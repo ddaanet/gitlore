@@ -7,27 +7,33 @@
 
 ## Functional Requirements
 
-1. Memory files are versioned in git, inside the project repo, as a submodule
-2. Memory is shared across Claude Code sessions on the same project
-3. Each git worktree has its own memory branch; branches converge into a shared trunk
-4. On the happy path, memory is committed transparently as part of the normal `git commit` workflow — no extra steps for the user
-5. When two sessions diverge, the agent performs a semantic merge with user review before the commit proceeds
-6. One-command install configures the entire system
-7. Works correctly after `git clone` with no manual steps beyond install
-8. Memory is pushed to a dedicated remote repository, synchronized before the parent repo push
-9. Remote creation is provider-agnostic; `gh` CLI is used opportunistically when available
+1. Memory files are versioned in git, inside the project repo, as a submodule.
+2. Memory is shared across Claude Code sessions on the same project.
+3. Each git worktree has its own memory branch; branches converge into a shared trunk.
+4. On the happy path, the agent drives memory commits: runs the configured pre-commit command, summarizes pending memory changes in prose, obtains explicit user confirmation, writes the approved summary as the memory commit message, then commits. The user's approval of the summary doubles as approval of the commit itself.
+5. When any divergence is detected (local branch vs. trunk, or local trunk vs. remote), `/gitlore:resolve` performs a semantic merge. A sub-agent with fresh context synthesizes the merged content; the parent agent approves the summary with the user before the merge is committed.
+6. One-command install configures the entire system.
+7. After `git clone`, the first `SessionStart` restores working state automatically. Running `/gitlore:install` again is not required; the plugin's own install is the only prerequisite.
+8. Memory is pushed to a dedicated remote repository with double-commit semantics — memory `live` is pushed before the parent push on every `git push`.
+9. Remote creation is provider-agnostic; `gh` CLI is used opportunistically when available.
+10. **Install-time disclosure (informational).** Before creating the memory remote, the user is shown the proposed name, owner, visibility, and a notice that memory may contain session context. This is orientation, not a hard gate.
+11. **Per-commit review gate.** Every memory commit (including merge commits produced by `/gitlore:resolve`) requires explicit user approval of a prose summary before the commit message file is written and the commit executes. This is the effective control over what reaches the remote.
+12. **Coexistence.** Repos without a `gitlore-memory` submodule are unaffected when the plugin is present. All hooks no-op silently if the submodule is not registered.
+13. **Recovery.** If memory enters a broken state (missing `live`, partial merge, locked checkout), tooling surfaces a clear error with recovery instructions rather than blocking parent git operations silently.
 
 ---
 
 ## Non-Functional Requirements
 
-1. **No AI on the hot path.** The happy-path commit flow runs entirely in shell scripts. The agent is only invoked for conflict resolution and user interaction.
-2. **Noisy failure with actionable instructions.** Hook failures exit 1 with a specific skill or command to run — never a generic error.
-3. **Idempotent install.** `/gitlore:install` is safe to re-run after clone or on a new machine.
-4. **Scripts decide, agent executes.** Detection logic (hook manager, remote provider, merge state) lives in shell scripts. The agent reads structured output and acts; it does not reason its way to a decision.
-5. **Double-commit semantics.** Memory is committed and pushed before the parent commit/push. The parent remote always points to reachable memory.
-6. **No tracked-file noise on plugin updates.** Hook scripts live in the plugin cache, not in the repo. Only stable wiring (hook manager config, sentinel file) is committed.
-7. **Works with any git hook manager.** Husky, Lefthook, Overcommit, or plain `.git/hooks/`.
+1. **No AI on the hot path.** The hook execution chain (pre-commit, pre-push) runs entirely in shell scripts. The agent is invoked out-of-band for commit-summary preparation, conflict resolution, and user interaction.
+2. **Noisy failure with actionable instructions.** Hook failures exit 1 with a specific skill or command to run — never a generic error. Stderr branches on `$CLAUDECODE`: agent-facing text when the agent is present, user-facing text (directing them to open Claude Code) otherwise.
+3. **Idempotent install.** `/gitlore:install` is safe to re-run after clone, on a new machine, or after a partial prior run.
+4. **Scripts decide, agent handles language.** Detection and branching logic (hook manager, remote provider, merge state, divergence flavor) lives in shell scripts. The agent handles summarization, synthesis, and user interaction.
+5. **Double-commit semantics.** Memory is committed and pushed before the parent commit/push. The parent remote always points to a memory SHA reachable on the memory remote.
+6. **No tracked-file churn on plugin updates.** Hook scripts live in the plugin cache, not in the repo. Only stable wiring (hook manager config, sentinel file, `.claude/settings.json` flag) is committed.
+7. **Works with common git hook managers.** Husky, Lefthook, Overcommit, or plain `.git/hooks/`. Unknown managers fall back to a copy-paste snippet.
+8. **Graceful degradation.** If memory is in a broken state, guard clauses (`.gitmodules` check, memory submodule init check, hooks-installed check) keep parent git operations unblocked.
+9. **Overrides.** Confirmation gates described here are defaults. Project or user instructions (`CLAUDE.md` and equivalents) can relax them — users who want auto-commit or auto-push can document the override.
 
 ---
 
@@ -38,40 +44,55 @@
 Memory lives at a configurable path inside the project repo (default: `memory/`, common alternative: `.claude/memory/`). Chosen at install time. The submodule is always named `gitlore-memory` in `.gitmodules` regardless of its working-tree path:
 
 ```sh
-git config --file .gitmodules submodule.gitlore-memory.path  # → memory or .claude/memory
-git config gitlore.memoryPath                                  # local git config, untracked
+git config --file .gitmodules submodule.gitlore-memory.path   # → memory or .claude/memory
 ```
+
+This is the canonical source of truth for the memory path; no duplicate local config key is maintained.
 
 ### Branch Model
 
 - **`live`** — memory trunk. Never worked on directly. All sessions merge into it.
-- **Per-worktree branches** — named after the worktree directory (linked worktrees) or the current parent branch (primary worktree).
-- Session start: fast-forward the worktree branch to `live`.
-- After commit: ff-push the worktree branch into `live`. Block on divergence.
+- **Per-worktree memory branches** — named after the corresponding parent worktree's branch.
+- **Parent branch switch → memory branch switch**, always. Parent and memory branches move together.
+- **Detached HEAD** on the parent → detached HEAD on memory. Branch names are a convenience; ff, commit, merge, and push all operate on detached HEAD (accepting a small readability cost — merge commits reference source by commit id instead of branch name).
+- **Reserved name.** A parent branch named `live` collides with the memory trunk and is rejected at SessionStart with an error.
+- **Session start:** if memory has no uncommitted changes, fast-forward the worktree branch to `live`. If uncommitted changes are present, warn the user and skip the ff.
+- **ff failure at SessionStart** is an invariant violation (memory merges should happen at commit time, not session start). Emit both `systemWarning` (user-visible) and `additionalContext` (agent-visible) directing to `/gitlore:resolve`. Note that resolve at session start produces a new commit; the agent then directs the user to `/clear`.
+- **After commit:** ff-push the worktree branch into `live`. Block on divergence.
+- **Branch rename on parent** (`git branch -m old new`): SessionStart renames the memory branch to match. If the old name has unmerged commits or the new name exists with divergent history, that is already a pre-existing invariant violation — surface it and route to `/gitlore:resolve`. If both names exist with ff-compatible state, reconcile via ff.
+- **New parent branch with stale memory branch of same name:** prompt — use a different branch name, or delete the stale memory branch.
+- **Parent rebase / force-push** is independent of memory. Memory history is its own concern.
+- **Stale memory branches** are cleaned up opportunistically to mirror Claude Code's handling of the parent worktree branch (determined at design time from CC documentation; fallback to testing if docs are silent). If CC retains parent branches, gitlore retains memory branches.
 
 ### Configuration
 
 | File | Key | Value | Tracked |
 |------|-----|-------|---------|
 | `.claude/settings.json` | `gitlore.enabled` | `true` | Yes |
-| `.claude/settings.local.json` | `autoMemoryDirectory` | `<abs-path-to-memory>` | No |
-| `.git/config` | `gitlore.memoryPath` | `memory` or `.claude/memory` | No |
+| `.claude/settings.json` | `gitlore.precommitCommand` | e.g. `lefthook run pre-commit` | Yes |
+| `.claude/settings.local.json` | `autoMemoryDirectory` | `<abs-path-to-memory>` (derived from `.gitmodules`) | No |
 | `.git/config` | `gitlore.hooksDir` | abs path to plugin hooks dir | No |
 
-**Commit message file:** `<memory-path>/.git/gitlore-commit-msg` — written by Claude alongside memory file writes, consumed and deleted by the pre-commit hook. In `.git/` so it is never tracked.
+**Commit message file:** resolved via `git -C <memory-path> rev-parse --git-path gitlore-commit-msg` — this handles the submodule gitdir correctly (the memory worktree's `.git` is a pointer file, not a directory). Written by Claude after user confirms the commit summary; consumed and deleted by the pre-commit hook.
 
-**Sentinel file:** `.claude/gitlore-hook-setup` — tracked. Contains the hook setup command (`lefthook install`, `npx husky`, or `direct`). Used by `SessionStart` to reinstall hooks on clone or new machine.
+**Sentinel file:** `.claude/gitlore-hook-setup` — tracked. Contains the hook setup command or keyword (`lefthook install`, `npx husky`, `overcommit --install`, `direct`, or `manual`). Used by `SessionStart` to re-wire hook-manager integration on clone or new machine.
 
 **Hook wrappers:** `SessionStart` writes two flat files to the parent repo's `.git/` on every startup:
 
 - `.git/gitlore-pre-commit`
 - `.git/gitlore-pre-push`
 
-Each wrapper delegates to the current plugin via `git config gitlore.hooksDir`. Stable paths for hook manager configs; plugin updates are transparent.
+Each wrapper delegates to the current plugin via `git config gitlore.hooksDir`. Stable paths for hook manager configs; plugin updates are transparent. If `gitlore.hooksDir` is unset (a plain `git commit` outside any Claude session before SessionStart has fired), the wrapper exits 0 after emitting a stderr hint — `"gitlore skipped: hooks not installed"` plus instructions to install the marketplace, plugin, and start Claude.
 
 ```sh
 #!/bin/sh
-exec "$(git config gitlore.hooksDir)/pre-commit" "$@"
+HOOKS_DIR=$(git config gitlore.hooksDir 2>/dev/null)
+if [ -z "$HOOKS_DIR" ]; then
+  echo "gitlore skipped: hooks not installed." >&2
+  echo "Install the gitlore plugin from the Claude Code marketplace, then start Claude Code in this repo." >&2
+  exit 0
+fi
+exec "$HOOKS_DIR/pre-commit" "$@"
 ```
 
 ### Components
@@ -80,159 +101,371 @@ exec "$(git config gitlore.hooksDir)/pre-commit" "$@"
 
 **`/gitlore:install`** — one-time setup, idempotent.
 
-1. Prompt for memory path (default: `memory`)
-2. Create memory submodule; initial commit; create `live` branch; create worktree branch from `live`
-3. Write `gitlore.enabled: true` to `.claude/settings.json`
-4. Write `autoMemoryDirectory` to `.claude/settings.local.json`
-5. Write `gitlore.memoryPath` and `gitlore.hooksDir` to local git config
-6. Migrate existing auto-memory content from `~/.claude/projects/<hash>/memory/` if present
-7. Run hook manager detection script → apply config changes, write sentinel file
-8. If parent has a remote: run remote detection script → present proposal to user, confirm, execute
-9. Leave tracked changes staged for the user to commit
+1. Check `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`; if unset, warn and offer to enable it (required for sub-agent-based resolve).
+2. Prompt for memory path (default: `memory`). If the path exists with unrelated content, refuse and prompt for an alternative.
+3. Prompt for the project pre-commit command (stored as `gitlore.precommitCommand`).
+4. Display install-time disclosure: proposed memory remote name, owner, visibility (inherited from parent), and notice that memory may contain session context. Await acknowledgement (informational, not a hard gate).
+5. Create the memory remote with explicit D8 confirmation — see Remote Repository. `gh repo create` (or provider-appropriate method) runs. If the parent has no remote, skip; memory stays local-only.
+6. `git submodule add <remote-url> <path>` (or a local path if no remote) — registers the submodule in `.gitmodules` and initializes the empty working tree.
+7. Seed memory content inside the submodule worktree:
+   - If existing auto-memory exists at `~/.claude/projects/<hash>/memory/`, copy it in.
+   - Otherwise, scaffold a `MEMORY.md` index file.
+8. `git -C <memory-path> add -A && git -C <memory-path> commit -m "Initial memory"` — non-empty initial commit; install is git-atomic.
+9. Create `live` branch at the initial commit; create worktree branch (named after current parent branch, or detached HEAD if parent is detached) from `live`.
+10. If a remote was created, `git -C <memory-path> push origin live` so the parent's submodule pointer is reachable upstream.
+11. Write `gitlore.enabled: true` and `gitlore.precommitCommand` to `.claude/settings.json`.
+12. Write `autoMemoryDirectory` (abs path derived from `.gitmodules`) to `.claude/settings.local.json`.
+13. Write `gitlore.hooksDir` (abs path to plugin hooks) to local git config.
+14. Run hook-manager detection script → apply idempotent wiring, write sentinel file.
+15. Leave tracked changes staged for the user to commit.
 
-**`/gitlore:resolve`** — in-session semantic merge. Invoked after pre-commit hook failure due to divergence.
+Idempotency rules for re-runs: existing submodule → verify and skip creation; existing settings keys → overwrite only if value differs; migration → detect prior migration (by presence of migrated files or a done-marker) and skip; existing hook-manager wiring with our marker → skip; existing remote → skip creation. A partial install (user aborted mid-flow) is recovered by re-running.
 
-> **Skill clarity requirement:** The agent will not naturally expect the memory submodule branch to change, or that the merge runs trunk-receives-branch. The SKILL.md must explicitly orient the agent at each surprising step.
+**`/gitlore:resolve`** — semantic merge on any divergence flavor. Script-driven; the agent handles language synthesis only.
 
-1. `BASE=$(git merge-base <branch> live)`
-2. Show Claude both diffs: `git diff $BASE live` (other session), `git diff $BASE HEAD` (this session)
-3. Claude reads both versions of changed files (`git show live:<file>`, `git show HEAD:<file>`), synthesizes holistically — semantic conflicts span files, not just lines
-4. *"You are about to switch the memory submodule to `live`. This is intentional — live is the trunk that receives the merge. Your session's branch is the source."*
-5. `git -C <memory-path> checkout live` — write lock acquired (git enforces one checkout per branch)
-6. *"You are now on `live`. Merge direction is intentional: do not reverse it."*
-7. `git merge --no-commit --no-ff <branch>`
-8. Claude writes synthesized files; `git add -A`
-9. `git commit -m "$(echo "$BRANCH_HEAD branch '<branch>'" | git fmt-merge-msg)"` → M on live (live first parent, branch second)
-10. *"Advance the worktree branch pointer BEFORE switching back."*
-11. `git branch -f <branch> HEAD` — advance worktree branch to M while still on live
-12. *"Switching back does not change files — both `live` and `<branch>` now point to M."*
-13. `git checkout <branch>`
-14. Report: "Memory merged. Retry your commit."
+> **Skill clarity requirement:** the agent will not naturally expect the memory submodule branch to change, or that merges run on the authoritative-trunk side. The SKILL.md must explicitly orient the agent at each surprising step.
 
-Concurrent resolve attempt: `git checkout live` fails (already checked out) → skill reports "Another session is resolving memory. Wait and retry."
+Script entry:
+
+1. `git -C <memory-path> fetch origin` (if a remote is configured).
+2. Detect divergence flavor(s) — both can hold simultaneously and are resolved serially:
+   - **Branch-vs-live:** `<branch>` not ancestor of local `live`.
+   - **Local-vs-remote:** local `live` ≠ `origin/live`.
+3. For each applicable flavor, run the matching plumbing sequence. All sequences dispatch a sub-agent for synthesis with an identical contract (see below).
+
+**Branch-vs-live plumbing:**
+
+1. `BASE=$(git merge-base <branch> live)`.
+2. Orient sub-agent: "live is the trunk; your branch is the source. Merge target is live."
+3. `git -C <memory-path> checkout live` — acquires the write lock via git's one-checkout-per-branch rule.
+4. `git -C <memory-path> merge --no-commit --no-ff <branch>` — leaves conflict markers if any.
+5. Dispatch sub-agent with context: changed files, diff3 output, base ref, source branch. Sub-agent synthesizes holistically (always, regardless of textual conflict presence — semantic conflicts can span files without any textual conflict).
+6. Sub-agent writes synthesized files; `git add -A`.
+7. Summary+confirm gate: sub-agent asks parent (via SendMessage) for clarification if needed; parent answers from conversation context or session logs, escalating to the user only as a last resort. Parent approves the synthesis summary with the user.
+8. `git commit` (uses git-generated `MERGE_MSG`).
+9. Orient: "advance the worktree branch pointer before switching back."
+10. `git branch -f <branch> HEAD`.
+11. `git checkout <branch>` (files don't change; both refs now point at the merge commit).
+
+**Local-vs-remote plumbing** (`origin/live` is more authoritative than local `live`):
+
+1. `OLD_LOCAL=$(git -C <memory-path> rev-parse live)`.
+2. `git -C <memory-path> checkout live`.
+3. `git -C <memory-path> reset --hard origin/live` — local `live` now points at `origin/live`.
+4. `git -C <memory-path> merge --no-commit --no-ff $OLD_LOCAL`.
+5. Dispatch sub-agent with context (diff3 between `origin/live` and `OLD_LOCAL`).
+6. Sub-agent synthesizes, writes files, adds.
+7. Summary+confirm gate (same as above).
+8. `git commit` — merge commit has `origin/live` as first parent, `OLD_LOCAL` as second. Remote's linear history is preserved.
+9. `git push origin live`.
+10. Return to worktree branch.
+
+**Post-resolve:**
+
+- Mid-session: refresh parent context with the *incoming* diff (what came from live / origin). This is fine at end-of-session timing where context tends to be closing out anyway.
+- Session start (recovery path): direct user to `/clear` — parent context is sparse, cheap to abandon.
+- Report "Memory merged. Retry your commit/push."
+
+**Concurrent resolve attempt:** `git checkout live` fails (already checked out elsewhere). Skill reports "Another session is resolving memory. Wait and retry." If a session crashed mid-resolve, manual recovery: `git -C <memory-path> merge --abort && git -C <memory-path> checkout <branch>` in the stuck worktree.
+
+**Abort handling:** on re-invocation, detect `.git/.../MERGE_HEAD` on live; offer to abort the pending merge and retry cleanly.
+
+**Sub-agent contract (identical for both flavors):**
+
+Input: path map of changed files (side A and side B), base ref, diff3 output where applicable.
+Output: synthesized file contents written to the worktree, with `git add -A` staging.
+Interaction: may SendMessage the parent with clarification questions; commit only after parent approves the summary with the user.
 
 #### Claude Code Hooks
 
 **`SessionStart`**
-1. Write `autoMemoryDirectory` to `.claude/settings.local.json`
-2. Set `gitlore.hooksDir` in local git config to current plugin hooks path
-3. Write `.git/gitlore-pre-commit` and `.git/gitlore-pre-push` wrappers
-4. If memory submodule not initialized: `git submodule update --init`; create worktree branch from `live`
-5. If memory submodule worktree missing: create it; checkout worktree branch
-6. Run sentinel command to reinstall hook manager wiring
-7. `git merge --ff-only live` on worktree branch
-8. If ff fails: emit `systemWarning` — do not proceed silently
+
+Guards: if `gitlore.enabled` is not `true`, or `.gitmodules` has no `gitlore-memory` entry, no-op.
+
+1. Derive memory path from `.gitmodules`; write abs path to `autoMemoryDirectory` in `.claude/settings.local.json`.
+2. Set `gitlore.hooksDir` in local git config to current plugin hooks path.
+3. Write `.git/gitlore-pre-commit` and `.git/gitlore-pre-push` wrappers.
+4. If the memory submodule is not initialized: `git submodule update --init`; create worktree branch from `live` (branch named after current parent branch, or detached-HEAD mirror if parent is detached).
+5. If the memory submodule worktree is missing (linked worktree scenario): create it via `git -C <main-repo>/.git/modules/gitlore-memory worktree add <worktree-path>/<memory-rel-path> <branch>`; checkout worktree branch.
+6. If `live` branch is absent on the memory side (corrupt / partial install): emit clear error + `additionalContext` with recovery instructions; abort further steps.
+7. Run sentinel command to reinstall hook-manager wiring (keywords `direct` and `manual` are interpreted specially — see Hook Manager Support).
+8. If memory has no uncommitted changes, `git merge --ff-only live` on the worktree branch. If uncommitted changes are present, display a warning and skip.
+9. If ff fails (invariant violation): emit both `systemWarning` (user-visible, prominent) and `additionalContext` (instructs agent to run `/gitlore:resolve`, and after resolve to direct the user to `/clear`).
 
 **`WorktreeCreate`** (Claude Code-initiated worktrees only)
-1. Initialize memory submodule worktree at `<worktree-path>/<memory-rel-path>`
-2. Create worktree branch from `live`
-3. Checkout worktree branch in the new memory worktree
 
-`SessionStart` handles manually-created worktrees as fallback.
+Guard: no-op if `.gitmodules` has no `gitlore-memory` entry.
+
+1. `git -C <main-repo>/.git/modules/gitlore-memory worktree add <worktree-path>/<memory-rel-path> <branch>` — initializes the memory submodule worktree at the correct gitdir.
+2. `<branch>` is the hook's `worktree_branch` input (the new parent worktree's branch name). Per Branch Model rules: if the memory branch already exists and is ff-compatible with `live`, ff and use; if diverged, prompt user.
+3. Checkout the worktree branch in the new memory worktree.
+
+Manually-created worktrees (`git worktree add` outside Claude Code) fall back to `SessionStart`.
 
 **`WorktreeRemove`** (advisory — cannot block)
 
 Input provides `worktree_path` and `worktree_branch`.
 
-1. `git worktree remove <memory-submodule-worktree-path>`
-2. `git branch -D <worktree_branch>` on memory repo
-3. If parent worktree branch is merged into `main`/`live`: `git branch -D <worktree_branch>` on parent repo. If unmerged: leave it.
+Guard: no-op if `.gitmodules` has no `gitlore-memory` entry.
 
-Unmerged memory from a removed worktree is discarded — memory is auxiliary.
+1. `git -C <memory-gitdir> worktree remove <memory-submodule-worktree-path>`. On failure (locked, uncommitted changes), emit a warning; do not block parent worktree removal.
+2. Apply Claude Code's branch-retention policy (the same rule it applies to the parent branch) to the memory branch. Determined at design time from CC documentation (fallback to testing if docs are silent). If CC does not delete parent branches on worktree removal — current assumption pending verification — this step is a no-op and unmerged memory branches fall to the classical merged-branch sweep.
+3. Gitlore never touches parent branches directly.
 
-**`PostToolUse`** (configurable trigger command)
+**`PostToolUse`** — triggers memory commit message preparation before a git commit.
 
-Fires after project pre-commit command exits 0, if memory is dirty AND `gitlore-commit-msg` is absent or older than the newest memory file.
+Configuration: `.claude/settings.json` key `gitlore.precommitCommand` holds the project's pre-commit check command. Set at install time; required for automatic triggering. If unset, memory commit preparation relies on the user explicitly asking Claude to commit memory.
 
-Action: notify Claude to write or refresh `<memory>/.git/gitlore-commit-msg`.
+Matcher: `Bash`. The hook script inspects `tool_input.command`, compares against the configured `gitlore.precommitCommand`, and fires only on a prefix match.
+
+Trigger conditions (all must hold):
+
+- Matched command exited 0.
+- Memory submodule worktree is dirty (uncommitted changes).
+- Commit message file is absent or stale relative to memory files.
+
+Commit message file path is always resolved via `git -C <memory-path> rev-parse --git-path gitlore-commit-msg`.
+
+Freshness check: file mtime compared to the newest memory file's mtime. Content-hash comparison is not worth the complexity; an edit that writes identical content will re-trigger preparation, which is acceptable noise.
+
+Action on trigger: emit `additionalContext` instructing Claude to:
+
+1. Summarize pending memory changes in prose.
+2. Present the summary to the user and await explicit confirmation.
+3. On approval, write the confirmed summary to the commit message file.
+4. On rejection, discuss with the user and repeat from (1).
+
+The confirmation gate (step 2) is load-bearing — per the per-commit review gate FR, the commit message file must not exist until the user has approved the summary.
 
 #### Git Hooks
 
-**`pre-commit`**
+**`pre-commit`** (runs in the parent repo's pre-commit chain)
 
-Guard: `[ -d "$(git config gitlore.memoryPath)/.git" ] || exit 0`
+Guard: fail-silent no-op if this repo doesn't use gitlore.
 
-1. Memory clean AND branch ancestor of `live` → exit 0
-2. Memory dirty, message file absent or stale → exit 1: *"Write memory commit message in your Claude Code session, then retry."*
-3. Memory dirty, message file fresh → commit memory; delete message file
-4. `git push . <branch>:live` (ff-only)
-5. Push fails → exit 1: *"Memory diverged. Run /gitlore:resolve in your Claude Code session, then retry."*
+```sh
+git config --file .gitmodules submodule.gitlore-memory.path >/dev/null 2>&1 || exit 0
+```
 
-**`pre-push`**
+Resolve memory path from `.gitmodules` and the memory branch from memory-worktree HEAD.
 
-Guard: `[ -d "$(git config gitlore.memoryPath)/.git" ] || exit 0`
+1. If memory is clean AND the branch HEAD equals `live` → exit 0.
+2. If memory is dirty AND the commit-message file is absent or stale → exit 1 with a CLAUDECODE-branched message:
+   - **`$CLAUDECODE` set:** "gitlore: memory is dirty and has no approved commit summary. Prepare a summary, present it for user confirmation, and on approval write it to `$(git -C <memory-path> rev-parse --git-path gitlore-commit-msg)`. Then retry."
+   - **Unset:** "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry."
+3. If memory is dirty AND the commit-message file is fresh:
+   - `git -C <memory-path> commit -F "$(git -C <memory-path> rev-parse --git-path gitlore-commit-msg)"`
+   - `rm "$(git -C <memory-path> rev-parse --git-path gitlore-commit-msg)"`
+4. If the branch is ahead of `live` (from step 3 or a prior un-pushed commit):
+   - `git -C <memory-path> push . <branch>:live` (ff-only by default).
+5. On push failure (divergence), exit 1 with a CLAUDECODE-branched message:
+   - **`$CLAUDECODE` set:** "gitlore: memory branch diverged from live. Run `/gitlore:resolve` to merge, then retry the commit."
+   - **Unset:** "gitlore: memory branch diverged from live. Open this project in Claude Code and run `/gitlore:resolve`, then retry."
 
-Push memory: `git -C <memory-path> push origin live`
+**`pre-push`** (runs in the parent repo's pre-push chain)
+
+Guards: no-op if this repo doesn't use gitlore, or if the memory submodule has no `origin` remote configured.
+
+```sh
+git config --file .gitmodules submodule.gitlore-memory.path >/dev/null 2>&1 || exit 0
+git -C <memory-path> remote get-url origin >/dev/null 2>&1 || exit 0
+```
+
+Push memory trunk: `git -C <memory-path> push origin live`.
+
+On failure (any cause — divergence, network, auth), exit 1 with a CLAUDECODE-branched message directing to `/gitlore:resolve`. The resolve script diagnoses the cause (fetches origin, determines flavor) and routes accordingly.
 
 ### Hook Manager Support
 
-Detection script outputs structured results:
+Detection script outputs structured results. Each hook manager has an idempotent wiring step (uses marker comment `# gitlore: managed` to detect and skip duplicates) and a sentinel command stored in `.claude/gitlore-hook-setup` and replayed by SessionStart on clone or plugin reinstall.
 
-| Detected | Wiring | Sentinel command |
-|----------|--------|-----------------|
-| Husky | Append `.git/gitlore-pre-commit` call to `.husky/pre-commit`, same for pre-push | `npx husky` |
-| Lefthook | Add `gitlore` commands pointing to `.git/gitlore-pre-commit` in `lefthook.yml` | `lefthook install` |
-| Overcommit | Add plugin entry in `.overcommit.yml` | `overcommit --install` |
-| None | Call `.git/gitlore-pre-commit` from `.git/hooks/pre-commit` | `direct` |
-| Unknown | Output snippet for manual wiring | `manual` |
+**Detection precedence** (first match wins; multiple detections produce a warning listing all found managers):
+
+1. `.lefthook.yml` or `lefthook.yml` → Lefthook
+2. `.husky/` directory → Husky (v7+)
+3. `.overcommit.yml` or `.git/hooks/overcommit-hook` → Overcommit
+4. Executable `.git/hooks/pre-commit` not tracked by any manager → None (direct)
+5. Otherwise → Unknown
+
+**Wiring** (applied symmetrically for pre-commit and pre-push):
+
+| Detected | Wiring | Sentinel value |
+|----------|--------|----------------|
+| Lefthook | Add `gitlore` command under `pre-commit` and `pre-push` in `lefthook.yml`, pointing at `.git/gitlore-pre-commit` and `.git/gitlore-pre-push`. Guard-marker comment. | `lefthook install` |
+| Husky | Append guarded line (`exec` the wrapper) to `.husky/pre-commit`; same for `.husky/pre-push`. Create files if missing. | `npx husky` |
+| Overcommit | Add custom hook under `PreCommit` and `PrePush` in `.overcommit.yml`, pointing at the wrappers. | `overcommit --install` |
+| None (direct) | Install shell stubs at `.git/hooks/pre-commit` and `.git/hooks/pre-push` that `exec` the `.git/gitlore-*` wrappers. | `direct` (keyword — interpreted by SessionStart, not run as a shell command) |
+| Unknown | Print copy-paste snippet for manual wiring; do not modify any file. | `manual` (keyword — SessionStart emits a user-facing reminder) |
+
+**Sentinel handling in SessionStart:**
+
+- `direct` → re-run the direct-wiring installer.
+- `manual` → emit `systemWarning` reminding the user to verify wiring.
+- Any other value → run as a shell command in the repo root.
+
+Idempotency: every wiring modification uses a detection marker (`# gitlore: managed` or the format-appropriate equivalent). Re-applying is a no-op.
 
 ### Workflows
 
-**Commit (happy path)**
-1. Claude writes memory files and `<memory>/.git/gitlore-commit-msg` in the same action
-2. User runs `git commit`
-3. PostToolUse hook fires if message file is absent or stale
-4. pre-commit: commits memory, ff-pushes branch → `live`
-5. Parent commit records updated submodule pointer
-6. pre-push: pushes `live` to memory remote
+**Commit (happy path, agent-driven)**
+
+1. Claude edits memory files during the session (ambiently, throughout).
+2. When preparing to commit, Claude runs the configured pre-commit command as part of its workflow (via `Bash`).
+3. PostToolUse hook fires — memory is dirty, commit-msg absent or stale.
+4. Claude summarizes pending memory changes in prose and presents the summary. The user reviews the full diff in their own git tooling if they wish, then gives explicit confirmation.
+5. Claude writes the confirmed summary to the commit-msg file.
+6. Claude runs `git commit`. The preceding confirmation of the commit message covers the commit itself.
+7. pre-commit hook: commits memory using the commit-msg file, deletes the file, ff-pushes `<branch>` → `live`.
+8. Parent commit records updated submodule pointer.
+
+**Push (happy path)**
+
+1. User or Claude runs `git push`. Agent-initiated push is allowed under the auto permission mode (subject to user approval of that mode).
+2. pre-push hook: pushes memory `live` → memory remote `origin/live`.
+3. Parent push proceeds.
+
+**Resolve (on divergence) — primary path: agent-driven**
+
+Most divergence is detected while the agent is attempting commit or push. The agent sees the hook's exit-1 stderr (addressed to it via the `$CLAUDECODE` branch) and invokes `/gitlore:resolve` inline without user intervention.
+
+1. Agent invokes `/gitlore:resolve` after observing a hook failure.
+2. Script fetches `origin`, detects divergence flavor(s).
+3. For each flavor (branch-vs-live, then local-vs-remote), script runs matching git plumbing and dispatches a sub-agent for semantic synthesis.
+4. Sub-agent reads changed files, synthesizes holistically; asks the parent via SendMessage if anything needs clarification.
+5. Parent agent approves the synthesis summary with the user; sub-agent commits.
+6. Script advances refs and returns to the worktree branch.
+7. Parent context refreshed with incoming diff (or user directed to `/clear` if resolve ran at session start).
+8. Agent retries the original commit or push.
+
+**Resolve fallback: user-driven**
+
+If divergence surfaces outside a Claude session (`git commit` or `git push` run from a plain terminal), the hook's stderr directs the user to open this project in Claude Code and run `/gitlore:resolve`. The primary path resumes from there.
 
 **Clone**
 
-`git clone --recurse-submodules <repo>` → first `SessionStart` configures settings, creates worktree branch, installs hooks via sentinel.
+`git clone --recurse-submodules <repo>` → first `SessionStart` configures settings, creates worktree branch (named after parent branch), replays hook-manager sentinel.
 
 Without `--recurse-submodules`: `SessionStart` detects uninitialized submodule, runs `git submodule update --init`, proceeds as above.
 
-**Worktree creation (manual)**
+**Worktree creation**
 
-`git worktree add` → next `SessionStart` in that worktree detects missing memory submodule worktree and initializes it.
+- **Claude Code-initiated:** `WorktreeCreate` hook initializes memory submodule worktree and checks out a memory branch matching the new parent branch name.
+- **Manual (`git worktree add`):** next `SessionStart` in that worktree handles setup as fallback.
 
 ### Remote Repository
 
-- Name: `<repo-name>-memory` (derived from parent remote)
-- Created on install with explicit user confirmation
-- Detection script selects method: `gh repo create` (GitHub + `gh` CLI) or manual URL + instructions
-- Pushed before parent on every push (double-commit semantics)
+The memory submodule is pushed to a dedicated remote, matching the parent repo's provider, ownership, and visibility where possible.
+
+**Naming**
+
+- Default: `<parent-remote-name>-memory`, derived from `origin` on the parent (e.g., `github.com/org/project.git` → `project-memory`).
+- If a repo with the default name exists in the target namespace, prompt for an alternative.
+
+**Ownership**
+
+- Default: same owner as parent `origin` (user account or org).
+- Overridable at creation time.
+
+**Visibility**
+
+- Default: match parent repo (public parent → public memory; private parent → private).
+- Rationale: memory is auxiliary to the project; no reason to split access control.
+- User can override the default.
+
+**Install-time disclosure (informational)**
+
+Before creating the remote, display proposed name, owner, and visibility (inherited from parent), along with:
+
+> Memory pushed to this remote may contain any context Claude has recorded — project details, decisions, or incidental session content. Each memory commit is reviewed and confirmed before it's pushed, so you control what goes up.
+
+This is orientation, not a clearance gate. The effective gate is the per-commit review (FR 11).
+
+**Creation method**
+
+1. **GitHub + `gh` CLI available** → `gh repo create <owner>/<name> [--public|--private]` matching parent visibility.
+2. **Other providers** → emit copy-paste instructions: "Create a repository at `<detected-provider>` named `<name>` with matching visibility, then paste the clone URL here." Wait for URL.
+3. **Parent has no remote** → skip memory remote creation. Memory stays local-only. Informational message; user can add a remote later.
+
+**On creation failure** (auth, quota, network, name collision): fall back to method 2 (copy-paste). Do not abort install.
+
+**Push semantics**
+
+Per NFR5 (double-commit semantics): memory `live` is pushed before parent push on every `git push`. Parent remote always points at a submodule SHA reachable on the memory remote.
 
 ---
 
 ## Design Decisions
 
-**D1 — `live` branch as trunk, not `main`**
-Using the primary worktree's `main` as the shared trunk would mean the primary worktree competes with other sessions on the same branch. `live` is a dedicated trunk that no session works on directly, making the merge target unambiguous. Git's one-checkout-per-branch constraint on `live` provides a natural write lock during resolve.
+**D1 — `live` branch as memory trunk, independent of parent's default branch**
 
-**D2 — Per-worktree branches, not detached HEAD**
-Detached HEAD was considered for simplicity (no branch cleanup). Rejected because merge commits from a detached HEAD have no meaningful message — git cannot generate "Merge branch 'feat-x' into live" without a named source branch. Branch names are recoverable from git log; anonymous detached-HEAD merges are not.
+Using the parent's default branch name (`main`, `master`, `develop`, etc.) as the shared memory trunk would mean the primary worktree's memory branch competes with other sessions on the same branch. `live` is a dedicated trunk that no session works on directly, making the merge target unambiguous. Git's one-checkout-per-branch constraint on `live` provides a natural write lock during resolve.
+
+**D2 — Per-worktree named branches by default; detached HEAD when parent is detached**
+
+Always using detached HEAD for memory worktrees was considered (no branch cleanup). Rejected as the default: merge commits from a detached HEAD reference the source by commit id rather than branch name (e.g., "Merge commit a3f21c8" vs "Merge branch 'feat-x' into live"). Branch names give better readability in git log.
+
+Exception: when the parent worktree is on detached HEAD, the memory worktree mirrors this state (also detached). The merge-message difference is accepted — branch names are a convenience; ff, commit, merge, and push all work on detached HEAD.
 
 **D3 — Checkout `live` during resolve, not git plumbing**
-`git commit-tree` + `git update-ref` were designed to avoid checking out `live` in a linked worktree. Rejected in favour of a direct `git checkout live` because: (a) the linked-worktree constraint is "one checkout per branch," not "no branch switching," and `live` is never checked out during normal work; (b) the checkout approach uses standard git commands that are easier to reason about; (c) the checkout naturally acts as a write lock.
+
+`git commit-tree` + `git update-ref` were designed to avoid checking out `live` in a linked worktree. Rejected in favour of `git checkout live` because:
+
+(a) Git's one-checkout-per-branch rule applies across all worktrees of a repo, but it only prohibits two simultaneous checkouts — not branch switching — and `live` is never checked out during normal work, so acquiring it is safe.
+(b) Checkout uses standard git commands that are easier to reason about than low-level plumbing.
+(c) The checkout naturally acts as a write lock — concurrent resolve attempts fail fast with a clear error.
 
 **D4 — Commit message via file handshake**
-Claude writes `<memory>/.git/gitlore-commit-msg` alongside memory file writes. The pre-commit hook consumes it. Alternatives rejected:
-- *Stop hook:* fires on every response turn, not just before commits — causes unnecessary writes and churn.
-- *Force-write on memory edit:* PostToolUse on every Write/Edit would generate noise; freshness check on PostToolUse of pre-commit command is sufficient.
-- *`claude --print`:* no session context, cannot ask user.
+
+Claude writes a commit message file inside the memory submodule's gitdir; the pre-commit hook reads, uses, and deletes it. Path is resolved via `git -C <memory-path> rev-parse --git-path gitlore-commit-msg` (handles the submodule gitdir correctly).
+
+Write timing: the file is created only after the user explicitly approves the commit summary Claude has presented. The file's presence is the signal that a memory commit has user approval; absence or staleness blocks pre-commit.
+
+Alternatives rejected:
+
+- **Stop hook:** fires on every response turn, not only before commits — unnecessary writes and churn, and no clean trigger for the confirmation prompt.
+- **Force-write on memory edit:** PostToolUse on every `Write`/`Edit` would generate noise and couple commit preparation to individual edits rather than commit intent. The chosen trigger (PostToolUse on the configured pre-commit command) is a stronger signal of intent with cleaner timing.
+- **`claude --print`:** no session context, cannot ask user for confirmation, no memory of why edits were made.
 
 **D5 — Wrapper scripts in `.git/`, not tracked**
-Tracking hook scripts in the repo causes a commit noise on every plugin update. Storing them in `.git/` (flat: `.git/gitlore-pre-commit`, `.git/gitlore-pre-push`) keeps them untracked and local. `SessionStart` regenerates them on every startup, always reflecting the current plugin version.
 
-**D6 — Merge direction: branch into live**
-The merge commit records "Merge branch 'feat-x' into live" with live as first parent. This preserves the conventional git ancestry reading: live's history is linear; feature branches appear as merged-in contributors. Reversing the direction would make live look like a branch of the worktree branch, which is incorrect.
+Tracking hook scripts in the repo would cause commit churn on every plugin update and couple the repo's history to the plugin's versioning. Storing flat wrappers in `.git/` (`.git/gitlore-pre-commit`, `.git/gitlore-pre-push`) keeps them untracked and local. `SessionStart` regenerates them on every startup, so they always reflect the current plugin version.
 
-**D7 — Agent executes, scripts decide**
-Detection and branching logic (hook manager type, remote provider, merge state checks) lives in shell scripts that output structured results. The agent reads and acts. This ensures deterministic, testable, auditable behavior that does not vary with model version or context.
+Wrappers exec the real hook scripts via `$(git config gitlore.hooksDir)/<hook>`. If `gitlore.hooksDir` is unset, the wrappers exit 0 after emitting a stderr hint directing the user to install the marketplace, plugin, and start Claude. Keeps git operations unblocked in non-gitlore contexts.
 
-**D8 — Remote creation requires user confirmation**
-Even when `gh` CLI is available, creating a remote repository is a visible external action. The agent presents the proposed action and waits for explicit approval before executing.
+**D6 — Merge direction: more-authoritative side is first parent**
+
+Across all resolve flavors, the merge commit records the more authoritative side as first parent; the divergent side becomes the second parent. This preserves the conventional `git log --first-parent` reading — the authoritative trunk stays linear, divergent work appears as merged-in contributors.
+
+- **Branch-vs-live** (post-commit): local `live` is the trunk. Commit message: "Merge branch 'feat-x' into live", with `live` as first parent, `<branch>` as second.
+- **Local-vs-remote** (pre-push): `origin/live` is more authoritative than local `live`. The merge commit is produced on local `live` after resetting it to `origin/live`'s tip; first parent is `origin/live`, second parent is the pre-merge local `live`.
+
+Reversing either direction would make the authoritative side look like a branch of the divergent side, breaking the `git log --first-parent` convention.
+
+**D7 — Scripts decide, agent handles language**
+
+Detection and branching logic (hook-manager type, remote provider, merge state, divergence flavor) lives in shell scripts that output structured results. The agent handles language-level work: summarizing memory changes, synthesizing merged memory content, communicating with the user, and answering clarification questions for sub-agents.
+
+Benefits:
+
+- **Deterministic and testable:** scripts can be unit-tested; model behavior can't.
+- **Auditable:** git plumbing is visible in code, not hidden behind natural-language reasoning.
+- **Stable across model versions:** logic that must not drift doesn't rely on the model.
+
+Load-bearing for `/gitlore:resolve`: the script determines divergence flavor, selects plumbing sequences, and dispatches the sub-agent with a scoped context. The agent never decides which git commands to run.
+
+**D8 — Remote creation requires explicit user confirmation**
+
+Creating a remote repository is a visible external action with side effects outside the local machine (namespace occupancy, provider-side records, potentially public visibility). Even when `gh` CLI is available and parameters are straightforward, the agent presents the full proposal — name, owner, visibility, creation method — and waits for explicit approval before executing.
+
+This confirmation is distinct from the install-time disclosure, which is informational orientation. D8 gates the specific external action. Rationale: external actions are not covered by the per-commit review gate and require their own opt-in.
+
+**D9 — Sub-agent for merge synthesis (requires experimental flag)**
+
+`/gitlore:resolve` dispatches a sub-agent with fresh context for merge synthesis. The parent session's in-memory context reflects the pre-merge state of files; after `git merge --no-commit --no-ff` rewrites them on disk, the parent's assumptions are stale. A sub-agent reads the post-merge state freshly, avoiding stale-context writes.
+
+The sub-agent + SendMessage pattern requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Install checks for the flag and offers to enable it. Known limitations (no session-resumption for in-process teammates, task-status lag) are documented; they do not affect the gitlore use case, which runs the sub-agent within a single live session.
+
+When the flag stabilizes or the feature becomes default, the install-time check becomes a no-op. No other design changes needed.
 
 ---
 
@@ -240,15 +473,24 @@ Even when `gh` CLI is available, creating a remote repository is a visible exter
 
 | Alternative | Rejected because |
 |-------------|-----------------|
-| Detached HEAD for all sessions | No meaningful merge commit messages |
-| `claude --print` for conflict resolution | No session context; cannot ask user; no memory of what produced the changes |
-| `git commit-tree` + `git update-ref` for merge | Complex plumbing; `git checkout live` is simpler and correct |
-| Temporary worktree for resolve | Unnecessary indirection; direct checkout is sufficient |
-| Stop hook for commit message generation | Fires on every response turn, not just before commits |
-| Tracked hook scripts in repo | Commit noise on every plugin update |
-| `gh repo create` as only remote creation method | Locks out non-GitHub users; provider-agnostic push is sufficient |
-| `live` as the primary worktree branch name | Confusing — `live` is the trunk, not a working branch; primary worktree should mirror parent branch name |
-| Single `main` branch for all sessions | Multiple concurrent sessions on `main` compete on the same branch; no isolation |
+| Detached HEAD for all memory sessions | Merge commits reference source by commit id rather than branch name; less readable git log. Exception preserved when parent is detached (D2). |
+| `claude --print` for conflict resolution | No session context; cannot ask user; no memory of what produced the changes. |
+| `git commit-tree` + `git update-ref` for resolve merge | Complex plumbing; `git checkout live` is simpler and doubles as a write lock (D3). |
+| Temporary worktree for resolve | Unnecessary indirection; direct checkout is sufficient. |
+| Stop hook for commit-message generation | Fires on every response turn, not only before commits — noise and wrong timing for the confirmation gate. |
+| PostToolUse on every memory Write/Edit | Couples commit preparation to individual edits rather than to commit intent; noisy. |
+| Tracked hook scripts in repo | Commit churn on every plugin update; couples repo history to plugin versioning. |
+| `gh repo create` as only remote creation method | Locks out non-GitHub users; provider-agnostic copy-paste flow is sufficient. |
+| `live` as a working branch in any worktree | `live` is the trunk; working on it directly breaks the resolve write-lock invariant. Parent branches named `live` are rejected at SessionStart. |
+| Single `main` branch for all memory sessions | Concurrent sessions would compete on the same branch; no isolation. |
+| Push memory as optional in v1 | Gitlore without shared memory is diminished value. Optional push can be added later as a user preference. |
+| Separate `gitlore.memoryPath` local config key | `.gitmodules` plus the fixed submodule name `gitlore-memory` is canonical; a duplicate source creates divergence risk. |
+| Empty initial commit on install | Install is git-atomic when the initial commit contains migrated auto-memory or a `MEMORY.md` scaffold. |
+| Unconditional memory branch deletion on WorktreeRemove | Memory branches mirror Claude Code's parent-branch policy; no special "memory is auxiliary, discard" rule. |
+| In-session diff dump for commit review | Too noisy in the TUI; user inspects the diff in their own git tooling when desired, approves via prose summary. |
+| Interactive prompt in pre-commit hook | Blocks non-interactive git commits (CI, scripts); agent-mediated confirmation is cleaner. |
+| Single-agent resolve with post-hoc context refresh | Sub-agent with fresh context avoids acting on stale in-session assumptions. Accepted experimental-flag dependency (D9). |
+| PreToolUse hook to constrain agent git ops | Load-bearing gate is the commit-msg file invariant at the hook level; PreToolUse would be belt-and-suspenders with scoping complexity. May revisit in v2 if drift is observed. |
 
 ---
 
@@ -257,3 +499,4 @@ Even when `gh` CLI is available, creating a remote repository is a visible exter
 | Date | Change |
 |------|--------|
 | 2026-04-11 | Initial design |
+| 2026-04-23 | Full design review. Added FRs for install-time disclosure, per-commit review gate, coexistence, and recovery. Added NFRs for graceful degradation and overrides. Removed `gitlore.memoryPath` in favour of `.gitmodules` as canonical path source. Corrected commit-message file path to use `git rev-parse --git-path`. Rewrote Branch Model to specify parent-branch-name rule, detached-HEAD mirror, rename handling, and collision with reserved `live`. Agent-driven commit flow replaces user-driven. `/gitlore:resolve` now covers both branch-vs-live and local-vs-remote divergence, with sub-agent synthesis under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Added D9 for the sub-agent decision. Install is git-atomic (non-empty initial commit). Hook wrappers gracefully degrade when `gitlore.hooksDir` is unset. Hook stderr branches on `$CLAUDECODE` for agent vs user targeting. Remote creation inherits parent visibility. Expanded Rejected Alternatives with new entries discovered during review. |
