@@ -20,13 +20,19 @@ if grep -q '# gitlore: managed' "$CONFIG"; then
 fi
 
 # Merge gitlore commands into the config using yq (preferred) or python3.
-if command -v yq >/dev/null 2>&1; then
+# yq detection: must distinguish mikefarah/yq (Go, expected flags) from
+# kislyuk/yq (Python jq wrapper, incompatible flags). mikefarah's `yq --version`
+# output contains either "mikefarah" or "version v<N>"; kislyuk's prints
+# "yq <N>.<N>.<N>" with no leading "v" and no mikefarah URL.
+if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -qE 'mikefarah|version v[0-9]'; then
   # yq (mikefarah/yq v4) — deep-merges commands without clobbering existing entries.
   yq -i '.pre-commit.commands.gitlore.run = ".git/gitlore-pre-commit"' "$CONFIG"
   yq -i '.pre-push.commands.gitlore.run   = ".git/gitlore-pre-push"'   "$CONFIG"
   # Append the marker comment.  yq strips comments, so we append it as a plain line.
+  # Note: any pre-existing YAML comments in lefthook.yml will have been stripped
+  # by the yq round-trip.  See docs/plugin-readme.md.
   printf '\n# gitlore: managed\n' >> "$CONFIG"
-elif command -v python3 >/dev/null 2>&1; then
+elif python3 -c 'import yaml' 2>/dev/null; then
   python3 - "$CONFIG" <<'PYEOF'
 import sys, yaml
 
@@ -45,7 +51,7 @@ with open(path, 'w') as fh:
     fh.write('\n# gitlore: managed\n')
 PYEOF
 else
-  echo "wire-lefthook: neither yq nor python3 found; cannot safely merge lefthook.yml" >&2
+  echo "wire-lefthook: need mikefarah/yq or python3 with PyYAML to safely merge lefthook.yml" >&2
   exit 1
 fi
 
