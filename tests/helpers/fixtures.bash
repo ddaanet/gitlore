@@ -4,6 +4,7 @@
 # Create a parent repo with a memory submodule pointing at a local bare repo.
 # Args: $1 = memory subpath (default "memory")
 make_parent_with_memory() {
+  cd "$TMP_REPO"
   local subpath="${1:-memory}"
   local bare="$TMP_REPO/.bare-memory.git"
 
