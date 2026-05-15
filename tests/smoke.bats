@@ -16,7 +16,7 @@ teardown() { teardown_tmp_repo; }
 @test "smoke: fixture creates parent with memory submodule" {
   make_parent_with_memory
   [ -f .gitmodules ]
-  run git config --file .gitmodules submodule.memory.path
+  run git config --file .gitmodules submodule.gitlore-memory.path
   [ "$status" -eq 0 ]
   [ "$output" = "memory" ]
 }

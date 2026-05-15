@@ -23,7 +23,7 @@ make_parent_with_memory() {
   git clone -q --bare "$seed_dir" "$bare"
   rm -rf "$seed_dir"
 
-  git -c protocol.file.allow=always submodule add "$bare" "$subpath" >/dev/null 2>&1
+  git -c protocol.file.allow=always submodule add --name gitlore-memory "$bare" "$subpath" >/dev/null 2>&1
   (
     cd "$subpath"
     git config user.email "test@example.com"
