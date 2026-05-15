@@ -34,6 +34,26 @@ fi
 git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
+# Sentinel replay: re-apply hook-setup recorded at install time.
+SENTINEL=".claude/gitlore-hook-setup"
+if [ -f "$SENTINEL" ]; then
+  cmd=$(head -1 "$SENTINEL" | tr -d '\n')
+  case "$cmd" in
+    "")
+      echo "gitlore: empty sentinel; nothing to replay" >&2
+      ;;
+    direct)
+      bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
+      ;;
+    manual)
+      echo "gitlore: hook wiring is 'manual'; verify .git/gitlore-pre-* are still invoked by your hooks." >&2
+      ;;
+    *)
+      sh -c "$cmd"
+      ;;
+  esac
+fi
+
 # Branch model: guard, submodule init, checkout, ff-merge.
 parent_branch=$(gitlore_parent_branch)
 if [ "$parent_branch" = "live" ]; then

@@ -87,3 +87,31 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   [[ "$output$stderr" == *"uncommitted"* ]] || [[ "${output}${stderr}" == *"dirty"* ]]
 }
+
+@test "sentinel 'direct' re-applies direct wiring" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  printf 'direct\n' > .claude/gitlore-hook-setup
+  bash "$SESSION_START"
+  grep -q '# gitlore: managed' .git/hooks/pre-commit
+}
+
+@test "sentinel 'manual' emits a reminder to stderr" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  printf 'manual\n' > .claude/gitlore-hook-setup
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [[ "$stderr$output" == *"manual"* ]]
+}
+
+@test "arbitrary sentinel is executed as a shell command" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  printf 'touch SENTINEL_RAN\n' > .claude/gitlore-hook-setup
+  bash "$SESSION_START"
+  [ -f SENTINEL_RAN ]
+}
