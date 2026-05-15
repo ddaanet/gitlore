@@ -121,3 +121,67 @@ EOF
   bash "$WIRE_HUSKY"
   [ "$(cat .claude/gitlore-hook-setup)" = "npx husky" ]
 }
+
+# ---------------------------------------------------------------------------
+# overcommit tests
+# ---------------------------------------------------------------------------
+
+WIRE_OVERCOMMIT="$PLUGIN_ROOT/scripts/hook-manager/wire-overcommit.sh"
+
+@test "wire-overcommit adds gitlore PreCommit and PrePush entries" {
+  cat > .overcommit.yml <<'EOF'
+PreCommit:
+  RuboCop:
+    enabled: true
+EOF
+  run bash "$WIRE_OVERCOMMIT"
+  [ "$status" -eq 0 ]
+  grep -q '# gitlore: managed' .overcommit.yml
+  grep -q 'gitlore-pre-commit' .overcommit.yml
+  grep -q 'gitlore-pre-push' .overcommit.yml
+  [ "$(cat .claude/gitlore-hook-setup)" = "overcommit --install" ]
+}
+
+# ---------------------------------------------------------------------------
+# direct tests
+# ---------------------------------------------------------------------------
+
+WIRE_DIRECT="$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
+
+@test "wire-direct installs .git/hooks/pre-commit and pre-push stubs" {
+  run bash "$WIRE_DIRECT"
+  [ "$status" -eq 0 ]
+  [ -x .git/hooks/pre-commit ]
+  [ -x .git/hooks/pre-push ]
+  grep -q 'exec .git/gitlore-pre-commit' .git/hooks/pre-commit
+  grep -q '# gitlore: managed' .git/hooks/pre-commit
+  [ "$(cat .claude/gitlore-hook-setup)" = "direct" ]
+}
+
+@test "wire-direct is idempotent and preserves existing user hooks" {
+  printf '#!/bin/sh\necho user hook\n' > .git/hooks/pre-commit
+  chmod +x .git/hooks/pre-commit
+  bash "$WIRE_DIRECT"
+  grep -q 'echo user hook' .git/hooks/pre-commit
+  grep -q 'exec .git/gitlore-pre-commit' .git/hooks/pre-commit
+  # Second run: no duplicate lines.
+  cp .git/hooks/pre-commit .git/hooks/pre-commit.before
+  bash "$WIRE_DIRECT"
+  diff .git/hooks/pre-commit .git/hooks/pre-commit.before
+}
+
+# ---------------------------------------------------------------------------
+# manual tests
+# ---------------------------------------------------------------------------
+
+WIRE_MANUAL="$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh"
+
+@test "wire-manual writes a manual sentinel without modifying any files" {
+  ls > .before
+  run bash "$WIRE_MANUAL"
+  [ "$status" -eq 0 ]
+  [ "$(cat .claude/gitlore-hook-setup)" = "manual" ]
+  # No new files beyond the sentinel (.claude/ already excluded by ls default).
+  ls > .after
+  diff .before .after
+}
