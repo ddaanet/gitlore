@@ -6,3 +6,8 @@ See `docs/design.md` for the full design. User-facing docs land in Plan 05.
 ## Development
 
 Install bats-core first (`brew install bats-core` or `npm i -g bats`), then run tests: `bats tests/`
+
+### Dependencies
+
+- **python3** (standard on macOS/Linux) — used by `wire-lefthook.sh` to safely merge `lefthook.yml` when `yq` is not available.
+- **yq** (optional, `brew install yq`) — preferred over python3 for lefthook wiring; install if you want yq-based merges.
