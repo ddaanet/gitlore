@@ -40,7 +40,8 @@ gitlore_commit_msg_file() {
   git -C "$mempath" rev-parse --git-path gitlore-commit-msg
 }
 
-# Echo 1 if memory worktree is dirty (uncommitted changes), 0 otherwise.
+# Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
+# callers should compare with `[ "$(gitlore_memory_dirty PATH)" = "1" ]`.
 gitlore_memory_dirty() {
   local mempath="$1"
   if [ -z "$(git -C "$mempath" status --porcelain)" ]; then
@@ -55,11 +56,13 @@ gitlore_memory_dirty() {
 gitlore_commit_msg_freshness() {
   local mempath="$1"
   local msgfile
-  msgfile=$(gitlore_commit_msg_file "$mempath")
+  msgfile=$(gitlore_commit_msg_file "$mempath") || return 1
   [ -f "$msgfile" ] || { printf 'absent\n'; return 0; }
-  local newest
-  newest=$(find "$mempath" -type f -not -path '*/.git/*' -printf '%T@\n' 2>/dev/null \
-           | sort -nr | head -1)
+  local newest=0 f m
+  while IFS= read -r -d '' f; do
+    m=$(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f")
+    [ "$m" -gt "$newest" ] && newest="$m"
+  done < <(find "$mempath" -type f -not -path '*/.git/*' -print0)
   local msgmtime
   msgmtime=$(stat -c '%Y' "$msgfile" 2>/dev/null || stat -f '%m' "$msgfile")
   awk -v a="$msgmtime" -v b="${newest:-0}" \
