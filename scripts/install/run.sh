@@ -31,7 +31,8 @@ case "$manager" in
   husky)      bash "$PLUGIN_ROOT/scripts/hook-manager/wire-husky.sh"      ;;
   overcommit) bash "$PLUGIN_ROOT/scripts/hook-manager/wire-overcommit.sh" ;;
   direct)     bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"     ;;
-  manual|multi:*) bash "$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh" ;;
+  manual)         bash "$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh" ;;
+  multi:*)        bash "$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh" "${manager#multi:}" ;;
 esac
 
 echo "gitlore: install complete." >&2

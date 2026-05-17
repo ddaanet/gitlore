@@ -185,3 +185,10 @@ WIRE_MANUAL="$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh"
   ls > .after
   diff .before .after
 }
+
+@test "wire-manual lists detected managers when called with a list argument" {
+  run --separate-stderr bash "$WIRE_MANUAL" "lefthook,husky"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"multiple hook managers detected"* ]]
+  [[ "$stderr" == *"lefthook,husky"* ]]
+}

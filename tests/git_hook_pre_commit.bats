@@ -61,3 +61,24 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"/gitlore:resolve"* ]]
 }
+
+@test "resolves PLUGIN_ROOT from gitlore.hooksDir when CLAUDE_PLUGIN_ROOT is unset" {
+  make_parent_with_memory
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  unset CLAUDE_PLUGIN_ROOT
+  run bash "$HOOK"
+  [ "$status" -eq 0 ]
+}
+
+@test "commits and ff-pushes to live from detached HEAD" {
+  make_parent_with_memory
+  (cd memory && git checkout -q --detach worktree)
+  echo dirty > memory/notes.md
+  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  printf 'memory: add notes\n' > "$msgfile"
+
+  bash "$HOOK"
+  head=$(git -C memory rev-parse HEAD)
+  live=$(git -C memory rev-parse live)
+  [ "$head" = "$live" ]
+}

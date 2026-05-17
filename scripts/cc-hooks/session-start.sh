@@ -27,7 +27,7 @@ if [ -f .claude/settings.local.json ]; then
   jq --arg p "$absmem" '.autoMemoryDirectory = $p' .claude/settings.local.json > "$tmp"
   mv "$tmp" .claude/settings.local.json
 else
-  printf '{"autoMemoryDirectory":"%s"}\n' "$absmem" > .claude/settings.local.json
+  jq -n --arg p "$absmem" '{autoMemoryDirectory: $p}' > .claude/settings.local.json
 fi
 
 # Hook dir + wrappers.

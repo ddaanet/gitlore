@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
 # wire-manual.sh — write a manual-wiring sentinel; print instructions to stderr.
+# Arg 1 (optional): comma-separated list of detected managers, when multiple were found.
 set -euo pipefail
+
+detected="${1:-}"
 
 mkdir -p .claude
 printf 'manual\n' > .claude/gitlore-hook-setup
 
+if [ -n "$detected" ]; then
+  echo "gitlore: multiple hook managers detected ($detected); cannot pick safely." >&2
+  echo "Disable all but one, or wire manually:" >&2
+else
+  echo "gitlore: no supported hook manager detected." >&2
+  echo "Wire the wrappers into your hook system manually:" >&2
+fi
+
 cat >&2 <<'EOF'
-gitlore: no supported hook manager detected.
-Wire the wrappers into your hook system manually:
 
   pre-commit → .git/gitlore-pre-commit
   pre-push   → .git/gitlore-pre-push

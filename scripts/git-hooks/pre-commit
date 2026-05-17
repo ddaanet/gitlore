@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/..}"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
@@ -10,7 +10,6 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null 2>&1 || exit 0
 
 mempath=$(gitlore_memory_path)
-branch=$(git -C "$mempath" symbolic-ref --short -q HEAD 2>/dev/null || echo DETACHED)
 msgfile=$(gitlore_commit_msg_file "$mempath")
 
 dirty=$(gitlore_memory_dirty "$mempath")
@@ -32,11 +31,10 @@ if [ "$dirty" = "1" ]; then
   git -C "$mempath" add -A
   git -C "$mempath" commit -q -F "$msgfile"
   rm -f "$msgfile"
-  head_sha=$(git -C "$mempath" rev-parse HEAD)
 fi
 
-if [ "$branch" != "DETACHED" ] && [ -n "$live_sha" ]; then
-  if ! git -C "$mempath" push -q . "$branch:live" 2>/dev/null; then
+if [ -n "$live_sha" ]; then
+  if ! git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
     gitlore_say_for_agent_or_user \
       "gitlore: memory branch diverged from live. Run /gitlore:resolve to merge, then retry the commit." \
       "gitlore: memory branch diverged from live. Open this project in Claude Code and run /gitlore:resolve, then retry." >&2
