@@ -20,8 +20,13 @@ if [ "$already_registered" -eq 0 ]; then
   )
 
   # 2. Seed content (auto-memory migration, else scaffold).
-  hash=$(printf '%s' "$parent_root" | shasum | cut -d' ' -f1)
-  src="$HOME/.claude/projects/$hash/memory"
+  #    CC encodes the project dir name by replacing every non-[A-Za-z0-9] byte
+  #    with `-` (see anthropic/claude-code bundle; verified empirically against
+  #    ~/.claude/projects/ entries). The >200-char truncate+hash fallback is
+  #    out of scope here — repo abs paths reaching 200 chars are vanishingly
+  #    rare and the scaffold path handles miss gracefully.
+  encoded=$(printf '%s' "$parent_root" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  src="$HOME/.claude/projects/$encoded/memory"
   if [ -d "$src" ]; then
     cp -R "$src"/. "$mempath/"
   else

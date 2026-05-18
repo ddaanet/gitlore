@@ -49,3 +49,16 @@ teardown() { teardown_tmp_repo; }
   run bash "$RUN_INSTALL" memory "echo precommit"
   [ "$status" -eq 0 ]
 }
+
+@test "install migrates pre-existing CC auto-memory at the mangled path" {
+  fake_home="$TMP_REPO/.fake-home"
+  encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  mkdir -p "$fake_home/.claude/projects/$encoded/memory"
+  printf 'migrated content\n' > "$fake_home/.claude/projects/$encoded/memory/MEMORY.md"
+  printf 'fact\n' > "$fake_home/.claude/projects/$encoded/memory/user_role.md"
+
+  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  [ -f memory/MEMORY.md ]
+  [ "$(cat memory/MEMORY.md)" = "migrated content" ]
+  [ -f memory/user_role.md ]
+}
