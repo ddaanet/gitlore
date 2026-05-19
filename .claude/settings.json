@@ -1,0 +1,6 @@
+{
+  "gitlore": {
+    "enabled": true,
+    "precommitCommand": ".git/gitlore-pre-commit"
+  }
+}
