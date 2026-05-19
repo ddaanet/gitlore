@@ -15,7 +15,8 @@ cmd=$(jq -r '.tool_input.command // empty' <<<"$payload")
 exit_code=$(jq -r '.tool_response.exit_code // 0' <<<"$payload")
 [ "$exit_code" = "0" ] || exit 0
 
-prefix=$(jq -r '.gitlore.precommitCommand // empty' .claude/settings.json 2>/dev/null)
+[ -f .claude/settings.json ] || exit 0
+prefix=$(jq -r '.gitlore.precommitCommand // empty' .claude/settings.json 2>/dev/null || true)
 [ -n "$prefix" ] || exit 0
 case "$cmd" in "$prefix"*) ;; *) exit 0 ;; esac
 

@@ -45,6 +45,14 @@ stdin() { printf '%s' "$1" | bash "$POST"; }
   [[ "$output" == *"Summarize pending memory changes"* ]]
 }
 
+@test "no-op when .claude/settings.json is missing" {
+  rm -f .claude/settings.json
+  payload='{"tool_name":"Bash","tool_input":{"command":"lefthook run pre-commit"},"tool_response":{"exit_code":0}}'
+  run stdin "$payload"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "no-op when commit-msg file is fresh" {
   echo dirty > memory/notes.md
   msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
