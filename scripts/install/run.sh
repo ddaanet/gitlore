@@ -35,5 +35,11 @@ case "$manager" in
   multi:*)        bash "$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh" "${manager#multi:}" ;;
 esac
 
+# Stage the tracked artifacts written by write-settings.sh and wire-*.sh so the
+# install's contract (commands/gitlore/install.md) holds: everything we promise
+# as "staged for review" actually is. .gitmodules and $mempath are staged by
+# init-submodule.sh; settings.local.json is gitignored by design.
+git add .claude/settings.json .claude/gitlore-hook-setup .gitignore
+
 echo "gitlore: install complete." >&2
-echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, .claude/gitlore-hook-setup) and commit when ready." >&2
+echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, .claude/gitlore-hook-setup, .gitignore) and commit when ready." >&2

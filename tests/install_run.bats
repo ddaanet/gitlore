@@ -44,6 +44,27 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
 }
 
+@test "install stages all artifacts it claims to leave staged" {
+  bash "$RUN_INSTALL" memory "echo precommit"
+  staged=$(git diff --cached --name-only)
+  [[ "$staged" == *".gitmodules"* ]]
+  [[ "$staged" == *"memory"* ]]
+  [[ "$staged" == *".claude/settings.json"* ]]
+  [[ "$staged" == *".claude/gitlore-hook-setup"* ]]
+  [[ "$staged" == *".gitignore"* ]]
+}
+
+@test "install stages memory as gitlink (mode 160000)" {
+  bash "$RUN_INSTALL" memory "echo precommit"
+  run git ls-files --stage memory
+  [[ "$output" == 160000\ * ]]
+}
+
+@test "install does not emit the embedded-git-repository advice" {
+  output=$(bash "$RUN_INSTALL" memory "echo precommit" 2>&1)
+  [[ "$output" != *"embedded git repository"* ]]
+}
+
 @test "install is idempotent" {
   bash "$RUN_INSTALL" memory "echo precommit"
   run bash "$RUN_INSTALL" memory "echo precommit"

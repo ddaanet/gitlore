@@ -69,9 +69,18 @@ EOF
     } >> .gitmodules
   fi
 
-  # 6. Stage parent-side artifacts.
-  git add .gitmodules "$mempath"
 fi
+
+# 6. Stage parent-side artifacts. Runs on every install — including idempotent
+#    re-runs after a reset — so the install's "leave it staged" contract holds
+#    regardless of working-tree state. The submodule gitlink is written via
+#    `git update-index --cacheinfo` (mode 160000) rather than `git add` so we
+#    don't trip git's "embedded git repository" advice, which fires on `git add
+#    <dir>` for any directory containing a .git/ entry and, in modern git,
+#    actually refuses to stage the directory as a submodule.
+git add .gitmodules
+mem_sha=$(git -C "$mempath" rev-parse HEAD)
+git update-index --add --cacheinfo "160000,${mem_sha},${mempath}"
 
 # 7. live + worktree branches (idempotent).
 cd "$mempath"
