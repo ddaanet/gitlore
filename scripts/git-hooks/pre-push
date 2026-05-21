@@ -6,6 +6,8 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null 2>&1 || exit 0
 
@@ -19,17 +21,29 @@ if [ -z "$remote_url" ]; then
   exit 1
 fi
 
-if ! git -C "$mempath" push -q origin live 2>/dev/null; then
-  if git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
-    gitlore_say_for_agent_or_user \
-      "gitlore: memory's live branch diverged from remote (non-fast-forward). Run /gitlore:resolve." \
-      "gitlore: memory's live branch diverged from remote. Open this project in Claude Code and run /gitlore:resolve." >&2
-  else
-    gitlore_say_for_agent_or_user \
-      "gitlore: memory remote unreachable. Check network or 'gh auth status', then retry. Run /gitlore:resolve if the issue persists." \
-      "gitlore: memory remote unreachable. Check network or 'gh auth status', then retry." >&2
-  fi
+git -C "$mempath" fetch -q origin live 2>/dev/null || true
+
+if git -C "$mempath" push -q origin live 2>/dev/null; then
+  exit 0
+fi
+
+# Push failed. Distinguish unreachable from divergence.
+if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
+  gitlore_say_for_agent_or_user \
+    "gitlore: memory remote unreachable. Check network or 'gh auth status'." \
+    "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
   exit 1
 fi
 
-exit 0
+# Reachable → local-vs-remote divergence. Prepare and yield.
+if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
+  gitlore_say_for_agent_or_user \
+    "gitlore: cannot checkout live (already checked out elsewhere). Another session is resolving memory. Wait and retry." \
+    "gitlore: another session is resolving memory. Wait and retry." >&2
+  exit 1
+fi
+IFS=':' read -r return_branch base old_local <<< "$prep_out"
+gitlore_write_merge_state "$mempath" "local-vs-remote" "$base" "$old_local" "live" "$return_branch" "continue-after-remote-merge"
+statefile=$(gitlore_merge_state_file "$mempath")
+gitlore_emit_merge_directive "$statefile" "local-vs-remote" "continue-after-remote-merge"
+exit 1

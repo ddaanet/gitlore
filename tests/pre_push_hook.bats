@@ -54,7 +54,9 @@ teardown() { teardown_tmp_repo; }
   )
   run --separate-stderr bash "$PRE_PUSH"
   [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"diverged"* ]] || [[ "${output}${stderr}" == *"/gitlore:resolve"* ]]
+  [[ "$output$stderr" == *"memory merge prepared"* ]]
+  [[ "$output$stderr" == *"flavor=local-vs-remote"* ]]
+  [[ "$output$stderr" == *"continue-after-remote-merge"* ]]
 }
 
 @test "pre-push fails when remote is unreachable" {
