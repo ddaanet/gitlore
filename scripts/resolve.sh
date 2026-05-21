@@ -73,17 +73,19 @@ if [ $# -ge 1 ]; then
   esac
 fi
 
-# Step 1: gitlore installed?
-if ! gitlore_has_submodule; then
+# Default mode: detect + try both pushes in turn. Yield on the first failure;
+# continuations re-enter from the hook (commit/push retries), not from here.
+
+gitlore_has_submodule || {
   gitlore_say_for_agent_or_user \
     "gitlore: not installed in this repo. Run /gitlore:install." \
     "gitlore: not installed in this repo. Open this project in Claude Code and run /gitlore:install." >&2
   exit 1
-fi
-
+}
 mempath=$(gitlore_memory_path)
 
-# Step 2: remote.origin.url set?
+# Existing Plan 02 simple repairs (remote.origin.url, ls-remote, push live)
+# happen first — they precede semantic-merge detection.
 remote_url=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
 if [ -z "$remote_url" ] || [ "$remote_url" = "./.git/gitlore-placeholder" ]; then
   echo "gitlore: no memory remote configured. Creating one." >&2
@@ -91,36 +93,44 @@ if [ -z "$remote_url" ] || [ "$remote_url" = "./.git/gitlore-placeholder" ]; the
   echo "gitlore: memory remote created and live pushed." >&2
   exit 0
 fi
-
-# Step 3: remote reachable?
 if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
   gitlore_say_for_agent_or_user \
-    "gitlore: memory remote unreachable. Check network or 'gh auth status'. Manual fix required." \
-    "gitlore: memory remote unreachable. Check network or run 'gh auth status'." >&2
+    "gitlore: memory remote unreachable. Check network or 'gh auth status'." \
+    "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
   exit 1
 fi
-
-# Step 4: live exists on remote?
 if ! git -C "$mempath" ls-remote origin live | grep -q .; then
   echo "gitlore: remote has no live branch. Pushing." >&2
   git -C "$mempath" push origin live
-  echo "gitlore: live pushed." >&2
   exit 0
 fi
 
-# Step 5: ff-relationship between local and remote live?
-local_live=$(git -C "$mempath" rev-parse live)
-remote_live=$(git -C "$mempath" ls-remote origin live | awk '{print $1}')
-if [ "$local_live" != "$remote_live" ]; then
-  if git -C "$mempath" merge-base --is-ancestor "$remote_live" "$local_live"; then
-    echo "gitlore: local live is ahead of remote. Pushing." >&2
-    git -C "$mempath" push origin live
-    echo "gitlore: live pushed." >&2
-    exit 0
+git -C "$mempath" fetch -q origin live 2>/dev/null || true
+
+# Try branch-vs-live first (cheaper, local-only).
+branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || echo "")
+if [ -n "$branch" ] && [ "$branch" != "live" ]; then
+  if ! git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
+    if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
+      echo "gitlore: another session is resolving memory. Wait and retry." >&2
+      exit 1
+    fi
+    branch_p="${prep_out%%:*}"; base_p="${prep_out#*:}"
+    gitlore_write_merge_state "$mempath" "branch-vs-live" "$base_p" "$branch_p" "live" "$branch_p" "continue-after-branch-merge"
+    gitlore_emit_merge_directive "$(gitlore_merge_state_file "$mempath")" "branch-vs-live" "continue-after-branch-merge"
+    exit 1
   fi
-  gitlore_say_for_agent_or_user \
-    "gitlore: local and remote live diverged. Manual resolution required — Plan 02 does not auto-resolve divergence. Inspect with 'git -C $mempath log live..origin/live' and 'git -C $mempath log origin/live..live'." \
-    "gitlore: local and remote live diverged. Open the memory submodule and resolve manually." >&2
+fi
+
+# Branch is in sync (or wasn't applicable). Try local-vs-remote.
+if ! git -C "$mempath" push -q origin live 2>/dev/null; then
+  if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
+    echo "gitlore: another session is resolving memory. Wait and retry." >&2
+    exit 1
+  fi
+  IFS=':' read -r return_branch base old_local <<< "$prep_out"
+  gitlore_write_merge_state "$mempath" "local-vs-remote" "$base" "$old_local" "live" "$return_branch" "continue-after-remote-merge"
+  gitlore_emit_merge_directive "$(gitlore_merge_state_file "$mempath")" "local-vs-remote" "continue-after-remote-merge"
   exit 1
 fi
 
