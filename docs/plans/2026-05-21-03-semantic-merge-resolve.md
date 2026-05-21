@@ -188,6 +188,8 @@ Constraints baked into the system prompt:
 
 `/gitlore:install` step 1 (from design): check `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Plan 03 implements this. If unset, warn and offer to enable; install still completes. At runtime, prepare scripts proceed regardless; the agent layer surfaces a clear error if `Task` dispatch fails because the flag is off.
 
+**Open Plan 04 follow-up — gitlore plugin marketplace install.** Dogfood Task 7 confirmed that having `agents/memory-merger.md` in the repo isn't enough on its own: a CC session only discovers the sub-agent when the plugin is installed via marketplace (`/plugin add`), not when the repo is merely the cwd. Plan 03 ships the file in the correct location; Plan 04 should add a one-time `/plugin add gitlore` step (or equivalent) to the install flow, or document that the agent layer requires marketplace installation. Until then, the script-side state machine still works correctly; the sub-agent dispatch silently no-ops.
+
 ### 5.3 Recovery edges
 
 | Situation | Detection | Behavior |
@@ -227,7 +229,17 @@ Only what stub-synth can't validate: actual `Task` dispatch, actual `SendMessage
 
 No Plan 02 backfill needed — both Plan 02 dogfood surprises (`.gitmodules` gitignored, `gh --source=.` with gitfile submodule) were already automated in commit `192d7e8` and live in `tests/install_run.bats` and `tests/install_remote.bats`.
 
-What does apply: anything §6.3's manual gate surfaces gets a Layer 2 fixture *in this plan* before Plan 03 is considered shipped. Following Plan 02's pattern (which patched + backfilled in the same commit). No findings are deferred to Plan 04.
+**Plan 03 dogfood findings (commit `dcaaf75`, all patched + regression-tested):**
+
+1. **`changed_files` was target-side only.** `gitlore_write_merge_state` ran `git diff base...HEAD` after the prepare phase had already `git checkout`ed the target ref, so source-side files were silently dropped from the state file. Sub-agent would synthesize the wrong set of files. Fixed to union diffs against both source_ref and target_ref. Regression: `resolve_merge_branch.bats` and `resolve_merge_remote.bats` assert both filenames in `changed_files`.
+
+2. **Directive emitted literal `$CLAUDE_PLUGIN_ROOT`.** Sub-agent shells don't necessarily inherit it; expansion to empty made the bash invocation fail at the path level (before `scripts/resolve.sh`'s own `:?` guard could fire). Fixed: directive now emits the absolute resolve.sh path resolved at hook time. `scripts/resolve.sh` additionally derives `PLUGIN_ROOT` from `$0` as a fallback. Regression: directive-shape assertions in `resolve_merge_{branch,remote}.bats` + `tests/resolve.bats` "derives plugin root from $0" test.
+
+3. **Continuation required CWD = parent repo root.** `gitlore_memory_path` reads `.gitmodules` without `-C`, so the continuation crashed if the sub-agent's CWD wasn't the parent repo (which it isn't by default in many CC dispatch contexts). Fixed: directive prefixes `cd "<parent-repo>" && ` so the sub-agent runs a fully self-contained command with no CWD assumptions. Regression: `cd "$TMP_REPO" && bash ...` shape asserted in the same files.
+
+No findings deferred to Plan 04.
+
+What does apply for future plans: anything §6.3's manual gate surfaces gets a Layer 2 fixture *in this plan* before Plan 03 is considered shipped. Following Plan 02's pattern (which patched + backfilled in the same commit).
 
 ### 6.5 Test layout
 
@@ -338,7 +350,7 @@ tests/install_run.bats                 # MODIFY — assert preflight warns when 
 
 Outside-in TDD: red e2e first → build scaffolding + impl in order to drive it green → backfill the loop case.
 
-- [ ] **Step 1: Write the happy-path test.**
+- [x] **Step 1: Write the happy-path test.**
 
 Create `tests/resolve_merge_branch.bats`:
 
@@ -396,12 +408,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run to confirm red.**
+- [x] **Step 2: Run to confirm red.**
 
 Run: `bats tests/resolve_merge_branch.bats`
 Expected: 2 failures — pre-commit currently exits 1 with the Plan 02 "manual fix required" message; the state file is never written.
 
-- [ ] **Step 3: Add `gitlore_merge_state_file` to `scripts/lib/util.sh`.**
+- [x] **Step 3: Add `gitlore_merge_state_file` to `scripts/lib/util.sh`.**
 
 Append:
 
@@ -415,7 +427,7 @@ gitlore_merge_state_file() {
 }
 ```
 
-- [ ] **Step 4: Create `scripts/lib/resolve.sh`.**
+- [x] **Step 4: Create `scripts/lib/resolve.sh`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -488,7 +500,7 @@ gitlore_prepare_local_vs_remote() {
 }
 ```
 
-- [ ] **Step 5: Create `tests/helpers/divergence-fixtures.bash`.**
+- [x] **Step 5: Create `tests/helpers/divergence-fixtures.bash`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -539,7 +551,7 @@ make_diverged_local_vs_remote() {
 }
 ```
 
-- [ ] **Step 6: Create `tests/helpers/stub-synth.bash`.**
+- [x] **Step 6: Create `tests/helpers/stub-synth.bash`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -566,7 +578,7 @@ run_stub_synth() {
 }
 ```
 
-- [ ] **Step 7: Modify `scripts/git-hooks/pre-commit`.**
+- [x] **Step 7: Modify `scripts/git-hooks/pre-commit`.**
 
 Replace the final `if [ -n "$live_sha" ]; then ... fi` block with a yield path. Full new file:
 
@@ -629,7 +641,7 @@ fi
 exit 0
 ```
 
-- [ ] **Step 8: Modify `scripts/resolve.sh` — add `continue-after-branch-merge` subcommand.**
+- [x] **Step 8: Modify `scripts/resolve.sh` — add `continue-after-branch-merge` subcommand.**
 
 Insert this dispatcher block immediately after the `source` lines and before the Plan 02 default-mode logic:
 
@@ -676,12 +688,12 @@ fi
 
 Also add `source "$PLUGIN_ROOT/scripts/lib/resolve.sh"` after the existing `source` lines.
 
-- [ ] **Step 9: Run happy-path; confirm green.**
+- [x] **Step 9: Run happy-path; confirm green.**
 
 Run: `bats tests/resolve_merge_branch.bats`
 Expected: 2 passing.
 
-- [ ] **Step 10: Append loop-case test.**
+- [x] **Step 10: Append loop-case test.**
 
 ```bash
 @test "branch-vs-live loop: continuation yields again if retry-push fails" {
@@ -719,12 +731,12 @@ Expected: 2 passing.
 
 Note: this test is the hardest one to set up cleanly. Refine during execution if the simulated concurrent-advance doesn't trigger the retry-push failure in practice. The intent is: continuation completes its commit, attempts retry-push, the retry fails because of new divergence, and a fresh prepare yields a new directive.
 
-- [ ] **Step 11: Run; confirm all green.**
+- [x] **Step 11: Run; confirm all green.**
 
 Run: `bats tests/resolve_merge_branch.bats`
 Expected: 3 passing.
 
-- [ ] **Step 12: Commit.**
+- [x] **Step 12: Commit.**
 
 ```bash
 git add scripts/lib/util.sh scripts/lib/resolve.sh \
@@ -745,7 +757,7 @@ git commit -m "✨ feat: branch-vs-live semantic merge — pre-commit yields, co
 
 Same outside-in shape as Task 1. The helpers (`scripts/lib/resolve.sh`, `divergence-fixtures.bash`, `stub-synth.bash`) already exist.
 
-- [ ] **Step 1: Write the happy-path test.**
+- [x] **Step 1: Write the happy-path test.**
 
 Create `tests/resolve_merge_remote.bats`:
 
@@ -793,12 +805,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run to confirm red.**
+- [x] **Step 2: Run to confirm red.**
 
 Run: `bats tests/resolve_merge_remote.bats`
 Expected: 2 failures.
 
-- [ ] **Step 3: Modify `scripts/git-hooks/pre-push`.**
+- [x] **Step 3: Modify `scripts/git-hooks/pre-push`.**
 
 Full new file:
 
@@ -854,7 +866,7 @@ gitlore_emit_merge_directive "$statefile" "local-vs-remote" "continue-after-remo
 exit 1
 ```
 
-- [ ] **Step 4: Add `continue-after-remote-merge` to `scripts/resolve.sh`.**
+- [x] **Step 4: Add `continue-after-remote-merge` to `scripts/resolve.sh`.**
 
 Add a new case to the subcommand dispatcher from Task 1 step 8:
 
@@ -884,12 +896,12 @@ Add a new case to the subcommand dispatcher from Task 1 step 8:
       ;;
 ```
 
-- [ ] **Step 5: Run happy-path; confirm green.**
+- [x] **Step 5: Run happy-path; confirm green.**
 
 Run: `bats tests/resolve_merge_remote.bats`
 Expected: 2 passing.
 
-- [ ] **Step 6: Append loop-case test (concurrent remote advance during synthesis).**
+- [x] **Step 6: Append loop-case test (concurrent remote advance during synthesis).**
 
 ```bash
 @test "local-vs-remote loop: continuation yields again if retry-push fails" {
@@ -912,12 +924,12 @@ Expected: 2 passing.
 }
 ```
 
-- [ ] **Step 7: Run; confirm all green.**
+- [x] **Step 7: Run; confirm all green.**
 
 Run: `bats tests/resolve_merge_remote.bats`
 Expected: 3 passing.
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```bash
 git add tests/resolve_merge_remote.bats scripts/git-hooks/pre-push scripts/resolve.sh
@@ -934,7 +946,7 @@ git commit -m "✨ feat: local-vs-remote semantic merge — pre-push yields, con
 
 The default mode of `scripts/resolve.sh` (no args) replaces Plan 02's "diverged → manual fix" path with the same yield protocol used by the hooks. When both flavors apply, the script tries branch-vs-live first (it's local-only and cheaper); local-vs-remote falls out on the next continuation cycle.
 
-- [ ] **Step 1: Write the happy-path test.**
+- [x] **Step 1: Write the happy-path test.**
 
 ```bash
 #!/usr/bin/env bats
@@ -991,12 +1003,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run to confirm red.**
+- [x] **Step 2: Run to confirm red.**
 
 Run: `bats tests/resolve_both_flavors.bats`
 Expected: ≥2 failures (Plan 02's default-mode `resolve.sh` doesn't yield, it reports "manual fix required").
 
-- [ ] **Step 3: Refactor `scripts/resolve.sh` default mode.**
+- [x] **Step 3: Refactor `scripts/resolve.sh` default mode.**
 
 Replace the Plan 02 default-mode body (from "Step 1: gitlore installed?" through the final "healthy" exit) with:
 
@@ -1066,12 +1078,12 @@ echo "gitlore: state is healthy. Nothing to do." >&2
 exit 0
 ```
 
-- [ ] **Step 4: Run; confirm all green.**
+- [x] **Step 4: Run; confirm all green.**
 
 Run: `bats tests/resolve_both_flavors.bats`
 Expected: 4 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/resolve.sh tests/resolve_both_flavors.bats
@@ -1094,7 +1106,7 @@ Cases:
 2. State file present + no `MERGE_HEAD` → fatal directive (no sub-agent), manual intervention.
 3. Concurrent `git checkout live` failure → already handled in Tasks 1-3 via `prepare_*` return-2.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 Create `tests/resolve_recovery.bats`:
 
@@ -1147,12 +1159,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run to confirm red.**
+- [x] **Step 2: Run to confirm red.**
 
 Run: `bats tests/resolve_recovery.bats`
 Expected: 3 failures.
 
-- [ ] **Step 3: Add `gitlore_detect_stale_merge_state` to `scripts/lib/resolve.sh`.**
+- [x] **Step 3: Add `gitlore_detect_stale_merge_state` to `scripts/lib/resolve.sh`.**
 
 ```bash
 # Detect whether a stale merge-state file + MERGE_HEAD exists.
@@ -1175,7 +1187,7 @@ gitlore_detect_stale_merge_state() {
 }
 ```
 
-- [ ] **Step 4: Add `abort-then-retry` subcommand to `scripts/resolve.sh`.**
+- [x] **Step 4: Add `abort-then-retry` subcommand to `scripts/resolve.sh`.**
 
 Add to the dispatcher case block:
 
@@ -1194,7 +1206,7 @@ Add to the dispatcher case block:
       ;;
 ```
 
-- [ ] **Step 5: Add stale-state guard to pre-commit and pre-push (top of file, after sourcing libs).**
+- [x] **Step 5: Add stale-state guard to pre-commit and pre-push (top of file, after sourcing libs).**
 
 In each hook, immediately after sourcing `scripts/lib/resolve.sh`:
 
@@ -1218,12 +1230,12 @@ if [ -n "$mempath" ]; then
 fi
 ```
 
-- [ ] **Step 6: Run; confirm all green.**
+- [x] **Step 6: Run; confirm all green.**
 
 Run: `bats tests/resolve_recovery.bats`
 Expected: 3 passing.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add tests/resolve_recovery.bats scripts/lib/resolve.sh scripts/resolve.sh \
@@ -1241,7 +1253,7 @@ git commit -m "✨ feat: recovery edges — stale MERGE_HEAD via abort-then-retr
 
 The sub-agent is invoked by the slash command via the `Task` tool when the slash command sees a yield directive on stderr from the underlying script.
 
-- [ ] **Step 1: Create `agents/memory-merger.md`.**
+- [x] **Step 1: Create `agents/memory-merger.md`.**
 
 ```markdown
 ---
@@ -1279,7 +1291,7 @@ The parent agent will give you exactly one input: an absolute path to a state fi
 Your final message to the parent (after approval and continuation exit): a one-line summary of what happened. Example: "Branch-vs-live merge complete. 3 files reconciled. Continuation exited 0."
 ```
 
-- [ ] **Step 2: Modify `commands/gitlore/resolve.md` to dispatch on directive.**
+- [x] **Step 2: Modify `commands/gitlore/resolve.md` to dispatch on directive.**
 
 Full replacement:
 
@@ -1335,11 +1347,11 @@ You are recovering a gitlore memory submodule from divergence — branch-vs-live
 7. **Summarize.** Tell the user what was merged and what state the repo is in now.
 ```
 
-- [ ] **Step 3: Manual verification (no bats here — Task and SendMessage aren't testable in bats).**
+- [x] **Step 3: Manual verification (no bats here — Task and SendMessage aren't testable in bats).**
 
 This task's correctness is verified by Task 7 (dogfood). Note that in the file layout.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add agents/memory-merger.md commands/gitlore/resolve.md
@@ -1356,7 +1368,7 @@ git commit -m "✨ feat: memory-merger sub-agent + /gitlore:resolve directive di
 
 Warn-only: install completes regardless. Runtime surfaces a clean error if `Task` dispatch fails because the flag is off.
 
-- [ ] **Step 1: Add a failing test.**
+- [x] **Step 1: Add a failing test.**
 
 Append to `tests/install_run.bats`:
 
@@ -1376,12 +1388,12 @@ Append to `tests/install_run.bats`:
 }
 ```
 
-- [ ] **Step 2: Run to confirm red.**
+- [x] **Step 2: Run to confirm red.**
 
 Run: `bats tests/install_run.bats -f "AGENT_TEAMS"`
 Expected: 1 failure (the "warns" test).
 
-- [ ] **Step 3: Add the warning to `scripts/install/preflight.sh`.**
+- [x] **Step 3: Add the warning to `scripts/install/preflight.sh`.**
 
 Append before the final `exit 0`:
 
@@ -1396,12 +1408,12 @@ EOF
 fi
 ```
 
-- [ ] **Step 4: Run; confirm all green.**
+- [x] **Step 4: Run; confirm all green.**
 
 Run: `bats tests/install_run.bats`
 Expected: all passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/install/preflight.sh tests/install_run.bats
@@ -1416,11 +1428,11 @@ git commit -m "🔧 chore: preflight warns when CLAUDE_CODE_EXPERIMENTAL_AGENT_T
 
 Plan 03 is not shipped until this passes. Per [[feedback-automate-default]] and §6.3 of the spec, this is the one gate that genuinely needs the real agent loop.
 
-- [ ] **Step 1: Pick a test repo.**
+- [x] **Step 1: Pick a test repo.**
 
 Recommended: the gitlore repo itself (which has gitlore installed). Otherwise: any repo with `/gitlore:install` completed.
 
-- [ ] **Step 2: Induce branch-vs-live divergence.**
+- [x] **Step 2: Induce branch-vs-live divergence.**
 
 In a Claude Code session (parent worktree):
 1. Make a memory edit (any auto-memory write — e.g., update a feedback memory).
@@ -1429,7 +1441,7 @@ In a Claude Code session (parent worktree):
 4. In that second worktree, also make a memory edit and attempt to commit. This should ff-push the second worktree's branch into live and succeed.
 5. Now back in the first worktree, attempt another commit — its memory branch is no longer an ancestor of live. The ff-push fails.
 
-- [ ] **Step 3: Observe the agent loop end-to-end.**
+- [x] **Step 3: Observe the agent loop end-to-end.**
 
 Expected:
 1. pre-commit emits the directive (state file written, "flavor=branch-vs-live", continuation `continue-after-branch-merge`).
@@ -1440,11 +1452,11 @@ Expected:
 6. Continuation commits with `live` as first parent, advances worktree branch, ff-pushes branch into live, exits 0.
 7. User's original commit can now proceed (or they retry it).
 
-- [ ] **Step 4: If anything surprises, patch in-plan and add a Layer 2 fixture.**
+- [x] **Step 4: If anything surprises, patch in-plan and add a Layer 2 fixture.**
 
 Per [[feedback-automate-default]] and §1 of the spec: dogfood findings become Layer 2 fixtures in Plan 03, not Plan 04. Patch the script, add a regression test under `tests/resolve_merge_branch.bats` (or a new file if the failure is genuinely new), commit, and re-run this step.
 
-- [ ] **Step 5: Tick all Plan 03 boxes; ship.**
+- [x] **Step 5: Tick all Plan 03 boxes; ship.**
 
 When this gate passes cleanly, Plan 03 is shipped. Open `/handoff` to summarize and prep the next iteration.
 
