@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Shared functions for memory divergence detection, state-file IO, and
+# directive emission. Source; do not exec.
+
+# Write a JSON merge-state file. All args required.
+# Args: $1=mempath  $2=flavor  $3=base_sha  $4=source_ref  $5=target_ref
+#       $6=return_branch  $7=continuation_subcommand
+gitlore_write_merge_state() {
+  local mempath="$1" flavor="$2" base="$3" source="$4" target="$5" return_branch="$6" cont="$7"
+  local statefile
+  statefile=$(gitlore_merge_state_file "$mempath")
+  local changed conflicted
+  changed=$(git -C "$mempath" diff --name-only "$base"...HEAD 2>/dev/null \
+    | jq -R . | jq -s . 2>/dev/null || echo '[]')
+  conflicted=$(git -C "$mempath" diff --name-only --diff-filter=U 2>/dev/null \
+    | jq -R . | jq -s . 2>/dev/null || echo '[]')
+  cat > "$statefile" <<EOF
+{
+  "flavor": "$flavor",
+  "base": "$base",
+  "source_ref": "$source",
+  "target_ref": "$target",
+  "return_branch": "$return_branch",
+  "changed_files": $changed,
+  "conflicted_files": $conflicted,
+  "continuation": "$cont"
+}
+EOF
+}
+
+# Emit the structured directive on stderr.
+# Args: $1=statefile_path  $2=flavor  $3=continuation_subcommand
+gitlore_emit_merge_directive() {
+  local statefile="$1" flavor="$2" cont="$3"
+  cat >&2 <<EOF
+gitlore: memory merge prepared (flavor=$flavor).
+gitlore: dispatch the memory-merger sub-agent with state file:
+gitlore:   $statefile
+gitlore: on approval, the sub-agent must run:
+gitlore:   bash "\$CLAUDE_PLUGIN_ROOT/scripts/resolve.sh" $cont
+EOF
+}
+
+# Prepare branch-vs-live merge. Caller must already know it's needed.
+# Stdout: `<branch>:<base_sha>`.  Exit 2 on concurrent-checkout (live already checked out).
+gitlore_prepare_branch_vs_live() {
+  local mempath="$1"
+  local branch base
+  branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || git -C "$mempath" rev-parse HEAD)
+  base=$(git -C "$mempath" merge-base "$branch" live)
+  git -C "$mempath" checkout -q live 2>/dev/null || return 2
+  git -C "$mempath" merge --no-commit --no-ff "$branch" >/dev/null 2>&1 || true
+  printf '%s:%s\n' "$branch" "$base"
+}
+
+# Prepare local-vs-remote merge.
+# Stdout: `<return_branch>:<base_sha>:<old_local_sha>`.  Exit 2 on concurrent-checkout.
+gitlore_prepare_local_vs_remote() {
+  local mempath="$1"
+  local return_branch old_local base
+  return_branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || git -C "$mempath" rev-parse HEAD)
+  old_local=$(git -C "$mempath" rev-parse live)
+  git -C "$mempath" checkout -q live 2>/dev/null || return 2
+  git -C "$mempath" reset --hard -q origin/live
+  base=$(git -C "$mempath" merge-base "$old_local" origin/live)
+  git -C "$mempath" merge --no-commit --no-ff "$old_local" >/dev/null 2>&1 || true
+  printf '%s:%s:%s\n' "$return_branch" "$base" "$old_local"
+}
