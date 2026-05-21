@@ -17,4 +17,13 @@ EOF
   exit 1
 fi
 
+if [ -z "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" ]; then
+  cat >&2 <<'EOF'
+gitlore: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is not set.
+gitlore: /gitlore:resolve requires it to dispatch the memory-merger sub-agent.
+gitlore: Continuing install — set it before semantic merge is needed:
+gitlore:   export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+EOF
+fi
+
 exit 0

@@ -100,3 +100,17 @@ teardown() { teardown_tmp_repo; }
   staged=$(git diff --cached --name-only)
   [[ "$staged" == *".gitmodules"* ]]
 }
+
+@test "preflight warns when CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is unset" {
+  unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output$stderr" == *"AGENT_TEAMS"* ]] || [[ "$output$stderr" == *"experimental"* ]]
+}
+
+@test "preflight is silent when CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1" {
+  export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output$stderr" != *"AGENT_TEAMS"* ]]
+}
