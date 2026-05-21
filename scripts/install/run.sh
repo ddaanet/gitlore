@@ -13,6 +13,8 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 toplevel=$(git rev-parse --show-toplevel)
 [ "$PWD" = "$toplevel" ] || { echo "Run /gitlore:install from the repo root ($toplevel)." >&2; exit 1; }
 
+bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
+
 # Refuse non-empty existing path that isn't already our submodule.
 if [ -e "$mempath" ] && ! git config --file .gitmodules "submodule.gitlore-memory.path" 2>/dev/null | grep -qx "$mempath"; then
   if [ -n "$(ls -A "$mempath" 2>/dev/null || true)" ]; then
@@ -22,6 +24,7 @@ if [ -e "$mempath" ] && ! git config --file .gitmodules "submodule.gitlore-memor
 fi
 
 bash "$PLUGIN_ROOT/scripts/install/init-submodule.sh" "$mempath"
+bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
 bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" "$mempath" "$precommit_cmd"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
