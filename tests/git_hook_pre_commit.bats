@@ -44,7 +44,7 @@ teardown() { teardown_tmp_repo; }
   [ ! -f "$msgfile" ]
 }
 
-@test "exits 1 with /gitlore:resolve hint when branch diverged from live" {
+@test "exits 1 with memory-merger directive when branch diverged from live" {
   make_parent_with_memory
   (
     cd memory
@@ -59,7 +59,9 @@ teardown() { teardown_tmp_repo; }
 
   CLAUDECODE=1 run --separate-stderr bash "$HOOK"
   [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"/gitlore:resolve"* ]]
+  [[ "$output$stderr" == *"memory merge prepared"* ]]
+  [[ "$output$stderr" == *"flavor=branch-vs-live"* ]]
+  [[ "$output$stderr" == *"continue-after-branch-merge"* ]]
 }
 
 @test "resolves PLUGIN_ROOT from gitlore.hooksDir when CLAUDE_PLUGIN_ROOT is unset" {

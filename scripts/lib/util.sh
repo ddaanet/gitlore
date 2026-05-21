@@ -40,6 +40,14 @@ gitlore_commit_msg_file() {
   git -C "$mempath" rev-parse --git-path gitlore-commit-msg
 }
 
+# Print abs path to the memory submodule's merge-state file.
+# Resolves through the submodule's gitdir correctly.
+# Args: $1 = memory path (working tree).
+gitlore_merge_state_file() {
+  local mempath="$1"
+  git -C "$mempath" rev-parse --git-path gitlore-merge-state
+}
+
 # Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
 # callers should compare with `[ "$(gitlore_memory_dirty PATH)" = "1" ]`.
 gitlore_memory_dirty() {
