@@ -65,6 +65,18 @@ if [ $# -ge 1 ]; then
       git -C "$mempath" checkout -q "$return_branch"
       exit 0
       ;;
+    abort-then-retry)
+      gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
+      mempath=$(gitlore_memory_path)
+      statefile=$(gitlore_merge_state_file "$mempath")
+      [ -f "$statefile" ] || { echo "gitlore: no merge state file to abort" >&2; exit 1; }
+      return_branch=$(jq -r .return_branch "$statefile")
+      git -C "$mempath" merge --abort 2>/dev/null || true
+      git -C "$mempath" checkout -q "$return_branch" 2>/dev/null || true
+      rm -f "$statefile"
+      # Re-enter the default mode to detect the original divergence freshly.
+      exec bash "$0"
+      ;;
     *)
       # Other subcommands added in later tasks.
       echo "gitlore: unknown resolve subcommand: $subcmd" >&2

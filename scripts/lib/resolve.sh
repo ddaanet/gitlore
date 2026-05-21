@@ -2,6 +2,25 @@
 # Shared functions for memory divergence detection, state-file IO, and
 # directive emission. Source; do not exec.
 
+# Detect whether a stale merge-state file + MERGE_HEAD exists.
+# Stdout: "clean" | "stale-with-merge-head" | "stale-no-merge-head".
+gitlore_detect_stale_merge_state() {
+  local mempath="$1"
+  local statefile
+  statefile=$(gitlore_merge_state_file "$mempath")
+  if [ ! -f "$statefile" ]; then
+    printf 'clean\n'
+    return 0
+  fi
+  local gitdir
+  gitdir=$(git -C "$mempath" rev-parse --git-dir)
+  if [ -f "$gitdir/MERGE_HEAD" ]; then
+    printf 'stale-with-merge-head\n'
+  else
+    printf 'stale-no-merge-head\n'
+  fi
+}
+
 # Write a JSON merge-state file. All args required.
 # Args: $1=mempath  $2=flavor  $3=base_sha  $4=source_ref  $5=target_ref
 #       $6=return_branch  $7=continuation_subcommand
