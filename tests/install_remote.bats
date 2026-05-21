@@ -10,8 +10,8 @@ setup() {
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   install_gh_mock
   export GH_MOCK_STDOUT_API_USER="alice"
-  # Seed a bare remote for the gh mock to point origin at when simulating
-  # `gh repo create ... --source=. --push`.
+  # The install flow calls `gh repo view <name> --json sshUrl -q .sshUrl` to
+  # discover the remote URL; the mock returns this when GH_MOCK_REMOTE_URL is set.
   export GH_MOCK_REMOTE_URL="$TMP_REPO/.fake-gh-remote.git"
   git init -q --bare "$GH_MOCK_REMOTE_URL"
 }
@@ -29,12 +29,14 @@ teardown() { teardown_tmp_repo; }
   [[ "$url" != *"gitlore-placeholder"* ]]
 }
 
-@test "install records gh repo create call with --private --source=. --push" {
+@test "install records gh repo create with --private (no --source flag)" {
   log="$TMP_REPO/gh-calls.log"
   GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
   grep -q 'repo create' "$log"
   grep -q -- '--private' "$log"
-  grep -q -- '--push' "$log"
+  # --source=. is intentionally omitted: gh's --source rejects gitfile-pointed
+  # submodule worktrees, so we wire origin and push by hand instead.
+  ! grep -q -- '--source' "$log"
 }
 
 @test "preflight aborts install when gh is missing" {

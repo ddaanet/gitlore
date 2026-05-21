@@ -78,6 +78,13 @@ fi
 #    don't trip git's "embedded git repository" advice, which fires on `git add
 #    <dir>` for any directory containing a .git/ entry and, in modern git,
 #    actually refuses to stage the directory as a submodule.
+if git check-ignore -q .gitmodules 2>/dev/null; then
+  if [ -f .gitignore ] && grep -qx '\.gitmodules' .gitignore; then
+    # Some repos gitignore .gitmodules to quiet sandbox-induced churn. With a
+    # real submodule, .gitmodules must be tracked — drop the ignore line.
+    tmp=$(mktemp) && grep -vx '\.gitmodules' .gitignore > "$tmp" && mv "$tmp" .gitignore
+  fi
+fi
 git add .gitmodules
 mem_sha=$(git -C "$mempath" rev-parse HEAD)
 git update-index --add --cacheinfo "160000,${mem_sha},${mempath}"
