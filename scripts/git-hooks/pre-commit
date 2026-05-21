@@ -9,6 +9,24 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
+mempath=$(gitlore_memory_path 2>/dev/null) || mempath=""
+if [ -n "$mempath" ]; then
+  state_status=$(gitlore_detect_stale_merge_state "$mempath")
+  case "$state_status" in
+    stale-with-merge-head)
+      statefile=$(gitlore_merge_state_file "$mempath")
+      flavor=$(jq -r .flavor "$statefile")
+      gitlore_emit_merge_directive "$statefile" "$flavor" "abort-then-retry"
+      exit 1
+      ;;
+    stale-no-merge-head)
+      statefile=$(gitlore_merge_state_file "$mempath")
+      echo "gitlore: merge state file present without MERGE_HEAD — manual intervention required. Inspect $statefile and the memory worktree." >&2
+      exit 1
+      ;;
+  esac
+fi
+
 git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null 2>&1 || exit 0
 
 mempath=$(gitlore_memory_path)
