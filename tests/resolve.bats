@@ -22,6 +22,16 @@ teardown() { teardown_tmp_repo; }
   [[ "$output$stderr" == *"not installed"* ]] || [[ "$output$stderr" == *"/gitlore:install"* ]]
 }
 
+@test "resolve: derives plugin root from \$0 when CLAUDE_PLUGIN_ROOT is unset" {
+  # Dogfood-driven: continuation commands run from sub-agents whose shell may
+  # not inherit CLAUDE_PLUGIN_ROOT. The script must derive its root from $0.
+  unset CLAUDE_PLUGIN_ROOT
+  run --separate-stderr bash "$RESOLVE"
+  # Either "not installed" (gitmodules empty) or some other gitlore-prefixed
+  # message — never "CLAUDE_PLUGIN_ROOT must be set".
+  [[ "$output$stderr" != *"CLAUDE_PLUGIN_ROOT must be set"* ]]
+}
+
 @test "resolve: creates remote when memory has no origin.url" {
   make_parent_with_memory
   git -C memory remote remove origin 2>/dev/null || true

@@ -29,8 +29,11 @@ gitlore_write_merge_state() {
   local statefile
   statefile=$(gitlore_merge_state_file "$mempath")
   local changed conflicted
-  changed=$(git -C "$mempath" diff --name-only "$base"...HEAD 2>/dev/null \
-    | jq -R . | jq -s . 2>/dev/null || echo '[]')
+  # Union of files changed on either side of the merge — target_ref (HEAD post-checkout)
+  # AND source_ref (the incoming branch). diff base...HEAD alone misses source-side files.
+  changed=$({ git -C "$mempath" diff --name-only "$base...$target" 2>/dev/null; \
+              git -C "$mempath" diff --name-only "$base...$source" 2>/dev/null; } \
+    | sort -u | jq -R . | jq -s . 2>/dev/null || echo '[]')
   conflicted=$(git -C "$mempath" diff --name-only --diff-filter=U 2>/dev/null \
     | jq -R . | jq -s . 2>/dev/null || echo '[]')
   cat > "$statefile" <<EOF
@@ -49,14 +52,21 @@ EOF
 
 # Emit the structured directive on stderr.
 # Args: $1=statefile_path  $2=flavor  $3=continuation_subcommand
+# Emits absolute paths for both the parent repo root (cd target — needed because
+# the continuation invokes git plumbing that reads .gitmodules from CWD) and
+# the plugin's resolve.sh. Sub-agent runs the command verbatim; no env vars or
+# CWD assumptions required.
 gitlore_emit_merge_directive() {
   local statefile="$1" flavor="$2" cont="$3"
+  local root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
+  local repo
+  repo=$(git rev-parse --show-toplevel)
   cat >&2 <<EOF
 gitlore: memory merge prepared (flavor=$flavor).
 gitlore: dispatch the memory-merger sub-agent with state file:
 gitlore:   $statefile
 gitlore: on approval, the sub-agent must run:
-gitlore:   bash "\$CLAUDE_PLUGIN_ROOT/scripts/resolve.sh" $cont
+gitlore:   cd "$repo" && bash "$root/scripts/resolve.sh" $cont
 EOF
 }
 
