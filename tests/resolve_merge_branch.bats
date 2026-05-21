@@ -25,10 +25,19 @@ teardown() { teardown_tmp_repo; }
   [[ "$output$stderr" == *"memory merge prepared"* ]]
   [[ "$output$stderr" == *"flavor=branch-vs-live"* ]]
   [[ "$output$stderr" == *"continue-after-branch-merge"* ]]
+  # Directive emits the absolute resolve.sh path AND a cd to the parent repo
+  # (so the sub-agent's shell needs neither CLAUDE_PLUGIN_ROOT nor a particular CWD).
+  # Dogfood-driven fix.
+  [[ "$output$stderr" == *"cd \"$TMP_REPO\" && bash \"$PLUGIN_ROOT/scripts/resolve.sh\""* ]]
+  [[ "$output$stderr" != *'$CLAUDE_PLUGIN_ROOT'* ]]
   statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
   [ -f "$statefile" ]
   [ "$(jq -r .flavor "$statefile")" = "branch-vs-live" ]
   [ "$(jq -r .return_branch "$statefile")" = "worktree" ]
+  # changed_files must include BOTH sides of the merge (target_ref AND source_ref).
+  # Pre-fix bug: only target-side (LIVE.md) made it in; source-side (BRANCH.md) was lost.
+  changed=$(jq -r '.changed_files[]' "$statefile" | sort | paste -sd, -)
+  [ "$changed" = "BRANCH.md,LIVE.md" ]
 }
 
 @test "branch-vs-live loop: continuation yields again if retry-push fails" {

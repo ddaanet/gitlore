@@ -22,9 +22,15 @@ teardown() { teardown_tmp_repo; }
   [[ "$output$stderr" == *"memory merge prepared"* ]]
   [[ "$output$stderr" == *"flavor=local-vs-remote"* ]]
   [[ "$output$stderr" == *"continue-after-remote-merge"* ]]
+  [[ "$output$stderr" == *"cd \"$TMP_REPO\" && bash \"$PLUGIN_ROOT/scripts/resolve.sh\""* ]]
+  [[ "$output$stderr" != *'$CLAUDE_PLUGIN_ROOT'* ]]
   statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
   [ -f "$statefile" ]
   [ "$(jq -r .flavor "$statefile")" = "local-vs-remote" ]
+  # changed_files must include both sides: REMOTE.md (target, from origin advance)
+  # AND LOCAL.md (source, from local-only commit).
+  changed=$(jq -r '.changed_files[]' "$statefile" | sort | paste -sd, -)
+  [ "$changed" = "LOCAL.md,REMOTE.md" ]
 }
 
 @test "local-vs-remote: stub-synth continuation commits + pushes to origin" {

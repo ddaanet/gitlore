@@ -27,16 +27,16 @@ You are recovering a gitlore memory submodule from divergence — branch-vs-live
    ```
    gitlore: memory merge prepared (flavor=<X>).
    gitlore: dispatch the memory-merger sub-agent with state file:
-   gitlore:   <abs-path>
+   gitlore:   <abs-path-to-state-file>
    gitlore: on approval, the sub-agent must run:
-   gitlore:   bash "$CLAUDE_PLUGIN_ROOT/scripts/resolve.sh" <continuation>
+   gitlore:   cd "<parent-repo>" && bash "<abs-path-to-resolve.sh>" <continuation-subcommand>
    ```
 
-   Extract the state-file path. Save the continuation command for verification only — the sub-agent will run it itself.
+   Extract the state-file path and the full continuation command (the entire `bash "..." <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
 
 4. **Dispatch the `memory-merger` sub-agent.**
 
-   Use the `Task` tool with `subagent_type: "memory-merger"`. Pass the state-file path as the only input.
+   Use the `Task` tool with `subagent_type: "memory-merger"`. Pass two inputs: the state-file path AND the full continuation command from the directive.
 
 5. **Answer the sub-agent's approval request.**
 

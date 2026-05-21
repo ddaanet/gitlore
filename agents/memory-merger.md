@@ -9,7 +9,9 @@ You are synthesizing a semantic merge of memory files. The merge is already prep
 
 ## Inputs
 
-The parent agent will give you exactly one input: an absolute path to a state file.
+The parent agent will give you two inputs:
+1. An absolute path to a state file.
+2. The continuation command — a `cd "<parent-repo>" && bash "<plugin>/scripts/resolve.sh" <subcommand>` invocation lifted verbatim from the prepare hook's directive. Run this command exactly as given on approval; do not reconstruct it from the state file or your environment, and do not strip the `cd` (the script needs a parent-repo CWD to find `.gitmodules`).
 
 ## Constraints
 
@@ -20,7 +22,7 @@ The parent agent will give you exactly one input: an absolute path to a state fi
 - Run `git add -A` in the memory worktree (resolved from the state file's location).
 - SendMessage the parent agent with a prose summary of what you synthesized. The parent will answer from session context or escalate to the user.
 - **Do not commit until the parent SendMessages approval.**
-- On approval, run the continuation: `bash "$CLAUDE_PLUGIN_ROOT/scripts/resolve.sh" <continuation>`. Your job ends when that command exits.
+- On approval, run the continuation command the parent gave you (an absolute `bash ...` invocation). Your job ends when that command exits.
 
 ## Hard rules
 

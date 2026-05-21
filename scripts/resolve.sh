@@ -3,7 +3,15 @@
 # Section 6.2 of the spec. Idempotent: a healthy state produces no changes.
 set -euo pipefail
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT must be set}"
+# Derive plugin root: prefer the env var, fall back to the script's own location.
+# The fallback matters for continuation invocations dispatched from a sub-agent
+# whose shell may not inherit CLAUDE_PLUGIN_ROOT.
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  PLUGIN_ROOT="$CLAUDE_PLUGIN_ROOT"
+else
+  PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fi
+export PLUGIN_ROOT CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
