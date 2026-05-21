@@ -23,7 +23,7 @@ full_name="${owner}/${repo_name}"
 (
   cd "$mempath"
   git checkout -q live
-  if ! gh repo create "$full_name" --private --source=. --push 2>&1; then
+  if ! gh repo create "$full_name" --private --source=. --push; then
     echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover." >&2
     exit 1
   fi
