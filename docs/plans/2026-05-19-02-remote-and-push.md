@@ -281,7 +281,7 @@ tests/resolve.bats                       # NEW — /gitlore:resolve detection + 
 
 Outside-in TDD: write the happy-path e2e first → drive the script to green → backfill failure-case tests. All in one task because the failure cases share setup and the implementation handles them in a single branchy path.
 
-- [ ] **Step 1: Write the happy-path test.**
+- [x] **Step 1: Write the happy-path test.**
 
 Create `tests/pre_push_hook.bats`:
 
@@ -324,12 +324,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run to confirm red.**
+- [x] **Step 2: Run to confirm red.**
 
 Run: `bats tests/pre_push_hook.bats`
 Expected: 1 failure — the stub exits 0 without pushing, so the SHA comparison fails.
 
-- [ ] **Step 3: Replace the stub with the real implementation.**
+- [x] **Step 3: Replace the stub with the real implementation.**
 
 `scripts/git-hooks/pre-push`:
 
@@ -371,12 +371,12 @@ fi
 exit 0
 ```
 
-- [ ] **Step 4: Run happy-path; confirm green.**
+- [x] **Step 4: Run happy-path; confirm green.**
 
 Run: `bats tests/pre_push_hook.bats`
 Expected: 1 passing.
 
-- [ ] **Step 5: Append failure-case tests.**
+- [x] **Step 5: Append failure-case tests.**
 
 ```bash
 @test "pre-push fails with /gitlore:resolve hint when memory has no remote" {
@@ -415,12 +415,12 @@ Expected: 1 passing.
 }
 ```
 
-- [ ] **Step 6: Run; confirm all green.**
+- [x] **Step 6: Run; confirm all green.**
 
 Run: `bats tests/pre_push_hook.bats`
 Expected: 5 passing. The implementation from Step 3 already handles all four failure paths — no further edits needed.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add scripts/git-hooks/pre-push tests/pre_push_hook.bats
@@ -435,25 +435,25 @@ git commit -m "✨ feat: pre-push hook pushes memory live and routes failures to
 
 The gitlore repo already has a memory submodule with a real remote. The new `scripts/git-hooks/pre-push` becomes active automatically because `gitlore.hooksDir` already points at this plugin's `scripts/git-hooks/`.
 
-- [ ] **Step 1: Make a memory-affecting change (or skip if memory is already ahead of remote).**
+- [x] **Step 1: Make a memory-affecting change (or skip if memory is already ahead of remote).**
 
 Edit a memory file so the next commit produces a memory commit, or check `git -C memory log live ^origin/live` to see if local is already ahead.
 
-- [ ] **Step 2: Trigger a parent push.**
+- [x] **Step 2: Trigger a parent push.**
 
 ```bash
 git -C /Users/david/code/gitlore push origin main
 ```
 
-- [ ] **Step 3: Observe the pre-push hook running.**
+- [x] **Step 3: Observe the pre-push hook running.**
 
 Expected: memory's `live` is pushed to its remote before the parent push proceeds. If the memory push fails (auth, network, divergence), the parent push aborts with the routing message.
 
-- [ ] **Step 4: Patch any surprises before starting Task 3.**
+- [x] **Step 4: Patch any surprises before starting Task 3.**
 
 Any deviation from expected behavior is a Phase A patch, not a Phase B concern. Patch, commit, re-run this dogfood, then proceed. Do not start install-remote work with a broken pre-push.
 
-- [ ] **Step 5: If patches were needed, write a feedback memory.**
+- [x] **Step 5: If patches were needed, write a feedback memory.**
 
 Capture what the fixture suite missed. Commit with `📝 memory: ...`.
 
@@ -472,7 +472,7 @@ Capture what the fixture suite missed. Commit with `📝 memory: ...`.
 
 Outside-in TDD: write red e2e for the full install-with-remote flow → implement preflight (it gates everything) → implement create-remote → wire into `run.sh` → backfill failure-case tests.
 
-- [ ] **Step 1: Build the `gh` mock helper.**
+- [x] **Step 1: Build the `gh` mock helper.**
 
 Create `tests/helpers/gh-mock.bash`:
 
@@ -514,7 +514,7 @@ EOF
 }
 ```
 
-- [ ] **Step 2: Sanity-test the mock.**
+- [x] **Step 2: Sanity-test the mock.**
 
 Create `tests/gh_mock.bats`:
 
@@ -556,7 +556,7 @@ teardown() { teardown_tmp_repo; }
 
 Run: `bats tests/gh_mock.bats` — expect 4 passing. (If failing, fix the mock before continuing.)
 
-- [ ] **Step 3: Write red e2e for install remote-creation.**
+- [x] **Step 3: Write red e2e for install remote-creation.**
 
 Create `tests/install_remote.bats`:
 
@@ -599,7 +599,7 @@ teardown() { teardown_tmp_repo; }
 
 Run: `bats tests/install_remote.bats` — expect 3 failures (install doesn't do remote creation yet).
 
-- [ ] **Step 4: Implement preflight.**
+- [x] **Step 4: Implement preflight.**
 
 Create `scripts/install/preflight.sh`:
 
@@ -626,7 +626,7 @@ fi
 exit 0
 ```
 
-- [ ] **Step 5: Implement create-remote.**
+- [x] **Step 5: Implement create-remote.**
 
 Create `scripts/install/create-remote.sh`:
 
@@ -674,7 +674,7 @@ git add .gitmodules
 exit 0
 ```
 
-- [ ] **Step 6: Wire preflight + create-remote into `scripts/install/run.sh`.**
+- [x] **Step 6: Wire preflight + create-remote into `scripts/install/run.sh`.**
 
 Modify `scripts/install/run.sh`:
 
@@ -702,19 +702,19 @@ Final ordering inside `run.sh`:
 9. Final `git add` of tracked artifacts
 10. Echo "install complete"
 
-- [ ] **Step 7: Run happy-path tests; confirm green.**
+- [x] **Step 7: Run happy-path tests; confirm green.**
 
 Run: `bats tests/install_remote.bats`
 Expected: 3 passing.
 
-- [ ] **Step 8: Verify Plan 01's install tests still pass.**
+- [x] **Step 8: Verify Plan 01's install tests still pass.**
 
 Run: `bats tests/install_run.bats`
 Expected: all of Plan 01's install tests still pass.
 
 If any fail because they didn't set up the gh mock, modify `tests/install_run.bats` to `load helpers/gh-mock` and call `install_gh_mock` + `export GH_MOCK_STDOUT_API_USER="alice"` in setup. Plan 02's preflight now requires a working `gh` even in Plan 01's test paths.
 
-- [ ] **Step 9: Append failure-case tests.**
+- [x] **Step 9: Append failure-case tests.**
 
 Append to `tests/install_remote.bats`:
 
@@ -753,12 +753,12 @@ Append to `tests/install_remote.bats`:
 }
 ```
 
-- [ ] **Step 10: Run; confirm all green.**
+- [x] **Step 10: Run; confirm all green.**
 
 Run: `bats tests/install_remote.bats`
 Expected: 7 passing.
 
-- [ ] **Step 11: Commit.**
+- [x] **Step 11: Commit.**
 
 ```bash
 git add tests/helpers/gh-mock.bash tests/gh_mock.bats tests/install_remote.bats \
@@ -778,7 +778,7 @@ git commit -m "✨ feat: install creates memory submodule remote via gh, gated b
 
 The command file is a thin shim. The real work happens in `scripts/resolve.sh`. Tests drive the script.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 Create `tests/resolve.bats`:
 
@@ -854,7 +854,7 @@ teardown() { teardown_tmp_repo; }
 
 Run: `bats tests/resolve.bats` — expect 5 failures.
 
-- [ ] **Step 2: Implement `scripts/resolve.sh`.**
+- [x] **Step 2: Implement `scripts/resolve.sh`.**
 
 ```bash
 #\!/usr/bin/env bash
@@ -923,12 +923,12 @@ echo "gitlore: state is healthy. Nothing to do." >&2
 exit 0
 ```
 
-- [ ] **Step 3: Run; confirm green.**
+- [x] **Step 3: Run; confirm green.**
 
 Run: `bats tests/resolve.bats`
 Expected: 5 passing.
 
-- [ ] **Step 4: Write the CC command file.**
+- [x] **Step 4: Write the CC command file.**
 
 Create `commands/gitlore/resolve.md`:
 
@@ -957,7 +957,7 @@ You are recovering a gitlore install whose memory remote is missing, unreachable
 3. **Summarize.** Tell the user what state was detected and what action was taken (or what they need to do next).
 ```
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/resolve.sh tests/resolve.bats commands/gitlore/resolve.md
@@ -972,14 +972,14 @@ git commit -m "✨ feat: /gitlore:resolve detection, dispatch, and command"
 
 End-to-end: one `/gitlore:install` command on a virgin repo. Tests the full Plan 01 + Plan 02 happy path against real `gh` and a real GitHub remote.
 
-- [ ] **Step 1: Locate the gitmoji repo and verify virgin state.**
+- [x] **Step 1: Locate the gitmoji repo and verify virgin state.**
 
 The user will identify the path. Verify it has:
 - A `.git/` directory
 - No existing `memory/` submodule
 - No existing `.claude/settings.json` with `gitlore.enabled`
 
-- [ ] **Step 2: Run `/gitlore:install`.**
+- [x] **Step 2: Run `/gitlore:install`.**
 
 From inside Claude Code, navigate to the gitmoji repo root and invoke:
 
@@ -989,7 +989,7 @@ From inside Claude Code, navigate to the gitmoji repo root and invoke:
 
 Adapt the precommit command to whatever the gitmoji repo actually uses; or pick a sensible no-op like `echo`.
 
-- [ ] **Step 3: Observe the install flow.**
+- [x] **Step 3: Observe the install flow.**
 
 Expected, in order:
 1. Preflight passes (gh + auth ok).
@@ -1000,15 +1000,15 @@ Expected, in order:
 6. Memory submodule is staged as a gitlink (mode 160000).
 7. Install completes with "Review the staged changes" message.
 
-- [ ] **Step 4: Exercise the full pipeline.**
+- [x] **Step 4: Exercise the full pipeline.**
 
 Make a memory-affecting change, commit (pre-commit fires, memory commit created), then push (pre-push fires, memory's `live` pushes to remote).
 
-- [ ] **Step 5: Patch any surprises.**
+- [x] **Step 5: Patch any surprises.**
 
 Any deviation is a Plan 02 patch. Patch, commit, re-run. Plan 02 is not shipped until this works end-to-end.
 
-- [ ] **Step 6: Write a `feedback_dogfood_b.md` memory.**
+- [x] **Step 6: Write a `feedback_dogfood_b.md` memory.**
 
 Record what *did* surface as a second concrete instance of [[feedback-dogfood-early]].
 
