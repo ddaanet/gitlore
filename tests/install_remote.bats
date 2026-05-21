@@ -1,0 +1,80 @@
+#!/usr/bin/env bats
+
+load helpers/setup
+load helpers/gh-mock
+
+RUN_INSTALL="$PLUGIN_ROOT/scripts/install/run.sh"
+
+setup() {
+  setup_tmp_repo
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  install_gh_mock
+  export GH_MOCK_STDOUT_API_USER="alice"
+  # Seed a bare remote for the gh mock to point origin at when simulating
+  # `gh repo create ... --source=. --push`.
+  export GH_MOCK_REMOTE_URL="$TMP_REPO/.fake-gh-remote.git"
+  git init -q --bare "$GH_MOCK_REMOTE_URL"
+}
+teardown() { teardown_tmp_repo; }
+
+@test "install configures memory submodule remote via gh repo create" {
+  bash "$RUN_INSTALL" memory "echo precommit"
+  url=$(git -C memory config --get remote.origin.url 2>/dev/null || true)
+  [ -n "$url" ]
+}
+
+@test "install rewrites .gitmodules URL from placeholder to real remote" {
+  bash "$RUN_INSTALL" memory "echo precommit"
+  url=$(git config --file .gitmodules submodule.gitlore-memory.url)
+  [[ "$url" != *"gitlore-placeholder"* ]]
+}
+
+@test "install records gh repo create call with --private --source=. --push" {
+  log="$TMP_REPO/gh-calls.log"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
+  grep -q 'repo create' "$log"
+  grep -q -- '--private' "$log"
+  grep -q -- '--push' "$log"
+}
+
+@test "preflight aborts install when gh is missing" {
+  # Build a controlled PATH that includes all tools needed by run.sh/preflight.sh
+  # but explicitly omits gh. We symlink every needed binary except gh.
+  local no_gh_bin="$TMP_REPO/.no-gh-bin"
+  mkdir -p "$no_gh_bin"
+  for tool in bash git jq mktemp dirname basename find grep sed awk sort cat cp rm mkdir touch chmod; do
+    bin=$(command -v "$tool" 2>/dev/null || true)
+    [ -n "$bin" ] && ln -sf "$bin" "$no_gh_bin/$tool"
+  done
+  # Deliberately do NOT link gh.
+  PATH="$no_gh_bin" \
+    run --separate-stderr bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"gh"* ]]
+  [ ! -d memory ]
+  [ ! -f .claude/settings.json ]
+}
+
+@test "preflight aborts install when gh is unauthed" {
+  GH_MOCK_EXIT_AUTH_STATUS=1 run --separate-stderr bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"gh auth login"* ]]
+  [ ! -d memory ]
+  [ ! -f .claude/settings.json ]
+}
+
+@test "install aborts cleanly when gh repo create fails (name collision)" {
+  GH_MOCK_EXIT_REPO_CREATE=1 \
+    GH_MOCK_STDERR_REPO_CREATE="GraphQL: Name already exists on this account" \
+    run --separate-stderr bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"/gitlore:resolve"* ]]
+}
+
+@test "install is idempotent (no second gh repo create call on re-run)" {
+  log="$TMP_REPO/gh-calls.log"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
+  count=$(grep -c 'repo create' "$log" || true)
+  [ "$count" -eq 1 ]
+}
