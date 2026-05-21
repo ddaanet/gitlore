@@ -20,22 +20,28 @@ repo_basename=$(basename "$(git rev-parse --show-toplevel)")
 repo_name="${repo_basename}-gitlore-memory"
 full_name="${owner}/${repo_name}"
 
-(
-  cd "$mempath"
-  git checkout -q live
-  if ! gh repo create "$full_name" --private --source=. --push; then
-    echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover." >&2
-    exit 1
-  fi
-)
-
-new_url=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
-if [ -z "$new_url" ]; then
-  echo "gitlore: gh repo create succeeded but remote.origin.url is empty. Run /gitlore:resolve." >&2
+# Avoid `gh repo create --source=. --push` — gh's --source handling rejects
+# gitfile-pointed submodule worktrees with "current directory is not a git
+# repository" (verified against gh 2.88.1). Create the empty remote and wire
+# it up by hand instead.
+if ! gh repo create "$full_name" --private; then
+  echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover." >&2
   exit 1
 fi
 
-git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" "$new_url"
+remote_url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl 2>/dev/null || true)
+if [ -z "$remote_url" ]; then
+  echo "gitlore: created remote $full_name but could not resolve its URL. Run /gitlore:resolve to recover." >&2
+  exit 1
+fi
+
+git -C "$mempath" remote add origin "$remote_url"
+if ! git -C "$mempath" push -u origin live; then
+  echo "gitlore: created remote but failed to push memory's live branch. Run /gitlore:resolve to retry." >&2
+  exit 1
+fi
+
+git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" "$remote_url"
 git add .gitmodules
 
 exit 0

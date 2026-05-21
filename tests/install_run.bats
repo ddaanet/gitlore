@@ -88,3 +88,15 @@ teardown() { teardown_tmp_repo; }
   [ "$(cat memory/MEMORY.md)" = "migrated content" ]
   [ -f memory/user_role.md ]
 }
+
+@test "install removes .gitmodules from .gitignore when present" {
+  printf '.bash_profile\n.gitmodules\n.mcp.json\n' > .gitignore
+  git add .gitignore
+  git commit -q -m "Ignore sandbox artifacts"
+  run bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -eq 0 ]
+  ! grep -qx '\.gitmodules' .gitignore
+  grep -qx '\.bash_profile' .gitignore  # other entries preserved
+  staged=$(git diff --cached --name-only)
+  [[ "$staged" == *".gitmodules"* ]]
+}

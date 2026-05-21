@@ -26,22 +26,11 @@ if [ -z "$stdout_val" ] && [ "${1:-}" = "--version" ]; then
   stdout_val="gh version mock 0.0.0 (mock build)"
 fi
 
-# Simulate `gh repo create ... --source=. --push` side effects on success.
-if [ "$exit_code" = "0" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "create" ]; then
-  has_source_dot=0
-  has_push=0
-  for arg in "$@"; do
-    case "$arg" in
-      --source=.) has_source_dot=1 ;;
-      --push)     has_push=1 ;;
-    esac
-  done
-  if [ "$has_source_dot" = "1" ] && [ "$has_push" = "1" ] && [ -n "${GH_MOCK_REMOTE_URL:-}" ]; then
-    if ! git remote get-url origin >/dev/null 2>&1; then
-      git remote add origin "$GH_MOCK_REMOTE_URL"
-    fi
-    git push -q origin HEAD 2>/dev/null || true
-  fi
+# `gh repo view <name> --json sshUrl -q .sshUrl` returns the configured remote URL
+# unless a per-call override is set. Lets tests script the URL the install flow
+# wires into the submodule.
+if [ -z "$stdout_val" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && [ -n "${GH_MOCK_REMOTE_URL:-}" ]; then
+  stdout_val="$GH_MOCK_REMOTE_URL"
 fi
 
 [ -n "$stdout_val" ] && printf '%s\n' "$stdout_val"
