@@ -42,6 +42,29 @@ if [ $# -ge 1 ]; then
       fi
       exit 0
       ;;
+    continue-after-remote-merge)
+      gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
+      mempath=$(gitlore_memory_path)
+      statefile=$(gitlore_merge_state_file "$mempath")
+      [ -f "$statefile" ] || { echo "gitlore: no merge state file at $statefile" >&2; exit 1; }
+      return_branch=$(jq -r .return_branch "$statefile")
+      # Commit the merge (origin/live is HEAD = first parent per D6).
+      git -C "$mempath" commit -q --no-edit
+      rm -f "$statefile"
+      # Retry the push; on failure, loop with a fresh prepare.
+      if ! git -C "$mempath" push -q origin live 2>/dev/null; then
+        if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
+          echo "gitlore: cannot checkout live (concurrent resolve). Wait and retry." >&2
+          exit 1
+        fi
+        IFS=':' read -r return_branch base old_local <<< "$prep_out"
+        gitlore_write_merge_state "$mempath" "local-vs-remote" "$base" "$old_local" "live" "$return_branch" "continue-after-remote-merge"
+        gitlore_emit_merge_directive "$statefile" "local-vs-remote" "continue-after-remote-merge"
+        exit 1
+      fi
+      git -C "$mempath" checkout -q "$return_branch"
+      exit 0
+      ;;
     *)
       # Other subcommands added in later tasks.
       echo "gitlore: unknown resolve subcommand: $subcmd" >&2

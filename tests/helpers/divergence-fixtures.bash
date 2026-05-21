@@ -23,6 +23,8 @@ make_diverged_branch_vs_live() {
 make_diverged_local_vs_remote() {
   local mempath="${1:-memory}"
   local bare="${TMP_REPO}/.bare-memory.git"
+  # Ensure live exists in the bare (make_parent_with_memory only creates it locally).
+  git -C "$mempath" push -q origin live 2>/dev/null || true
   local clone_dir
   clone_dir="$(mktemp -d "${TMP_REPO}/clone.XXXXXX")"
   (
