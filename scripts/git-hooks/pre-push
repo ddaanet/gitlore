@@ -1,2 +1,35 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/log.sh"
+
+git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null 2>&1 || exit 0
+
+mempath=$(gitlore_memory_path)
+
+remote_url=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
+if [ -z "$remote_url" ]; then
+  gitlore_say_for_agent_or_user \
+    "gitlore: memory submodule has no remote configured. Run /gitlore:resolve to create one." \
+    "gitlore: memory submodule has no remote configured. Open this project in Claude Code and run /gitlore:resolve." >&2
+  exit 1
+fi
+
+if ! git -C "$mempath" push -q origin live 2>/dev/null; then
+  if git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory's live branch diverged from remote (non-fast-forward). Run /gitlore:resolve." \
+      "gitlore: memory's live branch diverged from remote. Open this project in Claude Code and run /gitlore:resolve." >&2
+  else
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory remote unreachable. Check network or 'gh auth status', then retry. Run /gitlore:resolve if the issue persists." \
+      "gitlore: memory remote unreachable. Check network or 'gh auth status', then retry." >&2
+  fi
+  exit 1
+fi
+
 exit 0
