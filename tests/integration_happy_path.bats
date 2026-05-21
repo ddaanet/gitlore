@@ -1,11 +1,16 @@
 #!/usr/bin/env bats
 
 load helpers/setup
+load helpers/gh-mock
 
 setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   export CLAUDECODE=1
+  install_gh_mock
+  export GH_MOCK_STDOUT_API_USER="alice"
+  export GH_MOCK_REMOTE_URL="$TMP_REPO/.fake-gh-remote.git"
+  git init -q --bare "$GH_MOCK_REMOTE_URL"
 }
 teardown() { teardown_tmp_repo; }
 
