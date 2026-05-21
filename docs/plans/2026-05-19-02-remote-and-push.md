@@ -273,129 +273,20 @@ tests/resolve.bats                       # NEW — /gitlore:resolve detection + 
 - Tests use the `gh-mock.bash` helper (Task 1) for any test that would otherwise hit real `gh`. Tests *never* hit the real GitHub API — that's what Dogfood B is for.
 
 ---
-
-## Task 1: `gh` mock helper
-
-**Files:**
-- Create: `tests/helpers/gh-mock.bash`
-
-The mock writes a `gh` shim onto a temp `$PATH` entry and reads env vars to decide its behavior. Each bats test sets `GH_MOCK_*` env vars before calling install/resolve.
-
-- [ ] **Step 1: Write the failing test.**
-
-Create `tests/gh_mock.bats`:
-
-```bash
-#!/usr/bin/env bats
-
-load helpers/setup
-load helpers/gh-mock
-
-setup() {
-  setup_tmp_repo
-  install_gh_mock
-}
-teardown() { teardown_tmp_repo; }
-
-@test "gh mock: returns success by default" {
-  run gh --version
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"gh version mock"* ]]
-}
-
-@test "gh mock: scripted exit code via GH_MOCK_EXIT" {
-  GH_MOCK_EXIT=2 run gh auth status
-  [ "$status" -eq 2 ]
-}
-
-@test "gh mock: scripted stdout via GH_MOCK_STDOUT" {
-  GH_MOCK_STDOUT="alice" run gh api user -q .login
-  [ "$status" -eq 0 ]
-  [ "$output" = "alice" ]
-}
-
-@test "gh mock: records calls to GH_MOCK_LOG" {
-  log="$TMP_REPO/calls.log"
-  GH_MOCK_LOG="$log" gh repo create foo --private
-  grep -q 'repo create foo --private' "$log"
-}
-```
-
-Run: `bats tests/gh_mock.bats` — expect: 4 failures (helper not found).
-
-- [ ] **Step 2: Implement the helper.**
-
-Create `tests/helpers/gh-mock.bash`:
-
-```bash
-#!/usr/bin/env bash
-# Per-test gh mock. Call install_gh_mock from setup() in any test that
-# would otherwise hit real gh. Tests scripture behavior via env vars:
-#
-#   GH_MOCK_EXIT      — exit code to return (default 0)
-#   GH_MOCK_STDOUT    — stdout to print (default "gh version mock\n…" for `gh --version`)
-#   GH_MOCK_STDERR    — stderr to print
-#   GH_MOCK_LOG       — append "<args>" to this file on every invocation
-#
-# Per-subcommand overrides: set GH_MOCK_EXIT_REPO_CREATE etc. (uppercased, _-joined).
-
-install_gh_mock() {
-  local bindir="$TMP_REPO/.gh-mock-bin"
-  mkdir -p "$bindir"
-  cat > "$bindir/gh" <<'EOF'
-#!/usr/bin/env bash
-if [ -n "${GH_MOCK_LOG:-}" ]; then
-  printf '%s\n' "$*" >> "$GH_MOCK_LOG"
-fi
-
-# Per-subcommand override key: GH_MOCK_EXIT_REPO_CREATE etc.
-sub=$(printf '%s_%s' "${1:-}" "${2:-}" | tr 'a-z-' 'A-Z_')
-override_exit_var="GH_MOCK_EXIT_${sub}"
-override_stdout_var="GH_MOCK_STDOUT_${sub}"
-override_stderr_var="GH_MOCK_STDERR_${sub}"
-
-exit_code="${!override_exit_var:-${GH_MOCK_EXIT:-0}}"
-stdout_val="${!override_stdout_var:-${GH_MOCK_STDOUT:-}}"
-stderr_val="${!override_stderr_var:-${GH_MOCK_STDERR:-}}"
-
-# Default --version output for the no-arg-overrides case.
-if [ -z "$stdout_val" ] && [ "${1:-}" = "--version" ]; then
-  stdout_val="gh version mock 0.0.0 (mock build)"
-fi
-
-[ -n "$stdout_val" ] && printf '%s\n' "$stdout_val"
-[ -n "$stderr_val" ] && printf '%s\n' "$stderr_val" >&2
-exit "$exit_code"
-EOF
-  chmod +x "$bindir/gh"
-  export PATH="$bindir:$PATH"
-}
-```
-
-- [ ] **Step 3: Verify.**
-
-Run: `bats tests/gh_mock.bats` — expect: 4 passing.
-
-- [ ] **Step 4: Commit.**
-
-```bash
-git add tests/helpers/gh-mock.bash tests/gh_mock.bats
-git commit -m "🧪 add gh mock helper for hermetic install/resolve tests"
-```
-
----
-
-## Task 2: Pre-push hook — red e2e
+## Task 1: Pre-push hook end-to-end
 
 **Files:**
 - Create: `tests/pre_push_hook.bats`
+- Modify: `scripts/git-hooks/pre-push` (replaces Plan 01's no-op stub)
 
-Black-box test: install gitlore in a temp repo with a bare upstream + a bare memory remote, make a commit, run pre-push, assert memory's `live` advanced on the memory remote.
+Outside-in TDD: write the happy-path e2e first → drive the script to green → backfill failure-case tests. All in one task because the failure cases share setup and the implementation handles them in a single branchy path.
 
-- [ ] **Step 1: Write the failing test.**
+- [ ] **Step 1: Write the happy-path test.**
+
+Create `tests/pre_push_hook.bats`:
 
 ```bash
-#!/usr/bin/env bats
+#\!/usr/bin/env bats
 
 load helpers/setup
 load helpers/fixtures
@@ -405,17 +296,14 @@ PRE_PUSH="$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
-  # Bare memory remote on disk. No GitHub.
   MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
   export MEMORY_REMOTE
   git init -q --bare "$MEMORY_REMOTE"
   make_parent_with_memory
-  # Point memory submodule's origin at the bare remote.
   git -C memory remote remove origin 2>/dev/null || true
   git -C memory remote add origin "$MEMORY_REMOTE"
-  # Push initial live so the remote has a starting point.
   git -C memory push -q origin live
-  # Make a memory commit on live so we have something to push.
+  # Add a memory commit so we have something to push.
   (
     cd memory
     git checkout -q live
@@ -436,29 +324,17 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run to confirm failure.**
+- [ ] **Step 2: Run to confirm red.**
 
 Run: `bats tests/pre_push_hook.bats`
-Expected: 1 failure — the stub hook exits 0 but doesn't push, so the SHA assertion fails.
+Expected: 1 failure — the stub exits 0 without pushing, so the SHA comparison fails.
 
-- [ ] **Step 3: Commit the failing test.**
+- [ ] **Step 3: Replace the stub with the real implementation.**
 
-```bash
-git add tests/pre_push_hook.bats
-git commit -m "🧪 add red e2e test for pre-push memory push"
-```
-
----
-
-## Task 3: Pre-push hook — green implementation
-
-**Files:**
-- Modify: `scripts/git-hooks/pre-push`
-
-- [ ] **Step 1: Replace the stub with the real implementation.**
+`scripts/git-hooks/pre-push`:
 
 ```bash
-#!/usr/bin/env bash
+#\!/usr/bin/env bash
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
@@ -467,12 +343,10 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
 
-# No submodule registered — nothing to do.
 git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null 2>&1 || exit 0
 
 mempath=$(gitlore_memory_path)
 
-# No remote configured — guide the user to resolve.
 remote_url=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
 if [ -z "$remote_url" ]; then
   gitlore_say_for_agent_or_user \
@@ -481,9 +355,7 @@ if [ -z "$remote_url" ]; then
   exit 1
 fi
 
-# Push memory's live to its origin. ff-only.
-if ! git -C "$mempath" push -q origin live 2>/dev/null; then
-  # Distinguish "non-ff" from "unreachable" by checking ls-remote.
+if \! git -C "$mempath" push -q origin live 2>/dev/null; then
   if git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
     gitlore_say_for_agent_or_user \
       "gitlore: memory's live branch diverged from remote (non-fast-forward). Run /gitlore:resolve." \
@@ -499,26 +371,12 @@ fi
 exit 0
 ```
 
-- [ ] **Step 2: Run the test.**
+- [ ] **Step 4: Run happy-path; confirm green.**
 
 Run: `bats tests/pre_push_hook.bats`
 Expected: 1 passing.
 
-- [ ] **Step 3: Commit.**
-
-```bash
-git add scripts/git-hooks/pre-push
-git commit -m "✨ feat: pre-push hook pushes memory's live to its remote"
-```
-
----
-
-## Task 4: Pre-push hook — failure-case tests
-
-**Files:**
-- Modify: `tests/pre_push_hook.bats`
-
-- [ ] **Step 1: Append failure tests.**
+- [ ] **Step 5: Append failure-case tests.**
 
 ```bash
 @test "pre-push fails with /gitlore:resolve hint when memory has no remote" {
@@ -529,7 +387,6 @@ git commit -m "✨ feat: pre-push hook pushes memory's live to its remote"
 }
 
 @test "pre-push fails with divergence hint when remote diverged" {
-  # Force remote ahead of local.
   (
     cd "$(mktemp -d "$TMP_REPO/clone.XXXXXX")"
     git clone -q "$MEMORY_REMOTE" .
@@ -545,7 +402,6 @@ git commit -m "✨ feat: pre-push hook pushes memory's live to its remote"
 }
 
 @test "pre-push fails when remote is unreachable" {
-  # Break the URL so ls-remote fails.
   git -C memory remote set-url origin /this/path/does/not/exist.git
   run bash "$PRE_PUSH"
   [ "$status" -eq 1 ]
@@ -559,31 +415,31 @@ git commit -m "✨ feat: pre-push hook pushes memory's live to its remote"
 }
 ```
 
-- [ ] **Step 2: Run.**
+- [ ] **Step 6: Run; confirm all green.**
 
 Run: `bats tests/pre_push_hook.bats`
-Expected: 5 passing (1 original + 4 new).
+Expected: 5 passing. The implementation from Step 3 already handles all four failure paths — no further edits needed.
 
-- [ ] **Step 3: Commit.**
+- [ ] **Step 7: Commit.**
 
 ```bash
-git add tests/pre_push_hook.bats
-git commit -m "🧪 cover pre-push failure modes (no-remote, divergence, unreachable, no-submodule)"
+git add scripts/git-hooks/pre-push tests/pre_push_hook.bats
+git commit -m "✨ feat: pre-push hook pushes memory live and routes failures to /gitlore:resolve"
 ```
 
 ---
 
-## Task 5: 🐕 Dogfood A — pre-push hook on the gitlore repo itself
+## Task 2: 🐕 Dogfood A — pre-push hook on the gitlore repo itself
 
 **Files:** none (manual validation).
 
-The gitlore repo already has a memory submodule with a real remote (set up by the original dogfood pass). The new `scripts/git-hooks/pre-push` becomes active automatically because `gitlore.hooksDir` already points at this plugin's `scripts/git-hooks/`.
+The gitlore repo already has a memory submodule with a real remote. The new `scripts/git-hooks/pre-push` becomes active automatically because `gitlore.hooksDir` already points at this plugin's `scripts/git-hooks/`.
 
-- [ ] **Step 1: Make a memory-affecting change.**
+- [ ] **Step 1: Make a memory-affecting change (or skip if memory is already ahead of remote).**
 
-In the agent's normal flow, edit a memory file (e.g., touch a feedback memory) so the next commit will produce a memory commit. Or skip to step 2 if memory is already ahead of the remote.
+Edit a memory file so the next commit produces a memory commit, or check `git -C memory log live ^origin/live` to see if local is already ahead.
 
-- [ ] **Step 2: Trigger a git push.**
+- [ ] **Step 2: Trigger a parent push.**
 
 ```bash
 git -C /Users/david/code/gitlore push origin main
@@ -593,27 +449,119 @@ git -C /Users/david/code/gitlore push origin main
 
 Expected: memory's `live` is pushed to its remote before the parent push proceeds. If the memory push fails (auth, network, divergence), the parent push aborts with the routing message.
 
-- [ ] **Step 4: Record any surprises.**
+- [ ] **Step 4: Patch any surprises before starting Task 3.**
 
-Any deviation from expected behavior is a Phase A patch, not a Phase B concern. Patch, commit, re-run this dogfood, then proceed to Task 6. Do not start Phase B with a broken Phase A.
+Any deviation from expected behavior is a Phase A patch, not a Phase B concern. Patch, commit, re-run this dogfood, then proceed. Do not start install-remote work with a broken pre-push.
 
-- [ ] **Step 5: Commit a dogfood note if surprises were found and patched.**
+- [ ] **Step 5: If patches were needed, write a feedback memory.**
 
-If patches were needed, write a one-paragraph note to a feedback memory describing what was missed. Commit with `📝 memory: ...`.
+Capture what the fixture suite missed. Commit with `📝 memory: ...`.
 
 ---
 
-## Task 6: Install remote creation — red e2e
+## Task 3: Install remote creation end-to-end
 
 **Files:**
-- Create: `tests/install_remote.bats`
+- Create: `tests/helpers/gh-mock.bash` — per-test `gh` shim
+- Create: `tests/gh_mock.bats` — sanity tests for the mock itself
+- Create: `tests/install_remote.bats` — install e2e + preflight + failure-case tests
+- Create: `scripts/install/preflight.sh` — gh + auth checks
+- Create: `scripts/install/create-remote.sh` — shared remote-creation logic
+- Modify: `scripts/install/run.sh` — invoke preflight + create-remote
+- Modify: `tests/install_run.bats` if Plan 01's tests break under the new preflight gate
 
-Black-box: run install in a fresh repo with the `gh` mock, assert the memory submodule has a remote configured and `.gitmodules` URL was rewritten.
+Outside-in TDD: write red e2e for the full install-with-remote flow → implement preflight (it gates everything) → implement create-remote → wire into `run.sh` → backfill failure-case tests.
 
-- [ ] **Step 1: Write the failing test.**
+- [ ] **Step 1: Build the `gh` mock helper.**
+
+Create `tests/helpers/gh-mock.bash`:
 
 ```bash
-#!/usr/bin/env bats
+#\!/usr/bin/env bash
+# Per-test gh mock. Call install_gh_mock from setup(). Scripture behavior:
+#   GH_MOCK_EXIT, GH_MOCK_STDOUT, GH_MOCK_STDERR, GH_MOCK_LOG
+# Per-subcommand overrides: GH_MOCK_EXIT_REPO_CREATE, GH_MOCK_STDOUT_API_USER, etc.
+# (uppercase, _-joined first two args.)
+
+install_gh_mock() {
+  local bindir="$TMP_REPO/.gh-mock-bin"
+  mkdir -p "$bindir"
+  cat > "$bindir/gh" <<'EOF'
+#\!/usr/bin/env bash
+if [ -n "${GH_MOCK_LOG:-}" ]; then
+  printf '%s\n' "$*" >> "$GH_MOCK_LOG"
+fi
+
+sub=$(printf '%s_%s' "${1:-}" "${2:-}" | tr 'a-z-' 'A-Z_')
+override_exit_var="GH_MOCK_EXIT_${sub}"
+override_stdout_var="GH_MOCK_STDOUT_${sub}"
+override_stderr_var="GH_MOCK_STDERR_${sub}"
+
+exit_code="${\!override_exit_var:-${GH_MOCK_EXIT:-0}}"
+stdout_val="${\!override_stdout_var:-${GH_MOCK_STDOUT:-}}"
+stderr_val="${\!override_stderr_var:-${GH_MOCK_STDERR:-}}"
+
+if [ -z "$stdout_val" ] && [ "${1:-}" = "--version" ]; then
+  stdout_val="gh version mock 0.0.0 (mock build)"
+fi
+
+[ -n "$stdout_val" ] && printf '%s\n' "$stdout_val"
+[ -n "$stderr_val" ] && printf '%s\n' "$stderr_val" >&2
+exit "$exit_code"
+EOF
+  chmod +x "$bindir/gh"
+  export PATH="$bindir:$PATH"
+}
+```
+
+- [ ] **Step 2: Sanity-test the mock.**
+
+Create `tests/gh_mock.bats`:
+
+```bash
+#\!/usr/bin/env bats
+
+load helpers/setup
+load helpers/gh-mock
+
+setup() {
+  setup_tmp_repo
+  install_gh_mock
+}
+teardown() { teardown_tmp_repo; }
+
+@test "gh mock: returns success by default" {
+  run gh --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gh version mock"* ]]
+}
+
+@test "gh mock: GH_MOCK_EXIT scripts exit code" {
+  GH_MOCK_EXIT=2 run gh auth status
+  [ "$status" -eq 2 ]
+}
+
+@test "gh mock: GH_MOCK_STDOUT_API_USER scripts per-subcommand stdout" {
+  GH_MOCK_STDOUT_API_USER="alice" run gh api user -q .login
+  [ "$status" -eq 0 ]
+  [ "$output" = "alice" ]
+}
+
+@test "gh mock: records calls to GH_MOCK_LOG" {
+  log="$TMP_REPO/calls.log"
+  GH_MOCK_LOG="$log" gh repo create foo --private
+  grep -q 'repo create foo --private' "$log"
+}
+```
+
+Run: `bats tests/gh_mock.bats` — expect 4 passing. (If failing, fix the mock before continuing.)
+
+- [ ] **Step 3: Write red e2e for install remote-creation.**
+
+Create `tests/install_remote.bats`:
+
+```bash
+#\!/usr/bin/env bats
 
 load helpers/setup
 load helpers/gh-mock
@@ -624,7 +572,6 @@ setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   install_gh_mock
-  # Default: gh + auth ok; gh api user returns "alice"; gh repo create succeeds.
   export GH_MOCK_STDOUT_API_USER="alice"
 }
 teardown() { teardown_tmp_repo; }
@@ -633,14 +580,12 @@ teardown() { teardown_tmp_repo; }
   bash "$RUN_INSTALL" memory "echo precommit"
   url=$(git -C memory config --get remote.origin.url 2>/dev/null || true)
   [ -n "$url" ]
-  [[ "$url" == *"alice"*"gitlore-memory"* ]] || [[ "$url" == *"alice/$(basename "$TMP_REPO")-gitlore-memory"* ]]
 }
 
 @test "install rewrites .gitmodules URL from placeholder to real remote" {
   bash "$RUN_INSTALL" memory "echo precommit"
   url=$(git config --file .gitmodules submodule.gitlore-memory.url)
-  [[ "$url" != *"gitlore-placeholder"* ]]
-  [[ "$url" == *"alice"* ]] || [[ "$url" == *"gitlore-memory"* ]]
+  [[ "$url" \!= *"gitlore-placeholder"* ]]
 }
 
 @test "install records gh repo create call with --private --source=. --push" {
@@ -652,67 +597,26 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run to confirm failure.**
+Run: `bats tests/install_remote.bats` — expect 3 failures (install doesn't do remote creation yet).
 
-Run: `bats tests/install_remote.bats`
-Expected: 3 failures — install doesn't yet do remote creation.
+- [ ] **Step 4: Implement preflight.**
 
-- [ ] **Step 3: Commit the failing tests.**
-
-```bash
-git add tests/install_remote.bats
-git commit -m "🧪 add red e2e tests for install-time remote creation"
-```
-
----
-
-## Task 7: Preflight check
-
-**Files:**
-- Create: `scripts/install/preflight.sh`
-- Modify: `tests/install_remote.bats`
-
-- [ ] **Step 1: Append failing tests.**
+Create `scripts/install/preflight.sh`:
 
 ```bash
-@test "preflight aborts install when gh is missing" {
-  # Remove gh from PATH for this test only.
-  PATH="$(echo "$PATH" | sed "s|$TMP_REPO/.gh-mock-bin:||")" \
-    run bash "$RUN_INSTALL" memory "echo precommit"
-  [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"gh"* ]]
-  # Repo should be untouched.
-  [ ! -d memory ]
-  [ ! -f .claude/settings.json ]
-}
-
-@test "preflight aborts install when gh is unauthed" {
-  GH_MOCK_EXIT_AUTH_STATUS=1 run bash "$RUN_INSTALL" memory "echo precommit"
-  [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"gh auth login"* ]]
-  [ ! -d memory ]
-  [ ! -f .claude/settings.json ]
-}
-```
-
-Run: `bats tests/install_remote.bats` — expect 2 new failures (3 + 2 total failing).
-
-- [ ] **Step 2: Implement `scripts/install/preflight.sh`.**
-
-```bash
-#!/usr/bin/env bash
+#\!/usr/bin/env bash
 # Exit 0 if gh is available and authenticated; non-zero with a fix-up
 # message on stderr otherwise. Must do no destructive work.
 set -euo pipefail
 
-if ! command -v gh >/dev/null 2>&1; then
+if \! command -v gh >/dev/null 2>&1; then
   cat >&2 <<'EOF'
 gitlore: 'gh' CLI not found. Install it from https://cli.github.com/, then re-run /gitlore:install.
 EOF
   exit 1
 fi
 
-if ! gh auth status >/dev/null 2>&1; then
+if \! gh auth status >/dev/null 2>&1; then
   cat >&2 <<'EOF'
 gitlore: 'gh' is not authenticated. Run 'gh auth login', then re-run /gitlore:install.
 EOF
@@ -722,53 +626,14 @@ fi
 exit 0
 ```
 
-- [ ] **Step 3: Wire preflight as the *first* step in `scripts/install/run.sh`.**
+- [ ] **Step 5: Implement create-remote.**
 
-Modify `scripts/install/run.sh` — insert immediately after the `cd`-into-repo-root guard, before anything that writes to disk:
-
-```bash
-# Pre-flight: must run before any destructive action.
-bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
-```
-
-(Insert at line 16, before the "Refuse non-empty existing path" check.)
-
-- [ ] **Step 4: Run.**
-
-Run: `bats tests/install_remote.bats`
-Expected: 5 failures still on the remote-creation tests (Task 6) but the preflight tests now pass for the abort cases. (Tasks 6's tests still fail until create-remote is implemented in Task 8.)
-
-Specifically the 2 preflight tests now pass. Confirm:
+Create `scripts/install/create-remote.sh`:
 
 ```bash
-bats tests/install_remote.bats -f 'preflight aborts'
-```
-
-Expected: 2 passing.
-
-- [ ] **Step 5: Commit.**
-
-```bash
-git add scripts/install/preflight.sh scripts/install/run.sh tests/install_remote.bats
-git commit -m "✨ feat: preflight gates install on gh availability and auth"
-```
-
----
-
-## Task 8: `create-remote.sh` — shared remote creation
-
-**Files:**
-- Create: `scripts/install/create-remote.sh`
-
-Contract: idempotent (skip if `remote.origin.url` already non-empty), runs `gh repo create` from inside the memory worktree with `--source=.`, then rewrites `.gitmodules` URL and re-stages `.gitmodules`.
-
-- [ ] **Step 1: Implement `scripts/install/create-remote.sh`.**
-
-```bash
-#!/usr/bin/env bash
+#\!/usr/bin/env bash
 # Create the memory submodule's GitHub remote and rewire .gitmodules.
-# Idempotent: no-op when remote.origin.url is already set.
-#
+# Idempotent: no-op when remote.origin.url is already a real URL.
 # Args: $1 = mempath (relative to repo root)
 set -euo pipefail
 
@@ -778,9 +643,8 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT must be set}"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 
-# Idempotent: skip if remote already configured.
 existing=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
-if [ -n "$existing" ] && [ "$existing" != "./.git/gitlore-placeholder" ]; then
+if [ -n "$existing" ] && [ "$existing" \!= "./.git/gitlore-placeholder" ]; then
   exit 0
 fi
 
@@ -789,100 +653,89 @@ repo_basename=$(basename "$(git rev-parse --show-toplevel)")
 repo_name="${repo_basename}-gitlore-memory"
 full_name="${owner}/${repo_name}"
 
-# Create the GitHub repo from inside the memory worktree.
-# --source=. uses cwd as the source, --push pushes the current branch.
-# We create on `live` so the initial push populates the trunk.
 (
   cd "$mempath"
   git checkout -q live
-  if ! gh repo create "$full_name" --private --source=. --push 2>&1; then
+  if \! gh repo create "$full_name" --private --source=. --push 2>&1; then
     echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover." >&2
     exit 1
   fi
 )
 
-# At this point gh repo create --source=. has set origin and pushed live.
-# Sanity-check origin is set; if not, error out and route to resolve.
 new_url=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
 if [ -z "$new_url" ]; then
   echo "gitlore: gh repo create succeeded but remote.origin.url is empty. Run /gitlore:resolve." >&2
   exit 1
 fi
 
-# Rewrite .gitmodules placeholder URL → real URL, then re-stage.
 git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" "$new_url"
 git add .gitmodules
 
 exit 0
 ```
 
-- [ ] **Step 2: Run install_remote tests; preflight still passes, remote tests now closer to green.**
+- [ ] **Step 6: Wire preflight + create-remote into `scripts/install/run.sh`.**
 
-Run: `bats tests/install_remote.bats`
-Expected: still 3 failures on the remote-creation e2e tests (Task 6's three tests), because run.sh doesn't yet invoke create-remote.sh.
+Modify `scripts/install/run.sh`:
 
-- [ ] **Step 3: Commit.**
+- Insert preflight as the first action after the `cd`-into-repo-root guard, before the "Refuse non-empty existing path" check:
 
-```bash
-git add scripts/install/create-remote.sh
-git commit -m "✨ feat: create-remote shared library for install and resolve"
-```
+  ```bash
+  bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
+  ```
 
----
+- Insert create-remote after `init-submodule.sh` and before `write-settings.sh`:
 
-## Task 9: Wire `create-remote.sh` into `install/run.sh`
-
-**Files:**
-- Modify: `scripts/install/run.sh`
-
-- [ ] **Step 1: Invoke create-remote after init-submodule.**
-
-In `scripts/install/run.sh`, append after the existing `init-submodule.sh` invocation and before `write-settings.sh`:
-
-```bash
-bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
-```
+  ```bash
+  bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
+  ```
 
 Final ordering inside `run.sh`:
-1. Pre-flight (Task 7)
-2. Existing "refuse non-empty path" check
-3. `init-submodule.sh`
-4. `create-remote.sh` (NEW)
-5. `write-settings.sh`
-6. `emit-wrappers.sh`
-7. Hook manager wiring
-8. Final `git add` of tracked artifacts
-9. Echo "install complete"
+1. Repo-root guard
+2. Pre-flight (NEW)
+3. Existing "refuse non-empty path" check
+4. `init-submodule.sh`
+5. `create-remote.sh` (NEW)
+6. `write-settings.sh`
+7. `emit-wrappers.sh`
+8. Hook manager wiring
+9. Final `git add` of tracked artifacts
+10. Echo "install complete"
 
-- [ ] **Step 2: Run.**
+- [ ] **Step 7: Run happy-path tests; confirm green.**
 
 Run: `bats tests/install_remote.bats`
-Expected: 5 passing (3 from Task 6 + 2 from Task 7).
+Expected: 3 passing.
 
-- [ ] **Step 3: Run the full test suite to confirm no regression in Plan 01's install_run.bats.**
+- [ ] **Step 8: Verify Plan 01's install tests still pass.**
 
 Run: `bats tests/install_run.bats`
-Expected: all of Plan 01's 10 install tests still pass.
+Expected: all of Plan 01's install tests still pass.
 
-If any fail because they didn't set up the gh mock, modify `tests/install_run.bats` to source `helpers/gh-mock` and call `install_gh_mock` in setup. (Plan 01's tests don't use gh, but Plan 02's install now requires it — preflight will abort otherwise.)
+If any fail because they didn't set up the gh mock, modify `tests/install_run.bats` to `load helpers/gh-mock` and call `install_gh_mock` + `export GH_MOCK_STDOUT_API_USER="alice"` in setup. Plan 02's preflight now requires a working `gh` even in Plan 01's test paths.
 
-- [ ] **Step 4: Commit.**
+- [ ] **Step 9: Append failure-case tests.**
 
-```bash
-git add scripts/install/run.sh tests/install_run.bats
-git commit -m "✨ feat: install creates memory submodule remote via gh"
-```
-
----
-
-## Task 10: Install remote — failure-case tests
-
-**Files:**
-- Modify: `tests/install_remote.bats`
-
-- [ ] **Step 1: Append failing tests.**
+Append to `tests/install_remote.bats`:
 
 ```bash
+@test "preflight aborts install when gh is missing" {
+  PATH="$(echo "$PATH" | sed "s|$TMP_REPO/.gh-mock-bin:||")" \
+    run bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"gh"* ]]
+  [ \! -d memory ]
+  [ \! -f .claude/settings.json ]
+}
+
+@test "preflight aborts install when gh is unauthed" {
+  GH_MOCK_EXIT_AUTH_STATUS=1 run bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"gh auth login"* ]]
+  [ \! -d memory ]
+  [ \! -f .claude/settings.json ]
+}
+
 @test "install aborts cleanly when gh repo create fails (name collision)" {
   GH_MOCK_EXIT_REPO_CREATE=1 \
     GH_MOCK_STDERR_REPO_CREATE="GraphQL: Name already exists on this account" \
@@ -891,85 +744,46 @@ git commit -m "✨ feat: install creates memory submodule remote via gh"
   [[ "$output$stderr" == *"/gitlore:resolve"* ]]
 }
 
-@test "install is idempotent after a successful run (no second gh repo create call)" {
+@test "install is idempotent (no second gh repo create call on re-run)" {
   log="$TMP_REPO/gh-calls.log"
   GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
-  # Second run should not call gh repo create again because remote is set.
   GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
   count=$(grep -c 'repo create' "$log" || true)
   [ "$count" -eq 1 ]
 }
 ```
 
-- [ ] **Step 2: Run.**
+- [ ] **Step 10: Run; confirm all green.**
 
 Run: `bats tests/install_remote.bats`
 Expected: 7 passing.
 
-- [ ] **Step 3: Commit.**
+- [ ] **Step 11: Commit.**
 
 ```bash
-git add tests/install_remote.bats
-git commit -m "🧪 cover install remote-creation failure modes and idempotency"
+git add tests/helpers/gh-mock.bash tests/gh_mock.bats tests/install_remote.bats \
+        scripts/install/preflight.sh scripts/install/create-remote.sh scripts/install/run.sh \
+        tests/install_run.bats
+git commit -m "✨ feat: install creates memory submodule remote via gh, gated by preflight"
 ```
 
 ---
 
-## Task 11: `/gitlore:resolve` command file
+## Task 4: `/gitlore:resolve` — command, script, and tests
 
 **Files:**
-- Create: `commands/gitlore/resolve.md`
+- Create: `commands/gitlore/resolve.md` — CC slash command
+- Create: `scripts/resolve.sh` — detection + dispatch logic
+- Create: `tests/resolve.bats` — detection + dispatch tests
 
-- [ ] **Step 1: Write the command stub.**
-
-```markdown
----
-description: Diagnose and recover from a partial or broken gitlore remote setup
-allowed-tools: ["Bash"]
----
-
-# /gitlore:resolve
-
-You are recovering a gitlore install whose memory remote is missing, unreachable, or partially configured.
-
-## Steps
-
-1. **Confirm context.** Verify you are at the root of a git working tree. Run:
-   ```
-   git rev-parse --show-toplevel
-   ```
-   If this fails, tell the user to cd into a git repo and abort.
-
-2. **Run the resolver script.**
-
-   ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"
-   ```
-
-   The script exits 0 on success (state is healthy or was repaired). Non-zero means the state needs manual intervention; surface the script's stderr verbatim and stop.
-
-3. **Summarize.** Tell the user what state was detected and what action was taken (or what they need to do next).
-```
-
-- [ ] **Step 2: Commit.**
-
-```bash
-git add commands/gitlore/resolve.md
-git commit -m "✨ feat: /gitlore:resolve command stub"
-```
-
----
-
-## Task 12: `scripts/resolve.sh` — detection + dispatch
-
-**Files:**
-- Create: `scripts/resolve.sh`
-- Create: `tests/resolve.bats`
+The command file is a thin shim. The real work happens in `scripts/resolve.sh`. Tests drive the script.
 
 - [ ] **Step 1: Write failing tests.**
 
+Create `tests/resolve.bats`:
+
 ```bash
-#!/usr/bin/env bats
+#\!/usr/bin/env bats
 
 load helpers/setup
 load helpers/fixtures
@@ -1001,7 +815,7 @@ teardown() { teardown_tmp_repo; }
   [ -n "$(git -C memory config --get remote.origin.url)" ]
 }
 
-@test "resolve: reports unreachable remote without retrying" {
+@test "resolve: reports unreachable remote without calling gh repo create" {
   make_parent_with_memory
   git -C memory remote remove origin 2>/dev/null || true
   git -C memory remote add origin /does/not/exist.git
@@ -1009,8 +823,7 @@ teardown() { teardown_tmp_repo; }
   GH_MOCK_LOG="$log" run bash "$RESOLVE"
   [ "$status" -ne 0 ]
   [[ "$output$stderr" == *"unreachable"* ]] || [[ "$output$stderr" == *"network"* ]] || [[ "$output$stderr" == *"auth"* ]]
-  # Must not have called gh repo create — it's already created.
-  ! grep -q 'repo create' "$log" 2>/dev/null
+  \! grep -q 'repo create' "$log" 2>/dev/null
 }
 
 @test "resolve: pushes live when remote exists but has no live branch" {
@@ -1019,11 +832,10 @@ teardown() { teardown_tmp_repo; }
   git init -q --bare "$bare"
   git -C memory remote remove origin 2>/dev/null || true
   git -C memory remote add origin "$bare"
-  # Remote is reachable but empty.
   run bash "$RESOLVE"
   [ "$status" -eq 0 ]
   remote_live=$(git --git-dir="$bare" rev-parse live 2>/dev/null || echo MISSING)
-  [ "$remote_live" != "MISSING" ]
+  [ "$remote_live" \!= "MISSING" ]
 }
 
 @test "resolve: no-op when healthy" {
@@ -1036,7 +848,7 @@ teardown() { teardown_tmp_repo; }
   log="$TMP_REPO/gh-calls.log"
   GH_MOCK_LOG="$log" run bash "$RESOLVE"
   [ "$status" -eq 0 ]
-  ! grep -q 'repo create' "$log" 2>/dev/null
+  \! grep -q 'repo create' "$log" 2>/dev/null
 }
 ```
 
@@ -1045,7 +857,7 @@ Run: `bats tests/resolve.bats` — expect 5 failures.
 - [ ] **Step 2: Implement `scripts/resolve.sh`.**
 
 ```bash
-#!/usr/bin/env bash
+#\!/usr/bin/env bash
 # Diagnose and repair gitlore remote state. Detection order matches
 # Section 6.2 of the spec. Idempotent: a healthy state produces no changes.
 set -euo pipefail
@@ -1057,7 +869,7 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
 
 # Step 1: gitlore installed?
-if ! gitlore_has_submodule; then
+if \! gitlore_has_submodule; then
   gitlore_say_for_agent_or_user \
     "gitlore: not installed in this repo. Run /gitlore:install." \
     "gitlore: not installed in this repo. Open this project in Claude Code and run /gitlore:install." >&2
@@ -1076,7 +888,7 @@ if [ -z "$remote_url" ] || [ "$remote_url" = "./.git/gitlore-placeholder" ]; the
 fi
 
 # Step 3: remote reachable?
-if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
+if \! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
   gitlore_say_for_agent_or_user \
     "gitlore: memory remote unreachable. Check network or 'gh auth status'. Manual fix required." \
     "gitlore: memory remote unreachable. Check network or run 'gh auth status'." >&2
@@ -1084,7 +896,7 @@ if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
 fi
 
 # Step 4: live exists on remote?
-if ! git -C "$mempath" ls-remote origin live | grep -q .; then
+if \! git -C "$mempath" ls-remote origin live | grep -q .; then
   echo "gitlore: remote has no live branch. Pushing." >&2
   git -C "$mempath" push origin live
   echo "gitlore: live pushed." >&2
@@ -1094,9 +906,7 @@ fi
 # Step 5: ff-relationship between local and remote live?
 local_live=$(git -C "$mempath" rev-parse live)
 remote_live=$(git -C "$mempath" ls-remote origin live | awk '{print $1}')
-if [ "$local_live" != "$remote_live" ]; then
-  # Check if local is ancestor of remote (we're behind — fine, pull would advance us)
-  # or remote is ancestor of local (we're ahead — push would advance remote).
+if [ "$local_live" \!= "$remote_live" ]; then
   if git -C "$mempath" merge-base --is-ancestor "$remote_live" "$local_live"; then
     echo "gitlore: local live is ahead of remote. Pushing." >&2
     git -C "$mempath" push origin live
@@ -1113,29 +923,58 @@ echo "gitlore: state is healthy. Nothing to do." >&2
 exit 0
 ```
 
-- [ ] **Step 3: Run.**
+- [ ] **Step 3: Run; confirm green.**
 
 Run: `bats tests/resolve.bats`
 Expected: 5 passing.
 
-- [ ] **Step 4: Commit.**
+- [ ] **Step 4: Write the CC command file.**
+
+Create `commands/gitlore/resolve.md`:
+
+```markdown
+---
+description: Diagnose and recover from a partial or broken gitlore remote setup
+allowed-tools: ["Bash"]
+---
+
+# /gitlore:resolve
+
+You are recovering a gitlore install whose memory remote is missing, unreachable, or partially configured.
+
+## Steps
+
+1. **Confirm context.** Run `git rev-parse --show-toplevel`. If this fails, tell the user to cd into a git repo and abort.
+
+2. **Run the resolver script.**
+
+   ```bash
+   "${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"
+   ```
+
+   Exits 0 on success (state healthy or repaired). Non-zero means manual intervention is needed; surface stderr verbatim and stop.
+
+3. **Summarize.** Tell the user what state was detected and what action was taken (or what they need to do next).
+```
+
+- [ ] **Step 5: Commit.**
 
 ```bash
-git add scripts/resolve.sh tests/resolve.bats
-git commit -m "✨ feat: /gitlore:resolve detection and dispatch"
+git add scripts/resolve.sh tests/resolve.bats commands/gitlore/resolve.md
+git commit -m "✨ feat: /gitlore:resolve detection, dispatch, and command"
 ```
 
 ---
 
-## Task 13: 🐕 Dogfood B — install on the gitmoji repo
+## Task 5: 🐕 Dogfood B — install on the gitmoji repo
 
 **Files:** none (manual validation).
 
 End-to-end: one `/gitlore:install` command on a virgin repo. Tests the full Plan 01 + Plan 02 happy path against real `gh` and a real GitHub remote.
 
-- [ ] **Step 1: Locate the gitmoji repo.**
+- [ ] **Step 1: Locate the gitmoji repo and verify virgin state.**
 
-The user will identify the path. Likely under `~/code/gitmoji` or similar. Verify it has:
+The user will identify the path. Verify it has:
 - A `.git/` directory
 - No existing `memory/` submodule
 - No existing `.claude/settings.json` with `gitlore.enabled`
@@ -1148,7 +987,7 @@ From inside Claude Code, navigate to the gitmoji repo root and invoke:
 /gitlore:install memory "lefthook run pre-commit"
 ```
 
-(Adapt the precommit command to whatever the gitmoji repo actually uses; or pick a sensible no-op like `echo`.)
+Adapt the precommit command to whatever the gitmoji repo actually uses; or pick a sensible no-op like `echo`.
 
 - [ ] **Step 3: Observe the install flow.**
 
@@ -1161,38 +1000,26 @@ Expected, in order:
 6. Memory submodule is staged as a gitlink (mode 160000).
 7. Install completes with "Review the staged changes" message.
 
-- [ ] **Step 4: Make a memory-affecting change and commit.**
+- [ ] **Step 4: Exercise the full pipeline.**
 
-Edit a memory file (e.g., add a `project_overview.md`), then commit the parent repo. The pre-commit hook should:
-1. See memory is dirty.
-2. Either prompt for a commit message via Claude or use a fresh approved one.
-3. Commit memory and ff-push to memory's local `live`.
+Make a memory-affecting change, commit (pre-commit fires, memory commit created), then push (pre-push fires, memory's `live` pushes to remote).
 
-- [ ] **Step 5: Push the parent repo.**
+- [ ] **Step 5: Patch any surprises.**
 
-```bash
-git push
-```
+Any deviation is a Plan 02 patch. Patch, commit, re-run. Plan 02 is not shipped until this works end-to-end.
 
-Expected: the new pre-push hook fires, pushes memory's `live` to its remote, then the outer push proceeds.
+- [ ] **Step 6: Write a `feedback_dogfood_b.md` memory.**
 
-- [ ] **Step 6: Record any surprises.**
-
-Any deviation from expected behavior is a Plan 02 patch. Patch, commit, re-run this dogfood. Do not consider Plan 02 shipped until this works end-to-end.
-
-- [ ] **Step 7: Write a dogfood retrospective memory.**
-
-After Dogfood B succeeds, write a `feedback_dogfood_b.md` memory recording any surprises that *did* surface (even if patched). This continues the [[feedback-dogfood-early]] lesson with a second concrete instance.
+Record what *did* surface as a second concrete instance of [[feedback-dogfood-early]].
 
 ---
 
 ## Self-review checklist (writing-plans)
 
-After all tasks are written, the plan was checked against the spec:
-
-- ✅ Spec coverage: each of Sections 2.1's three bullets (Phase A, Phase B, `/gitlore:resolve`) has dedicated tasks. Sections 3, 4, 5, 6 each map to specific tasks or test files.
+- ✅ Spec coverage: Sections 2.1's three bullets (Phase A, Phase B, `/gitlore:resolve`) each have dedicated tasks. Sections 3, 4, 5, 6 each map to specific tasks or test files.
 - ✅ Placeholder scan: no TBDs, no "add appropriate error handling", no "similar to Task N", no references to undefined symbols.
-- ✅ Type consistency: `mempath` used consistently. `GITLORE_SUBMODULE_NAME` referenced from existing `scripts/lib/util.sh` (defined in Plan 01).
-- ✅ Outside-in test order: e2e written first (Tasks 2, 6), units backfilled (Tasks 4, 10), dogfood gates explicit (Tasks 5, 13).
-- ✅ Single source of truth for remote creation: `create-remote.sh` called from both `install/run.sh` (Task 9) and `resolve.sh` (Task 12).
+- ✅ Type consistency: `mempath`, `GITLORE_SUBMODULE_NAME` (from Plan 01's `scripts/lib/util.sh`), `gitlore_has_submodule`, `gitlore_memory_path` all used consistently.
+- ✅ Outside-in test order: each code task writes failing tests first, drives to green, backfills failures within the same task.
+- ✅ Single source of truth for remote creation: `create-remote.sh` called from both `install/run.sh` (Task 3) and `resolve.sh` (Task 4).
+- ✅ Dogfood gates explicit: Task 2 between Phase A and Phase B; Task 5 after Phase B before plan is considered shipped.
 - ✅ Spec corrections inline: removed stale `gitlore.prepushCommand` claim, clarified that user pre-push commands are the hook manager's responsibility.
