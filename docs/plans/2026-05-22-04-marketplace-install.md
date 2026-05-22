@@ -129,12 +129,12 @@ Plan 04's testable surface is two manifest files (`gitlore/.claude-plugin/plugin
 
 ### 7.1 Layer 1 — `claude plugin validate`
 
-`make validate` (or equivalent target) runs `claude plugin validate .` in:
+Authoritative manifest check. Runs in two places:
 
-- `/Users/david/code/gitlore`
-- `/Users/david/code/claude-plugins`
+- **In gitlore:** `make validate` (Task 5) runs `claude plugin validate .` against `gitlore/.claude-plugin/plugin.json`. Must exit 0 before Plan 04 ships.
+- **In claude-plugins:** invoked inline during Task 7 step 3, against `claude-plugins/.claude-plugin/marketplace.json`. Must exit 0 before the marketplace push.
 
-Both must exit 0. This is the authoritative manifest check.
+Two repos, two invocations — no shared Makefile across the sibling repos (out of scope).
 
 ### 7.2 Layer 2 — Manual dogfood (two-tier)
 
@@ -155,9 +155,10 @@ For dogfood findings that surface in the existing runtime code (scripts, agents,
 2. **Sub-agent namespace from a marketplace-installed plugin.** Plan 03 emitted directives naming `memory-merger` (bare). Confirm `Task({subagent_type: "memory-merger"})` vs `Task({subagent_type: "gitlore:memory-merger"})` — whichever CC actually accepts. Plan 03's `commands/gitlore/resolve.md` already chose one; verify it matches.
 3. **What `claude plugin validate` actually checks.** Existing `ddaanet/claude-plugins/CLAUDE.md` references the tool but doesn't enumerate what it enforces. Discover during Task 5 (validate); fix any rejection at the manifest, not at a test fixture.
 4. **Marketplace entry shape — full or minimal.** `handoff` entry has `version`, `license`, `keywords`, `repository`, etc. `edify` entry omits `version`. Pick the explicit-everything style (matches `handoff`/`gitmoji`); list deliberately for Plan 04.
-5. **README presence.** `gitlore` repo has `docs/plugin-readme.md` but no root `README.md`. The marketplace entry's `repository` link will land users on the GitHub page; CC may render `docs/plugin-readme.md` or expect `README.md`. Decide during Task 4 (manifest polish).
+5. **README presence.** `gitlore` repo has `docs/plugin-readme.md` but no root `README.md`. The marketplace entry's `repository` link will land users on the GitHub page; CC may render `docs/plugin-readme.md` or expect `README.md`. Decide during Task 4 (install-pathway documentation) by checking how `ddaanet/handoff` and `ddaanet/gitmoji` lay theirs out.
 6. **Inner-loop fixture: which throwaway repo.** Per [[feedback-dogfood-b]] the gitmoji repo was used previously. Use a fresh `mktemp -d` repo with a single initial commit — no leftover Plan 02 state, no parent submodule history to navigate around.
 7. **`/gitlore:install`'s pre-flight under marketplace load.** The existing preflight checks `gh` + `gh auth` + warns on `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Verify nothing in it depends on the plugin source being a cwd or symlink rather than a marketplace cache directory.
+8. **Double-prefix in slash command names.** Commands at `commands/gitlore/install.md` are exposed by CC as `/gitlore:gitlore:install` (`plugin:subdir:name`) — and alongside the skill at `skills/install/SKILL.md` exposed as `gitlore:install`, the user sees two confusingly-similar entries in the available-skills list. Flattening to `commands/install.md` would give `/gitlore:install` (clean). Out of scope for Plan 04 — would require coordination with all docs referencing the command paths. Flag for a follow-up plan.
 
 ---
 
@@ -215,28 +216,36 @@ claude-plugins/                           # sibling repo
 
 **Files:** none modified. This is a verification pass — its only output is "yes, agents are exposed" (proceed to Task 2) or "no, manifest declaration needed" (plan grows).
 
-- [ ] **Step 1: Start a session with `--plugin-dir`.**
+**Shortcut:** any session already started with `claude --plugin-dir /Users/david/code/gitlore` (e.g. the session where this plan is being executed) can answer Task 1 inline — no separate terminal needed. The full Step 1 setup is only required if no `--plugin-dir` session is already open.
+
+- [ ] **Step 1: Confirm you're in a `--plugin-dir` session, or start one.**
+
+  Already in one? Skip ahead. Otherwise:
 
   ```bash
-  # In a fresh terminal:
-  cd /tmp
-  mkdir -p test-gitlore-discovery && cd test-gitlore-discovery
+  workdir=$(mktemp -d /tmp/gitlore-discovery.XXXXXX)
+  cd "$workdir"
   git init -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
   claude --plugin-dir /Users/david/code/gitlore
   ```
 
 - [ ] **Step 2: From the session, confirm available skills + agents.**
 
-  Look at the system-reminder skills list — should show `gitlore:install` and `gitlore:resolve`. Then ask the model: "List the sub-agent types you can dispatch via the Task tool." Confirm `memory-merger` (or `gitlore:memory-merger` — whichever CC reports) appears.
+  Look at the system-reminder skills list — should show `gitlore:install` (skill) and `gitlore:gitlore:install` + `gitlore:gitlore:resolve` (commands). Then dispatch a no-op probe:
+
+  ```
+  Task({subagent_type: "memory-merger", description: "discovery probe", prompt: "Respond with 'ok' and exit."})
+  ```
+
+  If the dispatch returns "Agent type not found" → try `gitlore:memory-merger`. Record which form works.
 
 - [ ] **Step 3: Record the result.**
 
-  - **If `memory-merger` appears:** plan proceeds as designed. Record the exact `subagent_type` string (bare vs namespaced) in this task's "outcome" notes. Plan 03's `commands/gitlore/resolve.md` may need a one-character tweak to match.
-  - **If it does not appear:** halt. Investigate via [[reference-cc-agent-discovery]] — likely need an explicit declaration in `plugin.json` (CC docs reference). Append a Task 1b "research + update plugin.json" before Task 2 can proceed.
+  - **If `memory-merger` (bare) works:** plan proceeds as designed. Plan 03's `commands/gitlore/resolve.md` already uses bare form — no tweak needed.
+  - **If `gitlore:memory-merger` (namespaced) works:** update `commands/gitlore/resolve.md` to use the namespaced form. Commit as a fix in Task 3b's pattern.
+  - **If neither works:** halt. Investigate via [[reference-cc-agent-discovery]] — likely need an explicit declaration in `plugin.json` (consult CC docs). Append a Task 1b "research + update plugin.json" before Task 2 can proceed.
 
-- [ ] **Step 4: Commit nothing.**
-
-  This task changes no files; the outcome is captured in the plan checkbox and next session's working memory.
+- [ ] **Step 4: Commit nothing (unless Step 3 forces a `commands/gitlore/resolve.md` tweak — then commit just that).**
 
 ---
 
@@ -293,14 +302,31 @@ The point of this task is to be the first time the full memory-merger flow runs 
 
 - [ ] **Step 1: Construct a throwaway parent repo.**
 
+  Two variants — pick one based on what you want to exercise:
+
+  **Variant A — local-only memory (faster, no GitHub side-effects):**
   ```bash
   workdir=$(mktemp -d /tmp/gitlore-dogfood.XXXXXX)
   cd "$workdir"
   git init -q
   git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
-  # gh-create a private memory remote for the install. Reuse Plan 02's expectation:
-  # /gitlore:install will gh-create the memory remote in $owner/<name>-memory.
+  # No parent remote → /gitlore:install skips memory remote creation per design.md
+  # ("Parent has no remote → skip memory remote creation. Memory stays local-only.")
+  # This exercises branch-vs-live only; local-vs-remote can't fire.
   ```
+
+  **Variant B — with parent remote (also covers local-vs-remote):**
+  ```bash
+  workdir=$(mktemp -d /tmp/gitlore-dogfood.XXXXXX)
+  cd "$workdir"
+  git init -q
+  git -c user.email=t@t -c user.name=t commit -q --allow-empty -m "init"
+  gh repo create "gitlore-dogfood-$(date +%s)" --private --source=. --push
+  # /gitlore:install will gh-create a matching <name>-memory repo for the memory submodule.
+  # Manually delete both at cleanup (Step 9).
+  ```
+
+  Pick A unless Step 8 (local-vs-remote retry) is the focus.
 
 - [ ] **Step 2: Start a CC session with `--plugin-dir`.**
 
@@ -312,7 +338,7 @@ The point of this task is to be the first time the full memory-merger flow runs 
 
 - [ ] **Step 3: Run `/gitlore:install`.**
 
-  Accept defaults (memory path = `memory`); precommit command = something trivial that always exits 0 (e.g., `true`). Observe full install: submodule created, remote created (will be `ddaanet/gitlore-dogfood-NNN-memory` or similar — manually delete afterwards), hooks wired.
+  Accept defaults (memory path = `memory`); precommit command = something trivial that always exits 0 (e.g., `true`). Observe full install: submodule created, hooks wired. Memory remote: created as `ddaanet/<parent-name>-memory` if Variant B (parent has remote); skipped if Variant A.
 
 - [ ] **Step 4: Induce a branch-vs-live divergence.**
 
@@ -345,7 +371,17 @@ The point of this task is to be the first time the full memory-merger flow runs 
 
 - [ ] **Step 6: Verify the merge landed.**
 
-  After the continuation: `git -C memory log --first-parent live --oneline` should show `live` as a linear trunk with the new merge commit; `git -C memory rev-parse worktree` should equal `git -C memory rev-parse live`. The original `git commit` retry should now succeed (or surface naturally as the next step in the session).
+  After the continuation:
+
+  ```bash
+  parent_branch=$(git rev-parse --abbrev-ref HEAD)   # whatever the parent's current branch is
+  git -C memory log --first-parent live --oneline    # live is linear, with the new merge commit
+  test "$(git -C memory rev-parse "$parent_branch")" = "$(git -C memory rev-parse live)"
+  ```
+
+  The memory worktree branch is named after the parent branch (per design.md branch model), **not** literally `worktree` — that name is fixture-specific to Plan 03's bats tests.
+
+  The original `git commit` retry should now succeed (or surface naturally as the next step in the session).
 
 - [ ] **Step 7: Catalog findings.**
 
@@ -357,7 +393,14 @@ The point of this task is to be the first time the full memory-merger flow runs 
 
 - [ ] **Step 9: Clean up.**
 
-  Delete the throwaway parent repo and any GitHub `gitlore-dogfood-*-memory` repos created during install. Document the cleanup in the task notes.
+  ```bash
+  rm -rf "$workdir"
+  # If Variant B: also delete the GitHub repos
+  # gh repo delete ddaanet/<parent-name> --yes
+  # gh repo delete ddaanet/<parent-name>-memory --yes
+  ```
+
+  `gh repo delete` requires `delete_repo` token scope (Plan 02 leftover note: `gh auth refresh -h github.com -s delete_repo` first if missing).
 
 ---
 
@@ -418,7 +461,9 @@ The point of this task is to be the first time the full memory-merger flow runs 
   /gitlore:install
   ```
 
-  Requires `gh` CLI authenticated to create the memory remote.
+  If the project has a remote (e.g. GitHub), gitlore also creates a memory
+  remote inheriting the parent's provider and visibility — that step requires
+  `gh` CLI authenticated. Projects without a remote install memory as local-only.
   ```
 
 - [ ] **Step 3: Commit.**
@@ -462,13 +507,13 @@ The point of this task is to be the first time the full memory-merger flow runs 
 
 ## Task 6: Push `ddaanet/gitlore`
 
-External action — D8-equivalent: visible side effect outside the local machine. Confirm with the user before pushing if the working session is autonomous.
+External action — visible side effect outside the local machine (publishes the local commits to GitHub). Not a D8-class action (D8 governs *creating* remote repos, not pushing to existing ones), but still warrants user confirmation if the working session is autonomous.
 
 - [ ] **Step 1: Verify pre-push state.**
 
   ```bash
   git -C /Users/david/code/gitlore status
-  git -C /Users/david/code/gitlore log --oneline origin/main..HEAD | wc -l   # should match handoff's "25 commits ahead"
+  git -C /Users/david/code/gitlore log --oneline origin/main..HEAD | wc -l   # current ahead count; was 25 at Plan 04 spec time
   ```
 
 - [ ] **Step 2: Push.**
@@ -546,8 +591,10 @@ External action — D8-equivalent: visible side effect outside the local machine
   cd ~/code/claude-plugins
   git add .claude-plugin/marketplace.json README.md
   git commit -m "🎉 list gitlore 0.1.0"
-  git push origin main   # or `github main` per claude-plugins/CLAUDE.md — check first
+  git push origin main
   ```
+
+  Note: `claude-plugins/CLAUDE.md` claims the remote is named `github` (not `origin`); on this machine the actual remote is `origin`. Verify with `git -C ~/code/claude-plugins remote -v` before pushing if unsure. Worth updating that CLAUDE.md as part of this task or a follow-up.
 
 ---
 
@@ -567,9 +614,12 @@ External action — D8-equivalent: visible side effect outside the local machine
 - [ ] **Step 2: Install gitlore from the marketplace.**
 
   ```
+  /plugin marketplace add ddaanet/claude-plugins
   /plugin marketplace update ddaanet
   /plugin install gitlore@ddaanet
   ```
+
+  The `add` step is idempotent — safe to run even if the marketplace is already registered on this machine. The `update` ensures any version bump from Task 7 is picked up.
 
   Wait for the plugin to load. Confirm `gitlore:install` is now in the available skills list.
 
