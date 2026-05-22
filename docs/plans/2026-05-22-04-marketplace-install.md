@@ -31,7 +31,7 @@ The Plan 04 lesson is operational, not architectural:
 - **Validate.** `claude plugin validate .` in both repos must exit 0.
 - **Outer-loop dogfood (ship gate).** Install gitlore via `/plugin install gitlore@ddaanet` into a fresh parent repo; rerun the divergence; observe identical behaviour to the inner loop.
 - **Install-pathway documentation.** `docs/plugin-readme.md` (and the gitlore root, if a README is added) document the marketplace prerequisite: `/plugin marketplace add ddaanet/claude-plugins` → `/plugin install gitlore@ddaanet`, then `/gitlore:install` inside the target repo.
-- **In-plan backfill of dogfood findings.** Per [[feedback-dogfood-early]] / [[feedback-automate-default]] and Plan 03 §6.4: anything either dogfood tier surfaces gets a Layer 1 or Layer 2 fixture *in this plan* before Plan 04 is considered shipped.
+- **In-plan backfill of dogfood findings.** Per [[feedback-dogfood-early]] / [[feedback-automate-default]] and Plan 03 §6.4: anything either dogfood tier surfaces gets a regression fixture in the appropriate existing Plan-03 bats file *in this plan* before Plan 04 is considered shipped.
 
 ### 2.2 Out of scope (deferred)
 
@@ -90,7 +90,7 @@ The top two lines are Plan 04's surface. Everything below is already covered by 
 - Does the state-file path emitted by the directive resolve correctly from the sub-agent's CWD? (Plan 03 added `cd "<parent-repo>" && ` to the continuation; verify it still holds when the sub-agent is loaded from a `--plugin-dir` source rather than the marketplace cache.)
 - Does the memory-merger system prompt produce coherent synthesis on a non-trivial divergence? (Not testable below this layer.)
 
-The inner-loop test rig is bash + a real Claude Code session, not bats. It is exploratory by design — any structural issue uncovered gets a Layer 1 or Layer 2 bats fixture before Plan 04 ships.
+The inner-loop test rig is bash + a real Claude Code session, not bats. It is exploratory by design — any structural issue uncovered gets a regression fixture in the appropriate Plan-03 bats file before Plan 04 ships.
 
 ---
 
@@ -123,23 +123,11 @@ This plan does NOT introduce automation for that sync — the manual workflow is
 
 ---
 
-## 7. Testing strategy — three layers
+## 7. Testing strategy — two layers
 
-Same layered approach as Plan 03, scaled to this plan's smaller surface.
+Plan 04's testable surface is two manifest files (`gitlore/.claude-plugin/plugin.json`, `claude-plugins/.claude-plugin/marketplace.json`) plus the end-to-end agent dispatch. A bats sanity layer was considered and dropped: any structural breakage it would catch also breaks `claude plugin validate`, and content/policy edits (name, repository URL) are visible in the commit diff. Two layers suffice.
 
-### 7.1 Layer 1 — Unit (bats)
-
-`tests/plugin_manifest.bats` (new) — sanity-check `gitlore/.claude-plugin/plugin.json`:
-
-- File parses as JSON.
-- Required fields present (`name`, `version`, `description`).
-- Plan-04-mandated fields present (`author`, `license`, `repository`, `keywords`).
-- `version` is semver-shaped.
-- `name` is exactly `gitlore` (matches the marketplace entry, matches the sub-agent's plugin namespace).
-
-The intent is to catch accidental edits — not to validate against the full CC schema (that's Layer 2's job).
-
-### 7.2 Layer 2 — `claude plugin validate`
+### 7.1 Layer 1 — `claude plugin validate`
 
 `make validate` (or equivalent target) runs `claude plugin validate .` in:
 
@@ -148,16 +136,16 @@ The intent is to catch accidental edits — not to validate against the full CC 
 
 Both must exit 0. This is the authoritative manifest check.
 
-### 7.3 Layer 3 — Manual dogfood (two-tier)
+### 7.2 Layer 2 — Manual dogfood (two-tier)
 
 - **Inner loop (mandatory).** `claude --plugin-dir /Users/david/code/gitlore` in a throwaway parent repo; full `/gitlore:install` → induced divergence → `git commit` → observe `memory-merger` dispatched and complete. Pass = parent repo's memory submodule has a clean merge commit on `live`, retry-push succeeded.
 - **Outer loop (ship gate).** Same scenario in a fresh CC session, gitlore installed via `/plugin install gitlore@ddaanet`. Pass = identical outcome to inner loop.
 
-### 7.4 In-plan backfill
+### 7.3 In-plan backfill
 
-Per [[feedback-dogfood-early]]: every finding from §7.3 gets a Layer 1 or Layer 2 fixture *inside Plan 04* before ship. Following Plan 02 (commit `192d7e8`) and Plan 03 (commit `dcaaf75`) — same-plan backfill, not handoff to Plan 05.
+Per [[feedback-dogfood-early]]: every finding from §7.2 gets a fixture *inside Plan 04* before ship. Following Plan 02 (commit `192d7e8`) and Plan 03 (commit `dcaaf75`) — same-plan backfill, not handoff to Plan 05.
 
-If a finding is fundamentally untestable by bats (e.g., "the sub-agent prompt is too vague when files have no textual conflicts but semantic ones"), encode it in `agents/memory-merger.md` (system prompt update) and verify by re-running the inner-loop dogfood. That counts as Layer 2-equivalent.
+For dogfood findings that surface in the existing runtime code (scripts, agents, commands), the regression goes into the appropriate Plan-03 bats file (`resolve_merge_*.bats`, `resolve_recovery.bats`, etc.). For findings fundamentally untestable by bats (e.g., "the sub-agent prompt is too vague when files have no textual conflicts but semantic ones"), encode the fix in `agents/memory-merger.md` (system prompt update) and verify by re-running the inner-loop dogfood.
 
 ---
 
@@ -165,7 +153,7 @@ If a finding is fundamentally untestable by bats (e.g., "the sub-agent prompt is
 
 1. **Does `--plugin-dir <path>` expose `agents/<name>.md` for `Task` dispatch?** Hypothesis: yes; `--plugin-dir` is a fully-loaded plugin. Verify in Task 1; if no, the plan grows (need to find the missing manifest declaration, or symlink trick from [[reference-cc-agent-discovery]]).
 2. **Sub-agent namespace from a marketplace-installed plugin.** Plan 03 emitted directives naming `memory-merger` (bare). Confirm `Task({subagent_type: "memory-merger"})` vs `Task({subagent_type: "gitlore:memory-merger"})` — whichever CC actually accepts. Plan 03's `commands/gitlore/resolve.md` already chose one; verify it matches.
-3. **What `claude plugin validate` actually checks.** Existing `ddaanet/claude-plugins/CLAUDE.md` references the tool but doesn't enumerate what it enforces. Discover during Task 5 (validate); if `plugin.json` rejects something, fix and add to the Layer 1 fixture set.
+3. **What `claude plugin validate` actually checks.** Existing `ddaanet/claude-plugins/CLAUDE.md` references the tool but doesn't enumerate what it enforces. Discover during Task 5 (validate); fix any rejection at the manifest, not at a test fixture.
 4. **Marketplace entry shape — full or minimal.** `handoff` entry has `version`, `license`, `keywords`, `repository`, etc. `edify` entry omits `version`. Pick the explicit-everything style (matches `handoff`/`gitmoji`); list deliberately for Plan 04.
 5. **README presence.** `gitlore` repo has `docs/plugin-readme.md` but no root `README.md`. The marketplace entry's `repository` link will land users on the GitHub page; CC may render `docs/plugin-readme.md` or expect `README.md`. Decide during Task 4 (manifest polish).
 6. **Inner-loop fixture: which throwaway repo.** Per [[feedback-dogfood-b]] the gitmoji repo was used previously. Use a fresh `mktemp -d` repo with a single initial commit — no leftover Plan 02 state, no parent submodule history to navigate around.
@@ -175,12 +163,12 @@ If a finding is fundamentally untestable by bats (e.g., "the sub-agent prompt is
 
 ## Self-review checklist (spec phase)
 
-- ✅ Spec coverage: §2.1's eight in-scope bullets each have a section that owns them (manifest → §6 + Tasks; inner-loop dogfood → §4; publish gitlore → §5; add to claude-plugins → §5/§6; validate → §7.2; outer-loop dogfood → §5/§7.3; install-pathway docs → §3; in-plan backfill → §7.4).
+- ✅ Spec coverage: §2.1's eight in-scope bullets each have a section that owns them (manifest → §6 + Tasks; inner-loop dogfood → §4; publish gitlore → §5; add to claude-plugins → §5/§6; validate → §7.1; outer-loop dogfood → §5/§7.2; install-pathway docs → §3; in-plan backfill → §7.3).
 - ✅ Placeholder scan: no TBDs. §8 enumerates explicit open questions for writing-plans, not placeholders.
 - ✅ Internal consistency: §6's version-sync convention matches `claude-plugins/CLAUDE.md`. §5's outer-loop steps match the manifest schema referenced in §8.4.
 - ✅ Two-repo plan: Plan 04 touches both `gitlore` and `claude-plugins`. Both have changes in §2.1.
-- ✅ Test layers map to risks: Layer 1 protects against accidental edits; Layer 2 catches schema errors; Layer 3 catches the only thing that hasn't been exercised in a real CC session — the `Task` dispatch.
-- ✅ Dogfood gate is two-tier and explicit (§7.3). Inner loop is the fast iteration; outer loop is the ship gate.
+- ✅ Test layers map to risks: Layer 1 (`claude plugin validate`) catches manifest schema errors; Layer 2 dogfood catches the only thing that hasn't been exercised in a real CC session — the `Task` dispatch. A bats sanity fixture was considered and dropped (§7) as redundant with Layer 1.
+- ✅ Dogfood gate is two-tier and explicit (§7.2). Inner loop is the fast iteration; outer loop is the ship gate.
 - ✅ Single source of truth for plugin metadata: `gitlore/.claude-plugin/plugin.json`. `claude-plugins/marketplace.json` entries reference it; sync convention documented in §6.
 - ✅ Open questions enumerated (§8) for writing-plans to resolve.
 - ✅ No code architecture change — Plan 04 is packaging + distribution. Plans 01–03 own the runtime behaviour.
@@ -195,7 +183,7 @@ If a finding is fundamentally untestable by bats (e.g., "the sub-agent prompt is
 
 **Architecture:** No new runtime architecture. Two-repo change: polish `gitlore/.claude-plugin/plugin.json`, push `ddaanet/gitlore`, add gitlore to `~/code/claude-plugins/.claude-plugin/marketplace.json`, validate, dogfood twice (inner loop via `--plugin-dir`, outer loop via marketplace install).
 
-**Tech stack:** `bash`, `jq`, `bats-core`, `claude` CLI for `plugin validate`. `git` and `gh` for publishing. Real Claude Code session (with `--plugin-dir` and then without) for §7.3 dogfood.
+**Tech stack:** `bash`, `claude` CLI for `plugin validate`, `git`, `gh`. Real Claude Code session (with `--plugin-dir` and then without) for §7.2 dogfood.
 
 ---
 
@@ -205,7 +193,6 @@ If a finding is fundamentally untestable by bats (e.g., "the sub-agent prompt is
 gitlore/
   .claude-plugin/plugin.json              # MODIFY — fill in author/license/repository/keywords
   docs/plugin-readme.md                   # MODIFY — install pathway (marketplace step first)
-  tests/plugin_manifest.bats              # NEW — Layer 1 sanity check
   Makefile                                # MODIFY — add `validate` target
   README.md                               # POSSIBLY NEW — see Task 4 / §8.5
 
@@ -220,7 +207,7 @@ claude-plugins/                           # sibling repo
 
 - Same as Plan 03 (`docs/plans/2026-05-21-03-semantic-merge-resolve.md`): bats files load `helpers/setup`, shell scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`, commit prefix per gitmoji convention.
 - Cross-repo: when editing `~/code/claude-plugins`, commit there and push to its `origin` (the `claude-plugins/CLAUDE.md` note about `github` remote name is repo-specific; check before pushing).
-- Dogfood (Layer 3) findings get backfilled to Layer 1 or 2 *in this plan*, not in Plan 05.
+- Dogfood (Layer 2) findings get backfilled to the appropriate existing Plan-03 bats file *in this plan*, not in Plan 05.
 
 ---
 
@@ -257,56 +244,10 @@ claude-plugins/                           # sibling repo
 
 **Files:**
 - Modify: `.claude-plugin/plugin.json`
-- Create: `tests/plugin_manifest.bats`
 
-- [ ] **Step 1: Write `tests/plugin_manifest.bats` (red).**
+- [ ] **Step 1: Update `.claude-plugin/plugin.json`.**
 
-  ```bash
-  #!/usr/bin/env bats
-
-  load helpers/setup
-
-  MANIFEST="$PLUGIN_ROOT/.claude-plugin/plugin.json"
-
-  @test "plugin manifest: file exists" {
-    [ -f "$MANIFEST" ]
-  }
-
-  @test "plugin manifest: parses as JSON" {
-    run jq . "$MANIFEST"
-    [ "$status" -eq 0 ]
-  }
-
-  @test "plugin manifest: required + Plan-04 fields populated" {
-    for key in name version description author license repository keywords; do
-      run jq -er ".$key" "$MANIFEST"
-      [ "$status" -eq 0 ] || { echo "missing/empty field: $key"; return 1; }
-    done
-  }
-
-  @test "plugin manifest: name is exactly 'gitlore'" {
-    [ "$(jq -r .name "$MANIFEST")" = "gitlore" ]
-  }
-
-  @test "plugin manifest: version is semver-shaped" {
-    v=$(jq -r .version "$MANIFEST")
-    [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-  }
-
-  @test "plugin manifest: repository points at GitHub" {
-    repo=$(jq -r .repository "$MANIFEST")
-    [[ "$repo" == https://github.com/* ]]
-  }
-  ```
-
-- [ ] **Step 2: Run; confirm red.**
-
-  Run: `bats tests/plugin_manifest.bats`
-  Expected: ≥4 failures (missing author/license/repository/keywords; placeholder homepage).
-
-- [ ] **Step 3: Update `.claude-plugin/plugin.json`.**
-
-  Target shape (mirror handoff/gitmoji entries' field set):
+  Target shape (mirror `handoff`/`gitmoji` entries' field set):
 
   ```json
   {
@@ -333,17 +274,14 @@ claude-plugins/                           # sibling repo
 
   Adjust description if writing-plans has a better one-liner from `docs/design.md` §FRs.
 
-- [ ] **Step 4: Run; confirm all green.**
-
-  Run: `bats tests/plugin_manifest.bats`
-  Expected: 6/6 passing.
-
-- [ ] **Step 5: Commit.**
+- [ ] **Step 2: Commit.**
 
   ```bash
-  git add .claude-plugin/plugin.json tests/plugin_manifest.bats
-  git commit -m "📝 docs: fill in plugin.json metadata + sanity-check fixture"
+  git add .claude-plugin/plugin.json
+  git commit -m "📝 docs: fill in plugin.json metadata"
   ```
+
+  Layer 1 validation runs in Task 5 (`make validate`), not here.
 
 ---
 
@@ -511,7 +449,7 @@ The point of this task is to be the first time the full memory-merger flow runs 
   make validate
   ```
 
-  If `claude plugin validate .` exits 0: proceed. If non-zero: fix per the validator's output, re-run, repeat. Add any new field requirements that surface here to `tests/plugin_manifest.bats` (Task 2).
+  If `claude plugin validate .` exits 0: proceed. If non-zero: fix the manifest per the validator's output, re-run, repeat.
 
 - [ ] **Step 3: Commit.**
 
