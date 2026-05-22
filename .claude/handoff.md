@@ -1,50 +1,43 @@
-# Handoff — 2026-05-21 19:57:15 +0000
+# Handoff — 2026-05-22 16:05:20 +0000
 
-Session: `03a0d3e5-4434-42b0-9d92-9fb1800fa8e8`
+Session: `42606cdb-1aa3-4a00-a992-3119f3bbf6d4`
 
 ## Current task
 
-Execute Plan 03 via `superpowers:subagent-driven-development` on `docs/plans/2026-05-21-03-semantic-merge-resolve.md` — 7 tasks, outside-in TDD per task, dogfood gate at Task 7.
+Plan 03 shipped (commits `fc287c3`..`13966da`); write Plan 04 next per [[feedback-plan-late]].
 
 ## Open decisions
 
-- **Execution mode.** User deferred between subagent-driven (recommended; isolates per-task context) vs inline (faster, single session). Pick before starting; revisit if Task 1's scaffolding ends up larger than expected.
-- **Task 1 step 10 loop test.** The plan calls out that simulating a concurrent live-advance during synthesis is hard to set up cleanly in bats. Refine the fixture during execution or accept the loop test as a hand-validated checkpoint.
-- **Leftover GitHub repo from Plan 02 dogfood.** `ddaanet/gitmoji-gitlore-memory` still exists; token lacks `delete_repo` scope. To clean up: `gh auth refresh -h github.com -s delete_repo && gh repo delete ddaanet/gitmoji-gitlore-memory --yes`. Orthogonal to Plan 03 but unfinished.
-- **CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS at dogfood (Task 7).** Required for real `Task` + `SendMessage` dispatch. Plan 03 Tasks 1-4 don't need it (stub-synth bypasses the agent layer), but Task 7 does. Confirm set in the shell before invoking dogfood.
+- **Plan 04 scope.** Three credible focuses, pick one:
+  (a) **Marketplace install for gitlore** — makes the `memory-merger` sub-agent actually discoverable (Plan 03 §5.2 follow-up). Without this, the whole agent layer no-ops despite being correctly wired.
+  (b) **`WorktreeCreate` / `WorktreeRemove` hooks** — original Plan 04 scope from the design doc; gives per-parent-worktree `worktree` branches in memory.
+  (c) **Clone-from-remote smoke test + docs polish** — original Plan 05; defer until (a) or (b) lands.
+  Recommendation: (a). Plan 03's agent layer is dormant until install is reachable, and the design doc treats install as a first-class concern.
+- **Plan 02 leftover.** `ddaanet/gitmoji-gitlore-memory` GitHub repo still exists; current token lacks `delete_repo`. Clean up with `gh auth refresh -h github.com -s delete_repo && gh repo delete ddaanet/gitmoji-gitlore-memory --yes`. Orthogonal to Plan 04.
+- **Memory submodule housekeeping in this repo.** `memory/` shows `modified: MEMORY.md` and untracked `feedback_spec_vs_code.md` from a prior session — not Plan 03 work. Investigate or leave; doesn't block Plan 04.
 
 ## Files touched
-- `/tmp/claude/plan-03-section-c.md`
-- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/feedback_automate_default.md`
-- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/MEMORY.md`
+- `/Users/david/code/gitlore/tests/git_hook_pre_commit.bats`
+- `/Users/david/code/gitlore/scripts/lib/resolve.sh`
+- `/Users/david/code/gitlore/agents/memory-merger.md`
+- `/Users/david/code/gitlore/commands/gitlore/resolve.md`
+- `/Users/david/code/gitlore/tests/resolve_merge_branch.bats`
+- `/Users/david/code/gitlore/tests/resolve_merge_remote.bats`
+- `/Users/david/code/gitlore/scripts/resolve.sh`
+- `/Users/david/code/gitlore/tests/resolve.bats`
 - `/Users/david/code/gitlore/docs/plans/2026-05-21-03-semantic-merge-resolve.md`
+- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/feedback_self_contained_directives.md`
+- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/reference_cc_agent_discovery.md`
+- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/MEMORY.md`
 - `/Users/david/code/gitlore/.claude/handoff-task.md`
 
 ## Last user prompts
 
-**after Good push. Most of the dogfood content is automatable; the parts that aren't are exactly the parts manual dogfood was fo**
+**after Task 1 implementer is running in the background. I'll wait for completion notification before reviewing and dispatching **
 
-> would that rather be "do not one-off tests, automated as much as possible with a little effort" ? Asking.
+> you should probably specify sonnet for task agents
+> they should have plenty enough context
 
-**after Yours is sharper. Mine is retrospective ("after dogfood, encode learnings"); yours is a write-time decision ("when desig**
+**after ## Plan 03 shipped**
 
-> y
-
-**after Spec written and self-reviewed at `docs/plans/2026-05-21-03-semantic-merge-resolve.md`. Want to revdiff it before I comm**
-
-> revdiff
-
-**after Revdiff is open. Annotate Tasks 1-7 (or anything in the spec); I'll process when you quit.**
-
-> <task-notification>
-> <task-id>bwpxmrn1o</task-id>
-> <tool-use-id>toolu_01TnuZHTUr9UcujVkkkFjvSQ</tool-use-id>
-> <output-file>/tmp/claude-1000/-Users-david-code-gitlore/fa2189e6-4aa0-4e2f-9f55-6cd1438bf988/tasks/bwpxmrn1o.output</output-file>
-> <status>completed</status>
-> <summary>Background command "Launch revdiff to review full Plan 03" completed (exit code 0)</summary>
-> </task-notification>
-
-**after Deferring. Quick state for the next session:**
-
-> /handoff
-> /commit
+> Continue from where you left off.

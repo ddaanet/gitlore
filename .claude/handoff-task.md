@@ -1,10 +1,13 @@
 ## Current task
 
-Execute Plan 03 via `superpowers:subagent-driven-development` on `docs/plans/2026-05-21-03-semantic-merge-resolve.md` — 7 tasks, outside-in TDD per task, dogfood gate at Task 7.
+Plan 03 shipped (commits `fc287c3`..`13966da`); write Plan 04 next per [[feedback-plan-late]].
 
 ## Open decisions
 
-- **Execution mode.** User deferred between subagent-driven (recommended; isolates per-task context) vs inline (faster, single session). Pick before starting; revisit if Task 1's scaffolding ends up larger than expected.
-- **Task 1 step 10 loop test.** The plan calls out that simulating a concurrent live-advance during synthesis is hard to set up cleanly in bats. Refine the fixture during execution or accept the loop test as a hand-validated checkpoint.
-- **Leftover GitHub repo from Plan 02 dogfood.** `ddaanet/gitmoji-gitlore-memory` still exists; token lacks `delete_repo` scope. To clean up: `gh auth refresh -h github.com -s delete_repo && gh repo delete ddaanet/gitmoji-gitlore-memory --yes`. Orthogonal to Plan 03 but unfinished.
-- **CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS at dogfood (Task 7).** Required for real `Task` + `SendMessage` dispatch. Plan 03 Tasks 1-4 don't need it (stub-synth bypasses the agent layer), but Task 7 does. Confirm set in the shell before invoking dogfood.
+- **Plan 04 scope.** Three credible focuses, pick one:
+  (a) **Marketplace install for gitlore** — makes the `memory-merger` sub-agent actually discoverable (Plan 03 §5.2 follow-up). Without this, the whole agent layer no-ops despite being correctly wired.
+  (b) **`WorktreeCreate` / `WorktreeRemove` hooks** — original Plan 04 scope from the design doc; gives per-parent-worktree `worktree` branches in memory.
+  (c) **Clone-from-remote smoke test + docs polish** — original Plan 05; defer until (a) or (b) lands.
+  Recommendation: (a). Plan 03's agent layer is dormant until install is reachable, and the design doc treats install as a first-class concern.
+- **Plan 02 leftover.** `ddaanet/gitmoji-gitlore-memory` GitHub repo still exists; current token lacks `delete_repo`. Clean up with `gh auth refresh -h github.com -s delete_repo && gh repo delete ddaanet/gitmoji-gitlore-memory --yes`. Orthogonal to Plan 04.
+- **Memory submodule housekeeping in this repo.** `memory/` shows `modified: MEMORY.md` and untracked `feedback_spec_vs_code.md` from a prior session — not Plan 03 work. Investigate or leave; doesn't block Plan 04.
