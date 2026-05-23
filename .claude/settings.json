@@ -1,4 +1,16 @@
 {
+  "enabledPlugins": {
+    "gitlore@ddaanet": true
+  },
+  "extraKnownMarketplaces": {
+    "ddaanet": {
+      "source": {
+        "source": "github",
+        "repo": "ddaanet/claude-plugins"
+      },
+      "autoUpdate": true
+    }
+  },
   "gitlore": {
     "enabled": true,
     "precommitCommand": ".git/gitlore-pre-commit"
