@@ -23,3 +23,25 @@ load helpers/setup
   # installer cloning from GitHub.
   [[ "$url" =~ ^(https?://|git@|ssh://|git://) ]]
 }
+
+# Regression: Plan 04 Step 6 dogfood.
+# memory-merger failed to dispatch (Task subagent_type "gitlore:memory-merger" ->
+# "Agent type not found") because its frontmatter lacked the REQUIRED `name:` field
+# (CC does not fall back to the filename). It also used `allowed-tools:`, which CC
+# ignores for AGENT definitions (that key is for skills/commands) -- so the agent
+# silently inherited ALL tools, defeating the design's removal of SendMessage from
+# the approval-gated sub-agent. `claude plugin validate` did not catch either.
+@test "distribution: memory-merger agent declares name and uses tools (not allowed-tools)" {
+  agent="$PLUGIN_ROOT/agents/memory-merger.md"
+  [ -f "$agent" ]
+  # Extract the YAML frontmatter (between the first two --- fences).
+  fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$agent")"
+  # Required: a kebab-case name matching the dispatch id `gitlore:memory-merger`.
+  echo "$fm" | grep -qE '^name:[[:space:]]*memory-merger[[:space:]]*$'
+  # Must restrict tools via `tools:` ...
+  echo "$fm" | grep -qE '^tools:[[:space:]]*'
+  # ... and must NOT use the agent-invalid `allowed-tools:` key.
+  ! echo "$fm" | grep -qE '^allowed-tools:'
+  # The approval-gated sub-agent must not be able to message the parent itself.
+  ! echo "$fm" | grep -qiE '^tools:.*SendMessage'
+}
