@@ -30,6 +30,6 @@ msgfile=$(gitlore_commit_msg_file "$mempath")
 
 cat <<EOF
 {
-  "additionalContext": "gitlore: memory ($mempath) has uncommitted changes. Summarize pending memory changes in prose, present the summary to the user, await explicit confirmation, then write the approved summary to $msgfile. On rejection, discuss and retry."
+  "additionalContext": "gitlore: memory ($mempath) has uncommitted changes. Summarize pending memory changes in prose, present the summary to the user, and await confirmation. Treat only a clear, un-negated affirmative as approval; a hedge, a question, or any negation ('not yet', 'no', 'disapprove') is a rejection. Only once approved, write the summary to $msgfile. On rejection or anything unclear, discuss and ask again — do not write $msgfile."
 }
 EOF

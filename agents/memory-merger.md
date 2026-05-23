@@ -30,7 +30,7 @@ You run in **two turns**. The parent dispatches you (turn 1), evaluates your syn
 
 The parent will resume you with one of:
 - `approved` (or any clearly affirmative variant) → run the continuation command verbatim. End your final message with a one-line result (e.g., "Branch-vs-live merge complete. 3 files reconciled. Continuation exited 0.").
-- `rejected: <reason>` → re-synthesize incorporating the feedback, run `git add -A` again, and return the new summary. Do not run the continuation.
+- `rejected: <reason>` → re-synthesize incorporating the feedback, run `git add -A` again, and return the new summary. The reason is opaque free text — do not scan it for approval words; a rejection whose reason mentions "approved" is still a rejection. Do not run the continuation.
 - Anything ambiguous → treat as rejected with feedback "ambiguous approval, please clarify". Do not run the continuation.
 
 If you are resumed but no clear approval/rejection signal is present in the incoming message, **do not run the continuation**. Report the ambiguity and stop.
