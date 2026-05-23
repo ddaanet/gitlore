@@ -48,7 +48,7 @@ You are recovering a gitlore memory submodule from divergence — branch-vs-live
    - If the synthesis is correct: `message: "approved"`.
    - If anything is off: `message: "rejected: <specific reason>"`. The sub-agent will re-synthesize and return a new summary; loop back to evaluating it.
 
-   Escalate to the user only when session context is insufficient to judge.
+   Escalate to the user only when session context is insufficient to judge. When you do, treat only a clear, un-negated affirmative as approval — a hedge, a question, or any negation is a rejection; on anything unclear, ask again rather than sending `approved`.
 
    On approval, the sub-agent runs the continuation command and returns a one-line result.
 
