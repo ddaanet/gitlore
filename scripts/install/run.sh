@@ -39,7 +39,7 @@ case "$manager" in
 esac
 
 # Stage the tracked artifacts written by write-settings.sh and wire-*.sh so the
-# install's contract (commands/gitlore/install.md) holds: everything we promise
+# install's contract (commands/install.md) holds: everything we promise
 # as "staged for review" actually is. .gitmodules and $mempath are staged by
 # init-submodule.sh; settings.local.json is gitignored by design.
 git add .claude/settings.json .claude/gitlore-hook-setup .gitignore

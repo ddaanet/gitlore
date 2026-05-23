@@ -45,3 +45,14 @@ load helpers/setup
   # The approval-gated sub-agent must not be able to message the parent itself.
   ! echo "$fm" | grep -qiE '^tools:.*SendMessage'
 }
+
+# Regression: slash commands must live directly under commands/ so they expose as
+# /gitlore:<name>. A commands/gitlore/ subdir double-prefixes them to
+# /gitlore:gitlore:<name>. Keep install/resolve flat, and don't reintroduce a
+# redundant skills/install that would collide with the /gitlore:install command.
+@test "distribution: slash commands are flat (no /gitlore:gitlore: double-prefix)" {
+  [ -f "$PLUGIN_ROOT/commands/install.md" ]
+  [ -f "$PLUGIN_ROOT/commands/resolve.md" ]
+  [ ! -d "$PLUGIN_ROOT/commands/gitlore" ]
+  [ ! -e "$PLUGIN_ROOT/skills/install/SKILL.md" ]
+}

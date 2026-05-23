@@ -28,4 +28,4 @@ Make `memory-merger` discoverable. Plan 03 shipped the sub-agent file but `Task(
 
 - **Sub-agent namespace:** bare `memory-merger` vs `gitlore:memory-merger`. Step 1 answers.
 - **Root `README.md` vs `docs/plugin-readme.md`:** match whichever pattern `ddaanet/handoff` and `ddaanet/gitmoji` use.
-- **Double-prefix slash commands:** `commands/gitlore/install.md` exposes as `/gitlore:gitlore:install`. Flatten to `commands/install.md` would give `/gitlore:install` (clean). Out of scope here; flag for a follow-up.
+- **Double-prefix slash commands:** ~~`commands/gitlore/install.md` exposes as `/gitlore:gitlore:install`.~~ RESOLVED (2026-05-23): moved `commands/gitlore/{install,resolve}.md` → `commands/{install,resolve}.md` (now `/gitlore:install`, `/gitlore:resolve`) and removed the redundant `skills/install/SKILL.md` (a thin pointer to the command that would have collided with the flattened `/gitlore:install`). Regression test in `tests/plugin_distribution.bats`.
