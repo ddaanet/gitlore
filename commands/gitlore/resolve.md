@@ -34,15 +34,23 @@ You are recovering a gitlore memory submodule from divergence — branch-vs-live
 
    Extract the state-file path and the full continuation command (the entire `bash "..." <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
 
-4. **Dispatch the `memory-merger` sub-agent.**
+4. **Dispatch the `memory-merger` sub-agent (turn 1 — synthesis).**
 
-   Use the `Task` tool with `subagent_type: "memory-merger"`. Pass two inputs: the state-file path AND the full continuation command from the directive.
+   Use the `Task` tool with `subagent_type: "gitlore:memory-merger"` (the bare `memory-merger` form does not resolve — CC namespaces plugin agents under the plugin name). Pass two inputs in the prompt: the state-file path AND the full continuation command from the directive.
 
-5. **Answer the sub-agent's approval request.**
+   The sub-agent will synthesize, run `git add -A` in the memory worktree, and **return** a prose summary as its final message for this turn. It will not run the continuation yet. Capture the `agentId` from the dispatch result.
 
-   The sub-agent will SendMessage with a prose summary. Read it. Compare against session context: does the synthesis match what we'd expect from the changes you've seen this session? If so, answer "approved". If anything is off, answer "rejected: <reason>" and let the sub-agent retry.
+5. **Approve or reject (turn 2 — resume).**
 
-   Escalate to the user only when session context is insufficient.
+   Read the sub-agent's return message. Compare against session context: does the synthesis match what we'd expect from the changes you've seen this session?
+
+   Resume the sub-agent via `SendMessage` to its `agentId`:
+   - If the synthesis is correct: `message: "approved"`.
+   - If anything is off: `message: "rejected: <specific reason>"`. The sub-agent will re-synthesize and return a new summary; loop back to evaluating it.
+
+   Escalate to the user only when session context is insufficient to judge.
+
+   On approval, the sub-agent runs the continuation command and returns a one-line result.
 
 6. **After the sub-agent exits**, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor or a loop continuation. Repeat steps 2-6 until the script exits 0.
 
