@@ -20,6 +20,7 @@
 11. **Per-commit review gate.** Every memory commit (including merge commits produced by `/gitlore:resolve`) requires explicit user approval of a prose summary before the commit message file is written and the commit executes. This is the effective control over what reaches the remote.
 12. **Coexistence.** Repos without a `gitlore-memory` submodule are unaffected when the plugin is present. All hooks no-op silently if the submodule is not registered.
 13. **Recovery.** If memory enters a broken state (missing `live`, partial merge, locked checkout), tooling surfaces a clear error with recovery instructions rather than blocking parent git operations silently.
+14. **Transparent per-project redirect.** Memory is redirected into the submodule without changing how the user invokes Claude Code — they keep typing `claude`, using CC's native auto-memory. The redirect is scoped to the project (no effect on other repos' memory) and applied at launch by the Memory Redirect Launcher.
 
 ---
 
@@ -70,8 +71,11 @@ This is the canonical source of truth for the memory path; no duplicate local co
 |------|-----|-------|---------|
 | `.claude/settings.json` | `gitlore.enabled` | `true` | Yes |
 | `.claude/settings.json` | `gitlore.precommitCommand` | e.g. `lefthook run pre-commit` | Yes |
-| `.claude/settings.local.json` | `autoMemoryDirectory` | `<abs-path-to-memory>` (derived from `.gitmodules`) | No |
 | `.git/config` | `gitlore.hooksDir` | abs path to plugin hooks dir | No |
+| `.gitlore/bin/claude` | — | launcher shim (see Memory Redirect Launcher) | Yes |
+| `.envrc` | `PATH_add .gitlore/bin` | activates the shim inside the repo (direnv) | Yes |
+
+> **No `autoMemoryDirectory` in project settings.** Claude Code resolves `autoMemoryDirectory` only from `policySettings`, `flagSettings` (the `--settings` flag), or `userSettings` (`~/.claude/settings.json`) — never from project-level `.claude/settings.json` or `.claude/settings.local.json`, which it discards for security. The per-project redirect is therefore injected at launch by the Memory Redirect Launcher, not written to a settings file. See D10.
 
 **Commit message file:** resolved via `git -C <memory-path> rev-parse --git-path gitlore-commit-msg` — this handles the submodule gitdir correctly (the memory worktree's `.git` is a pointer file, not a directory). Written by Claude after user confirms the commit summary; consumed and deleted by the pre-commit hook.
 
@@ -95,6 +99,42 @@ fi
 exec "$HOOKS_DIR/pre-commit" "$@"
 ```
 
+### Memory Redirect Launcher
+
+Claude Code's native auto-memory writes to `~/.claude/projects/<sanitized-cwd>/memory/` unless `autoMemoryDirectory` is set in an honored settings tier. Project settings are *not* honored (D10), so the only per-project, non-global mechanism is the `--settings` flag at launch. The launcher is a thin `claude` shim that injects it transparently — the user keeps typing `claude`, and memory lands in the submodule.
+
+**One shim, two placements.** The shim body is identical in both modes; only how it lands on `PATH` differs. It is `#!/usr/bin/env sh`:
+
+```sh
+#!/usr/bin/env sh
+# real claude = next `claude` on PATH after stripping my own dir
+self=$(cd "$(dirname "$0")" && pwd)
+newpath=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$self" | paste -sd:)
+real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not found" >&2; exit 127; }
+
+# already injected upstream? pass through (composability, anti-double-inject, anti-recursion)
+[ -n "$GITLORE_LAUNCHED" ] && exec "$real" "$@"
+
+# in a gitlore-enabled repo? cheap git checks first, so jq only runs for actual gitlore repos
+root=$(git rev-parse --show-toplevel 2>/dev/null)
+mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path 2>/dev/null)
+[ -n "$root" ] && [ -n "$mempath" ] || exec "$real" "$@"          # no gitlore submodule → passthrough
+[ "$(jq -r '.gitlore.enabled // false' "$root/.claude/settings.json" 2>/dev/null)" = true ] \
+  || exec "$real" "$@"                                            # submodule present but disabled → passthrough
+
+json=$(jq -nc --arg p "$root/$mempath" '{autoMemoryDirectory:$p}')
+export GITLORE_LAUNCHED=1
+exec "$real" --settings "$json" "$@"
+```
+
+- **Real-claude resolution.** The shim strips its own directory from `PATH`, then takes the next `claude`. That next entry is normally Claude Code's own version-selector launcher (`~/.local/bin/claude`), so version selection is preserved — the shim chains to it rather than pinning a version.
+- **`GITLORE_LAUNCHED` sentinel.** Set before exec. Does triple duty: (a) when both shims are on `PATH`, the repo-local one runs first, execs the global one which sees the sentinel and passes through — no double injection; (b) guards against any accidental recursion; (c) lets `SessionStart` detect a plain `claude` launch (sentinel unset) and warn loudly instead of silently stranding memory.
+- **Path built with `jq`.** Handles spaces/quoting safely; computed at runtime so committed shims stay portable across clones. `--settings` loads an *additional* settings tier (`flagSettings`), so only `autoMemoryDirectory` is overridden; all other settings still resolve from their normal tiers.
+
+**Placement A — repo-local, direnv (default).** `/gitlore:install` emits two **committed** files: `.gitlore/bin/claude` (the shim) and `.envrc`. The `.envrc` must put `.gitlore/bin` at the **front** of `$PATH` so the shim shadows the real `claude` (shim before payload). direnv's `PATH_add .gitlore/bin` prepends, which is exactly this. Subtlety with an existing `.envrc`: direnv evaluates top-to-bottom and each `PATH_add` prepends, so the *last* `PATH_add` wins the front slot — gitlore's line must be inserted after any pre-existing `PATH_add` (idempotent no-op if already present). After a one-time `direnv allow`, the shim is on `PATH` only inside the repo tree (subdirectories included). Both files travel with the repo, so every clone gets the transparent launcher after `direnv allow`. The path is namespaced under `.gitlore/bin/` to avoid colliding with a project's own `bin/`.
+
+**Placement B — global shim, no-direnv fallback (opt-in).** A one-time, machine-level step — `scripts/install/global-shim.sh`, surfaced as `/gitlore:install-launcher` — drops the *same shim* at `~/.gitlore/bin/claude` and **prints** (does not auto-append) the one `PATH` line for the user's shell rc (e.g. `set -gx PATH ~/.gitlore/bin $PATH` for fish). Per-repo installs never touch it. Because the gitlore-repo detection is generic, this one shim auto-activates in any gitlore repo and no-ops everywhere else. This covers users without direnv and launches from outside an allowed directory.
+
 ### Components
 
 #### Skills
@@ -114,7 +154,7 @@ exec "$HOOKS_DIR/pre-commit" "$@"
 9. Create `live` branch at the initial commit; create worktree branch (named after current parent branch, or detached HEAD if parent is detached) from `live`.
 10. If a remote was created, `git -C <memory-path> push origin live` so the parent's submodule pointer is reachable upstream.
 11. Write `gitlore.enabled: true` and `gitlore.precommitCommand` to `.claude/settings.json`.
-12. Write `autoMemoryDirectory` (abs path derived from `.gitmodules`) to `.claude/settings.local.json`.
+12. Emit the memory redirect launcher: write `.gitlore/bin/claude` (shim) and ensure `.envrc` prepends `.gitlore/bin` to the front of `$PATH` via direnv `PATH_add .gitlore/bin` (create `.envrc`, or insert the line after any existing `PATH_add` so it wins the front slot; idempotent if already present). Both are staged for commit. Remind the user to run `direnv allow`. (Does **not** write `autoMemoryDirectory` to any settings file — that tier is ignored; see D10.)
 13. Write `gitlore.hooksDir` (abs path to plugin hooks) to local git config.
 14. Run hook-manager detection script → apply idempotent wiring, write sentinel file.
 15. Leave tracked changes staged for the user to commit.
@@ -176,13 +216,15 @@ Input: path map of changed files (side A and side B), base ref, diff3 output whe
 Output: synthesized file contents written to the worktree, with `git add -A` staging.
 Interaction: may SendMessage the parent with clarification questions; commit only after parent approves the summary with the user.
 
+**`/gitlore:install-launcher`** — one-time, machine-level setup for the global launcher fallback (Placement B). Runs `scripts/install/global-shim.sh`, which writes `~/.gitlore/bin/claude` (the same shim as the repo-local one) and prints the `PATH` line for the user's shell rc. Idempotent. Not invoked by `/gitlore:install`; offered to users without direnv. The shell rc is printed, never auto-edited.
+
 #### Claude Code Hooks
 
 **`SessionStart`**
 
 Guards: if `gitlore.enabled` is not `true`, or `.gitmodules` has no `gitlore-memory` entry, no-op.
 
-1. Derive memory path from `.gitmodules`; write abs path to `autoMemoryDirectory` in `.claude/settings.local.json`.
+1. **Launcher guard.** If `GITLORE_LAUNCHED` is unset, the session was started with a plain `claude` — memory is *not* redirected and will strand in the default dir. Emit both `systemWarning` (user-visible) and `additionalContext` (agent-visible) directing the user to run `direnv allow` (Placement A) or install the launcher via `/gitlore:install-launcher` (Placement B), then restart. Do **not** write `autoMemoryDirectory` to any settings file — that tier is ignored (D10).
 2. Set `gitlore.hooksDir` in local git config to current plugin hooks path.
 3. Write `.git/gitlore-pre-commit` and `.git/gitlore-pre-push` wrappers.
 4. If the memory submodule is not initialized: `git submodule update --init`; create worktree branch from `live` (branch named after current parent branch, or detached-HEAD mirror if parent is detached).
@@ -467,6 +509,14 @@ The sub-agent + SendMessage pattern requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEA
 
 When the flag stabilizes or the feature becomes default, the install-time check becomes a no-op. No other design changes needed.
 
+**D10 — Memory redirect via a launch-time `--settings` shim, not project settings**
+
+Claude Code resolves `autoMemoryDirectory` only from the `policySettings`, `flagSettings`, and `userSettings` tiers (verified by reading the resolver in the CC binary, v2.1.150). Project-level `.claude/settings.json` and `.claude/settings.local.json` are deliberately excluded for security — a checked-in repo setting must not be able to redirect where a user's memory is written. The earlier design wrote `autoMemoryDirectory` to `.claude/settings.local.json`; CC silently discarded it and memory stranded in the default `~/.claude/projects/<sanitized-cwd>/memory/` dir.
+
+The honored tiers are either global (`userSettings`, `policySettings`) or per-launch (`flagSettings`, via `--settings`). Per-project redirection without polluting other projects therefore requires supplying the value at launch. A thin `claude` shim injects `--settings '{"autoMemoryDirectory":…}'` transparently (see Memory Redirect Launcher). This keeps the value proposition intact — the user invokes Claude Code normally and uses its *native* auto-memory; only the storage directory is redirected, with no cowork semantics.
+
+The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the previous silent-stranding failure into a loud, actionable warning.
+
 ---
 
 ## Rejected Alternatives
@@ -491,6 +541,10 @@ When the flag stabilizes or the feature becomes default, the install-time check 
 | Interactive prompt in pre-commit hook | Blocks non-interactive git commits (CI, scripts); agent-mediated confirmation is cleaner. |
 | Single-agent resolve with post-hoc context refresh | Sub-agent with fresh context avoids acting on stale in-session assumptions. Accepted experimental-flag dependency (D9). |
 | PreToolUse hook to constrain agent git ops | Load-bearing gate is the commit-msg file invariant at the hook level; PreToolUse would be belt-and-suspenders with scoping complexity. May revisit in v2 if drift is observed. |
+| `autoMemoryDirectory` in `.claude/settings.local.json` (or `.json`) | Silently ignored — CC honors `autoMemoryDirectory` only from `policySettings`/`flagSettings`/`userSettings`, never project tiers (D10). Was the original implementation; memory stranded in the default dir. |
+| `autoMemoryDirectory` in global `~/.claude/settings.json` (`userSettings`) | Honored, but global — every project's auto-memory would redirect into one repo's submodule. Not per-project. |
+| `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` env var via `.envrc` | Highest-precedence and per-project-scopable, but carries cowork semantics: disables the native memory-write auto-allow and can inject cowork guidelines into the system prompt. Compromises the "plain native auto-memory" value proposition; the `--settings` flag feeds the identical setting with none of that baggage (D10). |
+| Explicit `gitlore` launch command instead of shadowing `claude` | Breaks the value proposition — users would have to remember a new command. Transparency (keep typing `claude`) is the goal; the shim shadows `claude` instead. |
 
 ---
 
@@ -499,4 +553,5 @@ When the flag stabilizes or the feature becomes default, the install-time check 
 | Date | Change |
 |------|--------|
 | 2026-04-11 | Initial design |
+| 2026-05-23 | Memory redirect reworked. Discovered CC honors `autoMemoryDirectory` only from `policySettings`/`flagSettings`/`userSettings` — the prior `.claude/settings.local.json` write was silently ignored and memory stranded in the default dir. Added the Memory Redirect Launcher: a transparent `claude` shim injecting `--settings` (one shim, two placements — repo-local committed `.gitlore/bin/claude` + `.envrc` `PATH_add` via direnv as default; global `~/.gitlore/bin/claude` via `/gitlore:install-launcher` as no-direnv fallback). Added `GITLORE_LAUNCHED` sentinel (anti-double-inject + SessionStart launcher guard). Install no longer writes `autoMemoryDirectory`; SessionStart warns loudly when launched without the shim. Added D10 and four Rejected Alternatives (project-tier setting, global userSettings, cowork env override, explicit launch command). |
 | 2026-04-23 | Full design review. Added FRs for install-time disclosure, per-commit review gate, coexistence, and recovery. Added NFRs for graceful degradation and overrides. Removed `gitlore.memoryPath` in favour of `.gitmodules` as canonical path source. Corrected commit-message file path to use `git rev-parse --git-path`. Rewrote Branch Model to specify parent-branch-name rule, detached-HEAD mirror, rename handling, and collision with reserved `live`. Agent-driven commit flow replaces user-driven. `/gitlore:resolve` now covers both branch-vs-live and local-vs-remote divergence, with sub-agent synthesis under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Added D9 for the sub-agent decision. Install is git-atomic (non-empty initial commit). Hook wrappers gracefully degrade when `gitlore.hooksDir` is unset. Hook stderr branches on `$CLAUDECODE` for agent vs user targeting. Remote creation inherits parent visibility. Expanded Rejected Alternatives with new entries discovered during review. |
