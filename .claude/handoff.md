@@ -1,75 +1,44 @@
-# Handoff — 2026-05-23 10:41:30 +0000
+# Handoff — 2026-05-23 11:54:20 +0000
 
-Session: `9df0bd20-256d-4cbe-b942-fddde0f211b9`
+Session: `1f5cfbea-7d20-4feb-837d-f0a29957091c`
 
 ## Current task
 
-Verify the gitlore two-turn approval handshake via a live `/gitlore:resolve` dogfood, then execute Plan 04 Steps 4–7 (push `ddaanet/gitlore`, add marketplace entry, outer-loop dogfood, document install pathway).
+Decide whether to investigate the broken `autoMemoryDirectory` redirect (memories silently strand in CC's default dir instead of the submodule) before resuming Plan 04 Steps 4–7 (push `ddaanet/gitlore`, marketplace entry, outer-loop dogfood, document install).
 
 ## Open decisions
 
-- How to verify the two-turn handshake before pushing: run a live `/gitlore:resolve` dogfood now against a manufactured divergence (this session already has the committed `gitlore:memory-merger` loaded, so it's verifiable here) vs. defer to the Step 6 outer-loop dogfood after pushing. User leaned "re-dogfood first, then push." The handshake is prompt-only and not bats-testable — a real-skill run is the only faithful check.
-- Whether to commit the now-complete `docs/references/evals-best-practices.md` (uncommitted) before resuming Plan 04, or fold it into a later commit.
-- GitHub-side cleanup of leftover dogfood remotes (`ddaanet/gitlore-dogfood-*`): fold into the Plan-02 leftover cleanup or leave to the user.
+- Investigate the `autoMemoryDirectory` redirect now vs. proceed to Plan 04 with manual live→submodule sync as a known workaround. This session found the setting stably present yet not honored — the existing "effective next session" theory doesn't explain it, and memory goes stale every session without a hand-sync. Recommended: investigate first, since it silently corrupts the product's core promise.
+- Plan 04's push must precede any live verification of this session's approval-gate hardening — sub-agents dispatch from the installed plugin cache, so the hardened `memory-merger`/hook prose can't be dogfooded until pushed + reinstalled.
 
 ## Files touched
-- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/feedback_no_handrun_tests.md`
-- `/Users/david/code/gitlore/docs/references/evals-best-practices.md`
-- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/feedback_verify_delegated_citations.md`
+- `/Users/david/code/gitlore/agents/memory-merger.md`
+- `/Users/david/code/gitlore/scripts/cc-hooks/post-tool-use.sh`
+- `/Users/david/code/gitlore/scripts/git-hooks/pre-commit`
+- `/Users/david/code/gitlore/commands/gitlore/resolve.md`
+- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/feedback_harden_human_gates.md`
 - `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/MEMORY.md`
+- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/reference_auto_memory_directory.md`
 - `/Users/david/code/gitlore/.claude/handoff-task.md`
 
 ## Last user prompts
 
-**after The handshake is a structural approval gate between three actors: the **user** (runs `/gitlore:resolve`), the **parent a**
+**after [AskUserQuestion]**
 
-> Delegate a sonnet agent to read up on "evals" best practices, and write a sourced reference document.
+> [Request interrupted by user for tool use]
 
-**after This is a self-contained research-and-write task — a good fit to delegate. I'll dispatch a Sonnet agent with web access **
+**after [AskUserQuestion]**
 
-> continue
+> Did we just have a full reference search for eval testing?
 
-**after Done. The reference doc is at `docs/references/evals-best-practices.md` — 9 sections (the agent/multi-turn section §6 is**
+**after Yes. The previous session ran exactly that: a Sonnet agent did a sourced research pass and wrote `docs/references/evals-**
 
-> I read that, it seems thin on operational material.
+> clarify design question
 
-**after Dispatched to the same agent (it kept its sourcing context) with a prescriptive spec for eight concrete artifacts: a run**
+**after Here's the design question, made precise. It turns on **who produces the approval signal at each point**, because that d**
 
-> <task-notification>
-> <task-id>a5774ac8396ba6ecf</task-id>
-> <tool-use-id>toolu_01E8fXAddDsedLyNwH4LouBb</tool-use-id>
-> <output-file>/tmp/claude-1000/-Users-david-code-gitlore/c236ff29-4849-43b1-b788-fff52f7ea482/tasks/a5774ac8396ba6ecf.output</output-file>
-> <status>completed</status>
-> <summary>Agent "Research evals, write sourced reference" completed</summary>
-> <result>All artifacts validate. Revision complete.
->
-> ## What I added
->
-> **§5 (LLM-as-Judge)** — two ready-to-use judge prompt templates: (a) pointwise binary pass/fail with rubric, reason-then-discard, and JSON output; (b) pairwise A/B with a position-swap wrapper (`pairwise_judge`) that only declares a winner if it wins both orderings.
->
-> **§6 (Agents)** —
-> - Tool-call assertion code: `assert_tool_schema` (jsonschema), `assert_tool_selection` (exact-match), `tool_call_f1`.
-> - Outcome assertion vs. trajectory assertion side-by-side, showing how each catches what the other misses.
-> - A worked transition-failure-matrix (200 traces, real-looking numbers, with the read-off conclusion).
-> - pass@k unbiased estimator + pass^k code, and `judge_quality` for judge precision/recall vs. human labels.
->
-> **§7 (Operationalizing)** — a real GitHub Actions `evals.yml` (runs on PRs, uploads scores artifact) plus the `gate.py` script that fails the job if any metric drops &gt;2 pts vs. a committed `baseline.json`.
->
-> **§10 (new Operational Cookbook)** —
-> - 10.1 Dataset schema: 4-row JSONL with code-graded and judge-graded cases.
-> - 10.2 ~55-line eval harness skeleton (grader registry, N-trial loop, pass^k aggregation, CLI).
-> - 10.3 Error-analysis workflow with a concrete 6-tag failure taxonomy and saturation rule.
-> - 10.4 Worked end-to-end multi-turn approval-gate example: adversarial dataset (no/ambiguous/rejected approval), the `grade_approval_gate` trajectory assertion that catches premature action, the pass^k≥5 reliability requirement, and a separate synthesis-quality judge rubric.
->
-> **Correctness rules honored**
-> - Did not touch the Sources section's existing entries or any inline citation/author names.
-> - One new factual claim (pass@k unbiased estimator) is cited to the Codex paper, which I fetched and verified (title + Mark Chen et al. + repeated-sampling pass@k); added as Source #20.
-> - Verified all Python logic (pass@k/pass^k, approval detection) and JSONL parsing runs correctly.
->
-> **Length:** grew from ~332 to **688 lines**. Conceptual sections §1–§4 and §8 are unchanged.</result>
-> <usage><total_tokens>93526</total_tokens><tool_uses>15</tool_uses><duration_ms>182250</duration_ms></usage>
-> </task-notification>
+> direction: the distinction was not made at that point, but in hindsight it's aimed at human gating
 
-**after Doc is now ~691 lines, substantially operational. Summary:**
+**after Done. Net effect:**
 
-> add word boundary and escape to approval
+> yes

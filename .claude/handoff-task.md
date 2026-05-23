@@ -1,9 +1,8 @@
 ## Current task
 
-Verify the gitlore two-turn approval handshake via a live `/gitlore:resolve` dogfood, then execute Plan 04 Steps 4–7 (push `ddaanet/gitlore`, add marketplace entry, outer-loop dogfood, document install pathway).
+Decide whether to investigate the broken `autoMemoryDirectory` redirect (memories silently strand in CC's default dir instead of the submodule) before resuming Plan 04 Steps 4–7 (push `ddaanet/gitlore`, marketplace entry, outer-loop dogfood, document install).
 
 ## Open decisions
 
-- How to verify the two-turn handshake before pushing: run a live `/gitlore:resolve` dogfood now against a manufactured divergence (this session already has the committed `gitlore:memory-merger` loaded, so it's verifiable here) vs. defer to the Step 6 outer-loop dogfood after pushing. User leaned "re-dogfood first, then push." The handshake is prompt-only and not bats-testable — a real-skill run is the only faithful check.
-- Whether to commit the now-complete `docs/references/evals-best-practices.md` (uncommitted) before resuming Plan 04, or fold it into a later commit.
-- GitHub-side cleanup of leftover dogfood remotes (`ddaanet/gitlore-dogfood-*`): fold into the Plan-02 leftover cleanup or leave to the user.
+- Investigate the `autoMemoryDirectory` redirect now vs. proceed to Plan 04 with manual live→submodule sync as a known workaround. This session found the setting stably present yet not honored — the existing "effective next session" theory doesn't explain it, and memory goes stale every session without a hand-sync. Recommended: investigate first, since it silently corrupts the product's core promise.
+- Plan 04's push must precede any live verification of this session's approval-gate hardening — sub-agents dispatch from the installed plugin cache, so the hardened `memory-merger`/hook prose can't be dogfooded until pushed + reinstalled.
