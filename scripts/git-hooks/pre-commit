@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Git sets GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE in the hook env (relative to
+# the parent repo). Any `git -C <submodule> ...` invocation inherits them and
+# tries to resolve `.git/index` under the submodule's gitfile, producing
+# "fatal: .git/index: index file open failed: Not a directory". Unset before
+# touching the submodule.
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
+
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"

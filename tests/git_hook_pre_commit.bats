@@ -84,3 +84,31 @@ teardown() { teardown_tmp_repo; }
   live=$(git -C memory rev-parse live)
   [ "$head" = "$live" ]
 }
+
+@test "ignores parent GIT_DIR/GIT_INDEX_FILE leaked by 'git commit'" {
+  # Regression: when git invokes the pre-commit hook, it sets GIT_DIR /
+  # GIT_INDEX_FILE / GIT_WORK_TREE to relative paths under the parent repo.
+  # `git -C memory <cmd>` inherits them and tries to resolve `.git/index` under
+  # the submodule's gitfile, producing "fatal: .git/index: index file open
+  # failed: Not a directory". The hook must unset these before touching the
+  # submodule. Reproduced before fix; this test pins the fix.
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  printf 'memory: add notes\n' > "$msgfile"
+
+  # Simulate the leaked env. Relative paths matter — git uses them under
+  # whatever CWD `git -C ...` switches to.
+  export GIT_DIR=.git
+  export GIT_INDEX_FILE=.git/index
+  export GIT_WORK_TREE=.
+
+  CLAUDECODE=1 run --separate-stderr bash "$HOOK"
+  unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+  [ "$status" -eq 0 ]
+  [[ "${output}${stderr}" != *"index file open failed"* ]]
+  # And the commit-and-push path actually fired:
+  wt=$(git -C memory rev-parse worktree)
+  live=$(git -C memory rev-parse live)
+  [ "$wt" = "$live" ]
+}
