@@ -1,6 +1,7 @@
 ---
+name: memory-merger
 description: Synthesizes a semantic memory merge from a prepared state file, then runs the continuation script.
-allowed-tools: ["Read", "Write", "Edit", "Bash"]
+tools: Read, Write, Edit, Bash
 ---
 
 # memory-merger
