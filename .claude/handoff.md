@@ -1,42 +1,38 @@
-# Handoff — 2026-05-24 10:05:39 +0000
+# Handoff — 2026-05-24 12:31:35 +0000
 
-Session: `4c347c63-b84a-48f3-b4fb-2b90c78a02a9`
+Session: `e7cfe40b-e331-41dc-b70e-cb2eac6ad3bb`
 
 ## Current task
 
-Plan 04 (marketplace install) is fully closed — Step 6's two-turn `memory-merger` approval flow was verified end-to-end under `--plugin-dir` and committed — so the next task is to draft Plan 05, the D10 memory-redirect launcher.
+Plan 05 (Memory Redirect Launcher / D10) is fully drafted and reviewed at `docs/plans/2026-05-24-05-memory-redirect-launcher.md`; the next action is to execute it task-by-task (TDD, 9 steps: canonical shim → Placement A direnv → wire-in + dead-write removal → SessionStart guard → Placement B global shim + command → Makefile → docs → self-dogfood).
 
 ## Open decisions
 
-- Plan 05 shape: the D10 redirect is a launch-time `--settings` shim pointing CC's `autoMemoryDirectory` at the `memory/` submodule (project-tier settings are ignored — see `reference_auto_memory_directory`). Decide whether it's a wrapper script vs a documented launch flag, and confirm now is the time to write it (plan-as-late-as-possible → yes, Plan 04 just shipped). This is the fix for the live-dir-vs-submodule divergence surfaced during the Step 6 verification.
+- Execution mode for Plan 05: subagent-driven (fresh subagent per task, review between tasks — recommended) vs inline in this session. Was asked twice and deferred both times; pick one to start.
+- Plan 05 Step 9 dogfood must run under `--plugin-dir` (not the marketplace cache) per the stale-cache lesson; a `/plugin install` + `/reload-plugins` happened this session, so confirm which gitlore source is loaded before trusting the dogfood.
 
 ## Files touched
+- `/Users/david/code/gitlore/docs/plans/2026-05-24-05-memory-redirect-launcher.md`
+- `/Users/david/code/gitlore/docs/design.md`
 - `/Users/david/code/gitlore/docs/plans/2026-05-22-04-marketplace-install.md`
-- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/reference_plugin_cache_staleness.md`
-- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/MEMORY.md`
 - `/Users/david/code/gitlore/.claude/handoff-task.md`
 
 ## Last user prompts
 
-**after [Bash] cd /Users/david/code/gitlore
-echo "===local unpushed?==="; git log --oneline @{u}.. 2>/dev/null || echo "(no upstream or**
+**after (session start)**
 
-> fix naming of gitlore:gitlore:resolve, one prefix is enough
+> next?
 
-**after No response requested.**
+**after Plan saved to `docs/plans/2026-05-24-05-memory-redirect-launcher.md`. I ran the skill's self-review — spec coverage (shi**
 
-> I restarted claude with "--plugin-dir" so changes can be tested without cutting a new release.
+> delegate: is there anything else interesting under hookSpecificOutput in the docs?
 
-**after Local state fully restored — `main`=`43e9d81`, `live`=`b4e0cd9`, worktree clean, tags gone, root repo clean. **
+**after Relaying the agent's findings. For `SessionStart` the three usable fields are `additionalContext` (what Plan 05 already **
 
-> push done
+> ok
 
-**after Done. Final state:**
+**after Recorded the `worktreePath` finding in two places:**
 
 > - /handoff
 > - /commit
-> - suggest a title for this session, as a full "/rename" line that can be copied in the tui (ask sonnet guide)
-
-**after Committed (`eef94c4`) — gitmoji hook rewrote `docs:` → `📝`; only the plan doc was staged, env files left untouched.**
-
-> You can trigger handoff skill yourself.
+> - suggest a title for this session, as a full "/rename" line, without surrounding backticks

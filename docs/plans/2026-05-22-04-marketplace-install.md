@@ -23,7 +23,7 @@ Make `memory-merger` discoverable. Plan 03 shipped the sub-agent file but `Task(
 ## Scope
 
 - **In:** the 7 steps above + in-plan backfill of dogfood findings.
-- **Out:** `WorktreeCreate`/`WorktreeRemove` hooks (next plan); clone-from-remote smoke (after that); CI to sync versions between `plugin.json` and `marketplace.json` (manual per `claude-plugins/CLAUDE.md`); cleanup of Plan-02 leftover `ddaanet/gitmoji-gitlore-memory` (orthogonal).
+- **Out:** `WorktreeCreate`/`WorktreeRemove` hooks (next plan — see the "Hook I/O note" in `docs/design.md`: command hooks read `worktree_path`/`worktree_branch` from input; `hookSpecificOutput.worktreePath` is HTTP-hooks-only); clone-from-remote smoke (after that); CI to sync versions between `plugin.json` and `marketplace.json` (manual per `claude-plugins/CLAUDE.md`); cleanup of Plan-02 leftover `ddaanet/gitmoji-gitlore-memory` (orthogonal).
 
 ## Open decisions during execution
 
