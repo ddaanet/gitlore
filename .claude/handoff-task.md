@@ -1,7 +1,8 @@
 ## Current task
 
-Plan 04 (marketplace install) is fully closed — Step 6's two-turn `memory-merger` approval flow was verified end-to-end under `--plugin-dir` and committed — so the next task is to draft Plan 05, the D10 memory-redirect launcher.
+Plan 05 (Memory Redirect Launcher / D10) is fully drafted and reviewed at `docs/plans/2026-05-24-05-memory-redirect-launcher.md`; the next action is to execute it task-by-task (TDD, 9 steps: canonical shim → Placement A direnv → wire-in + dead-write removal → SessionStart guard → Placement B global shim + command → Makefile → docs → self-dogfood).
 
 ## Open decisions
 
-- Plan 05 shape: the D10 redirect is a launch-time `--settings` shim pointing CC's `autoMemoryDirectory` at the `memory/` submodule (project-tier settings are ignored — see `reference_auto_memory_directory`). Decide whether it's a wrapper script vs a documented launch flag, and confirm now is the time to write it (plan-as-late-as-possible → yes, Plan 04 just shipped). This is the fix for the live-dir-vs-submodule divergence surfaced during the Step 6 verification.
+- Execution mode for Plan 05: subagent-driven (fresh subagent per task, review between tasks — recommended) vs inline in this session. Was asked twice and deferred both times; pick one to start.
+- Plan 05 Step 9 dogfood must run under `--plugin-dir` (not the marketplace cache) per the stale-cache lesson; a `/plugin install` + `/reload-plugins` happened this session, so confirm which gitlore source is loaded before trusting the dogfood.

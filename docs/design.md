@@ -244,6 +244,8 @@ Guard: no-op if `.gitmodules` has no `gitlore-memory` entry.
 
 Manually-created worktrees (`git worktree add` outside Claude Code) fall back to `SessionStart`.
 
+> **Hook I/O note (for the worktree-hooks plan).** `WorktreeCreate`/`WorktreeRemove` are wired as **command** hooks, so they consume `worktree_path` / `worktree_branch` from the hook **input** (stdin JSON) — as steps above already do. The `hookSpecificOutput.worktreePath` *output* field reported by the CC hooks docs is **HTTP-hooks-only** and is not available to command hooks, so do not plan to emit it. Per `claude-code-guide` 2026-05-24; verify the input field names against the live binary before implementing.
+
 **`WorktreeRemove`** (advisory — cannot block)
 
 Input provides `worktree_path` and `worktree_branch`.
