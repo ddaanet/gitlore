@@ -30,7 +30,7 @@
 
 ## Steps
 
-- [ ] **1. Canonical shim asset.** Create `scripts/install/launcher-shim` verbatim from `docs/design.md:108-128`:
+- [x] **1. Canonical shim asset.** Create `scripts/install/launcher-shim` verbatim from `docs/design.md:108-128`:
 
   ```sh
   #!/usr/bin/env sh
@@ -60,7 +60,7 @@
 
   `chmod 755 scripts/install/launcher-shim`. Commit: `feat: add canonical gitlore launcher shim (D10)`.
 
-- [ ] **2. Shim behavior tests (TDD red).** Create `tests/launcher_shim.bats`. The harness puts the shim in `shimdir` and a recording stub `claude` in `stubdir`, then invokes the shim by full path (so it strips `shimdir` from PATH and chains to the stub):
+- [x] **2. Shim behavior tests (TDD red).** Create `tests/launcher_shim.bats`. The harness puts the shim in `shimdir` and a recording stub `claude` in `stubdir`, then invokes the shim by full path (so it strips `shimdir` from PATH and chains to the stub):
 
   ```bash
   #!/usr/bin/env bats
@@ -123,7 +123,7 @@
 
   Run `bats tests/launcher_shim.bats` — all but the trivial passthrough cases fail until Step 1's shim is correct (it is), so this step mainly *locks in* behavior. Commit: `test: cover launcher shim passthrough/inject/127 paths`.
 
-- [ ] **3. Placement A emitter.** Create `scripts/install/emit-launcher.sh` (Bash, run from repo root):
+- [x] **3. Placement A emitter.** Create `scripts/install/emit-launcher.sh` (Bash, run from repo root):
 
   ```bash
   #!/usr/bin/env bash
@@ -187,7 +187,7 @@
 
   Run `bats tests/emit_launcher.bats` → PASS. Commit: `feat: emit repo-local launcher shim + .envrc (Placement A)`.
 
-- [ ] **4. Wire Placement A into install; drop dead settings.local.json write.**
+- [x] **4. Wire Placement A into install; drop dead settings.local.json write.**
 
   In `scripts/install/run.sh`, after the `write-settings.sh` call (line 28) add:
 
@@ -223,7 +223,7 @@
 
   Run `bats tests/install_run.bats` → PASS (no test asserted `settings.local.json`, so the removal is clean). Commit: `feat: wire launcher into install; drop dead settings.local.json write (D10)`.
 
-- [ ] **5. SessionStart launcher guard; drop dead settings.local.json write.**
+- [x] **5. SessionStart launcher guard; drop dead settings.local.json write.**
 
   In `scripts/cc-hooks/session-start.sh`:
 
@@ -298,7 +298,7 @@
 
   Run `bats tests/cc_hook_session_start.bats` → PASS. Commit: `feat: SessionStart launcher guard; drop dead settings.local.json write (D10)`.
 
-- [ ] **6. Placement B: global shim + command.** Create `scripts/install/global-shim.sh`:
+- [x] **6. Placement B: global shim + command.** Create `scripts/install/global-shim.sh`:
 
   ```bash
   #!/usr/bin/env bash
@@ -386,7 +386,7 @@
 
   Run `bats tests/global_shim.bats` → PASS. Commit: `feat: global launcher shim + /gitlore:install-launcher (Placement B)`.
 
-- [ ] **7. Register new test files; full suite green.** In `Makefile`, append to the `test-unit` recipe's file list: `tests/launcher_shim.bats tests/emit_launcher.bats tests/global_shim.bats`. Run `make test` → all PASS. Commit: `test: register launcher test files in Makefile`.
+- [x] **7. Register new test files; full suite green.** In `Makefile`, append to the `test-unit` recipe's file list: `tests/launcher_shim.bats tests/emit_launcher.bats tests/global_shim.bats`. Run `make test` → all PASS. Commit: `test: register launcher test files in Makefile`.
 
 - [ ] **8. Docs.**
   - `docs/plugin-readme.md`: replace the known-limitation note about the "unbuilt redirect launcher" with the shipped flow — after `/gitlore:install`, run `direnv allow` (or `/gitlore:install-launcher` without direnv); memory then redirects into the submodule. Update the status table row accordingly.
