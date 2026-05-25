@@ -96,9 +96,11 @@ EOF
   run bash "$WIRE_HUSKY"
   [ "$status" -eq 0 ]
   grep -q '# gitlore: managed' .husky/pre-commit
-  grep -q 'exec .git/gitlore-pre-commit' .husky/pre-commit
+  grep -qF 'git rev-parse --git-common-dir' .husky/pre-commit
+  grep -q 'gitlore-pre-commit' .husky/pre-commit
   grep -q '# gitlore: managed' .husky/pre-push
-  grep -q 'exec .git/gitlore-pre-push' .husky/pre-push
+  grep -qF 'git rev-parse --git-common-dir' .husky/pre-push
+  grep -q 'gitlore-pre-push' .husky/pre-push
 }
 
 @test "wire-husky creates missing pre-* files" {

@@ -16,11 +16,9 @@ EOF
   # Husky itself calls this hook last, so that is fine for standard setups —
   # but users with additional steps after the gitlore block should be aware.
   if ! grep -q '# gitlore: managed' "$f"; then
-    cat >> "$f" <<EOF
-
-# gitlore: managed
-exec .git/gitlore-$hook "\$@"
-EOF
+    # Common-dir anchor (D11): resolves from every worktree, incl. linked ones.
+    exec_line="exec \"\$(git rev-parse --git-common-dir)/gitlore-$hook\" \"\$@\""
+    { printf '\n# gitlore: managed\n'; printf '%s\n' "$exec_line"; } >> "$f"
   fi
 done
 
