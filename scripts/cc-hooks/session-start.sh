@@ -67,8 +67,21 @@ if [ "$parent_branch" = "live" ]; then
   exit 1
 fi
 
-if [ ! -f "$mempath/.git" ] && [ ! -d "$mempath/.git" ]; then
-  git submodule update --init -- "$mempath" >&2
+# Memory working tree missing in this worktree. Two cases:
+#  - submodule never initialized (main worktree, fresh clone) → submodule update;
+#  - submodule initialized in the main repo but this is a *linked* worktree whose
+#    memory tree was never checked out → create it from the shared submodule gitdir.
+# Plain `git submodule update --init` does not reliably populate a submodule in a
+# linked worktree, so the linked case uses an explicit `git worktree add`.
+if [ ! -e "$mempath/.git" ]; then
+  common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+  mem_gitdir="$common_dir/modules/$GITLORE_SUBMODULE_NAME"
+  if [ -d "$mem_gitdir" ]; then
+    git -C "$mem_gitdir" worktree prune >/dev/null 2>&1 || true
+    git -C "$mem_gitdir" worktree add --detach "$PWD/$mempath" live >&2
+  else
+    git submodule update --init -- "$mempath" >&2
+  fi
 fi
 
 if [ "$parent_branch" = "DETACHED" ]; then
