@@ -81,12 +81,14 @@ This is the canonical source of truth for the memory path; no duplicate local co
 
 **Sentinel file:** `.claude/gitlore-hook-setup` — tracked. Contains the hook setup command or keyword (`lefthook install`, `npx husky`, `overcommit --install`, `direct`, or `manual`). Used by `SessionStart` to re-wire hook-manager integration on clone or new machine.
 
-**Hook wrappers:** `SessionStart` writes two flat files to the parent repo's `.git/` on every startup:
+**Hook wrappers:** `SessionStart` writes two flat files into the repo's **git common dir** on every startup, resolved via `git rev-parse --git-common-dir`:
 
-- `.git/gitlore-pre-commit`
-- `.git/gitlore-pre-push`
+- `<common-dir>/gitlore-pre-commit`
+- `<common-dir>/gitlore-pre-push`
 
-Each wrapper delegates to the current plugin via `git config gitlore.hooksDir`. Stable paths for hook manager configs; plugin updates are transparent. If `gitlore.hooksDir` is unset (a plain `git commit` outside any Claude session before SessionStart has fired), the wrapper exits 0 after emitting a stderr hint — `"gitlore skipped: hooks not installed"` plus instructions to install the marketplace, plugin, and start Claude.
+**Why the common dir, not `.git/` literally.** In a linked worktree, `.git` is a gitlink *file*, not a directory, so a literal `.git/gitlore-*` path fails to write *and* fails to `exec` (verified: `exec: .git/gitlore-pre-commit: not found` → commit blocked). The git **common dir** is shared across all worktrees (`git rev-parse --git-common-dir` → `.git` in the main worktree, `<main>/.git` in a linked one), so a single wrapper emitted once is reachable and executable from every worktree — including a linked worktree where no Claude session has ever run (a plain `git worktree add` followed by a `git commit`). All producers (`emit-wrappers`) and all consumers (the wired hook stubs / manager configs) resolve the wrapper through `git rev-parse --git-common-dir`; none hardcode `.git/`. This mirrors the commit-message file, which already resolves via `git rev-parse --git-path` to survive the same gitlink subtlety (see above).
+
+Each wrapper delegates to the current plugin via `git config gitlore.hooksDir` (regular git config, shared across worktrees via the common config). Stable paths for hook manager configs; plugin updates are transparent. If `gitlore.hooksDir` is unset (a plain `git commit` outside any Claude session before SessionStart has fired), the wrapper exits 0 after emitting a stderr hint — `"gitlore skipped: hooks not installed"` plus instructions to install the marketplace, plugin, and start Claude.
 
 ```sh
 #!/bin/sh
@@ -226,7 +228,7 @@ Guards: if `gitlore.enabled` is not `true`, or `.gitmodules` has no `gitlore-mem
 
 1. **Launcher guard.** If `GITLORE_LAUNCHED` is unset, the session was started with a plain `claude` — memory is *not* redirected and will strand in the default dir. Emit both `systemWarning` (user-visible) and `additionalContext` (agent-visible) directing the user to run `direnv allow` (Placement A) or install the launcher via `/gitlore:install-launcher` (Placement B), then restart. Do **not** write `autoMemoryDirectory` to any settings file — that tier is ignored (D10).
 2. Set `gitlore.hooksDir` in local git config to current plugin hooks path.
-3. Write `.git/gitlore-pre-commit` and `.git/gitlore-pre-push` wrappers.
+3. Write the `gitlore-pre-commit` and `gitlore-pre-push` wrappers into the git common dir (`git rev-parse --git-common-dir`). Idempotent and worktree-agnostic — in a linked worktree this targets the same shared file as the main worktree (D11).
 4. If the memory submodule is not initialized: `git submodule update --init`; create worktree branch from `live` (branch named after current parent branch, or detached-HEAD mirror if parent is detached).
 5. If the memory submodule worktree is missing (linked worktree scenario): create it via `git -C <main-repo>/.git/modules/gitlore-memory worktree add <worktree-path>/<memory-rel-path> <branch>`; checkout worktree branch.
 6. If `live` branch is absent on the memory side (corrupt / partial install): emit clear error + `additionalContext` with recovery instructions; abort further steps.
@@ -243,6 +245,8 @@ Memory-worktree setup for a new worktree happens lazily at the next `SessionStar
 - **Claude Desktop's worktree button** — does not fire `WorktreeCreate` at all (CC #57209), but a session still starts there, so `SessionStart` covers it.
 
 Lazy creation is correct: with no session there is no auto-memory being written, so there is nothing to set up until the first session needs it.
+
+**Prerequisite — the hook wrappers must be gitlink-aware (D11).** Memory-worktree creation at SessionStart is only *reachable* in a linked worktree once the wrapper paths are anchored in the git common dir. With the original literal `.git/gitlore-*` paths, `emit-wrappers` (step 3) aborted SessionStart under `set -e` *before* this step ran, and committing in the worktree was blocked outright. The common-dir anchor (D11) is what makes the `SessionStart`-covers-everything claim above actually hold for linked worktrees; without it, "a session still starts there" was necessary but not sufficient.
 
 > **Why not a `WorktreeCreate` hook.** Verified against CC 2.1.150 (`claude-code-guide`, 2026-05-25): `WorktreeCreate` is an **override** hook — it fires *before* the worktree exists, the script is expected to *create* it and print only its absolute path on stdout, and any extra stdout makes CC hang (#27467). Its stdin carries `{hook_event_name, cwd, name}` — **no** worktree path and **no** branch (CC defaults the branch to `worktree-<name>`). It also does not fire for Desktop-created worktrees, and there is no post-creation hook (#27744). Registering it would mean hijacking worktree placement for zero benefit over the `SessionStart` path. The earlier assumption that command hooks receive `worktree_path`/`worktree_branch` on stdin was wrong for `WorktreeCreate`; `hookSpecificOutput.worktreePath` is an HTTP-hooks-only *output* field and irrelevant here.
 
@@ -335,10 +339,10 @@ Detection script outputs structured results. Each hook manager has an idempotent
 
 | Detected | Wiring | Sentinel value |
 |----------|--------|----------------|
-| Lefthook | Add `gitlore` command under `pre-commit` and `pre-push` in `lefthook.yml`, pointing at `.git/gitlore-pre-commit` and `.git/gitlore-pre-push`. Guard-marker comment. | `lefthook install` |
-| Husky | Append guarded line (`exec` the wrapper) to `.husky/pre-commit`; same for `.husky/pre-push`. Create files if missing. | `npx husky` |
-| Overcommit | Add custom hook under `PreCommit` and `PrePush` in `.overcommit.yml`, pointing at the wrappers. | `overcommit --install` |
-| None (direct) | Install shell stubs at `.git/hooks/pre-commit` and `.git/hooks/pre-push` that `exec` the `.git/gitlore-*` wrappers. | `direct` (keyword — interpreted by SessionStart, not run as a shell command) |
+| Lefthook | Add `gitlore` command under `pre-commit` and `pre-push` in `lefthook.yml`, with `run: '$(git rev-parse --git-common-dir)/gitlore-pre-commit'` (resp. `-pre-push`). Lefthook executes `run` via a shell, so the substitution expands at hook time. Guard-marker comment. | `lefthook install` |
+| Husky | Append a guarded `exec "$(git rev-parse --git-common-dir)/gitlore-<hook>" "$@"` line to `.husky/pre-commit`; same for `.husky/pre-push`. Create files if missing. Husky runs the script via `sh`, so the substitution expands. | `npx husky` |
+| Overcommit | Add a custom `gitlore` hook under `PreCommit` and `PrePush` in `.overcommit.yml`. Overcommit `command:` is an array exec'd **directly (no shell)**, so the wrapper path must be reached through an explicit shell: `command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']` (the `'gitlore'` sets `$0`; overcommit appends the applicable files as `$@`). | `overcommit --install` |
+| None (direct) | Install shell stubs at `git rev-parse --git-path hooks/<hook>` (the shared common-dir hooks file) that run `exec "$(git rev-parse --git-common-dir)/gitlore-<hook>" "$@"`. Resolve the hook-file path via `--git-path` (not literal `.git/hooks/…`) so the `[ -f ]` test and `cat >` survive sentinel replay in a linked worktree. | `direct` (keyword — interpreted by SessionStart, not run as a shell command) |
 | Unknown | Print copy-paste snippet for manual wiring; do not modify any file. | `manual` (keyword — SessionStart emits a user-facing reminder) |
 
 **Sentinel handling in SessionStart:**
@@ -467,11 +471,21 @@ Alternatives rejected:
 - **Force-write on memory edit:** PostToolUse on every `Write`/`Edit` would generate noise and couple commit preparation to individual edits rather than commit intent. The chosen trigger (PostToolUse on the configured pre-commit command) is a stronger signal of intent with cleaner timing.
 - **`claude --print`:** no session context, cannot ask user for confirmation, no memory of why edits were made.
 
-**D5 — Wrapper scripts in `.git/`, not tracked**
+**D5 — Wrapper scripts in the git common dir, not tracked**
 
-Tracking hook scripts in the repo would cause commit churn on every plugin update and couple the repo's history to the plugin's versioning. Storing flat wrappers in `.git/` (`.git/gitlore-pre-commit`, `.git/gitlore-pre-push`) keeps them untracked and local. `SessionStart` regenerates them on every startup, so they always reflect the current plugin version.
+Tracking hook scripts in the repo would cause commit churn on every plugin update and couple the repo's history to the plugin's versioning. Storing flat wrappers in the git common dir (`<common-dir>/gitlore-pre-commit`, `<common-dir>/gitlore-pre-push`, resolved via `git rev-parse --git-common-dir`) keeps them untracked and local. `SessionStart` regenerates them on every startup, so they always reflect the current plugin version. The common dir (rather than a literal `.git/`) is what makes the wrappers reachable from linked worktrees, where `.git` is a gitlink file — see Hook wrappers above and **D11**.
 
 Wrappers exec the real hook scripts via `$(git config gitlore.hooksDir)/<hook>`. If `gitlore.hooksDir` is unset, the wrappers exit 0 after emitting a stderr hint directing the user to install the marketplace, plugin, and start Claude. Keeps git operations unblocked in non-gitlore contexts.
+
+**D11 — Gitlink-aware wrapper paths (common-dir anchor) for linked-worktree support**
+
+The original design hardcoded the relative path `.git/gitlore-<hook>` in the wrapper writer (`emit-wrappers`) and in every hook-manager consumer. This works only when `.git` is a directory — i.e. only in the main worktree. In a linked worktree `.git` is a gitlink *file*, so the path fails on both sides: `emit-wrappers`' `cat > .git/gitlore-*` aborts SessionStart under `set -e`, and the shared wired hook (which lives in the common dir and therefore fires in *every* worktree) `exec`s the literal `.git/gitlore-*` and **blocks the commit** (`exec: … not found`). Both were verified empirically against git 2.47.3.
+
+Resolution: anchor the wrapper at `$(git rev-parse --git-common-dir)/gitlore-<hook>` on both the write and exec sides, across all managers (direct, husky, lefthook, overcommit, manual). The common dir is shared, so one emission covers every worktree, including a session-less linked worktree (plain `git worktree add` + `git commit`).
+
+Considered and rejected: a **per-worktree** anchor via `git rev-parse --git-path gitlore-<hook>` (which resolves to `…/worktrees/<name>/gitlore-<hook>`). It reintroduces the commit-blocking gap in any worktree where no session has run yet, because the shared wired stub would `exec` a per-worktree wrapper that does not exist. The common-dir anchor has no such gap. (The commit-message file legitimately uses the per-worktree `--git-path` because each worktree has its own pending message; the wrapper is the opposite — one shared executable.)
+
+Corollary fix: once the wrapper *fires* in a linked worktree, the git-hook runs `git -C "$mempath" …` under `set -e`. If the memory submodule worktree was never created there (session-less worktree), this would abort and block the commit for a *new* reason. Both `pre-commit` and `pre-push` therefore guard with an early `[ -e "$mempath/.git" ] || exit 0` — nothing to sync, never block.
 
 **D6 — Merge direction: more-authoritative side is first parent**
 
@@ -545,6 +559,8 @@ The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the pre
 | `autoMemoryDirectory` in global `~/.claude/settings.json` (`userSettings`) | Honored, but global — every project's auto-memory would redirect into one repo's submodule. Not per-project. |
 | `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` env var via `.envrc` | Highest-precedence and per-project-scopable, but carries cowork semantics: disables the native memory-write auto-allow and can inject cowork guidelines into the system prompt. Compromises the "plain native auto-memory" value proposition; the `--settings` flag feeds the identical setting with none of that baggage (D10). |
 | Explicit `gitlore` launch command instead of shadowing `claude` | Breaks the value proposition — users would have to remember a new command. Transparency (keep typing `claude`) is the goal; the shim shadows `claude` instead. |
+| Literal `.git/gitlore-<hook>` wrapper path | Fails in linked worktrees (`.git` is a gitlink file): write aborts SessionStart, exec blocks the commit. Replaced by the common-dir anchor (D11). |
+| Per-worktree wrapper anchor (`--git-path gitlore-<hook>`) | Reintroduces the commit-blocking gap in any worktree where no session has run, since the shared wired stub would exec a non-existent per-worktree wrapper. Common-dir anchor (D11) has no such gap. |
 
 ---
 
@@ -553,6 +569,7 @@ The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the pre
 | Date | Change |
 |------|--------|
 | 2026-04-11 | Initial design |
+| 2026-05-25 | **Plan 06 rethink → D11 (gitlink-aware wrappers).** Executing Plan 06 surfaced that the wrapper indirection hardcoded `.git/gitlore-<hook>`, which only resolves in the main worktree. Verified empirically (git 2.47.3): in a linked worktree the write aborts SessionStart and the shared wired hook's `exec` blocks the commit. Plan 06's memory-worktree-creation premise was therefore necessary but not sufficient — linked worktrees were unusable at a more basic level. Resolution (D11): anchor wrappers at `$(git rev-parse --git-common-dir)/gitlore-<hook>` on both write and exec sides, across all five hook managers; add an early `[ -e "$mempath/.git" ] || exit 0` guard in `pre-commit`/`pre-push` for session-less worktrees. Plan 06's two deliverables (SessionStart memory-worktree creation; advisory `WorktreeRemove`) are absorbed into the superseding plan. Corrected the "SessionStart covers linked worktrees" claim to note the D11 prerequisite. |
 | 2026-05-25 | Plan 06 design: verified worktree-hook I/O against CC 2.1.150. `WorktreeCreate` is an override hook (fires pre-creation, must emit only the worktree path on stdout, no branch in stdin) — **not used**; memory-worktree setup happens at `SessionStart` in the new worktree instead (covers `claude --worktree`, manual `git worktree add`, and the Desktop button uniformly). `WorktreeRemove` (advisory, `worktree_path`-only) removes the memory submodule worktree; branch retention confirmed a no-op (CC keeps the parent branch on removal). Corrected the prior wrong assumption that command hooks receive `worktree_path`/`worktree_branch` on stdin. |
 | 2026-05-25 | Released `0.1.1` (patch). Migrated 6 stranded pre-launcher memories into the submodule; pushed `main` (launcher) + the `gitlore-memory` submodule to GitHub. Bumped `plugin.json`/`marketplace.json` `0.1.0`→`0.1.1` so `/plugin update` re-fetches the launcher (same version string keeps the stale cache — see `plugin-cache-staleness` lesson). |
 | 2026-05-24 | Plan 05 built the Memory Redirect Launcher (shim + Placement A direnv + Placement B global + SessionStart guard) and removed the dead `settings.local.json` `autoMemoryDirectory` writes from `write-settings.sh`/`session-start.sh` (the tier CC ignores — D10). |
