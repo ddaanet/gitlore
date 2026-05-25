@@ -1,38 +1,62 @@
-# Handoff — 2026-05-24 12:31:35 +0000
+# Handoff — 2026-05-25 11:23:12 +0000
 
-Session: `e7cfe40b-e331-41dc-b70e-cb2eac6ad3bb`
+Session: `a3f48878-0a2f-4c9c-be64-3de5182b07e8`
 
 ## Current task
 
-Plan 05 (Memory Redirect Launcher / D10) is fully drafted and reviewed at `docs/plans/2026-05-24-05-memory-redirect-launcher.md`; the next action is to execute it task-by-task (TDD, 9 steps: canonical shim → Placement A direnv → wire-in + dead-write removal → SessionStart guard → Placement B global shim + command → Makefile → docs → self-dogfood).
+Plan 05 (Memory Redirect Launcher / D10) shipped and dogfooded — 10 commits on `main`, 124 tests green; pick the next piece of work.
 
 ## Open decisions
 
-- Execution mode for Plan 05: subagent-driven (fresh subagent per task, review between tasks — recommended) vs inline in this session. Was asked twice and deferred both times; pick one to start.
-- Plan 05 Step 9 dogfood must run under `--plugin-dir` (not the marketplace cache) per the stale-cache lesson; a `/plugin install` + `/reload-plugins` happened this session, so confirm which gitlore source is loaded before trusting the dogfood.
+- Next plan: Plan 06 (`WorktreeCreate`/`WorktreeRemove` hooks, deferred from Plan 05 scope) vs. closing out the Plan 04 outer-loop marketplace dogfood first. Write the chosen plan as late as possible.
+- Whether to migrate the stranded `~/.claude/projects/-Users-david-code-gitlore/memory/` dir (36 files, pre-launcher) into the now-active submodule `memory/` (30 files), or leave it as the orthogonal one-off Plan 05 declared out of scope.
 
 ## Files touched
-- `/Users/david/code/gitlore/docs/plans/2026-05-24-05-memory-redirect-launcher.md`
+- `/tmp/revdiff-desc-plan05.md`
+- `/tmp/revdiff-launch.sh`
+- `/Users/david/.claude/projects/-Users-david-code-gitlore/memory/reference_revdiff_iterm_tmux_cc.md`
+- `/Users/david/code/gitlore/scripts/install/launcher-shim`
+- `/Users/david/code/gitlore/tests/launcher_shim.bats`
+- `/Users/david/code/gitlore/scripts/install/emit-launcher.sh`
+- `/Users/david/code/gitlore/tests/emit_launcher.bats`
+- `/Users/david/code/gitlore/scripts/install/run.sh`
+- `/Users/david/code/gitlore/scripts/install/write-settings.sh`
+- `/Users/david/code/gitlore/commands/install.md`
+- `/Users/david/code/gitlore/tests/install_run.bats`
+- `/Users/david/code/gitlore/scripts/cc-hooks/session-start.sh`
+- `/Users/david/code/gitlore/tests/cc_hook_session_start.bats`
+- `/Users/david/code/gitlore/scripts/install/global-shim.sh`
+- `/Users/david/code/gitlore/commands/install-launcher.md`
+- `/Users/david/code/gitlore/tests/global_shim.bats`
+- `/Users/david/code/gitlore/Makefile`
+- `/Users/david/code/gitlore/docs/plugin-readme.md`
 - `/Users/david/code/gitlore/docs/design.md`
-- `/Users/david/code/gitlore/docs/plans/2026-05-22-04-marketplace-install.md`
+- `/Users/david/code/gitlore/docs/plans/2026-05-24-05-memory-redirect-launcher.md`
+- `/Users/david/code/gitlore/memory/project_overview.md`
 - `/Users/david/code/gitlore/.claude/handoff-task.md`
 
 ## Last user prompts
 
-**after (session start)**
+**after [Bash] ls -la /tmp/revdiff-output-plan05-*.md 2>/dev/null; echo "---"; cat /tmp/revdiff-output-plan05-9587.md 2>/dev/null; echo**
 
-> next?
+> approved
 
-**after Plan saved to `docs/plans/2026-05-24-05-memory-redirect-launcher.md`. I ran the skill's self-review — spec coverage (shi**
+**after [AskUserQuestion]**
 
-> delegate: is there anything else interesting under hookSpecificOutput in the docs?
+> actually, start revdiff again
 
-**after Relaying the agent's findings. For `SessionStart` the three usable fields are `additionalContext` (what Plan 05 already **
+**after No response requested.**
 
-> ok
+> Automemory location validated (open memory directory)
 
-**after Recorded the `worktreePath` finding in two places:**
+**after Plan 05 is fully complete. Summary:**
 
 > - /handoff
 > - /commit
-> - suggest a title for this session, as a full "/rename" line, without surrounding backticks
+> .
+
+**after [Skill]**
+
+> - /handoff
+> - /commit
+> - Suggest a title for this session, as a full "/rename" line, without surrounding backticks.
