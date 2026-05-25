@@ -49,7 +49,7 @@ if [ -f "$SENTINEL" ]; then
       bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
       ;;
     manual)
-      echo "gitlore: hook wiring is 'manual'; verify .git/gitlore-pre-* are still invoked by your hooks." >&2
+      echo "gitlore: hook wiring is 'manual'; verify your hooks still invoke \$(git rev-parse --git-common-dir)/gitlore-pre-*." >&2
       ;;
     *)
       sh -c "$cmd"
