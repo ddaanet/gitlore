@@ -7,6 +7,11 @@ SHIM_SRC="$PLUGIN_ROOT/scripts/install/launcher-shim"
 
 setup() {
   setup_tmp_repo
+  # Clean baseline: the suite may be run from inside a gitlore-launched session
+  # (GITLORE_LAUNCHED=1 in the ambient env), which would make the inject test
+  # see the anti-double-inject sentinel and pass through. The one test that
+  # needs the sentinel sets it inline.
+  unset GITLORE_LAUNCHED
   SHIMDIR="$TMP_REPO/.shimdir"; STUBDIR="$TMP_REPO/.stubdir"
   mkdir -p "$SHIMDIR" "$STUBDIR"
   cp "$SHIM_SRC" "$SHIMDIR/claude"; chmod 755 "$SHIMDIR/claude"
