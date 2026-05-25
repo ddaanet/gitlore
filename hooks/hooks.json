@@ -21,6 +21,16 @@
           }
         ]
       }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/worktree-remove.sh"
+          }
+        ]
+      }
     ]
   }
 }
