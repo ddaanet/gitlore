@@ -1,8 +1,7 @@
 ## Current task
 
-Plan 05 (Memory Redirect Launcher / D10) shipped and dogfooded — 10 commits on `main`, 124 tests green; pick the next piece of work.
+Execute Plan 06 (`docs/plans/2026-05-25-06-worktree-lifecycle.md`) — 4 TDD tasks: SessionStart linked-worktree memory-worktree creation, advisory `WorktreeRemove` hook + `hooks.json` registration, Makefile test registration, dogfood; git commands are pre-verified against git 2.47.3.
 
 ## Open decisions
 
-- Next plan: Plan 06 (`WorktreeCreate`/`WorktreeRemove` hooks, deferred from Plan 05 scope) vs. closing out the Plan 04 outer-loop marketplace dogfood first. Write the chosen plan as late as possible.
-- Whether to migrate the stranded `~/.claude/projects/-Users-david-code-gitlore/memory/` dir (36 files, pre-launcher) into the now-active submodule `memory/` (30 files), or leave it as the orthogonal one-off Plan 05 declared out of scope.
+- Execution mode for Plan 06: subagent-driven (fresh subagent per task, review between) vs inline (`executing-plans`, batch with checkpoints). User was asked but pivoted to handoff/commit; pick this up first on resume.
