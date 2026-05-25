@@ -16,6 +16,13 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 mempath=$(gitlore_memory_path 2>/dev/null) || mempath=""
+
+# D11 corollary: in a session-less worktree the memory submodule worktree may not
+# exist yet. Nothing to push — never block the parent push.
+if [ -n "$mempath" ] && [ ! -e "$mempath/.git" ]; then
+  exit 0
+fi
+
 if [ -n "$mempath" ]; then
   state_status=$(gitlore_detect_stale_merge_state "$mempath")
   case "$state_status" in

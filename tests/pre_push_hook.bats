@@ -71,3 +71,13 @@ teardown() { teardown_tmp_repo; }
   run bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
 }
+
+@test "exits 0 in a session-less linked worktree where the memory worktree is absent" {
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  [ ! -e "$WT/memory/.git" ]
+  cd "$WT"
+  run bash "$PRE_PUSH"
+  [ "$status" -eq 0 ]
+  rm -rf "$WT"
+}

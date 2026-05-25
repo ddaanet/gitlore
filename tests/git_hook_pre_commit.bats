@@ -112,3 +112,14 @@ teardown() { teardown_tmp_repo; }
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
 }
+
+@test "exits 0 in a session-less linked worktree where the memory worktree is absent" {
+  make_parent_with_memory
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  [ ! -e "$WT/memory/.git" ]   # git created the gitlink dir but did not init the submodule
+  cd "$WT"
+  run bash "$HOOK"
+  [ "$status" -eq 0 ]
+  rm -rf "$WT"
+}
