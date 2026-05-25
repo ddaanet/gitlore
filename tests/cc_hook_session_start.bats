@@ -6,7 +6,10 @@ load helpers/fixtures
 SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 
 setup()    { setup_tmp_repo; export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"; }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  teardown_tmp_repo
+}
 
 @test "no-op when gitlore.enabled is missing" {
   run bash "$SESSION_START"
@@ -134,4 +137,20 @@ teardown() { teardown_tmp_repo; }
   printf 'touch SENTINEL_RAN\n' > .claude/gitlore-hook-setup
   bash "$SESSION_START"
   [ -f SENTINEL_RAN ]
+}
+
+@test "creates the memory worktree in a linked (CC-created) worktree on the parent-named branch" {
+  make_parent_with_memory
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat-x "$WT" >/dev/null 2>&1
+  # git populates the gitlink dir but does not check out the submodule:
+  [ ! -e "$WT/memory/.git" ]
+  mkdir -p "$WT/.claude"
+  printf '{"gitlore":{"enabled":true}}\n' > "$WT/.claude/settings.json"
+
+  CLAUDE_PROJECT_DIR="$WT" GITLORE_LAUNCHED=1 run bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ -e "$WT/memory/.git" ]
+  run git -C "$WT/memory" rev-parse --abbrev-ref HEAD
+  [ "$output" = "feat-x" ]
 }
