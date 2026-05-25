@@ -1,18 +1,18 @@
-# Handoff — 2026-05-25 18:50:02 +0000
+# Handoff — 2026-05-25 19:20:39 +0000
 
-Session: `8b7ab998-a51c-41ab-973a-7585f7535ff2`
+Session: `4cfa66b9-c735-4537-b1df-5d8168dcdead`
 
 ## Current task
 
-Write the superseding implementation plan (D11 gitlink-aware wrappers across all five hook managers + Plan 06's absorbed SessionStart memory-worktree creation and advisory `WorktreeRemove`) via the writing-plans skill, then execute it subagent-driven on `main`.
+Execute Plan 07 (`docs/plans/2026-05-25-07-gitlink-aware-wrappers.md`) subagent-driven on `main` — 10 TDD tasks implementing D11 gitlink-aware wrappers + absorbed Plan 06 deliverables; nothing dispatched yet.
 
 ## Open decisions
 
-- The overcommit wiring uses `command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']` — overcommit's exact file-arg appending into `$@` is unverified; the plan must include a real verification test for this form before trusting it.
-- The implementer's aborted Task-1 edits to `scripts/cc-hooks/session-start.sh` (memory-init block) and `tests/cc_hook_session_start.bats` are still uncommitted in the working tree (kept, not reverted, since they match the approved design) — the new plan should fold them in rather than rewrite from scratch.
+- `hooks/hooks.json` Task 9 registers `WorktreeRemove` with `matcher: "*"` mirroring `SessionStart`; unverified whether `WorktreeRemove` honors a matcher field — confirm against CC, drop the matcher if it rejects one.
+- Task 10 assumes `tests/plugin_distribution.bats` tolerates the new `WorktreeRemove` hook key; if it asserts an exact event set, update that assertion.
 
 ## Files touched
-- `/Users/david/code/gitlore/docs/design.md`
+- `/Users/david/code/gitlore/docs/plans/2026-05-25-07-gitlink-aware-wrappers.md`
 - `/Users/david/code/gitlore/memory/project_overview.md`
 - `/Users/david/code/gitlore/.claude/handoff-task.md`
 
@@ -20,10 +20,8 @@ Write the superseding implementation plan (D11 gitlink-aware wrappers across all
 
 **after (session start)**
 
-> next?
+> continue
 
-**after Design committed as `98f1511` (gitmoji rewrote `docs:` → 📝). Stale Plan-06-structured tasks cleared.**
+**after [Bash] grep -rsil 'sparkline\|▁▂▃▄▅▆▇█\|cached.input\|cache_read' ~/.claude/ /Users/david/code/gitlore 2>/dev/null | grep -v -i**
 
-> - /handoff
-> - /commit
-> - Suggest a title for this session, as a full "/rename" line, without surrounding backticks.
+> oops the sparkline message was send to the wrong session, disregard it
