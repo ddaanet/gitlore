@@ -44,3 +44,15 @@ EOF
   bash "$EMIT"
   diff .git/gitlore-pre-commit .git/gitlore-pre-commit.before
 }
+
+@test "emit-wrappers in a linked worktree writes to the shared common dir, not the gitlink file" {
+  echo seed > f && git add f && git commit -q -m seed
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  ( cd "$WT" && bash "$EMIT" )
+  # The wrapper must land in the shared common dir (= the main worktree's .git),
+  # NOT next to the gitlink file (which would fail to write).
+  [ -x "$TMP_REPO/.git/gitlore-pre-commit" ]
+  [ -x "$TMP_REPO/.git/gitlore-pre-push" ]
+  rm -rf "$WT"
+}

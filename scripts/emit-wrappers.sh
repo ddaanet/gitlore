@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Anchor wrappers in the git COMMON dir (shared across all worktrees), not a
+# literal `.git/` — in a linked worktree `.git` is a gitlink *file*, so a literal
+# path fails to write. `git rev-parse --git-common-dir` resolves to `.git` in the
+# main worktree and the shared `<main>/.git` in a linked one, so a single emission
+# is reachable and executable from every worktree (D11).
+common_dir=$(git rev-parse --git-common-dir)
+
 write_wrapper() {
   local hook="$1"
-  local out=".git/gitlore-$hook"
+  local out="$common_dir/gitlore-$hook"
   cat > "$out" <<EOF
 #!/usr/bin/env sh
 HOOKS_DIR=\$(git config gitlore.hooksDir 2>/dev/null)
