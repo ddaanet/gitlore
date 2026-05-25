@@ -26,8 +26,8 @@ fi
 # "yq <N>.<N>.<N>" with no leading "v" and no mikefarah URL.
 if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -qE 'mikefarah|version v[0-9]'; then
   # yq (mikefarah/yq v4) — deep-merges commands without clobbering existing entries.
-  yq -i '.pre-commit.commands.gitlore.run = ".git/gitlore-pre-commit"' "$CONFIG"
-  yq -i '.pre-push.commands.gitlore.run   = ".git/gitlore-pre-push"'   "$CONFIG"
+  yq -i '.pre-commit.commands.gitlore.run = "$(git rev-parse --git-common-dir)/gitlore-pre-commit"' "$CONFIG"
+  yq -i '.pre-push.commands.gitlore.run   = "$(git rev-parse --git-common-dir)/gitlore-pre-push"'   "$CONFIG"
   # Append the marker comment.  yq strips comments, so we append it as a plain line.
   # Note: any pre-existing YAML comments in lefthook.yml will have been stripped
   # by the yq round-trip.  See docs/plugin-readme.md.
@@ -41,8 +41,8 @@ with open(path) as fh:
     data = yaml.safe_load(fh) or {}
 
 for hook, wrapper in (
-    ('pre-commit', '.git/gitlore-pre-commit'),
-    ('pre-push',   '.git/gitlore-pre-push'),
+    ('pre-commit', '$(git rev-parse --git-common-dir)/gitlore-pre-commit'),
+    ('pre-push',   '$(git rev-parse --git-common-dir)/gitlore-pre-push'),
 ):
     data.setdefault(hook, {}).setdefault('commands', {})['gitlore'] = {'run': wrapper}
 

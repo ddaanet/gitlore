@@ -26,8 +26,9 @@ EOF
   run bash "$WIRE_LEFTHOOK"
   [ "$status" -eq 0 ]
   grep -q '# gitlore: managed' lefthook.yml
-  grep -q '.git/gitlore-pre-commit' lefthook.yml
-  grep -q '.git/gitlore-pre-push' lefthook.yml
+  grep -qF 'git rev-parse --git-common-dir' lefthook.yml
+  grep -q 'gitlore-pre-commit' lefthook.yml
+  grep -q 'gitlore-pre-push' lefthook.yml
 }
 
 @test "wire-lefthook is idempotent (marker present → no change)" {
@@ -65,7 +66,7 @@ pre-commit:
 EOF
   bash "$WIRE_LEFTHOOK"
   grep -q 'eslint' lefthook.yml
-  grep -q '.git/gitlore-pre-commit' lefthook.yml
+  grep -q 'gitlore-pre-commit' lefthook.yml
 }
 
 @test "wire-lefthook works with .lefthook.yml filename" {
