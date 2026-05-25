@@ -22,17 +22,37 @@ teardown() { teardown_tmp_repo; }
   [ ! -f .claude/settings.local.json ]
 }
 
-@test "writes autoMemoryDirectory and hooksDir and emits wrappers" {
+@test "does not write settings.local.json (D10); sets hooksDir and emits wrappers" {
   make_parent_with_memory
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   run bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  [ -f .claude/settings.local.json ]
-  grep -q autoMemoryDirectory .claude/settings.local.json
+  [ ! -f .claude/settings.local.json ]
   [ "$(git config gitlore.hooksDir)" = "$CLAUDE_PLUGIN_ROOT/scripts/git-hooks" ]
   [ -x .git/gitlore-pre-commit ]
   [ -x .git/gitlore-pre-push ]
+}
+
+@test "emits launcher-guard JSON on stdout when GITLORE_LAUNCHED is unset" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  unset GITLORE_LAUNCHED
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("direnv allow")'
+  echo "$output" | jq -e '.hookSpecificOutput.hookEventName == "SessionStart"'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("GITLORE_LAUNCHED")'
+}
+
+@test "no launcher-guard JSON when GITLORE_LAUNCHED is set" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "rejects parent branch named 'live'" {
