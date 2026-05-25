@@ -248,3 +248,9 @@ WIRE_MANUAL="$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh"
   [[ "$stderr" == *"multiple hook managers detected"* ]]
   [[ "$stderr" == *"lefthook,husky"* ]]
 }
+
+@test "wire-manual instructions reference the common-dir wrapper path (D11)" {
+  run --separate-stderr bash "$WIRE_MANUAL"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"git rev-parse --git-common-dir"* ]]
+}
