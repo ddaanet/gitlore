@@ -147,13 +147,15 @@ EOF
 # ---------------------------------------------------------------------------
 
 WIRE_DIRECT="$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
+EMIT="$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
 @test "wire-direct installs .git/hooks/pre-commit and pre-push stubs" {
   run bash "$WIRE_DIRECT"
   [ "$status" -eq 0 ]
   [ -x .git/hooks/pre-commit ]
   [ -x .git/hooks/pre-push ]
-  grep -q 'exec .git/gitlore-pre-commit' .git/hooks/pre-commit
+  grep -qF 'git rev-parse --git-common-dir' .git/hooks/pre-commit
+  grep -q 'gitlore-pre-commit' .git/hooks/pre-commit
   grep -q '# gitlore: managed' .git/hooks/pre-commit
   [ "$(cat .claude/gitlore-hook-setup)" = "direct" ]
 }
@@ -163,11 +165,32 @@ WIRE_DIRECT="$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
   chmod +x .git/hooks/pre-commit
   bash "$WIRE_DIRECT"
   grep -q 'echo user hook' .git/hooks/pre-commit
-  grep -q 'exec .git/gitlore-pre-commit' .git/hooks/pre-commit
+  grep -q 'gitlore-pre-commit' .git/hooks/pre-commit
   # Second run: no duplicate lines.
   cp .git/hooks/pre-commit .git/hooks/pre-commit.before
   bash "$WIRE_DIRECT"
   diff .git/hooks/pre-commit .git/hooks/pre-commit.before
+}
+
+@test "wire-direct stub resolves the wrapper from a linked worktree (D11)" {
+  echo seed > f && git add f && git commit -q -m seed
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  cd "$WT"
+  bash "$EMIT"          # emit wrappers into the shared common dir
+  bash "$WIRE_DIRECT"   # wire the stub via --git-path hooks/<hook>
+
+  # A fake "real hook" the wrapper will exec, proving the whole chain resolves.
+  fake="$WT/fakehooks" && mkdir -p "$fake"
+  printf '#!/usr/bin/env sh\necho real-hook-ran\n' > "$fake/pre-commit"
+  chmod +x "$fake/pre-commit"
+  git config gitlore.hooksDir "$fake"
+
+  hookfile=$(git rev-parse --git-path hooks/pre-commit)
+  run "$hookfile"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"real-hook-ran"* ]]
+  rm -rf "$WT"
 }
 
 # ---------------------------------------------------------------------------
