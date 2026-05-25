@@ -1,7 +1,8 @@
 ## Current task
 
-Execute Plan 06 (`docs/plans/2026-05-25-06-worktree-lifecycle.md`) — 4 TDD tasks: SessionStart linked-worktree memory-worktree creation, advisory `WorktreeRemove` hook + `hooks.json` registration, Makefile test registration, dogfood; git commands are pre-verified against git 2.47.3.
+Write the superseding implementation plan (D11 gitlink-aware wrappers across all five hook managers + Plan 06's absorbed SessionStart memory-worktree creation and advisory `WorktreeRemove`) via the writing-plans skill, then execute it subagent-driven on `main`.
 
 ## Open decisions
 
-- Execution mode for Plan 06: subagent-driven (fresh subagent per task, review between) vs inline (`executing-plans`, batch with checkpoints). User was asked but pivoted to handoff/commit; pick this up first on resume.
+- The overcommit wiring uses `command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']` — overcommit's exact file-arg appending into `$@` is unverified; the plan must include a real verification test for this form before trusting it.
+- The implementer's aborted Task-1 edits to `scripts/cc-hooks/session-start.sh` (memory-init block) and `tests/cc_hook_session_start.bats` are still uncommitted in the working tree (kept, not reverted, since they match the approved design) — the new plan should fold them in rather than rewrite from scratch.
