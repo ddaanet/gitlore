@@ -18,11 +18,11 @@ You'll be asked for a memory subpath (default `memory`) and your project's
 pre-commit command (e.g. `lefthook run pre-commit`). A memory remote is created
 only if the parent repo has a remote, and that step uses `gh` when available.
 
-> **Known limitation (pending the next plan):** the per-project memory redirect
-> requires the launch-time launcher described in `docs/design.md` (D10) — Claude
-> Code ignores `autoMemoryDirectory` in project settings. Until the launcher
-> ships, memory still writes to Claude Code's default directory rather than the
-> submodule.
+After `/gitlore:install`, run `direnv allow` so the launcher in `.gitlore/bin/claude`
+takes over and CC's native auto-memory redirects into the submodule. If you don't
+use direnv (or you launch Claude Code from outside an allowed directory), run
+`/gitlore:install-launcher` instead — it installs the launcher globally and prints
+the one-line `PATH` change to add to your shell rc.
 
 ## Development
 
@@ -41,4 +41,4 @@ Dependencies:
 - **Plan 02 — remote and push** ✅
 - **Plan 03 — semantic merge / resolve** ✅
 - **Plan 04 — marketplace install** 🚧 (push + marketplace entry done; outer-loop dogfood pending)
-- **Plan 05 — memory redirect launcher** 📋 designed (D10), not yet implemented.
+- **Plan 05 — memory redirect launcher** ✅ (shim + Placement A direnv + Placement B global + SessionStart guard; dogfood pending)
