@@ -26,6 +26,7 @@ fi
 bash "$PLUGIN_ROOT/scripts/install/init-submodule.sh" "$mempath"
 bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
 bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" "$mempath" "$precommit_cmd"
+bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
 manager=$(bash "$PLUGIN_ROOT/scripts/hook-manager/detect.sh")
@@ -42,7 +43,8 @@ esac
 # install's contract (commands/install.md) holds: everything we promise
 # as "staged for review" actually is. .gitmodules and $mempath are staged by
 # init-submodule.sh; settings.local.json is gitignored by design.
-git add .claude/settings.json .claude/gitlore-hook-setup .gitignore
+git add .claude/settings.json .claude/gitlore-hook-setup .gitignore .gitlore/bin/claude .envrc
 
 echo "gitlore: install complete." >&2
-echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, .claude/gitlore-hook-setup, .gitignore) and commit when ready." >&2
+echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, .claude/gitlore-hook-setup, .gitignore, .gitlore/bin/claude, .envrc) and commit when ready." >&2
+echo "Then run 'direnv allow' so the launcher redirects memory into $mempath/ (no direnv? run /gitlore:install-launcher)." >&2

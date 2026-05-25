@@ -18,16 +18,6 @@ else
      '{gitlore: {enabled: true, precommitCommand: $pc}}' > .claude/settings.json
 fi
 
-# settings.local.json — untracked.
-absmem=$(cd "$mempath" && pwd)
-if [ -f .claude/settings.local.json ]; then
-  tmp=$(mktemp)
-  jq --arg p "$absmem" '.autoMemoryDirectory = $p' .claude/settings.local.json > "$tmp"
-  mv "$tmp" .claude/settings.local.json
-else
-  jq -n --arg p "$absmem" '{autoMemoryDirectory: $p}' > .claude/settings.local.json
-fi
-
 # Make sure .claude/settings.local.json is gitignored.
 if [ -f .gitignore ]; then
   grep -qx '.claude/settings.local.json' .gitignore || \

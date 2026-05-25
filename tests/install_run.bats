@@ -57,6 +57,9 @@ teardown() { teardown_tmp_repo; }
   [[ "$staged" == *".claude/settings.json"* ]]
   [[ "$staged" == *".claude/gitlore-hook-setup"* ]]
   [[ "$staged" == *".gitignore"* ]]
+  [[ "$staged" == *".gitlore/bin/claude"* ]]
+  [[ "$staged" == *".envrc"* ]]
+  [ -x .gitlore/bin/claude ]
 }
 
 @test "install stages memory as gitlink (mode 160000)" {
