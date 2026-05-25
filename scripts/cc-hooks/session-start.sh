@@ -18,16 +18,19 @@ enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json 2>/dev/null ||
 gitlore_has_submodule || exit 0
 
 mempath=$(gitlore_memory_path)
-absmem=$(cd "$mempath" 2>/dev/null && pwd || echo "$PROJECT_DIR/$mempath")
 
-# Update settings.local.json (create or merge).
-mkdir -p .claude
-if [ -f .claude/settings.local.json ]; then
-  tmp=$(mktemp)
-  jq --arg p "$absmem" '.autoMemoryDirectory = $p' .claude/settings.local.json > "$tmp"
-  mv "$tmp" .claude/settings.local.json
-else
-  jq -n --arg p "$absmem" '{autoMemoryDirectory: $p}' > .claude/settings.local.json
+# Keep stdout clean: everything below logs to stderr; only the guard JSON (if any)
+# goes to real stdout (fd 3), which CC parses for systemMessage/additionalContext.
+exec 3>&1 1>&2
+
+# Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's
+# native auto-memory strands in ~/.claude/projects/<cwd>/memory instead of the submodule.
+launcher_warning=""
+if [ -z "${GITLORE_LAUNCHED:-}" ]; then
+  launcher_warning=$(jq -nc \
+    --arg sys "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install-launcher' if you don't use direnv), then restart Claude Code." \
+    --arg ctx "gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or '/gitlore:install-launcher' (Placement B) and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)." \
+    '{systemMessage:$sys, hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}')
 fi
 
 # Hook dir + wrappers.
@@ -89,3 +92,6 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
 else
   echo "gitlore: memory has uncommitted changes; skipping live ff-merge." >&2
 fi
+
+[ -n "$launcher_warning" ] && printf '%s\n' "$launcher_warning" >&3
+exec 3>&- 1>&2
