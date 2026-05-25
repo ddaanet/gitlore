@@ -1,6 +1,6 @@
 {
   "name": "gitlore",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Versioned, shared, git-backed memory for Claude Code.",
   "author": {
     "name": "David Allouche",
