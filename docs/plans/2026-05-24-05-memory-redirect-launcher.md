@@ -395,12 +395,19 @@
 
   Commit: `docs: launcher shipped — update plugin-readme + design changelog`.
 
-- [ ] **9. Dogfood in this repo (the real target).** Per "dogfood early": this repo is the production target and currently suffers the live-dir-vs-submodule divergence.
+- [x] **9. Dogfood in this repo (the real target).** Per "dogfood early": this repo is the production target and currently suffers the live-dir-vs-submodule divergence.
   1. `CLAUDE_PLUGIN_ROOT=$PWD bash scripts/install/emit-launcher.sh` → confirm `.gitlore/bin/claude` + `.envrc` `PATH_add` line.
   2. `direnv allow`, then start a fresh Claude Code session in this repo (under `--plugin-dir`, per the stale-cache lesson in `reference_plugin_cache_staleness`).
   3. In the new session confirm `echo $GITLORE_LAUNCHED` = `1` and that the `SessionStart` guard did **not** fire (no warning).
   4. Confirm CC's auto-memory now resolves to `<repo>/memory` (write a throwaway memory, verify it lands in the submodule worktree, then discard).
   5. Record findings in this plan; fix any in-plan. Then `git add .gitlore/bin/claude .envrc` and commit if adopting the launcher for this repo. Commit: `chore: adopt gitlore launcher in this repo (dogfood)`.
+
+  **Findings (2026-05-25):** Dogfood passed cleanly, no in-plan fixes needed.
+  - `emit-launcher.sh` wrote `.gitlore/bin/claude` (executable, byte-identical to `scripts/install/launcher-shim`) and added `PATH_add .gitlore/bin` to a fresh `.envrc`.
+  - After `direnv allow` + fresh session: `echo $GITLORE_LAUNCHED` → `1`; the launcher shim ran.
+  - The `SessionStart` launcher guard did **not** fire (no warning emitted) — correct, since `GITLORE_LAUNCHED` was set.
+  - CC auto-memory location validated against the open submodule `memory/` directory.
+  - Adopted: `.gitlore/bin/claude` + `.envrc` committed for this repo.
 
 ## Scope
 
