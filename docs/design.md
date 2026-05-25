@@ -234,26 +234,26 @@ Guards: if `gitlore.enabled` is not `true`, or `.gitmodules` has no `gitlore-mem
 8. If memory has no uncommitted changes, `git merge --ff-only live` on the worktree branch. If uncommitted changes are present, display a warning and skip.
 9. If ff fails (invariant violation): emit both `systemWarning` (user-visible, prominent) and `additionalContext` (instructs agent to run `/gitlore:resolve`, and after resolve to direct the user to `/clear`).
 
-**`WorktreeCreate`** (Claude Code-initiated worktrees only)
+**Worktree creation — handled by `SessionStart`, not a `WorktreeCreate` hook**
 
-Guard: no-op if `.gitmodules` has no `gitlore-memory` entry.
+Memory-worktree setup for a new worktree happens lazily at the next `SessionStart` in that worktree (step 5 above: when the memory submodule worktree is missing, `git -C <main-repo>/.git/modules/gitlore-memory worktree add <worktree-path>/<memory-rel-path> <branch>`, then checkout the parent-named branch). This is uniform across every way a worktree comes into being:
 
-1. `git -C <main-repo>/.git/modules/gitlore-memory worktree add <worktree-path>/<memory-rel-path> <branch>` — initializes the memory submodule worktree at the correct gitdir.
-2. `<branch>` is the hook's `worktree_branch` input (the new parent worktree's branch name). Per Branch Model rules: if the memory branch already exists and is ff-compatible with `live`, ff and use; if diverged, prompt user.
-3. Checkout the worktree branch in the new memory worktree.
+- **`claude --worktree <name>`** — starts a *new session* in the new worktree, so `SessionStart` fires there with `cwd` = the worktree path (verified, CC 2.1.150).
+- **Manual `git worktree add`** — next `SessionStart` in that worktree handles it.
+- **Claude Desktop's worktree button** — does not fire `WorktreeCreate` at all (CC #57209), but a session still starts there, so `SessionStart` covers it.
 
-Manually-created worktrees (`git worktree add` outside Claude Code) fall back to `SessionStart`.
+Lazy creation is correct: with no session there is no auto-memory being written, so there is nothing to set up until the first session needs it.
 
-> **Hook I/O note (for the worktree-hooks plan).** `WorktreeCreate`/`WorktreeRemove` are wired as **command** hooks, so they consume `worktree_path` / `worktree_branch` from the hook **input** (stdin JSON) — as steps above already do. The `hookSpecificOutput.worktreePath` *output* field reported by the CC hooks docs is **HTTP-hooks-only** and is not available to command hooks, so do not plan to emit it. Per `claude-code-guide` 2026-05-24; verify the input field names against the live binary before implementing.
+> **Why not a `WorktreeCreate` hook.** Verified against CC 2.1.150 (`claude-code-guide`, 2026-05-25): `WorktreeCreate` is an **override** hook — it fires *before* the worktree exists, the script is expected to *create* it and print only its absolute path on stdout, and any extra stdout makes CC hang (#27467). Its stdin carries `{hook_event_name, cwd, name}` — **no** worktree path and **no** branch (CC defaults the branch to `worktree-<name>`). It also does not fire for Desktop-created worktrees, and there is no post-creation hook (#27744). Registering it would mean hijacking worktree placement for zero benefit over the `SessionStart` path. The earlier assumption that command hooks receive `worktree_path`/`worktree_branch` on stdin was wrong for `WorktreeCreate`; `hookSpecificOutput.worktreePath` is an HTTP-hooks-only *output* field and irrelevant here.
 
 **`WorktreeRemove`** (advisory — cannot block)
 
-Input provides `worktree_path` and `worktree_branch`.
+Input provides `worktree_path` only (verified CC 2.1.150 — no branch field). Advisory: a non-zero exit logs a warning but cannot stop the removal.
 
 Guard: no-op if `.gitmodules` has no `gitlore-memory` entry.
 
-1. `git -C <memory-gitdir> worktree remove <memory-submodule-worktree-path>`. On failure (locked, uncommitted changes), emit a warning; do not block parent worktree removal.
-2. Apply Claude Code's branch-retention policy (the same rule it applies to the parent branch) to the memory branch. Determined at design time from CC documentation (fallback to testing if docs are silent). If CC does not delete parent branches on worktree removal — current assumption pending verification — this step is a no-op and unmerged memory branches fall to the classical merged-branch sweep.
+1. Derive the memory submodule worktree path as `<worktree_path>/<memory-rel-path>`. If it is not a registered memory worktree (e.g. no session ever ran there, or an ephemeral subagent worktree), no-op. Otherwise `git -C <memory-gitdir> worktree remove <memory-submodule-worktree-path>` (prune if the directory is already gone). On failure (locked, uncommitted changes), emit a warning; never block parent worktree removal.
+2. **Branch retention is a no-op.** Verified: CC leaves the parent branch in place on worktree removal (#28422, #38287), so gitlore likewise leaves the memory branch in place; unmerged memory branches fall to the classical merged-branch sweep.
 3. Gitlore never touches parent branches directly.
 
 **`PostToolUse`** — triggers memory commit message preparation before a git commit.
@@ -391,10 +391,7 @@ If divergence surfaces outside a Claude session (`git commit` or `git push` run 
 
 Without `--recurse-submodules`: `SessionStart` detects uninitialized submodule, runs `git submodule update --init`, proceeds as above.
 
-**Worktree creation**
-
-- **Claude Code-initiated:** `WorktreeCreate` hook initializes memory submodule worktree and checks out a memory branch matching the new parent branch name.
-- **Manual (`git worktree add`):** next `SessionStart` in that worktree handles setup as fallback.
+**Worktree creation** — `SessionStart` in the new worktree initializes the memory submodule worktree and checks out a memory branch matching the new parent branch name. Uniform across `claude --worktree`, manual `git worktree add`, and the Desktop button (all start a session in the worktree). See "Worktree creation — handled by `SessionStart`" above for why no `WorktreeCreate` hook is used.
 
 ### Remote Repository
 
@@ -538,7 +535,8 @@ The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the pre
 | Push memory as optional in v1 | Gitlore without shared memory is diminished value. Optional push can be added later as a user preference. |
 | Separate `gitlore.memoryPath` local config key | `.gitmodules` plus the fixed submodule name `gitlore-memory` is canonical; a duplicate source creates divergence risk. |
 | Empty initial commit on install | Install is git-atomic when the initial commit contains migrated auto-memory or a `MEMORY.md` scaffold. |
-| Unconditional memory branch deletion on WorktreeRemove | Memory branches mirror Claude Code's parent-branch policy; no special "memory is auxiliary, discard" rule. |
+| Unconditional memory branch deletion on WorktreeRemove | Memory branches mirror Claude Code's parent-branch policy; no special "memory is auxiliary, discard" rule. CC keeps the parent branch on removal (verified 2.1.150), so the memory branch is kept too. |
+| `WorktreeCreate` hook to set up the memory worktree | It is an override hook (must create the worktree and print only its path on stdout; extra stdout hangs CC #27467), carries no branch in stdin, and misses Desktop-created worktrees. `SessionStart` in the new worktree does the setup uniformly with none of that fragility (verified CC 2.1.150). |
 | In-session diff dump for commit review | Too noisy in the TUI; user inspects the diff in their own git tooling when desired, approves via prose summary. |
 | Interactive prompt in pre-commit hook | Blocks non-interactive git commits (CI, scripts); agent-mediated confirmation is cleaner. |
 | Single-agent resolve with post-hoc context refresh | Sub-agent with fresh context avoids acting on stale in-session assumptions. Accepted experimental-flag dependency (D9). |
@@ -555,6 +553,7 @@ The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the pre
 | Date | Change |
 |------|--------|
 | 2026-04-11 | Initial design |
+| 2026-05-25 | Plan 06 design: verified worktree-hook I/O against CC 2.1.150. `WorktreeCreate` is an override hook (fires pre-creation, must emit only the worktree path on stdout, no branch in stdin) — **not used**; memory-worktree setup happens at `SessionStart` in the new worktree instead (covers `claude --worktree`, manual `git worktree add`, and the Desktop button uniformly). `WorktreeRemove` (advisory, `worktree_path`-only) removes the memory submodule worktree; branch retention confirmed a no-op (CC keeps the parent branch on removal). Corrected the prior wrong assumption that command hooks receive `worktree_path`/`worktree_branch` on stdin. |
 | 2026-05-25 | Released `0.1.1` (patch). Migrated 6 stranded pre-launcher memories into the submodule; pushed `main` (launcher) + the `gitlore-memory` submodule to GitHub. Bumped `plugin.json`/`marketplace.json` `0.1.0`→`0.1.1` so `/plugin update` re-fetches the launcher (same version string keeps the stale cache — see `plugin-cache-staleness` lesson). |
 | 2026-05-24 | Plan 05 built the Memory Redirect Launcher (shim + Placement A direnv + Placement B global + SessionStart guard) and removed the dead `settings.local.json` `autoMemoryDirectory` writes from `write-settings.sh`/`session-start.sh` (the tier CC ignores — D10). |
 | 2026-05-23 | Memory redirect reworked. Discovered CC honors `autoMemoryDirectory` only from `policySettings`/`flagSettings`/`userSettings` — the prior `.claude/settings.local.json` write was silently ignored and memory stranded in the default dir. Added the Memory Redirect Launcher: a transparent `claude` shim injecting `--settings` (one shim, two placements — repo-local committed `.gitlore/bin/claude` + `.envrc` `PATH_add` via direnv as default; global `~/.gitlore/bin/claude` via `/gitlore:install-launcher` as no-direnv fallback). Added `GITLORE_LAUNCHED` sentinel (anti-double-inject + SessionStart launcher guard). Install no longer writes `autoMemoryDirectory`; SessionStart warns loudly when launched without the shim. Added D10 and four Rejected Alternatives (project-tier setting, global userSettings, cowork env override, explicit launch command). |
