@@ -142,7 +142,37 @@ EOF
   grep -q '# gitlore: managed' .overcommit.yml
   grep -q 'gitlore-pre-commit' .overcommit.yml
   grep -q 'gitlore-pre-push' .overcommit.yml
+  grep -qF 'git rev-parse --git-common-dir' .overcommit.yml
   [ "$(cat .claude/gitlore-hook-setup)" = "overcommit --install" ]
+}
+
+@test "overcommit command array forwards appended files to the wrapper as \$@ (D11 verification)" {
+  cat > .overcommit.yml <<'EOF'
+PreCommit:
+  RuboCop:
+    enabled: true
+EOF
+  bash "$WIRE_OVERCOMMIT"
+
+  # Reproduce overcommit's invocation: it exec's the command array directly
+  # (no shell) and appends staged files as extra argv. We swap the embedded
+  # wrapper path for a capture stub, then run the array + files and check the
+  # stub saw the files — spaces intact — as positional args.
+  cap="$TMP_REPO/cap.sh"
+  printf '#!/usr/bin/env sh\nprintf "%%s\\n" "$@"\n' > "$cap"
+  chmod +x "$cap"
+
+  run python3 - "$cap" <<'PY'
+import sys, subprocess, yaml
+cap = sys.argv[1]
+cmd = yaml.safe_load(open('.overcommit.yml'))['PreCommit']['gitlore']['command']
+cmd = [c.replace('"$(git rev-parse --git-common-dir)/gitlore-pre-commit"', '"%s"' % cap) for c in cmd]
+out = subprocess.run(cmd + ['a.rb', 'b c.rb'], capture_output=True, text=True)
+sys.stdout.write(out.stdout)
+PY
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "a.rb" ]
+  [ "${lines[1]}" = "b c.rb" ]
 }
 
 # ---------------------------------------------------------------------------

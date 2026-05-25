@@ -24,8 +24,8 @@ fi
 # "yq <N>.<N>.<N>" with no leading "v" and no mikefarah URL.
 if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -qE 'mikefarah|version v[0-9]'; then
   # yq (mikefarah/yq v4) — deep-merges entries without clobbering existing ones.
-  yq -i '.PreCommit.gitlore.enabled = true | .PreCommit.gitlore.command = [".git/gitlore-pre-commit"]' "$CONFIG"
-  yq -i '.PrePush.gitlore.enabled = true | .PrePush.gitlore.command = [".git/gitlore-pre-push"]'       "$CONFIG"
+  yq -i '.PreCommit.gitlore.enabled = true | .PreCommit.gitlore.command = ["sh","-c","exec \"$(git rev-parse --git-common-dir)/gitlore-pre-commit\" \"$@\"","gitlore"]' "$CONFIG"
+  yq -i '.PrePush.gitlore.enabled = true | .PrePush.gitlore.command = ["sh","-c","exec \"$(git rev-parse --git-common-dir)/gitlore-pre-push\" \"$@\"","gitlore"]'       "$CONFIG"
   # Append the marker comment. yq strips comments, so we append it as a plain line.
   # Note: any pre-existing YAML comments in .overcommit.yml will have been stripped
   # by the yq round-trip. See docs/plugin-readme.md.
@@ -38,15 +38,20 @@ path = sys.argv[1]
 with open(path) as fh:
     data = yaml.safe_load(fh) or {}
 
-for hook, key, wrapper in (
-    ('PreCommit', 'gitlore-pre-commit', '.git/gitlore-pre-commit'),
-    ('PrePush',   'gitlore-pre-push',   '.git/gitlore-pre-push'),
+for hook, wrapper in (
+    ('PreCommit', 'gitlore-pre-commit'),
+    ('PrePush',   'gitlore-pre-push'),
 ):
     hook_data = data.setdefault(hook, {})
-    # key name used in yaml is just 'gitlore' for both
+    # Overcommit exec's the array directly (no shell); reach the wrapper through
+    # an explicit `sh -c`. $0='gitlore'; overcommit appends staged files as $@ (D11).
     hook_data['gitlore'] = {
         'enabled': True,
-        'command': [wrapper],
+        'command': [
+            'sh', '-c',
+            'exec "$(git rev-parse --git-common-dir)/%s" "$@"' % wrapper,
+            'gitlore',
+        ],
     }
 
 with open(path, 'w') as fh:
