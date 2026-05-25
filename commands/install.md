@@ -29,6 +29,7 @@ You are installing gitlore in the user's current repository.
 4. **Summarize.** Tell the user:
    - the memory submodule path,
    - that hooks are wired (which manager),
-   - and that they should commit the staged changes (`.gitmodules`, memory pointer, `.claude/settings.json`, `.claude/gitlore-hook-setup`) when they're ready.
+   - that they should commit the staged changes (`.gitmodules`, memory pointer, `.claude/settings.json`, `.claude/gitlore-hook-setup`, `.gitlore/bin/claude`, `.envrc`) when they're ready,
+   - and remind them to run `direnv allow` (or `/gitlore:install-launcher` if they don't use direnv) so memory is redirected into the submodule.
 
 Note: this is the local-only flow. Remote setup is a separate command (added in a later plan).
