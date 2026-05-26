@@ -45,6 +45,11 @@ esac
 # init-submodule.sh; settings.local.json is gitignored by design.
 git add .claude/settings.json .claude/gitlore-hook-setup .gitignore .gitlore/bin/claude .envrc
 
+if command -v direnv >/dev/null 2>&1; then
+  direnv allow
+else
+  bash "$PLUGIN_ROOT/scripts/install/global-shim.sh"
+fi
+
 echo "gitlore: install complete." >&2
 echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, .claude/gitlore-hook-setup, .gitignore, .gitlore/bin/claude, .envrc) and commit when ready." >&2
-echo "Then run 'direnv allow' so the launcher redirects memory into $mempath/ (no direnv? run /gitlore:install-launcher)." >&2

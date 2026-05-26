@@ -1,57 +1,65 @@
 ---
-description: Diagnose and recover from gitlore memory divergence (semantic merge included)
+description: Resolve gitlore memory divergence. Activate when a git commit or push fails with output containing "gitlore: memory merge prepared", or when the user invokes /gitlore:resolve.
 allowed-tools: ["Bash", "Task", "SendMessage"]
 ---
 
-# /gitlore:resolve
+# gitlore:resolve
 
-You are recovering a gitlore memory submodule from divergence — branch-vs-live, local-vs-remote, or a partial recovery state.
+You are resolving a gitlore memory submodule from divergence.
 
-## Steps
+## Entry mode
 
-1. **Confirm context.** Run `git rev-parse --show-toplevel`. If this fails, tell the user to cd into a git repo and abort.
+**Commit-triggered**: The pre-commit hook already emitted a merge directive — it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
 
-2. **Run the resolver script.**
+**Standalone** (user ran `/gitlore:resolve` or state is unclear): Run the resolver:
 
-   ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"
-   ```
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"
+```
 
-   Capture both stdout and stderr. Exit codes:
-   - `0` — state healthy or simple repair complete. Summarize and stop.
-   - Non-zero with a "memory merge prepared" directive on stderr — proceed to step 3.
-   - Non-zero without a directive — surface stderr verbatim, stop.
+Exit codes:
+- `0` — healthy or simple repair complete. Summarize and stop.
+- Non-zero + "memory merge prepared" on stderr → proceed to **Parse directive**.
+- Non-zero without that → surface stderr verbatim and stop.
 
-3. **Parse the directive.** The directive looks like:
+## Parse directive
 
-   ```
-   gitlore: memory merge prepared (flavor=<X>).
-   gitlore: dispatch the memory-merger sub-agent with state file:
-   gitlore:   <abs-path-to-state-file>
-   gitlore: on approval, the sub-agent must run:
-   gitlore:   cd "<parent-repo>" && bash "<abs-path-to-resolve.sh>" <continuation-subcommand>
-   ```
+The directive looks like:
 
-   Extract the state-file path and the full continuation command (the entire `bash "..." <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
+```
+gitlore: memory merge prepared (flavor=<X>).
+gitlore: dispatch the memory-merger sub-agent with state file:
+gitlore:   <abs-path-to-state-file>
+gitlore: on approval, the sub-agent must run:
+gitlore:   cd "<parent-repo>" && bash "<abs-path-to-resolve.sh>" <continuation-subcommand>
+```
 
-4. **Dispatch the `memory-merger` sub-agent (turn 1 — synthesis).**
+Extract the state-file path and the full continuation command (the entire `cd ... && bash ... <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
 
-   Use the `Task` tool with `subagent_type: "gitlore:memory-merger"` (the bare `memory-merger` form does not resolve — CC namespaces plugin agents under the plugin name). Pass two inputs in the prompt: the state-file path AND the full continuation command from the directive.
+## Dispatch memory-merger sub-agent (turn 1 — synthesis)
 
-   The sub-agent will synthesize, run `git add -A` in the memory worktree, and **return** a prose summary as its final message for this turn. It will not run the continuation yet. Capture the `agentId` from the dispatch result.
+Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass both the state-file path and the continuation command in the prompt. The sub-agent synthesizes, runs `git add -A` in the memory worktree, and returns a prose summary. Capture the `agentId`.
 
-5. **Approve or reject (turn 2 — resume).**
+## Approve or reject (turn 2 — resume)
 
-   Read the sub-agent's return message. Compare against session context: does the synthesis match what we'd expect from the changes you've seen this session?
+Read the sub-agent's summary. Compare against session context: does the synthesis match what we'd expect from the changes seen this session?
 
-   Resume the sub-agent via `SendMessage` to its `agentId`:
-   - If the synthesis is correct: `message: "approved"`.
-   - If anything is off: `message: "rejected: <specific reason>"`. The sub-agent will re-synthesize and return a new summary; loop back to evaluating it.
+Resume via `SendMessage` to the `agentId`:
+- If correct: `"approved"`.
+- If anything is off: `"rejected: <specific reason>"` — the sub-agent re-synthesizes and returns a new summary; loop back to evaluating it.
 
-   Escalate to the user only when session context is insufficient to judge. When you do, treat only a clear, un-negated affirmative as approval — a hedge, a question, or any negation is a rejection; on anything unclear, ask again rather than sending `approved`.
+Escalate to the user only when session context is insufficient to judge. Treat only a clear, un-negated affirmative as approval — a hedge, a question, or any negation is a rejection.
 
-   On approval, the sub-agent runs the continuation command and returns a one-line result.
+On approval, the sub-agent runs the continuation command.
 
-6. **After the sub-agent exits**, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor or a loop continuation. Repeat steps 2-6 until the script exits 0.
+## Loop
 
-7. **Summarize.** Tell the user what was merged and what state the repo is in now.
+After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0.
+
+## Resume commit
+
+If this skill was triggered by a commit failure, retry the original git commit now that memory is resolved.
+
+## Summarize
+
+Tell the user what was merged and what state the repo is in now.
