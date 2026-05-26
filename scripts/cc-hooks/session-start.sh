@@ -84,6 +84,21 @@ if [ ! -e "$mempath/.git" ]; then
   fi
 fi
 
+# Fresh clone (FR7): `git submodule update --init` checks out the recorded
+# gitlink SHA as a detached HEAD and creates no local branches — only
+# `origin/live` exists. The branch-model logic below references `live` as a
+# *local* ref (checkout target and ff-merge source), so materialize it first.
+# Prefer origin/live; fall back to the checked-out gitlink commit (HEAD) when
+# the memory has no remote (degenerate, never-pushed case). No-op once live
+# exists (install, normal sessions, linked worktrees).
+if ! git -C "$mempath" show-ref --verify --quiet refs/heads/live; then
+  if git -C "$mempath" show-ref --verify --quiet refs/remotes/origin/live; then
+    git -C "$mempath" branch live origin/live >&2
+  else
+    git -C "$mempath" branch live HEAD >&2
+  fi
+fi
+
 if [ "$parent_branch" = "DETACHED" ]; then
   git -C "$mempath" checkout --detach live >/dev/null 2>&1 || true
 else
