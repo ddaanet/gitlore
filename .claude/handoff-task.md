@@ -1,8 +1,7 @@
 ## Current task
 
-Execute Plan 07 (`docs/plans/2026-05-25-07-gitlink-aware-wrappers.md`) subagent-driven on `main` — 10 TDD tasks implementing D11 gitlink-aware wrappers + absorbed Plan 06 deliverables; nothing dispatched yet.
+Plan 07 (D11 gitlink-aware wrappers) is fully implemented, reviewed, and tested (135/135) — its 11 commits sit on local `main`, 17 ahead of `origin/main` and unpushed by choice; nothing is in progress.
 
 ## Open decisions
 
-- `hooks/hooks.json` Task 9 registers `WorktreeRemove` with `matcher: "*"` mirroring `SessionStart`; unverified whether `WorktreeRemove` honors a matcher field — confirm against CC, drop the matcher if it rejects one.
-- Task 10 assumes `tests/plugin_distribution.bats` tolerates the new `WorktreeRemove` hook key; if it asserts an exact event set, update that assertion.
+- Push the 17 local commits to `origin/main` now, or write Plan 08 first — the deferred follow-ups (clone-from-remote smoke test, version-sync CI, Plan-02 cleanup, locked-worktree `WorktreeRemove` test) are recorded in `memory/project_overview.md` and none is urgent.
