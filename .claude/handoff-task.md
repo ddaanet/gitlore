@@ -1,7 +1,10 @@
 ## Current task
 
-Nothing in progress — the FR7 clone-restore bug is fixed, tested (136/136), and committed on local `main` (root + memory submodule), unpushed.
+gitlore is preflight-passed and ready to release (main clean, 141 tests green, `make check-version` in sync at 0.1.1, readme refreshed in unpushed commit `418011e`) — the next release first adopts the `claude-plugin-dev` toolkit (vendored via `git subtree --prefix=plugin-dev`) to get a real `just release` recipe + git tags, then ships.
 
 ## Open decisions
 
-- Push the unpushed commits to `origin/main` (root ~19 ahead, memory submodule 1+ ahead — push memory first so the gitlink resolves), or pick up a deferred item next. Deferred, all nice-to-have: version-sync CI (`plugin.json`↔`marketplace.json`), Plan-02 leftover `ddaanet/gitmoji-gitlore-memory` cleanup, locked-worktree `WorktreeRemove` test.
+- Integrate `claude-plugin-dev` before releasing: `git subtree add --prefix=plugin-dev git@github.com:ddaanet/claude-plugin-dev.git <vX.Y.Z tag> --squash`, add a gitlore `justfile` with a `precommit` recipe wrapping `make test` + `make check-version` (the toolkit's `release` recipe depends on `precommit`), then run `plugin-dev/install.sh` to wire the `import 'plugin-dev/release.just'` line + the `version-guard.sh` PreToolUse hook into `.claude/settings.json`. Pick which toolkit tag to pin.
+- Bump level for the release: `0.2.0` (minor — recommended, ~26 commits of D11/Plan-07 rework + FR7 fix since `0.1.1`) vs `0.1.2` (patch). Run via `just release minor` once integrated.
+- The toolkit's `release` recipe bumps `plugin.json` + tags but is unaware of the separate marketplace repo — so the `marketplace.json` bump (kept in sync via `scripts/check-version.sh`) + `/plugin marketplace update` cache-bust still need to happen alongside. Decide whether to extend the recipe/precommit or keep that step manual.
+- Uncommitted: `memory/project_overview.md` has the release-ready/toolkit note in the working tree (memory submodule), not yet committed.
