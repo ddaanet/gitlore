@@ -26,10 +26,16 @@ You are installing gitlore in the user's current repository.
 
    The script exits 0 on success or a partial-but-recoverable install, non-zero on a hard error. On non-zero, surface stderr verbatim and stop.
 
-4. **Summarize.** Tell the user:
+4. **Wire the launcher.** Check whether direnv is available:
+   ```bash
+   command -v direnv
+   ```
+   - If found: run `direnv allow` in the repo root.
+   - If not found: run `"${CLAUDE_PLUGIN_ROOT}/scripts/install/global-shim.sh"` and relay its printed `PATH` instruction to the user verbatim, telling them to add it to their shell rc and restart their shell.
+
+5. **Summarize.** Tell the user:
    - the memory submodule path,
    - that hooks are wired (which manager),
-   - that they should commit the staged changes (`.gitmodules`, memory pointer, `.claude/settings.json`, `.claude/gitlore-hook-setup`, `.gitlore/bin/claude`, `.envrc`) when they're ready,
-   - and remind them to run `direnv allow` (or `/gitlore:install-launcher` if they don't use direnv) so memory is redirected into the submodule.
+   - that they should commit the staged changes (`.gitmodules`, memory pointer, `.claude/settings.json`, `.claude/gitlore-hook-setup`, `.gitlore/bin/claude`, `.envrc`) when they're ready.
 
 Note: this is the local-only flow. Remote setup is a separate command (added in a later plan).
