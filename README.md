@@ -18,11 +18,11 @@ You'll be asked for a memory subpath (default `memory`) and your project's
 pre-commit command (e.g. `lefthook run pre-commit`). A memory remote is created
 only if the parent repo has a remote, and that step uses `gh` when available.
 
-After `/gitlore:install`, run `direnv allow` so the launcher in `.gitlore/bin/claude`
-takes over and CC's native auto-memory redirects into the submodule. If you don't
-use direnv (or you launch Claude Code from outside an allowed directory), re-run
-`/gitlore:install` on that machine — it detects the missing direnv and installs the
-launcher globally, printing the one-line `PATH` change to add to your shell rc.
+After `/gitlore:install`, the launcher in `.gitlore/bin/claude` is activated
+automatically: direnv is approved if available, otherwise a global shim is installed
+under `~/.gitlore/bin/` and install prints the one-line `PATH` addition to add to
+your shell rc. Either way, Claude Code's auto-memory redirects into the submodule on
+the next session.
 
 ## Development
 
