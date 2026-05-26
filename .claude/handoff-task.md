@@ -1,7 +1,7 @@
 ## Current task
 
-Plan 07 (D11 gitlink-aware wrappers) is fully implemented, reviewed, and tested (135/135) — its 11 commits sit on local `main`, 17 ahead of `origin/main` and unpushed by choice; nothing is in progress.
+Nothing in progress — the FR7 clone-restore bug is fixed, tested (136/136), and committed on local `main` (root + memory submodule), unpushed.
 
 ## Open decisions
 
-- Push the 17 local commits to `origin/main` now, or write Plan 08 first — the deferred follow-ups (clone-from-remote smoke test, version-sync CI, Plan-02 cleanup, locked-worktree `WorktreeRemove` test) are recorded in `memory/project_overview.md` and none is urgent.
+- Push the unpushed commits to `origin/main` (root ~19 ahead, memory submodule 1+ ahead — push memory first so the gitlink resolves), or pick up a deferred item next. Deferred, all nice-to-have: version-sync CI (`plugin.json`↔`marketplace.json`), Plan-02 leftover `ddaanet/gitmoji-gitlore-memory` cleanup, locked-worktree `WorktreeRemove` test.
