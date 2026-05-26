@@ -20,9 +20,9 @@ only if the parent repo has a remote, and that step uses `gh` when available.
 
 After `/gitlore:install`, run `direnv allow` so the launcher in `.gitlore/bin/claude`
 takes over and CC's native auto-memory redirects into the submodule. If you don't
-use direnv (or you launch Claude Code from outside an allowed directory), run
-`/gitlore:install-launcher` instead — it installs the launcher globally and prints
-the one-line `PATH` change to add to your shell rc.
+use direnv (or you launch Claude Code from outside an allowed directory), re-run
+`/gitlore:install` on that machine — it detects the missing direnv and installs the
+launcher globally, printing the one-line `PATH` change to add to your shell rc.
 
 ## Development
 
