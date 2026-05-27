@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration check-version
+.PHONY: test test-unit test-integration check-version evals
 
 test: test-unit test-integration
 
@@ -11,4 +11,8 @@ check-version:
 	scripts/check-version.sh
 
 test-integration:
-	bats tests/integration_happy_path.bats tests/integration_clone_restore.bats
+	bats tests/integration_happy_path.bats tests/integration_clone_restore.bats tests/evals/lib/setup.bats tests/evals/lib/judge.bats
+
+.PHONY: evals
+evals:
+	tests/evals/run-evals.sh
