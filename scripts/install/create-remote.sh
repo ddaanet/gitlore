@@ -29,7 +29,7 @@ if ! gh repo create "$full_name" --private; then
   exit 1
 fi
 
-remote_url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl 2>/dev/null || true)
+remote_url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl || true)
 if [ -z "$remote_url" ]; then
   echo "gitlore: created remote $full_name but could not resolve its URL. Run /gitlore:resolve to recover." >&2
   exit 1

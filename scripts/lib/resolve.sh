@@ -31,11 +31,11 @@ gitlore_write_merge_state() {
   local changed conflicted
   # Union of files changed on either side of the merge — target_ref (HEAD post-checkout)
   # AND source_ref (the incoming branch). diff base...HEAD alone misses source-side files.
-  changed=$({ git -C "$mempath" diff --name-only "$base...$target" 2>/dev/null; \
-              git -C "$mempath" diff --name-only "$base...$source" 2>/dev/null; } \
-    | sort -u | jq -R . | jq -s . 2>/dev/null || echo '[]')
-  conflicted=$(git -C "$mempath" diff --name-only --diff-filter=U 2>/dev/null \
-    | jq -R . | jq -s . 2>/dev/null || echo '[]')
+  changed=$({ git -C "$mempath" diff --name-only "$base...$target"; \
+              git -C "$mempath" diff --name-only "$base...$source"; } \
+    | sort -u | jq -R . | jq -s . || echo '[]')
+  conflicted=$(git -C "$mempath" diff --name-only --diff-filter=U \
+    | jq -R . | jq -s . || echo '[]')
   cat > "$statefile" <<EOF
 {
   "flavor": "$flavor",
@@ -77,7 +77,7 @@ gitlore_prepare_branch_vs_live() {
   local branch base
   branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || git -C "$mempath" rev-parse HEAD)
   base=$(git -C "$mempath" merge-base "$branch" live)
-  git -C "$mempath" checkout -q live 2>/dev/null || return 2
+  git -C "$mempath" checkout -q live || return 2
   git -C "$mempath" merge --no-commit --no-ff "$branch" >/dev/null 2>&1 || true
   printf '%s:%s\n' "$branch" "$base"
 }
@@ -89,7 +89,7 @@ gitlore_prepare_local_vs_remote() {
   local return_branch old_local base
   return_branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || git -C "$mempath" rev-parse HEAD)
   old_local=$(git -C "$mempath" rev-parse live)
-  git -C "$mempath" checkout -q live 2>/dev/null || return 2
+  git -C "$mempath" checkout -q live || return 2
   git -C "$mempath" reset --hard -q origin/live
   base=$(git -C "$mempath" merge-base "$old_local" origin/live)
   git -C "$mempath" merge --no-commit --no-ff "$old_local" >/dev/null 2>&1 || true
