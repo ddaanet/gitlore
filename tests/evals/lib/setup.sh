@@ -38,7 +38,21 @@ setup_eval_repo() {
   # Install detects no hook manager; wire directly so the pre-commit hook fires
   # during the eval's parent git commit.
   bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
-  git add .claude/gitlore-hook-setup
+
+  # Wire the CC PostToolUse hook directly into settings.json.
+  # This bypasses the plugin marketplace (which requires a cached install) and
+  # works in both interactive and SDK-based eval runs.  The SDK loads hooks
+  # from <cwd>/.claude/settings.json when settingSources includes "project".
+  local tmp
+  tmp=$(mktemp)
+  jq --arg plugin_root "$PLUGIN_ROOT" '
+    .hooks.PostToolUse = [{
+      "matcher": "Bash",
+      "hooks": [{"type": "command", "command": ($plugin_root + "/scripts/cc-hooks/post-tool-use.sh")}]
+    }]
+  ' .claude/settings.json > "$tmp" && mv "$tmp" .claude/settings.json
+
+  git add .claude/settings.json .claude/gitlore-hook-setup
   git commit -q -m "Install gitlore"
 
   printf '%s\n' "$initial_memory" > memory/MEMORY.md

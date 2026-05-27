@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Gitlore eval runner — memory commit flow.
-# Requires: claude in PATH, ANTHROPIC_API_KEY set, gitlore installed in this repo.
+# Requires: uv in PATH, ANTHROPIC_API_KEY set, gitlore installed in this repo.
 set -e
+
+# sdk-runner.py uses the Claude Agent SDK (via uv) so PostToolUse hooks fire
+# and additionalContext injects correctly — unlike `claude --print` which
+# suppresses all hooks.
+command -v uv >/dev/null 2>&1 || { echo "error: uv not found (required for eval SDK runner)" >&2; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCENARIOS_DIR="$SCRIPT_DIR/scenarios"
@@ -28,7 +33,6 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
   name=$(jq -r '.name' "$scenario_file")
   initial_memory=$(jq -r '.initial_memory' "$scenario_file")
   prompt=$(jq -r '.prompt' "$scenario_file")
-  approval=$(jq -r '.approval_message' "$scenario_file")
   rubric=$(jq -r '.rubric' "$scenario_file")
 
   printf '📝 Scenario: %s\n\n' "$name"
@@ -40,25 +44,16 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     fail_reason=""
     setup_eval_repo "$initial_memory"
 
-    # Turn 1: agent edits memory, runs pre-commit command ("true"), receives
-    # additionalContext from post-tool-use.sh, generates summary, asks for approval.
-    t1_out=$(cd "$EVAL_REPO" && claude --print --output-format json "$prompt" 2>/dev/null) || true
-    session_id=$(printf '%s' "$t1_out" | jq -r '.session_id // empty' 2>/dev/null || true)
+    # SDK runner: agent edits memory, runs `true`, PostToolUse hook fires and
+    # injects additionalContext, agent writes the commit-msg file.
+    "$LIB_DIR/sdk-runner.py" --cwd "$EVAL_REPO" --prompt "$prompt" 2>/dev/null || \
+      fail_reason="sdk runner failed"
 
-    if [ -z "$session_id" ]; then
-      fail_reason="no session_id from turn 1"
-    fi
-
-    if [ -z "$fail_reason" ]; then
-      # Turn 2: user approves the summary; agent writes the commit-msg file.
-      cd "$EVAL_REPO" && claude --resume "$session_id" --print "$approval" >/dev/null 2>&1 || true
-    fi
-
-    # Assertion 0: commit-msg file must exist after Turn 2.
+    # Assertion 0: commit-msg file must exist (agent received additionalContext and wrote it).
     if [ -z "$fail_reason" ]; then
       msgfile_pre=$(git -C "$EVAL_REPO/memory" rev-parse --git-path gitlore-commit-msg 2>/dev/null || true)
       [ -n "$msgfile_pre" ] && [ -f "$msgfile_pre" ] || \
-        fail_reason="no commit-msg file after Turn 2 (agent did not complete approval flow)"
+        fail_reason="no commit-msg file (agent did not write it after receiving additionalContext)"
     fi
 
     if [ -z "$fail_reason" ]; then
