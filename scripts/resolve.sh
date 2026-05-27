@@ -37,7 +37,7 @@ if [ $# -ge 1 ]; then
       git -C "$mempath" checkout -q "$return_branch"
       rm -f "$statefile"
       # Retry the ff-push; on failure, loop with a fresh prepare.
-      if ! git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
+      if ! git -C "$mempath" push -q . HEAD:live; then
         if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
           echo "gitlore: cannot checkout live (concurrent resolve). Wait and retry." >&2
           exit 1
@@ -60,7 +60,7 @@ if [ $# -ge 1 ]; then
       git -C "$mempath" commit -q --no-edit
       rm -f "$statefile"
       # Retry the push; on failure, loop with a fresh prepare.
-      if ! git -C "$mempath" push -q origin live 2>/dev/null; then
+      if ! git -C "$mempath" push -q origin live; then
         if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
           echo "gitlore: cannot checkout live (concurrent resolve). Wait and retry." >&2
           exit 1
@@ -80,7 +80,7 @@ if [ $# -ge 1 ]; then
       [ -f "$statefile" ] || { echo "gitlore: no merge state file to abort" >&2; exit 1; }
       return_branch=$(jq -r .return_branch "$statefile")
       git -C "$mempath" merge --abort 2>/dev/null || true
-      git -C "$mempath" checkout -q "$return_branch" 2>/dev/null || true
+      git -C "$mempath" checkout -q "$return_branch" || true
       rm -f "$statefile"
       # Re-enter the default mode to detect the original divergence freshly.
       exec bash "$0"
@@ -125,12 +125,12 @@ if ! git -C "$mempath" ls-remote origin live | grep -q .; then
   exit 0
 fi
 
-git -C "$mempath" fetch -q origin live 2>/dev/null || true
+git -C "$mempath" fetch -q origin live || true
 
 # Try branch-vs-live first (cheaper, local-only).
 branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || echo "")
 if [ -n "$branch" ] && [ "$branch" != "live" ]; then
-  if ! git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
+  if ! git -C "$mempath" push -q . HEAD:live; then
     if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
       echo "gitlore: another session is resolving memory. Wait and retry." >&2
       exit 1
@@ -143,7 +143,7 @@ if [ -n "$branch" ] && [ "$branch" != "live" ]; then
 fi
 
 # Branch is in sync (or wasn't applicable). Try local-vs-remote.
-if ! git -C "$mempath" push -q origin live 2>/dev/null; then
+if ! git -C "$mempath" push -q origin live; then
   if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
     echo "gitlore: another session is resolving memory. Wait and retry." >&2
     exit 1

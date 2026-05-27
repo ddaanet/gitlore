@@ -46,7 +46,7 @@ esac
 git add .claude/settings.json .claude/gitlore-hook-setup .gitignore .gitlore/bin/claude .envrc
 
 if command -v direnv >/dev/null 2>&1; then
-  direnv allow 2>/dev/null || true
+  direnv allow || true
 else
   bash "$PLUGIN_ROOT/scripts/install/global-shim.sh"
 fi
