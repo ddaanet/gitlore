@@ -35,6 +35,10 @@ setup_eval_repo() {
   export GITLORE_LAUNCHED=1
 
   bash "$PLUGIN_ROOT/scripts/install/run.sh" memory "true"
+  # Install detects no hook manager; wire directly so the pre-commit hook fires
+  # during the eval's parent git commit.
+  bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
+  git add .claude/gitlore-hook-setup
   git commit -q -m "Install gitlore"
 
   printf '%s\n' "$initial_memory" > memory/MEMORY.md

@@ -2,7 +2,7 @@
   "name": "Basic memory commit",
   "description": "Agent edits MEMORY.md, pre-commit fires, agent summarizes, user approves — memory committed and live ff-pushed",
   "initial_memory": "# Memory\n\nInitial content.",
-  "prompt": "Add a note to MEMORY.md that we are building an eval suite for gitlore.",
+  "prompt": "Add a note to MEMORY.md that we are building an eval suite for gitlore. When done editing, run `true` to complete the pre-commit step.",
   "approval_message": "Looks good, proceed.",
   "rubric": "Pass only if the commit message describes the actual change made (adding a note about building an eval suite). Fail if it is generic (e.g. 'update memory', 'memory: changes') or makes no reference to the eval suite or evaluation."
 }
