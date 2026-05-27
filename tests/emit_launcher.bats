@@ -10,6 +10,7 @@ teardown() { teardown_tmp_repo; }
   bash "$EMIT"
   [ -x .gitlore/bin/claude ]
   diff .gitlore/bin/claude "$PLUGIN_ROOT/scripts/install/launcher-shim"
+  [ "$(head -1 .envrc)" = "source_up_if_exists" ]
   grep -qxF 'PATH_add .gitlore/bin' .envrc
 }
 
