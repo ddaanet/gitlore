@@ -54,6 +54,13 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
       cd "$EVAL_REPO" && claude --resume "$session_id" --print "$approval" >/dev/null 2>&1 || true
     fi
 
+    # Assertion 0: commit-msg file must exist after Turn 2.
+    if [ -z "$fail_reason" ]; then
+      msgfile_pre=$(git -C "$EVAL_REPO/memory" rev-parse --git-path gitlore-commit-msg 2>/dev/null || true)
+      [ -n "$msgfile_pre" ] && [ -f "$msgfile_pre" ] || \
+        fail_reason="no commit-msg file after Turn 2 (agent did not complete approval flow)"
+    fi
+
     if [ -z "$fail_reason" ]; then
       # Parent commit fires the gitlore pre-commit hook, which commits memory
       # and ff-pushes to live.
