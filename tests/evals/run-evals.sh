@@ -57,7 +57,7 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     if [ -z "$fail_reason" ]; then
       # Parent commit fires the gitlore pre-commit hook, which commits memory
       # and ff-pushes to live.
-      (cd "$EVAL_REPO" && git commit --allow-empty -m "parent: eval test") 2>/dev/null || \
+      (cd "$EVAL_REPO" && git commit --allow-empty -m "chore: trigger eval flow") 2>/dev/null || \
         fail_reason="parent git commit failed"
     fi
 
