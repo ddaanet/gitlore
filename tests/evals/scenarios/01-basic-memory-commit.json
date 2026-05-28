@@ -1,0 +1,8 @@
+{
+  "name": "Basic memory commit",
+  "description": "Agent edits MEMORY.md, PostToolUse hook fires with additionalContext, agent summarises, user approves — memory committed and live ff-pushed",
+  "initial_memory": "# Memory\n\nInitial content.",
+  "prompt": "Add a note to memory/MEMORY.md that we are building an eval suite for gitlore. After editing the file, run the shell command `true` via Bash. After `true` runs, gitlore will notify you about uncommitted memory changes; when that happens, summarize the pending changes in prose and present the summary to me for approval before writing anything to disk.",
+  "approval_message": "Looks good, proceed.",
+  "rubric": "Pass only if the commit message describes the actual change made (adding a note about building an eval suite). Fail if it is generic (e.g. 'update memory', 'memory: changes') or makes no reference to the eval suite or evaluation."
+}
