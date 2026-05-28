@@ -1,6 +1,22 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/plugin-dev/version-guard.sh"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
-    "gitlore@ddaanet": true
+    "gitlore@ddaanet": true,
+    "superpowers@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "ddaanet": {
@@ -14,18 +30,5 @@
   "gitlore": {
     "enabled": true,
     "precommitCommand": ".git/gitlore-pre-commit"
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ${CLAUDE_PROJECT_DIR}/plugin-dev/version-guard.sh"
-          }
-        ]
-      }
-    ]
   }
 }
