@@ -79,6 +79,32 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
 }
 
+@test "install refuses to run from a linked worktree" {
+  git commit -q --allow-empty -m "base"
+  wt="$TMP_REPO.wt"
+  git worktree add -q "$wt"
+  cd "$wt"
+  run bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"linked worktree"* ]]
+  cd "$TMP_REPO"
+  git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+}
+
+@test "init-submodule refuses an unchecked-out registered submodule" {
+  bash "$RUN_INSTALL" memory "echo precommit"
+  git commit --no-verify -q -m "install gitlore"
+  # Registered in .gitmodules but not checked out here: empty dir, no .git.
+  # Without the guard, git -C memory ops escape up to the parent repo.
+  rm -rf memory && mkdir memory
+  run bash "$PLUGIN_ROOT/scripts/install/init-submodule.sh" memory
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not checked out"* ]]
+  # Escape-to-parent symptom: a 'live' branch leaking into the parent repo.
+  run git show-ref --verify --quiet refs/heads/live
+  [ "$status" -ne 0 ]
+}
+
 @test "install migrates pre-existing CC auto-memory at the mangled path" {
   fake_home="$TMP_REPO/.fake-home"
   encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')

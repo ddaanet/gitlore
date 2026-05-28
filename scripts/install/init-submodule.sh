@@ -71,6 +71,19 @@ EOF
 
 fi
 
+# Steps 6-7 operate on the submodule via `git -C "$mempath"` / `cd "$mempath"`.
+# If it is registered (already_registered=1) but not checked out here — e.g. a
+# fresh clone before SessionStart, or after `git submodule deinit` — $mempath
+# has no .git and every such op walks up to the PARENT repo, staging the
+# parent's HEAD as the memory gitlink (unclonable superproject) and creating
+# branches in the parent. Refuse rather than corrupt. (On a first-time install
+# the init block above created $mempath/.git, so this never trips there.)
+if [ ! -e "$mempath/.git" ]; then
+  echo "gitlore: '$mempath' is registered as a submodule but not checked out here." >&2
+  echo "gitlore: start a Claude Code session (SessionStart checks it out) or run 'git submodule update --init -- $mempath', then re-run install." >&2
+  exit 1
+fi
+
 # 6. Stage parent-side artifacts. Runs on every install — including idempotent
 #    re-runs after a reset — so the install's "leave it staged" contract holds
 #    regardless of working-tree state. The submodule gitlink is written via
