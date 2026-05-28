@@ -33,6 +33,7 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
   name=$(jq -r '.name' "$scenario_file")
   initial_memory=$(jq -r '.initial_memory' "$scenario_file")
   prompt=$(jq -r '.prompt' "$scenario_file")
+  approval=$(jq -r '.approval_message' "$scenario_file")
   rubric=$(jq -r '.rubric' "$scenario_file")
 
   printf '📝 Scenario: %s\n\n' "$name"
@@ -44,10 +45,13 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     fail_reason=""
     setup_eval_repo "$initial_memory"
 
-    # SDK runner: agent edits memory, runs `true`, PostToolUse hook fires and
-    # injects additionalContext, agent writes the commit-msg file.
-    "$LIB_DIR/sdk-runner.py" --cwd "$EVAL_REPO" --prompt "$prompt" 2>/dev/null || \
-      fail_reason="sdk runner failed"
+    # SDK runner (two turns):
+    #   Turn 1 — agent edits memory, runs `true`, PostToolUse hook injects
+    #             additionalContext, agent summarises and stops.
+    #   Turn 2 — eval sends approval; agent writes commit-msg file.
+    "$LIB_DIR/sdk-runner.py" \
+      --cwd "$EVAL_REPO" --prompt "$prompt" --approval "$approval" \
+      2>/dev/null || fail_reason="sdk runner failed"
 
     # Assertion 0: commit-msg file must exist (agent received additionalContext and wrote it).
     if [ -z "$fail_reason" ]; then
