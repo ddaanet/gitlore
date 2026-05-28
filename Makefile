@@ -11,7 +11,7 @@ check-version:
 	scripts/check-version.sh
 
 test-integration:
-	bats tests/integration_happy_path.bats tests/integration_clone_restore.bats tests/evals/lib/setup.bats tests/evals/lib/judge.bats
+	bats tests/integration_happy_path.bats tests/integration_clone_restore.bats tests/evals/lib/setup.bats tests/evals/lib/judge.bats tests/evals/lib/runner.bats
 
 .PHONY: evals
 evals:

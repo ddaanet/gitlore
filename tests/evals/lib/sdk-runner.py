@@ -16,6 +16,7 @@ Two-turn flow:
 
 Usage:
     sdk-runner.py --cwd <path> --prompt <text> --approval <text> [--max-turns N]
+    sdk-runner.py --probe --cwd <path>   # connectivity check only
 """
 import asyncio
 import argparse
@@ -46,11 +47,26 @@ async def run_turn(
 
 async def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--cwd", required=True, help="Eval repo working directory")
-    p.add_argument("--prompt", required=True, help="Turn-1 user prompt")
-    p.add_argument("--approval", required=True, help="Turn-2 approval message")
+    p.add_argument("--cwd", required=True, help="Working directory")
+    p.add_argument("--prompt", help="Turn-1 user prompt")
+    p.add_argument("--approval", help="Turn-2 approval message")
     p.add_argument("--max-turns", type=int, default=20)
+    p.add_argument("--probe", action="store_true",
+                   help="Test Claude Code API connectivity and exit (no eval run)")
     args = p.parse_args()
+
+    if args.probe:
+        t = await run_turn("reply with the single word ok", args.cwd, max_turns=1)
+        if t is None:
+            print("probe: no response from Claude Code API", file=sys.stderr)
+            return 1
+        if t.subtype != "success":
+            print(f"probe: API error (subtype={t.subtype!r})", file=sys.stderr)
+            return 1
+        return 0
+
+    if not args.prompt or not args.approval:
+        p.error("--prompt and --approval are required unless --probe is set")
 
     # Turn 1: agent edits memory, runs precommit command, receives hook
     # additionalContext, summarises changes, stops waiting for approval.

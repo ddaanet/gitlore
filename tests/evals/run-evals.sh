@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Gitlore eval runner — memory commit flow.
-# Requires: uv in PATH, ANTHROPIC_API_KEY set, gitlore installed in this repo.
+# Requires: uv in PATH, Claude Code API access (Claude Max or ANTHROPIC_API_KEY).
+# Must run in an unsandboxed environment — Claude Code sandbox blocks API calls.
 set -e
 
 # sdk-runner.py uses the Claude Agent SDK (via uv) so PostToolUse hooks fire
@@ -9,8 +10,23 @@ set -e
 command -v uv >/dev/null 2>&1 || { echo "error: uv not found (required for eval SDK runner)" >&2; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCENARIOS_DIR="$SCRIPT_DIR/scenarios"
-LIB_DIR="$SCRIPT_DIR/lib"
+# Allow overrides for testing.
+SCENARIOS_DIR="${SCENARIOS_DIR:-$SCRIPT_DIR/scenarios}"
+LIB_DIR="${LIB_DIR:-$SCRIPT_DIR/lib}"
+
+# Pre-flight: verify Claude Code API is accessible before loading helpers.
+# Evals spawn real Claude sessions; this fails when running inside a Claude Code
+# sandbox (network to the API is blocked).
+_probe_tmp=$(mktemp -d)
+if ! "$LIB_DIR/sdk-runner.py" --probe --cwd "$_probe_tmp" 2>/dev/null; then
+  rm -rf "$_probe_tmp"
+  echo "error: Claude Code API is not accessible."
+  echo "       Evals must run in an unsandboxed environment."
+  echo "       If running inside Claude Code, disable sandbox mode first."
+  exit 1
+fi
+rm -rf "$_probe_tmp"
+
 EVAL_LIB_DIR="$LIB_DIR"
 export EVAL_LIB_DIR
 
