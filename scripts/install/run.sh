@@ -13,6 +13,19 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 toplevel=$(git rev-parse --show-toplevel)
 [ "$PWD" = "$toplevel" ] || { echo "Run /gitlore:install from the repo root ($toplevel)." >&2; exit 1; }
 
+# Must be the main worktree. In a linked worktree the memory submodule is
+# usually unchecked-out, and every `git -C memory` op below would silently walk
+# up to the parent repo — staging the parent's HEAD as the memory gitlink and
+# creating branches in the parent. A linked worktree's per-worktree git dir
+# differs from the common git dir; the main worktree's matches.
+git_dir=$(cd "$(git rev-parse --git-dir)" && pwd)
+common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+if [ "$git_dir" != "$common_dir" ]; then
+  echo "gitlore: run /gitlore:install from the main worktree, not a linked worktree ($PWD)." >&2
+  echo "gitlore: the main worktree is at $(dirname "$common_dir")." >&2
+  exit 1
+fi
+
 bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
 
 # Refuse non-empty existing path that isn't already our submodule.

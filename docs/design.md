@@ -143,6 +143,8 @@ exec "$real" --settings "$json" "$@"
 
 **`/gitlore:install`** — one-time setup, idempotent.
 
+Precondition: must run from the **main worktree** (repo root). In a linked worktree the memory submodule is typically unchecked-out, so submodule git ops would silently escape to the parent repo — staging the parent's HEAD as the memory gitlink and creating branches in the parent. `run.sh` aborts when the per-worktree git dir differs from the common git dir. As a second line of defense, `init-submodule.sh` refuses to stage the gitlink when the memory path has no `.git` (registered but not checked out).
+
 1. Check `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`; if unset, warn and offer to enable it (required for sub-agent-based resolve).
 2. Prompt for memory path (default: `memory`). If the path exists with unrelated content, refuse and prompt for an alternative.
 3. Prompt for the project pre-commit command (stored as `gitlore.precommitCommand`).
