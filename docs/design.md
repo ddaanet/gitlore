@@ -334,8 +334,9 @@ Detection script outputs structured results. Each hook manager has an idempotent
 1. `.lefthook.yml` or `lefthook.yml` → Lefthook
 2. `.husky/` directory → Husky (v7+)
 3. `.overcommit.yml` or `.git/hooks/overcommit-hook` → Overcommit
-4. Executable `.git/hooks/pre-commit` not tracked by any manager → None (direct)
-5. Otherwise → Unknown
+4. Otherwise → None (direct)
+
+The `direct` case is the default whenever no recognized manager is present — whether the repo has a hand-rolled `.git/hooks/pre-commit` (the direct installer appends, coexisting) or no hooks at all. The shared `.git/hooks` dir exists in every git repo, so direct wiring always works; defaulting bare repos to it means the double-commit guarantee (FR8) is active out of the box rather than waiting on a manual copy-paste step. `manual` is **no longer auto-detected** — it remains a valid sentinel a user can set by hand, and is still emitted for the ambiguous multi-manager case (multiple managers found → gitlore can't choose → manual instructions).
 
 **Wiring** (applied symmetrically for pre-commit and pre-push):
 
@@ -345,7 +346,7 @@ Detection script outputs structured results. Each hook manager has an idempotent
 | Husky | Append a guarded `exec "$(git rev-parse --git-common-dir)/gitlore-<hook>" "$@"` line to `.husky/pre-commit`; same for `.husky/pre-push`. Create files if missing. Husky runs the script via `sh`, so the substitution expands. | `npx husky` |
 | Overcommit | Add a custom `gitlore` hook under `PreCommit` and `PrePush` in `.overcommit.yml`. Overcommit `command:` is an array exec'd **directly (no shell)**, so the wrapper path must be reached through an explicit shell: `command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']` (the `'gitlore'` sets `$0`; overcommit appends the applicable files as `$@`). | `overcommit --install` |
 | None (direct) | Install shell stubs at `git rev-parse --git-path hooks/<hook>` (the shared common-dir hooks file) that run `exec "$(git rev-parse --git-common-dir)/gitlore-<hook>" "$@"`. Resolve the hook-file path via `--git-path` (not literal `.git/hooks/…`) so the `[ -f ]` test and `cat >` survive sentinel replay in a linked worktree. | `direct` (keyword — interpreted by SessionStart, not run as a shell command) |
-| Unknown | Print copy-paste snippet for manual wiring; do not modify any file. | `manual` (keyword — SessionStart emits a user-facing reminder) |
+| Multi / hand-set manual | Print copy-paste snippet for manual wiring; do not modify any file. Reached only when multiple managers are detected (ambiguous) or a user sets the sentinel by hand. | `manual` (keyword — SessionStart emits a user-facing reminder) |
 
 **Sentinel handling in SessionStart:**
 
@@ -570,6 +571,7 @@ The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the pre
 
 | Date | Change |
 |------|--------|
+| 2026-05-29 | **Hook detection defaults to `direct`, not `manual`.** `detect.sh` previously emitted `direct` only when an executable, untracked `.git/hooks/pre-commit` already existed; a repo with no recognized manager and no pre-existing hook (the common case) fell through to `manual`, which only prints a snippet and modifies nothing — so the pre-push double-commit hook silently never fired until hand-wired. Surfaced by dogfooding: gitlore's own repo (gitmoji installed only `commit-msg`) sat on `manual`, so `just release`'s `git push` never pushed the memory submodule. Detection now defaults the no-manager case to `direct` (wire-direct installs `.git/hooks/{pre-commit,pre-push}` stubs — always available, coexists with a hand-rolled hook by appending). `manual` is no longer auto-detected; it stays a hand-set sentinel and the multi-manager fallback. The release recipe (`plugin-dev/release.just`) is intentionally left untouched — it is generic, vendored tooling shared across plugins and must not know about gitlore's memory submodule; the git pre-push hook is the correct layer. This repo wired via `wire-direct.sh`. Detection tests updated; 153 green. |
 | 2026-05-27 | **`source_up_if_exists` added to fresh `.envrc`.** When `emit-launcher.sh` creates `.envrc` from scratch, it now writes `source_up_if_exists` as the first line so parent-directory direnv configs are inherited. Existing `.envrc` files are not modified. |
 | 2026-05-27 | **Prep for 0.2.0 release.** `direnv allow` in `run.sh` made non-fatal (`|| true`) — a read-only direnv allow-dir (e.g. sandbox) no longer aborts install. `2>/dev/null` suppressions removed from diagnostic-paths in `resolve.sh`, `lib/resolve.sh`, and `create-remote.sh`; retained only where errors are genuinely expected (missing config keys, detection probes, cross-platform fallbacks). `install` step 12 description updated to reflect automatic launcher activation (was "Remind the user to run `direnv allow`"). README updated — launcher activation paragraph now describes the automated behavior instead of instructing the user to run `direnv allow` manually. |
 | 2026-05-26 | **Fixed FR7 clone-restore bug.** Added a clone-from-remote integration test (`tests/integration_clone_restore.bats`): build an origin via the real install flow (gh-mock + local bare → memory remote carries `live`), clone without `--recurse-submodules`, run only `SessionStart`. It exposed a real defect — `git submodule update --init` leaves a detached HEAD with only `origin/live`, so `SessionStart`'s `checkout -b <branch> live` died with `fatal: 'live' is not a commit`; every fresh clone failed to restore. Fix: `SessionStart` materializes a local `live` (from `origin/live`, else `HEAD`) after submodule init, before the branch-model logic. 136 tests green. |
