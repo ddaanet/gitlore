@@ -132,13 +132,15 @@ teardown() { teardown_tmp_repo; }
   fake_home="$TMP_REPO/.fake-home"
   encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
   mkdir -p "$fake_home/.claude/projects/$encoded/memory"
-  printf 'migrated content\n' > "$fake_home/.claude/projects/$encoded/memory/MEMORY.md"
+  printf 'User is a senior engineer working on distributed systems.\n' > "$fake_home/.claude/projects/$encoded/memory/MEMORY.md"
   printf 'fact\n' > "$fake_home/.claude/projects/$encoded/memory/user_role.md"
 
   HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
   [ -f memory/MEMORY.md ]
-  [ "$(cat memory/MEMORY.md)" = "migrated content" ]
+  grep -q "senior engineer" memory/MEMORY.md
   [ -f memory/user_role.md ]
+  # source removed after migration
+  [ ! -d "$fake_home/.claude/projects/$encoded/memory" ]
 }
 
 @test "install removes .gitmodules from .gitignore when present" {
