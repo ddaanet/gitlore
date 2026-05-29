@@ -30,7 +30,12 @@ bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
 
 # Refuse non-empty existing path that isn't already our submodule.
 if [ -e "$mempath" ] && ! git config --file .gitmodules "submodule.gitlore-memory.path" 2>/dev/null | grep -qx "$mempath"; then
-  if [ -n "$(ls -A "$mempath" 2>/dev/null || true)" ]; then
+  # Partial prior install: module store absorbed + gitfile in place, but .gitmodules not yet written.
+  # init-submodule.sh repairs .gitmodules; fall through rather than refusing.
+  _common_dir=$(git rev-parse --git-common-dir)
+  if [ -d "$_common_dir/modules/gitlore-memory" ] && [ -f "$mempath/.git" ]; then
+    echo "gitlore: partial prior install detected at '$mempath' — resuming." >&2
+  elif [ -n "$(ls -A "$mempath" 2>/dev/null || true)" ]; then
     echo "gitlore: '$mempath' exists and is not empty. Choose another path." >&2
     exit 2
   fi
