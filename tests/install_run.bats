@@ -139,8 +139,38 @@ teardown() { teardown_tmp_repo; }
   [ -f memory/MEMORY.md ]
   grep -q "senior engineer" memory/MEMORY.md
   [ -f memory/user_role.md ]
-  # source removed after migration
+  # migrated content removed from source, replaced by a stub MEMORY.md
+  src="$fake_home/.claude/projects/$encoded/memory"
+  [ ! -f "$src/user_role.md" ]
+  ! grep -q "senior engineer" "$src/MEMORY.md"
+  grep -q 'migrated in-tree by `/gitlore:install`' "$src/MEMORY.md"
+}
+
+@test "install leaves no stub when there was no auto-memory to migrate" {
+  fake_home="$TMP_REPO/.fake-home"
+  encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+
+  # No ~/.claude/projects/<encoded>/memory exists. Install must NOT fabricate a
+  # stub dir under the user's real home — there was nothing to migrate.
+  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
   [ ! -d "$fake_home/.claude/projects/$encoded/memory" ]
+}
+
+@test "install migration stub is idempotent across re-runs" {
+  fake_home="$TMP_REPO/.fake-home"
+  encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  src="$fake_home/.claude/projects/$encoded/memory"
+  stub="$src/MEMORY.md"
+  mkdir -p "$src"
+  printf 'some migrated fact\n' > "$stub"
+
+  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  grep -q 'migrated in-tree by `/gitlore:install`' "$stub"
+  mtime1=$(stat -c '%Y' "$stub" 2>/dev/null || stat -f '%m' "$stub")
+  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  mtime2=$(stat -c '%Y' "$stub" 2>/dev/null || stat -f '%m' "$stub")
+  # second run recognizes the existing stub and leaves it untouched
+  [ "$mtime1" = "$mtime2" ]
 }
 
 @test "install removes .gitmodules from .gitignore when present" {

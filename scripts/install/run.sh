@@ -57,6 +57,20 @@ case "$manager" in
   multi:*)        bash "$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh" "${manager#multi:}" ;;
 esac
 
+# Catch-all for a stale Claude Code project-scoped auto-memory dir that
+# init-submodule.sh did NOT migrate (re-run, or a pre-registered submodule where
+# seeding was skipped). First-install migration is handled in init-submodule.sh,
+# which already leaves the stub. Only act on an existing dir — never create one
+# under the user's real ~/.claude when there was nothing to migrate.
+_old_memory=$(gitlore_cc_memory_dir "$toplevel")
+if [ -d "$_old_memory" ]; then
+  # shellcheck disable=SC2016  # literal marker string, no expansion intended
+  if ! grep -q 'migrated in-tree by `/gitlore:install`' "$_old_memory/MEMORY.md" 2>/dev/null; then
+    echo "gitlore: migrated stale auto-memory at $_old_memory" >&2
+  fi
+  gitlore_mark_migrated "$_old_memory"
+fi
+
 # Stage the tracked artifacts written by write-settings.sh and wire-*.sh so the
 # install's contract (commands/install.md) holds: everything we promise
 # as "staged for review" actually is. .gitmodules and $mempath are staged by
