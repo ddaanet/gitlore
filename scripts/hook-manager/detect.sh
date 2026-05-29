@@ -12,16 +12,14 @@ fi
 if [ -f .overcommit.yml ] || [ -f .git/hooks/overcommit-hook ]; then
   detected+=("overcommit")
 fi
-if [ -x .git/hooks/pre-commit ] && [ ${#detected[@]} -eq 0 ]; then
-  # Direct only if no manager already matched. Most hook managers also drop a
-  # .git/hooks/pre-commit shim, but detection precedence runs manager checks first.
-  if ! grep -q '# gitlore: managed' .git/hooks/pre-commit 2>/dev/null; then
-    detected+=("direct")
-  fi
-fi
-
 case "${#detected[@]}" in
-  0) printf 'manual\n' ;;
+  # No recognized hook manager → direct wiring into the shared .git/hooks dir,
+  # which is available in every git repo. wire-direct appends to a hand-rolled
+  # pre-commit (coexisting) or creates a fresh stub, so the double-commit
+  # guarantee works out of the box without any manual setup. `manual` is no
+  # longer auto-detected — it remains a valid sentinel a user can set by hand,
+  # and is still emitted for the ambiguous multi-manager case below.
+  0) printf 'direct\n' ;;
   1) printf '%s\n' "${detected[0]}" ;;
   *) printf 'multi:%s\n' "$(IFS=,; echo "${detected[*]}")" ;;
 esac

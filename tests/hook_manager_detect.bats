@@ -26,16 +26,16 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "overcommit" ]
 }
 
-@test "detects direct via executable .git/hooks/pre-commit not owned by a manager" {
+@test "defaults to direct with a hand-rolled .git/hooks/pre-commit (no manager)" {
   printf '#!/bin/sh\n' > .git/hooks/pre-commit
   chmod +x .git/hooks/pre-commit
   run bash "$DETECT"
   [ "$output" = "direct" ]
 }
 
-@test "returns manual when nothing detected" {
+@test "defaults to direct when no hook manager is detected" {
   run bash "$DETECT"
-  [ "$output" = "manual" ]
+  [ "$output" = "direct" ]
 }
 
 @test "reports multi when both lefthook and husky are present" {
