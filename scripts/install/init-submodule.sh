@@ -35,6 +35,7 @@ if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
   src="$HOME/.claude/projects/$encoded/memory"
   if [ -d "$src" ]; then
     cp -R "$src"/. "$mempath/"
+    rm -rf "$src"
   else
     cat > "$mempath/MEMORY.md" <<'EOF'
 # Memory Index
