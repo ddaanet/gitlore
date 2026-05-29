@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../lib/util.sh"
+
 mempath="$1"
 parent_root=$(git rev-parse --show-toplevel)
 
@@ -26,16 +29,13 @@ if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
   )
 
   # 2. Seed content (auto-memory migration, else scaffold).
-  #    CC encodes the project dir name by replacing every non-[A-Za-z0-9] byte
-  #    with `-` (see anthropic/claude-code bundle; verified empirically against
-  #    ~/.claude/projects/ entries). The >200-char truncate+hash fallback is
-  #    out of scope here — repo abs paths reaching 200 chars are vanishingly
-  #    rare and the scaffold path handles miss gracefully.
-  encoded=$(printf '%s' "$parent_root" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
-  src="$HOME/.claude/projects/$encoded/memory"
+  src=$(gitlore_cc_memory_dir "$parent_root")
   if [ -d "$src" ]; then
     cp -R "$src"/. "$mempath/"
-    rm -rf "$src"
+    # Replace the migrated source with a stub recording the move in-tree, so a
+    # session later launched without the shim (writing to this default dir) finds
+    # a breadcrumb rather than silently re-seeding stranded memory.
+    gitlore_mark_migrated "$src"
   else
     cat > "$mempath/MEMORY.md" <<'EOF'
 # Memory Index

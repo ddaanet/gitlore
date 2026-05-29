@@ -40,6 +40,41 @@ gitlore_commit_msg_file() {
   git -C "$mempath" rev-parse --git-path gitlore-commit-msg
 }
 
+# Print the CC project-scoped auto-memory dir for a repo root.
+# CC encodes the project dir name by replacing every non-[A-Za-z0-9] byte with
+# `-` (verified empirically against ~/.claude/projects/ entries). The >200-char
+# truncate+hash fallback is out of scope — repo abs paths that long are
+# vanishingly rare. Args: $1 = repo root abs path.
+gitlore_cc_memory_dir() {
+  local root="$1" encoded
+  encoded=$(printf '%s' "$root" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  printf '%s\n' "$HOME/.claude/projects/$encoded/memory"
+}
+
+# Replace a CC auto-memory dir with a stub MEMORY.md recording that gitlore
+# migrated memory in-tree. Idempotent: if the dir already holds only our stub,
+# leave it untouched. Args: $1 = the auto-memory dir.
+gitlore_mark_migrated() {
+  local dir="$1" stub="$1/MEMORY.md"
+  # shellcheck disable=SC2016  # literal marker string, no expansion intended
+  if [ -f "$stub" ] && grep -q 'migrated in-tree by `/gitlore:install`' "$stub" 2>/dev/null; then
+    return 0
+  fi
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  cat > "$stub" <<'EOF'
+# Memory migrated in-tree
+
+This project's auto-memory was migrated in-tree by `/gitlore:install`. It now
+lives in the `gitlore-memory` submodule, versioned in git alongside the code.
+
+Do not add memory here. Launch Claude Code through the gitlore `claude` shim so
+memory is redirected into the submodule. New files appearing in this directory
+mean a session was started without the launcher — see the gitlore SessionStart
+warning for how to activate it.
+EOF
+}
+
 # Print abs path to the memory submodule's merge-state file.
 # Resolves through the submodule's gitdir correctly.
 # Args: $1 = memory path (working tree).
