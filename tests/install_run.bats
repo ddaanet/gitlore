@@ -49,6 +49,29 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
 }
 
+@test "install resumes cleanly after partial prior run (module store absorbed, .gitmodules missing)" {
+  # Simulate the state left by a partial install where steps 1-4 of init-submodule.sh
+  # completed (gitdir absorbed, gitfile in place) but step 5 (.gitmodules write) was
+  # interrupted (e.g. by a sandbox restriction).
+  git init -q memory
+  git -C memory config user.email "gitlore@local"
+  git -C memory config user.name  "gitlore"
+  echo "# Memory" > memory/MEMORY.md
+  git -C memory add -A
+  git -C memory commit -q -m "Initial memory"
+  mkdir -p .git/modules/gitlore-memory
+  cp -a memory/.git/. .git/modules/gitlore-memory/
+  rm -rf memory/.git
+  printf 'gitdir: ../.git/modules/gitlore-memory\n' > memory/.git
+  git config -f .git/modules/gitlore-memory/config core.worktree "../../../memory"
+  # .gitmodules intentionally absent — this is the partial-install state
+
+  run bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -eq 0 ]
+  [ -f .gitmodules ]
+  git config --file .gitmodules submodule.gitlore-memory.path | grep -qx memory
+}
+
 @test "install stages all artifacts it claims to leave staged" {
   bash "$RUN_INSTALL" memory "echo precommit"
   staged=$(git diff --cached --name-only)

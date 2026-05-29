@@ -4,13 +4,19 @@ set -euo pipefail
 mempath="$1"
 parent_root=$(git rev-parse --show-toplevel)
 
-# Idempotency: if already registered, just ensure branches exist and exit.
+# Idempotency: three states —
+#   fully registered (.gitmodules has the entry)  → already_registered=1
+#   partial install (module store + gitfile, .gitmodules missing) → partial_install=1
+#   not started                                   → both 0
 already_registered=0
+partial_install=0
 if git config --file .gitmodules "submodule.gitlore-memory.path" 2>/dev/null | grep -qx "$mempath"; then
   already_registered=1
+elif [ -d "$(git rev-parse --git-common-dir)/modules/gitlore-memory" ] && [ -f "$mempath/.git" ]; then
+  partial_install=1
 fi
 
-if [ "$already_registered" -eq 0 ]; then
+if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
   # 1. Plain init at the target path.
   git init -q "$mempath"
   (
@@ -69,6 +75,19 @@ EOF
     } >> .gitmodules
   fi
 
+fi
+
+# Partial install: steps 1–4 already ran (module store absorbed, gitfile in place),
+# but .gitmodules was never written (e.g. sandbox blocked the write).  Repair it.
+if [ "$partial_install" -eq 1 ]; then
+  placeholder_url="./.git/gitlore-placeholder"
+  if ! { [ -f .gitmodules ] && grep -q '\[submodule "gitlore-memory"\]' .gitmodules; }; then
+    {
+      printf '[submodule "gitlore-memory"]\n'
+      printf '\tpath = %s\n' "$mempath"
+      printf '\turl = %s\n' "$placeholder_url"
+    } >> .gitmodules
+  fi
 fi
 
 # Steps 6-7 operate on the submodule via `git -C "$mempath"` / `cd "$mempath"`.
