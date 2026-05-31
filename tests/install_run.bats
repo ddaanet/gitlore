@@ -216,3 +216,16 @@ teardown() { teardown_tmp_repo; }
   # Verify there are no empty lines (lines matching nothing — a line with only whitespace)
   ! grep -qE '^\s*$' .gitignore
 }
+
+@test "run.sh fails loudly with a paste-able command when repo root is unwritable" {
+  # Make the git common dir unwritable so the probe trips before any mutation.
+  chmod 555 .git
+  run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  chmod 755 .git   # restore for teardown
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"sandbox"* ]]
+  [[ "$stderr" == *"$RUN_INSTALL"* ]]
+  # Nothing was created before the loud failure.
+  [ ! -d memory ]
+  [ ! -f .claude/settings.json ]
+}

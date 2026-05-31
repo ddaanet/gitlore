@@ -47,3 +47,17 @@ EOF
   run gitlore_has_submodule
   [ "$status" -eq 0 ]
 }
+
+@test "gitlore_probe_writable succeeds on a writable dir" {
+  run gitlore_probe_writable "$TMP_REPO"
+  [ "$status" -eq 0 ]
+}
+
+@test "gitlore_probe_writable fails on a read-only dir" {
+  local ro="$TMP_REPO/ro"
+  mkdir -p "$ro"
+  chmod 555 "$ro"
+  run gitlore_probe_writable "$ro"
+  chmod 755 "$ro"   # restore so teardown can rm -rf
+  [ "$status" -ne 0 ]
+}

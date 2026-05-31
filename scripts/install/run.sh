@@ -30,6 +30,23 @@ if [ "$git_dir" != "$common_dir" ]; then
   exit 1
 fi
 
+# Sandbox probe: the install writes .gitmodules at the repo root and absorbs the
+# submodule gitdir under the git common dir, then pushes a remote. Under the
+# Claude Code command sandbox these writes fail with a raw "Permission denied"
+# mid-run, leaving partial state. Detect it up front and fail with the exact
+# command to re-run sandbox-disabled.
+common_dir_abs=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+for probe_dir in "$toplevel" "$common_dir_abs"; do
+  if ! gitlore_probe_writable "$probe_dir"; then
+    {
+      echo "gitlore: cannot write to '$probe_dir' — the command sandbox is blocking install."
+      echo "gitlore: re-run with the sandbox disabled:"
+      echo "  CLAUDE_PLUGIN_ROOT='$PLUGIN_ROOT' bash '${BASH_SOURCE[0]}' '$mempath' '$precommit_cmd'"
+    } >&2
+    exit 3
+  fi
+done
+
 bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
 
 # Refuse non-empty existing path that isn't already our submodule.
