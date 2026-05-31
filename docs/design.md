@@ -98,6 +98,11 @@ if [ -z "$HOOKS_DIR" ]; then
   echo "Install the gitlore plugin from the Claude Code marketplace, then start Claude Code in this repo." >&2
   exit 0
 fi
+if [ ! -x "$HOOKS_DIR/pre-commit" ]; then
+  echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
+  echo "Start Claude Code in this repo to refresh the hooks dir, then retry." >&2
+  exit 0
+fi
 exec "$HOOKS_DIR/pre-commit" "$@"
 ```
 
@@ -478,7 +483,12 @@ Alternatives rejected:
 
 Tracking hook scripts in the repo would cause commit churn on every plugin update and couple the repo's history to the plugin's versioning. Storing flat wrappers in the git common dir (`<common-dir>/gitlore-pre-commit`, `<common-dir>/gitlore-pre-push`, resolved via `git rev-parse --git-common-dir`) keeps them untracked and local. `SessionStart` regenerates them on every startup, so they always reflect the current plugin version. The common dir (rather than a literal `.git/`) is what makes the wrappers reachable from linked worktrees, where `.git` is a gitlink file — see Hook wrappers above and **D11**.
 
-Wrappers exec the real hook scripts via `$(git config gitlore.hooksDir)/<hook>`. If `gitlore.hooksDir` is unset, the wrappers exit 0 after emitting a stderr hint directing the user to install the marketplace, plugin, and start Claude. Keeps git operations unblocked in non-gitlore contexts.
+Wrappers exec the real hook scripts via `$(git config gitlore.hooksDir)/<hook>`. The wrapper degrades to a clean skip (exit 0 + stderr hint) in **two** cases, not one:
+
+1. **`gitlore.hooksDir` unset** — a plain `git commit` outside any Claude session before SessionStart has fired. Hint: install the marketplace, plugin, and start Claude.
+2. **`gitlore.hooksDir` set but `$HOOKS_DIR/<hook>` does not exist** — the version-pinned config points at a plugin-cache dir that was GC'd after a plugin upgrade, in the window before the next SessionStart re-pins it. Without this guard the wrapper `exec`s a missing path and the commit/push **hard-fails** with `exec: …: not found`. Hint: start Claude Code in this repo to refresh the hooks dir.
+
+Both keep git operations unblocked rather than breaking a commit on a transient/stale-config condition.
 
 **D11 — Gitlink-aware wrapper paths (common-dir anchor) for linked-worktree support**
 
@@ -571,6 +581,7 @@ The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the pre
 
 | Date | Change |
 |------|--------|
+| 2026-05-31 | **Wrapper degrades on a stale (GC'd) hooks dir, not just an unset one (D5 extension).** `gitlore.hooksDir` is version-pinned and only re-pinned at SessionStart; in the window between a plugin upgrade (old cache GC'd) and the next session, a plain-terminal `git commit`/`push` made the wrapper `exec` a missing path and hard-fail. Wrappers now also skip-with-hint when `$HOOKS_DIR/<hook>` is not executable. Surfaced in the 0.2.1 install bug report (finding #7). Part of an install-rough-edges sweep also covering: scripts self-locating `CLAUDE_PLUGIN_ROOT` (#1), sandbox-write probing with paste-able fallback (#2), remote creation brought back into FR9/FR10/D8 compliance — opportunistic `gh` with parent-matched visibility, copy-paste-URL for other providers, first-class local-only, confirmation gate, and `<parent-remote-name>-memory` naming from the parent origin instead of the local dir basename (#5/#6), and a stray-blank-line fix in `.gitignore` (#9). |
 | 2026-05-29 | **Hook detection defaults to `direct`, not `manual`.** `detect.sh` previously emitted `direct` only when an executable, untracked `.git/hooks/pre-commit` already existed; a repo with no recognized manager and no pre-existing hook (the common case) fell through to `manual`, which only prints a snippet and modifies nothing — so the pre-push double-commit hook silently never fired until hand-wired. Surfaced by dogfooding: gitlore's own repo (gitmoji installed only `commit-msg`) sat on `manual`, so `just release`'s `git push` never pushed the memory submodule. Detection now defaults the no-manager case to `direct` (wire-direct installs `.git/hooks/{pre-commit,pre-push}` stubs — always available, coexists with a hand-rolled hook by appending). `manual` is no longer auto-detected; it stays a hand-set sentinel and the multi-manager fallback. The release recipe (`plugin-dev/release.just`) is intentionally left untouched — it is generic, vendored tooling shared across plugins and must not know about gitlore's memory submodule; the git pre-push hook is the correct layer. This repo wired via `wire-direct.sh`. Detection tests updated; 153 green. |
 | 2026-05-27 | **`source_up_if_exists` added to fresh `.envrc`.** When `emit-launcher.sh` creates `.envrc` from scratch, it now writes `source_up_if_exists` as the first line so parent-directory direnv configs are inherited. Existing `.envrc` files are not modified. |
 | 2026-05-27 | **Prep for 0.2.0 release.** `direnv allow` in `run.sh` made non-fatal (`|| true`) — a read-only direnv allow-dir (e.g. sandbox) no longer aborts install. `2>/dev/null` suppressions removed from diagnostic-paths in `resolve.sh`, `lib/resolve.sh`, and `create-remote.sh`; retained only where errors are genuinely expected (missing config keys, detection probes, cross-platform fallbacks). `install` step 12 description updated to reflect automatic launcher activation (was "Remind the user to run `direnv allow`"). README updated — launcher activation paragraph now describes the automated behavior instead of instructing the user to run `direnv allow` manually. |
