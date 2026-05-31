@@ -26,10 +26,18 @@ if [ -z "$stdout_val" ] && [ "${1:-}" = "--version" ]; then
   stdout_val="gh version mock 0.0.0 (mock build)"
 fi
 
+# `gh repo view <url> --json visibility -q .visibility` → GH_MOCK_VISIBILITY.
+if [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && \
+   printf '%s\n' "$@" | grep -q 'visibility' && [ -n "${GH_MOCK_VISIBILITY:-}" ]; then
+  printf '%s\n' "$GH_MOCK_VISIBILITY"
+  exit 0
+fi
+
 # `gh repo view <name> --json sshUrl -q .sshUrl` returns the configured remote URL
 # unless a per-call override is set. Lets tests script the URL the install flow
 # wires into the submodule.
-if [ -z "$stdout_val" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && [ -n "${GH_MOCK_REMOTE_URL:-}" ]; then
+if [ -z "$stdout_val" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && \
+   printf '%s\n' "$@" | grep -q 'sshUrl' && [ -n "${GH_MOCK_REMOTE_URL:-}" ]; then
   stdout_val="$GH_MOCK_REMOTE_URL"
 fi
 
