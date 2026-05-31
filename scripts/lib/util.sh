@@ -152,7 +152,7 @@ gitlore_parent_visibility() {
   purl=$(git config --get remote.origin.url 2>/dev/null || true)
   if [ -n "$purl" ] && command -v gh >/dev/null 2>&1; then
     v=$(gh repo view "$purl" --json visibility -q .visibility 2>/dev/null \
-          | tr 'A-Z' 'a-z' || true)
+          | tr '[:upper:]' '[:lower:]' || true)
     [ "$v" = "public" ] && { printf 'public\n'; return 0; }
   fi
   printf 'private\n'
