@@ -38,6 +38,17 @@ EOF
   [[ "$output" == *"real-hook-ran"* ]]
 }
 
+@test "wrapper exits 0 with hint when gitlore.hooksDir is set but GC'd" {
+  bash "$EMIT"
+  # Point hooksDir at a directory that does not contain the hook (simulates a
+  # plugin upgrade that GC'd the old version's cache before SessionStart re-pins).
+  git config gitlore.hooksDir "$TMP_REPO/gone-cache/scripts/git-hooks"
+  run .git/gitlore-pre-commit
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gitlore skipped"* ]]
+  [[ "$output" == *"stale"* ]]
+}
+
 @test "emit-wrappers is idempotent" {
   bash "$EMIT"
   cp .git/gitlore-pre-commit .git/gitlore-pre-commit.before
