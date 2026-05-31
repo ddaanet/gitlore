@@ -185,6 +185,14 @@ teardown() { teardown_tmp_repo; }
   [[ "$staged" == *".gitmodules"* ]]
 }
 
+@test "run.sh self-locates CLAUDE_PLUGIN_ROOT when unset in env" {
+  unset CLAUDE_PLUGIN_ROOT
+  run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  [ "$status" -eq 0 ]
+  [ -f .claude/settings.json ]
+  [ -d memory ]
+}
+
 @test "preflight warns when CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is unset" {
   unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/preflight.sh"

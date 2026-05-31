@@ -4,7 +4,11 @@ set -euo pipefail
 mempath="${1:-memory}"
 precommit_cmd="${2:-}"
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT must be set}"
+# Self-locate so we work under the Claude Code Bash tool, where
+# CLAUDE_PLUGIN_ROOT is injected for hooks but NOT for Bash commands.
+# Export it so the child install scripts inherit a correct value.
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"

@@ -27,4 +27,5 @@ else
 fi
 
 # Hook dir.
-git config gitlore.hooksDir "${CLAUDE_PLUGIN_ROOT}/scripts/git-hooks"
+plugin_root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+git config gitlore.hooksDir "${plugin_root}/scripts/git-hooks"
