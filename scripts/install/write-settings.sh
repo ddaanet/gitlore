@@ -20,8 +20,13 @@ fi
 
 # Make sure .claude/settings.local.json is gitignored.
 if [ -f .gitignore ]; then
+  # Append a trailing newline first only if the file does not already end in one,
+  # so we never introduce a blank line.
+  if [ -n "$(tail -c1 .gitignore)" ]; then
+    printf '\n' >> .gitignore
+  fi
   grep -qx '.claude/settings.local.json' .gitignore || \
-    printf '\n.claude/settings.local.json\n' >> .gitignore
+    printf '.claude/settings.local.json\n' >> .gitignore
 else
   printf '.claude/settings.local.json\n' > .gitignore
 fi

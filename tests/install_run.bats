@@ -206,3 +206,13 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   [[ "$output$stderr" != *"AGENT_TEAMS"* ]]
 }
+
+@test "install does not leave a stray blank line in .gitignore" {
+  printf 'node_modules\n' > .gitignore
+  bash "$RUN_INSTALL" memory "echo pc"
+  # Verify the entries we expect are present
+  grep -qx '.claude/settings.local.json' .gitignore
+  grep -qx 'node_modules' .gitignore
+  # Verify there are no empty lines (lines matching nothing — a line with only whitespace)
+  ! grep -qE '^\s*$' .gitignore
+}
