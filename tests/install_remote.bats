@@ -108,3 +108,11 @@ teardown() { teardown_tmp_repo; }
   grep -q 'repo create' "$log"
   grep -q 'project-memory' "$log"
 }
+
+@test "auto mode creates a public remote when the parent is public" {
+  git remote add origin "https://github.com/acme/project.git"
+  export GH_MOCK_VISIBILITY="PUBLIC"
+  log="$TMP_REPO/gh-calls.log"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo pc"
+  grep -q -- '--public' "$log"
+}
