@@ -61,3 +61,35 @@ EOF
   chmod 755 "$ro"   # restore so teardown can rm -rf
   [ "$status" -ne 0 ]
 }
+
+@test "gitlore_memory_remote_name from https origin" {
+  git remote add origin "https://github.com/acme/project.git"
+  run gitlore_memory_remote_name
+  [ "$status" -eq 0 ]
+  [ "$output" = "project-memory" ]
+}
+
+@test "gitlore_memory_remote_name from scp-style origin" {
+  git remote add origin "git@github.com:acme/project.git"
+  run gitlore_memory_remote_name
+  [ "$output" = "project-memory" ]
+}
+
+@test "gitlore_memory_remote_name from origin without .git suffix" {
+  git remote add origin "https://github.com/acme/project"
+  run gitlore_memory_remote_name
+  [ "$output" = "project-memory" ]
+}
+
+@test "gitlore_memory_remote_name falls back to repo basename when no origin" {
+  # setup_tmp_repo created the repo with no origin; the dir basename is the temp name.
+  run gitlore_memory_remote_name
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(basename "$TMP_REPO")-memory" ]
+}
+
+@test "gitlore_parent_visibility defaults to private with no origin" {
+  run gitlore_parent_visibility
+  [ "$status" -eq 0 ]
+  [ "$output" = "private" ]
+}
