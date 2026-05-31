@@ -3,6 +3,8 @@ set -euo pipefail
 
 mempath="${1:-memory}"
 precommit_cmd="${2:-}"
+remote_mode="${3:-auto}"
+remote_url="${4:-}"
 
 # Self-locate so we work under the Claude Code Bash tool, where
 # CLAUDE_PLUGIN_ROOT is injected for hooks but NOT for Bash commands.
@@ -63,7 +65,7 @@ if [ -e "$mempath" ] && ! git config --file .gitmodules "submodule.gitlore-memor
 fi
 
 bash "$PLUGIN_ROOT/scripts/install/init-submodule.sh" "$mempath"
-bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
+bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath" "$remote_mode" "$remote_url"
 bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" "$mempath" "$precommit_cmd"
 bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
