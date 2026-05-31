@@ -123,3 +123,37 @@ gitlore_probe_writable() {
   fi
   return 1
 }
+
+# Print the memory remote's bare name: <parent-remote-base>-memory.
+# Derives the base from the parent repo's origin URL when set, handling both
+# https (.../owner/repo[.git]) and scp-style (git@host:owner/repo[.git]) forms,
+# with or without a trailing .git. Falls back to the repo directory basename when
+# there is no origin (so the name is stable regardless of the local dir name when
+# a remote exists — fixing the clone-dir-rename drift).
+gitlore_memory_remote_name() {
+  local url base
+  url=$(git config --get remote.origin.url 2>/dev/null || true)
+  if [ -n "$url" ]; then
+    base=${url##*/}                       # https or scp-with-slash → repo[.git]
+    case "$base" in *:*) base=${base##*:};; esac  # scp without a slash
+    base=${base%.git}
+  else
+    base=$(basename "$(git rev-parse --show-toplevel)")
+  fi
+  printf '%s-memory\n' "$base"
+}
+
+# Print the visibility to use for the memory remote: "public" or "private".
+# Matches the parent repo (design: public parent → public memory). Defaults to
+# "private" when there is no parent origin or gh cannot report it — the safe
+# default for memory, which may contain session context.
+gitlore_parent_visibility() {
+  local purl v
+  purl=$(git config --get remote.origin.url 2>/dev/null || true)
+  if [ -n "$purl" ] && command -v gh >/dev/null 2>&1; then
+    v=$(gh repo view "$purl" --json visibility -q .visibility 2>/dev/null \
+          | tr 'A-Z' 'a-z' || true)
+    [ "$v" = "public" ] && { printf 'public\n'; return 0; }
+  fi
+  printf 'private\n'
+}
