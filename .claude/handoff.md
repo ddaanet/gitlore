@@ -1,37 +1,22 @@
-# Handoff — 2026-05-31 12:57:25 +0000
+# Handoff — 2026-05-31 14:19:20 +0000
 
-Session: `dbc6f902-b7af-4f15-b7b6-937ace88ebb7`
+Session: `2123702a-3f0b-4604-b343-76b6791a10f9`
 
 ## Current task
 
-Implementation plan for the 0.2.1 install-rough-edges bug report is written and approved; awaiting the user's execution choice (subagent-driven vs inline) before any code changes begin.
+Install-rough-edges sweep (0.2.1) is fully implemented and all 161 tests pass on `main`; the work needs to be pushed to the remote.
 
 ## Open decisions
 
-- Execution mode: subagent-driven (fresh agent per task, review between) or inline (executing-plans with checkpoints). Nothing implemented yet — the plan's 9 tasks are all unstarted.
+- Push disposition: commits are on `main` (no feature branch); decide whether to push directly to `origin/main` or cherry-pick onto a branch and open a PR first.
 
 ## Files touched
-- `/Users/david/code/gitlore/docs/design.md`
-- `/Users/david/code/gitlore/docs/plans/2026-05-31-08-install-rough-edges.md`
+- `/Users/david/code/gitlore/tests/install_remote.bats`
+- `/Users/david/code/gitlore/scripts/lib/util.sh`
+- `/Users/david/code/gitlore/.claude/handoff-task.md`
 
 ## Last user prompts
 
-**after [Read] /Users/david/code/gitlore/tests/helpers/gh-mock.bash**
-
-> Maybe having to reach for bash stub is the signal to rewrite in python... Main point against py is the startup latency (negligible with bash) and the memory overhead, none of which really matter for an install script.
-
-**after I have everything. Here's the design, organized by finding. I'll present it in one pass since each fix is small and the **
-
-> You read @docs/design.md ?
-
-**after I have everything. Here's the design, organized by finding. I'll present it in one pass since each fix is small and the **
-
-> You read docs/design.md ?
-
-**after No response requested.**
+**after (session start)**
 
 > go
-
-**after Plan written to `docs/plans/2026-05-31-08-install-rough-edges.md` (following the repo's `NN-name` plan convention, not t**
-
-> Handoff. Commit. Suggest session title, as a /rename command in a code block.

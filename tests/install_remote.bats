@@ -72,7 +72,7 @@ teardown() { teardown_tmp_repo; }
     bin=$(command -v "$tool" 2>/dev/null || true)
     [ -n "$bin" ] && ln -sf "$bin" "$no_gh_bin/$tool"
   done
-  PATH="$no_gh_bin" run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  GITLORE_HOME="$TMP_REPO/.test-home" PATH="$no_gh_bin" run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
   [ "$status" -eq 0 ]
   [ -d memory ]
   [ -f .claude/settings.json ]
