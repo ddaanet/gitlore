@@ -1,7 +1,7 @@
 ## Current task
 
-Implementation plan for the 0.2.1 install-rough-edges bug report is written and approved; awaiting the user's execution choice (subagent-driven vs inline) before any code changes begin.
+Install-rough-edges sweep (0.2.1) is fully implemented and all 161 tests pass on `main`; the work needs to be pushed to the remote.
 
 ## Open decisions
 
-- Execution mode: subagent-driven (fresh agent per task, review between) or inline (executing-plans with checkpoints). Nothing implemented yet — the plan's 9 tasks are all unstarted.
+- Push disposition: commits are on `main` (no feature branch); decide whether to push directly to `origin/main` or cherry-pick onto a branch and open a PR first.
