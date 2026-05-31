@@ -111,3 +111,15 @@ gitlore_commit_msg_freshness() {
   awk -v a="$msgmtime" -v b="${newest:-0}" \
       'BEGIN { print (a+0 >= b+0) ? "yes" : "no" }'
 }
+
+# Exit 0 if $1 is a writable directory, 1 otherwise. Used to detect a sandboxed
+# install before it dies mid-mutation with a raw "Permission denied".
+# Args: $1 = directory to test.
+gitlore_probe_writable() {
+  local dir="$1" probe="$1/.gitlore-write-probe.$$"
+  if ( : > "$probe" ) 2>/dev/null; then
+    rm -f "$probe"
+    return 0
+  fi
+  return 1
+}
