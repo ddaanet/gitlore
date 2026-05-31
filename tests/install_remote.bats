@@ -39,30 +39,13 @@ teardown() { teardown_tmp_repo; }
   ! grep -q -- '--source' "$log"
 }
 
-@test "preflight aborts install when gh is missing" {
-  # Build a controlled PATH that includes all tools needed by run.sh/preflight.sh
-  # but explicitly omits gh. We symlink every needed binary except gh.
-  local no_gh_bin="$TMP_REPO/.no-gh-bin"
-  mkdir -p "$no_gh_bin"
-  for tool in bash git jq mktemp dirname basename find grep sed awk sort cat cp rm mkdir touch chmod; do
-    bin=$(command -v "$tool" 2>/dev/null || true)
-    [ -n "$bin" ] && ln -sf "$bin" "$no_gh_bin/$tool"
-  done
-  # Deliberately do NOT link gh.
-  PATH="$no_gh_bin" \
-    run --separate-stderr bash "$RUN_INSTALL" memory "echo precommit"
-  [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"gh"* ]]
-  [ ! -d memory ]
-  [ ! -f .claude/settings.json ]
-}
-
-@test "preflight aborts install when gh is unauthed" {
-  GH_MOCK_EXIT_AUTH_STATUS=1 run --separate-stderr bash "$RUN_INSTALL" memory "echo precommit"
-  [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"gh auth login"* ]]
-  [ ! -d memory ]
-  [ ! -f .claude/settings.json ]
+@test "install completes local-only when gh is unauthed (no abort)" {
+  GH_MOCK_EXIT_AUTH_STATUS=1 run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  [ "$status" -eq 0 ]
+  [ -d memory ]
+  [ -f .claude/settings.json ]
+  url=$(git config --file .gitmodules submodule.gitlore-memory.url)
+  [[ "$url" == *"gitlore-placeholder"* ]]
 }
 
 @test "install aborts cleanly when gh repo create fails (name collision)" {
@@ -79,4 +62,49 @@ teardown() { teardown_tmp_repo; }
   GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
   count=$(grep -c 'repo create' "$log" || true)
   [ "$count" -eq 1 ]
+}
+
+@test "auto mode with no gh leaves a local-only install (placeholder URL kept)" {
+  # Build a PATH without gh but with the tools run.sh needs.
+  local no_gh_bin="$TMP_REPO/.no-gh-bin"
+  mkdir -p "$no_gh_bin"
+  for tool in bash sh git jq mktemp mv dirname basename find grep sed awk sort cat cp rm mkdir touch chmod tail stat; do
+    bin=$(command -v "$tool" 2>/dev/null || true)
+    [ -n "$bin" ] && ln -sf "$bin" "$no_gh_bin/$tool"
+  done
+  PATH="$no_gh_bin" run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  [ "$status" -eq 0 ]
+  [ -d memory ]
+  [ -f .claude/settings.json ]
+  url=$(git config --file .gitmodules submodule.gitlore-memory.url)
+  [[ "$url" == *"gitlore-placeholder"* ]]
+  [[ "$stderr" == *"local-only"* ]]
+}
+
+@test "url mode wires an existing remote and pushes live" {
+  local remote="$TMP_REPO/.existing-remote.git"
+  git init -q --bare "$remote"
+  bash "$RUN_INSTALL" memory "echo pc" url "$remote"
+  url=$(git -C memory config --get remote.origin.url)
+  [ "$url" = "$remote" ]
+  # live was pushed to the existing remote.
+  git -C "$remote" show-ref --verify --quiet refs/heads/live
+  gm=$(git config --file .gitmodules submodule.gitlore-memory.url)
+  [ "$gm" = "$remote" ]
+}
+
+@test "local mode keeps placeholder and never calls gh" {
+  log="$TMP_REPO/gh-calls.log"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo pc" local
+  url=$(git config --file .gitmodules submodule.gitlore-memory.url)
+  [[ "$url" == *"gitlore-placeholder"* ]]
+  [ ! -f "$log" ] || ! grep -q 'repo create' "$log"
+}
+
+@test "auto mode (gh available) names the remote <parent-base>-memory" {
+  git remote add origin "https://github.com/acme/project.git"
+  log="$TMP_REPO/gh-calls.log"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo pc"
+  grep -q 'repo create' "$log"
+  grep -q 'project-memory' "$log"
 }
