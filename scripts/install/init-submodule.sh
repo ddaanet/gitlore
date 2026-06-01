@@ -48,7 +48,7 @@ EOF
   (
     cd "$mempath"
     git add -A
-    git commit -q -m "Initial memory"
+    git commit -q --allow-empty -m "Initial memory"
   )
 
   # 4. Absorb gitdir manually: move <mempath>/.git into .git/modules/gitlore-memory
