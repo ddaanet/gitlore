@@ -561,7 +561,7 @@ The `SessionStart` launcher guard (sentinel `GITLORE_LAUNCHED`) converts the pre
 | Single `main` branch for all memory sessions | Concurrent sessions would compete on the same branch; no isolation. |
 | Push memory as optional in v1 | Gitlore without shared memory is diminished value. Optional push can be added later as a user preference. |
 | Separate `gitlore.memoryPath` local config key | `.gitmodules` plus the fixed submodule name `gitlore-memory` is canonical; a duplicate source creates divergence risk. |
-| Empty initial commit on install | Install is git-atomic when the initial commit contains migrated auto-memory or a `MEMORY.md` scaffold. |
+| Empty initial commit on install | Install uses `--allow-empty` on the initial commit as a safety net for the case where the migration source exists but is already a stub (prior failed install). The commit normally contains migrated auto-memory or a `MEMORY.md` scaffold, but the flag prevents a hard failure when it does not. |
 | Unconditional memory branch deletion on WorktreeRemove | Memory branches mirror Claude Code's parent-branch policy; no special "memory is auxiliary, discard" rule. CC keeps the parent branch on removal (verified 2.1.150), so the memory branch is kept too. |
 | `WorktreeCreate` hook to set up the memory worktree | It is an override hook (must create the worktree and print only its path on stdout; extra stdout hangs CC #27467), carries no branch in stdin, and misses Desktop-created worktrees. `SessionStart` in the new worktree does the setup uniformly with none of that fragility (verified CC 2.1.150). |
 | In-session diff dump for commit review | Too noisy in the TUI; user inspects the diff in their own git tooling when desired, approves via prose summary. |

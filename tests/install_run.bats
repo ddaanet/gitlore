@@ -156,6 +156,18 @@ teardown() { teardown_tmp_repo; }
   [ ! -d "$fake_home/.claude/projects/$encoded/memory" ]
 }
 
+@test "install succeeds when auto-memory dir exists but is empty" {
+  fake_home="$TMP_REPO/.fake-home"
+  encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  # Dir exists (e.g. from a prior failed install that called gitlore_mark_migrated
+  # before the git commit ran) but contains no files — cp copies nothing, so
+  # git add -A stages nothing; --allow-empty on the initial commit saves the day.
+  mkdir -p "$fake_home/.claude/projects/$encoded/memory"
+
+  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  git -C memory rev-parse HEAD  # initial commit must exist
+}
+
 @test "install migration stub is idempotent across re-runs" {
   fake_home="$TMP_REPO/.fake-home"
   encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')

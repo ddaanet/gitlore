@@ -1,7 +1,3 @@
 ## Current task
 
-Install-rough-edges sweep (0.2.1) is fully implemented and all 161 tests pass on `main`; the work needs to be pushed to the remote.
-
-## Open decisions
-
-- Push disposition: commits are on `main` (no feature branch); decide whether to push directly to `origin/main` or cherry-pick onto a branch and open a PR first.
+Commit the staged gitlore install artifacts in `/Users/david/code/claude-plugins` (`.gitmodules`, `memory/`, `.claude/settings.json`, `.claude/gitlore-hook-setup`, `.gitignore`, `.gitlore/bin/claude`, `.envrc`).
