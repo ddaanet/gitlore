@@ -22,11 +22,6 @@ fi
 if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
   # 1. Plain init at the target path.
   git init -q "$mempath"
-  (
-    cd "$mempath"
-    git config user.email "gitlore@local"
-    git config user.name  "gitlore"
-  )
 
   # 2. Seed content (auto-memory migration, else scaffold).
   src=$(gitlore_cc_memory_dir "$parent_root")
