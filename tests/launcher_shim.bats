@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+bats_require_minimum_version 1.5.0
 
 load helpers/setup
 load helpers/fixtures
@@ -56,6 +57,6 @@ teardown() { teardown_tmp_repo; }
   # PATH = shim dir + a minimal toolbox (the utilities the shim needs) but no claude.
   tools="$TMP_REPO/.tools"; mkdir -p "$tools"
   for t in sh tr grep paste git jq dirname env; do ln -s "$(command -v "$t")" "$tools/$t"; done
-  run env -i HOME="$HOME" PATH="$SHIMDIR:$tools" "$SHIMDIR/claude"
+  run -127 env -i HOME="$HOME" PATH="$SHIMDIR:$tools" "$SHIMDIR/claude"
   [ "$status" -eq 127 ]
 }
