@@ -132,6 +132,7 @@ teardown() { teardown_tmp_repo; }
   fake_home="$TMP_REPO/.fake-home"
   encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
   mkdir -p "$fake_home/.claude/projects/$encoded/memory"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
   printf 'User is a senior engineer working on distributed systems.\n' > "$fake_home/.claude/projects/$encoded/memory/MEMORY.md"
   printf 'fact\n' > "$fake_home/.claude/projects/$encoded/memory/user_role.md"
 
@@ -149,6 +150,8 @@ teardown() { teardown_tmp_repo; }
 @test "install leaves no stub when there was no auto-memory to migrate" {
   fake_home="$TMP_REPO/.fake-home"
   encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  mkdir -p "$fake_home"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
 
   # No ~/.claude/projects/<encoded>/memory exists. Install must NOT fabricate a
   # stub dir under the user's real home — there was nothing to migrate.
@@ -163,6 +166,7 @@ teardown() { teardown_tmp_repo; }
   # before the git commit ran) but contains no files — cp copies nothing, so
   # git add -A stages nothing; --allow-empty on the initial commit saves the day.
   mkdir -p "$fake_home/.claude/projects/$encoded/memory"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
 
   HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
   git -C memory rev-parse HEAD  # initial commit must exist
@@ -174,6 +178,7 @@ teardown() { teardown_tmp_repo; }
   src="$fake_home/.claude/projects/$encoded/memory"
   stub="$src/MEMORY.md"
   mkdir -p "$src"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
   printf 'some migrated fact\n' > "$stub"
 
   HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
