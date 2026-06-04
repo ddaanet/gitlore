@@ -191,6 +191,31 @@ teardown() { teardown_tmp_repo; }
   [ "$mtime1" = "$mtime2" ]
 }
 
+@test "install seeds the scaffold, not the migration stub, when the source is an already-migrated stub" {
+  fake_home="$TMP_REPO/.fake-home"
+  encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  src="$fake_home/.claude/projects/$encoded/memory"
+  mkdir -p "$src"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
+  # A prior install/run left the migration breadcrumb at the source. It is NOT
+  # real memory — install must fall through to the scaffold, never seed the
+  # submodule with "Do not add memory here".
+  cat > "$src/MEMORY.md" <<'EOF'
+# Memory migrated in-tree
+
+This project's auto-memory was migrated in-tree by `/gitlore:install`. It now
+lives in the `gitlore-memory` submodule, versioned in git alongside the code.
+
+Do not add memory here.
+EOF
+
+  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  [ -f memory/MEMORY.md ]
+  grep -q '# Memory Index' memory/MEMORY.md
+  ! grep -q 'migrated in-tree' memory/MEMORY.md
+  ! grep -q 'Do not add memory here' memory/MEMORY.md
+}
+
 @test "install removes .gitmodules from .gitignore when present" {
   printf '.bash_profile\n.gitmodules\n.mcp.json\n' > .gitignore
   git add .gitignore

@@ -93,3 +93,26 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "private" ]
 }
+
+@test "gitlore_is_migration_stub true for a dir holding only the migration breadcrumb" {
+  local dir="$TMP_REPO/cc-mem"
+  mkdir -p "$dir"
+  gitlore_mark_migrated "$dir"
+  run gitlore_is_migration_stub "$dir"
+  [ "$status" -eq 0 ]
+}
+
+@test "gitlore_is_migration_stub false for a dir holding real memory" {
+  local dir="$TMP_REPO/cc-mem"
+  mkdir -p "$dir"
+  printf 'User is a senior engineer.\n' > "$dir/MEMORY.md"
+  run gitlore_is_migration_stub "$dir"
+  [ "$status" -ne 0 ]
+}
+
+@test "gitlore_is_migration_stub false for a dir with no MEMORY.md" {
+  local dir="$TMP_REPO/cc-mem"
+  mkdir -p "$dir"
+  run gitlore_is_migration_stub "$dir"
+  [ "$status" -ne 0 ]
+}

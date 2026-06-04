@@ -5,6 +5,12 @@
 GITLORE_SUBMODULE_NAME="gitlore-memory"
 readonly GITLORE_SUBMODULE_NAME
 
+# Marker phrase in the in-tree migration breadcrumb. Single source of truth,
+# matched as a fixed string by gitlore_is_migration_stub and written into the
+# stub body by gitlore_mark_migrated.
+GITLORE_MIGRATION_MARKER='migrated in-tree by `/gitlore:install`'
+readonly GITLORE_MIGRATION_MARKER
+
 # Print the memory submodule's working-tree path (relative to repo root).
 # Exit 1 if the submodule is not registered.
 gitlore_memory_path() {
@@ -51,13 +57,21 @@ gitlore_cc_memory_dir() {
   printf '%s\n' "$HOME/.claude/projects/$encoded/memory"
 }
 
+# Exit 0 if $1 is a CC auto-memory dir whose MEMORY.md is our migration
+# breadcrumb — i.e. there is no real memory to migrate, just a leftover stub
+# from a prior install/run. 1 otherwise (no dir, no MEMORY.md, or real memory).
+# Args: $1 = the auto-memory dir.
+gitlore_is_migration_stub() {
+  local dir="$1"
+  grep -qF "$GITLORE_MIGRATION_MARKER" "$dir/MEMORY.md" 2>/dev/null
+}
+
 # Replace a CC auto-memory dir with a stub MEMORY.md recording that gitlore
 # migrated memory in-tree. Idempotent: if the dir already holds only our stub,
 # leave it untouched. Args: $1 = the auto-memory dir.
 gitlore_mark_migrated() {
   local dir="$1" stub="$1/MEMORY.md"
-  # shellcheck disable=SC2016  # literal marker string, no expansion intended
-  if [ -f "$stub" ] && grep -q 'migrated in-tree by `/gitlore:install`' "$stub" 2>/dev/null; then
+  if gitlore_is_migration_stub "$dir"; then
     return 0
   fi
   rm -rf "$dir"
