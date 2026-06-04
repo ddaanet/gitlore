@@ -87,8 +87,7 @@ esac
 # under the user's real ~/.claude when there was nothing to migrate.
 _old_memory=$(gitlore_cc_memory_dir "$toplevel")
 if [ -d "$_old_memory" ]; then
-  # shellcheck disable=SC2016  # literal marker string, no expansion intended
-  if ! grep -q 'migrated in-tree by `/gitlore:install`' "$_old_memory/MEMORY.md" 2>/dev/null; then
+  if ! gitlore_is_migration_stub "$_old_memory"; then
     echo "gitlore: migrated stale auto-memory at $_old_memory" >&2
   fi
   gitlore_mark_migrated "$_old_memory"
