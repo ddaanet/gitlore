@@ -30,11 +30,17 @@ Each scenario runs 5 trials (`pass^k`). A scenario passes only if all 5 pass.
 
 Each trial:
 1. Creates a fresh gitlore-installed repo with the scenario's initial memory content
-2. **Turn 1** — SDK runner: agent edits memory, runs the precommit command, PostToolUse hook injects `additionalContext`, agent summarises pending changes and stops
-3. **Turn 2** — SDK runner resumes the session with the approval message; agent writes the commit-msg file
-3. Fires `git commit` to trigger the pre-commit hook
-4. Asserts: memory committed, `live` ff-pushed, commit-msg temp file deleted
-5. LLM judge grades commit message quality against the scenario rubric
+2. **Turn 1** — SDK runner: agent edits memory, triggers the flow (see below), agent summarises pending changes and stops
+3. **Turn 2** — SDK runner resumes the session with the approval message; agent writes the commit-msg file (and may retry git commit depending on the scenario)
+4. Fires `git commit` to trigger the pre-commit hook (if memory not already committed by the agent)
+5. Asserts: memory committed, `live` ff-pushed, commit-msg temp file deleted
+6. LLM judge grades commit message quality against the scenario rubric
+
+### Trigger paths
+
+**PTU injection path** (precommit command scenario): agent runs the configured precommit command (`true`), PostToolUse hook fires and injects `additionalContext`, agent summarises and stops. Turn 2 approval → agent writes commit-msg file. Eval's `git commit` fires the pre-commit hook which commits memory.
+
+**Pre-commit failure path** (no precommit command scenario): agent runs `git commit` directly, pre-commit hook exits 1 with the `$CLAUDECODE`-addressed error message, agent summarises and stops. Turn 2 approval → agent writes commit-msg and retries `git commit`, which succeeds. Eval's subsequent `git commit` is a no-op on the memory side (already clean).
 
 ## Adding scenarios
 

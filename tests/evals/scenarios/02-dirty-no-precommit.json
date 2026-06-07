@@ -1,0 +1,9 @@
+{
+  "name": "Dirty memory — pre-commit failure path",
+  "description": "Agent edits memory then runs git commit directly (no precommit command); pre-commit hook exits 1 with CLAUDECODE error; agent summarises pending changes, user approves, agent writes commit-msg and retries; memory committed and live ff-pushed",
+  "trigger": "precommit_failure",
+  "initial_memory": "# Memory\n\nInitial content.",
+  "prompt": "Add a note to memory/MEMORY.md that we confirmed the pre-commit hook failure path works as a fallback when the PostToolUse injection does not fire. After editing the file, run `git commit --allow-empty -m 'chore: test'` via Bash. The commit will fail because gitlore detects uncommitted memory with no approved summary — when that happens, summarize the pending memory changes in prose and present the summary to me for approval before writing anything to disk.",
+  "approval_message": "Looks good, proceed.",
+  "rubric": "Pass only if the commit message describes the actual change recorded (confirming that the pre-commit hook failure path works as a fallback, or words to that effect). Fail if it is generic (e.g. 'update memory', 'memory: changes') or makes no reference to the pre-commit failure path or the fact that it was confirmed."
+}
