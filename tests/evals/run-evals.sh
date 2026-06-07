@@ -51,6 +51,9 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
   prompt=$(jq -r '.prompt' "$scenario_file")
   approval=$(jq -r '.approval_message' "$scenario_file")
   rubric=$(jq -r '.rubric' "$scenario_file")
+  # ptu: agent wrote commit-msg and stopped; commit-msg must exist before eval's git commit.
+  # precommit_failure: agent may have retried and consumed commit-msg; accept either state.
+  trigger=$(jq -r '.trigger // "ptu"' "$scenario_file")
 
   printf '📝 Scenario: %s\n\n' "$name"
 
@@ -62,23 +65,37 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     setup_eval_repo "$initial_memory"
 
     # SDK runner (two turns):
-    #   Turn 1 — agent edits memory, runs `true`, PostToolUse hook injects
-    #             additionalContext, agent summarises and stops.
-    #   Turn 2 — eval sends approval; agent writes commit-msg file.
+    #   PTU path  — Turn 1: agent edits memory, runs precommit command, PostToolUse
+    #               hook injects additionalContext, agent summarises and stops.
+    #               Turn 2: eval sends approval; agent writes commit-msg file.
+    #   Pre-commit failure path — Turn 1: agent edits memory, runs git commit,
+    #               hook exits 1 with CLAUDECODE error, agent summarises and stops.
+    #               Turn 2: eval sends approval; agent writes commit-msg and retries.
     "$LIB_DIR/sdk-runner.py" \
       --cwd "$EVAL_REPO" --prompt "$prompt" --approval "$approval" \
       2>/dev/null || fail_reason="sdk runner failed"
 
-    # Assertion 0: commit-msg file must exist (agent received additionalContext and wrote it).
+    # Assertion 0: agent completed its share of the gitlore flow.
+    # PTU path: agent wrote commit-msg and stopped; eval's git commit will consume it.
+    #   → commit-msg must be present.
+    # Pre-commit failure path: agent retried git commit after approval; the hook ran,
+    #   committed memory, and deleted commit-msg as part of completing the parent commit.
+    #   → commit-msg must be absent (still present = agent wrote it but did not retry).
     if [ -z "$fail_reason" ]; then
       msgfile_pre=$(git -C "$EVAL_REPO/memory" rev-parse --git-path gitlore-commit-msg 2>/dev/null || true)
-      [ -n "$msgfile_pre" ] && [ -f "$msgfile_pre" ] || \
-        fail_reason="no commit-msg file (agent did not write it after receiving additionalContext)"
+      if [ "$trigger" = "precommit_failure" ]; then
+        [ -z "$msgfile_pre" ] || [ ! -f "$msgfile_pre" ] || \
+          fail_reason="commit-msg still present after Turn 2 (agent wrote commit-msg but did not retry the commit)"
+      else
+        [ -n "$msgfile_pre" ] && [ -f "$msgfile_pre" ] || \
+          fail_reason="no commit-msg file (agent did not write it after receiving additionalContext)"
+      fi
     fi
 
     if [ -z "$fail_reason" ]; then
       # Parent commit fires the gitlore pre-commit hook, which commits memory
-      # and ff-pushes to live.
+      # (including any required merge steps and ff-push to live) before the
+      # parent commit can proceed.
       (cd "$EVAL_REPO" && git commit --allow-empty -m "chore: trigger eval flow") 2>/dev/null || \
         fail_reason="parent git commit failed"
     fi
