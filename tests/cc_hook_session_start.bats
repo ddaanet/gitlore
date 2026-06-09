@@ -50,13 +50,42 @@ teardown() {
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("GITLORE_LAUNCHED")'
 }
 
-@test "no launcher-guard JSON when GITLORE_LAUNCHED is set" {
+@test "no launcher systemMessage when GITLORE_LAUNCHED is set (still emits commit-protocol context)" {
   make_parent_with_memory
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  # Launcher warning is suppressed when launched via the shim...
+  echo "$output" | jq -e 'has("systemMessage") | not'
+  # ...but the standing commit-protocol orientation (Fix B) is always present.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory submodule")'
+}
+
+@test "emits standing commit-protocol additionalContext every gitlore session" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never commit"; "i")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("commit the parent"; "i")'
+}
+
+@test "wires the submodule commit gate (memory-pre-commit) into the submodule hooks dir" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  hookfile="$(git -C memory rev-parse --git-path hooks)/pre-commit"
+  [ -x "$hookfile" ]
+  # And it must actually block a naked direct commit.
+  echo dirty > memory/notes.md
+  git -C memory add -A
+  CLAUDECODE=1 run --separate-stderr git -C memory commit -m "direct"
+  [ "$status" -ne 0 ]
+  [[ "${output}${stderr}" == *"blocked"* ]]
 }
 
 @test "rejects parent branch named 'live'" {

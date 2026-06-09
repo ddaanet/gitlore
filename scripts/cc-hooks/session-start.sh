@@ -23,14 +23,20 @@ mempath=$(gitlore_memory_path)
 # goes to real stdout (fd 3), which CC parses for systemMessage/additionalContext.
 exec 3>&1 1>&2
 
+# Standing commit-protocol orientation (Fix B / FR11). The base Claude Code memory
+# instructions describe generic "edit files, save facts" memory with no review gate;
+# in a gitlore repo that mental model is wrong and leads to direct submodule commits
+# that bypass the gate. Emit the correct protocol every session, before the agent acts.
+protocol_ctx="gitlore: memory in this repo lives in a git submodule guarded by a per-commit approval gate (FR11). NEVER commit inside the memory submodule directly — do not run 'git -C <mempath> commit' or 'cd <mempath> && git commit' (the submodule has a pre-commit hook that will block you). To persist memory: (1) summarize the pending memory changes in prose, (2) get explicit user approval, (3) write the approved summary to \$(git -C <mempath> rev-parse --git-path gitlore-commit-msg), (4) commit the PARENT repo — its pre-commit hook records, gates, and pushes memory for you."
+
 # Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's
 # native auto-memory strands in ~/.claude/projects/<cwd>/memory instead of the submodule.
-launcher_warning=""
+launcher_sys=""
 if [ -z "${GITLORE_LAUNCHED:-}" ]; then
-  launcher_warning=$(jq -nc \
-    --arg sys "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install-launcher' if you don't use direnv), then restart Claude Code." \
-    --arg ctx "gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or '/gitlore:install-launcher' (Placement B) and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)." \
-    '{systemMessage:$sys, hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}')
+  launcher_sys="gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install-launcher' if you don't use direnv), then restart Claude Code."
+  protocol_ctx="$protocol_ctx
+
+gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or '/gitlore:install-launcher' (Placement B) and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
 fi
 
 # Hook dir + wrappers.
@@ -109,6 +115,11 @@ else
   fi
 fi
 
+# Wire the submodule-side commit gate (Fix A / FR11). Runs after the memory
+# worktree exists so its gitdir hooks dir is resolvable. Idempotent; re-pins the
+# submodule's gitlore.hooksDir to the live plugin each session.
+bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
+
 if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
   if ! git -C "$mempath" merge --ff-only live >/dev/null 2>&1; then
     msg=$(gitlore_say_for_agent_or_user \
@@ -121,5 +132,13 @@ else
   echo "gitlore: memory has uncommitted changes; skipping live ff-merge." >&2
 fi
 
-[ -n "$launcher_warning" ] && printf '%s\n' "$launcher_warning" >&3
+# Emit one SessionStart JSON: the commit-protocol additionalContext always; the
+# launcher systemMessage only when the shim didn't run.
+if [ -n "$launcher_sys" ]; then
+  jq -nc --arg sys "$launcher_sys" --arg ctx "$protocol_ctx" \
+    '{systemMessage:$sys, hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
+else
+  jq -nc --arg ctx "$protocol_ctx" \
+    '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
+fi
 exec 3>&- 1>&2
