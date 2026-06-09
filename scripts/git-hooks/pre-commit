@@ -63,7 +63,9 @@ if [ "$dirty" = "1" ]; then
     exit 1
   fi
   git -C "$mempath" add -A
-  git -C "$mempath" commit -q -F "$msgfile"
+  # Blessed commit: carry the sentinel so the submodule gate (memory-pre-commit)
+  # admits it. A naked commit never sets this and is blocked (FR11).
+  GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q -F "$msgfile"
   rm -f "$msgfile"
 fi
 

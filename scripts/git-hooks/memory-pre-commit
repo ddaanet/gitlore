@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Hard gate inside the memory submodule (FR11). gitlore's own commit paths —
+# the parent pre-commit hook, /gitlore:resolve, and install — export
+# GITLORE_MEMORY_COMMIT before committing memory. A naked `git -C <mempath>
+# commit`, a human `cd <mempath> && git commit`, or any script never do, so the
+# approval gate is unreachable for them. Block those; let the blessed paths pass.
+[ -n "${GITLORE_MEMORY_COMMIT:-}" ] && exit 0
+
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/log.sh"
+
+gitlore_say_for_agent_or_user \
+  "gitlore: direct commits inside the memory submodule are blocked — they bypass the per-commit approval gate (FR11). To persist memory: summarize the pending changes, get explicit user approval, write the approved summary to \$(git rev-parse --git-path gitlore-commit-msg), then commit the PARENT repo — its pre-commit hook records and pushes memory for you. Do not run 'git -C <mempath> commit'." \
+  "gitlore: direct memory commits are blocked. Open this project in Claude Code and ask it to commit memory." >&2
+exit 1

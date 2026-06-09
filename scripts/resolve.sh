@@ -31,7 +31,8 @@ if [ $# -ge 1 ]; then
       [ -f "$statefile" ] || { echo "gitlore: no merge state file at $statefile" >&2; exit 1; }
       return_branch=$(jq -r .return_branch "$statefile")
       # Commit the merge (uses git's MERGE_MSG; live is HEAD = first parent per D6).
-      git -C "$mempath" commit -q --no-edit
+      # Blessed path: carry the sentinel past the submodule gate (FR11).
+      GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q --no-edit
       # Advance the worktree branch to the merge commit and return.
       git -C "$mempath" branch -f "$return_branch" HEAD
       git -C "$mempath" checkout -q "$return_branch"
@@ -57,7 +58,8 @@ if [ $# -ge 1 ]; then
       [ -f "$statefile" ] || { echo "gitlore: no merge state file at $statefile" >&2; exit 1; }
       return_branch=$(jq -r .return_branch "$statefile")
       # Commit the merge (origin/live is HEAD = first parent per D6).
-      git -C "$mempath" commit -q --no-edit
+      # Blessed path: carry the sentinel past the submodule gate (FR11).
+      GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q --no-edit
       rm -f "$statefile"
       # Retry the push; on failure, loop with a fresh prepare.
       if ! git -C "$mempath" push -q origin live; then
