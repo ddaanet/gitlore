@@ -116,3 +116,79 @@ EOF
   run gitlore_is_migration_stub "$dir"
   [ "$status" -ne 0 ]
 }
+
+# --- D13: gitlore_git lock-contention retry wrapper -------------------------
+
+# Install a fake `git` on PATH that fails its first ($1) invocations writing
+# the stderr line ($2), then succeeds printing "ok". Counts calls in
+# $TMP_REPO/git-calls. Echoes the bin dir to prepend to PATH.
+_fake_git() {
+  local fail_until="$1" stderr_line="$2"
+  local bin="$TMP_REPO/fakebin"
+  mkdir -p "$bin"
+  printf '0\n' > "$TMP_REPO/git-calls"
+  cat > "$bin/git" <<EOF
+#!/usr/bin/env bash
+n=\$(cat "$TMP_REPO/git-calls")
+n=\$((n + 1)); printf '%s\n' "\$n" > "$TMP_REPO/git-calls"
+if [ "\$n" -le "$fail_until" ]; then
+  printf '%s\n' "$stderr_line" >&2
+  exit 128
+fi
+printf 'ok\n'
+exit 0
+EOF
+  chmod +x "$bin/git"
+  printf '%s\n' "$bin"
+}
+
+@test "gitlore_git_is_lock_error matches the documented lock signatures" {
+  gitlore_git_is_lock_error "fatal: Unable to create '/r/.git/index.lock': File exists."
+  gitlore_git_is_lock_error "error: cannot lock ref 'refs/heads/live': unable to..."
+  gitlore_git_is_lock_error "fatal: Unable to create '/r/.git/refs/heads/x.lock': File exists"
+  gitlore_git_is_lock_error "Another git process seems to be running in this repository"
+}
+
+@test "gitlore_git_is_lock_error does NOT match resolve's live worktree lock (D3)" {
+  run gitlore_git_is_lock_error "fatal: 'live' is already used by worktree at '/x/live'"
+  [ "$status" -ne 0 ]
+}
+
+@test "gitlore_git_is_lock_error does NOT match an unrelated error" {
+  run gitlore_git_is_lock_error "fatal: not a git repository"
+  [ "$status" -ne 0 ]
+}
+
+@test "gitlore_git retries on index.lock contention then succeeds" {
+  local bin; bin="$(_fake_git 2 "fatal: Unable to create '/r/.git/index.lock': File exists.")"
+  export GITLORE_GIT_RETRY_SCHEDULE="0 0 0 0 0 0 0"
+  PATH="$bin:$PATH" run gitlore_git commit -m x
+  [ "$status" -eq 0 ]
+  [[ "$output" == *ok* ]]
+  [ "$(cat "$TMP_REPO/git-calls")" = "3" ]   # 2 failures + 1 success
+}
+
+@test "gitlore_git fails fast on a non-lock error (no retry)" {
+  local bin; bin="$(_fake_git 99 "fatal: not a git repository")"
+  export GITLORE_GIT_RETRY_SCHEDULE="0 0 0 0 0 0 0"
+  PATH="$bin:$PATH" run gitlore_git commit -m x
+  [ "$status" -eq 128 ]
+  [ "$(cat "$TMP_REPO/git-calls")" = "1" ]   # called exactly once
+}
+
+@test "gitlore_git fails fast on resolve's live worktree lock (D3 preserved)" {
+  local bin; bin="$(_fake_git 99 "fatal: 'live' is already used by worktree at '/x/live'")"
+  export GITLORE_GIT_RETRY_SCHEDULE="0 0 0 0 0 0 0"
+  PATH="$bin:$PATH" run gitlore_git checkout live
+  [ "$status" -eq 128 ]
+  [ "$(cat "$TMP_REPO/git-calls")" = "1" ]
+}
+
+@test "gitlore_git surfaces the final stderr and exit code after exhausting retries" {
+  local bin; bin="$(_fake_git 99 "fatal: Unable to create '/r/.git/index.lock': File exists.")"
+  export GITLORE_GIT_RETRY_SCHEDULE="0 0 0"   # 3 retries
+  PATH="$bin:$PATH" run gitlore_git commit -m x
+  [ "$status" -eq 128 ]
+  [[ "$output" == *index.lock* ]]
+  [ "$(cat "$TMP_REPO/git-calls")" = "4" ]    # 1 initial + 3 retries
+}

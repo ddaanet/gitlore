@@ -99,19 +99,19 @@ fi
 # exists (install, normal sessions, linked worktrees).
 if ! git -C "$mempath" show-ref --verify --quiet refs/heads/live; then
   if git -C "$mempath" show-ref --verify --quiet refs/remotes/origin/live; then
-    git -C "$mempath" branch live origin/live >&2
+    gitlore_git -C "$mempath" branch live origin/live >&2
   else
-    git -C "$mempath" branch live HEAD >&2
+    gitlore_git -C "$mempath" branch live HEAD >&2
   fi
 fi
 
 if [ "$parent_branch" = "DETACHED" ]; then
-  git -C "$mempath" checkout --detach live >/dev/null 2>&1 || true
+  gitlore_git -C "$mempath" checkout --detach live >/dev/null 2>&1 || true
 else
   if git -C "$mempath" show-ref --verify --quiet "refs/heads/$parent_branch"; then
-    git -C "$mempath" checkout -q "$parent_branch"
+    gitlore_git -C "$mempath" checkout -q "$parent_branch"
   else
-    git -C "$mempath" checkout -q -b "$parent_branch" live
+    gitlore_git -C "$mempath" checkout -q -b "$parent_branch" live
   fi
 fi
 
@@ -121,7 +121,7 @@ fi
 bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
 
 if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
-  if ! git -C "$mempath" merge --ff-only live >/dev/null 2>&1; then
+  if ! gitlore_git -C "$mempath" merge --ff-only live >/dev/null 2>&1; then
     msg=$(gitlore_say_for_agent_or_user \
       "gitlore: memory branch '$parent_branch' diverged from live. Run /gitlore:resolve, then /clear." \
       "gitlore: memory branch '$parent_branch' has diverged from live. Open this project in Claude Code and run /gitlore:resolve, then start a fresh session.")

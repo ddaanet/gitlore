@@ -54,7 +54,7 @@ fi
 
 git -C "$mempath" fetch -q origin live 2>/dev/null || true
 
-if git -C "$mempath" push -q origin live 2>/dev/null; then
+if gitlore_git -C "$mempath" push -q origin live 2>/dev/null; then
   exit 0
 fi
 

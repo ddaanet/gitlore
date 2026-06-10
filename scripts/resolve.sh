@@ -32,13 +32,13 @@ if [ $# -ge 1 ]; then
       return_branch=$(jq -r .return_branch "$statefile")
       # Commit the merge (uses git's MERGE_MSG; live is HEAD = first parent per D6).
       # Blessed path: carry the sentinel past the submodule gate (FR11).
-      GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q --no-edit
+      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
       # Advance the worktree branch to the merge commit and return.
-      git -C "$mempath" branch -f "$return_branch" HEAD
-      git -C "$mempath" checkout -q "$return_branch"
+      gitlore_git -C "$mempath" branch -f "$return_branch" HEAD
+      gitlore_git -C "$mempath" checkout -q "$return_branch"
       rm -f "$statefile"
       # Retry the ff-push; on failure, loop with a fresh prepare.
-      if ! git -C "$mempath" push -q . HEAD:live; then
+      if ! gitlore_git -C "$mempath" push -q . HEAD:live; then
         if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
           echo "gitlore: cannot checkout live (concurrent resolve). Wait and retry." >&2
           exit 1
@@ -59,10 +59,10 @@ if [ $# -ge 1 ]; then
       return_branch=$(jq -r .return_branch "$statefile")
       # Commit the merge (origin/live is HEAD = first parent per D6).
       # Blessed path: carry the sentinel past the submodule gate (FR11).
-      GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q --no-edit
+      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
       rm -f "$statefile"
       # Retry the push; on failure, loop with a fresh prepare.
-      if ! git -C "$mempath" push -q origin live; then
+      if ! gitlore_git -C "$mempath" push -q origin live; then
         if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
           echo "gitlore: cannot checkout live (concurrent resolve). Wait and retry." >&2
           exit 1
@@ -72,7 +72,7 @@ if [ $# -ge 1 ]; then
         gitlore_emit_merge_directive "$statefile" "local-vs-remote" "continue-after-remote-merge"
         exit 1
       fi
-      git -C "$mempath" checkout -q "$return_branch"
+      gitlore_git -C "$mempath" checkout -q "$return_branch"
       exit 0
       ;;
     abort-then-retry)
@@ -81,8 +81,8 @@ if [ $# -ge 1 ]; then
       statefile=$(gitlore_merge_state_file "$mempath")
       [ -f "$statefile" ] || { echo "gitlore: no merge state file to abort" >&2; exit 1; }
       return_branch=$(jq -r .return_branch "$statefile")
-      git -C "$mempath" merge --abort 2>/dev/null || true
-      git -C "$mempath" checkout -q "$return_branch" || true
+      gitlore_git -C "$mempath" merge --abort 2>/dev/null || true
+      gitlore_git -C "$mempath" checkout -q "$return_branch" || true
       rm -f "$statefile"
       # Re-enter the default mode to detect the original divergence freshly.
       exec bash "$0"
@@ -123,16 +123,16 @@ if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
 fi
 if ! git -C "$mempath" ls-remote origin live | grep -q .; then
   echo "gitlore: remote has no live branch. Pushing." >&2
-  git -C "$mempath" push origin live
+  gitlore_git -C "$mempath" push origin live
   exit 0
 fi
 
-git -C "$mempath" fetch -q origin live || true
+gitlore_git -C "$mempath" fetch -q origin live || true
 
 # Try branch-vs-live first (cheaper, local-only).
 branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || echo "")
 if [ -n "$branch" ] && [ "$branch" != "live" ]; then
-  if ! git -C "$mempath" push -q . HEAD:live; then
+  if ! gitlore_git -C "$mempath" push -q . HEAD:live; then
     if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
       echo "gitlore: another session is resolving memory. Wait and retry." >&2
       exit 1
@@ -145,7 +145,7 @@ if [ -n "$branch" ] && [ "$branch" != "live" ]; then
 fi
 
 # Branch is in sync (or wasn't applicable). Try local-vs-remote.
-if ! git -C "$mempath" push -q origin live; then
+if ! gitlore_git -C "$mempath" push -q origin live; then
   if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
     echo "gitlore: another session is resolving memory. Wait and retry." >&2
     exit 1

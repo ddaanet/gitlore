@@ -62,15 +62,15 @@ if [ "$dirty" = "1" ]; then
       "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry." >&2
     exit 1
   fi
-  git -C "$mempath" add -A
+  gitlore_git -C "$mempath" add -A
   # Blessed commit: carry the sentinel so the submodule gate (memory-pre-commit)
   # admits it. A naked commit never sets this and is blocked (FR11).
-  GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q -F "$msgfile"
+  GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile"
   rm -f "$msgfile"
 fi
 
 if [ -n "$live_sha" ]; then
-  if ! git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
+  if ! gitlore_git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
     # ff-push failed → branch-vs-live divergence. Prepare and yield.
     if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
       gitlore_say_for_agent_or_user \

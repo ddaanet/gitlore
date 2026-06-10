@@ -25,7 +25,7 @@ wire_and_push() {
   # Args: $1 = remote URL. Adds origin, pushes live, rewrites .gitmodules URL.
   local remote_url="$1"
   git -C "$mempath" remote add origin "$remote_url"
-  if ! git -C "$mempath" push -u origin live; then
+  if ! gitlore_git -C "$mempath" push -u origin live; then
     echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:resolve to retry." >&2
     exit 1
   fi
