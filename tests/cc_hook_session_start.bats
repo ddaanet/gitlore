@@ -3,6 +3,7 @@ bats_require_minimum_version 1.5.0
 
 load helpers/setup
 load helpers/fixtures
+load helpers/divergence-fixtures
 
 SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 
@@ -50,15 +51,18 @@ teardown() {
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("GITLORE_LAUNCHED")'
 }
 
-@test "no launcher systemMessage when GITLORE_LAUNCHED is set (still emits commit-protocol context)" {
+@test "clean launched session: success confirmation on systemMessage, no launcher warning (D14)" {
   make_parent_with_memory
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  # Launcher warning is suppressed when launched via the shim...
-  echo "$output" | jq -e 'has("systemMessage") | not'
-  # ...but the standing commit-protocol orientation (Fix B) is always present.
+  # D14 always-confirm: a clean start rides a success confirmation on systemMessage...
+  echo "$output" | jq -e '.systemMessage | test("ready")'
+  echo "$output" | jq -e '.systemMessage | test("synced with live")'
+  # ...and it is NOT the launcher warning (shim ran).
+  echo "$output" | jq -e '.systemMessage | test("direnv allow") | not'
+  # The standing commit-protocol orientation (Fix B) is always present.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory submodule")'
 }
 
@@ -88,14 +92,16 @@ teardown() {
   [[ "${output}${stderr}" == *"blocked"* ]]
 }
 
-@test "rejects parent branch named 'live'" {
+@test "rejects parent branch named 'live' via systemMessage, exit 0 (D14)" {
   make_parent_with_memory
   git checkout -q -b live
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"reserved"* ]] || [[ "${output}${stderr}" == *"live"* ]]
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  # D14: non-blocking exit, user-visible notice on systemMessage (not stderr+exit 1).
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("live")'
+  echo "$output" | jq -e '.systemMessage | test("collides|reserved|rename"; "i")'
 }
 
 @test "creates worktree branch matching parent branch name from live" {
@@ -130,15 +136,27 @@ teardown() {
   [ "$livesha" = "$wtsha" ]
 }
 
-@test "warns and skips ff when memory is dirty" {
+@test "warns and skips ff when memory is dirty via systemMessage (D14)" {
   make_parent_with_memory
   echo dirty > memory/scratch.md
   git checkout -q -b worktree
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  run --separate-stderr bash "$SESSION_START"
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  [[ "$output$stderr" == *"uncommitted"* ]] || [[ "${output}${stderr}" == *"dirty"* ]]
+  echo "$output" | jq -e '.systemMessage | test("uncommitted")'
+}
+
+@test "diverged memory branch reports via systemMessage, exit 0 (D14)" {
+  make_parent_with_memory
+  make_diverged_branch_vs_live
+  git checkout -q -b worktree   # parent branch mirrors memory's diverged 'worktree'
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("diverged")'
+  echo "$output" | jq -e '.systemMessage | test("resolve")'
 }
 
 @test "sentinel 'direct' re-applies direct wiring" {
