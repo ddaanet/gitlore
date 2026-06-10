@@ -56,3 +56,13 @@ load helpers/setup
   [ ! -d "$PLUGIN_ROOT/commands/gitlore" ]
   [ ! -e "$PLUGIN_ROOT/skills/install/SKILL.md" ]
 }
+
+# Regression: D15 — the in-process-worktree memory-drift guard must be registered
+# as a PostToolUse hook on the EnterWorktree|ExitWorktree matcher, and its script
+# must exist and be executable (verified to fire; targeted matcher chosen).
+@test "distribution: worktree-drift hook is wired on EnterWorktree|ExitWorktree (D15)" {
+  run jq -r '.hooks.PostToolUse[] | select(.matcher=="EnterWorktree|ExitWorktree") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"worktree-drift.sh"* ]]
+  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/worktree-drift.sh" ]
+}
