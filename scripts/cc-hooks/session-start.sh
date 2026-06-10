@@ -29,11 +29,32 @@ exec 3>&1 1>&2
 # that bypass the gate. Emit the correct protocol every session, before the agent acts.
 protocol_ctx="gitlore: memory in this repo lives in a git submodule guarded by a per-commit approval gate (FR11). NEVER commit inside the memory submodule directly — do not run 'git -C <mempath> commit' or 'cd <mempath> && git commit' (the submodule has a pre-commit hook that will block you). To persist memory: (1) summarize the pending memory changes in prose, (2) get explicit user approval, (3) write the approved summary to \$(git -C <mempath> rev-parse --git-path gitlore-commit-msg), (4) commit the PARENT repo — its pre-commit hook records, gates, and pushes memory for you."
 
+# User-facing output (D14): every user-visible SessionStart notice rides the
+# single SessionStart `systemMessage` (the only reliably user-visible hook
+# channel; stderr is shown only on exit 2 / --verbose). `sysmsg` accumulates
+# notices; `emit_session_json` writes the one JSON to fd 3 (systemMessage when
+# non-empty, plus the standing commit-protocol additionalContext always).
+sysmsg=""
+add_sysmsg() {
+  if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
+
+$1"; else sysmsg="$1"; fi
+}
+emit_session_json() {
+  if [ -n "$sysmsg" ]; then
+    jq -nc --arg sys "$sysmsg" --arg ctx "$protocol_ctx" \
+      '{systemMessage:$sys, hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
+  else
+    jq -nc --arg ctx "$protocol_ctx" \
+      '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
+  fi
+  exec 3>&- 1>&2
+}
+
 # Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's
 # native auto-memory strands in ~/.claude/projects/<cwd>/memory instead of the submodule.
-launcher_sys=""
 if [ -z "${GITLORE_LAUNCHED:-}" ]; then
-  launcher_sys="gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install-launcher' if you don't use direnv), then restart Claude Code."
+  add_sysmsg "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install-launcher' if you don't use direnv), then restart Claude Code."
   protocol_ctx="$protocol_ctx
 
 gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or '/gitlore:install-launcher' (Placement B) and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
@@ -66,11 +87,9 @@ fi
 # Branch model: guard, submodule init, checkout, ff-merge.
 parent_branch=$(gitlore_parent_branch)
 if [ "$parent_branch" = "live" ]; then
-  msg=$(gitlore_say_for_agent_or_user \
-    "gitlore: parent branch 'live' collides with the memory trunk. Rename the parent branch (git branch -m) before continuing." \
-    "gitlore: this repo's parent branch is named 'live', which collides with gitlore's memory trunk. Rename it (git branch -m) before using gitlore.")
-  echo "$msg" >&2
-  exit 1
+  add_sysmsg "gitlore: parent branch 'live' collides with the memory trunk. Rename the parent branch (git branch -m) before continuing."
+  emit_session_json
+  exit 0
 fi
 
 # Memory working tree missing in this worktree. Two cases:
@@ -120,25 +139,25 @@ fi
 # submodule's gitlore.hooksDir to the live plugin each session.
 bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
 
-if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
-  if ! gitlore_git -C "$mempath" merge --ff-only live >/dev/null 2>&1; then
-    msg=$(gitlore_say_for_agent_or_user \
-      "gitlore: memory branch '$parent_branch' diverged from live. Run /gitlore:resolve, then /clear." \
-      "gitlore: memory branch '$parent_branch' has diverged from live. Open this project in Claude Code and run /gitlore:resolve, then start a fresh session.")
-    echo "$msg" >&2
-    exit 1
-  fi
+# Branch state for the success/divergence confirmation (D14).
+if [ "$parent_branch" = "DETACHED" ]; then
+  where="detached at live"
 else
-  echo "gitlore: memory has uncommitted changes; skipping live ff-merge." >&2
+  where="branch '$parent_branch'"
 fi
 
-# Emit one SessionStart JSON: the commit-protocol additionalContext always; the
-# launcher systemMessage only when the shim didn't run.
-if [ -n "$launcher_sys" ]; then
-  jq -nc --arg sys "$launcher_sys" --arg ctx "$protocol_ctx" \
-    '{systemMessage:$sys, hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
+if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
+  if gitlore_git -C "$mempath" merge --ff-only live >/dev/null 2>&1; then
+    add_sysmsg "gitlore: memory ready ($where, synced with live)."
+  else
+    add_sysmsg "gitlore: memory $where diverged from live. Run /gitlore:resolve, then start a fresh session."
+    emit_session_json
+    exit 0
+  fi
 else
-  jq -nc --arg ctx "$protocol_ctx" \
-    '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
+  add_sysmsg "gitlore: memory ready ($where); uncommitted changes present, skipped live sync."
 fi
-exec 3>&- 1>&2
+
+# Emit one SessionStart JSON: the commit-protocol additionalContext always, plus
+# any accumulated user-facing systemMessage (success/dirty/launcher — D14).
+emit_session_json
