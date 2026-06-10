@@ -138,6 +138,54 @@ gitlore_probe_writable() {
   return 1
 }
 
+# Exit 0 if a git stderr blob signals lock contention worth retrying, 1 if not.
+# Lowercases the haystack so casing in git's messages doesn't matter. Resolve's
+# one-checkout-per-branch error ("'live' is already used by worktree at …", D3)
+# is explicitly NOT a retryable lock — it must fail fast. See D13.
+# Args: $1 = the captured stderr text.
+gitlore_git_is_lock_error() {
+  local err
+  err=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  case "$err" in
+    *"is already used by worktree at"*) return 1 ;;   # D3 fast-fail, not a lock
+  esac
+  case "$err" in
+    *index.lock*)               return 0 ;;
+    *"file exists"*)            return 0 ;;
+    *"unable to create"*.lock*) return 0 ;;
+    *"cannot lock ref"*)        return 0 ;;
+    *"another git process"*)    return 0 ;;
+  esac
+  return 1
+}
+
+# Run `git "$@"`, retrying on transient lock contention with exponential
+# backoff. The default schedule's waits sum to exactly 10.0s wall-clock — the
+# last term (3.7) is the budget remainder, not a doubled value — and is
+# overridable via GITLORE_GIT_RETRY_SCHEDULE (tests set it to zeros). Only
+# lock-contention failures retry (gitlore_git_is_lock_error); every other
+# failure fails fast. The final attempt's stderr and exit code are surfaced
+# unchanged. Stdout passes through untouched. Apply to mutating git calls only
+# (read-only ops never take the index/ref lock). See D13.
+gitlore_git() {
+  local -a schedule
+  read -r -a schedule <<< "${GITLORE_GIT_RETRY_SCHEDULE:-0.1 0.2 0.4 0.8 1.6 3.2 3.7}"
+  local errfile rc i=0
+  errfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-git.XXXXXX")
+  while :; do
+    rc=0
+    git "$@" 2>"$errfile" || rc=$?               # `|| rc=$?` keeps set -e happy
+    [ "$rc" -eq 0 ] && break
+    gitlore_git_is_lock_error "$(cat "$errfile")" || break
+    [ "$i" -lt "${#schedule[@]}" ] || break          # retries exhausted
+    sleep "${schedule[$i]}"
+    i=$((i + 1))
+  done
+  cat "$errfile" >&2
+  rm -f "$errfile"
+  return "$rc"
+}
+
 # Print the memory remote's bare name: <parent-remote-base>-memory.
 # Derives the base from the parent repo's origin URL when set, handling both
 # https (.../owner/repo[.git]) and scp-style (git@host:owner/repo[.git]) forms,

@@ -45,10 +45,10 @@ EOF
   # 3. Initial commit.
   (
     cd "$mempath"
-    git add -A
+    gitlore_git add -A
     # Sentinel for parity with all other blessed commit paths; the submodule gate
     # isn't wired until SessionStart, but a re-run install must still pass it (FR11).
-    GITLORE_MEMORY_COMMIT=1 git commit -q --allow-empty -m "Initial memory"
+    GITLORE_MEMORY_COMMIT=1 gitlore_git commit -q --allow-empty -m "Initial memory"
   )
 
   # 4. Absorb gitdir manually: move <mempath>/.git into .git/modules/gitlore-memory
@@ -118,9 +118,9 @@ if git check-ignore -q .gitmodules 2>/dev/null; then
     tmp=$(mktemp) && grep -vx '\.gitmodules' .gitignore > "$tmp" && mv "$tmp" .gitignore
   fi
 fi
-git add .gitmodules
+gitlore_git add .gitmodules
 mem_sha=$(git -C "$mempath" rev-parse HEAD)
-git update-index --add --cacheinfo "160000,${mem_sha},${mempath}"
+gitlore_git update-index --add --cacheinfo "160000,${mem_sha},${mempath}"
 
 # 7. live + worktree branches (idempotent).
 cd "$mempath"
