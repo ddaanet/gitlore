@@ -37,7 +37,7 @@ Dependencies:
 
 ## Status
 
-Feature-complete: all functional requirements and design decisions (D1–D11) in
+Feature-complete: all functional requirements and design decisions (D1–D15) in
 `docs/design.md` are implemented and tested.
 
 - **Plan 01 — local memory pipeline** ✅
@@ -46,3 +46,4 @@ Feature-complete: all functional requirements and design decisions (D1–D11) in
 - **Plan 04 — marketplace install** ✅ (push + marketplace entry + outer-loop dogfood)
 - **Plan 05 — memory redirect launcher** ✅ (shim + Placement A direnv + Placement B global + SessionStart guard)
 - **Plan 07 — gitlink-aware wrappers / worktree lifecycle (D11)** ✅ (common-dir-anchored hook wrappers; SessionStart creates the memory worktree in linked worktrees; advisory `WorktreeRemove` teardown)
+- **Dogfood-driven hardening (D12–D15)** ✅ (submodule-side commit gate; git lock-contention retry; SessionStart output on `systemMessage`; in-process-worktree memory-drift guard)
