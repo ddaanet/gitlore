@@ -5,7 +5,8 @@
 
 # real claude = next `claude` on PATH after stripping my own dir
 self=$(cd "$(dirname "$0")" && pwd)
-newpath=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$self" | paste -sd:)
+# explicit `-` operand: BSD paste has no implicit stdin, unlike GNU
+newpath=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$self" | paste -sd: -)
 real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not found" >&2; exit 127; }
 
 # already injected upstream? pass through (composability, anti-double-inject, anti-recursion)
