@@ -53,6 +53,24 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *"hi"* ]]
 }
 
+@test "PATH stripping survives BSD paste (no implicit stdin)" {
+  # macOS/BSD paste errors out when given no file operand; GNU defaults to
+  # stdin. Shadow paste with a BSD-strict wrapper to catch the GNU-ism.
+  real_paste=$(command -v paste)
+  bsd="$TMP_REPO/.bsdtools"; mkdir -p "$bsd"
+  cat > "$bsd/paste" <<EOF
+#!/bin/sh
+ok=0
+for a in "\$@"; do case "\$a" in -) ok=1 ;; -*) ;; *) ok=1 ;; esac; done
+[ "\$ok" -eq 1 ] || { echo 'usage: paste [-s] [-d delimiters] file ...' >&2; exit 1; }
+exec "$real_paste" "\$@"
+EOF
+  chmod 755 "$bsd/paste"
+  PATH="$bsd:$PATH" run "$SHIMDIR/claude" hello
+  [ "$status" -eq 0 ]
+  [ "$output" = "REAL:hello" ]
+}
+
 @test "exit 127 when no real claude is reachable" {
   # PATH = shim dir + a minimal toolbox (the utilities the shim needs) but no claude.
   tools="$TMP_REPO/.tools"; mkdir -p "$tools"
