@@ -11,6 +11,7 @@ set -euo pipefail
 # Both default relative to this script: ../.claude-plugin/plugin.json and the
 # sibling ../../claude-plugins/.claude-plugin/marketplace.json.
 
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) captures below
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 plugin_root="$(cd "$here/.." && pwd)"
 

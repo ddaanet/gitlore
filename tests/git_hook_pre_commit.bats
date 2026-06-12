@@ -116,6 +116,34 @@ teardown() { teardown_tmp_repo; }
   [ "$wt" = "$live" ]
 }
 
+@test "ignores parent GIT_COMMON_DIR/GIT_OBJECT_DIRECTORY leaked in a linked worktree" {
+  # Regression: in a linked parent worktree git exports GIT_COMMON_DIR (and
+  # GIT_OBJECT_DIRECTORY) alongside GIT_DIR. A hand-picked 4-var unset leaves
+  # GIT_COMMON_DIR set, silently redirecting the submodule's refs/objects to the
+  # parent's common dir. The hook must clear the full local-env-var set. This
+  # points the parent's store at a bogus path: if the hook leaked it, the
+  # submodule sync would touch that path and fail or write the wrong refs.
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  printf 'memory: add notes\n' > "$msgfile"
+
+  bogus="$TMP_REPO/.bogus-common-dir"
+  mkdir -p "$bogus"
+  export GIT_COMMON_DIR="$bogus"
+  export GIT_OBJECT_DIRECTORY="$bogus/objects"
+
+  CLAUDECODE=1 run --separate-stderr bash "$HOOK"
+  unset GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
+  [ "$status" -eq 0 ]
+  # The submodule's own live ref advanced — refs were written to the submodule
+  # store, not the bogus parent common dir.
+  wt=$(git -C memory rev-parse worktree)
+  live=$(git -C memory rev-parse live)
+  [ "$wt" = "$live" ]
+  [ ! -e "$bogus/refs/heads/live" ]
+}
+
 @test "exits 0 in a session-less linked worktree where the memory worktree is absent" {
   make_parent_with_memory
   WT="$TMP_REPO-wt"

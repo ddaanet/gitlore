@@ -1,9 +1,9 @@
 ## Current task
 
-Execute the written plan `docs/plans/2026-06-12-09-standalone-memory-commit.md` (four TDD tasks adding the standalone `commit-memory.sh` memory-commit entry point, D16) — not started; this session instead added the shellcheck precommit gate (`scripts/lint-shell.sh` + `make lint` wired into the justfile `precommit` recipe), which is complete, clean, and green.
+Shell-gotcha audit fixes are complete and verified (full git-hook `unset $(git rev-parse --local-env-vars)`, `unset CDPATH` at every `cd … && pwd` capture site, `LC_ALL=C` on the NUL read loop, new GIT_COMMON_DIR regression test) — committing now; no code work remains in flight.
 
 ## Open decisions
 
-- Plan Task 3 Step 5: confirm whether `tests/install_run.bats` drives a full install through `write-settings.sh` (extend that test) or whether a focused `write-settings.sh` invocation test is needed for the `gitlore.commitCommand` key assertion.
-- Whether to cut a 0.2.8 release — 0.2.7 ships the macOS-broken launcher shim that commit 3b416bb already fixes (and `.gitlore/bin/claude` was just regenerated to match the fixed template).
-- The shell-gotchas plugin (`shell-scripting@ddaanet`, repo `/Users/david/code/shell-gotchas`) is built but never trigger-tested in a real session.
+- Whether to cut a 0.2.8 release — 0.2.7 shipped the macOS-broken launcher shim that is now fixed, and `.gitlore/bin/claude` was regenerated again this session (added `unset CDPATH`).
+- Whether the D16 standalone-memory-commit plan (`docs/plans/2026-06-12-09-standalone-memory-commit.md`) is fully landed — `scripts/commit-memory.sh` + `tests/commit_memory.bats` now exist and pass; confirm against the plan's remaining tasks before considering it closed.
+- The shell-scripting plugin (`shell-scripting@ddaanet`) has still never been trigger-tested in a real session beyond this scan.

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) captures below
 
 mempath="${1:-memory}"
 precommit_cmd="${2:-}"

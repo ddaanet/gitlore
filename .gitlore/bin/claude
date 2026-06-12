@@ -4,6 +4,7 @@
 # see docs/design.md "Memory Redirect Launcher" (D10).
 
 # real claude = next `claude` on PATH after stripping my own dir
+unset CDPATH   # else `cd` may echo the target, corrupting the capture below
 self=$(cd "$(dirname "$0")" && pwd)
 # explicit `-` operand: BSD paste has no implicit stdin, unlike GNU
 newpath=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$self" | paste -sd: -)

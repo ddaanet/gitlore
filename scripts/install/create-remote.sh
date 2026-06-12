@@ -5,6 +5,7 @@
 #       $2 = mode: auto (default) | url | local
 #       $3 = remote URL (required for url mode)
 set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
 
 mempath="$1"
 
