@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
 load helpers/setup

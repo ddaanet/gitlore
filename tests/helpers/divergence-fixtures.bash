@@ -6,7 +6,7 @@
 make_diverged_branch_vs_live() {
   local mempath="${1:-memory}"
   (
-    cd "$mempath"
+    cd "$mempath" || exit 1
     git checkout -q worktree
     echo "branch-side" > BRANCH.md
     git add BRANCH.md
@@ -28,7 +28,7 @@ make_diverged_local_vs_remote() {
   local clone_dir
   clone_dir="$(mktemp -d "${TMP_REPO}/clone.XXXXXX")"
   (
-    cd "$clone_dir"
+    cd "$clone_dir" || exit 1
     git clone -q "$bare" .
     git checkout -q live
     echo "remote-side" > REMOTE.md
@@ -38,7 +38,7 @@ make_diverged_local_vs_remote() {
   )
   rm -rf "$clone_dir"
   (
-    cd "$mempath"
+    cd "$mempath" || exit 1
     git fetch -q origin
     git checkout -q live
     echo "local-side" > LOCAL.md

@@ -1,4 +1,9 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
+# Assertions deliberately match the literal string `$CLAUDE_PLUGIN_ROOT` to prove
+# it does NOT leak unexpanded; the single quotes are intentional.
+# shellcheck disable=SC2016
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -67,8 +72,6 @@ teardown() { teardown_tmp_repo; }
   #    push, fails (not an ancestor → ff rejected), re-prepares, yields again.
   (
     cd memory
-    # Save MERGE_HEAD ref so we can restore it.
-    merge_head=$(cat .git/MERGE_HEAD 2>/dev/null || git rev-parse --git-path MERGE_HEAD | xargs cat)
     git merge --abort
     # Sibling advance on live not reachable from the prepared merge.
     git checkout -q live
@@ -105,7 +108,6 @@ teardown() { teardown_tmp_repo; }
   [ "$(git -C memory rev-parse worktree)" = "$(git -C memory rev-parse live)" ]
   # First-parent invariant (D6): live is first parent of the merge commit.
   merge_commit=$(git -C memory rev-parse live)
-  first_parent=$(git -C memory rev-parse "${merge_commit}^1")
   # First parent should match the live tip from BEFORE the merge.
   # (We can't easily reconstruct that here without recording it; assert by message instead.)
   msg=$(git -C memory log -1 --format=%s "$merge_commit")

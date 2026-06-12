@@ -24,7 +24,9 @@ fi
 # "yq <N>.<N>.<N>" with no leading "v" and no mikefarah URL.
 if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -qE 'mikefarah|version v[0-9]'; then
   # yq (mikefarah/yq v4) — deep-merges entries without clobbering existing ones.
+  # shellcheck disable=SC2016  # $(...) is literal; git expands it at hook-fire time
   yq -i '.PreCommit.gitlore.enabled = true | .PreCommit.gitlore.command = ["sh","-c","exec \"$(git rev-parse --git-common-dir)/gitlore-pre-commit\" \"$@\"","gitlore"]' "$CONFIG"
+  # shellcheck disable=SC2016  # $(...) is literal; git expands it at hook-fire time
   yq -i '.PrePush.gitlore.enabled = true | .PrePush.gitlore.command = ["sh","-c","exec \"$(git rev-parse --git-common-dir)/gitlore-pre-push\" \"$@\"","gitlore"]'       "$CONFIG"
   # Append the marker comment. yq strips comments, so we append it as a plain line.
   # Note: any pre-existing YAML comments in .overcommit.yml will have been stripped

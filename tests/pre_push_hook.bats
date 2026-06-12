@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -18,7 +20,7 @@ setup() {
   git -C memory push -q origin live
   # Add a memory commit so we have something to push.
   (
-    cd memory
+    cd memory || exit 1
     git checkout -q live
     echo new-fact > FACT.md
     git add FACT.md

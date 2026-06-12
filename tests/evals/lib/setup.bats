@@ -4,6 +4,7 @@ EVAL_LIB_DIR="$BATS_TEST_DIRNAME"
 export EVAL_LIB_DIR
 
 setup() {
+  # shellcheck disable=SC1091  # dynamic path resolved at runtime; not followable here
   source "$EVAL_LIB_DIR/setup.sh"
 }
 

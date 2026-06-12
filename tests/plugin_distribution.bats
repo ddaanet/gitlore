@@ -41,9 +41,11 @@ load helpers/setup
   # Must restrict tools via `tools:` ...
   echo "$fm" | grep -qE '^tools:[[:space:]]*'
   # ... and must NOT use the agent-invalid `allowed-tools:` key.
-  ! echo "$fm" | grep -qE '^allowed-tools:'
+  run grep -qE '^allowed-tools:' <<<"$fm"
+  [ "$status" -ne 0 ]
   # The approval-gated sub-agent must not be able to message the parent itself.
-  ! echo "$fm" | grep -qiE '^tools:.*SendMessage'
+  run grep -qiE '^tools:.*SendMessage' <<<"$fm"
+  [ "$status" -ne 0 ]
 }
 
 # Regression: slash commands must live directly under commands/ so they expose as

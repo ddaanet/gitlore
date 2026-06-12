@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -37,7 +39,8 @@ teardown() { teardown_tmp_repo; }
   grep -q -- '--private' "$log"
   # --source=. is intentionally omitted: gh's --source rejects gitfile-pointed
   # submodule worktrees, so we wire origin and push by hand instead.
-  ! grep -q -- '--source' "$log"
+  run grep -q -- '--source' "$log"
+  [ "$status" -ne 0 ]
 }
 
 @test "install completes local-only when gh is unauthed (no abort)" {

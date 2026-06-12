@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -51,7 +53,8 @@ teardown() { teardown_tmp_repo; }
   GH_MOCK_LOG="$log" run --separate-stderr bash "$RESOLVE"
   [ "$status" -ne 0 ]
   [[ "$output$stderr" == *"unreachable"* ]] || [[ "$output$stderr" == *"network"* ]] || [[ "$output$stderr" == *"auth"* ]]
-  ! grep -q 'repo create' "$log" 2>/dev/null
+  run grep -q 'repo create' "$log"
+  [ "$status" -ne 0 ]
 }
 
 @test "resolve: pushes live when remote exists but has no live branch" {
@@ -76,5 +79,6 @@ teardown() { teardown_tmp_repo; }
   log="$TMP_REPO/gh-calls.log"
   GH_MOCK_LOG="$log" run bash "$RESOLVE"
   [ "$status" -eq 0 ]
-  ! grep -q 'repo create' "$log" 2>/dev/null
+  run grep -q 'repo create' "$log"
+  [ "$status" -ne 0 ]
 }
