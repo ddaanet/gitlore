@@ -18,73 +18,12 @@ source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 mempath=$(gitlore_memory_path 2>/dev/null) || mempath=""
 
+# Not a gitlore repo (submodule unregistered) → nothing to sync.
+[ -z "$mempath" ] && exit 0
+
 # D11 corollary: in a session-less worktree the memory submodule worktree may not
 # exist yet. Nothing to sync — never block the parent commit.
-if [ -n "$mempath" ] && [ ! -e "$mempath/.git" ]; then
-  exit 0
-fi
+[ ! -e "$mempath/.git" ] && exit 0
 
-if [ -n "$mempath" ]; then
-  state_status=$(gitlore_detect_stale_merge_state "$mempath")
-  case "$state_status" in
-    stale-with-merge-head)
-      statefile=$(gitlore_merge_state_file "$mempath")
-      flavor=$(jq -r .flavor "$statefile")
-      gitlore_emit_merge_directive "$statefile" "$flavor" "abort-then-retry"
-      exit 1
-      ;;
-    stale-no-merge-head)
-      statefile=$(gitlore_merge_state_file "$mempath")
-      echo "gitlore: merge state file present without MERGE_HEAD — manual intervention required. Inspect $statefile and the memory worktree." >&2
-      exit 1
-      ;;
-  esac
-fi
-
-git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null 2>&1 || exit 0
-
-mempath=$(gitlore_memory_path)
-msgfile=$(gitlore_commit_msg_file "$mempath")
-
-dirty=$(gitlore_memory_dirty "$mempath")
-live_sha=$(git -C "$mempath" rev-parse live 2>/dev/null || echo "")
-head_sha=$(git -C "$mempath" rev-parse HEAD)
-
-if [ "$dirty" = "0" ] && [ "$head_sha" = "$live_sha" ]; then
-  exit 0
-fi
-
-if [ "$dirty" = "1" ]; then
-  fresh=$(gitlore_commit_msg_freshness "$mempath")
-  if [ "$fresh" != "yes" ]; then
-    gitlore_say_for_agent_or_user \
-      "gitlore: memory is dirty and has no approved commit summary. Prepare a summary, present it for user confirmation; treat only a clear, un-negated affirmative as approval (a hedge, a question, or any negation is a rejection). Only once approved, write it to $msgfile, then retry." \
-      "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry." >&2
-    exit 1
-  fi
-  gitlore_git -C "$mempath" add -A
-  # Blessed commit: carry the sentinel so the submodule gate (memory-pre-commit)
-  # admits it. A naked commit never sets this and is blocked (FR11).
-  GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile"
-  rm -f "$msgfile"
-fi
-
-if [ -n "$live_sha" ]; then
-  if ! gitlore_git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
-    # ff-push failed → branch-vs-live divergence. Prepare and yield.
-    if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
-      gitlore_say_for_agent_or_user \
-        "gitlore: cannot checkout live (already checked out elsewhere). Another session is resolving memory. Wait and retry." \
-        "gitlore: another session is resolving memory. Wait and retry." >&2
-      exit 1
-    fi
-    branch="${prep_out%%:*}"
-    base="${prep_out#*:}"
-    gitlore_write_merge_state "$mempath" "branch-vs-live" "$base" "$branch" "live" "$branch" "continue-after-branch-merge"
-    statefile=$(gitlore_merge_state_file "$mempath")
-    gitlore_emit_merge_directive "$statefile" "branch-vs-live" "continue-after-branch-merge"
-    exit 1
-  fi
-fi
-
-exit 0
+gitlore_sync_memory_to_live "$mempath"
+exit $?
