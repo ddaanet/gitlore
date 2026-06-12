@@ -1,4 +1,9 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
+# Assertion deliberately matches the literal string `$CLAUDE_PLUGIN_ROOT` to prove
+# it does NOT leak unexpanded; the single quotes are intentional.
+# shellcheck disable=SC2016
 bats_require_minimum_version 1.5.0
 
 load helpers/setup

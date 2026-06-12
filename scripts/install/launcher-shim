@@ -15,7 +15,8 @@ real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not fo
 # in a gitlore-enabled repo? cheap git checks first, so jq only runs for actual gitlore repos
 root=$(git rev-parse --show-toplevel 2>/dev/null)
 mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path 2>/dev/null)
-[ -n "$root" ] && [ -n "$mempath" ] || exec "$real" "$@"          # no gitlore submodule → passthrough
+# no gitlore submodule → passthrough
+if [ -z "$root" ] || [ -z "$mempath" ]; then exec "$real" "$@"; fi
 [ "$(jq -r '.gitlore.enabled // false' "$root/.claude/settings.json" 2>/dev/null)" = true ] \
   || exec "$real" "$@"                                            # submodule present but disabled → passthrough
 

@@ -4,7 +4,7 @@
 # Create a parent repo with a memory submodule pointing at a local bare repo.
 # Args: $1 = memory subpath (default "memory")
 make_parent_with_memory() {
-  cd "$TMP_REPO"
+  cd "$TMP_REPO" || return 1
   local subpath="${1:-memory}"
   local bare="$TMP_REPO/.bare-memory.git"
 
@@ -13,7 +13,7 @@ make_parent_with_memory() {
   seed_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-seed.XXXXXX")"
   git init -q -b main "$seed_dir"
   (
-    cd "$seed_dir"
+    cd "$seed_dir" || exit 1
     git config user.email "test@example.com"
     git config user.name  "Test"
     echo "# memory" > MEMORY.md
@@ -25,7 +25,7 @@ make_parent_with_memory() {
 
   git -c protocol.file.allow=always submodule add --name gitlore-memory "$bare" "$subpath" >/dev/null 2>&1
   (
-    cd "$subpath"
+    cd "$subpath" || exit 1
     git config user.email "test@example.com"
     git config user.name  "Test"
     git branch live

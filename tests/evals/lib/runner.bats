@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # Tests for run-evals.sh pre-flight behaviour.
 
-EVAL_LIB_DIR="$BATS_TEST_DIRNAME"
+# Consumed by the sourced setup.sh (`${EVAL_LIB_DIR:-…}`); export so it crosses.
+export EVAL_LIB_DIR="$BATS_TEST_DIRNAME"
 RUN_EVALS="$BATS_TEST_DIRNAME/../run-evals.sh"
 
 @test "run-evals: exits 1 with sandbox hint when SDK runner probe fails" {

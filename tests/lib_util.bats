@@ -1,4 +1,8 @@
 #!/usr/bin/env bats
+# Each @test is its own subshell; the per-test `export GITLORE_GIT_RETRY_SCHEDULE`
+# is consumed by the `run` on the next line within that same test. shellcheck's
+# "modified in a subshell / might be lost" is a false positive here.
+# shellcheck disable=SC2030,SC2031
 
 load helpers/setup
 load helpers/fixtures

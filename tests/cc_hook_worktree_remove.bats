@@ -37,7 +37,8 @@ teardown() {
 
   run bash "$HOOK" <<<"{\"worktree_path\":\"$WT\"}"
   [ "$status" -eq 0 ]
-  ! git -C "$mem_gitdir" worktree list --porcelain | grep -qF "$WT/memory"
+  run git -C "$mem_gitdir" worktree list --porcelain
+  [[ "$output" != *"$WT/memory"* ]]
 }
 
 @test "advisory: a locked memory worktree is not force-removed, hook still exits 0 with a warning" {
@@ -76,6 +77,7 @@ teardown() {
   rm -rf "$WT"   # parent worktree dir removed before the hook fires
   run bash "$HOOK" <<<"{\"worktree_path\":\"$WT\"}"
   [ "$status" -eq 0 ]
-  ! git -C "$mem_gitdir" worktree list --porcelain | grep -qF "$WT/memory"
+  run git -C "$mem_gitdir" worktree list --porcelain
+  [[ "$output" != *"$WT/memory"* ]]
   WT=""          # already removed; skip teardown rm
 }

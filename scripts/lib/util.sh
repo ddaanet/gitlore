@@ -8,6 +8,7 @@ readonly GITLORE_SUBMODULE_NAME
 # Marker phrase in the in-tree migration breadcrumb. Single source of truth,
 # matched as a fixed string by gitlore_is_migration_stub and written into the
 # stub body by gitlore_mark_migrated.
+# shellcheck disable=SC2016  # literal marker text; the backticks are not a command sub
 GITLORE_MIGRATION_MARKER='migrated in-tree by `/gitlore:install`'
 readonly GITLORE_MIGRATION_MARKER
 
