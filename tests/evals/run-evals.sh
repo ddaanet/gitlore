@@ -9,6 +9,7 @@ set -e
 # suppresses all hooks.
 command -v uv >/dev/null 2>&1 || { echo "error: uv not found (required for eval SDK runner)" >&2; exit 1; }
 
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Allow overrides for testing.
 SCENARIOS_DIR="${SCENARIOS_DIR:-$SCRIPT_DIR/scenarios}"

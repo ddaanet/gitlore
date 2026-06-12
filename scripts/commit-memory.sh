@@ -9,8 +9,11 @@ set -euo pipefail
 # Activation is the gitlore-memory submodule registration (FR12), same gate as
 # pre-commit. Discover this script via `git config gitlore.commitCommand`.
 
-# Defensive: a caller's env may carry leaked GIT_* vars (see pre-commit prologue).
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
+# Defensive: a caller's env may carry leaked repo-local GIT_* vars (see
+# pre-commit prologue). Clear the full local-env-var set, not a hand-picked
+# subset — GIT_COMMON_DIR/GIT_OBJECT_DIRECTORY can redirect submodule git ops.
+# shellcheck disable=SC2046  # intentional word-splitting of the var-name list
+unset $(git rev-parse --local-env-vars)
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
 # shellcheck disable=SC1091

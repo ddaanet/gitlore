@@ -117,7 +117,7 @@ gitlore_commit_msg_freshness() {
   msgfile=$(gitlore_commit_msg_file "$mempath") || return 1
   [ -f "$msgfile" ] || { printf 'absent\n'; return 0; }
   local newest=0 f m
-  while IFS= read -r -d '' f; do
+  while IFS= LC_ALL=C read -r -d '' f; do
     m=$(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f")
     [ "$m" -gt "$newest" ] && newest="$m"
   done < <(find "$mempath" -type f -not -path '*/.git/*' -print0)

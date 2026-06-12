@@ -6,6 +6,7 @@
 # Usage: bash tests/hook-test.sh   (run from repo root)
 set -euo pipefail
 
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 

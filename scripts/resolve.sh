@@ -2,6 +2,7 @@
 # Diagnose and repair gitlore remote state. Detection order matches
 # Section 6.2 of the spec. Idempotent: a healthy state produces no changes.
 set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
 
 # Derive plugin root: prefer the env var, fall back to the script's own location.
 # The fallback matters for continuation invocations dispatched from a sub-agent

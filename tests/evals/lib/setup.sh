@@ -3,6 +3,7 @@
 # Source this file, then call setup_eval_repo <initial_memory> and teardown_eval_repo.
 set -euo pipefail
 
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) captures below
 EVAL_LIB_DIR="${EVAL_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 PLUGIN_ROOT="${PLUGIN_ROOT:-$(cd "$EVAL_LIB_DIR/../../.." && pwd)}"
 

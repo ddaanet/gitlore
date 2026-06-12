@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
 
 precommit_cmd="$1"
 
