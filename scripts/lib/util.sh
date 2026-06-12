@@ -12,6 +12,32 @@ readonly GITLORE_SUBMODULE_NAME
 GITLORE_MIGRATION_MARKER='migrated in-tree by `/gitlore:install`'
 readonly GITLORE_MIGRATION_MARKER
 
+# Write an executable hook wrapper that resolves the live plugin via
+# `git config gitlore.hooksDir` and degrades to a clean skip (exit 0) when that
+# config is unset or the target hook is missing (plugin upgraded + cache GC'd),
+# so a transient plugin state never bricks a commit/push (NFR8/D5). Shared by the
+# parent-hook wrappers (emit-wrappers.sh) and the submodule gate (emit-memory-gate.sh).
+# Args: $1 = output file path; $2 = hook name to exec under HOOKS_DIR.
+gitlore_emit_hook_wrapper() {
+  local out="$1" hook="$2"
+  cat > "$out" <<EOF
+#!/usr/bin/env sh
+HOOKS_DIR=\$(git config gitlore.hooksDir 2>/dev/null)
+if [ -z "\$HOOKS_DIR" ]; then
+  echo "gitlore skipped: hooks not installed." >&2
+  echo "Install the gitlore plugin from the Claude Code marketplace, then start Claude Code in this repo." >&2
+  exit 0
+fi
+if [ ! -x "\$HOOKS_DIR/$hook" ]; then
+  echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
+  echo "Start Claude Code in this repo to refresh the hooks dir, then retry." >&2
+  exit 0
+fi
+exec "\$HOOKS_DIR/$hook" "\$@"
+EOF
+  chmod +x "$out"
+}
+
 # Print the memory submodule's working-tree path (relative to repo root).
 # Exit 1 if the submodule is not registered.
 gitlore_memory_path() {

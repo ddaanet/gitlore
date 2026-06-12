@@ -20,17 +20,32 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
+# Load shared continuation state: require an installed submodule and an existing
+# merge-state file, then set mempath/statefile/return_branch for the caller.
+# Args: $1 = "abort" to use the abort-flavored missing-state message; any other
+# value (or none) uses the default "no merge state file at <path>" message.
+load_continuation_state() {
+  gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
+  mempath=$(gitlore_memory_path)
+  statefile=$(gitlore_merge_state_file "$mempath")
+  if [ ! -f "$statefile" ]; then
+    if [ "${1:-}" = "abort" ]; then
+      echo "gitlore: no merge state file to abort" >&2
+    else
+      echo "gitlore: no merge state file at $statefile" >&2
+    fi
+    exit 1
+  fi
+  return_branch=$(jq -r .return_branch "$statefile")
+}
+
 # Subcommand dispatch (Plan 03 continuations).
 if [ $# -ge 1 ]; then
   subcmd="$1"
   shift
   case "$subcmd" in
     continue-after-branch-merge)
-      gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
-      mempath=$(gitlore_memory_path)
-      statefile=$(gitlore_merge_state_file "$mempath")
-      [ -f "$statefile" ] || { echo "gitlore: no merge state file at $statefile" >&2; exit 1; }
-      return_branch=$(jq -r .return_branch "$statefile")
+      load_continuation_state
       # Commit the merge (uses git's MERGE_MSG; live is HEAD = first parent per D6).
       # Blessed path: carry the sentinel past the submodule gate (FR11).
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
@@ -53,11 +68,7 @@ if [ $# -ge 1 ]; then
       exit 0
       ;;
     continue-after-remote-merge)
-      gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
-      mempath=$(gitlore_memory_path)
-      statefile=$(gitlore_merge_state_file "$mempath")
-      [ -f "$statefile" ] || { echo "gitlore: no merge state file at $statefile" >&2; exit 1; }
-      return_branch=$(jq -r .return_branch "$statefile")
+      load_continuation_state
       # Commit the merge (origin/live is HEAD = first parent per D6).
       # Blessed path: carry the sentinel past the submodule gate (FR11).
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
@@ -77,11 +88,7 @@ if [ $# -ge 1 ]; then
       exit 0
       ;;
     abort-then-retry)
-      gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
-      mempath=$(gitlore_memory_path)
-      statefile=$(gitlore_merge_state_file "$mempath")
-      [ -f "$statefile" ] || { echo "gitlore: no merge state file to abort" >&2; exit 1; }
-      return_branch=$(jq -r .return_branch "$statefile")
+      load_continuation_state abort
       gitlore_git -C "$mempath" merge --abort 2>/dev/null || true
       gitlore_git -C "$mempath" checkout -q "$return_branch" || true
       rm -f "$statefile"
