@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-mempath="$1"
-precommit_cmd="$2"
+precommit_cmd="$1"
 
 mkdir -p .claude
 
@@ -34,3 +33,4 @@ fi
 # Hook dir.
 plugin_root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 git config gitlore.hooksDir "${plugin_root}/scripts/git-hooks"
+git config gitlore.commitCommand "${plugin_root}/scripts/commit-memory.sh"
