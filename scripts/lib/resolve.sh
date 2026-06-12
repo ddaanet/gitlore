@@ -95,3 +95,80 @@ gitlore_prepare_local_vs_remote() {
   gitlore_git -C "$mempath" merge --no-commit --no-ff "$old_local" >/dev/null 2>&1 || true
   printf '%s:%s:%s\n' "$return_branch" "$base" "$old_local"
 }
+
+# Commit dirty memory with the blessed sentinel and fast-forward local `live`.
+# Assumes the memory worktree exists (caller guards `[ -e "$mempath/.git" ]`).
+# Returns 0 on success or no-op. Returns 1 after emitting a directive when:
+#   a stale merge state is present, memory is dirty without a fresh approved
+#   commit-msg file, or the `HEAD:live` fast-forward fails (branch-vs-live
+#   divergence). Source the util/log/resolve libs before calling.
+# Args: $1 = memory worktree path.
+gitlore_sync_memory_to_live() {
+  local mempath="$1"
+
+  # Stale merge-state precheck: never commit on top of a half-finished merge.
+  local state_status
+  state_status=$(gitlore_detect_stale_merge_state "$mempath")
+  case "$state_status" in
+    stale-with-merge-head)
+      local statefile flavor
+      statefile=$(gitlore_merge_state_file "$mempath")
+      flavor=$(jq -r .flavor "$statefile")
+      gitlore_emit_merge_directive "$statefile" "$flavor" "abort-then-retry"
+      return 1
+      ;;
+    stale-no-merge-head)
+      local statefile
+      statefile=$(gitlore_merge_state_file "$mempath")
+      echo "gitlore: merge state file present without MERGE_HEAD — manual intervention required. Inspect $statefile and the memory worktree." >&2
+      return 1
+      ;;
+  esac
+
+  local msgfile dirty live_sha head_sha
+  msgfile=$(gitlore_commit_msg_file "$mempath")
+  dirty=$(gitlore_memory_dirty "$mempath")
+  live_sha=$(git -C "$mempath" rev-parse live 2>/dev/null || echo "")
+  head_sha=$(git -C "$mempath" rev-parse HEAD)
+
+  if [ "$dirty" = "0" ] && [ "$head_sha" = "$live_sha" ]; then
+    return 0
+  fi
+
+  if [ "$dirty" = "1" ]; then
+    local fresh
+    fresh=$(gitlore_commit_msg_freshness "$mempath")
+    if [ "$fresh" != "yes" ]; then
+      gitlore_say_for_agent_or_user \
+        "gitlore: memory is dirty and has no approved commit summary. Prepare a summary, present it for user confirmation; treat only a clear, un-negated affirmative as approval (a hedge, a question, or any negation is a rejection). Only once approved, write it to $msgfile, then retry." \
+        "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry." >&2
+      return 1
+    fi
+    gitlore_git -C "$mempath" add -A
+    # Blessed commit: carry the sentinel so the submodule gate (memory-pre-commit)
+    # admits it. A naked commit never sets this and is blocked (FR11/D12).
+    GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile"
+    rm -f "$msgfile"
+  fi
+
+  if [ -n "$live_sha" ]; then
+    if ! gitlore_git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
+      # ff-push failed → branch-vs-live divergence. Prepare and yield.
+      local prep_out branch base statefile
+      if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
+        gitlore_say_for_agent_or_user \
+          "gitlore: cannot checkout live (already checked out elsewhere). Another session is resolving memory. Wait and retry." \
+          "gitlore: another session is resolving memory. Wait and retry." >&2
+        return 1
+      fi
+      branch="${prep_out%%:*}"
+      base="${prep_out#*:}"
+      gitlore_write_merge_state "$mempath" "branch-vs-live" "$base" "$branch" "live" "$branch" "continue-after-branch-merge"
+      statefile=$(gitlore_merge_state_file "$mempath")
+      gitlore_emit_merge_directive "$statefile" "branch-vs-live" "continue-after-branch-merge"
+      return 1
+    fi
+  fi
+
+  return 0
+}
