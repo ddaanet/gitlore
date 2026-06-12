@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -144,7 +146,10 @@ teardown() { teardown_tmp_repo; }
   # migrated content removed from source, replaced by a stub MEMORY.md
   src="$fake_home/.claude/projects/$encoded/memory"
   [ ! -f "$src/user_role.md" ]
-  ! grep -q "senior engineer" "$src/MEMORY.md"
+  run grep -q "senior engineer" "$src/MEMORY.md"
+  [ "$status" -ne 0 ]
+  # backticks are literal text in the stub; single quotes are intentional.
+  # shellcheck disable=SC2016
   grep -q 'migrated in-tree by `/gitlore:install`' "$src/MEMORY.md"
 }
 
@@ -183,6 +188,8 @@ teardown() { teardown_tmp_repo; }
   printf 'some migrated fact\n' > "$stub"
 
   HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  # backticks are literal text in the stub; single quotes are intentional.
+  # shellcheck disable=SC2016
   grep -q 'migrated in-tree by `/gitlore:install`' "$stub"
   mtime1=$(stat -c '%Y' "$stub" 2>/dev/null || stat -f '%m' "$stub")
   HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
@@ -212,8 +219,10 @@ EOF
   HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
   [ -f memory/MEMORY.md ]
   grep -q '# Memory Index' memory/MEMORY.md
-  ! grep -q 'migrated in-tree' memory/MEMORY.md
-  ! grep -q 'Do not add memory here' memory/MEMORY.md
+  run grep -q 'migrated in-tree' memory/MEMORY.md
+  [ "$status" -ne 0 ]
+  run grep -q 'Do not add memory here' memory/MEMORY.md
+  [ "$status" -ne 0 ]
 }
 
 @test "install removes .gitmodules from .gitignore when present" {
@@ -222,7 +231,8 @@ EOF
   git commit -q -m "Ignore sandbox artifacts"
   run bash "$RUN_INSTALL" memory "echo precommit"
   [ "$status" -eq 0 ]
-  ! grep -qx '\.gitmodules' .gitignore
+  run grep -qx '\.gitmodules' .gitignore
+  [ "$status" -ne 0 ]
   grep -qx '\.bash_profile' .gitignore  # other entries preserved
   staged=$(git diff --cached --name-only)
   [[ "$staged" == *".gitmodules"* ]]
@@ -257,7 +267,8 @@ EOF
   grep -qx '.claude/settings.local.json' .gitignore
   grep -qx 'node_modules' .gitignore
   # Verify there are no empty lines (lines matching nothing — a line with only whitespace)
-  ! grep -qE '^\s*$' .gitignore
+  run grep -qE '^\s*$' .gitignore
+  [ "$status" -ne 0 ]
 }
 
 @test "run.sh fails loudly with a paste-able command when repo root is unwritable" {
