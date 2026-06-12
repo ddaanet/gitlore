@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -35,6 +37,7 @@ teardown() {
   [ "$status" -eq 0 ]
   [ ! -f .claude/settings.local.json ]
   [ "$(git config gitlore.hooksDir)" = "$CLAUDE_PLUGIN_ROOT/scripts/git-hooks" ]
+  [ "$(git config gitlore.commitCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" ]
   [ -x .git/gitlore-pre-commit ]
   [ -x .git/gitlore-pre-push ]
 }

@@ -62,6 +62,7 @@ fi
 
 # Hook dir + wrappers.
 git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+git config gitlore.commitCommand "$PLUGIN_ROOT/scripts/commit-memory.sh"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
 # Sentinel replay: re-apply hook-setup recorded at install time.

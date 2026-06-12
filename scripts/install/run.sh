@@ -66,7 +66,7 @@ fi
 
 bash "$PLUGIN_ROOT/scripts/install/init-submodule.sh" "$mempath"
 bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath" "$remote_mode" "$remote_url"
-bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" "$mempath" "$precommit_cmd"
+bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" "$precommit_cmd"
 bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
