@@ -7,6 +7,20 @@ source "$(dirname "$0")/../lib/util.sh"
 mempath="$1"
 parent_root=$(git rev-parse --show-toplevel)
 
+# Append the gitlore-memory entry to .gitmodules unless it is already present.
+# Plan 02 rewrites the placeholder URL to a real remote. Idempotent.
+register_in_gitmodules() {
+  local placeholder_url="./.git/gitlore-placeholder"
+  if [ -f .gitmodules ] && grep -q '\[submodule "gitlore-memory"\]' .gitmodules; then
+    return 0
+  fi
+  {
+    printf '[submodule "gitlore-memory"]\n'
+    printf '\tpath = %s\n' "$mempath"
+    printf '\turl = %s\n' "$placeholder_url"
+  } >> .gitmodules
+}
+
 # Idempotency: three states —
 #   fully registered (.gitmodules has the entry)  → already_registered=1
 #   partial install (module store + gitfile, .gitmodules missing) → partial_install=1
@@ -64,31 +78,14 @@ EOF
   git config -f .git/modules/gitlore-memory/config core.worktree "../../../$mempath"
 
   # 5. Register in .gitmodules with a local placeholder URL.
-  #    Plan 02 rewrites this to a real remote.
-  placeholder_url="./.git/gitlore-placeholder"
-  if [ -f .gitmodules ] && grep -q '\[submodule "gitlore-memory"\]' .gitmodules; then
-    :
-  else
-    {
-      printf '[submodule "gitlore-memory"]\n'
-      printf '\tpath = %s\n' "$mempath"
-      printf '\turl = %s\n' "$placeholder_url"
-    } >> .gitmodules
-  fi
+  register_in_gitmodules
 
 fi
 
 # Partial install: steps 1–4 already ran (module store absorbed, gitfile in place),
 # but .gitmodules was never written (e.g. sandbox blocked the write).  Repair it.
 if [ "$partial_install" -eq 1 ]; then
-  placeholder_url="./.git/gitlore-placeholder"
-  if ! { [ -f .gitmodules ] && grep -q '\[submodule "gitlore-memory"\]' .gitmodules; }; then
-    {
-      printf '[submodule "gitlore-memory"]\n'
-      printf '\tpath = %s\n' "$mempath"
-      printf '\turl = %s\n' "$placeholder_url"
-    } >> .gitmodules
-  fi
+  register_in_gitmodules
 fi
 
 # Steps 6-7 operate on the submodule via `git -C "$mempath"` / `cd "$mempath"`.

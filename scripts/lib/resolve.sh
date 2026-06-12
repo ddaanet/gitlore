@@ -21,6 +21,33 @@ gitlore_detect_stale_merge_state() {
   fi
 }
 
+# Guard against a stale merge-state file before committing or pushing memory:
+# never operate on top of a half-finished merge. On a clean state, return 0
+# silently. Otherwise emit the appropriate directive/message on stderr and
+# return 1, so callers can `|| return 1` / `|| exit 1`.
+#   stale-with-merge-head → emit the abort-then-retry merge directive
+#   stale-no-merge-head    → emit a fatal manual-intervention message
+# Args: $1 = memory worktree path.
+gitlore_guard_stale_merge_state() {
+  local mempath="$1"
+  local state_status statefile flavor
+  state_status=$(gitlore_detect_stale_merge_state "$mempath")
+  case "$state_status" in
+    stale-with-merge-head)
+      statefile=$(gitlore_merge_state_file "$mempath")
+      flavor=$(jq -r .flavor "$statefile")
+      gitlore_emit_merge_directive "$statefile" "$flavor" "abort-then-retry"
+      return 1
+      ;;
+    stale-no-merge-head)
+      statefile=$(gitlore_merge_state_file "$mempath")
+      echo "gitlore: merge state file present without MERGE_HEAD — manual intervention required. Inspect $statefile and the memory worktree." >&2
+      return 1
+      ;;
+  esac
+  return 0
+}
+
 # Write a JSON merge-state file. All args required.
 # Args: $1=mempath  $2=flavor  $3=base_sha  $4=source_ref  $5=target_ref
 #       $6=return_branch  $7=continuation_subcommand
@@ -107,23 +134,7 @@ gitlore_sync_memory_to_live() {
   local mempath="$1"
 
   # Stale merge-state precheck: never commit on top of a half-finished merge.
-  local state_status
-  state_status=$(gitlore_detect_stale_merge_state "$mempath")
-  case "$state_status" in
-    stale-with-merge-head)
-      local statefile flavor
-      statefile=$(gitlore_merge_state_file "$mempath")
-      flavor=$(jq -r .flavor "$statefile")
-      gitlore_emit_merge_directive "$statefile" "$flavor" "abort-then-retry"
-      return 1
-      ;;
-    stale-no-merge-head)
-      local statefile
-      statefile=$(gitlore_merge_state_file "$mempath")
-      echo "gitlore: merge state file present without MERGE_HEAD — manual intervention required. Inspect $statefile and the memory worktree." >&2
-      return 1
-      ;;
-  esac
+  gitlore_guard_stale_merge_state "$mempath" || return 1
 
   local msgfile dirty live_sha head_sha
   msgfile=$(gitlore_commit_msg_file "$mempath")
