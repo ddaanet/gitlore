@@ -330,6 +330,16 @@ Push memory trunk: `git -C <memory-path> push origin live`.
 
 On failure (any cause — divergence, network, auth), exit 1 with a CLAUDECODE-branched message directing to `/gitlore:resolve`. The resolve script diagnoses the cause (fetches origin, determines flavor) and routes accordingly.
 
+#### Memory Commit Entry Point
+
+**`commit-memory.sh`** — a callable script (not a git hook) that commits the memory submodule and advances local `live` **without a parent commit**, so a skill can satisfy the FR11 gate at an interactive moment and a later non-interactive parent commit never trips it. See D16.
+
+Arg-driven, `git commit`-style: `-m <summary>`, `-F <file>`, or `-F -` (stdin/heredoc). It resolves the memory path, writes the summary to the commit-msg file, then calls the shared `gitlore_sync_memory_to_live`. Guards (exit 0): not a gitlore repo / no `gitlore-memory` submodule / submodule worktree absent / memory clean-and-synced. Dirty with no summary supplied → exit 1 with a caller-facing message.
+
+**Discovery.** A `gitlore.commitCommand` git config key resolves to `$PLUGIN_ROOT/scripts/commit-memory.sh`, re-pinned every `SessionStart` (self-healing across plugin-cache path changes, like `gitlore.hooksDir`, D5) and seeded at install in `write-settings.sh`. A caller finds the script with one `git config gitlore.commitCommand` lookup — no coupling to gitlore's internal layout.
+
+**Shared body.** `gitlore_sync_memory_to_live` (lib) is the commit-and-advance-live logic factored out of `pre-commit`: dirty/freshness gate → `add -A` → `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>` → `rm <msgfile>` → `push . HEAD:live` (ff) → divergence (prepare / write merge-state / emit directive / exit 1). Both `pre-commit` and `commit-memory.sh` call it — one implementation, no drift.
+
 ### Hook Manager Support
 
 Detection script outputs structured results. Each hook manager has an idempotent wiring step (uses marker comment `# gitlore: managed` to detect and skip duplicates) and a sentinel command stored in `.claude/gitlore-hook-setup` and replayed by SessionStart on clone or plugin reinstall.
@@ -588,6 +598,16 @@ A `PostToolUse` hook on the targeted matcher `EnterWorktree|ExitWorktree` (`scri
 
 Drift predicate (all read-only git, bail silently on any error): the current worktree's `--show-toplevel` differs from the launch root's, **and** both resolve to one shared `--git-common-dir` (a linked worktree of the *same* repo, not an unrelated directory). `ExitWorktree` restores cwd to the launch root, so the predicate is false and the hook is silent — the Enter-warns/Exit-silent asymmetry is intentional. The guard also requires the launch repo to be a gitlore-enabled repo with a registered memory submodule; otherwise there is no redirected memory to strand. No shim change is needed — the guard reads the frozen `CLAUDE_PROJECT_DIR` (already relied on by the `version-guard` hook) and compares it to the moved cwd.
 
+**D16 — Standalone memory-commit entry point (arg-driven)**
+
+The only blessed path to commit memory is committing the parent repo, which fires `pre-commit` (sentinel commit + advance `live`). That is wrong for a caller that wants to commit *only* memory at an interactive moment so a later non-interactive commit never trips the FR11 gate: the parent commit drags whatever else is staged (handoff has already `git add -f`'d its task file), it doesn't stage the submodule gitlink anyway, and a naked submodule commit is blocked by the D12 gate. The motivating caller is `/commit-commands:commit`, which forbids prompting; splitting review from commit otherwise causes drift or redundant reviews. So an interactive caller (`handoff`) couples review+commit once, up front, through a standalone entry point.
+
+The entry point is `scripts/commit-memory.sh`: it commits the dirty memory submodule with the `GITLORE_MEMORY_COMMIT=1` sentinel and advances local `live` (`push . HEAD:live`) — no parent commit. Origin push stays with `pre-push`. The commit-and-advance-live body it shares with `pre-commit` is factored into one lib function, `gitlore_sync_memory_to_live`; both callers invoke it, so the intricate divergence tail has a single implementation.
+
+**Arg-driven, not file-driven.** The script takes the approved summary as an argument (`-m`, `-F <file>`, `-F -`), mirroring `git commit`, and writes it to the commit-msg file itself. The file reverts to what it always was — the hook↔commit IPC handshake (D4) — and stops being the caller's contract, which keeps callers from reconstructing gitlore-internal paths. The freshness gate stays *inside* the shared body because `pre-commit` still needs it to refuse un-approved commits; on the script's path it is satisfied by construction (the summary is written immediately before the commit, so the mtime check always passes). The per-commit FR11 approval therefore rests on the *caller's* contract here — the interactive caller obtains explicit user approval before invoking — while the mtime gate continues to protect the non-interactive parent path. A blessed interactive entry point trusting its caller's approval is the intended split, not a hole.
+
+**Discovery via `gitlore.commitCommand`.** Re-pinned to `$PLUGIN_ROOT/scripts/commit-memory.sh` every `SessionStart` (the self-healing re-pin that absorbs plugin-cache path changes, exactly as `gitlore.hooksDir` does, D5) and seeded at install in `write-settings.sh`. Existing repos pick the key up on their next session — no reinstall. The key is a *path pin, not an activation signal*: a caller decides whether gitlore manages memory here from the `gitlore-memory` submodule registration in `.gitmodules` (FR12 — the same gate `pre-commit` uses, never stale), not from the presence of the key. The key only answers *where* the script is, and is trustworthy because `SessionStart` refreshed it this session; a caller should still verify the resolved path is executable and degrade with a "restart your session" hint rather than exec a missing path (the D5-extension staleness window). Graceful no-op (exit 0) mirrors the hook guards: not a gitlore repo / no `gitlore-memory` submodule / submodule worktree absent / memory clean-and-synced; dirty with no summary supplied refuses with a caller-facing message. Caller wiring is out of scope for the gitlore side: `handoff` consumes the key in its own work; `/commit-commands:commit` stays untouched until there is a second real caller.
+
 ---
 
 ## Rejected Alternatives
@@ -619,6 +639,9 @@ Drift predicate (all read-only git, bail silently on any error): the current wor
 | Explicit `gitlore` launch command instead of shadowing `claude` | Breaks the value proposition — users would have to remember a new command. Transparency (keep typing `claude`) is the goal; the shim shadows `claude` instead. |
 | Literal `.git/gitlore-<hook>` wrapper path | Fails in linked worktrees (`.git` is a gitlink file): write aborts SessionStart, exec blocks the commit. Replaced by the common-dir anchor (D11). |
 | Per-worktree wrapper anchor (`--git-path gitlore-<hook>`) | Reintroduces the commit-blocking gap in any worktree where no session has run, since the shared wired stub would exec a non-existent per-worktree wrapper. Common-dir anchor (D11) has no such gap. |
+| Trigger memory commit via a parent commit (pointer-bump / `--allow-empty` / unstage-everything-else) | All fight the hook's parent-commit requirement and the gitlink-staging wrinkle, and drag unrelated staged files. The standalone entry point (D16) sidesteps all of it. |
+| Reimplement the sentinel / `push HEAD:live` / merge-state logic in the caller (handoff) plugin | Fragile duplication of gitlore internals that would drift from `pre-commit`. The logic lives in gitlore behind `commit-memory.sh` (D16); callers resolve it via `gitlore.commitCommand`. |
+| Caller pre-writes the commit-msg file; entry point only validates freshness | Couples external callers to the gitlore-internal commit-msg path and keeps two approval semantics in the system. Arg-driven (D16) keeps one IPC handshake (D4) internal and a single `git commit`-style contract for callers. |
 
 ---
 
