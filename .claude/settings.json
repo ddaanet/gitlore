@@ -18,7 +18,8 @@
     "superpowers@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true,
     "commit-commands@claude-plugins-official": true,
-    "plugin-dev@claude-plugins-official": true
+    "plugin-dev@claude-plugins-official": true,
+    "handoff@ddaanet": true
   },
   "extraKnownMarketplaces": {
     "ddaanet": {
