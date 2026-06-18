@@ -26,8 +26,16 @@ exec 3>&1 1>&2
 # Standing commit-protocol orientation (Fix B / FR11). The base Claude Code memory
 # instructions describe generic "edit files, save facts" memory with no review gate;
 # in a gitlore repo that mental model is wrong and leads to direct submodule commits
-# that bypass the gate. Emit the correct protocol every session, before the agent acts.
-protocol_ctx="gitlore: memory in this repo lives in a git submodule guarded by a per-commit approval gate (FR11). NEVER commit inside the memory submodule directly — do not run 'git -C <mempath> commit' or 'cd <mempath> && git commit' (the submodule has a pre-commit hook that will block you). To persist memory: (1) summarize the pending memory changes in prose, (2) get explicit user approval, (3) write the approved summary to \$(git -C <mempath> rev-parse --git-path gitlore-commit-msg), (4) commit the PARENT repo — its pre-commit hook records, gates, and pushes memory for you."
+# that bypass the gate. Emit the *prohibition* every session, before the agent acts —
+# it guards an action the agent would otherwise take unprompted, so it cannot be
+# deferred. The four-step persist *procedure* is NOT preloaded: front-loading a recipe
+# reads as "a process you must run" and makes the agent run ceremony (pausing for
+# approval before even writing a memory file) when persistence is meant to be seamless.
+# The procedure is surfaced just-in-time instead — by the memory-pre-commit hook's own
+# output if a direct commit is blocked, and by /gitlore:resolve on divergence. Here we
+# keep only the prohibition plus the one-line seamless happy path (commit the parent;
+# the hook does the rest), which defuses over-worry rather than feeding it.
+protocol_ctx="gitlore: memory in this repo lives in a git submodule guarded by a per-commit approval gate (FR11). NEVER commit inside the memory submodule directly — do not run 'git -C <mempath> commit' or 'cd <mempath> && git commit' (the submodule has a pre-commit hook that will block you). Persisting memory is seamless: writing a memory file is an ordinary edit, and committing the PARENT repo is all you need — its pre-commit hook records, gates, and pushes memory for you."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook

@@ -75,8 +75,15 @@ teardown() {
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
+  # The prohibition (the one piece that must precede any action) is present...
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never commit"; "i")'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("commit the parent"; "i")'
+  # ...along with the one-line seamless happy path (commit the parent; hook handles it).
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("PARENT repo"; "i")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("seamless"; "i")'
+  # ...but the four-step persist *procedure* is NOT front-loaded — it is surfaced
+  # just-in-time by the pre-commit hook / gitlore:resolve, not the always-on context.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("explicit user approval"; "i") | not'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("rev-parse --git-path gitlore-commit-msg"; "i") | not'
 }
 
 @test "wires the submodule commit gate (memory-pre-commit) into the submodule hooks dir" {
