@@ -1,10 +1,12 @@
 #!/usr/bin/env bats
+# shellcheck disable=SC2030,SC2031
 
 load helpers/setup
 load helpers/fixtures
 
 SRC="$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
+# shellcheck disable=SC1090
 setup() { setup_tmp_repo; . "$SRC"; }
 teardown() { teardown_tmp_repo; }
 
@@ -42,6 +44,7 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "body" ]
 }
 
+# shellcheck disable=SC2016
 @test "set_frontmatter_description: YAML-escapes quotes, colons, backticks" {
   printf -- '---\ndescription: x\n---\n' > f.md
   gitlore_set_frontmatter_description f.md 'has "quote": a `tick` and \ slash'
@@ -56,4 +59,31 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "1" ]
   run grep -c '^description: "changed"' f.md
   [ "$output" = "1" ]
+}
+
+PRE="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
+
+pre_stdin() { printf '%s' "$1" | bash "$PRE"; }
+
+@test "pre: stashes MEMORY.md when the edited file is the index" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '- [a](a.md) — before\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  payload=$(jq -n --arg f "$abs" '{tool_name:"Edit",tool_input:{file_path:$f}}')
+  run pre_stdin "$payload"
+  [ "$status" -eq 0 ]
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  [ -f "$stash" ]
+}
+
+@test "pre: no-op when the edited file is not the index" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '- [a](a.md) — before\n' > memory/MEMORY.md
+  payload=$(jq -n --arg f "$PWD/memory/other.md" '{tool_name:"Write",tool_input:{file_path:$f}}')
+  run pre_stdin "$payload"
+  [ "$status" -eq 0 ]
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  [ ! -f "$stash" ]
 }
