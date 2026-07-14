@@ -1,7 +1,7 @@
 ## Current task
 
-D17 (tiered memory) design is revised and captured in `docs/design.md` + memory; the resumable next step is writing implementation plan 1 = authoring-time bidirectional index↔frontmatter sync (Pre/Post `Write|Edit`), per the D17 sequence: sync → one-time reconcile (dogfood here) → structural recompose + first nested tier.
+D17 tiered-memory slice 1 (one-way index→frontmatter sync) is designed in `docs/design.md` and fully planned at `docs/superpowers/plans/2026-07-15-index-frontmatter-sync.md` (4 TDD tasks: lib helpers → PreToolUse stash → PostToolUse diff-and-propagate → wire hooks.json + e2e); next is executing the plan task-by-task.
 
 ## Open decisions
 
-- Whether to build the authoring-time bidi sync at all, or declare the index one-liner canonical and skip it (frontmatter drift is low-harm — it's the weaker retrieval lever). The reconcile depends on the sync existing first, so this choice gates the whole sequence; decide before planning.
+- Execution mode for the plan: subagent-driven (fresh agent per task, review between tasks — recommended by writing-plans) vs. inline batch execution in one session.
