@@ -7,8 +7,14 @@ lint:
 
 test: test-unit test-integration
 
+# Discovered by glob, not hand-listed: an explicit list silently orphans new
+# suites (five drifted off it, incl. the FR11 memory-gate cover). Integration =
+# tests/integration_*.bats + the evals libs; unit = every other tests/*.bats.
+INTEGRATION_TESTS := $(wildcard tests/integration_*.bats) $(wildcard tests/evals/lib/*.bats)
+UNIT_TESTS := $(filter-out $(INTEGRATION_TESTS),$(wildcard tests/*.bats))
+
 test-unit:
-	bats tests/lib_util.bats tests/lib_log.bats tests/hook_manager_detect.bats tests/hook_manager_wire.bats tests/emit_wrappers.bats tests/cc_hook_session_start.bats tests/cc_hook_post_tool_use.bats tests/cc_hook_worktree_drift.bats tests/git_hook_pre_commit.bats tests/install_run.bats tests/smoke.bats tests/pre_push_hook.bats tests/gh_mock.bats tests/install_remote.bats tests/resolve.bats tests/resolve_merge_branch.bats tests/resolve_merge_remote.bats tests/resolve_both_flavors.bats tests/resolve_recovery.bats tests/plugin_distribution.bats tests/launcher_shim.bats tests/emit_launcher.bats tests/global_shim.bats tests/cc_hook_worktree_remove.bats tests/check_version.bats tests/lint_shell.bats tests/index_sync.bats
+	bats $(UNIT_TESTS)
 
 # Fail if plugin.json drifts from the gitlore entry in the sibling marketplace
 # repo (../claude-plugins). Skips cleanly when that repo isn't checked out.
@@ -16,7 +22,7 @@ check-version:
 	scripts/check-version.sh
 
 test-integration:
-	bats tests/integration_happy_path.bats tests/integration_clone_restore.bats tests/evals/lib/setup.bats tests/evals/lib/judge.bats tests/evals/lib/runner.bats
+	bats $(INTEGRATION_TESTS)
 
 .PHONY: evals
 evals:
