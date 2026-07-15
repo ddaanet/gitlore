@@ -13,6 +13,14 @@ real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not fo
 # already injected upstream? pass through (composability, anti-double-inject, anti-recursion)
 [ -n "$GITLORE_LAUNCHED" ] && exec "$real" "$@"
 
+# Opt-in: load the plugin from the checkout you are standing in rather than the
+# marketplace cache (which lags the repo at the same version string). Default off
+# so a plugin repo does not silently shadow the installed plugin; set the env var
+# in your rc if you develop plugins. Applies to every exec path below.
+if [ -n "$GITLORE_AUTO_CLAUDE_PLUGIN_DIR" ] && [ -f .claude-plugin/plugin.json ]; then
+  set -- --plugin-dir . "$@"
+fi
+
 # in a gitlore-enabled repo? cheap git checks first, so jq only runs for actual gitlore repos
 root=$(git rev-parse --show-toplevel 2>/dev/null)
 mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path 2>/dev/null)

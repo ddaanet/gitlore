@@ -123,6 +123,11 @@ real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not fo
 # already injected upstream? pass through (composability, anti-double-inject, anti-recursion)
 [ -n "$GITLORE_LAUNCHED" ] && exec "$real" "$@"
 
+# opt-in: load the plugin from the checkout you're standing in, not the marketplace cache
+if [ -n "$GITLORE_AUTO_CLAUDE_PLUGIN_DIR" ] && [ -f .claude-plugin/plugin.json ]; then
+  set -- --plugin-dir . "$@"
+fi
+
 # in a gitlore-enabled repo? cheap git checks first, so jq only runs for actual gitlore repos
 root=$(git rev-parse --show-toplevel 2>/dev/null)
 mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path 2>/dev/null)
@@ -137,6 +142,7 @@ exec "$real" --settings "$json" "$@"
 
 - **Real-claude resolution.** The shim strips its own directory from `PATH`, then takes the next `claude`. That next entry is normally Claude Code's own version-selector launcher (`~/.local/bin/claude`), so version selection is preserved — the shim chains to it rather than pinning a version.
 - **`GITLORE_LAUNCHED` sentinel.** Set before exec. Does triple duty: (a) when both shims are on `PATH`, the repo-local one runs first, execs the global one which sees the sentinel and passes through — no double injection; (b) guards against any accidental recursion; (c) lets `SessionStart` detect a plain `claude` launch (sentinel unset) and warn loudly instead of silently stranding memory.
+- **`GITLORE_AUTO_CLAUDE_PLUGIN_DIR` (opt-in, default off).** When the var is non-empty *and* the cwd holds a `.claude-plugin/plugin.json`, the shim prepends `--plugin-dir .`, so Claude Code loads the plugin from the checkout you are standing in rather than the marketplace cache — which lags the repo at the same version string, making plugin changes untestable without a reinstall. Default-off is the point: silently shadowing an installed plugin whenever a user cd's into its source tree would be surprising and could mask a released version with dirty working-tree code. Opting in is a one-line rc export for people who develop plugins. Injected via `set -- --plugin-dir . "$@"` before the repo checks, so it applies on every exec path (passthrough included) — a plugin checkout need not be a gitlore repo. The `GITLORE_LAUNCHED` sentinel still short-circuits first, so an upstream shim's decision wins.
 - **Path built with `jq`.** Handles spaces/quoting safely; computed at runtime so committed shims stay portable across clones. `--settings` loads an *additional* settings tier (`flagSettings`), so only `autoMemoryDirectory` is overridden; all other settings still resolve from their normal tiers.
 
 **Placement A — repo-local, direnv (default).** `/gitlore:install` emits two **committed** files: `.gitlore/bin/claude` (the shim) and `.envrc`. The `.envrc` must put `.gitlore/bin` at the **front** of `$PATH` so the shim shadows the real `claude` (shim before payload). direnv's `PATH_add .gitlore/bin` prepends, which is exactly this. When creating `.envrc` from scratch, `source_up_if_exists` is written as the first line so parent-directory direnv configs are inherited. Subtlety with an existing `.envrc`: direnv evaluates top-to-bottom and each `PATH_add` prepends, so the *last* `PATH_add` wins the front slot — gitlore's line must be inserted after any pre-existing `PATH_add` (idempotent no-op if already present). After a one-time `direnv allow`, the shim is on `PATH` only inside the repo tree (subdirectories included). Both files travel with the repo, so every clone gets the transparent launcher after `direnv allow`. The path is namespaced under `.gitlore/bin/` to avoid colliding with a project's own `bin/`.
