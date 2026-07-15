@@ -63,6 +63,22 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "1" ]
 }
 
+@test "set_frontmatter_description: no .gitlore.tmp survives when awk itself fails (not the redirect)" {
+  printf -- '---\ndescription: old\n---\n' > f.md
+  # Shadow awk with a stub that always fails, so the redirect (which creates
+  # f.md.gitlore.tmp) succeeds but the command itself does not — distinct
+  # from the chmod-555 case, which fails the redirect before awk ever runs.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  printf '#!/bin/sh\nexit 1\n' > "$fakebin/awk"
+  chmod +x "$fakebin/awk"
+  PATH="$fakebin:$PATH" run gitlore_set_frontmatter_description f.md "new"
+  [ "$status" -ne 0 ]                      # failure status preserved
+  [ ! -e f.md.gitlore.tmp ]                # no leftover temp file
+  run grep '^description:' f.md
+  [ "$output" = 'description: old' ]       # original file untouched
+}
+
 PRE="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
 
 pre_stdin() { printf '%s' "$1" | bash "$PRE"; }
@@ -140,6 +156,34 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   [ "$output" = 'description: keep' ]
 }
 
+@test "post: does NOT rewrite the index itself even via a self-referential index line" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '---\ndescription: index desc\n---\n- [Index](MEMORY.md) — old\n' > "$stash"
+  printf -- '---\ndescription: index desc\n---\n- [Index](MEMORY.md) — new\n' > memory/MEMORY.md
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run post_stdin "$payload"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/MEMORY.md
+  [ "$output" = 'description: index desc' ]   # untouched — self-reference guard
+}
+
+@test "post: rejects an index line with a '..' path component (no write outside the memory dir)" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  mkdir -p outside
+  printf -- '---\ndescription: outside orig\n---\n' > outside/evil.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [Evil](../outside/evil.md) — old\n' > "$stash"
+  printf -- '- [Evil](../outside/evil.md) — new\n' > memory/MEMORY.md
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run post_stdin "$payload"
+  [ "$status" -eq 0 ]
+  run grep '^description:' outside/evil.md
+  [ "$output" = 'description: outside orig' ]   # untouched — traversal guard
+}
+
 @test "post: a failed frontmatter write surfaces via systemMessage and does not abort other files' sync" {
   [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits; cannot force a write failure"
   make_parent_with_memory
@@ -214,6 +258,11 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   printf '%s' "$post_payload" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
   run grep '^description:' memory/a.md
   [ "$output" = 'description: "brand new hook line"' ]
+}
+
+@test "e2e: both index-sync hook scripts are executable" {
+  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh" ]
+  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh" ]
 }
 
 @test "e2e: hooks.json registers both Write|Edit index-sync hooks" {

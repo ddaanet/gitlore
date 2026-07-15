@@ -28,18 +28,36 @@ gitlore_index_pairs() {
 # Rewrite the first `description:` line inside a file's leading frontmatter
 # block to a JSON-quoted (=> YAML-safe) scalar of $2. In place.
 gitlore_set_frontmatter_description() {
-  local file="$1" newdesc="$2" quoted repl
+  local file="$1" newdesc="$2" quoted repl tmp status
   quoted=$(jq -Rn --arg d "$newdesc" '$d')   # e.g. "has \"quote\": ..."
   repl="description: $quoted"
-  # Pass repl via ENVIRON so awk does no escape processing on it.
-  GITLORE_REPL="$repl" awk '
+  tmp="$file.gitlore.tmp"
+  # Pass repl via ENVIRON so awk does no escape processing on it. Both the
+  # awk call and the mv are the condition of this `if`, so either one
+  # failing (awk itself, the redirect that creates $tmp, or the mv) is
+  # caught here instead of tripping errexit; on failure the (possibly
+  # empty or partially-written) $tmp is removed so it never survives
+  # inside the memory worktree — an untracked leftover there would make
+  # gitlore_memory_dirty report dirty and get swept up by the FR11 memory
+  # gate's `git add -A`. The original failing command's status is
+  # preserved and returned so callers' `if !` guard still fires.
+  if GITLORE_REPL="$repl" awk '
     BEGIN { dashes = 0; done = 0 }
     /^---[[:space:]]*$/ { dashes++; print; next }
     (dashes == 1 && !done && /^description:/) {
       print ENVIRON["GITLORE_REPL"]; done = 1; next
     }
     { print }
-  ' "$file" > "$file.gitlore.tmp" && mv "$file.gitlore.tmp" "$file"
+  ' "$file" > "$tmp" && mv "$tmp" "$file"; then
+    return 0
+  else
+    # $? after a bare `if cond; then ...; fi` with no branch taken is 0, not
+    # the condition's status (POSIX) — capture it here, in the else branch,
+    # while it is still live.
+    status=$?
+    rm -f "$tmp"
+    return "$status"
+  fi
 }
 
 # Abs/relative path of the pre-edit MEMORY.md stash, inside the submodule
