@@ -199,3 +199,26 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   [ -n "$stderr" ]
   [ ! -f "$stash" ]
 }
+
+@test "e2e: pre-then-post syncs a description edited only in the index" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD\n---\nbody\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook line\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  pre_payload=$(jq -n --arg f "$abs" '{tool_name:"Edit",tool_input:{file_path:$f}}')
+  printf '%s' "$pre_payload" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
+  # the "edit" happens between pre and post:
+  printf -- '- [A](a.md) — brand new hook line\n' > memory/MEMORY.md
+  post_payload=$(jq -n --arg f "$abs" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  printf '%s' "$post_payload" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "brand new hook line"' ]
+}
+
+@test "e2e: hooks.json registers both Write|Edit index-sync hooks" {
+  run jq -r '.hooks.PreToolUse[] | select(.matcher=="Write|Edit") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
+  [[ "$output" == *index-sync-pre.sh ]]
+  run jq -r '.hooks.PostToolUse[] | select(.matcher=="Write|Edit") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
+  [[ "$output" == *index-sync-post.sh ]]
+}
