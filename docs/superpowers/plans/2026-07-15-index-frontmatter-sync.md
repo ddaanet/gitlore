@@ -4,7 +4,7 @@
 
 **Goal:** When the agent edits the root `MEMORY.md` index one-liner for a memory file, automatically mirror the edited hook text into that file's frontmatter `description` — one-way, index→frontmatter only.
 
-**Architecture:** A `PreToolUse(Write|Edit)` hook stashes the pre-edit `MEMORY.md`; a `PostToolUse(Write|Edit)` hook diffs the post-edit `MEMORY.md` against the stash and, for **only the index lines whose hook actually changed**, rewrites the target file's frontmatter `description`. One-way because the index is canonical (D17): the hook never writes the index, and a frontmatter-only edit never triggers propagation. Diffing pre-vs-post (not a blanket sweep) is what protects fresh frontmatter sitting under an unrelated *stale* index line.
+**Architecture:** *(Superseded 2026-07-15 after execution: the post half moved to `PostToolBatch` so a turn with several index edits syncs and reports once, and it now reports the replacement on `systemMessage`/`additionalContext`. See D17 in `docs/design.md` for the current wiring; the rest of this plan stands as executed.)* A `PreToolUse(Write|Edit)` hook stashes the pre-edit `MEMORY.md`; a `PostToolUse(Write|Edit)` hook diffs the post-edit `MEMORY.md` against the stash and, for **only the index lines whose hook actually changed**, rewrites the target file's frontmatter `description`. One-way because the index is canonical (D17): the hook never writes the index, and a frontmatter-only edit never triggers propagation. Diffing pre-vs-post (not a blanket sweep) is what protects fresh frontmatter sitting under an unrelated *stale* index line.
 
 **Tech Stack:** POSIX-ish bash (must run on macOS bash 3.2 and Linux), `jq` (already a hard dependency), `awk` (portable one-true-awk/BSD + gawk), bats tests.
 

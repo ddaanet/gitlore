@@ -23,6 +23,14 @@ index="$mempath/MEMORY.md"
 [ "$file" -ef "$index" ] || exit 0
 
 stash=$(gitlore_index_preimage_file "$mempath")   # absolute; parent dir exists
+
+# First index edit of the batch establishes the baseline; later ones in the
+# same batch must not overwrite it, or the batch-end sync would diff against a
+# mid-batch state and miss everything the earlier edits changed. The post-hook
+# removes the stash at batch end (even when the index went untouched), so an
+# existing stash here always belongs to the batch in flight.
+if [ -f "$stash" ]; then exit 0; fi
+
 if ! cp "$index" "$stash" 2>/dev/null; then
   # Never exit 2 (would block the Write) and never exit 1 (stdout JSON is
   # only parsed on exit 0 — D14). systemMessage + exit 0 is the only channel

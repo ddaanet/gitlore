@@ -7,20 +7,38 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
+# PostToolBatch, not PostToolUse: it fires once per turn carrying every call in
+# .tool_calls[], so a turn with three Edits to the index syncs — and reports —
+# once, instead of repeating itself per edit.
 payload=$(cat)
-tool=$(jq -r '.tool_name // empty' <<<"$payload")
-case "$tool" in Write|Edit) ;; *) exit 0 ;; esac
-
-file=$(jq -r '.tool_input.file_path // empty' <<<"$payload")
-[ -n "$file" ] || exit 0
+files=$(jq -r '
+  .tool_calls[]? | select(.tool_name == "Write" or .tool_name == "Edit")
+  | .tool_input.file_path // empty' <<<"$payload")
+[ -n "$files" ] || exit 0   # read-only batch
 
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
 index="$mempath/MEMORY.md"
 [ -e "$index" ] || exit 0
-[ "$file" -ef "$index" ] || exit 0
 
 stashfile=$(gitlore_index_preimage_file "$mempath")   # absolute
+
+# Did any call in this batch write the index? Identity via -ef, as in the pre-hook.
+touched=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  if [ -e "$f" ] && [ "$f" -ef "$index" ]; then touched=1; break; fi
+done <<<"$files"
+
+if [ -z "$touched" ]; then
+  # The index survived this batch untouched, so there is nothing to propagate.
+  # Still drop any stash: one stranded by an interrupted batch would otherwise
+  # become the baseline for a later, unrelated edit and over-propagate. This
+  # bounds a stale pre-image to a single batch.
+  rm -f "$stashfile"
+  exit 0
+fi
+
 [ -f "$stashfile" ] || exit 0   # no baseline → nothing to diff
 
 pre_pairs=$(gitlore_index_pairs "$stashfile")
@@ -70,28 +88,37 @@ rm -f "$stashfile"
 
 # Both halves land in ONE object: two jq calls would print two concatenated
 # objects, which CC does not parse. Build the strings here, encode once below.
+#
+# The two channels are deliberately asymmetric. The user gets one line — the
+# sync is routine, and the before/after detail is noise they did not ask for.
+# The agent gets the full replacement list: at the explicitness needed for
+# compliance, every clause there earns its place.
 sysmsg=""
 ctx=""
 if [ -n "$replaced" ]; then
-  sysmsg="gitlore: synced description: to the MEMORY.md index line (canonical) —$replaced"
+  n=$(printf '%s' "$replaced" | grep -c '•')
+  if [ "$n" -eq 1 ]; then unit="file"; else unit="files"; fi
+  sysmsg="gitlore: reset frontmatter to match MEMORY.md ($n $unit)"
   # Model-only channel: without it the agent re-reads the files to work out
   # what the hook did. Does NOT inject under --print (tested via systemMessage).
   ctx="The gitlore index→frontmatter sync already rewrote the description: line of these memory files to match the index hook, which is canonical. This is expected and complete — do not re-read or re-edit them to verify. If a replaced description carried meaning the index hook loses, fix the index line, not the file.$replaced"
 fi
 if [ -n "$failed" ]; then
-  # Never exit 1/2 here: PostToolUse cannot block/undo (the tool already ran),
-  # and stdout JSON is only parsed on exit 0 (D14) — systemMessage + exit 0 is
-  # the only channel proven user-visible. stderr above is a debug-log echo.
+  # Never exit 1/2 here: the batch already ran, so a non-zero exit cannot undo
+  # it — it would only discard this JSON, since stdout is parsed on exit 0 only
+  # (D14). A failure names its file: unlike the routine sync, it needs action.
   if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
 "; fi
   sysmsg="${sysmsg}gitlore: index→frontmatter sync failed for: $failed — check file/directory permissions; the description may now be stale"
 fi
 
 if [ -n "$sysmsg" ]; then
+  # suppressOutput hides the raw stdout from the transcript; systemMessage is
+  # the user's channel, additionalContext the model's.
   jq -n --arg s "$sysmsg" --arg c "$ctx" \
-    '{systemMessage: $s}
+    '{systemMessage: $s, suppressOutput: true}
      + (if $c == "" then {} else
-         {hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}
+         {hookSpecificOutput: {hookEventName: "PostToolBatch", additionalContext: $c}}
        end)'
 fi
 exit 0
