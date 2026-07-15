@@ -23,5 +23,12 @@ index="$mempath/MEMORY.md"
 [ "$file" -ef "$index" ] || exit 0
 
 stash=$(gitlore_index_preimage_file "$mempath")   # absolute; parent dir exists
-cp "$index" "$stash" || exit 0   # stash failed → no baseline; never block the Write
+if ! cp "$index" "$stash" 2>/dev/null; then
+  # Never exit 2 (would block the Write) and never exit 1 (stdout JSON is
+  # only parsed on exit 0 — D14). systemMessage + exit 0 is the only channel
+  # proven user-visible regardless of exit code; stderr is a debug-log echo.
+  printf 'gitlore: failed to stash the pre-edit MEMORY.md (%s)\n' "$stash" >&2
+  jq -n --arg stash "$stash" \
+    '{systemMessage: ("gitlore: failed to stash the pre-edit MEMORY.md (" + $stash + "); index→frontmatter sync will be skipped for this edit")}'
+fi
 exit 0
