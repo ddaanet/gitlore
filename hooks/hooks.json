@@ -40,9 +40,10 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/worktree-drift.sh"
           }
         ]
-      },
+      }
+    ],
+    "PostToolBatch": [
       {
-        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",

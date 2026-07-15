@@ -133,6 +133,75 @@ POST="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
 
 post_stdin() { printf '%s' "$1" | bash "$POST"; }
 
+# PostToolBatch payload: every call of the turn under .tool_calls[], so the
+# sync runs once per batch however many Edits it contains. $1.. = file paths.
+batch_payload() {
+  local f json='[]'
+  for f in "$@"; do
+    json=$(jq -c --arg f "$f" '. + [{tool_name:"Edit",tool_input:{file_path:$f}}]' <<<"$json")
+  done
+  jq -n --argjson c "$json" '{hook_event_name:"PostToolBatch", tool_calls:$c, tool_results:[]}'
+}
+
+@test "post: fires ONCE for a batch containing several index edits" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\ndescription: stale\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old\n' > "$stash"
+  printf -- '- [A](a.md) — new\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  # Three Edits to the index in one turn — the user must still see one line.
+  run post_stdin "$(batch_payload "$abs" "$abs" "$abs")"
+  [ "$status" -eq 0 ]
+  run jq -r '.systemMessage' <<<"$output"
+  [ "${#lines[@]}" -eq 1 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "new"' ]
+}
+
+@test "post: syncs when the index edit is one call among unrelated ones" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\ndescription: stale\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old\n' > "$stash"
+  printf -- '- [A](a.md) — new\n' > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/src.txt" "$PWD/memory/MEMORY.md" "$PWD/other.txt")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "new"' ]
+}
+
+@test "post: a batch that never touched the index still clears a leftover stash" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\ndescription: keep me\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old\n' > "$stash"     # stranded by an interrupted batch
+  printf -- '- [A](a.md) — new\n' > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/unrelated.txt")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: keep me' ]   # no sync — the index was not edited
+  [ ! -f "$stash" ]                        # but staleness is bounded to one batch
+}
+
+@test "post: hookEventName is PostToolBatch and stdout is suppressed from the transcript" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\ndescription: stale\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old\n' > "$stash"
+  printf -- '- [A](a.md) — new\n' > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  json="$output"
+  run jq -r '.hookSpecificOutput.hookEventName' <<<"$json"
+  [ "$output" = "PostToolBatch" ]
+  run jq -r '.suppressOutput' <<<"$json"
+  [ "$output" = "true" ]
+}
+
 # Seed a stash + a memory file, edit the index, run post.
 @test "post: propagates a CHANGED index hook into the file's frontmatter" {
   make_parent_with_memory
@@ -141,29 +210,31 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)   # abs
   printf -- '- [A](a.md) — old hook\n' > "$stash"             # pre-image
   printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md     # post-edit
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   run grep '^description:' memory/a.md
   [ "$output" = 'description: "new hook"' ]
   [ ! -f "$stash" ]   # stash consumed
 }
 
-@test "post: names the file and shows what it REPLACED in systemMessage" {
+@test "post: systemMessage is ONE terse line; the replaced text goes to the agent only" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   printf -- '---\nname: a\ndescription: considered prose the agent authored\n---\nbody\n' > memory/a.md
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
   printf -- '- [A](a.md) — old hook\n' > "$stash"
   printf -- '- [A](a.md) — terse hook\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
-  run jq -r '.systemMessage' <<<"$output"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"a.md"* ]]
-  [[ "$output" == *"considered prose the agent authored"* ]]   # what was clobbered
-  [[ "$output" == *"terse hook"* ]]                            # what replaced it
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [ "${#lines[@]}" -eq 1 ]                                     # one line, no bullets
+  [[ "$output" == *"MEMORY.md"* ]]
+  [[ "$output" != *"considered prose the agent authored"* ]]   # detail is not the user's problem
+  # The agent still gets the full before/after — explicitness buys compliance.
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [[ "$output" == *"considered prose the agent authored"* ]]
+  [[ "$output" == *"terse hook"* ]]
 }
 
 @test "post: tells the agent via additionalContext so it need not re-derive" {
@@ -173,12 +244,11 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
   printf -- '- [A](a.md) — old hook\n' > "$stash"
   printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   json="$output"   # each `run` clobbers $output; keep the JSON to re-query
   run jq -r '.hookSpecificOutput.hookEventName' <<<"$json"
-  [ "$output" = "PostToolUse" ]
+  [ "$output" = "PostToolBatch" ]
   run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
   [ "$status" -eq 0 ]
   [[ "$output" == *"a.md"* ]]
@@ -191,10 +261,9 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
   printf -- '- [A](a.md) — old hook\n' > "$stash"
   printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
-  run jq -r '.systemMessage' <<<"$output"
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$output"
   [[ "$output" == *"unset"* ]]
   [[ "$output" == *"a.md"* ]]
 }
@@ -208,8 +277,7 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
   printf -- '- [A](a.md) — old hook\n' > "$stash"
   printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
@@ -225,16 +293,18 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   printf -- '- [A](locked/a.md) — old a\n- [B](b.md) — old b\n' > "$stash"
   printf -- '- [A](locked/a.md) — new a\n- [B](b.md) — new b\n' > memory/MEMORY.md
   chmod 555 memory/locked
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run --separate-stderr post_stdin "$payload"
+  run --separate-stderr post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   chmod 755 memory/locked
   [ "$status" -eq 0 ]
   # A single object: two jq objects concatenated would not parse as one.
   run jq -e '.' <<<"$output"
   [ "$status" -eq 0 ]
-  run jq -r '.systemMessage' <<<"$output"
-  [[ "$output" == *"locked/a.md"* ]]   # the failure
-  [[ "$output" == *"stale b"* ]]       # the successful replacement
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [[ "$output" == *"locked/a.md"* ]]   # the failure names the file — it needs action
+  [[ "$output" == *"MEMORY.md"* ]]     # alongside the terse success line
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [[ "$output" == *"stale b"* ]]       # the successful replacement, agent-side
 }
 
 @test "post: does NOT touch a file whose index line is UNCHANGED (protects fresh frontmatter)" {
@@ -247,8 +317,7 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   printf -- '---\ndescription: x\n---\n' > memory/a.md
   printf -- '- [A](a.md) — old\n- [B](b.md) — stale index for b\n' > "$stash"
   printf -- '- [A](a.md) — new\n- [B](b.md) — stale index for b\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   run grep '^description:' memory/b.md
   [ "$output" = 'description: fresh frontmatter' ]   # untouched — the key guard
   run grep '^description:' memory/a.md
@@ -260,8 +329,7 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   printf -- '---\ndescription: keep\n---\n' > memory/a.md
   printf -- '- [A](a.md) — whatever\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   run grep '^description:' memory/a.md
   [ "$output" = 'description: keep' ]
@@ -273,8 +341,7 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
   printf -- '---\ndescription: index desc\n---\n- [Index](MEMORY.md) — old\n' > "$stash"
   printf -- '---\ndescription: index desc\n---\n- [Index](MEMORY.md) — new\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   run grep '^description:' memory/MEMORY.md
   [ "$output" = 'description: index desc' ]   # untouched — self-reference guard
@@ -288,8 +355,7 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
   printf -- '- [Evil](../outside/evil.md) — old\n' > "$stash"
   printf -- '- [Evil](../outside/evil.md) — new\n' > memory/MEMORY.md
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   run grep '^description:' outside/evil.md
   [ "$output" = 'description: outside orig' ]   # untouched — traversal guard
@@ -306,8 +372,7 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   printf -- '- [A](locked/a.md) — old a\n- [B](b.md) — old b\n' > "$stash"
   printf -- '- [A](locked/a.md) — new a\n- [B](b.md) — new b\n' > memory/MEMORY.md
   chmod 555 memory/locked   # blocks the frontmatter rewrite for a.md only
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run --separate-stderr post_stdin "$payload"
+  run --separate-stderr post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   chmod 755 memory/locked   # restore so teardown can clean up
   [ "$status" -eq 0 ]                              # PostToolUse: never non-zero here
   run jq -e '.systemMessage' <<<"$output"
@@ -329,8 +394,7 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   printf -- '- [A](locked/a.md) — old\n' > "$stash"
   printf -- '- [A](locked/a.md) — new\n' > memory/MEMORY.md
   chmod 555 memory/locked
-  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  run post_stdin "$payload"
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   chmod 755 memory/locked
   [ "$status" -eq 0 ]
   [ ! -f "$stash" ]
@@ -365,10 +429,31 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   printf '%s' "$pre_payload" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
   # the "edit" happens between pre and post:
   printf -- '- [A](a.md) — brand new hook line\n' > memory/MEMORY.md
-  post_payload=$(jq -n --arg f "$abs" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
-  printf '%s' "$post_payload" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
+  printf '%s' "$(batch_payload "$abs")" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
   run grep '^description:' memory/a.md
   [ "$output" = 'description: "brand new hook line"' ]
+}
+
+@test "e2e: TWO index edits in one batch diff against the pre-BATCH state, not the last edit" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD A\n---\n' > memory/a.md
+  printf -- '---\nname: b\ndescription: OLD B\n---\n' > memory/b.md
+  printf -- '- [A](a.md) — hook a v0\n- [B](b.md) — hook b v0\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  pre=$(jq -n --arg f "$abs" '{tool_name:"Edit",tool_input:{file_path:$f}}')
+  # Edit 1 of the batch: pre fires, stashes v0; the edit changes a's line.
+  printf '%s' "$pre" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
+  printf -- '- [A](a.md) — hook a v1\n- [B](b.md) — hook b v0\n' > memory/MEMORY.md
+  # Edit 2 of the same batch: pre fires again and must NOT re-stash. Were the
+  # baseline overwritten here, a's change would vanish from the batch-end diff.
+  printf '%s' "$pre" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
+  printf -- '- [A](a.md) — hook a v1\n- [B](b.md) — hook b v1\n' > memory/MEMORY.md
+  printf '%s' "$(batch_payload "$abs" "$abs")" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "hook a v1"' ]   # the first edit is not lost
+  run grep '^description:' memory/b.md
+  [ "$output" = 'description: "hook b v1"' ]
 }
 
 @test "e2e: both index-sync hook scripts are executable" {
@@ -376,9 +461,14 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh" ]
 }
 
-@test "e2e: hooks.json registers both Write|Edit index-sync hooks" {
+@test "e2e: hooks.json registers pre on PreToolUse(Write|Edit) and post on PostToolBatch" {
   run jq -r '.hooks.PreToolUse[] | select(.matcher=="Write|Edit") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
   [[ "$output" == *index-sync-pre.sh ]]
-  run jq -r '.hooks.PostToolUse[] | select(.matcher=="Write|Edit") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
+  # PostToolBatch takes no matcher — it carries the whole batch, and the hook
+  # filters .tool_calls[] itself.
+  run jq -r '.hooks.PostToolBatch[].hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
   [[ "$output" == *index-sync-post.sh ]]
+  # ...and is no longer double-registered on the per-call event.
+  run jq -r '[.hooks.PostToolUse[]? | .hooks[].command] | map(select(test("index-sync"))) | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$output" = "0" ]
 }
