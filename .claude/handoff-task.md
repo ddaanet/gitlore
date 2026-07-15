@@ -1,7 +1,9 @@
 ## Current task
 
-D17 tiered-memory slice 1 (one-way index→frontmatter sync) is designed in `docs/design.md` and fully planned at `docs/superpowers/plans/2026-07-15-index-frontmatter-sync.md` (4 TDD tasks: lib helpers → PreToolUse stash → PostToolUse diff-and-propagate → wire hooks.json + e2e); next is executing the plan task-by-task.
+D17 slice-1 (one-way index→frontmatter sync) is merged and green, so next is upgrading the claude shim to pass `--plugin-dir .` when appropriate — which is the prerequisite for dogfooding the sync against this repo's real `memory/MEMORY.md`, since the loaded plugin is the marketplace cache and lags the repo at the same version string — then release.
 
 ## Open decisions
 
-- Execution mode for the plan: subagent-driven (fresh agent per task, review between tasks — recommended by writing-plans) vs. inline batch execution in one session.
+- What predicate makes `--plugin-dir .` "appropriate" in the shim: only when cwd is the plugin's own repo (detect via `plugin.json` + a marketplace entry?), only under an opt-in env var/config key, or always-when-a-local-plugin-is-detected? Affects whether dogfooding is automatic here or an explicit gesture, and risks shadowing the installed plugin in unrelated repos.
+- Whether the one-time semantic **reconcile** (healing pre-existing stale-index drift the one-way sync cannot fix) must land before the release, or ships after — D17 sequences it as sync → reconcile → structural recompose, and it must run after the sync is actually deployed or it re-drifts.
+- Whether to fix the five orphaned bats files (21 passing tests unreferenced by the Makefile, including the D12/FR11 memory-gate suite) as part of release prep or as separate work — the gate currently has no regression cover.
