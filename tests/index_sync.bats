@@ -79,6 +79,29 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = 'description: old' ]       # original file untouched
 }
 
+# shellcheck disable=SC2016
+@test "get_frontmatter_description: unquotes a JSON-quoted scalar (round-trips the setter)" {
+  printf -- '---\ndescription: x\n---\n' > f.md
+  gitlore_set_frontmatter_description f.md 'has "quote": a `tick`'
+  run gitlore_get_frontmatter_description f.md
+  [ "$status" -eq 0 ]
+  [ "$output" = 'has "quote": a `tick`' ]
+}
+
+@test "get_frontmatter_description: returns a bare (hand-authored) value verbatim" {
+  printf -- '---\nname: a\ndescription: hand authored prose — no quotes\n---\nbody\n' > f.md
+  run gitlore_get_frontmatter_description f.md
+  [ "$status" -eq 0 ]
+  [ "$output" = 'hand authored prose — no quotes' ]
+}
+
+@test "get_frontmatter_description: fails when there is no description line" {
+  printf -- '---\nname: a\n---\nbody\ndescription: not in frontmatter\n' > f.md
+  run gitlore_get_frontmatter_description f.md
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
+}
+
 PRE="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
 
 pre_stdin() { printf '%s' "$1" | bash "$PRE"; }
@@ -124,6 +147,94 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   run grep '^description:' memory/a.md
   [ "$output" = 'description: "new hook"' ]
   [ ! -f "$stash" ]   # stash consumed
+}
+
+@test "post: names the file and shows what it REPLACED in systemMessage" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: considered prose the agent authored\n---\nbody\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — terse hook\n' > memory/MEMORY.md
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run post_stdin "$payload"
+  [ "$status" -eq 0 ]
+  run jq -r '.systemMessage' <<<"$output"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"a.md"* ]]
+  [[ "$output" == *"considered prose the agent authored"* ]]   # what was clobbered
+  [[ "$output" == *"terse hook"* ]]                            # what replaced it
+}
+
+@test "post: tells the agent via additionalContext so it need not re-derive" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\ndescription: old prose\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run post_stdin "$payload"
+  [ "$status" -eq 0 ]
+  json="$output"   # each `run` clobbers $output; keep the JSON to re-query
+  run jq -r '.hookSpecificOutput.hookEventName' <<<"$json"
+  [ "$output" = "PostToolUse" ]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"a.md"* ]]
+}
+
+@test "post: marks an absent description as unset rather than replaced" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\n---\nbody\n' > memory/a.md   # no description: line
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run post_stdin "$payload"
+  [ "$status" -eq 0 ]
+  run jq -r '.systemMessage' <<<"$output"
+  [[ "$output" == *"unset"* ]]
+  [[ "$output" == *"a.md"* ]]
+}
+
+@test "post: stays SILENT when the frontmatter already matched the new hook (no news)" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  # Index line changed, but the frontmatter already carries the new text —
+  # the rewrite is a no-op, so there is nothing to report.
+  printf -- '---\ndescription: "new hook"\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run post_stdin "$payload"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "post: reports a successful sync and a failure together in ONE json object" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits; cannot force a write failure"
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  mkdir memory/locked
+  printf -- '---\ndescription: stale a\n---\n' > memory/locked/a.md
+  printf -- '---\ndescription: stale b\n---\n' > memory/b.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](locked/a.md) — old a\n- [B](b.md) — old b\n' > "$stash"
+  printf -- '- [A](locked/a.md) — new a\n- [B](b.md) — new b\n' > memory/MEMORY.md
+  chmod 555 memory/locked
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run --separate-stderr post_stdin "$payload"
+  chmod 755 memory/locked
+  [ "$status" -eq 0 ]
+  # A single object: two jq objects concatenated would not parse as one.
+  run jq -e '.' <<<"$output"
+  [ "$status" -eq 0 ]
+  run jq -r '.systemMessage' <<<"$output"
+  [[ "$output" == *"locked/a.md"* ]]   # the failure
+  [[ "$output" == *"stale b"* ]]       # the successful replacement
 }
 
 @test "post: does NOT touch a file whose index line is UNCHANGED (protects fresh frontmatter)" {
