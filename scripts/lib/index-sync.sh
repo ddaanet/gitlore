@@ -25,6 +25,29 @@ gitlore_index_pairs() {
   ' "$1"
 }
 
+# Print the effective value of the first `description:` line in a file's
+# leading frontmatter block; return 1 if there is none. A double-quoted scalar
+# is unquoted, mirroring the setter's JSON quoting, so a value that round-trips
+# through the setter compares equal to the hook it came from — otherwise every
+# already-synced file would look like a fresh replacement.
+gitlore_get_frontmatter_description() {
+  local raw
+  raw=$(awk '
+    BEGIN { dashes = 0 }
+    /^---[[:space:]]*$/ { dashes++; if (dashes == 2) exit; next }
+    (dashes == 1 && /^description:/) {
+      sub(/^description:[[:space:]]*/, ""); print; exit
+    }
+  ' "$1") || return 1
+  [ -n "$raw" ] || return 1
+  case "$raw" in
+    # jq parses the setter's own output; a value that only looks quoted (stray
+    # inner quotes, say) falls back to verbatim rather than vanishing.
+    '"'*'"') jq -r . <<<"$raw" 2>/dev/null || printf '%s\n' "$raw" ;;
+    *) printf '%s\n' "$raw" ;;
+  esac
+}
+
 # Rewrite the first `description:` line inside a file's leading frontmatter
 # block to a JSON-quoted (=> YAML-safe) scalar of $2. In place.
 gitlore_set_frontmatter_description() {
