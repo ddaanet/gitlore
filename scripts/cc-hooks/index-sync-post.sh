@@ -32,7 +32,11 @@ while IFS=$'\t' read -r path hook; do
   [ -n "$path" ] || continue
   prehook=$(awk -F'\t' -v p="$path" '$1==p{sub(/^[^\t]*\t/,""); print; exit}' <<<"$pre_pairs")
   [ "$hook" = "$prehook" ] && continue        # unchanged this edit → skip
+  case "$path" in
+    ..|../*|*/../*|*/..) continue ;;          # reject any ".." path component
+  esac
   target="$mempath/$path"
+  if [ "$target" -ef "$index" ]; then continue; fi   # never rewrite the index itself
   [ -f "$target" ] || continue                # orphan line → skip
   if ! gitlore_set_frontmatter_description "$target" "$hook"; then
     # A single failing target must not abort the loop — the rest still sync.
