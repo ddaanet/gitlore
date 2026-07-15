@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # shellcheck disable=SC2030,SC2031
 
+bats_require_minimum_version 1.5.0   # `run --separate-stderr`
+
 load helpers/setup
 load helpers/fixtures
 
@@ -136,4 +138,64 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
   [ "$status" -eq 0 ]
   run grep '^description:' memory/a.md
   [ "$output" = 'description: keep' ]
+}
+
+@test "post: a failed frontmatter write surfaces via systemMessage and does not abort other files' sync" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits; cannot force a write failure"
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  mkdir memory/locked
+  printf -- '---\ndescription: stale a\n---\n' > memory/locked/a.md
+  printf -- '---\ndescription: stale b\n---\n' > memory/b.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](locked/a.md) — old a\n- [B](b.md) — old b\n' > "$stash"
+  printf -- '- [A](locked/a.md) — new a\n- [B](b.md) — new b\n' > memory/MEMORY.md
+  chmod 555 memory/locked   # blocks the frontmatter rewrite for a.md only
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run --separate-stderr post_stdin "$payload"
+  chmod 755 memory/locked   # restore so teardown can clean up
+  [ "$status" -eq 0 ]                              # PostToolUse: never non-zero here
+  run jq -e '.systemMessage' <<<"$output"
+  [ "$status" -eq 0 ]                              # stdout is valid JSON with the field
+  [[ "$output" == *"locked/a.md"* ]]
+  [[ "$stderr" == *"locked/a.md"* ]]                # also echoed to stderr (debug log)
+  run grep '^description:' memory/b.md
+  [ "$output" = 'description: "new b"' ]            # second target still synced
+  [ ! -f "$stash" ]                                 # stash still removed
+}
+
+@test "post: stash is removed even when a propagation fails" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits; cannot force a write failure"
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  mkdir memory/locked
+  printf -- '---\ndescription: stale\n---\n' > memory/locked/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](locked/a.md) — old\n' > "$stash"
+  printf -- '- [A](locked/a.md) — new\n' > memory/MEMORY.md
+  chmod 555 memory/locked
+  payload=$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f},tool_response:{}}')
+  run post_stdin "$payload"
+  chmod 755 memory/locked
+  [ "$status" -eq 0 ]
+  [ ! -f "$stash" ]
+}
+
+@test "pre: a failed stash cp emits a systemMessage and exits 0 (never blocks the Write)" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits; cannot force a write failure"
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '- [a](a.md) — before\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  stashdir=$(dirname "$stash")
+  chmod 555 "$stashdir"   # blocks creation of the stash file
+  payload=$(jq -n --arg f "$abs" '{tool_name:"Edit",tool_input:{file_path:$f}}')
+  run --separate-stderr pre_stdin "$payload"
+  chmod 755 "$stashdir"   # restore so teardown can clean up
+  [ "$status" -eq 0 ]                              # PreToolUse: only exit 2 blocks; never used
+  run jq -e '.systemMessage' <<<"$output"
+  [ "$status" -eq 0 ]
+  [ -n "$stderr" ]
+  [ ! -f "$stash" ]
 }
