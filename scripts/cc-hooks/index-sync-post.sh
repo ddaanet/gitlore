@@ -53,8 +53,6 @@ replaced="" # newline-joined "  • path: <old> → <new>" bullets, one per
             # filename — is the point: a silent clobber is the failure mode.
 while IFS=$'\t' read -r path hook; do
   [ -n "$path" ] || continue
-  prehook=$(awk -F'\t' -v p="$path" '$1==p{sub(/^[^\t]*\t/,""); print; exit}' <<<"$pre_pairs")
-  [ "$hook" = "$prehook" ] && continue        # unchanged this edit → skip
   case "$path" in
     ..|../*|*/../*|*/..) continue ;;          # reject any ".." path component
   esac
@@ -63,11 +61,22 @@ while IFS=$'\t' read -r path hook; do
   [ -f "$target" ] || continue                # orphan line → skip
   # Read the outgoing text BEFORE the rewrite. `|| true` is legitimate here
   # despite the plan's ban on it for fallible commands: rc 1 is the ordinary
-  # "no description: line yet" case, and this read feeds the *report* only —
-  # never the sync. Should it fail for a real reason, the same awk drives the
-  # setter one line down, whose failure IS checked and surfaced; the worst
-  # outcome here is a bullet that says "(unset)".
+  # "no description: line yet" case, and this read feeds both the added-line
+  # fill-if-empty decision and the *report*. Should it fail for a real reason,
+  # the same awk drives the setter below, whose failure IS checked and surfaced;
+  # the worst outcome here is a bullet that says "(unset)".
   old=$(gitlore_get_frontmatter_description "$target" 2>/dev/null) || true
+  # Key the sync on what happened to this index line (D17):
+  #   • line present in the pre-image → propagate ONLY when its hook changed;
+  #   • line ADDED this batch (absent from the pre-image) → fill the frontmatter
+  #     ONLY when it is empty, so a description authored alongside the new index
+  #     line is never clobbered by the terser one-liner that first referenced it.
+  if awk -F'\t' -v p="$path" '$1==p{f=1; exit} END{exit !f}' <<<"$pre_pairs"; then
+    prehook=$(awk -F'\t' -v p="$path" '$1==p{sub(/^[^\t]*\t/,""); print; exit}' <<<"$pre_pairs")
+    [ "$hook" = "$prehook" ] && continue      # existing line, unchanged → skip
+  else
+    [ -n "$old" ] && continue                 # added line with authored prose → keep it
+  fi
   if ! gitlore_set_frontmatter_description "$target" "$hook"; then
     # A single failing target must not abort the loop — the rest still sync.
     printf 'gitlore: failed to update frontmatter description for %s\n' "$path" >&2

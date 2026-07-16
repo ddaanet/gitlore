@@ -57,6 +57,7 @@ run_batch() { printf '{"hook_event_name":"PostToolBatch","tool_calls":[]}' | bas
   [ "$status" -eq 0 ]
   [[ "$output" == *"no approved summary"* ]]
   [[ "$output" == *"$(gitlore_commit_msg_file memory)"* ]]
+  [[ "$output" == *blockquote* ]]   # present as a draft (> ...), not a code fence
   # Nothing committed, and the trigger is KEPT: the moment the summary is
   # written, the next batch commits transparently (no re-trigger needed).
   [ -n "$(git -C memory status --porcelain)" ]

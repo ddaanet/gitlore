@@ -32,6 +32,7 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"approved commit summary"* ]] || \
     [[ "${output}${stderr}" == *"Prepare a summary"* ]]
+  [[ "${output}${stderr}" == *blockquote* ]]   # present as a draft (> ...), not a code fence
 }
 
 @test "commits and ff-pushes to live when summary is fresh" {

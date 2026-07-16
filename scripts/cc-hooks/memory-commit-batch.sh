@@ -39,7 +39,7 @@ msgfile=$(gitlore_commit_msg_file "$mempath")
 if [ ! -s "$msgfile" ]; then
   # Keep the trigger: the moment the approved summary lands, the next
   # PostToolBatch commits transparently — the agent need not re-trigger.
-  emit "gitlore: commit-memory is pending but no approved summary exists yet at $msgfile. Summarize the pending memory changes, get the user's approval, and write the summary to $msgfile — the commit then completes on its own."
+  emit "gitlore: commit-memory is pending but no approved summary exists yet at $msgfile. Summarize the pending memory changes, present the summary to the user as a markdown blockquote (\`> …\`) rather than a code fence, get their approval, and write the summary to $msgfile — the commit then completes on its own."
   exit 0
 fi
 

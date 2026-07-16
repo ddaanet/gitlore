@@ -43,6 +43,7 @@ stdin() { printf '%s' "$1" | bash "$POST"; }
   [ "$status" -eq 0 ]
   [[ "$output" == *additionalContext* ]]
   [[ "$output" == *"Summarize pending memory changes"* ]]
+  [[ "$output" == *blockquote* ]]   # present as a draft (> ...), not a code fence
 }
 
 @test "no-op when .claude/settings.json is missing" {

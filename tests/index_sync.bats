@@ -324,6 +324,38 @@ batch_payload() {
   [ "$output" = 'description: "new"' ]
 }
 
+@test "post: does NOT clobber an authored description when the index line is ADDED (fill-if-empty)" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  # a.md is a freshly authored memory file with a considered description; its
+  # index one-liner is ADDED in the same batch (absent from the pre-image). An
+  # added line must fill only an empty frontmatter, never overwrite authored
+  # prose with the terser index hook.
+  printf -- '---\nname: a\ndescription: considered authored prose\n---\nbody\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [Z](z.md) — unrelated\n' > "$stash"                                  # a.md NOT in pre-image
+  printf -- '- [Z](z.md) — unrelated\n- [A](a.md) — terse index hook\n' > memory/MEMORY.md   # a.md ADDED
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: considered authored prose' ]   # untouched — added-line fill-if-empty
+}
+
+@test "post: FILLS an empty description when the index line is ADDED" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  # a.md has no description value; its index line is ADDED this batch. With
+  # nothing to clobber, fill-if-empty seeds the frontmatter from the hook.
+  printf -- '---\nname: a\ndescription:\n---\nbody\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [Z](z.md) — unrelated\n' > "$stash"
+  printf -- '- [Z](z.md) — unrelated\n- [A](a.md) — filled hook\n' > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "filled hook"' ]   # seeded — nothing was lost
+}
+
 @test "post: no-op when no stash exists (no baseline to diff)" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
