@@ -62,3 +62,26 @@ stdin() { printf '%s' "$1" | bash "$POST"; }
   run stdin "$payload"
   [ -z "$output" ]
 }
+
+@test "nudges only once per dirty episode" {
+  echo dirty > memory/notes.md
+  payload='{"tool_name":"Bash","tool_input":{"command":"lefthook run pre-commit"},"tool_response":{"exit_code":0}}'
+  run stdin "$payload"
+  [[ "$output" == *additionalContext* ]]   # first green pre-commit nudges
+  run stdin "$payload"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]                          # second, same episode, stays silent
+}
+
+@test "committing memory ends the episode and re-enables the nudge" {
+  echo dirty > memory/notes.md
+  payload='{"tool_name":"Bash","tool_input":{"command":"lefthook run pre-commit"},"tool_response":{"exit_code":0}}'
+  run stdin "$payload"
+  [[ "$output" == *additionalContext* ]]
+
+  # Commit memory (clears the once-per-episode marker), then dirty it anew.
+  bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: notes"
+  echo more > memory/more.md
+  run stdin "$payload"
+  [[ "$output" == *additionalContext* ]]   # a fresh episode nudges again
+}

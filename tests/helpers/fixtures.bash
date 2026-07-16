@@ -37,7 +37,7 @@ make_parent_with_memory() {
   # the dir and gitignore the file so an untracked message never pollutes a
   # parent `git add -A`.
   mkdir -p .claude
-  printf '/.claude/gitlore-memory-message\n' > .gitignore
+  printf '/.claude/gitlore-memory-message\n/.claude/gitlore-commit-memory\n' > .gitignore
   git add .gitmodules "$subpath" .gitignore
   git commit -q -m "Add memory submodule"
 }

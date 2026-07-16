@@ -68,3 +68,14 @@ load helpers/setup
   [[ "$output" == *"worktree-drift.sh"* ]]
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/worktree-drift.sh" ]
 }
+
+# The memory-commit trigger hook (FR11) must be registered on PostToolBatch —
+# additive to the index-sync entry that shares the event — and executable, so a
+# distributed plugin can commit memory on a file trigger without the agent
+# running git (sidesteps the sandbox and the auto-mode classifier).
+@test "distribution: memory-commit-batch hook is wired on PostToolBatch and executable" {
+  run jq -r '[.hooks.PostToolBatch[].hooks[].command | select(test("memory-commit-batch"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh" ]
+}

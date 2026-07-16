@@ -286,7 +286,7 @@ Trigger conditions (all must hold):
 - Memory submodule worktree is dirty (uncommitted changes).
 - Commit message file is absent or stale relative to memory files.
 
-Commit message file path is always resolved via `git -C <memory-path> rev-parse --git-path gitlore-commit-msg`.
+Commit message file path is always resolved via `gitlore_commit_msg_file` — `<superproject-working-tree>/.claude/gitlore-memory-message` (relocated 2026-07-16 from the submodule gitdir, which the agent cannot write under auto mode; the gitdir path is denied by both the sandbox and the auto-mode classifier). Gitignored.
 
 Freshness check: file mtime compared to the newest memory file's mtime. Content-hash comparison is not worth the complexity; an edit that writes identical content will re-trigger preparation, which is acceptable noise.
 
@@ -298,6 +298,10 @@ Action on trigger: emit `additionalContext` instructing Claude to:
 4. On rejection, discuss with the user and repeat from (1).
 
 The confirmation gate (step 2) is load-bearing — per the per-commit review gate FR, the commit message file must not exist until the user has approved the summary.
+
+The nudge fires **once per dirty episode** (added 2026-07-16): a `gitlore-nudged` marker in the memory submodule's **gitdir** (like the merge-state file — not the working tree, so nothing to gitignore) suppresses a repeat on a second green pre-commit while memory is still dirty and unapproved. The marker is written by the hook, which writes git internals freely (unlike the agent, which cannot). `gitlore_sync_memory_to_live` clears it when memory is finally committed, so the next round of uncommitted changes surfaces again.
+
+**`PostToolBatch`** — commits memory on the agent's behalf, without the agent running git. The agent writes two ordinary files — the approved summary (`.claude/gitlore-memory-message`) and a trigger (`.claude/gitlore-commit-memory`) — and `memory-commit-batch.sh` runs `commit-memory.sh -F <msgfile>`, committing the submodule with the blessed sentinel and advancing local `live` (no parent commit; D16). Because the agent makes no Bash call and never touches the gitdir, this sidesteps the sandbox and the auto-mode classifier entirely — that is why file-trigger + hook beats agent-runs-git for the standalone/handoff commit, which must land *before* any parent commit, whether or not the agent stops (no `Stop` hook: settled 2026-07-16). **Both IPC files are removed only on a complete commit.** A locked repo (`index.lock`, or `live` checked out by another session) and an in-flight merge are expected transients: on any failure the trigger *and* the message file are left in place, so the next `PostToolBatch` retries transparently — no agent action, no lost approval. A trigger set with no approved summary is likewise kept, so the commit completes on its own the moment the summary is written. The hook registration is additive to the existing `PostToolBatch` index-sync entry.
 
 #### Git Hooks
 

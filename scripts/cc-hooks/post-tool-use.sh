@@ -26,6 +26,13 @@ mempath=$(gitlore_memory_path)
 [ "$(gitlore_memory_dirty "$mempath")" = "1" ] || exit 0
 [ "$(gitlore_commit_msg_freshness "$mempath")" != "yes" ] || exit 0
 
+# Nudge once per dirty episode: a second green pre-commit run while memory is
+# still dirty and unapproved stays silent. The marker is cleared when memory is
+# finally committed (gitlore_sync_memory_to_live), starting a fresh episode.
+notifyfile=$(gitlore_commit_notified_file "$mempath")
+if [ -f "$notifyfile" ]; then exit 0; fi
+touch "$notifyfile"
+
 msgfile=$(gitlore_commit_msg_file "$mempath")
 
 cat <<EOF
