@@ -37,7 +37,7 @@ teardown() { teardown_tmp_repo; }
 @test "commits and ff-pushes to live when summary is fresh" {
   make_parent_with_memory
   echo dirty > memory/notes.md
-  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: add notes\n' > "$msgfile"
 
   bash "$HOOK"
@@ -57,7 +57,7 @@ teardown() { teardown_tmp_repo; }
     git checkout -q worktree
   )
   echo dirty > memory/notes.md
-  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: add notes\n' > "$msgfile"
 
   CLAUDECODE=1 run --separate-stderr bash "$HOOK"
@@ -79,7 +79,7 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   (cd memory && git checkout -q --detach worktree)
   echo dirty > memory/notes.md
-  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: add notes\n' > "$msgfile"
 
   bash "$HOOK"
@@ -97,7 +97,7 @@ teardown() { teardown_tmp_repo; }
   # submodule. Reproduced before fix; this test pins the fix.
   make_parent_with_memory
   echo dirty > memory/notes.md
-  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: add notes\n' > "$msgfile"
 
   # Simulate the leaked env. Relative paths matter — git uses them under
@@ -125,7 +125,7 @@ teardown() { teardown_tmp_repo; }
   # submodule sync would touch that path and fail or write the wrong refs.
   make_parent_with_memory
   echo dirty > memory/notes.md
-  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: add notes\n' > "$msgfile"
 
   bogus="$TMP_REPO/.bogus-common-dir"

@@ -65,12 +65,20 @@ gitlore_parent_branch() {
   printf '%s\n' "$b"
 }
 
-# Print abs path to the memory submodule's commit-msg file.
-# Resolves through the submodule's gitdir correctly.
-# Args: $1 = memory path (must exist as a working tree).
+# Print abs path to the memory commit-message IPC file. Relocated 2026-07-16
+# from the submodule gitdir to the PARENT working tree (`.claude/`) so the agent
+# can write it under auto mode — the gitdir is unwritable via every agent tool
+# (Write and a bash heredoc are both classifier/sandbox denied). Gitignored (see
+# `.gitignore`). Args: $1 = memory worktree path (relative or absolute).
 gitlore_commit_msg_file() {
-  local mempath="$1"
-  git -C "$mempath" rev-parse --git-path gitlore-commit-msg
+  local mempath="$1" super
+  super=$(git -C "$mempath" rev-parse --show-superproject-working-tree 2>/dev/null) || super=""
+  if [ -z "$super" ]; then
+    # Not a registered submodule (or detached): the parent of the memory
+    # worktree, resolved to an absolute path.
+    super=$(CDPATH='' cd -- "$(dirname -- "$mempath")" && pwd)
+  fi
+  printf '%s/.claude/gitlore-memory-message\n' "$super"
 }
 
 # Print the CC project-scoped auto-memory dir for a repo root.

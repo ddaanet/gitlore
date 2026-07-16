@@ -55,7 +55,7 @@ stdin() { printf '%s' "$1" | bash "$POST"; }
 
 @test "no-op when commit-msg file is fresh" {
   echo dirty > memory/notes.md
-  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  msgfile=$(gitlore_commit_msg_file memory)
   printf 'pre-approved\n' > "$msgfile"
   touch "$msgfile"
   payload='{"tool_name":"Bash","tool_input":{"command":"lefthook run pre-commit"},"tool_response":{"exit_code":0}}'

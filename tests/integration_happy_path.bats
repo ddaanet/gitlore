@@ -30,7 +30,7 @@ teardown() { teardown_tmp_repo; }
   [[ "$out" == *additionalContext* ]]
 
   # 5. Claude writes the commit-msg file (simulating user approval).
-  msgfile=$(git -C memory rev-parse --git-path gitlore-commit-msg)
+  msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: record session edits\n' > "$msgfile"
 
   # 6. Parent's pre-commit hook fires (driven by the wrapper).

@@ -25,6 +25,14 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
 }
 
+@test "commit_msg_file resolves to the parent .claude/ path, not the gitdir" {
+  make_parent_with_memory
+  run gitlore_commit_msg_file memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "$TMP_REPO/.claude/gitlore-memory-message" ]
+  [[ "$output" != *".git/"* ]]   # no longer inside any gitdir
+}
+
 @test "exits 0 in a session-less worktree where the memory worktree is absent" {
   make_parent_with_memory
   WT="$TMP_REPO-wt"
@@ -61,7 +69,7 @@ teardown() { teardown_tmp_repo; }
   [ "$wt" = "$live" ]
   [ "$(git -C memory log -1 --pretty=%s)" = "memory: add notes" ]
   # The commit-msg IPC file was consumed.
-  [ ! -f "$(git -C memory rev-parse --git-path gitlore-commit-msg)" ]
+  [ ! -f "$(gitlore_commit_msg_file memory)" ]
   # No parent commit happened.
   [ "$(git rev-parse HEAD)" = "$parent_head_before" ]
 }
