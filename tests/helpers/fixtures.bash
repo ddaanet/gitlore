@@ -32,6 +32,12 @@ make_parent_with_memory() {
     git branch worktree
     git checkout -q worktree
   )
-  git add .gitmodules "$subpath"
+  # The memory commit-message IPC file lives in the parent tree under .claude/
+  # (relocated 2026-07-16 from the submodule gitdir). Mirror production: create
+  # the dir and gitignore the file so an untracked message never pollutes a
+  # parent `git add -A`.
+  mkdir -p .claude
+  printf '/.claude/gitlore-memory-message\n' > .gitignore
+  git add .gitmodules "$subpath" .gitignore
   git commit -q -m "Add memory submodule"
 }

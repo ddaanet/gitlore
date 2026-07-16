@@ -13,6 +13,6 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
 
 gitlore_say_for_agent_or_user \
-  "gitlore: direct commits inside the memory submodule are blocked — they bypass the per-commit approval gate (FR11). To persist memory: summarize the pending changes, get explicit user approval, write the approved summary to \$(git rev-parse --git-path gitlore-commit-msg), then commit the PARENT repo — its pre-commit hook records and pushes memory for you. Do not run 'git -C <mempath> commit'." \
+  "gitlore: direct commits inside the memory submodule are blocked — they bypass the per-commit approval gate (FR11). To persist memory: summarize the pending changes, get explicit user approval, write the approved summary to the parent repo's .claude/gitlore-memory-message, then commit the PARENT repo — its pre-commit hook records and pushes memory for you. Do not run 'git -C <mempath> commit'." \
   "gitlore: direct memory commits are blocked. Open this project in Claude Code and ask it to commit memory." >&2
 exit 1

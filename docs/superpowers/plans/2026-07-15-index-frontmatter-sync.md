@@ -4,7 +4,7 @@
 
 **Goal:** When the agent edits the root `MEMORY.md` index one-liner for a memory file, automatically mirror the edited hook text into that file's frontmatter `description` — one-way, index→frontmatter only.
 
-**Architecture:** *(Superseded 2026-07-15 after execution: the post half moved to `PostToolBatch` so a turn with several index edits syncs and reports once, and it now reports the replacement on `systemMessage`/`additionalContext`. See D17 in `docs/design.md` for the current wiring; the rest of this plan stands as executed.)* A `PreToolUse(Write|Edit)` hook stashes the pre-edit `MEMORY.md`; a `PostToolUse(Write|Edit)` hook diffs the post-edit `MEMORY.md` against the stash and, for **only the index lines whose hook actually changed**, rewrites the target file's frontmatter `description`. One-way because the index is canonical (D17): the hook never writes the index, and a frontmatter-only edit never triggers propagation. Diffing pre-vs-post (not a blanket sweep) is what protects fresh frontmatter sitting under an unrelated *stale* index line.
+**Architecture:** *(Superseded 2026-07-15 after execution: the post half moved to `PostToolBatch` so a turn with several index edits syncs and reports once, and it now reports the replacement on `systemMessage`/`additionalContext`. See D17 in `docs/design.md` for the current wiring; the rest of this plan stands as executed. **Superseded again 2026-07-16:** the SPOT question is settled and the added-line semantics are corrected — see "D17 SPOT settled + reconcile spec" below; the post-hook's added-line branch must change from overwrite to fill-if-empty.)* A `PreToolUse(Write|Edit)` hook stashes the pre-edit `MEMORY.md`; a `PostToolUse(Write|Edit)` hook diffs the post-edit `MEMORY.md` against the stash and, for **only the index lines whose hook actually changed**, rewrites the target file's frontmatter `description`. One-way because the index is canonical (D17): the hook never writes the index, and a frontmatter-only edit never triggers propagation. Diffing pre-vs-post (not a blanket sweep) is what protects fresh frontmatter sitting under an unrelated *stale* index line.
 
 **Tech Stack:** POSIX-ish bash (must run on macOS bash 3.2 and Linux), `jq` (already a hard dependency), `awk` (portable one-true-awk/BSD + gawk), bats tests.
 
@@ -540,6 +540,56 @@ git commit -m "feat: wire PreToolUse/PostToolUse Write|Edit index-sync hooks"
 ## Dogfood (after Task 4)
 
 The sync is now live in this repo. Before the reconcile slice, sanity-check by editing one real `memory/MEMORY.md` hook in a session and confirming the target file's frontmatter follows. This is the D17 sequence's step-1 exit criterion; the one-time **reconcile** (fixing pre-existing *stale-index* drift the one-way sync can't heal) is the next plan, dogfooded here first.
+
+## D17 SPOT settled + reconcile spec (2026-07-16)
+
+The single-point-of-truth question this plan left open (is the index one-liner
+really canonical?) is now **settled by eval** (MemoryEval sub-agent, 528 session
+transcripts + a 136-file native baseline across 7 other projects where gitlore's
+sync hook has not yet acted): index-canonical holds — agents refine the index
+hook ≈3:1 over the frontmatter `description:`, others-only, so it is native
+curation, not a gitlore artifact. Full evidence in
+`memory/project_gitlore_global_memory.md` (RESOLVED block).
+
+**Settled sync rule — keyed by DESTINATION path, not line position.** Parse the
+pre- and post-edit `MEMORY.md` into `{path → hook}` maps and, per destination:
+
+| pre-image state | action on the file's frontmatter `description:` |
+|---|---|
+| destination ABSENT (added line) | **fill** only if the description is EMPTY; else leave it |
+| present, hook CHANGED | **overwrite** (propagate) with the new hook |
+| present, hook UNCHANGED (incl. reordered) | no-op |
+| destination removed | no-op |
+
+Keying by destination (not position) makes reordering and grouped mid-list
+insertion no-ops — required, since the eval found ~25% of index insertions land
+mid-list, grouped by type prefix. Fill-if-empty at add-time is a no-op on real
+creations (write-order: the file carries its authored `description:` before the
+index line is added), so "don't clobber a fresh creation" falls out with **no
+file-added check**. A deliberate hook *edit* still overwrites — the intended
+propagation of the canonical side. REJECTED by the eval: bidirectional sync,
+slug-detection (0/136 native descriptions are slug-like), and the
+hook-authors-index-via-`additionalContext` reframe (a new line is not reliably
+end-appended).
+
+**Required correction to the live post-hook (`scripts/lib/index-sync.sh`).** The
+post loop already keys by destination, but its added-line branch OVERWRITES: when
+a destination is absent from the pre-image, `prehook` is empty, the
+`[ "$hook" = "$prehook" ]` test is false, and it calls
+`gitlore_set_frontmatter_description` unconditionally — clobbering an authored
+description (reproduced twice live). Fix: split the branch — if the destination
+was ABSENT in the pre-image, fill only when
+`gitlore_get_frontmatter_description "$target"` returns empty/none; otherwise
+skip. The CHANGED-hook path is unchanged. TDD: add a failing
+`post: an ADDED index line fills only an EMPTY description, never clobbers` test
+first. MUST land before reconcile runs the rule at scale.
+
+**Reconcile slice (its own plan, after the correction).** One-time, per-project +
+once-per-shared-tier, applies the settled rule as a sweep over the ~40 files whose
+index line and frontmatter already drifted. The one-way live sync only heals
+going forward; reconcile is the semantic catch-up. On a genuine divergence the
+tie-break is index-canonical; a missing description is filled from the hook.
+Dogfood on this repo first.
 
 ## Out of scope (later slices)
 

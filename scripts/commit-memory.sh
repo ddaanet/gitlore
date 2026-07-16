@@ -56,6 +56,7 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
     exit 1
   fi
   msgfile=$(gitlore_commit_msg_file "$mempath")
+  mkdir -p "$(dirname "$msgfile")"   # .claude/ may not exist yet in a fresh tree
   printf '%s\n' "$summary" > "$msgfile"
 fi
 
