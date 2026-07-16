@@ -50,6 +50,14 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-sync-post.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/memory-commit-batch.sh"
+          }
+        ]
       }
     ],
     "WorktreeRemove": [

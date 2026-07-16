@@ -160,6 +160,9 @@ gitlore_sync_memory_to_live() {
     # admits it. A naked commit never sets this and is blocked (FR11/D12).
     GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile"
     rm -f "$msgfile"
+    # The dirty episode is over: clear the once-per-episode nudge marker so the
+    # next round of uncommitted memory can be surfaced again (post-tool-use.sh).
+    rm -f "$(gitlore_commit_notified_file "$mempath")"
   fi
 
   if [ -n "$live_sha" ]; then

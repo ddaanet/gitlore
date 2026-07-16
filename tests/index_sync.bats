@@ -465,8 +465,9 @@ batch_payload() {
   run jq -r '.hooks.PreToolUse[] | select(.matcher=="Write|Edit") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
   [[ "$output" == *index-sync-pre.sh ]]
   # PostToolBatch takes no matcher — it carries the whole batch, and the hook
-  # filters .tool_calls[] itself.
-  run jq -r '.hooks.PostToolBatch[].hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
+  # filters .tool_calls[] itself. The event is shared (memory-commit-batch.sh is
+  # also registered here), so select the index-sync entry by command.
+  run jq -r '.hooks.PostToolBatch[].hooks[].command | select(test("index-sync-post"))' "$PLUGIN_ROOT/hooks/hooks.json"
   [[ "$output" == *index-sync-post.sh ]]
   # ...and is no longer double-registered on the per-call event.
   run jq -r '[.hooks.PostToolUse[]? | .hooks[].command] | map(select(test("index-sync"))) | length' "$PLUGIN_ROOT/hooks/hooks.json"

@@ -65,20 +65,45 @@ gitlore_parent_branch() {
   printf '%s\n' "$b"
 }
 
-# Print abs path to the memory commit-message IPC file. Relocated 2026-07-16
-# from the submodule gitdir to the PARENT working tree (`.claude/`) so the agent
-# can write it under auto mode — the gitdir is unwritable via every agent tool
-# (Write and a bash heredoc are both classifier/sandbox denied). Gitignored (see
-# `.gitignore`). Args: $1 = memory worktree path (relative or absolute).
-gitlore_commit_msg_file() {
+# Print abs path to the `.claude/` dir in the PARENT working tree that hosts the
+# memory IPC files (message, commit trigger, notified marker). Resolves the
+# superproject working tree; falls back to the memory worktree's parent dir when
+# memory is not a registered submodule (or is detached). Relocated 2026-07-16
+# from the submodule gitdir so the agent can write these under auto mode — the
+# gitdir is unwritable via every agent tool (Write and a bash heredoc are both
+# classifier/sandbox denied). Args: $1 = memory worktree path (relative or absolute).
+_gitlore_ipc_dir() {
   local mempath="$1" super
   super=$(git -C "$mempath" rev-parse --show-superproject-working-tree 2>/dev/null) || super=""
   if [ -z "$super" ]; then
-    # Not a registered submodule (or detached): the parent of the memory
-    # worktree, resolved to an absolute path.
     super=$(CDPATH='' cd -- "$(dirname -- "$mempath")" && pwd)
   fi
-  printf '%s/.claude/gitlore-memory-message\n' "$super"
+  printf '%s/.claude\n' "$super"
+}
+
+# Print abs path to the memory commit-message IPC file. The agent writes the
+# approved commit summary here; gitignored (see `.gitignore`).
+gitlore_commit_msg_file() {
+  printf '%s/gitlore-memory-message\n' "$(_gitlore_ipc_dir "$1")"
+}
+
+# Print abs path to the commit-memory trigger file. The agent creates this
+# ordinary file to ask the PostToolBatch hook (memory-commit-batch.sh) to commit
+# memory on its behalf — the agent never runs git, sidestepping the sandbox and
+# the auto-mode classifier. Gitignored.
+gitlore_commit_trigger_file() {
+  printf '%s/gitlore-commit-memory\n' "$(_gitlore_ipc_dir "$1")"
+}
+
+# Print the path to the "already nudged this dirty episode" marker. Kept in the
+# memory submodule's gitdir (like gitlore_merge_state_file), NOT the working
+# tree, so it never appears in `git status` and needs no `.gitignore` entry. Set
+# by the PostToolUse nudge (post-tool-use.sh, a hook that writes git internals
+# freely — unlike the agent, which cannot) so the summarize-memory direction
+# fires once per dirty episode; cleared by gitlore_sync_memory_to_live when
+# memory is committed (the episode ends). Args: $1 = memory worktree path.
+gitlore_commit_notified_file() {
+  git -C "$1" rev-parse --git-path gitlore-nudged
 }
 
 # Print the CC project-scoped auto-memory dir for a repo root.
