@@ -128,12 +128,14 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
       [ ! -f "$MSG_FILE" ] || fail_reason="commit-msg file still present at $MSG_FILE"
     fi
 
-    # LLM judge: commit message must match the rubric.
+    # LLM judge: commit message must match the rubric. Capture the judge's
+    # stderr (its verdict + one-line reason, and thus the offending message)
+    # into the failure — else a rubric miss reports THAT but not WHAT.
     if [ -z "$fail_reason" ]; then
       diff=$(git -C "$EVAL_REPO/memory" show HEAD 2>/dev/null || true)
       msg=$(git -C "$EVAL_REPO/memory" log -1 --format=%B 2>/dev/null || true)
-      "$LIB_DIR/judge.sh" "$rubric" "$diff" "$msg" 2>/dev/null || \
-        fail_reason="commit message failed judge rubric"
+      judge_err=$("$LIB_DIR/judge.sh" "$rubric" "$diff" "$msg" 2>&1 1>/dev/null) || \
+        fail_reason="commit message failed judge rubric — ${judge_err//$'\n'/ } — commit msg: ${msg//$'\n'/ }"
     fi
 
     teardown_eval_repo
