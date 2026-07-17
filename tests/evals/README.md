@@ -2,9 +2,9 @@
 
 End-to-end evaluation suite for the gitlore memory-commit flow. Runs real CC sessions via the Claude Agent SDK and grades both pipeline compliance and commit-message quality.
 
-## Why the Agent SDK, not `claude --print`
+## Why the Agent SDK
 
-`claude --print` (the `-p` flag) suppresses all hooks — PostToolUse never fires and `additionalContext` is never injected. The Agent SDK runs the full hook lifecycle, which is required to test the gitlore `post-tool-use.sh` flow. See [anthropics/claude-code#37559](https://github.com/anthropics/claude-code/issues/37559).
+Both the Agent SDK and `claude --print --resume` can drive these evals — each fires the PostToolUse hooks, injects `hookSpecificOutput.additionalContext`, and supports the two-turn summarise-then-approve flow. The SDK is chosen for **efficiency at scale**: it holds one process across both turns, whereas each `claude --print` spawn re-primes the full session context (~40k cache-creation tokens) and pays ~10s process-startup latency every turn — overhead that dominates across the scenario × trial matrix. `--print --resume` is a viable lighter-weight harness if the SDK dependency is unwanted.
 
 ## Requirements
 

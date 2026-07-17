@@ -109,7 +109,7 @@ if [ -n "$replaced" ]; then
   if [ "$n" -eq 1 ]; then unit="file"; else unit="files"; fi
   sysmsg="gitlore: reset frontmatter to match MEMORY.md ($n $unit)"
   # Model-only channel: without it the agent re-reads the files to work out
-  # what the hook did. Does NOT inject under --print (tested via systemMessage).
+  # what the hook did.
   ctx="The gitlore index→frontmatter sync already rewrote the description: line of these memory files to match the index hook, which is canonical. This is expected and complete — do not re-read or re-edit them to verify. If a replaced description carried meaning the index hook loses, fix the index line, not the file.$replaced"
 fi
 if [ -n "$failed" ]; then
