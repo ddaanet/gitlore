@@ -6,8 +6,9 @@
 """SDK-based eval runner for gitlore.
 
 Invokes a Claude agent session with the project's .claude/settings.json hooks
-loaded. Unlike `claude --print`, the Agent SDK fires PostToolUse hooks and
-injects additionalContext, enabling the full gitlore memory-commit flow.
+loaded, held in one persistent process across both turns so the project
+context primes once. A `claude --print --resume` harness would work too, but
+re-primes the full context (~40k tokens) and pays process startup per turn.
 
 Two-turn flow:
   Turn 1 — agent edits memory, runs precommit command, hook injects
