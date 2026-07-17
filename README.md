@@ -37,8 +37,9 @@ Dependencies:
 
 ## Status
 
-Feature-complete: all functional requirements and design decisions (D1–D16) in
-`docs/design.md` are implemented and tested.
+The core memory pipeline is feature-complete: all functional requirements and
+design decisions D1–D16 in `docs/design.md` are implemented and tested. D17
+(tiered memory) is partially shipped — see below.
 
 - **Plan 01 — local memory pipeline** ✅
 - **Plan 02 — remote and push** ✅
@@ -47,3 +48,5 @@ Feature-complete: all functional requirements and design decisions (D1–D16) in
 - **Plan 05 — memory redirect launcher** ✅ (shim + Placement A direnv + Placement B global + SessionStart guard)
 - **Plan 07 — gitlink-aware wrappers / worktree lifecycle (D11)** ✅ (common-dir-anchored hook wrappers; SessionStart creates the memory worktree in linked worktrees; advisory `WorktreeRemove` teardown)
 - **Dogfood-driven hardening (D12–D16)** ✅ (submodule-side commit gate; git lock-contention retry; SessionStart output on `systemMessage`; in-process-worktree memory-drift guard; standalone memory-commit entry point; SessionStart disclosure trimmed to prohibition + seamless happy path)
+- **FR11 memory-commit batch** ✅ (a `PostToolBatch` file-trigger hook commits memory from an agent-written message, sidestepping the sandbox and commit-approval classifier — no Stop hook)
+- **D17 — tiered memory index composition (FR15)** 🚧 authoring-time index→frontmatter sync and the one-time reconcile are shipped and dogfooded; the nested global/org submodule tiers themselves are still to build
