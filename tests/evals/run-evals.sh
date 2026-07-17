@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Gitlore eval runner — memory commit flow.
 # Requires: claude and jq in PATH, Claude Code API access (Claude Max or ANTHROPIC_API_KEY).
-# Must run in an unsandboxed environment — Claude Code sandbox blocks API calls.
+# Must run in an unsandboxed environment: the API is reachable from inside the
+# Claude Code sandbox, but ~/.claude/projects/ (where session transcripts live)
+# is read-only there, so turn 1 never persists and turn 2's --resume finds no
+# conversation. The pre-flight probe below is a single turn and does NOT catch
+# this — it passes sandboxed.
 set -e
 
 # The runner drives the `claude` CLI in --print mode: hooks fire and
@@ -15,9 +19,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCENARIOS_DIR="${SCENARIOS_DIR:-$SCRIPT_DIR/scenarios}"
 LIB_DIR="${LIB_DIR:-$SCRIPT_DIR/lib}"
 
-# Pre-flight: verify Claude Code API is accessible before loading helpers.
-# Evals spawn real Claude sessions; this fails when running inside a Claude Code
-# sandbox (network to the API is blocked).
+# Pre-flight: verify the Claude Code API answers before loading helpers.
+# One turn only — it does not exercise --resume, so it cannot detect the
+# sandboxed-transcript failure described above.
 _probe_tmp=$(mktemp -d)
 if ! "$LIB_DIR/claude-runner.sh" --probe --cwd "$_probe_tmp" 2>/dev/null; then
   rm -rf "$_probe_tmp"
@@ -38,7 +42,8 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
-K=5
+# Trials per scenario (pass^k). Override for a quick smoke run: EVAL_K=1.
+K="${EVAL_K:-5}"
 total=0
 passed=0
 failed=0
@@ -64,6 +69,10 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
   for trial in $(seq 1 "$K"); do
     fail_reason=""
     setup_eval_repo "$initial_memory"
+    # The approved-summary IPC file the agent writes and the pre-commit hook
+    # consumes. Spelled out rather than resolved via scripts/lib/util.sh: these
+    # assertions are black-box, and must fail if production moves the file.
+    MSG_FILE="$EVAL_REPO/.claude/gitlore-memory-message"
 
     # Eval runner (two turns):
     #   PTU path  — Turn 1: agent edits memory, runs precommit command, PostToolUse
@@ -83,7 +92,7 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     #   committed memory, and deleted commit-msg as part of completing the parent commit.
     #   → commit-msg must be absent (still present = agent wrote it but did not retry).
     if [ -z "$fail_reason" ]; then
-      msgfile_pre=$(git -C "$EVAL_REPO/memory" rev-parse --git-path gitlore-commit-msg 2>/dev/null || true)
+      msgfile_pre="$MSG_FILE"
       if [ "$trigger" = "precommit_failure" ]; then
         [ -z "$msgfile_pre" ] || [ ! -f "$msgfile_pre" ] || \
           fail_reason="commit-msg still present after Turn 2 (agent wrote commit-msg but did not retry the commit)"
@@ -116,8 +125,7 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
 
     # Assertion 3: commit-msg temp file was consumed and deleted.
     if [ -z "$fail_reason" ]; then
-      msgfile=$(git -C "$EVAL_REPO/memory" rev-parse --git-path gitlore-commit-msg 2>/dev/null || true)
-      [ -z "$msgfile" ] || [ ! -f "$msgfile" ] || fail_reason="commit-msg file still present at $msgfile"
+      [ ! -f "$MSG_FILE" ] || fail_reason="commit-msg file still present at $MSG_FILE"
     fi
 
     # LLM judge: commit message must match the rubric.
