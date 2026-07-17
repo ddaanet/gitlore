@@ -42,8 +42,8 @@ setup_eval_repo() {
 
   # Wire the CC PostToolUse hook directly into settings.json.
   # This bypasses the plugin marketplace (which requires a cached install) and
-  # works in both interactive and SDK-based eval runs.  The SDK loads hooks
-  # from <cwd>/.claude/settings.json when settingSources includes "project".
+  # works in both interactive and eval runs.  The eval runner passes
+  # `--setting-sources project`, so claude loads hooks from <cwd>/.claude/settings.json.
   local tmp
   tmp=$(mktemp)
   jq --arg plugin_root "$PLUGIN_ROOT" '
