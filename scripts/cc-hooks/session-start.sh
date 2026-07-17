@@ -9,10 +9,6 @@ cd "$PROJECT_DIR"
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
-# shellcheck disable=SC1091
-source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
-# shellcheck disable=SC1091
-source "$PLUGIN_ROOT/scripts/lib/index-recompose.sh"
 
 # Guard 1: gitlore.enabled
 enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json 2>/dev/null || echo false)
@@ -169,18 +165,6 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
   fi
 else
   add_sysmsg "gitlore: memory ready ($where); uncommitted changes present, skipped live sync."
-fi
-
-# Structural index recompose (D17 slice 3a). Runs AFTER the ff-merge so it also
-# heals union-driver residue the merge may have left, on top of coverage/prune.
-# It runs at SessionStart only — a cold store, before the agent authors anything
-# — so it never races the agent's own index edits (a mid-session recompose could
-# dedup-away a line the agent had just curated). Writes only on real drift, which
-# then rides the next parent commit like any memory change (the "float", D17).
-# A recompose failure must never abort SessionStart, hence `|| changed=0`.
-changed=$(gitlore_recompose_index "$mempath") || changed=0
-if [ "$changed" = "1" ]; then
-  add_sysmsg "gitlore: healed the memory index (added/pruned pointer lines); the change rides your next commit."
 fi
 
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus
