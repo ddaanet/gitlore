@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Gitlore eval runner — memory commit flow.
-# Requires: uv in PATH, Claude Code API access (Claude Max or ANTHROPIC_API_KEY).
+# Requires: claude and jq in PATH, Claude Code API access (Claude Max or ANTHROPIC_API_KEY).
 # Must run in an unsandboxed environment — Claude Code sandbox blocks API calls.
 set -e
 
-# sdk-runner.py uses the Claude Agent SDK (via uv) so PostToolUse hooks fire
-# and additionalContext injects correctly — unlike `claude --print` which
-# suppresses all hooks.
-command -v uv >/dev/null 2>&1 || { echo "error: uv not found (required for eval SDK runner)" >&2; exit 1; }
+# The runner drives the `claude` CLI in --print mode: hooks fire and
+# additionalContext injects, with no Python/uv dependency.
+command -v claude >/dev/null 2>&1 || { echo "error: claude not found (required for the eval runner)" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "error: jq not found (required for the eval runner)" >&2; exit 1; }
 
 unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +19,7 @@ LIB_DIR="${LIB_DIR:-$SCRIPT_DIR/lib}"
 # Evals spawn real Claude sessions; this fails when running inside a Claude Code
 # sandbox (network to the API is blocked).
 _probe_tmp=$(mktemp -d)
-if ! "$LIB_DIR/sdk-runner.py" --probe --cwd "$_probe_tmp" 2>/dev/null; then
+if ! "$LIB_DIR/claude-runner.sh" --probe --cwd "$_probe_tmp" 2>/dev/null; then
   rm -rf "$_probe_tmp"
   echo "error: Claude Code API is not accessible."
   echo "       Evals must run in an unsandboxed environment."
@@ -65,16 +65,16 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     fail_reason=""
     setup_eval_repo "$initial_memory"
 
-    # SDK runner (two turns):
+    # Eval runner (two turns):
     #   PTU path  — Turn 1: agent edits memory, runs precommit command, PostToolUse
     #               hook injects additionalContext, agent summarises and stops.
     #               Turn 2: eval sends approval; agent writes commit-msg file.
     #   Pre-commit failure path — Turn 1: agent edits memory, runs git commit,
     #               hook exits 1 with CLAUDECODE error, agent summarises and stops.
     #               Turn 2: eval sends approval; agent writes commit-msg and retries.
-    "$LIB_DIR/sdk-runner.py" \
+    "$LIB_DIR/claude-runner.sh" \
       --cwd "$EVAL_REPO" --prompt "$prompt" --approval "$approval" \
-      2>/dev/null || fail_reason="sdk runner failed"
+      2>/dev/null || fail_reason="eval runner failed"
 
     # Assertion 0: agent completed its share of the gitlore flow.
     # PTU path: agent wrote commit-msg and stopped; eval's git commit will consume it.
