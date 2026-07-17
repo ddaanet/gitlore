@@ -4,7 +4,18 @@ End-to-end evaluation suite for the gitlore memory-commit flow. Runs real CC ses
 
 ## Why the Agent SDK
 
-Both the Agent SDK and `claude --print --resume` can drive these evals — each fires the PostToolUse hooks, injects `hookSpecificOutput.additionalContext`, and supports the two-turn summarise-then-approve flow. The SDK is chosen for **efficiency at scale**: it holds one process across both turns, whereas each `claude --print` spawn re-primes the full session context (~40k cache-creation tokens) and pays ~10s process-startup latency every turn — overhead that dominates across the scenario × trial matrix. `--print --resume` is a viable lighter-weight harness if the SDK dependency is unwanted.
+Both the Agent SDK and `claude --print --resume` can drive these evals — each fires the PostToolUse hooks, injects `hookSpecificOutput.additionalContext`, and supports the two-turn summarise-then-approve flow.
+
+Neither harness keeps a session in-process. This runner uses the SDK's `query()`, which is one-shot and stateless by design ("each query is independent, no conversation state"); turn 2 replays the session via `resume`, exactly as `--print --resume` does. So **both re-prime the project context on every turn** — the SDK's edge is process startup, not context reuse. (`ClaudeSDKClient` is the SDK's stateful API; this runner does not use it.)
+
+Measured on this repo, 2026-07-17, trivial two-turn probe, warm cache, per two-turn trial:
+
+| harness | cost | wall |
+|---|---|---|
+| SDK (`query()` ×2) | $0.379 | 14.4s |
+| `claude --print --resume` | $0.425 | 24.3s |
+
+The gap is ~5s of process startup per turn, plus a slightly larger context: the CLI loads user settings, while the runner passes `setting_sources=["project"]`. Across the current 2-scenario × 5-trial matrix that is roughly $0.5 and 2 minutes per full run — fixed overhead that does not grow with turn length. `--print --resume` is a viable lighter-weight harness if the SDK dependency is unwanted.
 
 ## Requirements
 

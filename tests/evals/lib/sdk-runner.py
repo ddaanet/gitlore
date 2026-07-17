@@ -6,9 +6,10 @@
 """SDK-based eval runner for gitlore.
 
 Invokes a Claude agent session with the project's .claude/settings.json hooks
-loaded, held in one persistent process across both turns so the project
-context primes once. A `claude --print --resume` harness would work too, but
-re-primes the full context (~40k tokens) and pays process startup per turn.
+loaded. Each turn is a separate `query()` — the SDK's one-shot, stateless API —
+so turn 2 replays the session by id via `resume` rather than continuing an open
+process, and re-primes the project context just as `claude --print --resume`
+would. See README for the measured cost/latency comparison.
 
 Two-turn flow:
   Turn 1 — agent edits memory, runs precommit command, hook injects

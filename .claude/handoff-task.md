@@ -1,8 +1,7 @@
 ## Current task
 
-D17 slice-2 memory reconcile shipped; two follow-ups are parked awaiting a decision.
+The eval-harness choice is the only work left open — `tests/evals/` docs and memory now state the verified facts, but the harness itself is untouched pending the decision below.
 
 ## Open decisions
 
-- unsandbox-git-status plugin (separate repo, `~/.claude/plugins/cache/ddaanet/unsandbox-git-status`): adopt the drafted generic `additionalContext` wording AND move the auto-unsandbox notice from `systemMessage` (user-only channel — why agents miss it and wrongly infer the sandbox is clean) to `additionalContext` (model channel). Pending a check that a PreToolUse hook honours `additionalContext`; if it doesn't, fold the notice into the command's own output.
-- Eval harness: whether to switch `tests/evals/` from the Agent SDK to `claude --print --resume`. The false "SDK because --print suppresses hooks" rationale is already corrected; the SDK is kept only for efficiency (~40k-token context repriming + ~10s startup per `--print` spawn). Decision: does that efficiency edge justify keeping the SDK dependency, or is `--print --resume` the simpler harness?
+- Eval harness: drop the Agent SDK for a `claude --print --resume` runner, keep `sdk-runner.py` as-is, or rewrite it onto `ClaudeSDKClient`. The rationale the SDK was chosen for is false — `query()` is stateless and spawns per call, so both harnesses re-prime context every turn; measured warm, the SDK's real edge is ~$0.05 and ~10s per two-turn trial (process startup, plus ~7k context because the CLI loads user settings while the runner passes `setting_sources=["project"]`). Recommendation: switch — that edge does not pay for a `uv` + Python + `claude-agent-sdk` dependency in an otherwise bash/bats suite, and the replacement is ~10 lines of bash. `ClaudeSDKClient` is the only path that would deliver genuine process persistence, at the cost of keeping the dependency.
