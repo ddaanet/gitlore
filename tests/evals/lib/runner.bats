@@ -24,6 +24,10 @@ _make_mock_claude() {
   cat > "$MOCK_BIN/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$MOCK_BIN/argv.log"
+# Log whatever claude received on stdin — nothing, iff the runner redirected
+# </dev/null. `read -t` rather than `cat`: on a regression the mock must not
+# inherit a live stdin and hang the suite.
+if IFS= read -r -t 1 _line; then printf '%s\n' "$_line" >> "$MOCK_BIN/stdin.log"; fi
 n=$(wc -l < "$MOCK_BIN/argv.log" | tr -d ' ')
 subtype=$(sed -n "${n}p" "$MOCK_BIN/subtypes")
 printf '{"subtype":"%s","session_id":"sid-%s","result":"canned"}\n' "$subtype" "$n"
@@ -99,6 +103,15 @@ EOF
   run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p" --approval "a"
   [ "$status" -eq 1 ]
   [[ "$output" =~ "turn 2" ]]
+}
+
+# `claude -p` waits 3s for piped stdin that never arrives, warning and stalling
+# every turn. The runner redirects </dev/null; nothing of ours may reach claude.
+@test "claude-runner: gives claude an empty stdin" {
+  _make_mock_claude success success
+  run bash -c "printf 'LEAK\n' | '$RUNNER' --cwd '$BATS_TEST_TMPDIR' --prompt p --approval a"
+  [ "$status" -eq 0 ]
+  [ ! -s "$MOCK_BIN/stdin.log" ]
 }
 
 @test "claude-runner: --prompt without --approval is a usage error" {

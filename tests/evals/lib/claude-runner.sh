@@ -50,7 +50,8 @@ run_turn() {
               --permission-mode bypassPermissions
               --max-budget-usd "$MAX_BUDGET_USD")
   [ -z "$session" ] || args+=(--resume "$session")
-  (cd "$CWD" && claude "${args[@]}")
+  # `< /dev/null`: claude -p waits 3s for piped stdin that never comes.
+  (cd "$CWD" && claude "${args[@]}" < /dev/null)
 }
 
 # Echoes the result's session id; fails with a diagnostic when the turn did not
