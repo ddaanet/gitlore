@@ -212,3 +212,19 @@ teardown() {
   run git -C "$WT/memory" rev-parse --abbrev-ref HEAD
   [ "$output" = "feat-x" ]
 }
+
+@test "recompose seeds a pointer for an unindexed memory file (D17 slice 3a)" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  # An uncovered memory file: on disk, no bullet in MEMORY.md.
+  printf -- '---\nname: orphaned-fact\ndescription: was never indexed\nmetadata:\n  type: reference\n---\nbody\n' \
+    > memory/orphaned-fact.md
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  # Assert the healed-index notice on the session-start JSON BEFORE any `run`
+  # clobbers $output.
+  echo "$output" | jq -e '.systemMessage | test("healed the memory index")'
+  run grep -F -- '](orphaned-fact.md) — was never indexed' memory/MEMORY.md
+  [ "$status" -eq 0 ]
+}
