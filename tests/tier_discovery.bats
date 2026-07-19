@@ -129,3 +129,47 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.systemMessage | test("memory ready")'
 }
+
+# --- gitlore_active_tiers: the activation manifest ---
+
+@test "gitlore_active_tiers reads the manifest in order, skipping blanks" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  printf '  ddaanet  \n\n' > memory/.gitlore-tiers
+  run gitlore_active_tiers memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "ddaanet" ]
+}
+
+@test "gitlore_active_tiers is empty when no manifest exists" {
+  make_parent_with_memory
+  run gitlore_active_tiers memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- SessionStart routing guidance ---
+
+@test "SessionStart advertises an active tier's description as routing guidance" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  printf 'ddaanet\n' > memory/.gitlore-tiers
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory/ddaanet")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for ddaanet")'
+}
+
+@test "SessionStart does not advertise a mounted-but-unlisted (dormant) tier" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  run -1 jq -e '.hookSpecificOutput.additionalContext | test("ddaanet")' <<< "$output"
+}
