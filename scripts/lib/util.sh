@@ -246,6 +246,19 @@ gitlore_git() {
   return "$rc"
 }
 
+# Print each tier submodule's path (relative to the memory worktree), one per
+# line, read from the memory store's OWN .gitmodules. Discovery is by enclosure:
+# every submodule registered inside the memory store is a tier — there is no
+# tier-name constant (D17). No output (exit 0) when there is no nested .gitmodules.
+# Args: $1 = memory worktree path.
+gitlore_tier_paths() {
+  local mempath="$1"
+  [ -f "$mempath/.gitmodules" ] || return 0
+  git config --file "$mempath/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null \
+    | awk '{ print $2 }'
+  return 0
+}
+
 # Print the memory remote's bare name: <parent-remote-base>-memory.
 # Derives the base from the parent repo's origin URL when set, handling both
 # https (.../owner/repo[.git]) and scp-style (git@host:owner/repo[.git]) forms,

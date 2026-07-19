@@ -1,11 +1,14 @@
 #!/usr/bin/env bats
-# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
-# shellcheck disable=SC2154
+# Each @test is its own subshell; the per-test `export GITLORE_LAUNCHED` is
+# consumed within that same test, so SC2030/SC2031 are false positives here.
+# shellcheck disable=SC2030,SC2031
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
+
+SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 
 setup()    { setup_tmp_repo; export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"; }
 teardown() { teardown_tmp_repo; }
@@ -67,4 +70,62 @@ teardown() { teardown_tmp_repo; }
   esac
   rm -rf "$wt"
   git -C .git/modules/gitlore-memory worktree prune
+}
+
+# --- gitlore_tier_paths: discovery by enclosure ---
+
+@test "gitlore_tier_paths lists tiers from the memory store's own .gitmodules" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  run gitlore_tier_paths memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "ddaanet" ]
+}
+
+@test "gitlore_tier_paths is empty when the memory store has no tiers" {
+  make_parent_with_memory
+  run gitlore_tier_paths memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- SessionStart propagation-in ---
+
+@test "SessionStart ff's a mounted tier and leaves it detached at live (propagation)" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  remote_sha="$(push_tier_fact ddaanet)"
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  run git -C memory/ddaanet symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
+}
+
+@test "SessionStart materializes a tier that was never checked out (propagation)" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  git -C memory submodule deinit -f -- ddaanet >/dev/null 2>&1
+  [ ! -e memory/ddaanet/.git ]
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  export GIT_ALLOW_PROTOCOL=file
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ -e memory/ddaanet/.git ]
+}
+
+@test "SessionStart survives a memory store with no tiers at all (propagation)" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("memory ready")'
 }

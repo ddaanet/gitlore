@@ -167,6 +167,34 @@ else
   add_sysmsg "gitlore: memory ready ($where); uncommitted changes present, skipped live sync."
 fi
 
+# Nested tiers (D17 3-i-a): materialize + fast-forward each tier submodule inside
+# the memory store so a portable fact authored in another repo arrives here.
+# Discovery is by enclosure — every entry in memory/.gitmodules is a tier. Tiers
+# use the detached-at-live branch model (D17): no named working branch, HEAD is
+# detached at live. Propagation-in only; commit/push lockstep is a later slice.
+# Every git call is guarded: a broken tier must never abort the session.
+while IFS= read -r tier; do
+  [ -n "$tier" ] || continue
+  tierpath="$mempath/$tier"
+  # Materialize if this worktree never checked the tier out. Guard submodule
+  # escape: only operate once the tier working tree exists (a `git -C` into an
+  # unchecked-out submodule path walks up to the enclosing repo).
+  if [ ! -e "$tierpath/.git" ]; then
+    gitlore_git -C "$mempath" submodule update --init -- "$tier" >&2 \
+      || add_sysmsg "gitlore: tier '$tier' could not be initialized; skipped."
+  fi
+  [ -e "$tierpath/.git" ] || continue
+  # ff local `live` from the remote's `live`. A refspec fetch into a branch ref
+  # refuses a non-fast-forward without '+', so this is ff-only by construction —
+  # and it works precisely because a tier never checks `live` out AS a branch.
+  # A missing remote or a divergence is not fatal here; tier writes are a later slice.
+  git -C "$tierpath" fetch -q origin "live:live" 2>/dev/null || true
+  # Detach the working tree at live (the tier branch model — no named branch).
+  if git -C "$tierpath" show-ref --verify --quiet refs/heads/live; then
+    gitlore_git -C "$tierpath" checkout -q --detach live >/dev/null 2>&1 || true
+  fi
+done < <(gitlore_tier_paths "$mempath")
+
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus
 # any accumulated user-facing systemMessage (success/dirty/launcher — D14).
 emit_session_json
