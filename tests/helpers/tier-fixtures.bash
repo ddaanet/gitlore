@@ -54,6 +54,16 @@ make_tier_in_memory() {
   )
   # Blessed commit inside the memory submodule so the FR11 gate admits it.
   GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q -m "Add $tier tier"
+  # The tier belongs to the memory trunk: advance every other local branch to the
+  # tier commit, so whichever branch SessionStart checks out still sees the tier.
+  # (Otherwise checking out a stale branch drops memory/.gitmodules and the tier
+  # looks unmounted.)
+  local head br
+  head="$(git -C "$mempath" rev-parse HEAD)"
+  while IFS= read -r br; do
+    [ -n "$br" ] || continue
+    git -C "$mempath" branch -f "$br" "$head" >/dev/null 2>&1 || true
+  done < <(git -C "$mempath" for-each-ref --format='%(refname:short)' refs/heads)
 }
 
 # Push a new commit onto a tier remote's `live` branch and echo its SHA.
