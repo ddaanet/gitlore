@@ -259,6 +259,23 @@ gitlore_tier_paths() {
   return 0
 }
 
+# Print the tier paths listed in the activation manifest <mempath>/.gitlore-tiers,
+# in file order, one per line, whitespace-trimmed, skipping blank lines. The
+# manifest is the deliberate activation + precedence surface (listed = active,
+# order = precedence); a mounted but unlisted tier is dormant. No output (exit 0)
+# when the manifest is absent. (D17)
+# Args: $1 = memory worktree path.
+gitlore_active_tiers() {
+  local manifest="$1/.gitlore-tiers" line
+  [ -f "$manifest" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"     # trim leading whitespace
+    line="${line%"${line##*[![:space:]]}"}"     # trim trailing whitespace
+    [ -n "$line" ] && printf '%s\n' "$line"
+  done < "$manifest"
+  return 0
+}
+
 # Print the memory remote's bare name: <parent-remote-base>-memory.
 # Derives the base from the parent repo's origin URL when set, handling both
 # https (.../owner/repo[.git]) and scp-style (git@host:owner/repo[.git]) forms,

@@ -9,6 +9,9 @@ cd "$PROJECT_DIR"
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
+# gitlore_get_frontmatter_description, for tier routing guidance (D17).
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
 # Guard 1: gitlore.enabled
 enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json 2>/dev/null || echo false)
@@ -194,6 +197,31 @@ while IFS= read -r tier; do
     gitlore_git -C "$tierpath" checkout -q --detach live >/dev/null 2>&1 || true
   fi
 done < <(gitlore_tier_paths "$mempath")
+
+# Routing guidance (D17): advertise each ACTIVE tier (listed in the manifest)
+# and its self-described purpose, so the agent routes a portable fact to the
+# right tier instead of burying it in project-local memory. A mounted but
+# unlisted tier is dormant and intentionally not advertised.
+tier_guidance=""
+while IFS= read -r tier; do
+  [ -n "$tier" ] || continue
+  tierpath="$mempath/$tier"
+  [ -e "$tierpath/.git" ] || continue
+  desc=$(gitlore_get_frontmatter_description "$tierpath/MEMORY.md" 2>/dev/null || true)
+  if [ -n "$desc" ]; then
+    tier_guidance="$tier_guidance
+  - $tierpath/ — $desc"
+  else
+    tier_guidance="$tier_guidance
+  - $tierpath/"
+  fi
+done < <(gitlore_active_tiers "$mempath")
+
+if [ -n "$tier_guidance" ]; then
+  protocol_ctx="$protocol_ctx
+
+gitlore memory tiers: shared memory stores mounted inside the memory submodule. Write a portable fact into the matching tier's directory (same one-file-per-fact format, and add its index line to that tier's MEMORY.md); facts specific to this project stay in $mempath/.$tier_guidance"
+fi
 
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus
 # any accumulated user-facing systemMessage (success/dirty/launcher — D14).
