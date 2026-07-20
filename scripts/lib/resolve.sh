@@ -139,7 +139,9 @@ gitlore_sync_memory_to_live() {
   local msgfile dirty live_sha head_sha
   msgfile=$(gitlore_commit_msg_file "$mempath")
   dirty=$(gitlore_memory_dirty "$mempath")
-  live_sha=$(git -C "$mempath" rev-parse live 2>/dev/null || echo "")
+  # `-q --verify` is silent when `live` does not exist (the expected miss), so no
+  # redirect is needed and a real rev-parse failure is no longer swallowed.
+  live_sha=$(git -C "$mempath" rev-parse -q --verify live || echo "")
   head_sha=$(git -C "$mempath" rev-parse HEAD)
 
   if [ "$dirty" = "0" ] && [ "$head_sha" = "$live_sha" ]; then
@@ -166,7 +168,25 @@ gitlore_sync_memory_to_live() {
   fi
 
   if [ -n "$live_sha" ]; then
-    if ! gitlore_git -C "$mempath" push -q . HEAD:live 2>/dev/null; then
+    # Capture, don't discard: this push is to the local repo (`.`), where a
+    # non-fast-forward genuinely does mean branch-vs-live divergence — but a
+    # failure for any OTHER reason (a ref lock, a corrupt object) would have been
+    # read as divergence too, sending the user into a merge that cannot help.
+    local push_err=""
+    if ! push_err=$(gitlore_git -C "$mempath" push -q . HEAD:live 2>&1); then
+      case "$push_err" in
+        *"(fetch first)"*|*"(non-fast-forward)"*) ;;
+        *)
+          if [ -n "$push_err" ]; then
+            gitlore_say_for_agent_or_user \
+              "gitlore: updating the local 'live' ref failed, and not because of divergence. git said:
+$push_err" \
+              "gitlore: updating the local 'live' ref failed, and not because of divergence. git said:
+$push_err" >&2
+            return 1
+          fi
+          ;;
+      esac
       # ff-push failed → branch-vs-live divergence. Prepare and yield.
       local prep_out branch base statefile
       if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then

@@ -18,7 +18,7 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
-mempath=$(gitlore_memory_path 2>/dev/null) || mempath=""
+mempath=$(gitlore_memory_path) || mempath=""
 
 # D11 corollary: in a session-less worktree the memory submodule worktree may not
 # exist yet. Nothing to push — never block the parent push.
@@ -30,11 +30,11 @@ if [ -n "$mempath" ]; then
   gitlore_guard_stale_merge_state "$mempath" || exit 1
 fi
 
-git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null 2>&1 || exit 0
+git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.path" >/dev/null || exit 0
 
 mempath=$(gitlore_memory_path)
 
-remote_url=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
+remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
 if [ -z "$remote_url" ]; then
   gitlore_say_for_agent_or_user \
     "gitlore: memory submodule has no remote configured. Run /gitlore:resolve to create one." \
@@ -42,9 +42,18 @@ if [ -z "$remote_url" ]; then
   exit 1
 fi
 
-git -C "$mempath" fetch -q origin live 2>/dev/null || true
+# No redirect: `-q` already silences progress, so anything fetch writes here is a
+# real problem. Non-fatal (`|| true`) — the push below is the operation that counts.
+git -C "$mempath" fetch -q origin live || true
 
-if gitlore_git -C "$mempath" push -q origin live 2>/dev/null; then
+# Capture rather than discard the push error: the two branches below diagnose
+# only "unreachable" and "divergence", and a push can fail for neither reason
+# (protected branch, pre-receive rejection, bad credentials on a reachable host,
+# quota). Those used to land in the divergence branch and start a bogus merge
+# resolution with git's actual explanation thrown away. Keeping the text lets the
+# fall-through report the real cause.
+push_err=""
+if push_err=$(gitlore_git -C "$mempath" push -q origin live 2>&1); then
   exit 0
 fi
 
@@ -55,6 +64,27 @@ if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
     "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
   exit 1
 fi
+
+# Reachable, and the push was refused. Divergence is the only cause a merge can
+# fix; anything else (policy hook, protected branch, quota, credentials) is not,
+# and used to be misdiagnosed as divergence with git's explanation discarded.
+# The discriminator is git's parenthesized reason, verified against real output:
+#   divergence → " ! [rejected]        HEAD -> live (fetch first)"
+#                (or "(non-fast-forward)")
+#   policy     → " ! [remote rejected] HEAD -> live (pre-receive hook declined)"
+case "$push_err" in
+  *"(fetch first)"*|*"(non-fast-forward)"*) ;;
+  *)
+    if [ -n "$push_err" ]; then
+      gitlore_say_for_agent_or_user \
+        "gitlore: pushing memory to its remote failed, and not because of divergence. git said:
+$push_err" \
+        "gitlore: pushing memory to its remote failed, and not because of divergence. git said:
+$push_err" >&2
+      exit 1
+    fi
+    ;;
+esac
 
 # Reachable → local-vs-remote divergence. Prepare and yield.
 if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
