@@ -251,11 +251,19 @@ gitlore_git() {
 # every submodule registered inside the memory store is a tier — there is no
 # tier-name constant (D17). No output (exit 0) when there is no nested .gitmodules.
 # Args: $1 = memory worktree path.
+# Whitespace safety: `-z` emits one NUL-terminated "key\nvalue" record per match,
+# so a submodule name or path containing spaces survives intact. (A field split on
+# the plain output loses both: for `[submodule "a b"]` it yields `b.path`, part of
+# the KEY.) Paths containing a newline are out of scope by construction — the
+# activation manifest is line-oriented, so such a tier could never be listed.
+# No stderr redirect: --get-regexp is silent on no-match (rc=1, verified), so any
+# message here is a real failure worth seeing.
 gitlore_tier_paths() {
-  local mempath="$1"
+  local mempath="$1" rec
   [ -f "$mempath/.gitmodules" ] || return 0
-  git config --file "$mempath/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null \
-    | awk '{ print $2 }'
+  while IFS= read -r -d '' rec; do
+    printf '%s\n' "${rec#*$'\n'}"
+  done < <(git config --file "$mempath/.gitmodules" -z --get-regexp '^submodule\..*\.path$')
   return 0
 }
 

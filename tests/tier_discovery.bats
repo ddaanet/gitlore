@@ -82,6 +82,19 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "ddaanet" ]
 }
 
+# Regression: enumeration must not split on whitespace. A field split of `git
+# config --get-regexp` output loses a path containing spaces, and for a submodule
+# NAMED with a space it emits a fragment of the KEY (`b.path`) as if it were a
+# path. Both the name and the path here contain spaces, so either fault fails.
+@test "gitlore_tier_paths survives whitespace in the submodule name and path" {
+  make_parent_with_memory
+  git config --file memory/.gitmodules "submodule.org tier.path" "dir with spaces/tier"
+  git config --file memory/.gitmodules "submodule.org tier.url" "https://example.invalid/x.git"
+  run gitlore_tier_paths memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "dir with spaces/tier" ]
+}
+
 @test "gitlore_tier_paths is empty when the memory store has no tiers" {
   make_parent_with_memory
   run gitlore_tier_paths memory
