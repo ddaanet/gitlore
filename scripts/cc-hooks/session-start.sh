@@ -111,7 +111,10 @@ fi
 # Plain `git submodule update --init` does not reliably populate a submodule in a
 # linked worktree, so the linked case uses an explicit `git worktree add`.
 if [ ! -e "$mempath/.git" ]; then
-  common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+  # CDPATH='' cd --: --git-common-dir returns a RELATIVE '.git' in a main
+  # worktree, and a set CDPATH would resolve it elsewhere *and* make cd echo the
+  # destination, yielding a two-line, wrong common_dir.
+  common_dir=$(CDPATH='' cd -- "$(git rev-parse --git-common-dir)" && pwd)
   mem_gitdir="$common_dir/modules/$GITLORE_SUBMODULE_NAME"
   if [ -d "$mem_gitdir" ]; then
     git -C "$mem_gitdir" worktree prune >/dev/null 2>&1 || true
