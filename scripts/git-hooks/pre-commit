@@ -18,7 +18,7 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
-mempath=$(gitlore_memory_path 2>/dev/null) || mempath=""
+mempath=$(gitlore_memory_path) || mempath=""
 
 # Not a gitlore repo (submodule unregistered) → nothing to sync.
 [ -z "$mempath" ] && exit 0

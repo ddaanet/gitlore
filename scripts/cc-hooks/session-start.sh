@@ -14,7 +14,12 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
 # Guard 1: gitlore.enabled
-enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json 2>/dev/null || echo false)
+# Guard on the file rather than suppressing jq: "no settings.json" is the normal
+# not-a-gitlore-repo case, but a *malformed* settings.json is a real fault that
+# would otherwise be silently downgraded to "gitlore disabled" — the whole hook
+# then no-ops with no explanation.
+[ -f .claude/settings.json ] || exit 0
+enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json || echo false)
 [ "$enabled" = "true" ] || exit 0
 
 # Guard 2: gitlore-memory submodule registered
@@ -193,11 +198,22 @@ while IFS= read -r tier; do
   # ff local `live` from the remote's `live`. A refspec fetch into a branch ref
   # refuses a non-fast-forward without '+', so this is ff-only by construction —
   # and it works precisely because a tier never checks `live` out AS a branch.
-  # A missing remote or a divergence is not fatal here; tier writes are a later slice.
-  git -C "$tierpath" fetch -q origin "live:live" 2>/dev/null || true
+  # Non-fatal (tier writes are a later slice), but NOT silent: a tier that has
+  # quietly stopped propagating is indistinguishable from one with nothing new,
+  # so capture the reason and report it. The ff-rejection is the interesting
+  # case — it means this tier has diverged and needs the lockstep slice.
+  if ! fetch_err=$(git -C "$tierpath" fetch -q origin "live:live" 2>&1); then
+    case "$fetch_err" in
+      *non-fast-forward*|*"fetch first"*)
+        add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — local commits are not being propagated. Left untouched." ;;
+      *)
+        add_sysmsg "gitlore: tier '$tier' could not fetch from its remote; it may be stale. git said: $fetch_err" ;;
+    esac
+  fi
   # Detach the working tree at live (the tier branch model — no named branch).
   if git -C "$tierpath" show-ref --verify --quiet refs/heads/live; then
-    gitlore_git -C "$tierpath" checkout -q --detach live >/dev/null 2>&1 || true
+    gitlore_git -C "$tierpath" checkout -q --detach live >/dev/null \
+      || add_sysmsg "gitlore: tier '$tier' could not be checked out at live; skipped."
   fi
 done < <(gitlore_tier_paths "$mempath")
 
@@ -210,7 +226,13 @@ while IFS= read -r tier; do
   [ -n "$tier" ] || continue
   tierpath="$mempath/$tier"
   [ -e "$tierpath/.git" ] || continue
-  desc=$(gitlore_get_frontmatter_description "$tierpath/MEMORY.md" 2>/dev/null || true)
+  # Guard on the file rather than suppressing the reader's stderr: a tier without
+  # a MEMORY.md yet is normal (it lists without a description), while a genuine
+  # read failure now speaks up instead of silently degrading the routing text.
+  desc=""
+  if [ -f "$tierpath/MEMORY.md" ]; then
+    desc=$(gitlore_get_frontmatter_description "$tierpath/MEMORY.md") || desc=""
+  fi
   if [ -n "$desc" ]; then
     tier_guidance="$tier_guidance
   - $tierpath/ — $desc"

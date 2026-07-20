@@ -16,7 +16,7 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 
-mempath=$(gitlore_memory_path 2>/dev/null) || exit 0   # no submodule → nothing to guard
+mempath=$(gitlore_memory_path) || exit 0   # no submodule → nothing to guard
 
 # Session-less linked worktree: the memory tree isn't checked out, so its gitdir
 # pointer is absent and `--git-path` can't resolve. The shared common-dir hooks
@@ -28,7 +28,7 @@ mempath=$(gitlore_memory_path 2>/dev/null) || exit 0   # no submodule → nothin
 # not the parent's where SessionStart pins the key — so mirror the parent's value
 # into the submodule config (common config, shared across submodule worktrees).
 # Only when set: leaving it unset preserves the "hooks not installed" skip path.
-parent_hooksdir=$(git config gitlore.hooksDir 2>/dev/null || true)
+parent_hooksdir=$(git config gitlore.hooksDir || true)
 [ -n "$parent_hooksdir" ] && git -C "$mempath" config gitlore.hooksDir "$parent_hooksdir"
 
 hooks_dir=$(git -C "$mempath" rev-parse --git-path hooks)

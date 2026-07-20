@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 is_shell_shebang() {
-  head -1 "$1" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'
+  head -1 "$1" | grep -qE '^#!.*\b(ba)?sh\b'
 }
 
 files=()

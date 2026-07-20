@@ -16,7 +16,10 @@ exit_code=$(jq -r '.tool_response.exit_code // 0' <<<"$payload")
 [ "$exit_code" = "0" ] || exit 0
 
 [ -f .claude/settings.json ] || exit 0
-prefix=$(jq -r '.gitlore.precommitCommand // empty' .claude/settings.json 2>/dev/null || true)
+# No redirect: the `-f` guard above already covers the file-absent case, so a jq
+# error here means malformed settings.json — which the user needs to hear about
+# rather than have silently downgraded to "feature off".
+prefix=$(jq -r '.gitlore.precommitCommand // empty' .claude/settings.json || true)
 [ -n "$prefix" ] || exit 0
 case "$cmd" in "$prefix"*) ;; *) exit 0 ;; esac
 
