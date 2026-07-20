@@ -89,7 +89,12 @@ if [ $# -ge 1 ]; then
       ;;
     abort-then-retry)
       load_continuation_state abort
-      gitlore_git -C "$mempath" merge --abort 2>/dev/null || true
+      # Test for a merge in progress rather than suppressing "no merge to abort":
+      # that message is the one expected failure, and gating on MERGE_HEAD removes
+      # it, so a genuine abort failure is no longer swallowed.
+      if git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+        gitlore_git -C "$mempath" merge --abort || true
+      fi
       gitlore_git -C "$mempath" checkout -q "$return_branch" || true
       rm -f "$statefile"
       # Re-enter the default mode to detect the original divergence freshly.
@@ -116,7 +121,7 @@ mempath=$(gitlore_memory_path)
 
 # Existing Plan 02 simple repairs (remote.origin.url, ls-remote, push live)
 # happen first — they precede semantic-merge detection.
-remote_url=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
+remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
 if [ -z "$remote_url" ] || [ "$remote_url" = "./.git/gitlore-placeholder" ]; then
   echo "gitlore: no memory remote configured. Creating one." >&2
   bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"

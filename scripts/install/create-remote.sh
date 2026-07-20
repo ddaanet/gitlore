@@ -17,7 +17,7 @@ mode="${2:-auto}"
 url_arg="${3:-}"
 
 # Idempotency: a real (non-placeholder) origin already wired → nothing to do.
-existing=$(git -C "$mempath" config --get remote.origin.url 2>/dev/null || true)
+existing=$(git -C "$mempath" config --get remote.origin.url || true)
 if [ -n "$existing" ] && [ "$existing" != "./.git/gitlore-placeholder" ]; then
   exit 0
 fi

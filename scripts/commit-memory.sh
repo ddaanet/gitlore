@@ -38,7 +38,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-mempath=$(gitlore_memory_path 2>/dev/null) || mempath=""
+mempath=$(gitlore_memory_path) || mempath=""
 
 # Activation: no gitlore-memory submodule → nothing to do.
 [ -z "$mempath" ] && exit 0

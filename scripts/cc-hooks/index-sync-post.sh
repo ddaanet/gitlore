@@ -65,7 +65,10 @@ while IFS=$'\t' read -r path hook; do
   # fill-if-empty decision and the *report*. Should it fail for a real reason,
   # the same awk drives the setter below, whose failure IS checked and surfaced;
   # the worst outcome here is a bullet that says "(unset)".
-  old=$(gitlore_get_frontmatter_description "$target" 2>/dev/null) || true
+  # No redirect: "$target" is the file this batch just edited, so it exists — the
+  # reader is silent on the ordinary "no description: line" miss and only writes
+  # to stderr when the read itself genuinely failed.
+  old=$(gitlore_get_frontmatter_description "$target") || true
   # Key the sync on what happened to this index line (D17):
   #   • line present in the pre-image → propagate ONLY when its hook changed;
   #   • line ADDED this batch (absent from the pre-image) → fill the frontmatter

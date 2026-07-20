@@ -46,7 +46,11 @@ make_tier_in_memory() {
   git clone -q --bare "$seed_dir" "$bare"
   rm -rf "$seed_dir"
 
-  git -C "$mempath" -c protocol.file.allow=always submodule add --name "$tier" "$bare" "$tier" >/dev/null 2>&1
+  # Suppress the noise, but never the status: this is the fixture's central step,
+  # and a silent failure here surfaces as a baffling assertion failure later.
+  git -C "$mempath" -c protocol.file.allow=always \
+    submodule add --name "$tier" "$bare" "$tier" >/dev/null 2>&1 \
+    || { echo "make_tier_in_memory: submodule add '$tier' failed" >&2; return 1; }
   (
     cd "$mempath/$tier" || exit 1
     git config user.email "test@example.com"

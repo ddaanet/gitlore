@@ -32,6 +32,7 @@ if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -qE 'mikefarah|vers
   # Note: any pre-existing YAML comments in .overcommit.yml will have been stripped
   # by the yq round-trip. See docs/plugin-readme.md.
   printf '\n# gitlore: managed\n' >> "$CONFIG"
+# Redirect kept: this is a feature probe — the ImportError IS the answer.
 elif python3 -c 'import yaml' 2>/dev/null; then
   python3 - "$CONFIG" <<'PYEOF'
 import sys, yaml

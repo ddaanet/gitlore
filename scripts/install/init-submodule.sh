@@ -27,7 +27,7 @@ register_in_gitmodules() {
 #   not started                                   → both 0
 already_registered=0
 partial_install=0
-if git config --file .gitmodules "submodule.gitlore-memory.path" 2>/dev/null | grep -qx "$mempath"; then
+if git config --file .gitmodules "submodule.gitlore-memory.path" | grep -qx "$mempath"; then
   already_registered=1
 elif [ -d "$(git rev-parse --git-common-dir)/modules/gitlore-memory" ] && [ -f "$mempath/.git" ]; then
   partial_install=1
@@ -108,7 +108,7 @@ fi
 #    don't trip git's "embedded git repository" advice, which fires on `git add
 #    <dir>` for any directory containing a .git/ entry and, in modern git,
 #    actually refuses to stage the directory as a submodule.
-if git check-ignore -q .gitmodules 2>/dev/null; then
+if git check-ignore -q .gitmodules; then
   if [ -f .gitignore ] && grep -qx '\.gitmodules' .gitignore; then
     # Some repos gitignore .gitmodules to quiet sandbox-induced churn. With a
     # real submodule, .gitmodules must be tracked — drop the ignore line.
@@ -124,7 +124,7 @@ cd "$mempath"
 git show-ref --verify --quiet refs/heads/live || git branch live
 
 cd "$parent_root"
-parent_branch=$(git symbolic-ref --short -q HEAD 2>/dev/null || echo DETACHED)
+parent_branch=$(git symbolic-ref --short -q HEAD || echo DETACHED)
 
 cd "$mempath"
 if [ "$parent_branch" = "DETACHED" ]; then

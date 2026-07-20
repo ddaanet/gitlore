@@ -22,8 +22,12 @@ if [ -n "$GITLORE_AUTO_CLAUDE_PLUGIN_DIR" ] && [ -f .claude-plugin/plugin.json ]
 fi
 
 # in a gitlore-enabled repo? cheap git checks first, so jq only runs for actual gitlore repos
+# Redirects kept deliberately in this file: the shim wraps EVERY `claude`
+# invocation, including ones outside any repo or in a non-gitlore repo. Those
+# failures are the common case, each already has its answer (passthrough below),
+# and their messages would print on every unrelated launch.
 root=$(git rev-parse --show-toplevel 2>/dev/null)
-mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path 2>/dev/null)
+mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path)
 # no gitlore submodule → passthrough
 if [ -z "$root" ] || [ -z "$mempath" ]; then exec "$real" "$@"; fi
 [ "$(jq -r '.gitlore.enabled // false' "$root/.claude/settings.json" 2>/dev/null)" = true ] \

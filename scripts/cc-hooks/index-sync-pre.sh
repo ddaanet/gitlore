@@ -31,12 +31,14 @@ stash=$(gitlore_index_preimage_file "$mempath")   # absolute; parent dir exists
 # existing stash here always belongs to the batch in flight.
 if [ -f "$stash" ]; then exit 0; fi
 
-if ! cp "$index" "$stash" 2>/dev/null; then
+# Capture cp's reason rather than dropping it — "why" (no space, permissions,
+# bad path) is exactly what makes this recoverable for the user.
+if ! cp_err=$(cp "$index" "$stash" 2>&1); then
   # Never exit 2 (would block the Write) and never exit 1 (stdout JSON is
   # only parsed on exit 0 — D14). systemMessage + exit 0 is the only channel
   # proven user-visible regardless of exit code; stderr is a debug-log echo.
-  printf 'gitlore: failed to stash the pre-edit MEMORY.md (%s)\n' "$stash" >&2
-  jq -n --arg stash "$stash" \
-    '{systemMessage: ("gitlore: failed to stash the pre-edit MEMORY.md (" + $stash + "); index→frontmatter sync will be skipped for this edit")}'
+  printf 'gitlore: failed to stash the pre-edit MEMORY.md (%s): %s\n' "$stash" "$cp_err" >&2
+  jq -n --arg stash "$stash" --arg err "$cp_err" \
+    '{systemMessage: ("gitlore: failed to stash the pre-edit MEMORY.md (" + $stash + "): " + $err + "; index→frontmatter sync will be skipped for this edit")}'
 fi
 exit 0

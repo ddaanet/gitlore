@@ -25,8 +25,12 @@ mem_gitdir="$common_dir/modules/$GITLORE_SUBMODULE_NAME"
 
 mem_wt="$worktree_path/$mempath"
 if [ -e "$mem_wt" ]; then
-  git -C "$mem_gitdir" worktree remove --force "$mem_wt" 2>/dev/null \
-    || echo "gitlore: could not remove memory worktree at $mem_wt (locked or uncommitted); it will be pruned." >&2
+  # Capture git's reason instead of discarding it: "(locked or uncommitted)" was
+  # a guess appended to every failure, so the actual cause never reached the user.
+  if ! rm_err=$(git -C "$mem_gitdir" worktree remove --force "$mem_wt" 2>&1); then
+    printf 'gitlore: could not remove memory worktree at %s; it will be pruned. git said:\n%s\n' \
+      "$mem_wt" "$rm_err" >&2
+  fi
 fi
 # Prune dangling admin entries whether the dir was removable or already gone.
 git -C "$mem_gitdir" worktree prune >/dev/null 2>&1 || true

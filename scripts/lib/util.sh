@@ -22,7 +22,7 @@ gitlore_emit_hook_wrapper() {
   local out="$1" hook="$2"
   cat > "$out" <<EOF
 #!/usr/bin/env sh
-HOOKS_DIR=\$(git config gitlore.hooksDir 2>/dev/null)
+HOOKS_DIR=\$(git config gitlore.hooksDir)
 if [ -z "\$HOOKS_DIR" ]; then
   echo "gitlore skipped: hooks not installed." >&2
   echo "Install the gitlore plugin from the Claude Code marketplace, then start Claude Code in this repo." >&2
@@ -42,8 +42,10 @@ EOF
 # Exit 1 if the submodule is not registered.
 gitlore_memory_path() {
   local path
+  # No redirect: `git config --file` is silent when the file or key is absent
+  # (rc=1, verified), so anything on stderr here is a genuine fault.
   path=$(git config --file .gitmodules \
-    "submodule.${GITLORE_SUBMODULE_NAME}.path" 2>/dev/null) || return 1
+    "submodule.${GITLORE_SUBMODULE_NAME}.path") || return 1
   [ -n "$path" ] || return 1
   printf '%s\n' "$path"
 }
@@ -57,7 +59,9 @@ gitlore_has_submodule() {
 # Exit 1 outside a git repo.
 gitlore_parent_branch() {
   local b
-  b=$(git symbolic-ref --short -q HEAD 2>/dev/null) || {
+  # `-q` already silences the detached-HEAD case (the normal, expected failure);
+  # what remains on stderr is a real fault (not a repo), worth surfacing.
+  b=$(git symbolic-ref --short -q HEAD) || {
     git rev-parse --verify HEAD >/dev/null 2>&1 || return 1
     printf 'DETACHED\n'
     return 0
@@ -73,8 +77,14 @@ gitlore_parent_branch() {
 # gitdir is unwritable via every agent tool (Write and a bash heredoc are both
 # classifier/sandbox denied). Args: $1 = memory worktree path (relative or absolute).
 _gitlore_ipc_dir() {
-  local mempath="$1" super
-  super=$(git -C "$mempath" rev-parse --show-superproject-working-tree 2>/dev/null) || super=""
+  local mempath="$1" super=""
+  # Guard on the gitlink rather than suppressing stderr: without a checked-out
+  # memory worktree the rev-parse would fail with an expected "not a git
+  # repository", which is exactly the fallback case below. Guarding removes the
+  # expected failure, so a *real* rev-parse error is no longer swallowed.
+  if [ -e "$mempath/.git" ]; then
+    super=$(git -C "$mempath" rev-parse --show-superproject-working-tree) || super=""
+  fi
   if [ -z "$super" ]; then
     super=$(CDPATH='' cd -- "$(dirname -- "$mempath")" && pwd)
   fi
@@ -123,7 +133,10 @@ gitlore_cc_memory_dir() {
 # Args: $1 = the auto-memory dir.
 gitlore_is_migration_stub() {
   local dir="$1"
-  grep -qF "$GITLORE_MIGRATION_MARKER" "$dir/MEMORY.md" 2>/dev/null
+  # Guard on the file instead of suppressing grep's stderr: "no such file" is the
+  # expected miss, and guarding it away means a real read error still speaks up.
+  [ -f "$dir/MEMORY.md" ] || return 1
+  grep -qF "$GITLORE_MIGRATION_MARKER" "$dir/MEMORY.md"
 }
 
 # Replace a CC auto-memory dir with a stub MEMORY.md recording that gitlore
@@ -168,6 +181,27 @@ gitlore_memory_dirty() {
   fi
 }
 
+# Print a file's mtime as an epoch second, portably (GNU `stat -c` vs BSD/macOS
+# `stat -f`). The flavor is probed ONCE, against a path that always exists, and
+# memoized — rather than running the GNU form per file and discarding its stderr,
+# which on BSD suppresses an expected error every call and on GNU silently
+# swallows a real one (missing file, permission denied). After the probe, no stat
+# error is hidden. The probe itself redirects because provoking the failure is
+# how it detects the flavor. Args: $1 = file.
+_gitlore_mtime() {
+  if [ -z "${_GITLORE_STAT_FLAVOR:-}" ]; then
+    if stat -c '%Y' . >/dev/null 2>&1; then
+      _GITLORE_STAT_FLAVOR=gnu
+    else
+      _GITLORE_STAT_FLAVOR=bsd
+    fi
+  fi
+  case "$_GITLORE_STAT_FLAVOR" in
+    gnu) stat -c '%Y' "$1" ;;
+    *)   stat -f '%m' "$1" ;;
+  esac
+}
+
 # Echo "yes" if commit-msg file is fresh (mtime >= newest tracked memory file),
 # else "no" or "absent".
 gitlore_commit_msg_freshness() {
@@ -177,11 +211,11 @@ gitlore_commit_msg_freshness() {
   [ -f "$msgfile" ] || { printf 'absent\n'; return 0; }
   local newest=0 f m
   while IFS= LC_ALL=C read -r -d '' f; do
-    m=$(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f")
+    m=$(_gitlore_mtime "$f")
     [ "$m" -gt "$newest" ] && newest="$m"
   done < <(find "$mempath" -type f -not -path '*/.git/*' -print0)
   local msgmtime
-  msgmtime=$(stat -c '%Y' "$msgfile" 2>/dev/null || stat -f '%m' "$msgfile")
+  msgmtime=$(_gitlore_mtime "$msgfile")
   awk -v a="$msgmtime" -v b="${newest:-0}" \
       'BEGIN { print (a+0 >= b+0) ? "yes" : "no" }'
 }
@@ -191,6 +225,8 @@ gitlore_commit_msg_freshness() {
 # Args: $1 = directory to test.
 gitlore_probe_writable() {
   local dir="$1" probe="$1/.gitlore-write-probe.$$"
+  # Redirect kept deliberately: provoking "Permission denied" IS the probe, so
+  # the message is both expected and the answer. Surfacing it would be the noise.
   if ( : > "$probe" ) 2>/dev/null; then
     rm -f "$probe"
     return 0
@@ -292,7 +328,7 @@ gitlore_active_tiers() {
 # a remote exists — fixing the clone-dir-rename drift).
 gitlore_memory_remote_name() {
   local url base
-  url=$(git config --get remote.origin.url 2>/dev/null || true)
+  url=$(git config --get remote.origin.url || true)
   if [ -n "$url" ]; then
     base=${url##*/}                       # https or scp-with-slash → repo[.git]
     case "$base" in *:*) base=${base##*:};; esac  # scp without a slash
@@ -309,8 +345,13 @@ gitlore_memory_remote_name() {
 # default for memory, which may contain session context.
 gitlore_parent_visibility() {
   local purl v
-  purl=$(git config --get remote.origin.url 2>/dev/null || true)
+  purl=$(git config --get remote.origin.url || true)
   if [ -n "$purl" ] && command -v gh >/dev/null 2>&1; then
+    # Redirect kept: this is a best-effort lookup whose failure modes are all
+    # normal and expected (no gh auth, non-GitHub remote, network down, repo not
+    # visible to this token) and each already has its answer — "private", the
+    # safe default. Surfacing gh's error would put a scary, actionable-looking
+    # message in front of a user for whom nothing is wrong.
     v=$(gh repo view "$purl" --json visibility -q .visibility 2>/dev/null \
           | tr '[:upper:]' '[:lower:]' || true)
     [ "$v" = "public" ] && { printf 'public\n'; return 0; }
