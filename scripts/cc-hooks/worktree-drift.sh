@@ -30,10 +30,13 @@ launch="${CLAUDE_PROJECT_DIR:-}"
 # root, but both share one git common dir (a linked worktree of the *same* repo,
 # not an unrelated directory). All git calls are read-only; any failure → bail.
 top_cwd=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || exit 0
-top_launch=$(cd "$launch" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || exit 0
+top_launch=$(CDPATH='' cd -- "$launch" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || exit 0
 [ "$top_cwd" != "$top_launch" ] || exit 0
-common_cwd=$(cd "$cwd" && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd) || exit 0
-common_launch=$(cd "$launch" && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd) || exit 0
+# CDPATH='' cd --: --git-common-dir returns a relative '.git' in a main worktree,
+# and a set CDPATH would resolve it against an unrelated directory *and* make cd
+# echo the destination, corrupting the comparison below into a false match.
+common_cwd=$(CDPATH='' cd -- "$cwd" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" && pwd) 2>/dev/null || exit 0
+common_launch=$(CDPATH='' cd -- "$launch" && CDPATH='' cd -- "$(git rev-parse --git-common-dir)" && pwd) 2>/dev/null || exit 0
 [ "$common_cwd" = "$common_launch" ] || exit 0
 
 # Only meaningful for a gitlore-managed launch repo with memory enabled.

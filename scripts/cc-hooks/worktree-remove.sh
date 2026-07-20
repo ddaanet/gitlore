@@ -19,7 +19,7 @@ cd "${CLAUDE_PROJECT_DIR:-$PWD}"
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
 
-common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+common_dir=$(CDPATH='' cd -- "$(git rev-parse --git-common-dir)" && pwd)
 mem_gitdir="$common_dir/modules/$GITLORE_SUBMODULE_NAME"
 [ -d "$mem_gitdir" ] || exit 0
 
