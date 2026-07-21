@@ -139,6 +139,62 @@ gitlore_yield_merge() {
   return 0
 }
 
+# Commit every dirty tier and fast-forward each one's local `live`, reusing the
+# episode's single approved summary as the commit message (D17 lockstep).
+#
+# One approval per episode, not per store: the user approves a set of writes,
+# not a set of repositories, so the same summary lands in every store the
+# episode touched. The approval prompt is what groups those writes by
+# destination — a line bound for a shared tier is more public than one bound for
+# project memory, and that is the part the user needs to see.
+#
+# Runs BEFORE memory's own `git add -A`, so the moved tier gitlink is part of
+# the memory commit — the same before-and-alongside staircase the parent applies
+# to memory, one level deeper.
+#
+# Scope is every MOUNTED tier, not only the active ones: the activation manifest
+# governs routing and composition, and silently dropping a dormant tier's writes
+# would be data loss rather than dormancy.
+#
+# Recursion is driver-side by design; the memory store gets no recursing
+# pre-commit. The parent already drives memory exactly this way, and a
+# hook-side version would have to re-litigate the full local-env-var unset and
+# the GIT_INDEX_FILE capture/restore at a level that needs neither, while
+# forcing the FR11 gate to share a hook with the driver.
+#
+# Returns 1 after emitting a message if a tier commits but its local `live`
+# cannot be advanced. Args: $1 = memory worktree path, $2 = approved msg file.
+gitlore_sync_tiers_to_live() {
+  local mempath="$1" msgfile="$2" tier tierpath push_err
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # Guard submodule escape: `git -C` into an unchecked-out submodule path walks
+    # up to the enclosing repo, so without this a fresh clone would commit the
+    # MEMORY store under the tier's name.
+    [ -e "$tierpath/.git" ] || continue
+    [ "$(gitlore_memory_dirty "$tierpath")" = "1" ] || continue
+    gitlore_git -C "$tierpath" add -A
+    # Blessed commit: the same sentinel that admits a memory commit past the FR11
+    # gate, which emit-memory-gate.sh installs in each tier too.
+    GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$tierpath" commit -q -F "$msgfile"
+    # `live` exists once SessionStart has fetched it; a tier that has never been
+    # fetched has no local `live` to advance, and `-q --verify` is silent on that
+    # expected miss.
+    if git -C "$tierpath" rev-parse -q --verify live >/dev/null; then
+      if ! push_err=$(gitlore_git -C "$tierpath" push -q . HEAD:live 2>&1); then
+        gitlore_say_for_agent_or_user \
+          "gitlore: tier '$tier' was committed but its local 'live' could not be advanced, so the commit is not yet the tier's tip. git said:
+$push_err" \
+          "gitlore: tier '$tier' was committed but its local 'live' could not be advanced. git said:
+$push_err" >&2
+        return 1
+      fi
+    fi
+  done < <(gitlore_tier_paths "$mempath")
+  return 0
+}
+
 # Commit dirty memory with the blessed sentinel and fast-forward local `live`.
 # Assumes the memory worktree exists (caller guards `[ -e "$mempath/.git" ]`).
 # Returns 0 on success or no-op. Returns 1 after emitting a directive when:
@@ -173,6 +229,11 @@ gitlore_sync_memory_to_live() {
         "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry." >&2
       return 1
     fi
+    # Tiers first: a tier commit moves its gitlink, and the `add -A` below is what
+    # records that move in the memory commit. Reversing the order would pin the
+    # pre-commit tier SHA — the same one-behind lag the parent's gitlink staging
+    # exists to prevent.
+    gitlore_sync_tiers_to_live "$mempath" "$msgfile" || return 1
     gitlore_git -C "$mempath" add -A
     # Blessed commit: carry the sentinel so the submodule gate (memory-pre-commit)
     # admits it. A naked commit never sets this and is blocked (FR11/D12).
