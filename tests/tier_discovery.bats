@@ -209,3 +209,43 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   run -1 jq -e '.hookSpecificOutput.additionalContext | test("ddaanet")' <<< "$output"
 }
+
+@test "SessionStart composes propagated tier lines into the root index" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  push_tier_fact ddaanet '- [remote_fact](remote_fact.md) — arrived by propagation' >/dev/null
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  grep -qF -- '- [remote_fact](ddaanet/remote_fact.md) — arrived by propagation' memory/MEMORY.md
+}
+
+@test "SessionStart survives a store that fails composition" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ghost
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ghost"* ]]
+}
+
+@test "routing guidance points the agent at the ROOT index, prefixed" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  # The sentence is generic — the tiers themselves are enumerated below it.
+  [[ "$output" == *'<tier>/<file>.md'* ]]
+  [[ "$output" == *"ROOT"* ]]
+  [[ "$output" != *"that tier's MEMORY.md"* ]]
+}
