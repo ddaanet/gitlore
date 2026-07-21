@@ -165,3 +165,128 @@ teardown() { teardown_tmp_repo; }
   run gitlore_compose_check memory
   [ "$status" -eq 0 ]
 }
+
+@test "splice up: an active tier's carrier bullets appear prefixed in the root" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  seed_root_bullet "project_overview.md" "the project"
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  grep -qF -- '- [shared](ddaanet/shared.md) — a portable fact' memory/MEMORY.md
+  # Tier block precedes project lines.
+  tierline=$(grep -n 'ddaanet/shared.md' memory/MEMORY.md | cut -d: -f1)
+  projline=$(grep -n 'project_overview.md' memory/MEMORY.md | cut -d: -f1)
+  [ "$tierline" -lt "$projline" ]
+}
+
+@test "mirror down: a root-authored tier line lands in the carrier, unprefixed" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_root_bullet "ddaanet/new_fact.md" "authored in the root"
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  grep -qF -- '- [new_fact](new_fact.md) — authored in the root' memory/ddaanet/MEMORY.md
+  run ! grep -qF 'ddaanet/new_fact.md' memory/ddaanet/MEMORY.md
+}
+
+@test "compose is byte-idempotent" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  seed_root_bullet "ddaanet/other.md" "root authored"
+  seed_root_bullet "project_overview.md" "the project"
+  gitlore_compose memory
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.1"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.1"
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]                       # nothing changed → nothing reported
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.1"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.1"
+}
+
+@test "the root's hook text wins over a divergent carrier hook" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale carrier text"
+  seed_root_bullet "ddaanet/shared.md" "fresh curated text"
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  grep -qF -- '— fresh curated text' memory/ddaanet/MEMORY.md
+  run ! grep -qF 'stale carrier text' memory/ddaanet/MEMORY.md
+  [ "$(grep -c 'shared.md' memory/MEMORY.md)" -eq 1 ]
+}
+
+@test "manifest order is tier block order" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  make_tier_in_memory lore
+  set_tier_manifest lore ddaanet
+  seed_tier_bullet ddaanet d.md "dd fact"
+  seed_tier_bullet lore l.md "lore fact"
+  gitlore_compose memory
+  l=$(grep -n 'lore/l.md' memory/MEMORY.md | cut -d: -f1)
+  d=$(grep -n 'ddaanet/d.md' memory/MEMORY.md | cut -d: -f1)
+  [ "$l" -lt "$d" ]
+}
+
+@test "a dormant mounted tier is dropped from the root but keeps its carrier lines" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  gitlore_compose memory
+  grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  set_tier_manifest                       # deactivate
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  run ! grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  grep -qF -- '- [shared](shared.md) — a portable fact' memory/ddaanet/MEMORY.md
+}
+
+@test "a dormant tier still receives mirror-down, so no root line is lost" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest                       # mounted, never active
+  seed_root_bullet "ddaanet/rescued.md" "would be dropped"
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  grep -qF -- '- [rescued](rescued.md) — would be dropped' memory/ddaanet/MEMORY.md
+  run ! grep -qF 'ddaanet/rescued.md' memory/MEMORY.md
+}
+
+@test "preamble and trailer are preserved verbatim" {
+  make_parent_with_memory
+  printf '# Memory Index\n\n- [A](a.md) — x\n\n<!-- footer -->\n' > memory/MEMORY.md
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  head -1 memory/MEMORY.md | grep -qF '# Memory Index'
+  tail -1 memory/MEMORY.md | grep -qF '<!-- footer -->'
+}
+
+@test "project bullets keep their order and are never rewritten" {
+  make_parent_with_memory
+  printf '# Memory Index\n\n- [C](c.md) — three\n- [A](a.md) — one\n- [B](b.md) — two\n' > memory/MEMORY.md
+  gitlore_compose memory
+  run gitlore_index_part memory/MEMORY.md bullets
+  [ "$output" = "$(printf -- '- [C](c.md) — three\n- [A](a.md) — one\n- [B](b.md) — two')" ]
+}
+
+@test "a failing check writes nothing at all" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ghost
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ghost"* ]]
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
+}

@@ -188,3 +188,128 @@ $path"
   done < "$file"
   return 0
 }
+
+# Print the merged bullet list for tier $2 under store $1, unprefixed and in
+# carrier order with root-only lines appended. The ROOT's text wins on a path
+# present in both: the root index is canonical for a line's text (D17).
+gitlore_compose_tier_bullets() {
+  local mempath="$1" tier="$2"
+  local carrier="$mempath/$tier/MEMORY.md"
+  local root="$mempath/MEMORY.md"
+  local line path stripped rootline seen=""
+
+  # Root bullets belonging to this tier, prefix stripped, keyed by path.
+  local rootbullets=""
+  if [ -f "$root" ]; then
+    while IFS= read -r line; do
+      path=$(gitlore_bullet_path "$line") || continue
+      case "$path" in "$tier"/*) ;; *) continue ;; esac
+      stripped=$(gitlore_bullet_deprefix "$line" "$tier") || continue
+      rootbullets="$rootbullets$stripped
+"
+    done < "$root"
+  fi
+
+  # Carrier order first; each line replaced by the root's version when present.
+  if [ -f "$carrier" ]; then
+    while IFS= read -r line; do
+      path=$(gitlore_bullet_path "$line") || continue
+      rootline=$(printf '%s' "$rootbullets" | gitlore_compose_pick "$path")
+      if [ -n "$rootline" ]; then printf '%s\n' "$rootline"; else printf '%s\n' "$line"; fi
+      seen="$seen
+$path"
+    done < <(gitlore_index_part "$carrier" bullets)
+  fi
+
+  # Then root-only lines, in root order.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    path=$(gitlore_bullet_path "$line") || continue
+    printf '%s\n' "$seen" | grep -qxF -- "$path" && continue
+    printf '%s\n' "$line"
+  done <<EOF
+$rootbullets
+EOF
+}
+
+# Filter stdin (bullets) to the first one whose path is $1. Helper for the
+# merge above; keeps the path comparison out of a subshell-heavy inline loop.
+gitlore_compose_pick() {
+  local want="$1" line path
+  while IFS= read -r line; do
+    path=$(gitlore_bullet_path "$line") || continue
+    if [ "$path" = "$want" ]; then printf '%s\n' "$line"; return 0; fi
+  done
+  return 0
+}
+
+# Replace $1's bullet region with the bullets on stdin, preserving preamble and
+# trailer. Writes only when the result differs, so an already-canonical index
+# produces no churn; prints "composed <file>" when it did write.
+gitlore_compose_write() {
+  local file="$1" tmp="$1.gitlore-compose.tmp" bullets
+  bullets=$(cat)
+  {
+    gitlore_index_part "$file" preamble
+    [ -n "$bullets" ] && printf '%s\n' "$bullets"
+    gitlore_index_part "$file" trailer
+  } > "$tmp" || { rm -f "$tmp"; return 1; }
+  if cmp -s "$tmp" "$file"; then
+    rm -f "$tmp"
+    return 0
+  fi
+  mv "$tmp" "$file" || { rm -f "$tmp"; return 1; }
+  printf 'composed %s\n' "$file"
+}
+
+# The whole pass. Validates first; on any problem prints the problems, writes
+# nothing, and returns 1 — fail-safe, so a broken store is never half-rewritten.
+# Otherwise mirrors down into every MOUNTED tier (a dormant tier still receives
+# its root lines: dropping them would be data loss, not dormancy — the same rule
+# the commit/push lockstep applies) and splices up every ACTIVE tier.
+gitlore_compose() {
+  local mempath="$1"
+  local root="$mempath/MEMORY.md"
+  local mounted active tier line path changed=""
+  [ -f "$root" ] || return 0
+
+  if ! gitlore_compose_check "$mempath"; then
+    return 1
+  fi
+
+  mounted=$(gitlore_tier_paths "$mempath")
+  active=$(gitlore_active_tiers "$mempath")
+
+  # Mirror down — every mounted tier with a checked-out carrier.
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -f "$mempath/$tier/MEMORY.md" ] || continue
+    changed="$changed$(gitlore_compose_tier_bullets "$mempath" "$tier" \
+      | gitlore_compose_write "$mempath/$tier/MEMORY.md")
+"
+  done <<EOF
+$mounted
+EOF
+
+  # Splice up — active tiers in manifest order, then the project's own bullets.
+  changed="$changed$( {
+    while IFS= read -r tier; do
+      [ -n "$tier" ] || continue
+      [ -f "$mempath/$tier/MEMORY.md" ] || continue
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        gitlore_bullet_reprefix "$line" "$tier"
+      done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
+    done <<INNER
+$active
+INNER
+    while IFS= read -r line; do
+      path=$(gitlore_bullet_path "$line") || continue
+      case "$path" in */*) continue ;; esac
+      printf '%s\n' "$line"
+    done < <(gitlore_index_part "$root" bullets)
+  } | gitlore_compose_write "$root" )"
+
+  [ -n "$changed" ] && printf '%s\n' "$changed"
+  return 0
+}
