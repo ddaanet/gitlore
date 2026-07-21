@@ -39,11 +39,18 @@ The spec says an inactive tier's block is dropped from the root because "the lin
 - **Modify `tests/helpers/tier-fixtures.bash`** — add `set_tier_manifest` and `seed_tier_bullet` factories.
 - **Modify `docs/design.md`** — D17 status line + changelog row.
 
-`make test` globs `tests/*.bats`, so both new suites are collected automatically. Verify that in Task 6 rather than assuming it.
+`make test` globs `tests/*.bats`, so both new suites are collected automatically. Verify that in Task 4 rather than assuming it.
 
 ---
 
-### Task 1: Index splitting and bullet path arithmetic
+### Task 1: The read-only half — parsing, attribution, validation
+
+*Both halves of this task edit `scripts/lib/index-compose.sh` and
+`tests/index_compose.bats`, and neither writes a file. They are one reviewer's
+gate: "does this correctly read a store and refuse a broken one?" Keep the two
+red-green cycles and the two commits — just don't split the dispatch.*
+
+#### Part A — index splitting and bullet path arithmetic
 
 **Files:**
 - Create: `scripts/lib/index-compose.sh`
@@ -265,7 +272,7 @@ git commit -m "feat: index splitting and bullet path arithmetic (D17 3-ii)"
 
 ---
 
-### Task 2: Attribution and the four validations
+#### Part B — attribution and the four validations
 
 **Files:**
 - Modify: `scripts/lib/index-compose.sh`
@@ -273,12 +280,12 @@ git commit -m "feat: index splitting and bullet path arithmetic (D17 3-ii)"
 - Modify: `tests/helpers/tier-fixtures.bash`
 
 **Interfaces:**
-- Consumes: `gitlore_bullet_path`, `gitlore_index_region`, `gitlore_index_part` (Task 1); `gitlore_tier_paths MEMPATH` and `gitlore_active_tiers MEMPATH` (existing, `scripts/lib/util.sh`).
+- Consumes: `gitlore_bullet_path`, `gitlore_index_region`, `gitlore_index_part` (Part A); `gitlore_tier_paths MEMPATH` and `gitlore_active_tiers MEMPATH` (existing, `scripts/lib/util.sh`).
 - Produces:
   - `gitlore_tier_of PATH TIERS` → prints the first path component when it names a tier in the newline-separated list `TIERS`; prints nothing and returns 1 otherwise.
   - `gitlore_compose_check MEMPATH` → prints one human-readable problem per line and returns 1 if the store cannot be safely composed; prints nothing and returns 0 otherwise.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 6: Write the failing test**
 
 First add the fixture factories. Append to `tests/helpers/tier-fixtures.bash`:
 
@@ -393,12 +400,12 @@ Then append to `tests/index_compose.bats` (it must now also `load helpers/fixtur
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 7: Run test to verify it fails**
 
 Run: `bats tests/index_compose.bats`
 Expected: FAIL — `gitlore_tier_of: command not found`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 8: Write minimal implementation**
 
 Append to `scripts/lib/index-compose.sh`:
 
@@ -501,12 +508,12 @@ $path"
 
 Note `${line//[[:space:]]/}` is bash-only (not POSIX sh) — the file is `#!/usr/bin/env bash` and every caller sources it from bash, so this is fine.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 9: Run test to verify it passes**
 
 Run: `bats tests/index_compose.bats`
 Expected: PASS, 19 tests.
 
-- [ ] **Step 5: Lint and commit**
+- [ ] **Step 10: Lint and commit**
 
 ```bash
 scripts/lint-shell.sh
@@ -516,14 +523,14 @@ git commit -m "feat: tier attribution and compose validations (D17 3-ii)"
 
 ---
 
-### Task 3: The compose pass — mirror down, splice up, idempotent
+### Task 2: The compose pass — mirror down, splice up, idempotent
 
 **Files:**
 - Modify: `scripts/lib/index-compose.sh`
 - Modify: `tests/index_compose.bats`
 
 **Interfaces:**
-- Consumes: everything from Tasks 1 and 2.
+- Consumes: everything from Task 1.
 - Produces:
   - `gitlore_compose MEMPATH` → runs the check, then rewrites the root index and every mounted tier carrier. On check failure: prints the problems, writes nothing, returns 1. On success: prints one summary line per file it actually changed (`composed <path>`), returns 0.
 
@@ -807,7 +814,13 @@ git commit -m "feat: the compose pass — splice up, mirror down (D17 3-ii)"
 
 ---
 
-### Task 4: The PostToolBatch hook
+### Task 3: Both callers — the PostToolBatch hook and SessionStart
+
+*Two thin callers of the same `gitlore_compose`. Separately they are a hook
+registration and a two-line call plus a guidance string; together they are one
+deliverable: "composition actually runs, on both triggers."*
+
+#### Part A — the PostToolBatch hook
 
 **Files:**
 - Create: `scripts/cc-hooks/index-compose.sh`
@@ -815,7 +828,7 @@ git commit -m "feat: the compose pass — splice up, mirror down (D17 3-ii)"
 - Test: `tests/cc_hook_index_compose.bats`
 
 **Interfaces:**
-- Consumes: `gitlore_compose MEMPATH` (Task 3); `gitlore_has_submodule`, `gitlore_memory_path` (existing `util.sh`).
+- Consumes: `gitlore_compose MEMPATH` (Task 2); `gitlore_has_submodule`, `gitlore_memory_path` (existing `util.sh`).
 - Produces: nothing other scripts call.
 
 - [ ] **Step 1: Write the failing test**
@@ -1020,17 +1033,17 @@ git commit -m "feat: PostToolBatch tier composition hook (D17 3-ii)"
 
 ---
 
-### Task 5: SessionStart wiring and the routing-guidance change
+#### Part B — SessionStart wiring and the routing-guidance change
 
 **Files:**
 - Modify: `scripts/cc-hooks/session-start.sh` (tier block ends ~line 211; guidance text ~line 241)
 - Modify: `tests/tier_discovery.bats`
 
 **Interfaces:**
-- Consumes: `gitlore_compose MEMPATH` (Task 3).
+- Consumes: `gitlore_compose MEMPATH` (Task 2).
 - Produces: nothing.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 6: Write the failing test**
 
 Append to `tests/tier_discovery.bats`:
 
@@ -1067,12 +1080,12 @@ Append to `tests/tier_discovery.bats`:
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 7: Run test to verify it fails**
 
 Run: `bats tests/tier_discovery.bats`
 Expected: FAIL — the root index has no `ddaanet/remote_fact.md` line, and the guidance still says "that tier's MEMORY.md".
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 8: Write minimal implementation**
 
 In `scripts/cc-hooks/session-start.sh`, source the new library beside the existing ones:
 
@@ -1106,12 +1119,12 @@ New text:
 Write a portable fact into the matching tier's directory (same one-file-per-fact format), and add its index line to the ROOT $mempath/MEMORY.md with the tier prefix — '- [Title](<tier>/<file>.md) — hook'. gitlore mirrors that line down into the tier's own index for you. Facts specific to this project stay in $mempath/ with a bare path.
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 9: Run test to verify it passes**
 
 Run: `bats tests/tier_discovery.bats`
 Expected: PASS, 16 tests.
 
-- [ ] **Step 5: Lint and commit**
+- [ ] **Step 10: Lint and commit**
 
 ```bash
 scripts/lint-shell.sh
@@ -1121,7 +1134,11 @@ git commit -m "feat: compose at SessionStart and route tier lines via the root i
 
 ---
 
-### Task 6: Full suite, design doc, dogfood
+### Task 4: Full suite, design doc, dogfood — **run this inline, do not dispatch**
+
+*Step 4 asks whether a diff against the live memory store is a composition or a
+bug. That is a judgment call on real data, and a subagent will read it as a
+checkbox. Whoever owns the session runs this task.*
 
 **Files:**
 - Modify: `docs/design.md` (D17 status line ~679; changelog table ~line 730)
