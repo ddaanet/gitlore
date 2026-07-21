@@ -50,9 +50,9 @@ gitlore_guard_stale_merge_state() {
 
 # Write a JSON merge-state file. All args required.
 # Args: $1=mempath  $2=flavor  $3=base_sha  $4=source_ref  $5=target_ref
-#       $6=return_branch  $7=continuation_subcommand
+#       $6=continuation_subcommand
 gitlore_write_merge_state() {
-  local mempath="$1" flavor="$2" base="$3" source="$4" target="$5" return_branch="$6" cont="$7"
+  local mempath="$1" flavor="$2" base="$3" source="$4" target="$5" cont="$6"
   local statefile
   statefile=$(gitlore_merge_state_file "$mempath")
   local changed conflicted
@@ -69,7 +69,6 @@ gitlore_write_merge_state() {
   "base": "$base",
   "source_ref": "$source",
   "target_ref": "$target",
-  "return_branch": "$return_branch",
   "changed_files": $changed,
   "conflicted_files": $conflicted,
   "continuation": "$cont"
@@ -97,38 +96,55 @@ gitlore:   cd "$repo" && bash "$root/scripts/resolve.sh" $cont
 EOF
 }
 
-# Prepare branch-vs-live merge. Caller must already know it's needed.
-# Stdout: `<branch>:<base_sha>`.  Exit 2 on concurrent-checkout (live already checked out).
-gitlore_prepare_branch_vs_live() {
-  local mempath="$1"
-  local branch base
-  branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || git -C "$mempath" rev-parse HEAD)
-  base=$(git -C "$mempath" merge-base "$branch" live)
-  git -C "$mempath" checkout -q live || return 2   # D3 lock checkout: never retry
-  gitlore_git -C "$mempath" merge --no-commit --no-ff "$branch" >/dev/null 2>&1 || true
-  printf '%s:%s\n' "$branch" "$base"
+# Prepare a merge of the pending commit into the more authoritative side. One
+# shape serves both flavors (D17 unified branch model): memory is detached at
+# `live`, so the authority is reached with `checkout --detach` — no named branch
+# is ever checked out, so the one-checkout-per-branch contention that used to
+# make this fail (D3) cannot arise, and there is no branch to return to.
+# The authority becomes the merge's FIRST parent (D6); the pending commit is
+# merged in as the second. The pending commit is pinned at
+# `$GITLORE_PENDING_REF` before HEAD moves — nothing else references it once
+# `merge --abort` drops MERGE_HEAD.
+# Args: $1 = memory worktree path, $2 = authority ref (`live` or `origin/live`).
+# Stdout: `<base_sha>:<pending_sha>`.
+gitlore_prepare_merge() {
+  local mempath="$1" authority="$2"
+  local pending base
+  pending=$(git -C "$mempath" rev-parse HEAD)
+  base=$(git -C "$mempath" merge-base "$pending" "$authority")
+  gitlore_git -C "$mempath" update-ref "$GITLORE_PENDING_REF" "$pending"
+  gitlore_git -C "$mempath" checkout -q --detach "$authority"
+  gitlore_git -C "$mempath" merge --no-commit --no-ff "$pending" >/dev/null 2>&1 || true
+  printf '%s:%s\n' "$base" "$pending"
 }
 
-# Prepare local-vs-remote merge.
-# Stdout: `<return_branch>:<base_sha>:<old_local_sha>`.  Exit 2 on concurrent-checkout.
-gitlore_prepare_local_vs_remote() {
-  local mempath="$1"
-  local return_branch old_local base
-  return_branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || git -C "$mempath" rev-parse HEAD)
-  old_local=$(git -C "$mempath" rev-parse live)
-  git -C "$mempath" checkout -q live || return 2   # D3 lock checkout: never retry
-  gitlore_git -C "$mempath" reset --hard -q origin/live
-  base=$(git -C "$mempath" merge-base "$old_local" origin/live)
-  gitlore_git -C "$mempath" merge --no-commit --no-ff "$old_local" >/dev/null 2>&1 || true
-  printf '%s:%s:%s\n' "$return_branch" "$base" "$old_local"
+# Prepare the merge, record its state file, and emit the sub-agent directive.
+# The caller yields (return/exit 1) immediately afterwards. Returns 1 without
+# emitting if the merge could not be prepared at all.
+# Args: $1 = memory worktree path, $2 = authority ref, $3 = flavor label.
+gitlore_yield_merge() {
+  local mempath="$1" authority="$2" flavor="$3"
+  local prep base pending statefile
+  if ! prep=$(gitlore_prepare_merge "$mempath" "$authority"); then
+    gitlore_say_for_agent_or_user \
+      "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." \
+      "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." >&2
+    return 1
+  fi
+  base="${prep%%:*}"
+  pending="${prep#*:}"
+  gitlore_write_merge_state "$mempath" "$flavor" "$base" "$pending" "$authority" "continue-after-merge"
+  statefile=$(gitlore_merge_state_file "$mempath")
+  gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
+  return 0
 }
 
 # Commit dirty memory with the blessed sentinel and fast-forward local `live`.
 # Assumes the memory worktree exists (caller guards `[ -e "$mempath/.git" ]`).
 # Returns 0 on success or no-op. Returns 1 after emitting a directive when:
 #   a stale merge state is present, memory is dirty without a fresh approved
-#   commit-msg file, or the `HEAD:live` fast-forward fails (branch-vs-live
-#   divergence). Source the util/log/resolve libs before calling.
+#   commit-msg file, or the `HEAD:live` fast-forward fails (the pending commit
+#   diverged from `live`). Source the util/log/resolve libs before calling.
 # Args: $1 = memory worktree path.
 gitlore_sync_memory_to_live() {
   local mempath="$1"
@@ -169,7 +185,7 @@ gitlore_sync_memory_to_live() {
 
   if [ -n "$live_sha" ]; then
     # Capture, don't discard: this push is to the local repo (`.`), where a
-    # non-fast-forward genuinely does mean branch-vs-live divergence — but a
+    # non-fast-forward genuinely does mean HEAD-vs-live divergence — but a
     # failure for any OTHER reason (a ref lock, a corrupt object) would have been
     # read as divergence too, sending the user into a merge that cannot help.
     local push_err=""
@@ -187,19 +203,8 @@ $push_err" >&2
           fi
           ;;
       esac
-      # ff-push failed → branch-vs-live divergence. Prepare and yield.
-      local prep_out branch base statefile
-      if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
-        gitlore_say_for_agent_or_user \
-          "gitlore: cannot checkout live (already checked out elsewhere). Another session is resolving memory. Wait and retry." \
-          "gitlore: another session is resolving memory. Wait and retry." >&2
-        return 1
-      fi
-      branch="${prep_out%%:*}"
-      base="${prep_out#*:}"
-      gitlore_write_merge_state "$mempath" "branch-vs-live" "$base" "$branch" "live" "$branch" "continue-after-branch-merge"
-      statefile=$(gitlore_merge_state_file "$mempath")
-      gitlore_emit_merge_directive "$statefile" "branch-vs-live" "continue-after-branch-merge"
+      # ff-push failed → the pending commit has diverged from local `live`.
+      gitlore_yield_merge "$mempath" live head-vs-live || return 1
       return 1
     fi
   fi

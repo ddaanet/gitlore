@@ -5,6 +5,7 @@ bats_require_minimum_version 1.5.0
 
 load helpers/setup
 load helpers/fixtures
+load helpers/divergence-fixtures
 
 HOOK="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
 
@@ -42,7 +43,7 @@ teardown() { teardown_tmp_repo; }
   printf 'memory: add notes\n' > "$msgfile"
 
   bash "$HOOK"
-  wt=$(git -C memory rev-parse worktree)
+  wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
   [ ! -f "$msgfile" ]
@@ -50,13 +51,9 @@ teardown() { teardown_tmp_repo; }
 
 @test "exits 1 with memory-merger directive when branch diverged from live" {
   make_parent_with_memory
-  (
-    cd memory
-    git checkout -q live
-    echo "live-only" > MEMORY.md
-    git commit -aq -m "Diverging commit on live"
-    git checkout -q worktree
-  )
+  # `live` advances behind the detached worktree's back (D17 branch model:
+  # `live` is never checked out, so this is plumbing, not a checkout dance).
+  advance_branch_with_file memory live LIVE.md live-only "Diverging commit on live"
   echo dirty > memory/notes.md
   msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: add notes\n' > "$msgfile"
@@ -64,8 +61,8 @@ teardown() { teardown_tmp_repo; }
   CLAUDECODE=1 run --separate-stderr bash "$HOOK"
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"memory merge prepared"* ]]
-  [[ "$output$stderr" == *"flavor=branch-vs-live"* ]]
-  [[ "$output$stderr" == *"continue-after-branch-merge"* ]]
+  [[ "$output$stderr" == *"flavor=head-vs-live"* ]]
+  [[ "$output$stderr" == *"continue-after-merge"* ]]
 }
 
 @test "resolves PLUGIN_ROOT from gitlore.hooksDir when CLAUDE_PLUGIN_ROOT is unset" {
@@ -76,17 +73,24 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
 }
 
-@test "commits and ff-pushes to live from detached HEAD" {
+@test "commit path leaves HEAD detached at the advanced live" {
+  # The D17 branch model's core invariant: the commit path must never attach
+  # HEAD to a branch, and `live` must land on the new commit.
   make_parent_with_memory
-  (cd memory && git checkout -q --detach worktree)
   echo dirty > memory/notes.md
   msgfile=$(gitlore_commit_msg_file memory)
   printf 'memory: add notes\n' > "$msgfile"
 
   bash "$HOOK"
+  run git -C memory symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
   head=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$head" = "$live" ]
+  # `live` is the only branch the commit path touches — no per-worktree branch
+  # is created or advanced alongside it.
+  run git -C memory for-each-ref --format='%(refname:short)' --points-at HEAD refs/heads
+  [ "$output" = "live" ]
 }
 
 @test "ignores parent GIT_DIR/GIT_INDEX_FILE leaked by 'git commit'" {
@@ -112,7 +116,7 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   [[ "${output}${stderr}" != *"index file open failed"* ]]
   # And the commit-and-push path actually fired:
-  wt=$(git -C memory rev-parse worktree)
+  wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
 }
@@ -139,7 +143,7 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   # The submodule's own live ref advanced — refs were written to the submodule
   # store, not the bogus parent common dir.
-  wt=$(git -C memory rev-parse worktree)
+  wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
   [ ! -e "$bogus/refs/heads/live" ]

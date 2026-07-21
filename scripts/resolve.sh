@@ -21,7 +21,7 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 # Load shared continuation state: require an installed submodule and an existing
-# merge-state file, then set mempath/statefile/return_branch for the caller.
+# merge-state file, then set mempath/statefile/flavor/pending for the caller.
 # Args: $1 = "abort" to use the abort-flavored missing-state message; any other
 # value (or none) uses the default "no merge state file at <path>" message.
 load_continuation_state() {
@@ -36,7 +36,8 @@ load_continuation_state() {
     fi
     exit 1
   fi
-  return_branch=$(jq -r .return_branch "$statefile")
+  flavor=$(jq -r .flavor "$statefile")
+  pending=$(jq -r .source_ref "$statefile")
 }
 
 # Subcommand dispatch (Plan 03 continuations).
@@ -44,47 +45,29 @@ if [ $# -ge 1 ]; then
   subcmd="$1"
   shift
   case "$subcmd" in
-    continue-after-branch-merge)
+    continue-after-merge)
       load_continuation_state
-      # Commit the merge (uses git's MERGE_MSG; live is HEAD = first parent per D6).
-      # Blessed path: carry the sentinel past the submodule gate (FR11).
+      # Commit the merge (uses git's MERGE_MSG; the authority is HEAD, so it is
+      # the first parent per D6). Blessed path: carry the sentinel past the
+      # submodule gate (FR11).
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
-      # Advance the worktree branch to the merge commit and return.
-      gitlore_git -C "$mempath" branch -f "$return_branch" HEAD
-      gitlore_git -C "$mempath" checkout -q "$return_branch"
       rm -f "$statefile"
-      # Retry the ff-push; on failure, loop with a fresh prepare.
+      gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
+      # Restore the invariant: fast-forward local `live` onto the merge commit,
+      # then — when the merge was against the remote — the remote's `live` too.
+      # Either can lose a race with a concurrent advance; re-prepare against
+      # whichever side refused and yield again.
       if ! gitlore_git -C "$mempath" push -q . HEAD:live; then
-        if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
-          echo "gitlore: cannot checkout live (concurrent resolve). Wait and retry." >&2
-          exit 1
-        fi
-        branch="${prep_out%%:*}"
-        base="${prep_out#*:}"
-        gitlore_write_merge_state "$mempath" "branch-vs-live" "$base" "$branch" "live" "$branch" "continue-after-branch-merge"
-        gitlore_emit_merge_directive "$statefile" "branch-vs-live" "continue-after-branch-merge"
+        gitlore_yield_merge "$mempath" live head-vs-live || exit 1
         exit 1
       fi
-      exit 0
-      ;;
-    continue-after-remote-merge)
-      load_continuation_state
-      # Commit the merge (origin/live is HEAD = first parent per D6).
-      # Blessed path: carry the sentinel past the submodule gate (FR11).
-      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
-      rm -f "$statefile"
-      # Retry the push; on failure, loop with a fresh prepare.
-      if ! gitlore_git -C "$mempath" push -q origin live; then
-        if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
-          echo "gitlore: cannot checkout live (concurrent resolve). Wait and retry." >&2
+      if [ "$flavor" = "head-vs-remote" ]; then
+        if ! gitlore_git -C "$mempath" push -q origin live; then
+          gitlore_git -C "$mempath" fetch -q origin live || true
+          gitlore_yield_merge "$mempath" origin/live head-vs-remote || exit 1
           exit 1
         fi
-        IFS=':' read -r return_branch base old_local <<< "$prep_out"
-        gitlore_write_merge_state "$mempath" "local-vs-remote" "$base" "$old_local" "live" "$return_branch" "continue-after-remote-merge"
-        gitlore_emit_merge_directive "$statefile" "local-vs-remote" "continue-after-remote-merge"
-        exit 1
       fi
-      gitlore_git -C "$mempath" checkout -q "$return_branch"
       exit 0
       ;;
     abort-then-retry)
@@ -95,8 +78,12 @@ if [ $# -ge 1 ]; then
       if git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
         gitlore_git -C "$mempath" merge --abort || true
       fi
-      gitlore_git -C "$mempath" checkout -q "$return_branch" || true
+      # Return to the pending commit — the divergent side the merge was landing.
+      # Aborting leaves HEAD at the authority, where the divergence is invisible;
+      # re-detaching there is what makes the re-entry below detect it again.
+      gitlore_git -C "$mempath" checkout -q --detach "$pending" || true
       rm -f "$statefile"
+      gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
       # Re-enter the default mode to detect the original divergence freshly.
       exec bash "$0"
       ;;
@@ -142,30 +129,17 @@ fi
 
 gitlore_git -C "$mempath" fetch -q origin live || true
 
-# Try branch-vs-live first (cheaper, local-only).
-branch=$(git -C "$mempath" symbolic-ref --short -q HEAD || echo "")
-if [ -n "$branch" ] && [ "$branch" != "live" ]; then
-  if ! gitlore_git -C "$mempath" push -q . HEAD:live; then
-    if ! prep_out=$(gitlore_prepare_branch_vs_live "$mempath"); then
-      echo "gitlore: another session is resolving memory. Wait and retry." >&2
-      exit 1
-    fi
-    branch_p="${prep_out%%:*}"; base_p="${prep_out#*:}"
-    gitlore_write_merge_state "$mempath" "branch-vs-live" "$base_p" "$branch_p" "live" "$branch_p" "continue-after-branch-merge"
-    gitlore_emit_merge_directive "$(gitlore_merge_state_file "$mempath")" "branch-vs-live" "continue-after-branch-merge"
-    exit 1
-  fi
+# Try HEAD-vs-live first (cheaper, local-only). No branch guard is needed: the
+# memory worktree is always detached, so `HEAD:live` is always the right question
+# and is a silent no-op when HEAD is already at live.
+if ! gitlore_git -C "$mempath" push -q . HEAD:live; then
+  gitlore_yield_merge "$mempath" live head-vs-live || exit 1
+  exit 1
 fi
 
-# Branch is in sync (or wasn't applicable). Try local-vs-remote.
+# Local `live` is in sync with HEAD. Try HEAD-vs-remote.
 if ! gitlore_git -C "$mempath" push -q origin live; then
-  if ! prep_out=$(gitlore_prepare_local_vs_remote "$mempath"); then
-    echo "gitlore: another session is resolving memory. Wait and retry." >&2
-    exit 1
-  fi
-  IFS=':' read -r return_branch base old_local <<< "$prep_out"
-  gitlore_write_merge_state "$mempath" "local-vs-remote" "$base" "$old_local" "live" "$return_branch" "continue-after-remote-merge"
-  gitlore_emit_merge_directive "$(gitlore_merge_state_file "$mempath")" "local-vs-remote" "continue-after-remote-merge"
+  gitlore_yield_merge "$mempath" origin/live head-vs-remote || exit 1
   exit 1
 fi
 

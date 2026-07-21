@@ -28,9 +28,10 @@ make_parent_with_memory() {
     cd "$subpath" || exit 1
     git config user.email "test@example.com"
     git config user.name  "Test"
+    # Branch model (D17): `live` is the only branch, and it is never checked out
+    # as a branch — the worktree sits detached at its commit.
     git branch live
-    git branch worktree
-    git checkout -q worktree
+    git checkout -q --detach live
   )
   # The memory commit-message IPC file lives in the parent tree under .claude/
   # (relocated 2026-07-16 from the submodule gitdir). Mirror production: create

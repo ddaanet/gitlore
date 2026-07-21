@@ -5,6 +5,7 @@ bats_require_minimum_version 1.5.0
 
 load helpers/setup
 load helpers/fixtures
+load helpers/divergence-fixtures
 
 CMD="$PLUGIN_ROOT/scripts/commit-memory.sh"
 
@@ -64,7 +65,7 @@ teardown() { teardown_tmp_repo; }
 
   # Memory committed and live advanced.
   [ -z "$(git -C memory status --porcelain)" ]
-  wt=$(git -C memory rev-parse worktree)
+  wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
   [ "$(git -C memory log -1 --pretty=%s)" = "memory: add notes" ]
@@ -87,17 +88,13 @@ EOF"
 
 @test "exits 1 with merge directive when branch diverged from live" {
   make_parent_with_memory
-  (
-    cd memory
-    git checkout -q live
-    echo "live-only" > MEMORY.md
-    git commit -aq -m "Diverging commit on live"
-    git checkout -q worktree
-  )
+  # `live` advances behind the detached worktree's back (D17 branch model:
+  # `live` is never checked out, so this is plumbing, not a checkout dance).
+  advance_branch_with_file memory live LIVE.md live-only "Diverging commit on live"
   echo dirty > memory/notes.md
 
   CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: add notes"
   [ "$status" -eq 1 ]
   [[ "${output}${stderr}" == *"memory merge prepared"* ]]
-  [[ "${output}${stderr}" == *"flavor=branch-vs-live"* ]]
+  [[ "${output}${stderr}" == *"flavor=head-vs-live"* ]]
 }

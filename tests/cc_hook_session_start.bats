@@ -62,7 +62,7 @@ teardown() {
   [ "$status" -eq 0 ]
   # D14 always-confirm: a clean start rides a success confirmation on systemMessage...
   echo "$output" | jq -e '.systemMessage | test("ready")'
-  echo "$output" | jq -e '.systemMessage | test("synced with live")'
+  echo "$output" | jq -e '.systemMessage | test("detached at live")'
   # ...and it is NOT the launcher warning (shim ran).
   echo "$output" | jq -e '.systemMessage | test("direnv allow") | not'
   # The standing commit-protocol orientation (Fix B) is always present.
@@ -102,54 +102,48 @@ teardown() {
   [[ "${output}${stderr}" == *"blocked"* ]]
 }
 
-@test "rejects parent branch named 'live' via systemMessage, exit 0 (D14)" {
+@test "detaches memory HEAD when it arrives on a named branch" {
+  # Migration path off the retired per-parent-branch model: a memory worktree
+  # left attached to a branch must come back detached, at the same commit.
+  make_parent_with_memory
+  (cd memory && git checkout -q -b legacy-branch)
+  before=$(git -C memory rev-parse HEAD)
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  run bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  run git -C memory symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$before" ]
+}
+
+@test "parent branch named 'live' is no longer a collision" {
+  # The old model named memory's working branch after the parent branch, so a
+  # parent on 'live' collided with the memory trunk. Detached HEADs cannot.
   make_parent_with_memory
   git checkout -q -b live
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  # D14: non-blocking exit, user-visible notice on systemMessage (not stderr+exit 1).
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("live")'
-  echo "$output" | jq -e '.systemMessage | test("collides|reserved|rename"; "i")'
+  echo "$output" | jq -e '.systemMessage | test("collides|rename"; "i")' && return 1
+  echo "$output" | jq -e '.systemMessage | test("memory ready")'
 }
 
-@test "creates worktree branch matching parent branch name from live" {
+@test "ff-merges detached memory HEAD to live when clean" {
   make_parent_with_memory
-  git checkout -q -b feat-x
-  (cd memory && git checkout -q live)  # leave memory on live so SessionStart needs to act
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  run bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  run git -C memory branch --list feat-x
-  [[ "$output" == *feat-x* ]]
-}
-
-@test "ff-merges memory branch to live when clean" {
-  make_parent_with_memory
-  # Advance live ahead of worktree branch.
-  (
-    cd memory
-    git checkout -q live
-    echo extra > MEMORY.md
-    git commit -aq -m "Advance live"
-    git checkout -q worktree
-  )
-  git checkout -q -b worktree  # parent branch mirrors memory's worktree branch
+  # Advance live ahead of the detached HEAD.
+  advance_branch_with_file memory live EXTRA.md extra "Advance live"
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   bash "$SESSION_START"
-  # After SessionStart, memory worktree branch should equal live tip.
-  livesha=$(git -C memory rev-parse live)
-  wtsha=$(git -C memory rev-parse worktree)
-  [ "$livesha" = "$wtsha" ]
+  # After SessionStart, the detached HEAD should sit at the live tip.
+  [ "$(git -C memory rev-parse live)" = "$(git -C memory rev-parse HEAD)" ]
 }
 
 @test "warns and skips ff when memory is dirty via systemMessage (D14)" {
   make_parent_with_memory
   echo dirty > memory/scratch.md
-  git checkout -q -b worktree
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
@@ -157,10 +151,9 @@ teardown() {
   echo "$output" | jq -e '.systemMessage | test("uncommitted")'
 }
 
-@test "diverged memory branch reports via systemMessage, exit 0 (D14)" {
+@test "diverged memory reports via systemMessage, exit 0 (D14)" {
   make_parent_with_memory
-  make_diverged_branch_vs_live
-  git checkout -q -b worktree   # parent branch mirrors memory's diverged 'worktree'
+  make_diverged_head_vs_live
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
@@ -197,7 +190,7 @@ teardown() {
   [ -f SENTINEL_RAN ]
 }
 
-@test "creates the memory worktree in a linked (CC-created) worktree on the parent-named branch" {
+@test "creates the memory worktree detached at live in a linked (CC-created) worktree" {
   make_parent_with_memory
   WT="$TMP_REPO-wt"
   git worktree add -q -b feat-x "$WT" >/dev/null 2>&1
@@ -209,6 +202,9 @@ teardown() {
   CLAUDE_PROJECT_DIR="$WT" GITLORE_LAUNCHED=1 run bash "$SESSION_START"
   [ "$status" -eq 0 ]
   [ -e "$WT/memory/.git" ]
-  run git -C "$WT/memory" rev-parse --abbrev-ref HEAD
-  [ "$output" = "feat-x" ]
+  # Detached at live — the reason one memory gitdir can serve many parent
+  # worktrees at once (a named branch could only be checked out in one).
+  run git -C "$WT/memory" symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
+  [ "$(git -C "$WT/memory" rev-parse HEAD)" = "$(git -C "$WT/memory" rev-parse live)" ]
 }

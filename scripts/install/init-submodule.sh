@@ -119,17 +119,10 @@ gitlore_git add .gitmodules
 mem_sha=$(git -C "$mempath" rev-parse HEAD)
 gitlore_git update-index --add --cacheinfo "160000,${mem_sha},${mempath}"
 
-# 7. live + worktree branches (idempotent).
+# 7. `live` trunk, checked out detached (idempotent). The branch model is
+# detached-at-live (D17): `live` is the only branch memory ever carries, and it
+# is never checked out AS a branch, so any number of parent worktrees can share
+# one memory gitdir.
 cd "$mempath"
 git show-ref --verify --quiet refs/heads/live || git branch live
-
-cd "$parent_root"
-parent_branch=$(git symbolic-ref --short -q HEAD || echo DETACHED)
-
-cd "$mempath"
-if [ "$parent_branch" = "DETACHED" ]; then
-  git checkout -q --detach live
-else
-  git show-ref --verify --quiet "refs/heads/$parent_branch" || git branch "$parent_branch" live
-  git checkout -q "$parent_branch"
-fi
+git checkout -q --detach live

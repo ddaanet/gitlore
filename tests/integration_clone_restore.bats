@@ -62,12 +62,10 @@ teardown() { teardown_tmp_repo; }
   [ -e "$CLONE/memory/.git" ]
   [ -f "$CLONE/memory/MEMORY.md" ]
 
-  # Memory checked out on a branch matching the parent (main), forked from live,
-  # and fast-forwarded clean (live is an ancestor of HEAD).
-  run git -C "$CLONE/memory" symbolic-ref --short HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "main" ]
-  [ "$(git -C "$CLONE/memory" rev-parse main)" = "$(git -C "$CLONE/memory" rev-parse live)" ]
+  # Memory checked out DETACHED at live (D17 branch model), not on a named branch.
+  run git -C "$CLONE/memory" symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
+  [ "$(git -C "$CLONE/memory" rev-parse HEAD)" = "$(git -C "$CLONE/memory" rev-parse live)" ]
 
   rm -rf "$CLONE"
 }

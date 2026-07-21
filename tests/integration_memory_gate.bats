@@ -41,7 +41,7 @@ wire_gate() {
 
   run bash "$PRECOMMIT"
   [ "$status" -eq 0 ]
-  wt=$(git -C memory rev-parse worktree)
+  wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
   [ ! -f "$msgfile" ]

@@ -20,7 +20,7 @@ You run in **two turns**. The parent dispatches you (turn 1), evaluates your syn
 
 **Turn 1 — synthesize and stop:**
 
-1. Read the state file. It is JSON with fields: `flavor`, `base`, `source_ref`, `target_ref`, `return_branch`, `changed_files`, `conflicted_files`, `continuation`.
+1. Read the state file. It is JSON with fields: `flavor`, `base`, `source_ref`, `target_ref`, `changed_files`, `conflicted_files`, `continuation`. `source_ref` is the pending commit being landed; `target_ref` is the authoritative side it is merging into (`live` or `origin/live`), which is checked out.
 2. For every path in `changed_files`, **read the file fresh from disk** (post-merge state — may contain conflict markers).
 3. Synthesize holistically: resolve conflicts AND reconcile semantic overlap, even if the file has no textual conflict markers. Memory files can have semantic conflicts that don't surface as textual ones.
 4. Write the synthesized contents to each file.
@@ -30,7 +30,7 @@ You run in **two turns**. The parent dispatches you (turn 1), evaluates your syn
 **Turn 2 — on resume:**
 
 The parent will resume you with one of:
-- `approved` (or any clearly affirmative variant) → run the continuation command verbatim. End your final message with a one-line result (e.g., "Branch-vs-live merge complete. 3 files reconciled. Continuation exited 0.").
+- `approved` (or any clearly affirmative variant) → run the continuation command verbatim. End your final message with a one-line result (e.g., "head-vs-live merge complete. 3 files reconciled. Continuation exited 0.").
 - `rejected: <reason>` → re-synthesize incorporating the feedback, run `git add -A` again, and return the new summary. The reason is opaque free text — do not scan it for approval words; a rejection whose reason mentions "approved" is still a rejection. Do not run the continuation.
 - Anything ambiguous → treat as rejected with feedback "ambiguous approval, please clarify". Do not run the continuation.
 
