@@ -42,6 +42,49 @@ if [ -z "$remote_url" ]; then
   exit 1
 fi
 
+# Tier push lockstep (D17). Each tier is an independent repo with its own remote,
+# and the memory commit about to be published records its gitlink — so every tier
+# commit must reach its remote BEFORE that pointer goes out, or a colleague
+# fetches memory and cannot resolve the tier. Driver-side, like memory's own
+# push: the memory store gets no recursing pre-push.
+# Failure here is fatal. A tier that silently stops publishing is indistinguish-
+# able from one with nothing to say, which is exactly how shared memory rots.
+while IFS= read -r tier; do
+  [ -n "$tier" ] || continue
+  tierpath="$mempath/$tier"
+  # Unchecked-out tier: `git -C` escapes to the enclosing repo, which would push
+  # MEMORY's live to memory's origin under the tier's name.
+  [ -e "$tierpath/.git" ] || continue
+  # `-q --verify` is silent on the expected miss: a tier never fetched has no
+  # local `live` and so has nothing of its own to publish.
+  git -C "$tierpath" rev-parse -q --verify live >/dev/null || continue
+  if [ -z "$(git -C "$tierpath" config --get remote.origin.url || true)" ]; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: tier '$tier' has no remote configured, so nothing written there is being shared. Mount it against a remote or unmount it." \
+      "gitlore: tier '$tier' has no remote configured, so nothing written there is being shared." >&2
+    exit 1
+  fi
+  if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
+    # Same discriminator as memory's push below: git's parenthesized reason
+    # separates divergence from policy/credential/quota refusals.
+    case "$tier_err" in
+      *"(fetch first)"*|*"(non-fast-forward)"*)
+        gitlore_say_for_agent_or_user \
+          "gitlore: tier '$tier' has diverged from its remote 'live' — someone else advanced it. Resolving a tier divergence is not yet automated: fetch and merge inside $tierpath, then retry the push." \
+          "gitlore: tier '$tier' has diverged from its remote 'live'. Open this project in Claude Code to resolve it." >&2
+        ;;
+      *)
+        gitlore_say_for_agent_or_user \
+          "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" \
+          "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" >&2
+        ;;
+    esac
+    exit 1
+  fi
+done < <(gitlore_tier_paths "$mempath")
+
 # No redirect: `-q` already silences progress, so anything fetch writes here is a
 # real problem. Non-fatal (`|| true`) — the push below is the operation that counts.
 git -C "$mempath" fetch -q origin live || true
