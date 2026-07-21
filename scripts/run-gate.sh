@@ -11,7 +11,7 @@
 # Set GITLORE_GATE_FORCE=1 to run regardless of the sentinel.
 set -euo pipefail
 
-[ "$#" -ge 2 ] || { echo "usage: run-gate.sh NAME CMD [ARG...]" >&2; exit 2; }
+[ "$#" -ge 2 ] || { printf 'usage: run-gate.sh NAME CMD [ARG...]\n' >&2; exit 2; }
 name="$1"
 shift
 
@@ -29,8 +29,14 @@ cd -- "$toplevel"
 # whole point, since a release commits after precommit goes green.
 tree_hash() {
   local tmp_index real_index
-  tmp_index=$(mktemp "${TMPDIR:-/tmp}/gitlore-gate-index.XXXXXX")
-  real_index=$(git rev-parse --git-path index)
+  # Checked, not assumed: the caller runs this inside `$(...) || ...`, which
+  # switches errexit off for everything within, so a failing mktemp would
+  # otherwise fall through to `GIT_INDEX_FILE= git add -A`. That happens to
+  # fail hard rather than hitting the real index (verified git 2.47.3), but
+  # relying on it would leave the whole worktree one git version away from
+  # being staged by a hashing routine.
+  tmp_index=$(mktemp "${TMPDIR:-/tmp}/gitlore-gate-index.XXXXXX") || return 1
+  real_index=$(git rev-parse --git-path index) || { rm -f -- "$tmp_index"; return 1; }
   if [ -f "$real_index" ]; then
     cp -- "$real_index" "$tmp_index"
   else
@@ -57,12 +63,13 @@ sentinel="$sentinel_dir/$name"
 # Empty on failure: no hash means no skip and no record, so the gate runs.
 current=$(tree_hash) || {
   current=""
-  echo "gate $name: could not hash the tree (see above) — running the gate." >&2
+  printf 'gate %s: could not hash the tree (see above) — running the gate.\n' \
+    "$name" >&2
 }
 
 if [ -z "${GITLORE_GATE_FORCE:-}" ] && [ -n "$current" ] && [ -f "$sentinel" ] \
    && [ "$(cat -- "$sentinel")" = "$current" ]; then
-  echo "gate $name: tree unchanged since it last passed — skipping."
+  printf 'gate %s: tree unchanged since it last passed — skipping.\n' "$name"
   exit 0
 fi
 

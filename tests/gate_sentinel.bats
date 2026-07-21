@@ -17,27 +17,44 @@ load helpers/setup
 
 setup() {
   setup_tmp_repo
+  # The suite runs *inside* a gate (`just precommit` → `make test`), so an
+  # ambient GITLORE_GATE_FORCE would reach every gate under test and make the
+  # skip cases silently unprovable.
+  unset GITLORE_GATE_FORCE
   RUN_GATE="$PLUGIN_ROOT/scripts/run-gate.sh"
   # Outside the repo on purpose: a marker inside it would be an untracked file,
   # which by design invalidates the sentinel — the test would measure itself.
   MARKER_DIR="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-gate-marker.XXXXXX")"
   MARKER="$MARKER_DIR/ran"
+  export MARKER
   echo seed > tracked.txt
   git add tracked.txt
   git commit -q -m "seed"
 }
 teardown() {
-  [ -n "${MARKER_DIR:-}" ] && rm -rf "$MARKER_DIR"
+  # An `&&` chain here would make teardown itself exit non-zero whenever the
+  # test is set up, which bats reports as a failure.
+  if [ -n "${MARKER_DIR:-}" ]; then
+    rm -rf "$MARKER_DIR"
+  fi
   teardown_tmp_repo
 }
 
 # A gate command that appends one line per execution, so the marker's line
-# count is the number of times the gate actually ran.
+# count is the number of times the gate actually ran. The path travels in the
+# environment rather than interpolated into the `-c` string, which would break
+# on a quote in $TMPDIR.
 run_counting_gate() {
-  run bash "$RUN_GATE" "${1:-demo}" bash -c "echo ran >> '$MARKER'"
+  run bash "$RUN_GATE" "${1:-demo}" bash -c 'printf "ran\n" >> "$MARKER"'
 }
 
-runs() { [ -f "$MARKER" ] && wc -l < "$MARKER" | tr -d ' ' || echo 0; }
+runs() {
+  if [ -f "$MARKER" ]; then
+    wc -l < "$MARKER" | tr -d ' '
+  else
+    printf '0\n'
+  fi
+}
 
 @test "the first run executes the command" {
   run_counting_gate
@@ -102,9 +119,9 @@ runs() { [ -f "$MARKER" ] && wc -l < "$MARKER" | tr -d ' ' || echo 0; }
 }
 
 @test "a failing gate records nothing, so the next run retries" {
-  run bash "$RUN_GATE" demo bash -c "echo ran >> '$MARKER'; exit 1"
+  run bash "$RUN_GATE" demo bash -c 'printf "ran\n" >> "$MARKER"; exit 1'
   [ "$status" -eq 1 ]
-  run bash "$RUN_GATE" demo bash -c "echo ran >> '$MARKER'; exit 1"
+  run bash "$RUN_GATE" demo bash -c 'printf "ran\n" >> "$MARKER"; exit 1'
   [ "$status" -eq 1 ]
   [ "$(runs)" = 2 ]
 }
@@ -127,6 +144,9 @@ runs() { [ -f "$MARKER" ] && wc -l < "$MARKER" | tr -d ' ' || echo 0; }
 @test "GITLORE_GATE_FORCE runs the command despite a matching sentinel" {
   run_counting_gate
   GITLORE_GATE_FORCE=1 run_counting_gate
+  [ "$(runs)" = 2 ]
+  # And it does not linger: the next run, unforced, skips again.
+  run_counting_gate
   [ "$(runs)" = 2 ]
 }
 
