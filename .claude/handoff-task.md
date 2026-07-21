@@ -1,28 +1,34 @@
 ## Current task
 
-D17 slice 3-i-a (nested-tier propagation-in + routing) and a follow-on shell
-hardening pass over `scripts/` both await David's eyeball review, before Task 4
-of the 3-i-a plan (the real-`ddaanet` dogfood) and the branch-model unification
-refactor that follows it.
+First teach the parent `pre-commit` hook to leave the memory gitlink alone while
+a rebase or cherry-pick is replaying — it now stages the gitlink on every
+commit, so an `--amend` mid-surgery re-pins the replayed commit to memory's
+current SHA instead of the one it recorded — then resume D17 slice 3 at tier
+commit/push lockstep, followed by 3-ii composition and 3-iii `/add-tier`.
 
 ## Open decisions
 
-- **`ddaanet` remote visibility** for the Task 4 dogfood: default private
-  (matching the memory submodule's own default) unless David overrides. The
-  submodule git writes need David's `!` shell — the agent cannot run them.
-- **Whether the linked-worktree finding changes the lockstep design:** a D11
-  linked memory worktree gets its own independent tier clone (separate objects
-  and refs), so two worktrees can diverge and both push to one tier remote.
-  Harmless for propagation-in; needs a decision when tier commit/push lockstep
-  is planned.
-- **How much to trust the push-rejection discriminator:** the pre-push and
-  resolve paths now gate the merge-resolution flow on git's parenthesized reason
-  (`(fetch first)`/`(non-fast-forward)`), verified against real output for the
-  divergence and pre-receive cases. That text is git's UI, not a documented
-  contract — if it drifts across versions or transports, a genuine divergence
-  gets reported as an unexpected failure rather than entering the resolve flow.
-  Accept that failure direction, or pin it with a test against a real
-  non-fast-forward push?
-- Still deferred to their own slices: one approval summary per memory episode
-  vs. per tier; whether the memory submodule needs its own recursing
-  `pre-commit`/`pre-push`.
+- **How far the replay guard reaches.** Skipping the gitlink staging is the
+  settled part. Undecided: whether the whole sync is skipped too, since dirty
+  memory during a replay trips the FR11 approval gate and would abort the
+  rebase rather than the commit; and whether a skip announces itself or stays
+  silent, given the hook has no way to tell a deliberate replay from a stuck
+  one.
+- **What content each sentinel hashes.** `just precommit` and `just prerelease`
+  are to skip when their recorded content hash still matches, so `release`
+  right after a green `precommit` re-runs only the uncovered part. Undecided:
+  whether the hash covers the whole tracked tree or a per-gate input set (a
+  narrower set skips more often but silently misses an untracked input), and
+  where the sentinel is recorded so it survives a rebuild but never travels
+  between checkouts. A fork drafted an implementation of both gate scripts this
+  session; it was removed rather than reviewed, and is to be rewritten.
+- **One approval summary per memory episode, or per tier.** Deferred to the
+  lockstep slice, which is the first code that commits into more than one store
+  in a single episode.
+- **Whether the memory submodule needs its own recursing `pre-commit`/`pre-push`.**
+  Same slice — a tier is a submodule inside a submodule, so the parent's hooks
+  do not reach it.
+- **Presence-authority: is the file set or the index authoritative over a
+  pointer line's presence?** Coverage, prune, and dedup all wait behind this;
+  it needs log evidence of how presence actually drifts, and the standing
+  instruction is to decide it on that evidence rather than let inaction pick.

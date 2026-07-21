@@ -119,6 +119,29 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
 }
 
+@test "SessionStart reports a diverged tier with git's own reason" {
+  # Regression: the tier fetch ran with `-q`, and a quiet fetch prints NOTHING
+  # on a non-fast-forward — it only exits 1. The divergence arm could never
+  # match, so a tier that had stopped propagating was reported as merely
+  # "stale", with "git said:" trailing into empty space. Asserted through the
+  # hook, not against a hand-rolled `git fetch`: the invocation is the bug.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  git -C memory/ddaanet fetch -q origin "live:live"
+  git -C memory/ddaanet checkout -q -B live
+  echo "local only" >> memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet commit -aqm "local divergent"
+  git -C memory/ddaanet checkout -q --detach live
+  push_tier_fact ddaanet >/dev/null
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("has diverged")'
+  echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
+}
+
 @test "SessionStart materializes a tier that was never checked out (propagation)" {
   make_parent_with_memory
   make_tier_in_memory ddaanet

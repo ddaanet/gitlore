@@ -7,6 +7,14 @@ set -euo pipefail
 # a linked parent worktree GIT_COMMON_DIR/GIT_OBJECT_DIRECTORY silently redirect
 # the submodule's refs and objects to the parent's store. Clear the full
 # local-env-var set (githooks(5)), not a hand-picked subset.
+# Capture the index git means this commit to be built from, BEFORE the unset
+# below discards it. Which index that is depends on how the commit was invoked:
+# `.git/index` for a plain commit, `.git/index.lock` under `-a`, and a
+# `.git/next-index-*.lock` temp index for a pathspec commit. Staging the gitlink
+# below has to target that same index or the commit will not see it — and for
+# the two lock flavors a bare `git add` does not merely miss, it dies on
+# "Unable to create '.git/index.lock': File exists" and blocks the commit.
+saved_index="${GIT_INDEX_FILE-}"
 # shellcheck disable=SC2046  # intentional word-splitting of the var-name list
 unset $(git rev-parse --local-env-vars)
 
@@ -27,5 +35,20 @@ mempath=$(gitlore_memory_path) || mempath=""
 # exist yet. Nothing to sync — never block the parent commit.
 [ ! -e "$mempath/.git" ] && exit 0
 
-gitlore_sync_memory_to_live "$mempath"
-exit $?
+gitlore_sync_memory_to_live "$mempath" || exit $?
+
+# Record the memory commit the sync just made. The parent's index was read
+# before this hook ran, so without this the commit pins the PRE-hook memory SHA:
+# every parent commit would lag one memory commit behind, and a fresh clone at
+# any commit would restore stale memory. A no-op when memory did not move.
+if [ -n "$saved_index" ]; then
+  GIT_INDEX_FILE="$saved_index" git add -- "$mempath" || {
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory was committed but its pointer could not be staged, so this commit would record a stale memory SHA. Inspect the index and retry." \
+      "gitlore: memory was committed but its pointer could not be staged, so this commit would record a stale memory SHA. Inspect the index and retry." >&2
+    exit 1
+  }
+else
+  git add -- "$mempath"
+fi
+exit 0
