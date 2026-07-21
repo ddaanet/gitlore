@@ -12,6 +12,8 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # gitlore_get_frontmatter_description, for tier routing guidance (D17).
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 
 # Guard 1: gitlore.enabled
 # Guard on the file rather than suppressing jq: "no settings.json" is the normal
@@ -210,6 +212,15 @@ while IFS= read -r tier; do
   fi
 done < <(gitlore_tier_paths "$mempath")
 
+# Compose after the fast-forward, so lines that just propagated in surface in
+# the always-loaded root index this session rather than next (D17 3-ii). Never
+# fatal: a store that fails validation is reported and left alone — SessionStart
+# must always finish.
+if ! compose_problems=$(gitlore_compose "$mempath"); then
+  add_sysmsg "gitlore: tier composition refused; the memory indexes were left untouched:
+$compose_problems"
+fi
+
 # Routing guidance (D17): advertise each ACTIVE tier (listed in the manifest)
 # and its self-described purpose, so the agent routes a portable fact to the
 # right tier instead of burying it in project-local memory. A mounted but
@@ -238,7 +249,7 @@ done < <(gitlore_active_tiers "$mempath")
 if [ -n "$tier_guidance" ]; then
   protocol_ctx="$protocol_ctx
 
-gitlore memory tiers: shared memory stores mounted inside the memory submodule. Write a portable fact into the matching tier's directory (same one-file-per-fact format, and add its index line to that tier's MEMORY.md); facts specific to this project stay in $mempath/.$tier_guidance"
+gitlore memory tiers: shared memory stores mounted inside the memory submodule. Write a portable fact into the matching tier's directory (same one-file-per-fact format), and add its index line to the ROOT $mempath/MEMORY.md with the tier prefix — '- [Title](<tier>/<file>.md) — hook'. gitlore mirrors that line down into the tier's own index for you. Facts specific to this project stay in $mempath/ with a bare path.$tier_guidance"
 fi
 
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus
