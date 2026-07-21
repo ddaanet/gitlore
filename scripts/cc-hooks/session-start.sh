@@ -190,7 +190,12 @@ while IFS= read -r tier; do
   # quietly stopped propagating is indistinguishable from one with nothing new,
   # so capture the reason and report it. The ff-rejection is the interesting
   # case — it means this tier has diverged and needs the lockstep slice.
-  if ! fetch_err=$(git -C "$tierpath" fetch -q origin "live:live" 2>&1); then
+  # No `-q`: unlike `push -q`, which still reports its rejection reason, a quiet
+  # fetch prints NOTHING on a non-fast-forward — it just exits 1. With `-q` the
+  # divergence arm below could never match, and the fall-through reported "git
+  # said:" followed by empty space. The output is captured either way, so the
+  # only cost of dropping it is progress text nobody sees on success.
+  if ! fetch_err=$(git -C "$tierpath" fetch origin "live:live" 2>&1); then
     case "$fetch_err" in
       *non-fast-forward*|*"fetch first"*)
         add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — local commits are not being propagated. Left untouched." ;;
