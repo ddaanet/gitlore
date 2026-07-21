@@ -89,3 +89,25 @@ push_tier_fact() {
   git -C "$work" rev-parse HEAD
   rm -rf "$work"
 }
+
+# Write the tier activation manifest. Args: the active tier names, in
+# precedence order. With no args the manifest is created empty.
+set_tier_manifest() {
+  : > memory/.gitlore-tiers
+  local t
+  for t in "$@"; do printf '%s\n' "$t" >> memory/.gitlore-tiers; done
+}
+
+# Append a bullet to a tier carrier's MEMORY.md (and create the file it names,
+# so the store looks realistic). Args: $1 = tier, $2 = file name, $3 = hook.
+seed_tier_bullet() {
+  local tier="$1" file="$2" hook="$3"
+  printf -- '- [%s](%s) — %s\n' "${file%.md}" "$file" "$hook" >> "memory/$tier/MEMORY.md"
+  printf -- '---\nname: %s\ndescription: ""\n---\n\nbody\n' "${file%.md}" > "memory/$tier/$file"
+}
+
+# Append a bullet to the ROOT index. Args: $1 = path (may be tier-prefixed),
+# $2 = hook.
+seed_root_bullet() {
+  printf -- '- [%s](%s) — %s\n' "$(basename "${1%.md}")" "$1" "$2" >> memory/MEMORY.md
+}

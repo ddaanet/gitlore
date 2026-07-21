@@ -2,7 +2,12 @@
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
+load helpers/fixtures
+load helpers/tier-fixtures
 
+# `load helpers/setup` already sources every scripts/lib/*.sh, which is where
+# gitlore_tier_paths / gitlore_active_tiers come from. Re-sourcing util.sh here
+# would fail on its readonly constants, so only the file under test is named.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 
@@ -76,4 +81,87 @@ teardown() { teardown_tmp_repo; }
   [ -z "$output" ]
   run gitlore_index_part idx.md preamble
   [[ "$output" == *"# Tier"* ]]
+}
+
+@test "tier_of attributes a prefixed path to a mounted tier" {
+  tiers=$(printf 'ddaanet\nlore\n')
+  run gitlore_tier_of "ddaanet/x.md" "$tiers"
+  [ "$status" -eq 0 ]
+  [ "$output" = "ddaanet" ]
+}
+
+@test "tier_of rejects a bare path and an unknown prefix" {
+  tiers=$(printf 'ddaanet\n')
+  run gitlore_tier_of "x.md" "$tiers"
+  [ "$status" -eq 1 ]
+  run gitlore_tier_of "gone/x.md" "$tiers"
+  [ "$status" -eq 1 ]
+}
+
+@test "check passes on a well-formed store" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_root_bullet "project_overview.md" "the project"
+  run gitlore_compose_check memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "check fails on a duplicate path in the root index" {
+  make_parent_with_memory
+  seed_root_bullet "dup.md" "first"
+  seed_root_bullet "dup.md" "second"
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"duplicate"* ]]
+  [[ "$output" == *"dup.md"* ]]
+}
+
+@test "check fails when the manifest lists a tier that is not mounted" {
+  make_parent_with_memory
+  set_tier_manifest ghost
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ghost"* ]]
+  [[ "$output" == *"not mounted"* ]]
+}
+
+@test "check fails on a root bullet whose prefix names no mounted tier" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_root_bullet "removed_tier/orphan.md" "leftover"
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"removed_tier/orphan.md"* ]]
+}
+
+@test "check fails on a non-bullet line inside the bullet region" {
+  make_parent_with_memory
+  seed_root_bullet "a.md" "x"
+  printf '\nSome interleaved prose\n\n' >> memory/MEMORY.md
+  seed_root_bullet "b.md" "y"
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"interleaved"* ]]
+}
+
+@test "check inspects tier carriers too, not just the root" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet dup.md "first"
+  seed_tier_bullet ddaanet dup.md "second"
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"duplicate"* ]]
+}
+
+@test "a mounted but unlisted tier is dormant, not an error" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest
+  run gitlore_compose_check memory
+  [ "$status" -eq 0 ]
 }
