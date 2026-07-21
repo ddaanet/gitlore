@@ -24,36 +24,36 @@ teardown() { teardown_tmp_repo; }
   [[ "$output$stderr" == *"healthy"* ]] || [[ -z "$stderr" ]]
 }
 
-@test "resolve: yields branch-vs-live directive when worktree diverged from live" {
-  make_diverged_branch_vs_live memory
+@test "resolve: yields head-vs-live directive when the pending commit diverged from live" {
+  make_diverged_head_vs_live memory
   run --separate-stderr bash "$RESOLVE"
   [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"flavor=branch-vs-live"* ]]
+  [[ "$output$stderr" == *"flavor=head-vs-live"* ]]
 }
 
-@test "resolve: yields local-vs-remote directive when local diverged from origin" {
-  make_diverged_local_vs_remote memory
-  # make_diverged_local_vs_remote leaves HEAD on live, so branch-vs-live is
-  # skipped (condition: HEAD != live is false). Only local-vs-remote fires.
+@test "resolve: yields head-vs-remote directive when local diverged from origin" {
+  make_diverged_head_vs_remote memory
+  # The commit path keeps local `live` at HEAD, so the local check is a no-op
+  # and only the remote one fires.
   run --separate-stderr bash "$RESOLVE"
   [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"flavor=local-vs-remote"* ]]
+  [[ "$output$stderr" == *"flavor=head-vs-remote"* ]]
 }
 
-@test "resolve: both flavors → serial yield (branch-vs-live first)" {
-  make_diverged_branch_vs_live memory
-  make_diverged_local_vs_remote memory
-  # make_diverged_local_vs_remote leaves HEAD on live; switch to worktree so
-  # branch-vs-live detection fires first (condition: HEAD != live).
-  git -C memory checkout -q worktree
+@test "resolve: both flavors → serial yield (head-vs-live first)" {
+  # Remote divergence first (leaves HEAD == local live), then move `live`
+  # sideways off the shared parent so it genuinely diverges from HEAD — merely
+  # advancing it would be a fast-forward, not a conflict.
+  make_diverged_head_vs_remote memory
+  advance_branch_with_file memory live SIBLING.md sibling "Sibling live advance" 'live^'
   run --separate-stderr bash "$RESOLVE"
   [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"flavor=branch-vs-live"* ]]
+  [[ "$output$stderr" == *"flavor=head-vs-live"* ]]
   # After stub-synth + first continuation, /gitlore:resolve should be re-invoked
   # to detect the second flavor. The continuation does NOT auto-loop into the
   # second flavor — that's a fresh entry-point invocation.
   run_stub_synth memory
   run --separate-stderr bash "$RESOLVE"
   [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"flavor=local-vs-remote"* ]]
+  [[ "$output$stderr" == *"flavor=head-vs-remote"* ]]
 }

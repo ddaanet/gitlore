@@ -26,12 +26,15 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "memory" ]
 }
 
-@test "install creates live and worktree branches inside memory" {
+@test "install creates the live trunk and leaves memory detached at it" {
   bash "$RUN_INSTALL" memory "echo precommit"
   run git -C memory branch --list live
   [[ "$output" == *live* ]]
-  run git -C memory branch --list main  # parent branch is main from setup
-  [[ "$output" == *main* ]]
+  # Branch model (D17): no per-parent-branch working branch is created, and HEAD
+  # is detached at live rather than attached to any branch.
+  run git -C memory symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$(git -C memory rev-parse live)" ]
 }
 
 @test "install writes settings.json keys" {

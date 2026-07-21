@@ -20,7 +20,7 @@ setup() {
 teardown() { teardown_tmp_repo; }
 
 @test "recovery: stale state file + MERGE_HEAD → abort-then-retry directive" {
-  make_diverged_branch_vs_live memory
+  make_diverged_head_vs_live memory
   run --separate-stderr bash "$PRE_COMMIT"
   # Now we have a state file + MERGE_HEAD. Simulate a fresh entry.
   run --separate-stderr bash "$PRE_COMMIT"
@@ -28,7 +28,7 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "recovery: state file without MERGE_HEAD → fatal directive" {
-  make_diverged_branch_vs_live memory
+  make_diverged_head_vs_live memory
   bash "$PRE_COMMIT" || true
   # Manually abort the merge but leave the state file behind.
   (cd memory && git merge --abort 2>/dev/null || true)
@@ -41,12 +41,12 @@ teardown() { teardown_tmp_repo; }
   # Push live to origin so resolve.sh default mode hits the semantic-merge
   # detection logic rather than the "no live in remote, push it, exit 0" path.
   git -C memory push -q origin live
-  make_diverged_branch_vs_live memory
+  make_diverged_head_vs_live memory
   bash "$PRE_COMMIT" || true
   # Simulate a crash by leaving the state file + MERGE_HEAD intact.
   run --separate-stderr bash "$RESOLVE" abort-then-retry
   [ "$status" -ne 0 ]  # Re-entry yields a fresh directive
-  [[ "$output$stderr" == *"branch-vs-live"* ]] || [[ "$output$stderr" == *"flavor="* ]]
+  [[ "$output$stderr" == *"head-vs-live"* ]] || [[ "$output$stderr" == *"flavor="* ]]
   # MERGE_HEAD cleaned (the re-entry prepares a new merge, so MERGE_HEAD will
   # exist again — but that's a new merge, not the stale one).
 }

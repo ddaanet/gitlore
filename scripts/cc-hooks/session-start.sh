@@ -101,14 +101,7 @@ if [ -f "$SENTINEL" ]; then
   esac
 fi
 
-# Branch model: guard, submodule init, checkout, ff-merge.
-parent_branch=$(gitlore_parent_branch)
-if [ "$parent_branch" = "live" ]; then
-  add_sysmsg "gitlore: parent branch 'live' collides with the memory trunk. Rename the parent branch (git branch -m) before continuing."
-  emit_session_json
-  exit 0
-fi
-
+# Branch model: submodule init, detach at live, ff-merge.
 # Memory working tree missing in this worktree. Two cases:
 #  - submodule never initialized (main worktree, fresh clone) → submodule update;
 #  - submodule initialized in the main repo but this is a *linked* worktree whose
@@ -132,7 +125,7 @@ fi
 # Fresh clone (FR7): `git submodule update --init` checks out the recorded
 # gitlink SHA as a detached HEAD and creates no local branches — only
 # `origin/live` exists. The branch-model logic below references `live` as a
-# *local* ref (checkout target and ff-merge source), so materialize it first.
+# *local* ref (detach target and ff-merge source), so materialize it first.
 # Prefer origin/live; fall back to the checked-out gitlink commit (HEAD) when
 # the memory has no remote (degenerate, never-pushed case). No-op once live
 # exists (install, normal sessions, linked worktrees).
@@ -144,14 +137,16 @@ if ! git -C "$mempath" show-ref --verify --quiet refs/heads/live; then
   fi
 fi
 
-if [ "$parent_branch" = "DETACHED" ]; then
-  gitlore_git -C "$mempath" checkout --detach live >/dev/null 2>&1 || true
-else
-  if git -C "$mempath" show-ref --verify --quiet "refs/heads/$parent_branch"; then
-    gitlore_git -C "$mempath" checkout -q "$parent_branch"
-  else
-    gitlore_git -C "$mempath" checkout -q -b "$parent_branch" live
-  fi
+# Branch model (D17): memory is checked out DETACHED — `live` is the sole
+# travelling ref and is never checked out as a branch, so one memory gitdir
+# serves any number of parent worktrees and every commit path reduces to
+# "pending HEAD vs live". Detaching is done *in place* (no ref argument), which
+# keeps the current commit and any uncommitted work; the ff-merge below is what
+# advances HEAD onto live. A session that predates this model arrives on a named
+# branch and is migrated here, losing nothing — the old model advanced `live` on
+# every commit, so the branch never held anything `live` did not.
+if git -C "$mempath" symbolic-ref -q HEAD >/dev/null; then
+  gitlore_git -C "$mempath" checkout -q --detach
 fi
 
 # Wire the submodule-side commit gate (Fix A / FR11). Runs after the memory
@@ -159,23 +154,16 @@ fi
 # submodule's gitlore.hooksDir to the live plugin each session.
 bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
 
-# Branch state for the success/divergence confirmation (D14).
-if [ "$parent_branch" = "DETACHED" ]; then
-  where="detached at live"
-else
-  where="branch '$parent_branch'"
-fi
-
 if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
   if gitlore_git -C "$mempath" merge --ff-only live >/dev/null 2>&1; then
-    add_sysmsg "gitlore: memory ready ($where, synced with live)."
+    add_sysmsg "gitlore: memory ready (detached at live)."
   else
-    add_sysmsg "gitlore: memory $where diverged from live. Run /gitlore:resolve, then start a fresh session."
+    add_sysmsg "gitlore: memory diverged from live. Run /gitlore:resolve, then start a fresh session."
     emit_session_json
     exit 0
   fi
 else
-  add_sysmsg "gitlore: memory ready ($where); uncommitted changes present, skipped live sync."
+  add_sysmsg "gitlore: memory ready (detached at live); uncommitted changes present, skipped live sync."
 fi
 
 # Nested tiers (D17 3-i-a): materialize + fast-forward each tier submodule inside

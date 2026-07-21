@@ -55,19 +55,13 @@ gitlore_has_submodule() {
   gitlore_memory_path >/dev/null 2>&1
 }
 
-# Print the parent worktree's branch name, or "DETACHED" if not on a branch.
-# Exit 1 outside a git repo.
-gitlore_parent_branch() {
-  local b
-  # `-q` already silences the detached-HEAD case (the normal, expected failure);
-  # what remains on stderr is a real fault (not a repo), worth surfacing.
-  b=$(git symbolic-ref --short -q HEAD) || {
-    git rev-parse --verify HEAD >/dev/null 2>&1 || return 1
-    printf 'DETACHED\n'
-    return 0
-  }
-  printf '%s\n' "$b"
-}
+# Ref pinning the pending (divergent) commit while a merge is prepared. Under
+# the detached-at-`live` branch model no named branch holds that commit, and
+# `merge --abort` drops MERGE_HEAD — without this ref the only remaining handle
+# would be the reflog, which is prunable. Created by gitlore_prepare_merge,
+# deleted once the merge lands or is abandoned.
+# shellcheck disable=SC2034  # consumed by sourcing scripts (lib/resolve.sh, resolve.sh)
+readonly GITLORE_PENDING_REF="refs/gitlore/pending"
 
 # Print abs path to the `.claude/` dir in the PARENT working tree that hosts the
 # memory IPC files (message, commit trigger, notified marker). Resolves the
