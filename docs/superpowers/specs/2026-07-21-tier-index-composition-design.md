@@ -47,8 +47,8 @@ up and mirrors the existing `ddaanet/`-prefixed root lines, if any, down.
 ## Composition is placement only
 
 It never derives, edits, or reorders a line's *text*; never touches project
-bullets; never creates or deletes a memory *file*. It owns exactly one thing: where
-a tier's bullets sit in the root index, and whether the carrier has them.
+bullets; never creates or deletes a memory *file*. It owns exactly one thing:
+where a tier's bullets sit in the root index, and whether the carrier has them.
 
 Consequence for the existing index→frontmatter sync: composition preserves the
 `(path, hook)` set of the root index, and `index-sync-post.sh` keys per line on
