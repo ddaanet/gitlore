@@ -1,0 +1,151 @@
+#!/usr/bin/env bats
+
+load helpers/setup
+load helpers/fixtures
+
+BATCH="$PLUGIN_ROOT/scripts/cc-hooks/recall-batch.sh"
+RESET="$PLUGIN_ROOT/scripts/cc-hooks/recall-reset.sh"
+
+setup() {
+  setup_tmp_repo
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+}
+teardown() { teardown_tmp_repo; }
+
+# The request file is the signal; tool_calls only feed the ledger.
+run_batch() {
+  local calls="${1:-[]}"
+  printf '{"hook_event_name":"PostToolBatch","session_id":"sess-1","tool_calls":%s}' "$calls" \
+    | bash "$BATCH"
+}
+run_reset() {
+  printf '{"hook_event_name":"PreCompact","session_id":"sess-1"}' | bash "$RESET"
+}
+read_call() { printf '[{"tool_name":"Read","tool_input":{"file_path":"%s"}}]' "$1"; }
+
+@test "hooks are executable and discovered as such" {
+  [ -x "$BATCH" ]
+  [ -x "$RESET" ]
+}
+
+@test "both hooks are registered in hooks.json" {
+  run jq -r '[.hooks | .. | .command? // empty] | join("\n")' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cc-hooks/recall-batch.sh"* ]]
+  [[ "$output" == *"cc-hooks/recall-reset.sh"* ]]
+  run jq -r '.hooks | keys | join(" ")' "$PLUGIN_ROOT/hooks/hooks.json"
+  [[ "$output" == *"PreCompact"* ]]
+}
+
+@test "no-op (exit 0, silent) when gitlore is not configured" {
+  run run_batch
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run run_reset
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "no-op when no request file is present" {
+  make_parent_with_memory
+  printf 'body of A\n' > memory/feedback_a.md
+  run run_batch
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "a request injects the bodies as additionalContext and is consumed" {
+  make_parent_with_memory
+  printf 'body of A\n' > memory/feedback_a.md
+  printf 'feedback_a.md\n' > "$(gitlore_recall_file memory)"
+
+  run run_batch
+  [ "$status" -eq 0 ]
+  ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+  [[ "$ctx" == *"body of A"* ]]
+  [ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.hookEventName')" = "PostToolBatch" ]
+  [[ "$(printf '%s' "$output" | jq -r '.systemMessage')" == *"recalled 1 memory"* ]]
+
+  [ ! -f "$(gitlore_recall_file memory)" ]     # consumed
+}
+
+@test "no match reports and fetches nothing" {
+  make_parent_with_memory
+  printf 'no match\n' > "$(gitlore_recall_file memory)"
+  run run_batch
+  [ "$status" -eq 0 ]
+  [[ "$(printf '%s' "$output" | jq -r '.systemMessage')" == *"no match"* ]]
+  [ ! -f "$(gitlore_recall_file memory)" ]
+}
+
+@test "a rejected request is consumed too, so it cannot re-report forever" {
+  make_parent_with_memory
+  printf 'feedback_nope.md\n' > "$(gitlore_recall_file memory)"
+
+  run run_batch
+  [ "$status" -eq 0 ]
+  ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+  [[ "$ctx" == *"REFUSED"* ]]
+  [[ "$ctx" == *"feedback_nope.md"* ]]
+  [ ! -f "$(gitlore_recall_file memory)" ]
+
+  run run_batch          # nothing left to report
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "a Read in the batch is ledgered, so the same body is not re-sent" {
+  make_parent_with_memory
+  printf 'body of A\n' > memory/feedback_a.md
+  abs="$TMP_REPO/memory/feedback_a.md"
+
+  # A prior batch read it directly — this is also the shape of CC's own
+  # "Recalled 1 memory", which issues a real Read on the agent's behalf.
+  run run_batch "$(read_call "$abs")"
+  [ "$status" -eq 0 ]
+
+  printf 'feedback_a.md\n' > "$(gitlore_recall_file memory)"
+  run run_batch
+  [ "$status" -eq 0 ]
+  ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+  [[ "$ctx" == *"already in this context"* ]]
+  [[ "$ctx" != *"body of A"* ]]
+}
+
+@test "a Read outside the memory store is not ledgered" {
+  make_parent_with_memory
+  printf 'body of A\n' > memory/feedback_a.md
+  printf 'decoy\n' > "$TMP_REPO/feedback_a.md"
+
+  run run_batch "$(read_call "$TMP_REPO/feedback_a.md")"
+  [ "$status" -eq 0 ]
+
+  printf 'feedback_a.md\n' > "$(gitlore_recall_file memory)"
+  run run_batch
+  ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+  [[ "$ctx" == *"body of A"* ]]
+}
+
+@test "reset clears the ledger so a post-compaction request re-fetches" {
+  make_parent_with_memory
+  printf 'body of A\n' > memory/feedback_a.md
+  printf 'feedback_a.md\n' > "$(gitlore_recall_file memory)"
+  run run_batch
+  [[ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')" == *"body of A"* ]]
+
+  run run_reset
+  [ "$status" -eq 0 ]
+
+  printf 'feedback_a.md\n' > "$(gitlore_recall_file memory)"
+  run run_batch
+  ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+  [[ "$ctx" == *"body of A"* ]]      # re-fetched, not skipped
+}
+
+@test "the skill is discoverable with a description that names the mid-task trigger" {
+  skill="$PLUGIN_ROOT/skills/recall/SKILL.md"
+  [ -f "$skill" ]
+  run head -5 "$skill"
+  [[ "$output" == *"name: recall"* ]]
+  [[ "$output" == *"tool result"* ]]
+}

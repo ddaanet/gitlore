@@ -1,3 +1,83 @@
 # Agent instructions
 
 @.claude/token-efficient.md
+
+## Recall
+
+Spontaneous recall is nil, and CC's passive recall fires a per-query classifier
+against the *user prompt* that does not re-select later in the conversation.
+Facts whose trigger only appears mid-task — a git error string, a `2>/dev/null`
+in a file you just read, an empty `$TMPDIR` — never surface on their own.
+
+So recall actively, at two checkpoints: after reading the task input, and again
+after exploring the code, before writing anything durable. Scan the index in
+`memory/MEMORY.md` (already in context — re-read it only after a compaction, or
+if it was edited this session), name the entries that match what you now know,
+and Read them in one batch.
+
+`memory/MEMORY.md` is a routing table, not the content. Its lines exist to let
+you decide read-or-skip; the fact lives in the file.
+
+## Working with David
+
+- No `AskUserQuestion` (`#no-askuserquestion`). Ask in plain prose: number the
+  questions, state your default so the thread can proceed, decide the rest and
+  say what you assumed.
+- He engages with LLM internals. Ground mechanism and cost claims or don't make
+  them; "be contrarian" means real pushback, not performative disagreement.
+- Decide as late as the evidence allows, but before inaction decides for you.
+  Don't build code that presupposes an unsettled question.
+- Match plan length to the work — a full spec is for real design decisions.
+
+## Memory and commits
+
+- Never `git commit` inside `memory/` or a tier. Writing a memory file is an
+  ordinary edit; committing the parent repo records, gates and pushes it.
+- `memory/` moves in lockstep with the parent: committed before the root commit,
+  pushed alongside every parent push. Lockstep is `live` vs `origin/live` — the
+  memory tree's `main` may legitimately sit ahead.
+- Handoff files (`.claude/handoff-task.md`, `.claude/handoff.md`) are
+  tooling-managed. Write them only through the handoff skill, and fold them into
+  the same commit as the work they describe.
+- Conventional-commit prefixes are required; the gitmoji hook rewrites them.
+- After a compaction, check `PWD`, `CLAUDE_PROJECT_DIR` and the gitStatus block
+  against what the summary describes before acting — a summary says what, not
+  where. If they disagree, stop and say so; don't `cd` to reconcile.
+
+## Scope
+
+Stay read-only on the *code* of David's other repos (`handoff`,
+`unsandbox-git-status`, `cwd-safety`, …), even for a small verified fix.
+Investigate and propose a patch; he applies it. Dropping a `NOTES`/`TODO`
+pointer in that repo is fine.
+
+## Design
+
+- Scripts decide, the agent executes. Detection, branching and state checks live
+  in shell scripts that emit structured output; the skill or hook acts on that
+  output instead of reasoning its way to the answer.
+- Commands emitted for a sub-agent are self-contained: absolute paths, explicit
+  `cd`, every `$VAR` resolved at emit time.
+- Always-on context carries prohibitions, not procedures. A resident recipe
+  reads as ceremony to run; surface procedures at the trigger that fires them.
+- Self-triggering skill when the condition is mechanical and detectable; a
+  command only for an explicitly user-initiated action.
+
+## Writing
+
+- State current truth in the present tense. Don't frame text as a correction of
+  a previous version — git history is the changelog. Commit messages excepted.
+- `docs/design.md` follows the six-section living-doc structure.
+
+## Testing
+
+- Encode behavior in the bats suite. Don't hand-build a fixture and assert in
+  the shell — grep the suite first, the path is usually already covered.
+- Test the invocation path, not just the code: assert discovery and `[ -x ]`,
+  and that the suite is listed in `make test`. Green means nothing until you
+  know what ran.
+- Automate by default; choose a manual check only when automation costs
+  disproportionately more than the value.
+- Dogfood on the real target the day it ships; fixtures miss real-world bugs.
+- `just precommit` is fast and frequent; `just prerelease` adds evals and is
+  slow and rare. Release via `just prerelease release`.

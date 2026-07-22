@@ -1,29 +1,38 @@
 ## Current task
 
-D17 slice 3-ii (tier index composition) is built and dogfooded — `index-compose.sh`
-library + PostToolBatch hook + SessionStart pass, splice-up of active tiers and
-mirror-down into every mounted tier, four fail-safe validations, byte-idempotent.
-Next slice is **3-iii `/gitlore:add-tier`** (mount an existing tier + `--create` a
-new one, both ending by editing `memory/.gitlore-tiers`, which triggers the
-recompose built in 3-ii). After 3-iii: **happy-path evals for the finished tier
-flow** (the standing instruction to write them once nested memory is done).
+Active recall (FR16/D18) is built and green — `skills/recall/SKILL.md`,
+`scripts/lib/recall.sh`, `recall-batch.sh` on PostToolBatch, `recall-reset.sh` on
+SessionStart+PreCompact, 28 new cases, 410 total green. It has **not been
+dogfooded**: CC freezes hook event registration at session start, and `PreCompact`
+is a newly registered event, so the first real exercise is a fresh session — write
+a `.claude/gitlore-recall` there and confirm the bodies actually arrive as
+`additionalContext`.
 
-The 3-ii composition hook does not self-fire in the session that wrote it — CC
-freezes hook event-registration at session start — so a fresh session is what
-first exercises the PostToolBatch trigger end-to-end; worth watching on the next
-memory edit.
+Also landed this session: always-on directives moved from `memory/MEMORY.md` into
+`CLAUDE.md` and a new path-scoped `.claude/rules/shell.md`; index trimmed to
+keyword-dense routing lines (20,381 → 18,676 bytes).
+
+Next planned slice remains **D17 3-iii `/gitlore:add-tier`** (mount an existing
+tier + `--create`, both ending by editing `memory/.gitlore-tiers`), then
+happy-path evals for the finished tier flow — which should now also cover the
+recall round trip.
 
 ## Open decisions
 
-- **Root `MEMORY.md` is ~19.7KB, nearing the 24.4KB always-loaded read limit.**
-  A hook now warns on every edit. Compacting means one line per entry, detail
-  pushed into topic files, stale entries merged or dropped — a semantic curation
-  pass over ~65 pointers, not a mechanical one. Decide whether to do it as its
-  own focused session before it forces itself.
+- **Root `MEMORY.md` is still 18.7KB against a 24.4KB limit, and the trim barely
+  moved it.** Measured: one project-state line is 3,288 bytes (18% of the index),
+  the top five lines are 31%, and every behavioral directive line combined was a
+  small fraction. The remaining curation is on the long state and reference lines,
+  which is semantic work — decide whether to do it as its own focused session.
+- **Does the index→frontmatter sync need a keyword-density validation?** The sync
+  makes the index line canonical and overwrites each file's `description:`. Both
+  feed CC's recall classifier, so a teaser-style index line ("the opt-out, and how
+  to ask instead") silently degrades passive recall. Hit this live and rewrote 20
+  lines keyword-dense. Nothing currently detects it — candidate fifth compose
+  validation.
 - **Presence-authority: is the file set or the index authoritative over a pointer
-  line's presence?** Still gates coverage/prune/dedup. 3-ii was built not to
-  prejudge it (mirror-down unconditional). Needs log evidence of how presence
-  actually drifts.
+  line's presence?** Still gates coverage/prune/dedup. The recall ledger now
+  produces the usage evidence that question was waiting on.
 - **Tier divergence is detected but not resolvable** — the resolve continuation
   derives its store from `gitlore_memory_path` and cannot target a tier; the state
   file would need to carry the store path.
