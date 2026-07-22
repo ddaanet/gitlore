@@ -114,9 +114,54 @@ EOF
   [ ! -s "$MOCK_BIN/stdin.log" ]
 }
 
-@test "claude-runner: --prompt without --approval is a usage error" {
+# Scenarios with no approval gate (add-tier, recall) are a single turn. A
+# synthetic second message would put the agent's reply to something the flow
+# never sends into the very transcript the assertions read.
+@test "claude-runner: --prompt without --approval runs exactly one turn" {
   _make_mock_claude success
   run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$MOCK_BIN/argv.log" | tr -d ' ')" -eq 1 ]
+}
+
+@test "claude-runner: --cwd alone is a usage error" {
+  _make_mock_claude success
+  run "$RUNNER" --cwd "$BATS_TEST_TMPDIR"
   [ "$status" -ne 0 ]
-  [[ "$output" =~ "--approval" ]]
+  [[ "$output" =~ "--prompt" ]]
+}
+
+@test "claude-runner: --out-dir captures each turn's text and the session id" {
+  _make_mock_claude success success
+  local out="$BATS_TEST_TMPDIR/out"
+  run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p" --approval "a" --out-dir "$out"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$out/turn1.txt")" = "canned" ]
+  [ "$(cat "$out/turn2.txt")" = "canned" ]
+  [ "$(cat "$out/session-id")" = "sid-1" ]
+}
+
+@test "claude-runner: --out-dir on a one-turn run captures turn 1 only" {
+  _make_mock_claude success
+  local out="$BATS_TEST_TMPDIR/out"
+  run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p" --out-dir "$out"
+  [ "$status" -eq 0 ]
+  [ -f "$out/turn1.txt" ]
+  [ ! -f "$out/turn2.txt" ]
+}
+
+# The transcript is how an assertion sees which TOOLS ran. Located by session id
+# alone, because the projects/<dir> name is a mangling of cwd and deriving it
+# here would be a second place to get that encoding wrong.
+@test "claude-runner: --out-dir captures the session transcript by id" {
+  _make_mock_claude success
+  local home="$BATS_TEST_TMPDIR/cfg"
+  mkdir -p "$home/projects/-some-mangled-path"
+  printf '{"marker":"transcript"}\n' > "$home/projects/-some-mangled-path/sid-1.jsonl"
+  local out="$BATS_TEST_TMPDIR/out"
+  run env CLAUDE_CONFIG_DIR="$home" \
+      "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p" --out-dir "$out"
+  [ "$status" -eq 0 ]
+  run grep -q transcript "$out/transcript.jsonl"
+  [ "$status" -eq 0 ]
 }

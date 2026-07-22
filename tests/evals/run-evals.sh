@@ -18,6 +18,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Allow overrides for testing.
 SCENARIOS_DIR="${SCENARIOS_DIR:-$SCRIPT_DIR/scenarios}"
 LIB_DIR="${LIB_DIR:-$SCRIPT_DIR/lib}"
+ASSERTS_DIR="${ASSERTS_DIR:-$SCRIPT_DIR/asserts}"
+SETUPS_DIR="${SETUPS_DIR:-$SCRIPT_DIR/setups}"
 
 # Pre-flight: verify the Claude Code API answers before loading helpers.
 # One turn only — it does not exercise --resume, so it cannot detect the
@@ -55,13 +57,31 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
   name=$(jq -r '.name' "$scenario_file")
   initial_memory=$(jq -r '.initial_memory' "$scenario_file")
   prompt=$(jq -r '.prompt' "$scenario_file")
-  approval=$(jq -r '.approval_message' "$scenario_file")
-  rubric=$(jq -r '.rubric' "$scenario_file")
+  # Optional: a scenario with no approval gate is a single turn.
+  approval=$(jq -r '.approval_message // ""' "$scenario_file")
+  rubric=$(jq -r '.rubric // ""' "$scenario_file")
   # ptu: agent wrote commit-msg and stopped; commit-msg must exist before eval's git commit.
   # precommit_failure: agent may have retried and consumed commit-msg; accept either state.
   trigger=$(jq -r '.trigger // "ptu"' "$scenario_file")
+  # Which flow this scenario grades. The memory-commit chain is one flow among
+  # several now (tiers, recall, add-tier), each with its own end state, so the
+  # assertions live per-flow in asserts/ rather than inline here.
+  assert=$(jq -r '.assert // "memory-commit"' "$scenario_file")
+  # Optional fixture extension, run after setup_eval_repo with cwd = $EVAL_REPO:
+  # mounting a tier, seeding a remote, planting a memory body to recall.
+  scenario_setup=$(jq -r '.setup // ""' "$scenario_file")
 
   printf '📝 Scenario: %s\n\n' "$name"
+
+  # A scenario naming an assertion that is missing or not executable is a broken
+  # scenario, not a passing one. Fail it loudly rather than skip it — an eval
+  # that quietly grades nothing is worse than one that is red.
+  assert_script="$ASSERTS_DIR/$assert.sh"
+  if [ ! -x "$assert_script" ]; then
+    printf "  ${RED}✗ Scenario FAILED${NC} (no executable assertion at %s)\n\n" "$assert_script"
+    failed=$((failed + 1))
+    continue
+  fi
 
   trial_passes=0
   trial_fails=0
@@ -69,75 +89,54 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
   for trial in $(seq 1 "$K"); do
     fail_reason=""
     setup_eval_repo "$initial_memory"
-    # The approved-summary IPC file the agent writes and the pre-commit hook
-    # consumes. Spelled out rather than resolved via scripts/lib/util.sh: these
-    # assertions are black-box, and must fail if production moves the file.
-    MSG_FILE="$EVAL_REPO/.claude/gitlore-memory-message"
 
-    # Eval runner (two turns):
-    #   PTU path  — Turn 1: agent edits memory, runs precommit command, PostToolUse
-    #               hook injects additionalContext, agent summarises and stops.
-    #               Turn 2: eval sends approval; agent writes commit-msg file.
-    #   Pre-commit failure path — Turn 1: agent edits memory, runs git commit,
-    #               hook exits 1 with CLAUDECODE error, agent summarises and stops.
-    #               Turn 2: eval sends approval; agent writes commit-msg and retries.
-    "$LIB_DIR/claude-runner.sh" \
-      --cwd "$EVAL_REPO" --prompt "$prompt" --approval "$approval" \
-      2>/dev/null || fail_reason="eval runner failed"
+    # Per-turn transcripts, for assertions that must see what the agent said.
+    EVAL_OUT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-eval-out.XXXXXX")
 
-    # Assertion 0: agent completed its share of the gitlore flow.
-    # PTU path: agent wrote commit-msg and stopped; eval's git commit will consume it.
-    #   → commit-msg must be present.
-    # Pre-commit failure path: agent retried git commit after approval; the hook ran,
-    #   committed memory, and deleted commit-msg as part of completing the parent commit.
-    #   → commit-msg must be absent (still present = agent wrote it but did not retry).
-    if [ -z "$fail_reason" ]; then
-      msgfile_pre="$MSG_FILE"
-      if [ "$trigger" = "precommit_failure" ]; then
-        [ -z "$msgfile_pre" ] || [ ! -f "$msgfile_pre" ] || \
-          fail_reason="commit-msg still present after Turn 2 (agent wrote commit-msg but did not retry the commit)"
-      else
-        [ -n "$msgfile_pre" ] && [ -f "$msgfile_pre" ] || \
-          fail_reason="no commit-msg file (agent did not write it after receiving additionalContext)"
-      fi
+    # Scenario fixture extension, before the agent runs. A non-zero exit here is
+    # a broken fixture, not a graded failure — report it as its own reason so it
+    # is never mistaken for the agent getting the flow wrong.
+    if [ -n "$scenario_setup" ]; then
+      setup_out=$( (cd "$EVAL_REPO" && bash "$SETUPS_DIR/$scenario_setup.sh") 2>&1 ) || \
+        fail_reason="scenario setup '$scenario_setup' failed — ${setup_out//$'\n'/ }"
     fi
 
+    # Where the memory store stood before the agent touched anything. An
+    # assertion of the form "nothing committed inside memory" cannot count
+    # commits: install, setup_eval_repo and the scenario fixture each make their
+    # own, and that baseline differs per scenario.
     if [ -z "$fail_reason" ]; then
-      # Parent commit fires the gitlore pre-commit hook, which commits memory
-      # (including any required merge steps and ff-push to live) before the
-      # parent commit can proceed.
-      (cd "$EVAL_REPO" && git commit --allow-empty -m "chore: trigger eval flow") 2>/dev/null || \
-        fail_reason="parent git commit failed"
+      git -C "$EVAL_REPO/memory" rev-parse HEAD > "$EVAL_OUT_DIR/memory-baseline"
     fi
 
-    # Assertion 1: memory has ≥2 commits (initial + the new one).
+    # Eval runner. Two turns when the scenario carries an approval message
+    # (the memory-commit gate), one when it does not (add-tier, recall).
+    #
+    # {{EVAL_REPO}} in a prompt expands to the throwaway repo's path. A scenario
+    # that has to name something the fixture created — a tier remote's URL — can
+    # only learn its path at trial time, and telling the agent to go find it
+    # would grade a search instead of the flow under test.
     if [ -z "$fail_reason" ]; then
-      count=$(git -C "$EVAL_REPO/memory" log --oneline | wc -l | tr -d ' ')
-      [ "$count" -ge 2 ] || fail_reason="memory not committed (found $count commit(s))"
+      prompt_expanded="${prompt//\{\{EVAL_REPO\}\}/$EVAL_REPO}"
+      runner_args=(--cwd "$EVAL_REPO" --prompt "$prompt_expanded" --out-dir "$EVAL_OUT_DIR")
+      [ -z "$approval" ] || runner_args+=(--approval "$approval")
+      runner_err=$("$LIB_DIR/claude-runner.sh" "${runner_args[@]}" 2>&1 1>/dev/null) || \
+        fail_reason="eval runner failed — ${runner_err//$'\n'/ }"
     fi
 
-    # Assertion 2: live is ff-pushed (HEAD == live).
+    # Grade the flow. The assertion script owns everything after the turns —
+    # including firing the parent commit, where the flow has one — and reports a
+    # failure by exiting non-zero with the reason on stdout/stderr.
     if [ -z "$fail_reason" ]; then
-      head=$(git -C "$EVAL_REPO/memory" rev-parse HEAD)
-      live=$(git -C "$EVAL_REPO/memory" rev-parse live)
-      [ "$head" = "$live" ] || fail_reason="live not ff-pushed (HEAD=$head live=$live)"
+      assert_out=$(
+        EVAL_REPO="$EVAL_REPO" EVAL_OUT_DIR="$EVAL_OUT_DIR" \
+        EVAL_RUBRIC="$rubric" EVAL_TRIGGER="$trigger" \
+        PLUGIN_ROOT="$PLUGIN_ROOT" LIB_DIR="$LIB_DIR" \
+        bash "$assert_script" 2>&1
+      ) || fail_reason="${assert_out//$'\n'/ }"
     fi
 
-    # Assertion 3: commit-msg temp file was consumed and deleted.
-    if [ -z "$fail_reason" ]; then
-      [ ! -f "$MSG_FILE" ] || fail_reason="commit-msg file still present at $MSG_FILE"
-    fi
-
-    # LLM judge: commit message must match the rubric. Capture the judge's
-    # stderr (its verdict + one-line reason, and thus the offending message)
-    # into the failure — else a rubric miss reports THAT but not WHAT.
-    if [ -z "$fail_reason" ]; then
-      diff=$(git -C "$EVAL_REPO/memory" show HEAD 2>/dev/null || true)
-      msg=$(git -C "$EVAL_REPO/memory" log -1 --format=%B 2>/dev/null || true)
-      judge_err=$("$LIB_DIR/judge.sh" "$rubric" "$diff" "$msg" 2>&1 1>/dev/null) || \
-        fail_reason="commit message failed judge rubric — ${judge_err//$'\n'/ } — commit msg: ${msg//$'\n'/ }"
-    fi
-
+    rm -rf "$EVAL_OUT_DIR"
     teardown_eval_repo
 
     if [ -z "$fail_reason" ]; then
