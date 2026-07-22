@@ -27,7 +27,8 @@ Exit codes:
 The directive looks like:
 
 ```
-gitlore: memory merge prepared (flavor=<X>).
+gitlore: memory merge prepared (flavor=<X>) in store:
+gitlore:   <abs-path-to-store>
 gitlore: dispatch the memory-merger sub-agent with state file:
 gitlore:   <abs-path-to-state-file>
 gitlore: on approval, the sub-agent must run:
@@ -35,6 +36,8 @@ gitlore:   cd "<parent-repo>" && bash "<abs-path-to-resolve.sh>" <continuation-s
 ```
 
 Extract the state-file path and the full continuation command (the entire `cd ... && bash ... <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
+
+The store line names which repository diverged: the project memory store, or a tier mounted inside it. One merge policy covers every level, so the flow below is identical either way — but say which store you merged when you summarize, because a tier is shared with other repositories and the project store is not.
 
 ## Dispatch memory-merger sub-agent (turn 1 — synthesis)
 

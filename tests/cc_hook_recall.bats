@@ -87,6 +87,8 @@ read_call() { printf '[{"tool_name":"Read","tool_input":{"file_path":"%s"}}]' "$
   ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
   [[ "$ctx" == *"REFUSED"* ]]
   [[ "$ctx" == *"feedback_nope.md"* ]]
+  # The banner states it once; the resolver's report must not repeat it.
+  [ "$(printf '%s\n' "${ctx,,}" | grep -c 'nothing was read')" -eq 1 ]
   [ ! -f "$(gitlore_recall_file memory)" ]
 
   run run_batch          # nothing left to report

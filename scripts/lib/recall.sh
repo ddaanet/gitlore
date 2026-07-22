@@ -118,6 +118,10 @@ _gitlore_recall_normalize() {
 # Read the recall request and print the text to inject. Returns 0 with the
 # injection payload on stdout, or 1 with the problem report on stdout.
 #
+# A problem report is a standalone sentence, capitalized, and never says that
+# nothing was read: the caller's refusal banner owns that clause, and stating it
+# in both places is what produced the doubled live text.
+#
 # The request file is consumed by the CALLER either way: it is a one-shot
 # request, and keeping a rejected one would re-report the same error on every
 # subsequent batch. Rejection is safe to make terminal because there is no gate
@@ -129,7 +133,7 @@ gitlore_recall_resolve() {
   local n=0 nomatch=0
 
   req=$(gitlore_recall_file "$mempath")
-  [ -f "$req" ] || { printf 'no recall request\n'; return 1; }
+  [ -f "$req" ] || { printf 'There is no recall request file to serve.\n'; return 1; }
 
   while IFS= read -r line || [ -n "$line" ]; do
     trimmed="${line#"${line%%[![:space:]]*}"}"
@@ -144,7 +148,7 @@ gitlore_recall_resolve() {
   done < "$req"
 
   if [ "$nomatch" -eq 1 ] && [ "$n" -gt 0 ]; then
-    printf 'the request mixes "no match" with %d path(s); it must be one or the other\n' "$n"
+    printf 'The request mixes "no match" with %d path(s); it must be one or the other.\n' "$n"
     return 1
   fi
   if [ "$nomatch" -eq 1 ]; then
@@ -152,12 +156,12 @@ gitlore_recall_resolve() {
     return 0
   fi
   if [ "$n" -eq 0 ]; then
-    printf 'the request is empty; write either "no match" or up to %d paths, one per line\n' \
+    printf 'The request is empty; write either "no match" or up to %d paths, one per line.\n' \
       "$GITLORE_RECALL_MAX"
     return 1
   fi
   if [ "$n" -gt "$GITLORE_RECALL_MAX" ]; then
-    printf 'the request lists %d entries, over the limit of %d. Nothing was read. Reassess and retry with a more specific list — pick only the entries whose trigger you have actually seen.\n' \
+    printf 'The request lists %d entries, over the limit of %d. Reassess and retry with a more specific list — pick only the entries whose trigger you have actually seen.\n' \
       "$n" "$GITLORE_RECALL_MAX"
     return 1
   fi
@@ -172,7 +176,7 @@ gitlore_recall_resolve() {
     fi
   done
   if [ "${#problems[@]}" -gt 0 ]; then
-    printf 'the request names entries that do not resolve. Nothing was read.\n'
+    printf 'The request names entries that do not resolve.\n'
     printf '  - %s\n' "${problems[@]}"
     printf 'Check the paths against the index in %s/MEMORY.md and retry.\n' "$mempath"
     return 1
