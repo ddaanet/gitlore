@@ -20,11 +20,11 @@ You run in **two turns**. The parent dispatches you (turn 1), evaluates your syn
 
 **Turn 1 — synthesize and stop:**
 
-1. Read the state file. It is JSON with fields: `flavor`, `base`, `source_ref`, `target_ref`, `changed_files`, `conflicted_files`, `continuation`. `source_ref` is the pending commit being landed; `target_ref` is the authoritative side it is merging into (`live` or `origin/live`), which is checked out.
-2. For every path in `changed_files`, **read the file fresh from disk** (post-merge state — may contain conflict markers).
+1. Read the state file. It is JSON with fields: `flavor`, `store`, `base`, `source_ref`, `target_ref`, `changed_files`, `conflicted_files`, `continuation`. `source_ref` is the pending commit being landed; `target_ref` is the authoritative side it is merging into (`live` or `origin/live`), which is checked out. **`store` is the absolute path of the repository the merge is prepared in** — the project memory store, or a tier mounted inside it. Every path in `changed_files` is relative to `store`, and it is the only place you run `git`. Do not assume the memory store: the same merge policy applies at every level, and a tier merge looks identical apart from this field.
+2. For every path in `changed_files`, **read the file fresh from disk** (`<store>/<path>`, post-merge state — may contain conflict markers).
 3. Synthesize holistically: resolve conflicts AND reconcile semantic overlap, even if the file has no textual conflict markers. Memory files can have semantic conflicts that don't surface as textual ones.
 4. Write the synthesized contents to each file.
-5. Run `git add -A` in the memory worktree (resolved from the state file's location).
+5. Run `git add -A` in the store named by the state file's `store` field.
 6. **Return** a prose summary of what you synthesized as your final message for this turn. Do not run the continuation. Do not commit. End the turn by stopping.
 
 **Turn 2 — on resume:**

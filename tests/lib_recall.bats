@@ -60,9 +60,42 @@ feedback_a.md'
   [ "$status" -eq 1 ]
   [[ "$output" == *"6 entries"* ]]
   [[ "$output" == *"limit of 5"* ]]
-  [[ "$output" == *"Nothing was read"* ]]
   [[ "$output" == *"more specific"* ]]
   [[ "$output" != *"body of A"* ]]
+}
+
+@test "a problem report never claims nothing was read — that is the banner's clause" {
+  # Each refusal path, so a new message cannot reintroduce the doubling.
+  req 'feedback_nope.md'
+  run gitlore_recall_resolve memory "$SESSION"
+  [ "$status" -eq 1 ]
+  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "$output" == "The request names"* ]]
+
+  req 'feedback_a.md
+feedback_a.md
+feedback_a.md
+feedback_a.md
+feedback_a.md
+feedback_a.md'
+  run gitlore_recall_resolve memory "$SESSION"
+  [ "$status" -eq 1 ]
+  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "$output" == "The request lists"* ]]
+
+  req '
+   '
+  run gitlore_recall_resolve memory "$SESSION"
+  [ "$status" -eq 1 ]
+  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "$output" == "The request is empty"* ]]
+
+  req 'no match
+feedback_a.md'
+  run gitlore_recall_resolve memory "$SESSION"
+  [ "$status" -eq 1 ]
+  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "$output" == "The request mixes"* ]]
 }
 
 @test "exactly the cap is accepted" {

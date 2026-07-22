@@ -161,7 +161,9 @@ approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
   git --git-dir="$TMP_REPO/.bare-ddaanet.git" show live:MEMORY.md | grep -q 'org fact'
 }
 
-@test "pre-push reports the tier by name when its remote diverged" {
+# Resolution itself is tier_divergence.bats' subject; what this pins is that the
+# tier is named, so a merge directive in a multi-tier repo says which store.
+@test "pre-push names the tier when its remote diverged" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
@@ -174,7 +176,7 @@ approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
   run --separate-stderr bash "$PRE_PUSH"
   [ "$status" -eq 1 ]
   [[ "${output}${stderr}" == *ddaanet* ]]
-  [[ "${output}${stderr}" == *diverged* ]]
+  [[ "${output}${stderr}" == *"merge prepared"* ]]
 }
 
 @test "pre-push still pushes memory when a repo has no tiers" {

@@ -2,6 +2,36 @@
 # Shared functions for memory divergence detection, state-file IO, and
 # directive emission. Source; do not exec.
 
+# Print every store under this memory tree — memory itself, then each mounted
+# tier — in the order the gates visit them. One merge policy applies at every
+# level, so callers that walk stores (divergence detection, the stale-state
+# guard, the continuation's search for a prepared merge) all walk this list.
+# Args: $1 = memory worktree path.
+gitlore_memory_stores() {
+  local mempath="$1" tier
+  printf '%s\n' "$mempath"
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    # `git -C` into an unchecked-out submodule escapes to the enclosing repo, so
+    # an unmounted tier must never reach a caller.
+    [ -e "$mempath/$tier/.git" ] || continue
+    printf '%s/%s\n' "$mempath" "$tier"
+  done < <(gitlore_tier_paths "$mempath")
+}
+
+# Print every store that currently holds a merge-state file. Normally none or
+# one: a gate yields on the first divergence it meets and stops, so a second
+# store's merge is not prepared until the first is landed.
+# Args: $1 = memory worktree path.
+gitlore_stores_with_merge_state() {
+  local mempath="$1" store
+  while IFS= read -r store; do
+    [ -n "$store" ] || continue
+    [ -f "$(gitlore_merge_state_file "$store")" ] || continue
+    printf '%s\n' "$store"
+  done < <(gitlore_memory_stores "$mempath")
+}
+
 # Detect whether a stale merge-state file + MERGE_HEAD exists.
 # Stdout: "clean" | "stale-with-merge-head" | "stale-no-merge-head".
 gitlore_detect_stale_merge_state() {
@@ -49,12 +79,20 @@ gitlore_guard_stale_merge_state() {
 }
 
 # Write a JSON merge-state file. All args required.
-# Args: $1=mempath  $2=flavor  $3=base_sha  $4=source_ref  $5=target_ref
-#       $6=continuation_subcommand
+#
+# `store` records WHICH store the merge belongs to, absolutely. Memory and every
+# tier share one merge policy and one state-file name, each resolved inside its
+# own gitdir — so the file alone cannot say which repository it describes, and
+# both readers need to know: the continuation commits there, and the merger
+# sub-agent resolves `changed_files` against it. Absolute, so neither depends on
+# the CWD it happens to be invoked with.
+# Args: $1=store path (memory or tier worktree)  $2=flavor  $3=base_sha
+#       $4=source_ref  $5=target_ref  $6=continuation_subcommand
 gitlore_write_merge_state() {
   local mempath="$1" flavor="$2" base="$3" source="$4" target="$5" cont="$6"
-  local statefile
+  local statefile store_abs
   statefile=$(gitlore_merge_state_file "$mempath")
+  store_abs=$(CDPATH='' cd -- "$mempath" && pwd)
   local changed conflicted
   # Union of files changed on either side of the merge — target_ref (HEAD post-checkout)
   # AND source_ref (the incoming branch). diff base...HEAD alone misses source-side files.
@@ -66,6 +104,7 @@ gitlore_write_merge_state() {
   cat > "$statefile" <<EOF
 {
   "flavor": "$flavor",
+  "store": "$store_abs",
   "base": "$base",
   "source_ref": "$source",
   "target_ref": "$target",
@@ -78,6 +117,9 @@ EOF
 
 # Emit the structured directive on stderr.
 # Args: $1=statefile_path  $2=flavor  $3=continuation_subcommand
+# The banner keeps the literal "gitlore: memory merge prepared" prefix that
+# `commands/resolve.md` triggers on, and names the store after it — a tier merge
+# and a memory merge are otherwise indistinguishable in the output.
 # Emits absolute paths for both the parent repo root (cd target — needed because
 # the continuation invokes git plumbing that reads .gitmodules from CWD) and
 # the plugin's resolve.sh. Sub-agent runs the command verbatim; no env vars or
@@ -85,10 +127,12 @@ EOF
 gitlore_emit_merge_directive() {
   local statefile="$1" flavor="$2" cont="$3"
   local root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
-  local repo
+  local repo store
   repo=$(git rev-parse --show-toplevel)
+  store=$(jq -r '.store // "?"' "$statefile")
   cat >&2 <<EOF
-gitlore: memory merge prepared (flavor=$flavor).
+gitlore: memory merge prepared (flavor=$flavor) in store:
+gitlore:   $store
 gitlore: dispatch the memory-merger sub-agent with state file:
 gitlore:   $statefile
 gitlore: on approval, the sub-agent must run:
@@ -173,6 +217,8 @@ gitlore_sync_tiers_to_live() {
     # up to the enclosing repo, so without this a fresh clone would commit the
     # MEMORY store under the tier's name.
     [ -e "$tierpath/.git" ] || continue
+    # Same precheck memory gets: never commit on top of a half-finished merge.
+    gitlore_guard_stale_merge_state "$tierpath" || return 1
     [ "$(gitlore_memory_dirty "$tierpath")" = "1" ] || continue
     gitlore_git -C "$tierpath" add -A
     # Blessed commit: the same sentinel that admits a memory commit past the FR11
@@ -183,11 +229,22 @@ gitlore_sync_tiers_to_live() {
     # expected miss.
     if git -C "$tierpath" rev-parse -q --verify live >/dev/null; then
       if ! push_err=$(gitlore_git -C "$tierpath" push -q . HEAD:live 2>&1); then
-        gitlore_say_for_agent_or_user \
-          "gitlore: tier '$tier' was committed but its local 'live' could not be advanced, so the commit is not yet the tier's tip. git said:
+        # Same discriminator memory uses: only git's parenthesized reason means
+        # divergence, and only divergence is something a merge can fix.
+        case "$push_err" in
+          *"(fetch first)"*|*"(non-fast-forward)"*) ;;
+          *)
+            gitlore_say_for_agent_or_user \
+              "gitlore: tier '$tier' was committed but its local 'live' could not be advanced, and not because of divergence. git said:
 $push_err" \
-          "gitlore: tier '$tier' was committed but its local 'live' could not be advanced. git said:
+              "gitlore: tier '$tier' was committed but its local 'live' could not be advanced. git said:
 $push_err" >&2
+            return 1
+            ;;
+        esac
+        # Diverged from its own local `live` — the same gate memory has here, and
+        # the same resolution. The prepared merge lands in the tier's gitdir.
+        gitlore_yield_merge "$tierpath" live head-vs-live || return 1
         return 1
       fi
     fi

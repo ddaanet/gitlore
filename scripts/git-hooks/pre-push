@@ -64,14 +64,20 @@ while IFS= read -r tier; do
       "gitlore: tier '$tier' has no remote configured, so nothing written there is being shared." >&2
     exit 1
   fi
+  # Never push on top of a half-finished merge, at any level.
+  gitlore_guard_stale_merge_state "$tierpath" || exit 1
+  # `origin/live` has to be current before it can serve as the merge authority.
+  # Non-fatal, exactly as memory's is: the push below is what decides.
+  git -C "$tierpath" fetch -q origin live || true
   if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
     # Same discriminator as memory's push below: git's parenthesized reason
     # separates divergence from policy/credential/quota refusals.
     case "$tier_err" in
       *"(fetch first)"*|*"(non-fast-forward)"*)
-        gitlore_say_for_agent_or_user \
-          "gitlore: tier '$tier' has diverged from its remote 'live' — someone else advanced it. Resolving a tier divergence is not yet automated: fetch and merge inside $tierpath, then retry the push." \
-          "gitlore: tier '$tier' has diverged from its remote 'live'. Open this project in Claude Code to resolve it." >&2
+        # One merge policy at every level: prepare against the tier's own
+        # `origin/live` and yield, exactly as memory does below.
+        gitlore_yield_merge "$tierpath" origin/live head-vs-remote || exit 1
+        exit 1
         ;;
       *)
         gitlore_say_for_agent_or_user \

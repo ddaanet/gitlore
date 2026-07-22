@@ -62,7 +62,9 @@ if body=$(gitlore_recall_resolve "$mempath" "$session"); then
   fi
 else
   sysmsg="gitlore: recall request rejected."
-  ctx="gitlore recall REFUSED — nothing was read. $body"
+  # The banner is the one place "nothing was read" is stated; the resolver's
+  # report says only what went wrong.
+  ctx=$(printf 'gitlore recall REFUSED. Nothing was read.\n%s' "$body")
 fi
 
 # Consume either way: a one-shot request. Keeping a rejected one would re-report
