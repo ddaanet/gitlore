@@ -189,6 +189,50 @@ $path"
   return 0
 }
 
+# Print one report line per pointer bullet whose target file is absent; return 0
+# either way. This is the fifth compose validation, and the only one that
+# REPORTS instead of refusing: a dangling line does not make the composed output
+# wrong, and refusing would block every later index write over a stale line the
+# agent can fix in one edit.
+#
+# Under presence-authority (D17) the index says what memory CONTAINS, so the
+# missing FILE is the anomaly, not the line — which is why nothing here touches
+# either surface. Reporting is the whole job.
+gitlore_compose_dangling() {
+  local mempath="$1" mounted tier file line path reported=""
+
+  file="$mempath/MEMORY.md"
+  if [ -f "$file" ]; then
+    while IFS= read -r line; do
+      path=$(gitlore_bullet_path "$line") || continue
+      [ -e "$mempath/$path" ] && continue
+      printf '%s: %s names no file in the memory store\n' "$file" "$path"
+      reported="$reported
+$path"
+    done < "$file"
+  fi
+
+  # Carrier lines too: a DORMANT tier's bullets never reach the root, so a
+  # root-only scan would leave them unchecked for as long as the tier sleeps.
+  mounted=$(gitlore_tier_paths "$mempath")
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    file="$mempath/$tier/MEMORY.md"
+    [ -f "$file" ] || continue
+    while IFS= read -r line; do
+      path=$(gitlore_bullet_path "$line") || continue
+      [ -e "$mempath/$tier/$path" ] && continue
+      # An active tier's line lives in both indexes and resolves to one file;
+      # report the root's copy only, since that is the surface the agent edits.
+      printf '%s\n' "$reported" | grep -qxF -- "$tier/$path" && continue
+      printf '%s: %s names no file in the tier\n' "$file" "$path"
+    done < "$file"
+  done <<EOF
+$mounted
+EOF
+  return 0
+}
+
 # Print the merged bullet list for tier $2 under store $1, unprefixed and in
 # carrier order with root-only lines appended. The ROOT's text wins on a path
 # present in both: the root index is canonical for a line's text (D17).

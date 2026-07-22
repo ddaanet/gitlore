@@ -219,6 +219,14 @@ done < <(gitlore_tier_paths "$mempath")
 if ! compose_problems=$(gitlore_compose "$mempath"); then
   add_sysmsg "gitlore: tier composition refused; the memory indexes were left untouched:
 $compose_problems"
+else
+  # The fifth validation reports rather than refuses — a bullet whose file is
+  # absent leaves the composed output correct, so it is named, not acted on.
+  dangling=$(gitlore_compose_dangling "$mempath")
+  if [ -n "$dangling" ]; then
+    add_sysmsg "gitlore: the memory index points at files that do not exist. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
+$dangling"
+  fi
 fi
 
 # Routing guidance (D17): advertise each ACTIVE tier (listed in the manifest)

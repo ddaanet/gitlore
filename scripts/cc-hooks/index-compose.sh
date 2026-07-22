@@ -44,6 +44,20 @@ if result=$(gitlore_compose "$mempath"); then
     ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and mirrored root-authored tier lines down into their carrier. This is expected and complete — do not re-read or re-edit them to verify. Composition moves lines only; it never changes a line's text.
 $result"
   fi
+
+  # The fifth validation reports rather than refuses, so it runs on the composed
+  # store and rides the same message whether or not anything was written.
+  dangling=$(gitlore_compose_dangling "$mempath")
+  if [ -n "$dangling" ]; then
+    d=$(printf '%s\n' "$dangling" | grep -c .)
+    if [ "$d" -eq 1 ]; then dunit="pointer"; else dunit="pointers"; fi
+    sysmsg="${sysmsg:+$sysmsg
+}gitlore: $d dangling index $dunit — a line names a file that is not there"
+    ctx="${ctx:+$ctx
+
+}These memory index lines point at files that do not exist. Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Either restore the file or remove the line — removing it deletes nothing.
+$dangling"
+  fi
 else
   # Fail-safe: nothing was written. Never exit non-zero — stdout JSON parses on
   # exit 0 only, so a non-zero exit would DISCARD this message and make the
