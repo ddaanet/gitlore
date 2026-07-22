@@ -49,4 +49,17 @@ design decisions D1–D16 in `docs/design.md` are implemented and tested. D17
 - **Plan 07 — gitlink-aware wrappers / worktree lifecycle (D11)** ✅ (common-dir-anchored hook wrappers; SessionStart creates the memory worktree in linked worktrees; advisory `WorktreeRemove` teardown)
 - **Dogfood-driven hardening (D12–D16)** ✅ (submodule-side commit gate; git lock-contention retry; SessionStart output on `systemMessage`; in-process-worktree memory-drift guard; standalone memory-commit entry point; SessionStart disclosure trimmed to prohibition + seamless happy path)
 - **FR11 memory-commit batch** ✅ (a `PostToolBatch` file-trigger hook commits memory from an agent-written message, sidestepping the sandbox and commit-approval classifier — no Stop hook)
-- **D17 — tiered memory index composition (FR15)** 🚧 authoring-time index→frontmatter sync and the one-time reconcile are shipped and dogfooded; the nested global/org submodule tiers themselves are still to build
+- **D17 — tiered memory (FR15)** ✅ index→frontmatter sync, nested tier submodules discovered by enclosure, detach-at-`live` propagation, commit/push lockstep, index composition, and `/gitlore:add-tier`; coverage/prune/dedup stay deferred
+- **D18 — active recall (FR16)** ✅ the agent names memory files in `.claude/gitlore-recall` and a `PostToolBatch` hook injects their bodies, so a fact whose trigger only appears mid-task can still reach context
+
+## Tiers
+
+A **tier** is a memory store shared across repos — a submodule mounted inside
+this repo's memory submodule. Facts that hold for every project in an org live
+there once instead of being duplicated per repo.
+
+    /gitlore:add-tier
+
+Mounts an existing tier, or creates one. A mounted tier is dormant until it is
+listed in `memory/.gitlore-tiers` — one name per line, file order is precedence.
+Listing it composes its pointer lines into the always-loaded root index.

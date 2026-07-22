@@ -88,6 +88,14 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/recall-batch.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/add-tier-batch.sh"
+          }
+        ]
       }
     ],
     "WorktreeRemove": [

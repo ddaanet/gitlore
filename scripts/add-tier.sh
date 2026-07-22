@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# Mount (or create then mount) a memory tier: a submodule inside the memory
+# submodule. D17 slice 3-iii, the doer behind `/gitlore:add-tier`.
+#
+# Reads the intent from the add-tier IPC file so the agent never runs git — the
+# same route as the FR11 commit path, and doubly necessary here because mounting
+# CLONES and the agent's command sandbox has no network.
+#
+# It deliberately does NOT touch memory/.gitlore-tiers. Activation is the
+# manifest, the manifest is edited deliberately (D17), and the gap between
+# "module exists" and "module self-describes" is exactly what keeps a half-formed
+# tier invisible to composition. The agent lists the tier as its final step,
+# which re-triggers the 3-ii recompose.
+#
+# It also makes no commit inside the memory store: gitlore_tier_paths reads
+# memory/.gitmodules from the WORKING TREE, so a staged `submodule add` is
+# already discoverable and the FR11 gate stays the sole committer.
+set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
+
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+# gitlore_get_frontmatter_description, to echo the tier's routing guidance back.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
+
+die() { printf 'gitlore: add-tier failed — %s\n' "$1" >&2; exit 1; }
+
+gitlore_has_submodule || die "this repo has no gitlore memory submodule; run /gitlore:install first."
+mempath=$(gitlore_memory_path)
+[ -e "$mempath/.git" ] || die "the memory submodule is not checked out here."
+
+intent=$(gitlore_add_tier_file "$mempath")
+[ -f "$intent" ] || die "no add-tier intent file at $intent."
+
+# ---------------------------------------------------------------- parse intent
+# `key=value`, value is the REST OF THE LINE verbatim — a description carries
+# spaces by construction and a url may. Only the line's outer whitespace is
+# trimmed. Unknown keys are an error, not a silent drop: a typo'd `descripton=`
+# would otherwise seed a tier with no routing guidance at all.
+mode="" name="" url="" description=""
+lineno=0
+while IFS= read -r line || [ -n "$line" ]; do
+  lineno=$((lineno + 1))
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
+  [ -n "$line" ] || continue
+  case "$line" in \#*) continue ;; esac
+  case "$line" in
+    *=*) key="${line%%=*}"; value="${line#*=}" ;;
+    *)   die "intent line $lineno is not key=value: $line" ;;
+  esac
+  key="${key%"${key##*[![:space:]]}"}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  case "$key" in
+    mode)        mode="$value" ;;
+    name)        name="$value" ;;
+    url)         url="$value" ;;
+    description) description="$value" ;;
+    *)           die "unknown intent key '$key' on line $lineno." ;;
+  esac
+done < "$intent"
+
+# ------------------------------------------------------------------ validation
+case "$mode" in
+  mount|create) ;;
+  "") die "intent has no 'mode='; write mode=mount or mode=create." ;;
+  *)  die "unknown mode '$mode'; write mode=mount or mode=create." ;;
+esac
+
+[ -n "$name" ] || die "intent has no 'name=' (the directory the tier mounts at, under $mempath/)."
+case "$name" in
+  */*)  die "tier name '$name' contains a slash; a tier mounts directly under $mempath/." ;;
+  .*)   die "tier name '$name' starts with a dot." ;;
+esac
+# A name with whitespace would mount fine but could never be LISTED: the
+# activation manifest is line-oriented and trims its entries. Refuse up front
+# rather than produce a tier that composition can never activate.
+case "$name" in
+  *[[:space:]]*) die "tier name '$name' contains whitespace; the activation manifest could never list it." ;;
+esac
+
+[ ! -e "$mempath/$name" ] || die "$mempath/$name already exists."
+while IFS= read -r existing; do
+  if [ "$existing" = "$name" ]; then die "'$name' is already a mounted tier."; fi
+done < <(gitlore_tier_paths "$mempath")
+
+if [ "$mode" = "mount" ]; then
+  [ -n "$url" ] || die "mount needs a 'url=' for the existing tier remote."
+else
+  [ -n "$description" ] || \
+    die "create needs a 'description=' — it becomes the tier's routing guidance, which is how every consumer learns what belongs in it."
+fi
+
+# --------------------------------------------------------------- create branch
+# Seed the tier's content and its remote BEFORE mounting, so the mount below is
+# the identical code path in both modes.
+if [ "$mode" = "create" ]; then
+  if [ -z "$url" ]; then
+    command -v gh >/dev/null 2>&1 || \
+      die "create without a 'url=' needs the gh CLI to make the remote. Install gh, or create the repo yourself and re-run with url=."
+    gh auth status >/dev/null 2>&1 || \
+      die "create without a 'url=' needs gh to be authenticated (gh auth login), or create the repo yourself and re-run with url=."
+    owner=$(gh api user -q .login) || die "could not determine the gh account to create the tier remote under."
+    full_name="${owner}/${name}-memory"
+    gh repo create "$full_name" --private || die "gh repo create $full_name failed."
+    url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl) || url=""
+    [ -n "$url" ] || die "created $full_name but could not resolve its URL."
+  fi
+
+  seed=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-tier-seed.XXXXXX")
+  # `-b main`: the tier remote's default branch MUST stay `main` with `live`
+  # alongside. A `live` default gets checked out AS A BRANCH by the mount, and
+  # the ff-only `fetch origin live:live` then refuses to update a checked-out
+  # branch — propagation-in would die at the first hop.
+  git init -q -b main "$seed"
+  {
+    printf -- '---\ndescription: "%s"\n---\n\n' "$description"
+    printf '# %s tier index\n\n' "$name"
+    printf 'One line per fact, same format as a project index. Facts here travel\n'
+    printf 'to every repo that mounts this tier.\n'
+  } > "$seed/MEMORY.md"
+  git -C "$seed" add MEMORY.md
+  git -C "$seed" commit -q -m "Seed $name tier index"
+  git -C "$seed" branch live
+  git -C "$seed" remote add origin "$url"
+  # main first so the remote's default branch settles on it, live second.
+  if ! push_err=$(git -C "$seed" push -q -u origin main 2>&1); then
+    rm -rf "$seed"
+    die "could not push the seeded tier to $url. git said: $push_err"
+  fi
+  if ! push_err=$(git -C "$seed" push -q origin live 2>&1); then
+    rm -rf "$seed"
+    die "pushed main but not live to $url. git said: $push_err"
+  fi
+  rm -rf "$seed"
+fi
+
+# ---------------------------------------------------------------- mount branch
+# --name pins the submodule's registered name to the mount path, so discovery by
+# enclosure and the manifest agree on one identifier.
+if ! add_err=$(git -C "$mempath" submodule add --name "$name" -- "$url" "$name" 2>&1); then
+  die "submodule add failed for $url. git said: $add_err"
+fi
+
+tierpath="$mempath/$name"
+# Guard the submodule escape: without this, a failed add would leave `git -C`
+# operating on the memory store itself.
+[ -e "$tierpath/.git" ] || die "submodule add reported success but $tierpath is not a checkout."
+
+warnings=""
+# Propagation-in: create the local `live` from the remote. Fast-forward-only for
+# free — a refspec fetch into a branch ref refuses a non-ff without `+`.
+if ! fetch_err=$(git -C "$tierpath" fetch origin "live:live" 2>&1); then
+  case "$fetch_err" in
+    *"couldn't find remote ref"*|*"does not appear to be"*)
+      warnings="$warnings
+  - the remote has no 'live' branch. gitlore's tiers are detached at 'live'; push one to $url (main and live together, main default) before this tier can carry facts." ;;
+    *)
+      warnings="$warnings
+  - could not fetch 'live' from the tier remote. git said: $fetch_err" ;;
+  esac
+fi
+
+if git -C "$tierpath" show-ref --verify --quiet refs/heads/live; then
+  if ! co_err=$(git -C "$tierpath" checkout -q --detach live 2>&1); then
+    warnings="$warnings
+  - could not detach the tier at 'live'. git said: $co_err"
+  fi
+else
+  warnings="$warnings
+  - the tier is left on its default branch, not detached at 'live'."
+fi
+
+desc=""
+if [ -f "$tierpath/MEMORY.md" ]; then
+  desc=$(gitlore_get_frontmatter_description "$tierpath/MEMORY.md") || desc=""
+fi
+if [ -z "$desc" ]; then
+  warnings="$warnings
+  - the tier's MEMORY.md carries no frontmatter 'description:', so it advertises no routing guidance. Add one in $tierpath/MEMORY.md."
+fi
+
+printf 'gitlore: tier "%s" mounted at %s (%s).\n' "$name" "$tierpath" "$url"
+if [ -n "$desc" ]; then
+  printf 'gitlore: it describes itself as: %s\n' "$desc"
+fi
+if [ -n "$warnings" ]; then
+  printf 'gitlore: mounted with warnings:%s\n' "$warnings"
+fi
+printf 'gitlore: it is MOUNTED but INACTIVE. Add the line "%s" to %s/.gitlore-tiers to activate it — the file order is precedence, and that edit recomposes the indexes.\n' \
+  "$name" "$mempath"
+exit 0
