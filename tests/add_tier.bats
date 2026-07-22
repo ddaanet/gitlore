@@ -241,6 +241,62 @@ write_intent() {
   [[ "$output" == *"already exists"* ]]
 }
 
+# --- url transport bounds -------------------------------------------------
+#
+# git's own protocol.ext.allow already defaults to `never` (2.47.3 refuses with
+# "transport 'ext' not allowed"), so these pin the guard that makes the bound
+# hold regardless of the user's git config — the hook runs outside the agent's
+# sandbox, with network.
+
+@test "add-tier: an ext:: transport-helper url is refused before git is reached" {
+  make_parent_with_memory
+  write_intent "mode=mount" "name=ddaanet" "url=ext::sh -c 'touch $TMP_REPO/PWNED'"
+
+  run bash "$ADD_TIER"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"transport helper"* ]]
+  [ ! -e "$TMP_REPO/PWNED" ]
+  [ ! -e memory/ddaanet ]
+}
+
+@test "add-tier: an unknown url scheme is refused" {
+  make_parent_with_memory
+  write_intent "mode=mount" "name=ddaanet" "url=ftp://example.com/repo.git"
+  run bash "$ADD_TIER"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"scheme"* ]]
+}
+
+@test "add-tier: a url starting with '-' is refused (git would read it as an option)" {
+  make_parent_with_memory
+  write_intent "mode=mount" "name=ddaanet" "url=--upload-pack=touch"
+  run bash "$ADD_TIER"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"option"* ]]
+}
+
+@test "add-tier: create refuses a transport-helper url before pushing to it" {
+  make_parent_with_memory
+  write_intent "mode=create" "name=orgwide" "url=ext::sh -c 'touch $TMP_REPO/PWNED'" \
+    "description=org facts"
+  run bash "$ADD_TIER"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"transport helper"* ]]
+  [ ! -e "$TMP_REPO/PWNED" ]
+}
+
+@test "add-tier: the ordinary remote spellings are accepted" {
+  make_parent_with_memory
+  # Reaching git is enough — these must fail on the network/path, not the guard.
+  for u in "https://example.invalid/x.git" "ssh://git@example.invalid/x.git" \
+           "git@example.invalid:org/x.git" "git://example.invalid/x.git"; do
+    write_intent "mode=mount" "name=t" "url=$u"
+    run bash "$ADD_TIER"
+    [ "$status" -ne 0 ]                       # no such host, of course
+    [[ "$output" == *"submodule add failed"* ]]   # …but it got past the guard
+  done
+}
+
 @test "add-tier: a bad url fails with git's own message and mounts nothing" {
   make_parent_with_memory
   write_intent "mode=mount" "name=ddaanet" "url=$TMP_REPO/.no-such-remote.git"
