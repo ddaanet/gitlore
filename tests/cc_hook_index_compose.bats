@@ -85,6 +85,28 @@ feed() { printf '%s' "$1" | bash "$HOOK"; }
   [[ "$output" == *additionalContext* ]]
 }
 
+@test "a dangling pointer is reported even when nothing was composed" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  feed "$(batch "$PWD/memory/MEMORY.md")" >/dev/null   # settle the store
+  seed_root_bullet "gone.md" "stale line"
+  run feed "$(batch "$PWD/memory/MEMORY.md")"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gone.md"* ]]
+  [[ "$output" == *systemMessage* ]]
+  [[ "$output" == *additionalContext* ]]
+  run jq -e . <<<"$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "a dangling report never rewrites or deletes anything" {
+  seed_root_bullet "gone.md" "stale line"
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  feed "$(batch "$PWD/memory/MEMORY.md")" >/dev/null
+  # Composition may reflow the bullets, but the dangling line itself survives.
+  grep -qF -- '- [gone](gone.md) — stale line' memory/MEMORY.md
+  [ ! -e memory/gone.md ]
+}
+
 @test "no-op outside a gitlore repo" {
   local outside="$BATS_TEST_TMPDIR/outside"
   mkdir -p "$outside"

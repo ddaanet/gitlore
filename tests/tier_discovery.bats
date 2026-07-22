@@ -235,6 +235,21 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *"ghost"* ]]
 }
 
+@test "SessionStart reports a dangling pointer without touching the index" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  seed_root_bullet "gone.md" "stale line"
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gone.md"* ]]
+  grep -qF -- '- [gone](gone.md) — stale line' memory/MEMORY.md
+  [ ! -e memory/gone.md ]
+}
+
 @test "routing guidance points the agent at the ROOT index, prefixed" {
   make_parent_with_memory
   make_tier_in_memory ddaanet

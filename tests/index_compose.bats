@@ -277,6 +277,76 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "$(printf -- '- [C](c.md) — three\n- [A](a.md) — one\n- [B](b.md) — two')" ]
 }
 
+@test "dangling reports a root bullet whose file is absent" {
+  make_parent_with_memory
+  seed_root_bullet "gone.md" "the fact that got away"
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gone.md"* ]]
+  [[ "$output" == *"memory/MEMORY.md"* ]]
+}
+
+@test "dangling is silent when every pointer resolves" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  seed_root_bullet "here.md" "present"
+  printf 'body\n' > memory/here.md
+  gitlore_compose memory
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "dangling resolves a tier-prefixed root path inside the tier" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  gitlore_compose memory                    # splices ddaanet/shared.md into the root
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "dangling reports each missing target once, not once per index" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_root_bullet "ddaanet/vanished.md" "authored in the root"
+  gitlore_compose memory                    # mirrors the line down into the carrier
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'vanished.md')" -eq 1 ]
+}
+
+@test "dangling inspects a dormant tier's carrier, which the root never shows" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest                         # mounted, never active
+  printf -- '- [orphan](orphan.md) — no such file\n' >> memory/ddaanet/MEMORY.md
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"orphan.md"* ]]
+  [[ "$output" == *"memory/ddaanet/MEMORY.md"* ]]
+}
+
+@test "a dangling pointer reports but never refuses: compose still writes" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  seed_root_bullet "gone.md" "stale line"
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  # The stale line survives: an index edit is the agent's, never the hook's.
+  grep -qF -- '- [gone](gone.md) — stale line' memory/MEMORY.md
+  # And compose's own report stays a list of what it WROTE.
+  [[ "$output" != *"names no file"* ]]
+}
+
 @test "a failing check writes nothing at all" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
