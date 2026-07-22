@@ -27,6 +27,50 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
 die() { printf 'gitlore: add-tier failed — %s\n' "$1" >&2; exit 1; }
 
+# Refuse any url that is not a plain transport or a local path.
+#
+# Not a shell-injection guard — the url is a quoted argument after `--`, never
+# interpolated. It bounds which git TRANSPORT the url can select. Git's own
+# `protocol.ext.allow` already defaults to `never` (2.47.3: `fatal: transport
+# 'ext' not allowed`), so `ext::sh -c …` is dead out of the box; this makes that
+# independent of the user's git config, and closes the same class for any other
+# `helper::address` transport.
+#
+# It matters here more than in an ordinary script because this runs from a HOOK,
+# outside the agent's command sandbox and with network. A url the agent hands us
+# would otherwise reach further than one the agent could use itself, which is
+# exactly the escalation the sandbox exists to prevent.
+check_url() {
+  local url="$1" head rest
+  case "$url" in
+    "")   die "empty url." ;;
+    -*)   die "url '$url' starts with '-'; git would read it as an option." ;;
+    /*|./*|../*) return 0 ;;                     # local path
+  esac
+  case "$url" in
+    *:*) head="${url%%:*}"; rest="${url#*:}" ;;
+    *)   die "url '$url' is neither a path nor a remote; use https://, ssh://, git@host:path, or an absolute path." ;;
+  esac
+  case "$rest" in
+    //*)
+      head=$(printf '%s' "$head" | tr '[:upper:]' '[:lower:]')
+      case "$head" in
+        http|https|ssh|git|file) return 0 ;;
+        *) die "url scheme '$head' is not allowed; use https, ssh, git, or file." ;;
+      esac ;;
+    :*)
+      # `helper::address` — git's remote-helper form, of which `ext::` runs a
+      # shell command. Never needed to reach a tier remote.
+      die "url '$url' selects the git transport helper '$head'; that form is not allowed." ;;
+    *)
+      # scp-like [user@]host:path — a host has no slash and no whitespace.
+      case "$head" in
+        ""|*[/[:space:]]*) die "url '$url' is not a usable remote." ;;
+        *) return 0 ;;
+      esac ;;
+  esac
+}
+
 gitlore_has_submodule || die "this repo has no gitlore memory submodule; run /gitlore:install first."
 mempath=$(gitlore_memory_path)
 [ -e "$mempath/.git" ] || die "the memory submodule is not checked out here."
@@ -88,6 +132,7 @@ done < <(gitlore_tier_paths "$mempath")
 
 if [ "$mode" = "mount" ]; then
   [ -n "$url" ] || die "mount needs a 'url=' for the existing tier remote."
+  check_url "$url"
 else
   [ -n "$description" ] || \
     die "create needs a 'description=' — it becomes the tier's routing guidance, which is how every consumer learns what belongs in it."
@@ -97,6 +142,9 @@ fi
 # Seed the tier's content and its remote BEFORE mounting, so the mount below is
 # the identical code path in both modes.
 if [ "$mode" = "create" ]; then
+  # A url supplied for create is pushed to before anything is mounted, so it is
+  # checked here as well as at the mount below.
+  if [ -n "$url" ]; then check_url "$url"; fi
   if [ -z "$url" ]; then
     command -v gh >/dev/null 2>&1 || \
       die "create without a 'url=' needs the gh CLI to make the remote. Install gh, or create the repo yourself and re-run with url=."
@@ -139,7 +187,9 @@ fi
 
 # ---------------------------------------------------------------- mount branch
 # --name pins the submodule's registered name to the mount path, so discovery by
-# enclosure and the manifest agree on one identifier.
+# enclosure and the manifest agree on one identifier. Re-check the url: in create
+# mode it may have been derived from gh since the check above.
+check_url "$url"
 if ! add_err=$(git -C "$mempath" submodule add --name "$name" -- "$url" "$name" 2>&1); then
   die "submodule add failed for $url. git said: $add_err"
 fi
