@@ -21,16 +21,14 @@
 #     worktree therefore fast-forwards from the remote on its own (fine for
 #     propagation-in; relevant to push lockstep in a later slice).
 
-# Mount a tier submodule inside an existing memory submodule.
-# Requires: make_parent_with_memory has already run (cwd = $TMP_REPO).
-# Args: $1 = tier subpath/name (default "ddaanet")
-# Leaves: memory/<tier> checked out, the memory submodule committed, the parent
-#         index NOT updated (the caller decides when the parent records it).
-make_tier_in_memory() {
-  local tier="${1:-ddaanet}" mempath="memory"
-  local bare="$TMP_REPO/.bare-$tier.git"
-
-  local seed_dir
+# Build a bare tier REMOTE at $TMP_REPO/.bare-<tier>.git and echo its path.
+# Default branch main with `live` alongside — the shape a tier remote must have
+# (a `live` default gets checked out as a branch by the mount, and the ff-only
+# `fetch origin live:live` then refuses).
+# Args: $1 = tier name (default "ddaanet"); $2 = "nolive" to omit the live branch.
+make_tier_remote() {
+  local tier="${1:-ddaanet}" live="${2:-live}"
+  local bare="$TMP_REPO/.bare-$tier.git" seed_dir
   seed_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-tier-seed.XXXXXX")"
   git init -q -b main "$seed_dir"
   (
@@ -41,10 +39,23 @@ make_tier_in_memory() {
       "$tier" "$tier" > MEMORY.md
     git add MEMORY.md
     git commit -q -m "Initial $tier"
-    git branch live
+    [ "$live" = "nolive" ] || git branch live
   )
   git clone -q --bare "$seed_dir" "$bare"
   rm -rf "$seed_dir"
+  printf '%s\n' "$bare"
+}
+
+# Mount a tier submodule inside an existing memory submodule.
+# Requires: make_parent_with_memory has already run (cwd = $TMP_REPO).
+# Args: $1 = tier subpath/name (default "ddaanet")
+# Leaves: memory/<tier> checked out, the memory submodule committed, the parent
+#         index NOT updated (the caller decides when the parent records it).
+make_tier_in_memory() {
+  local tier="${1:-ddaanet}" mempath="memory"
+  local bare="$TMP_REPO/.bare-$tier.git"
+
+  make_tier_remote "$tier" >/dev/null
 
   # Suppress the noise, but never the status: this is the fixture's central step,
   # and a silent failure here surfaces as a baffling assertion failure later.

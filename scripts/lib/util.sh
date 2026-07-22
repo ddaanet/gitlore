@@ -99,6 +99,16 @@ gitlore_commit_trigger_file() {
   printf '%s/gitlore-commit-memory\n' "$(_gitlore_ipc_dir "$1")"
 }
 
+# Print abs path to the add-tier intent file. The agent writes the mount/create
+# intent here as `key=value` lines; the PostToolBatch hook (add-tier-batch.sh)
+# runs the git on its behalf. Same trigger-file route as the commit path, and for
+# a second reason on top of the classifier: mounting a tier CLONES, and the
+# command sandbox has no network — only the hook, which runs outside it, can
+# reach the remote. Gitignored.
+gitlore_add_tier_file() {
+  printf '%s/gitlore-add-tier\n' "$(_gitlore_ipc_dir "$1")"
+}
+
 # Print the path to the "already nudged this dirty episode" marker. Kept in the
 # memory submodule's gitdir (like gitlore_merge_state_file), NOT the working
 # tree, so it never appears in `git status` and needs no `.gitignore` entry. Set
