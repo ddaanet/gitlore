@@ -1,0 +1,8 @@
+{
+  "name": "Active recall — fetch a memory body the index only points at",
+  "description": "The index line carries the trigger keywords; the answer lives only in the body. The agent must write .claude/gitlore-recall, let the PostToolBatch hook inject the body, and answer from it — without Reading the file itself",
+  "setup": "recall-corpus",
+  "assert": "recall",
+  "initial_memory": "# Memory Index\n\n- [stuck deploy lock](reference_deploy_lock.md) — a `deploy.lock` left behind by a failed rollout; clearing it by hand corrupts the rollout ledger\n",
+  "prompt": "A rollout died halfway and now every retry prints `error: deploy.lock exists (held by pid 8123)`. Check what memory has on this before you answer, then give me the exact command to run."
+}

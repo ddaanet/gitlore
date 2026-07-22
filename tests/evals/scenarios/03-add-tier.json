@@ -1,0 +1,8 @@
+{
+  "name": "Add tier — mount an existing tier and activate it",
+  "description": "Agent runs /add-tier, writes the intent file and no git; the PostToolBatch hook mounts the tier remote (outside the sandbox, which has no network) and reports back; agent lists the tier in memory/.gitlore-tiers, and that edit recomposes the tier's pointer lines into the root index",
+  "setup": "tier-remote",
+  "assert": "add-tier",
+  "initial_memory": "# Memory Index\n",
+  "prompt": "/add-tier The acme team already has a shared memory tier and I want this repo to join it. It mounts as `acme`, and its clone URL is {{EVAL_REPO}}/.tier-remote.git — mount it and make it active."
+}

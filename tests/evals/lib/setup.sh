@@ -32,6 +32,16 @@ setup_eval_repo() {
 
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   export CLAUDECODE=1
+  # No eval may reach the network, so every remote in a fixture is a local bare
+  # repo — and `protocol.file.allow` defaults to `user`, which blocks exactly the
+  # clone `git submodule add` performs when mounting a tier. Repo config does not
+  # reach it: the transport policy is read by the CLONE, a fresh process with a
+  # fresh repo. GIT_CONFIG_* does reach it, and survives the hooks' local-env-var
+  # unset (that list has no GIT_CONFIG_*). Exported here rather than per fixture
+  # so it also reaches the `claude` subprocess, whose hooks run the real mount.
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=protocol.file.allow
+  export GIT_CONFIG_VALUE_0=always
   # Suppress launcher warning: eval bypasses the shim intentionally
   export GITLORE_LAUNCHED=1
 
@@ -40,20 +50,35 @@ setup_eval_repo() {
   # during the eval's parent git commit.
   bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
 
-  # Wire the CC PostToolUse hook directly into settings.json.
-  # This bypasses the plugin marketplace (which requires a cached install) and
-  # works in both interactive and eval runs.  The eval runner passes
-  # `--setting-sources project`, so claude loads hooks from <cwd>/.claude/settings.json.
+  # Wire the CC hooks into settings.json, copied wholesale from the plugin's own
+  # hooks/hooks.json with ${CLAUDE_PLUGIN_ROOT} resolved. This bypasses the plugin
+  # marketplace (which requires a cached install) and works in both interactive and
+  # eval runs; the eval runner passes `--setting-sources project`, so claude loads
+  # hooks from <cwd>/.claude/settings.json.
+  #
+  # Derived, never hand-listed: a hand-written subset is a registration the evals
+  # never exercise, and the whole point of an eval is that it walks the wiring
+  # production ships ([[feedback_test_the_invocation_path]]). The subset here was
+  # PostToolUse alone, which would have left every PostToolBatch hook — composition,
+  # the commit gate, recall, add-tier — dark.
   local tmp
   tmp=$(mktemp)
-  jq --arg plugin_root "$PLUGIN_ROOT" '
-    .hooks.PostToolUse = [{
-      "matcher": "Bash",
-      "hooks": [{"type": "command", "command": ($plugin_root + "/scripts/cc-hooks/post-tool-use.sh")}]
-    }]
+  jq --arg plugin_root "$PLUGIN_ROOT" --slurpfile hooks "$PLUGIN_ROOT/hooks/hooks.json" '
+    .hooks = ($hooks[0].hooks
+              | walk(if type == "string"
+                     then gsub("\\$\\{CLAUDE_PLUGIN_ROOT\\}"; $plugin_root)
+                     else . end))
   ' .claude/settings.json > "$tmp" && mv "$tmp" .claude/settings.json
 
-  git add .claude/settings.json .claude/gitlore-hook-setup
+  # Skills and commands are plugin-scoped, and the eval repo has no plugin
+  # installed — copy them in so their prompt contracts are what the agent reads.
+  # Without this, /add-tier is an unknown command and the recall skill never
+  # activates, and the scenario silently grades a different flow.
+  mkdir -p .claude/skills .claude/commands
+  cp -R "$PLUGIN_ROOT/skills/." .claude/skills/
+  cp "$PLUGIN_ROOT"/commands/*.md .claude/commands/
+
+  git add .claude/settings.json .claude/gitlore-hook-setup .claude/skills .claude/commands
   git commit -q -m "Install gitlore"
 
   printf '%s\n' "$initial_memory" > memory/MEMORY.md

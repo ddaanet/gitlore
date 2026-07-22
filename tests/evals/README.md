@@ -40,32 +40,61 @@ tests/evals/run-evals.sh
 Each scenario runs 5 trials (`pass^k`). A scenario passes only if all 5 pass.
 
 Each trial:
-1. Creates a fresh gitlore-installed repo with the scenario's initial memory content
-2. **Turn 1** — eval runner: agent edits memory, triggers the flow (see below), agent summarises pending changes and stops
-3. **Turn 2** — eval runner resumes the session with the approval message; agent writes the commit-msg file (and may retry git commit depending on the scenario)
-4. Fires `git commit` to trigger the pre-commit hook (if memory not already committed by the agent)
-5. Asserts: memory committed, `live` ff-pushed, commit-msg temp file deleted
-6. LLM judge grades commit message quality against the scenario rubric
+1. Creates a fresh gitlore-installed repo with the scenario's initial memory content, and runs the scenario's fixture script if it names one
+2. Records where the memory store stands, before the agent touches anything
+3. **Turn 1** — eval runner: agent works the flow and stops
+4. **Turn 2** — eval runner resumes the session with the approval message, for scenarios that have an approval gate
+5. Runs the scenario's assertion script, which owns everything after the turns — including firing the parent `git commit`, where the flow has one
+
+The eval repo's hooks are copied wholesale from the plugin's own `hooks/hooks.json`, with `${CLAUDE_PLUGIN_ROOT}` resolved. Derived, never hand-listed: a hand-written subset is a registration the evals never exercise, and an eval's whole point is to walk the wiring production ships. Skills and commands are copied in too, so the prompt contracts the agent reads are the real ones.
+
+Fixtures reach no network — every remote in here is a local bare repo, and `GIT_CONFIG_*` loosens `protocol.file.allow` for the process tree so `git submodule add` can clone one.
+
+### Flows covered
+
+| Scenario | Assertion | What only an eval sees |
+|---|---|---|
+| 01 basic memory commit | `memory-commit` | PostToolUse `additionalContext` → summary → approval → commit |
+| 02 dirty, no precommit | `memory-commit` | the pre-commit hook's exit-1 path as the fallback trigger |
+| 03 add tier | `add-tier` | intent file → PostToolBatch hook mounts (agent runs no git) → manifest edit recomposes the root index |
+| 04 tier write | `tier-write` | routing a portable fact to the tier, the mirror-down, and one approved summary committing memory *and* the tier |
+| 05 active recall | `recall` | request file → hook injects the body → the answer uses it, without the agent Reading the file |
 
 ### Trigger paths
 
-**PTU injection path** (precommit command scenario): agent runs the configured precommit command (`true`), PostToolUse hook fires and injects `additionalContext`, agent summarises and stops. Turn 2 approval → agent writes commit-msg file. Eval's `git commit` fires the pre-commit hook which commits memory.
+**PTU injection path** (precommit command scenario): agent runs the configured precommit command (`true`), PostToolUse hook fires and injects `additionalContext`, agent summarises and stops. Turn 2 approval → agent writes commit-msg file. The assertion's `git commit` fires the pre-commit hook which commits memory.
 
-**Pre-commit failure path** (no precommit command scenario): agent runs `git commit` directly, pre-commit hook exits 1 with the `$CLAUDECODE`-addressed error message, agent summarises and stops. Turn 2 approval → agent writes commit-msg and retries `git commit`, which succeeds. Eval's subsequent `git commit` is a no-op on the memory side (already clean).
+**Pre-commit failure path** (no precommit command scenario): agent runs `git commit` directly, pre-commit hook exits 1 with the `$CLAUDECODE`-addressed error message, agent summarises and stops. Turn 2 approval → agent writes commit-msg and retries `git commit`, which succeeds. The assertion's subsequent `git commit` is a no-op on the memory side (already clean).
 
 ## Adding scenarios
 
-Add a JSON file to `tests/evals/scenarios/` with these fields:
+Add a JSON file to `tests/evals/scenarios/`:
 
 ```json
 {
   "name": "Human-readable name",
   "description": "What this tests",
   "initial_memory": "Initial content of memory/MEMORY.md",
-  "prompt": "Turn 1 user message — should instruct Claude to edit memory and run the precommit command",
-  "approval_message": "Turn 2 message — sent after Claude summarises pending changes",
-  "rubric": "Pass/fail criteria for the commit message"
+  "prompt": "Turn 1 user message",
+  "approval_message": "Turn 2 message — omit for a single-turn flow",
+  "setup": "name of a script in setups/ — omit if the base fixture is enough",
+  "assert": "name of a script in asserts/ — defaults to memory-commit",
+  "rubric": "Pass/fail criteria for the commit message, where one is judged"
 }
 ```
 
+`{{EVAL_REPO}}` in a prompt expands to the trial's throwaway repo. A scenario that has to name something the fixture created — a tier remote's URL — can only learn its path at trial time, and telling the agent to go find it would grade a search instead of the flow.
+
 The runner processes all `*.json` files in scenarios/ alphabetically.
+
+### Assertion scripts
+
+`asserts/<name>.sh` runs after the turns with `EVAL_REPO`, `EVAL_OUT_DIR`, `EVAL_RUBRIC`, `EVAL_TRIGGER`, `PLUGIN_ROOT` and `LIB_DIR` in the environment. Exit 0 to pass; exit non-zero with the reason on stdout to fail.
+
+`EVAL_OUT_DIR` holds `turn1.txt` / `turn2.txt` (each turn's final text), `session-id`, `memory-baseline` (memory's HEAD before the agent ran), and `transcript.jsonl` — the session transcript, which is how an assertion sees which *tools* ran. Some contracts are only visible there: active recall is meant to fetch a body through the hook, and an agent that instead Read the file itself leaves an identical repo and an identical answer.
+
+Assertions are themselves tested, in `lib/asserts.bats`, against a good end state and against the specific breakage each one exists to catch. An assertion that always passes turns its scenario into an expensive no-op, and the eval run looks green either way.
+
+### Fixture scripts
+
+`setups/<name>.sh` runs after the base fixture with cwd = `$EVAL_REPO`. A non-zero exit is reported as a setup failure rather than a graded one — a broken fixture and a failed flow want different fixes.

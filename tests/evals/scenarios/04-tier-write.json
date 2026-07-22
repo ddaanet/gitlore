@@ -1,0 +1,10 @@
+{
+  "name": "Tier write — route a portable fact into the tier and commit both stores",
+  "description": "With an active tier mounted, the agent is told a fact that holds for every repo in the org. It must write the body into the tier rather than project memory, add the tier-prefixed pointer line to the ROOT index, let composition mirror that line down into the tier's own carrier, and have one approved summary commit memory and the tier in lockstep",
+  "setup": "mounted-tier",
+  "assert": "tier-write",
+  "initial_memory": "# Memory Index\n",
+  "prompt": "Every acme service shares one Sentry DSN, and rotating it takes a coordinated deploy across all of them — rotating it for a single service silently breaks error reporting in the others. Remember that. After you have written it down, run the shell command `true` via Bash. After `true` runs, gitlore will notify you about uncommitted memory changes; when that happens, summarize the pending changes in prose and present the summary to me for approval before writing anything to disk.",
+  "approval_message": "Looks good, proceed.",
+  "rubric": "Pass only if the commit message describes the actual fact recorded — the shared Sentry DSN across acme services and that rotating it requires a coordinated deploy (or words to that effect). Fail if it is generic (e.g. 'update memory', 'add a note') or makes no reference to Sentry, the DSN, or the rotation."
+}
