@@ -5,3 +5,4 @@
 .claude/handoff-session
 /.claude/gitlore-memory-message
 /.claude/gitlore-commit-memory
+/.claude/gitlore-recall
