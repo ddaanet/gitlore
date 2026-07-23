@@ -1,26 +1,18 @@
 ## Current task
 
-The gitlore 0.4.0 release is deliberately gated behind making the `pass^5`
-evals pass the `just prerelease` gate honestly. The code is release-ready; the
-gate is red only on the two LLM-driven-half losses, not on store-side bugs. Next
-session improves the evals, confirms a green gate, then releases. The full
-account — root cause, judge fragility, what to try — is in
-`memory/project_gitlore_global_memory.md` under the `pass^5` / NEXT entries.
+Migrate the gitlore sibling repos onto the shared `ddaanet` memory tier, one
+repo at a time from inside each: `/gitlore:add-tier` in the repo, move that
+repo's portable facts (`user` / CC-platform `reference` / portable `feedback`)
+up into `ddaanet/`, then activate via the manifest. Not batchable — each mount
+clones, and cross-repo git is classifier-denied, so it runs from the inside per
+repo. Scope and the full worklist are in `memory/project_gitlore_global_memory.md`
+(NEXT block): ddaanet is an org of one, so every gitlore sibling is a consumer;
+public/private is not a tier boundary (the tier repo is private).
 
 ## Open decisions
 
-- **`04-tier-write` judge misfire (~1/5).** The commit message is correct but
-  `judge.sh` parses the FIRST word of free-form model text, and the judge
-  occasionally leads with the wrong token before self-correcting. Harden via a
-  structured/enum verdict or a required `VERDICT: x` delimiter (fail-closed on
-  absent), or accept it as safe-direction noise (it is fail-closed — it can only
-  reject a good commit, never pass a bad one). Do NOT switch to a different
-  positional scan; that only relocates the fragility.
-- **`05-recall` loss (~1/5).** The agent sometimes answers without writing
-  `.claude/gitlore-recall`. Tighten the scenario prompt, or accept the rate.
-- **Do not ship over a red gate.** The `evals` sentinel records only a real
-  green; hand-writing it to bypass `pass^5` is off the table.
-- **Bump size** — `minor` (0.4.0), scope since v0.3.0 is D17 + D18 + index
-  authority. Confirm before `just release`.
-- **Authorization** — commit + `just release` (unsandboxed, clean tree, `main`)
-  each need David's explicit go-ahead.
+- Re-rank the worklist by portable-fact COUNT per repo, not `MEMORY.md` byte
+  size — a large index can be mostly `project` facts that stay put, so count is
+  the real per-repo payload. Do this ranking first next session.
+- Whether `general` is a gitlore repo at all — no gitlore wiring was detected in
+  its `.claude/settings*.json`; verify before counting it in.
