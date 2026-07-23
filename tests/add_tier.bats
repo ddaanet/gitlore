@@ -344,6 +344,24 @@ write_intent() {
     memory/orgwide/MEMORY.md
 }
 
+@test "add-tier: a description containing quotes seeds readable frontmatter" {
+  # The description is agent-supplied prose. Interpolated raw into a double-
+  # quoted YAML scalar it truncates at the first `"`, and the seeded carrier
+  # then reads back as two garbage lines for the life of the tier.
+  make_parent_with_memory
+  git init -q --bare "$TMP_REPO/.new-tier.git"
+  desc='Facts about the "core" team, a\b and all'
+  write_intent "mode=create" "name=orgwide" "url=$TMP_REPO/.new-tier.git" \
+    "description=$desc"
+
+  run bash "$ADD_TIER"
+  [ "$status" -eq 0 ]
+  run gitlore_get_frontmatter_description memory/orgwide/MEMORY.md
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 1 ]
+  [ "$output" = "$desc" ]
+}
+
 @test "add-tier: create leaves the tier inactive too" {
   make_parent_with_memory
   git init -q --bare "$TMP_REPO/.new-tier.git"

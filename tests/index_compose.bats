@@ -158,6 +158,25 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *"duplicate"* ]]
 }
 
+@test "problems from two indexes stay on separate lines" {
+  # Each index's problems are captured separately, and a capture drops its
+  # trailing newline: without one added back, the root's last problem and the
+  # carrier's first share a line — and that string is the refusal banner the
+  # user reads.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_root_bullet "ddaanet/dup.md" "first"
+  seed_root_bullet "ddaanet/dup.md" "second"
+  seed_tier_bullet ddaanet other.md "first"
+  seed_tier_bullet ddaanet other.md "second"
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [ "${#lines[@]}" -eq 2 ]
+  [ "${lines[0]}" = "memory/MEMORY.md: duplicate pointer path ddaanet/dup.md" ]
+  [ "${lines[1]}" = "memory/ddaanet/MEMORY.md: duplicate pointer path other.md" ]
+}
+
 @test "a mounted but unlisted tier is dormant, not an error" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
@@ -345,6 +364,24 @@ teardown() { teardown_tmp_repo; }
   grep -qF -- '- [gone](gone.md) — stale line' memory/MEMORY.md
   # And compose's own report stays a list of what it WROTE.
   [[ "$output" != *"names no file"* ]]
+}
+
+@test "a failed index write is reported, not reported as success" {
+  # The writes run inside a command substitution feeding a string append, and
+  # every caller invokes gitlore_compose as an `if` condition — which disables
+  # errexit for the whole call. Without an explicit status check a failed write
+  # left the index unchanged and the hook said "recomposed".
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_root_bullet "ddaanet/shared.md" "a portable fact"
+  # No write permission on the carrier's directory: the temp file cannot be
+  # created there, so gitlore_compose_write fails.
+  chmod a-w memory/ddaanet
+  run gitlore_compose memory
+  chmod u+w memory/ddaanet
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"could not write memory/ddaanet/MEMORY.md"* ]]
 }
 
 @test "a failing check writes nothing at all" {

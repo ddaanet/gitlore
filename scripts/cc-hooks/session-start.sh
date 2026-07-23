@@ -2,11 +2,10 @@
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-cd "$PROJECT_DIR"
 
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # gitlore_get_frontmatter_description, for tier routing guidance (D17).
@@ -216,7 +215,14 @@ done < <(gitlore_tier_paths "$mempath")
 # the always-loaded root index this session rather than next (D17 3-ii). Never
 # fatal: a store that fails validation is reported and left alone — SessionStart
 # must always finish.
-if ! compose_problems=$(gitlore_compose "$mempath"); then
+compose_rc=0
+compose_problems=$(gitlore_compose "$mempath") || compose_rc=$?
+if [ "$compose_rc" -eq 2 ]; then
+  # Not a refusal: a write failed partway, so some indexes are composed and one
+  # is not. The fail-safe wording below would misdescribe the store.
+  add_sysmsg "gitlore: tier composition could not write an index; the memory indexes are only partly composed:
+$compose_problems"
+elif [ "$compose_rc" -ne 0 ]; then
   add_sysmsg "gitlore: tier composition refused; the memory indexes were left untouched:
 $compose_problems"
 else

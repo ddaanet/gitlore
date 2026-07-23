@@ -13,7 +13,7 @@ input=$(cat)
 worktree_path=$(printf '%s' "$input" | jq -r '.worktree_path // empty')
 [ -n "$worktree_path" ] || exit 0
 
-cd "${CLAUDE_PROJECT_DIR:-$PWD}"
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 
 # Guard: no-op unless this repo registers the gitlore-memory submodule.
 gitlore_has_submodule || exit 0

@@ -25,7 +25,7 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 source "$PLUGIN_ROOT/scripts/lib/recall.sh"
 
 payload=$(cat)
-cd "${CLAUDE_PROJECT_DIR:-$PWD}"
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)

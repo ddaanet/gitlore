@@ -87,8 +87,9 @@ load_continuation_state() {
 # then commit what the merger produced.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
-  local memroot="$1" store="$2" composed dangling
-  if composed=$(gitlore_compose "$memroot"); then
+  local memroot="$1" store="$2" composed dangling rc=0
+  composed=$(gitlore_compose "$memroot") || rc=$?
+  if [ "$rc" -eq 0 ]; then
     [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
     # The dangling pass reports rather than refuses, so it runs on the composed
     # store and speaks whether or not composition wrote anything.
@@ -97,6 +98,9 @@ compose_merged_indexes() {
       echo "gitlore: these index lines name files that are not there. Nothing was rewritten or deleted:" >&2
       printf '%s\n' "$dangling" | sed 's/^/gitlore:   /' >&2
     fi
+  elif [ "$rc" -eq 2 ]; then
+    echo "gitlore: tier composition could not write an index — the merge is being committed with the indexes only PARTLY composed. Investigate the path named below, then edit MEMORY.md to retrigger the pass:" >&2
+    printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
   else
     echo "gitlore: tier composition refused — the merge is being committed uncomposed. Fix the store by hand, then edit MEMORY.md to retrigger it:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
@@ -104,6 +108,41 @@ compose_merged_indexes() {
   # The merger already ran `git add -A` here; re-running it is how anything
   # composition wrote joins the same commit.
   gitlore_git -C "$store" add -A
+}
+
+# Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on
+# success; returns 1 when git's parenthesized reason says the ref diverged,
+# which is the caller's cue to prepare a merge; reports git's own explanation
+# and EXITS 1 on any other refusal — a protected branch, a pre-receive decline,
+# a bad credential, a full quota.
+#
+# The same discriminator `pre-push` and `gitlore_sync_memory_to_live` apply, and
+# for the same reason: only divergence is something a merge can fix. Without it
+# a policy refusal prepares a merge that cannot help — and this script is where
+# the user lands *after* pre-push has correctly told them the push failed for a
+# reason other than divergence, so it is the last place that should re-diagnose
+# it as one.
+#
+# An empty message is treated as divergence, matching the memory gate: `push -q`
+# names its rejection reason, so silence here means the refusal carried no text
+# to route on and the local `HEAD:live` case is the only cause left.
+# Args: $1 = store worktree, $2… = push arguments (remote and refspec).
+push_or_report() {
+  local store="$1"; shift
+  local push_err
+  if push_err=$(gitlore_git -C "$store" push -q "$@" 2>&1); then
+    return 0
+  fi
+  case "$push_err" in
+    *"(fetch first)"*|*"(non-fast-forward)"*) return 1 ;;
+    *) [ -n "$push_err" ] || return 1 ;;
+  esac
+  gitlore_say_for_agent_or_user \
+    "gitlore: pushing '$*' in $store failed, and not because of divergence — no merge can fix this. git said:
+$push_err" \
+    "gitlore: pushing '$*' in $store failed, and not because of divergence — no merge can fix this. git said:
+$push_err" >&2
+  exit 1
 }
 
 # Subcommand dispatch (Plan 03 continuations).
@@ -126,12 +165,12 @@ if [ $# -ge 1 ]; then
       # then — when the merge was against the remote — the remote's `live` too.
       # Either can lose a race with a concurrent advance; re-prepare against
       # whichever side refused and yield again.
-      if ! gitlore_git -C "$mempath" push -q . HEAD:live; then
+      if ! push_or_report "$mempath" . HEAD:live; then
         gitlore_yield_merge "$mempath" live head-vs-live || exit 1
         exit 1
       fi
       if [ "$flavor" = "head-vs-remote" ]; then
-        if ! gitlore_git -C "$mempath" push -q origin live; then
+        if ! push_or_report "$mempath" origin live; then
           gitlore_git -C "$mempath" fetch -q origin live || true
           gitlore_yield_merge "$mempath" origin/live head-vs-remote || exit 1
           exit 1
@@ -191,7 +230,10 @@ if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
     "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
   exit 1
 fi
-if ! git -C "$mempath" ls-remote origin live | grep -q .; then
+# Captured rather than piped into `grep -q`: this script runs with `set -o
+# pipefail`, where an early-exiting consumer can leave `ls-remote` writing into
+# a closed pipe and turn a healthy remote into a SIGPIPE failure.
+if [ -z "$(git -C "$mempath" ls-remote origin live)" ]; then
   echo "gitlore: remote has no live branch. Pushing." >&2
   gitlore_git -C "$mempath" push origin live
   # Fall through, same reason: the gates below re-check memory as a no-op and
@@ -207,11 +249,11 @@ fi
 check_store_gates() {
   local store="$1"
   gitlore_git -C "$store" fetch -q origin live || true
-  if ! gitlore_git -C "$store" push -q . HEAD:live; then
+  if ! push_or_report "$store" . HEAD:live; then
     gitlore_yield_merge "$store" live head-vs-live || exit 1
     exit 1
   fi
-  if ! gitlore_git -C "$store" push -q origin live; then
+  if ! push_or_report "$store" origin live; then
     gitlore_yield_merge "$store" origin/live head-vs-remote || exit 1
     exit 1
   fi

@@ -12,6 +12,21 @@ readonly GITLORE_SUBMODULE_NAME
 GITLORE_MIGRATION_MARKER='migrated in-tree by `/gitlore:install`'
 readonly GITLORE_MIGRATION_MARKER
 
+# cd to the repo every gitlore hook operates on: the LAUNCH repo, not whatever
+# directory the session is sitting in. Claude Code's in-process EnterWorktree
+# moves the session cwd into a linked worktree but freezes the launch
+# environment — CLAUDE_PROJECT_DIR and the auto-memory directory both — so
+# memory keeps landing in the launch repo's store (D15). A hook that followed
+# cwd would read and write a different store from the one being written to, and
+# from the one recall-reset.sh clears: the recall ledger would then never be
+# reset across a compaction.
+#
+# Every hook calls this before it touches a repo. worktree-drift.sh is the one
+# exception, because comparing the two locations IS its job.
+gitlore_cd_project_root() {
+  cd "${CLAUDE_PROJECT_DIR:-$PWD}" || return 1
+}
+
 # Write an executable hook wrapper that resolves the live plugin via
 # `git config gitlore.hooksDir` and degrades to a clean skip (exit 0) when that
 # config is unset or the target hook is missing (plugin upgraded + cache GC'd),

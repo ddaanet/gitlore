@@ -101,18 +101,28 @@ gitlore_write_merge_state() {
     | sort -u | jq -R . | jq -s . || echo '[]')
   conflicted=$(git -C "$mempath" diff --name-only --diff-filter=U \
     | jq -R . | jq -s . || echo '[]')
-  cat > "$statefile" <<EOF
-{
-  "flavor": "$flavor",
-  "store": "$store_abs",
-  "base": "$base",
-  "source_ref": "$source",
-  "target_ref": "$target",
-  "changed_files": $changed,
-  "conflicted_files": $conflicted,
-  "continuation": "$cont"
-}
-EOF
+  [ -n "$changed" ] || changed='[]'
+  [ -n "$conflicted" ] || conflicted='[]'
+  # jq builds the JSON rather than a heredoc interpolating into it: $store_abs is
+  # a filesystem path, and one containing a `"` or a `\` produces a file that the
+  # first reader — `jq -r .flavor` in the stale-state guard — cannot parse, which
+  # surfaces as a blocked commit with a jq syntax error instead of a merge.
+  # Written through a temp file so a jq failure cannot leave a truncated state
+  # file behind: a half-written one blocks every later commit in this store.
+  jq -n \
+    --arg flavor "$flavor" \
+    --arg store "$store_abs" \
+    --arg base "$base" \
+    --arg source "$source" \
+    --arg target "$target" \
+    --arg cont "$cont" \
+    --argjson changed "$changed" \
+    --argjson conflicted "$conflicted" \
+    '{flavor: $flavor, store: $store, base: $base, source_ref: $source,
+      target_ref: $target, changed_files: $changed,
+      conflicted_files: $conflicted, continuation: $cont}' \
+    > "$statefile.tmp" || { rm -f "$statefile.tmp"; return 1; }
+  mv "$statefile.tmp" "$statefile" || { rm -f "$statefile.tmp"; return 1; }
 }
 
 # Emit the structured directive on stderr.
@@ -153,12 +163,24 @@ EOF
 # Stdout: `<base_sha>:<pending_sha>`.
 gitlore_prepare_merge() {
   local mempath="$1" authority="$2"
-  local pending base
+  local pending base merge_err
   pending=$(git -C "$mempath" rev-parse HEAD)
   base=$(git -C "$mempath" merge-base "$pending" "$authority")
   gitlore_git -C "$mempath" update-ref "$GITLORE_PENDING_REF" "$pending"
   gitlore_git -C "$mempath" checkout -q --detach "$authority"
-  gitlore_git -C "$mempath" merge --no-commit --no-ff "$pending" >/dev/null 2>&1 || true
+  # A conflicting merge is the EXPECTED outcome here — the conflicted worktree is
+  # exactly what the merger sub-agent resolves — so a non-zero exit is not a
+  # failure and the conflict listing is noise the state file already carries in
+  # `conflicted_files`. Captured rather than discarded, because a merge that
+  # failed for some other reason (an unmergeable ref, an index left unmerged by
+  # something else) leaves no MERGE_HEAD, and the directive would then announce a
+  # merge nobody prepared. MERGE_HEAD is the discriminator; git's own words are
+  # what the user gets when it is absent.
+  merge_err=$(gitlore_git -C "$mempath" merge --no-commit --no-ff "$pending" 2>&1) || true
+  if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    printf '%s\n' "$merge_err" >&2
+    return 1
+  fi
   printf '%s:%s\n' "$base" "$pending"
 }
 
@@ -177,7 +199,12 @@ gitlore_yield_merge() {
   fi
   base="${prep%%:*}"
   pending="${prep#*:}"
-  gitlore_write_merge_state "$mempath" "$flavor" "$base" "$pending" "$authority" "continue-after-merge"
+  if ! gitlore_write_merge_state "$mempath" "$flavor" "$base" "$pending" "$authority" "continue-after-merge"; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: the merge was prepared in $mempath but its state file could not be written, so no continuation can run. Inspect the memory worktree." \
+      "gitlore: the merge was prepared in $mempath but its state file could not be written, so no continuation can run. Inspect the memory worktree." >&2
+    return 1
+  fi
   statefile=$(gitlore_merge_state_file "$mempath")
   gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
   return 0

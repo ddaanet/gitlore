@@ -18,6 +18,9 @@
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
+# Each @test is its own subshell, so a per-test export is consumed inside that
+# same test — SC2030/SC2031 are false positives here.
+# shellcheck disable=SC2030,SC2031
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -211,12 +214,51 @@ HOOK
   [ "$status" -ne 0 ]
 }
 
-@test "all three sites still key on the pinned patterns" {
+@test "resolve reports a policy rejection instead of preparing a merge" {
+  # /gitlore:resolve is where the user lands after pre-push has correctly told
+  # them the push failed for a reason other than divergence. Re-diagnosing it as
+  # divergence here prepares a merge that cannot help — and sends them round the
+  # same loop.
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  git -C memory remote remove origin || true
+  git -C memory remote add origin "$MEMORY_REMOTE"
+  git -C memory push -q origin live
+
+  cat > "$MEMORY_REMOTE/hooks/pre-receive" <<'HOOK'
+#!/bin/sh
+echo "policy: live is protected" >&2
+exit 1
+HOOK
+  chmod +x "$MEMORY_REMOTE/hooks/pre-receive"
+  # Something to push, so the gate reaches the remote rather than no-opping.
+  (
+    cd memory || exit 1
+    echo new-fact > FACT.md
+    git add FACT.md
+    GITLORE_MEMORY_COMMIT=1 git commit -q -m "Add fact"
+    git push -q . HEAD:live
+  )
+
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh"
+  [ "$status" -ne 0 ]
+  msg="$output$stderr"
+  [[ "$msg" == *"not because of divergence"* ]]
+  [[ "$msg" == *"policy: live is protected"* ]]
+  [[ "$msg" != *"memory merge prepared"* ]]
+  run git -C memory rev-parse -q --verify refs/gitlore/pending
+  [ "$status" -ne 0 ]
+}
+
+@test "all four sites still key on the pinned patterns" {
   # Guards the mirror above from drifting away from the code it stands in for:
   # if a site stops using this pattern pair, the scenarios go on passing while
   # testing nothing.
   for site in \
     scripts/lib/resolve.sh \
+    scripts/resolve.sh \
     scripts/git-hooks/pre-push \
     scripts/cc-hooks/session-start.sh
   do

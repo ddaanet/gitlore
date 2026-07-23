@@ -69,6 +69,32 @@ teardown() { teardown_tmp_repo; }
   [ "$remote_live" != "MISSING" ]
 }
 
+@test "resolve: the merge state file parses when the store path holds a quote" {
+  # The state file records the store path, and its first reader is `jq -r
+  # .flavor` in the stale-merge guard. A path containing a `"` or a `\` written
+  # by string interpolation yields invalid JSON, and the guard's failure surfaces
+  # as a blocked commit with a jq syntax error rather than as a merge.
+  store="$TMP_REPO/we\"ird \\ store"
+  mkdir -p "$store"
+  git init -q "$store"
+  git -C "$store" config user.email "test@example.com"
+  git -C "$store" config user.name "Test"
+  echo seed > "$store/SEED.md"
+  git -C "$store" add SEED.md
+  git -C "$store" commit -q -m seed
+  sha=$(git -C "$store" rev-parse HEAD)
+
+  gitlore_write_merge_state "$store" head-vs-live "$sha" "$sha" live continue-after-merge
+
+  statefile=$(gitlore_merge_state_file "$store")
+  [ -f "$statefile" ]
+  run jq -r .flavor "$statefile"
+  [ "$status" -eq 0 ]
+  [ "$output" = "head-vs-live" ]
+  [ "$(jq -r .store "$statefile")" = "$store" ]
+  [ "$(jq -r '.changed_files | type' "$statefile")" = "array" ]
+}
+
 @test "resolve: no-op when healthy" {
   make_parent_with_memory
   bare="$TMP_REPO/.healthy-remote.git"

@@ -144,6 +144,50 @@ read_call() { printf '[{"tool_name":"Read","tool_input":{"file_path":"%s"}}]' "$
   [[ "$ctx" == *"body of A"* ]]      # re-fetched, not skipped
 }
 
+@test "batch and reset agree on one ledger when the session cwd has drifted" {
+  # CC's in-process EnterWorktree moves the session cwd but freezes
+  # CLAUDE_PROJECT_DIR (D15). Every hook anchors on the launch repo, because
+  # that is where auto-memory keeps writing. A hook that followed cwd instead
+  # would ledger in one store while reset cleared another, and the ledger would
+  # never be cleared across a compaction.
+  make_parent_with_memory
+  printf 'body of A\n' > memory/feedback_a.md
+  export CLAUDE_PROJECT_DIR="$TMP_REPO"
+  ledger_req="$(gitlore_recall_file "$TMP_REPO/memory")"
+  mkdir -p elsewhere
+  cd elsewhere || return 1
+
+  printf 'feedback_a.md\n' > "$ledger_req"
+  run run_batch
+  [ "$status" -eq 0 ]
+  [[ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')" == *"body of A"* ]]
+
+  printf 'feedback_a.md\n' > "$ledger_req"
+  run run_batch
+  [[ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')" == *"already in this context"* ]]
+
+  run run_reset
+  [ "$status" -eq 0 ]
+  printf 'feedback_a.md\n' > "$ledger_req"
+  run run_batch
+  [[ "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')" == *"body of A"* ]]
+}
+
+@test "every cc-hook anchors on the launch repo before it touches a repo" {
+  # One convention or none: a mix is what let the recall ledger be written in
+  # one store and cleared in another.
+  for hook in "$PLUGIN_ROOT"/scripts/cc-hooks/*.sh; do
+    case "${hook##*/}" in
+      # Comparing the session cwd with the launch root IS this hook's job.
+      worktree-drift.sh) continue ;;
+    esac
+    grep -qF 'gitlore_cd_project_root' "$hook" || {
+      echo "no gitlore_cd_project_root in $hook" >&2
+      return 1
+    }
+  done
+}
+
 @test "the skill is discoverable with a description that names the mid-task trigger" {
   skill="$PLUGIN_ROOT/skills/recall/SKILL.md"
   [ -f "$skill" ]
