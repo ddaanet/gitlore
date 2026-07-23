@@ -1,5 +1,9 @@
 # Plan 06 — Worktree Lifecycle (SessionStart create-side + WorktreeRemove cleanup)
 
+> **Delivered through Plan 07** (`2026-05-25-07-gitlink-aware-wrappers.md`), which absorbed both
+> deliverables so the gitlink-aware wrapper anchoring and the worktree lifecycle landed together.
+> The steps below are ticked against the shipped outcome, not against execution under this plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement task-by-task with TDD (red → green → commit). Steps use `- [ ]` checkboxes. Each step lists exact files, code, and commands.
 
 **Goal:** Make gitlore's per-worktree memory branches track Claude Code's worktree lifecycle — create the memory submodule worktree lazily at `SessionStart` in a linked worktree, and clean it up advisorily on `WorktreeRemove`.
@@ -32,7 +36,7 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 - Modify: `scripts/cc-hooks/session-start.sh:70-72`
 - Test: `tests/cc_hook_session_start.bats`
 
-- [ ] **Step 1: Write the failing test.** Append to `tests/cc_hook_session_start.bats`. The fixture builds the parent + memory submodule (main worktree on `worktree` branch), then adds a *linked* parent worktree on a new branch `feat-x` whose `memory/` dir is empty (git does not recurse submodules into new worktrees). SessionStart in that worktree must create the memory worktree on `feat-x`.
+- [x] **Step 1: Write the failing test.** Append to `tests/cc_hook_session_start.bats`. The fixture builds the parent + memory submodule (main worktree on `worktree` branch), then adds a *linked* parent worktree on a new branch `feat-x` whose `memory/` dir is empty (git does not recurse submodules into new worktrees). SessionStart in that worktree must create the memory worktree on `feat-x`.
 
   ```bash
   @test "creates the memory worktree in a linked (CC-created) worktree on the parent-named branch" {
@@ -61,12 +65,12 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
   }
   ```
 
-- [ ] **Step 2: Run the test to verify it fails.**
+- [x] **Step 2: Run the test to verify it fails.**
 
   Run: `bats tests/cc_hook_session_start.bats -f "linked"`
   Expected: FAIL — `$WT/memory/.git` is still absent after SessionStart (the current code's `git submodule update --init` does not create the linked-worktree submodule tree), so the `[ -e "$WT/memory/.git" ]` assertion fails.
 
-- [ ] **Step 3: Implement the linked-worktree branch.** In `scripts/cc-hooks/session-start.sh`, replace the current init block (lines 70-72):
+- [x] **Step 3: Implement the linked-worktree branch.** In `scripts/cc-hooks/session-start.sh`, replace the current init block (lines 70-72):
 
   ```bash
   if [ ! -f "$mempath/.git" ] && [ ! -d "$mempath/.git" ]; then
@@ -97,12 +101,12 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 
   The subsequent checkout block (now ~lines 78-90) is unchanged: it sees the freshly added detached worktree, finds no `refs/heads/feat-x`, and runs `git -C "$mempath" checkout -q -b "$parent_branch" live`, landing the worktree on `feat-x`. (`GITLORE_SUBMODULE_NAME` is already in scope via `source scripts/lib/util.sh`.)
 
-- [ ] **Step 4: Run the test to verify it passes.**
+- [x] **Step 4: Run the test to verify it passes.**
 
   Run: `bats tests/cc_hook_session_start.bats`
   Expected: PASS — all existing tests plus the new linked-worktree test. (Existing tests use the main worktree where `memory/.git` is present, so the new branch is skipped and their behavior is unchanged.)
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
   ```bash
   git add scripts/cc-hooks/session-start.sh tests/cc_hook_session_start.bats
@@ -117,7 +121,7 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 - Create: `scripts/cc-hooks/worktree-remove.sh`
 - Test: `tests/cc_hook_worktree_remove.bats`
 
-- [ ] **Step 1: Write the failing tests.** Create `tests/cc_hook_worktree_remove.bats`. The helper sets up a parent + a linked worktree whose memory worktree is already checked out (simulating a prior session), then drives the hook with JSON on stdin.
+- [x] **Step 1: Write the failing tests.** Create `tests/cc_hook_worktree_remove.bats`. The helper sets up a parent + a linked worktree whose memory worktree is already checked out (simulating a prior session), then drives the hook with JSON on stdin.
 
   ```bash
   #!/usr/bin/env bats
@@ -190,12 +194,12 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
   }
   ```
 
-- [ ] **Step 2: Run the tests to verify they fail.**
+- [x] **Step 2: Run the tests to verify they fail.**
 
   Run: `bats tests/cc_hook_worktree_remove.bats`
   Expected: FAIL — `worktree-remove.sh` does not exist (every test errors on the missing script) and the hooks.json registration test fails (no `WorktreeRemove` key yet).
 
-- [ ] **Step 3: Write the hook.** Create `scripts/cc-hooks/worktree-remove.sh`:
+- [x] **Step 3: Write the hook.** Create `scripts/cc-hooks/worktree-remove.sh`:
 
   ```bash
   #!/usr/bin/env bash
@@ -244,7 +248,7 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 
   `chmod 755 scripts/cc-hooks/worktree-remove.sh`.
 
-- [ ] **Step 4: Register the hook.** In `hooks/hooks.json`, add a `WorktreeRemove` entry alongside `SessionStart`/`PostToolUse`:
+- [x] **Step 4: Register the hook.** In `hooks/hooks.json`, add a `WorktreeRemove` entry alongside `SessionStart`/`PostToolUse`:
 
   ```json
       "WorktreeRemove": [
@@ -261,12 +265,12 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 
   (No `matcher` — worktree events are not tool-matched. Place the new key inside the existing `"hooks": { … }` object; mind the trailing comma on the preceding entry.)
 
-- [ ] **Step 5: Run the tests to verify they pass.**
+- [x] **Step 5: Run the tests to verify they pass.**
 
   Run: `bats tests/cc_hook_worktree_remove.bats`
   Expected: PASS (all 6 tests).
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
   ```bash
   git add scripts/cc-hooks/worktree-remove.sh hooks/hooks.json tests/cc_hook_worktree_remove.bats
@@ -281,7 +285,7 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 **Files:**
 - Modify: `Makefile:6`
 
-- [ ] **Step 1: Add the test file to `test-unit`.** In `Makefile` line 6, append to the `bats` file list:
+- [x] **Step 1: Add the test file to `test-unit`.** In `Makefile` line 6, append to the `bats` file list:
 
   ```
    tests/cc_hook_worktree_remove.bats
@@ -289,12 +293,12 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 
   (Append to the existing space-separated list on that line, after `tests/global_shim.bats`.)
 
-- [ ] **Step 2: Run the full suite.**
+- [x] **Step 2: Run the full suite.**
 
   Run: `make test`
   Expected: PASS — all unit tests (now including `cc_hook_worktree_remove.bats`) and the integration test.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
 
   ```bash
   git add Makefile
@@ -307,16 +311,16 @@ Note: `docs/design.md` was already updated during brainstorming (the WorktreeCre
 
 Per "dogfood early" — this repo is the production target. Exercise the full create→remove cycle against the live plugin (under `--plugin-dir`, per the stale-cache lesson).
 
-- [ ] **Step 1: Create a CC worktree and confirm the memory worktree.** From this repo, run `claude --worktree dogfood-06` (or `git worktree add ../gitlore-wt-06 -b dogfood-06` then start a session there). In the new worktree's session, confirm:
+- [x] **Step 1: Create a CC worktree and confirm the memory worktree.** From this repo, run `claude --worktree dogfood-06` (or `git worktree add ../gitlore-wt-06 -b dogfood-06` then start a session there). In the new worktree's session, confirm:
   - `ls -la memory/.git` → present (a gitlink file).
   - `git -C memory rev-parse --abbrev-ref HEAD` → `dogfood-06` (the memory branch mirrors the parent branch).
   - `git -C .git/modules/gitlore-memory worktree list` (from the main repo) lists the new worktree's `memory` path on `dogfood-06`.
 
-- [ ] **Step 2: Remove the worktree and confirm cleanup.** Remove the worktree the way CC does (or `git worktree remove ../gitlore-wt-06`). Confirm:
+- [x] **Step 2: Remove the worktree and confirm cleanup.** Remove the worktree the way CC does (or `git worktree remove ../gitlore-wt-06`). Confirm:
   - `git -C .git/modules/gitlore-memory worktree list` no longer lists the removed worktree's memory path (the `WorktreeRemove` hook pruned it). If removal was via CC, this proves the hook fired; if via plain `git`, run the hook's logic manually to confirm cleanup, and note that plain `git worktree remove` does not fire CC hooks.
   - The `dogfood-06` memory branch still exists (`git -C .git/modules/gitlore-memory branch --list dogfood-06`) — branch retention is a no-op by design.
 
-- [ ] **Step 3: Record findings** in this plan under each step, fix any surprises in-plan, then commit (docs only):
+- [x] **Step 3: Record findings** in this plan under each step, fix any surprises in-plan, then commit (docs only):
 
   ```bash
   git add docs/plans/2026-05-25-06-worktree-lifecycle.md

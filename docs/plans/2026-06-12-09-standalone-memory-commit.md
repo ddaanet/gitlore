@@ -34,7 +34,7 @@ Extract `pre-commit`'s stale-merge precheck + dirty/freshness/commit + push/dive
 - Modify: `scripts/git-hooks/pre-commit:19-90`
 - Test: `tests/git_hook_pre_commit.bats` (existing, must stay green) + `tests/commit_memory.bats` (created in Task 2 also exercises it)
 
-- [ ] **Step 1: Add the function to `scripts/lib/resolve.sh`**
+- [x] **Step 1: Add the function to `scripts/lib/resolve.sh`**
 
 Append at end of file. This is a verbatim relocation of `pre-commit:27-90` with `exit N` → `return N` and `mempath` taken as `$1`:
 
@@ -118,7 +118,7 @@ gitlore_sync_memory_to_live() {
 }
 ```
 
-- [ ] **Step 2: Rewrite `scripts/git-hooks/pre-commit` to delegate**
+- [x] **Step 2: Rewrite `scripts/git-hooks/pre-commit` to delegate**
 
 Replace the entire file body from line 19 onward (everything after the lib `source` lines) with presence guards + one call. The file becomes:
 
@@ -156,17 +156,17 @@ exit $?
 
 Note: the original `git config --file .gitmodules … || exit 0` guard (old line 44) is subsumed by `[ -z "$mempath" ] && exit 0` — `gitlore_memory_path` already returns empty when the submodule is unregistered.
 
-- [ ] **Step 3: Run the existing pre-commit suite to verify behavior is preserved**
+- [x] **Step 3: Run the existing pre-commit suite to verify behavior is preserved**
 
 Run: `bats tests/git_hook_pre_commit.bats`
 Expected: PASS — all existing tests green (clean no-op, dirty+fresh commit/push, dirty+no-summary hint, divergence directive, detached HEAD, leaked-GIT_DIR regression, session-less worktree).
 
-- [ ] **Step 4: Run the resolve suite to confirm no lib regression**
+- [x] **Step 4: Run the resolve suite to confirm no lib regression**
 
 Run: `bats tests/resolve.bats tests/resolve_merge_branch.bats tests/lib_util.bats`
 Expected: PASS — the new function only adds; existing resolve/util behavior unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/lib/resolve.sh scripts/git-hooks/pre-commit
@@ -183,7 +183,7 @@ Arg-driven script that resolves the memory path, writes the approved summary to 
 - Create: `scripts/commit-memory.sh`
 - Test: `tests/commit_memory.bats`
 
-- [ ] **Step 1: Write the failing test file `tests/commit_memory.bats`**
+- [x] **Step 1: Write the failing test file `tests/commit_memory.bats`**
 
 ```bash
 #!/usr/bin/env bats
@@ -281,12 +281,12 @@ EOF"
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `bats tests/commit_memory.bats`
 Expected: FAIL — every test errors (`commit-memory.sh` does not exist).
 
-- [ ] **Step 3: Implement `scripts/commit-memory.sh`**
+- [x] **Step 3: Implement `scripts/commit-memory.sh`**
 
 ```bash
 #!/usr/bin/env bash
@@ -351,22 +351,22 @@ gitlore_sync_memory_to_live "$mempath"
 exit $?
 ```
 
-- [ ] **Step 4: Make it executable**
+- [x] **Step 4: Make it executable**
 
 Run: `chmod +x scripts/commit-memory.sh`
 Expected: no output; `test -x scripts/commit-memory.sh` succeeds.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `bats tests/commit_memory.bats`
 Expected: PASS — all 8 tests green.
 
-- [ ] **Step 6: Lint the new script**
+- [x] **Step 6: Lint the new script**
 
 Run: `shellcheck scripts/commit-memory.sh`
 Expected: no findings (the `SC1091` source-not-followed lines carry inline disables, matching the hooks).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add scripts/commit-memory.sh tests/commit_memory.bats
@@ -384,7 +384,7 @@ Set the key in both the per-session re-pin (`session-start.sh`, the self-healing
 - Modify: `scripts/install/write-settings.sh:34-36`
 - Test: `tests/cc_hook_session_start.bats`, `tests/install_run.bats`
 
-- [ ] **Step 1: Add the session-start assertion (failing)**
+- [x] **Step 1: Add the session-start assertion (failing)**
 
 In `tests/cc_hook_session_start.bats`, extend the existing test at line 30 (`"does not write settings.local.json (D10); sets hooksDir and emits wrappers"`). Immediately after the `hooksDir` assertion (line 37) add:
 
@@ -392,12 +392,12 @@ In `tests/cc_hook_session_start.bats`, extend the existing test at line 30 (`"do
   [ "$(git config gitlore.commitCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" ]
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `bats tests/cc_hook_session_start.bats -f "sets hooksDir"`
 Expected: FAIL — `git config gitlore.commitCommand` is empty, assertion fails.
 
-- [ ] **Step 3: Set the key in `session-start.sh`**
+- [x] **Step 3: Set the key in `session-start.sh`**
 
 At `scripts/cc-hooks/session-start.sh`, in the "Hook dir + wrappers" block, add the second `git config` line:
 
@@ -408,12 +408,12 @@ git config gitlore.commitCommand "$PLUGIN_ROOT/scripts/commit-memory.sh"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 ```
 
-- [ ] **Step 4: Run the session-start suite to verify it passes**
+- [x] **Step 4: Run the session-start suite to verify it passes**
 
 Run: `bats tests/cc_hook_session_start.bats`
 Expected: PASS — all tests green, including the new key assertion.
 
-- [ ] **Step 5: Add the install-seed assertion (failing)**
+- [x] **Step 5: Add the install-seed assertion (failing)**
 
 In `tests/install_run.bats`, locate the test that asserts `gitlore.precommitCommand` (line 38) and add, in the same test, after the install run completes:
 
@@ -423,12 +423,12 @@ In `tests/install_run.bats`, locate the test that asserts `gitlore.precommitComm
 
 (If that test does not run the full install through `write-settings.sh`, instead add a focused test that invokes `bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" memory "test-pc"` inside `setup_tmp_repo` and asserts the key. Verify which by reading the test's body first.)
 
-- [ ] **Step 6: Run it to verify it fails**
+- [x] **Step 6: Run it to verify it fails**
 
 Run: `bats tests/install_run.bats`
 Expected: FAIL — the new `commitCommand` assertion fails (key unset by install).
 
-- [ ] **Step 7: Seed the key in `write-settings.sh`**
+- [x] **Step 7: Seed the key in `write-settings.sh`**
 
 At `scripts/install/write-settings.sh`, after the `hooksDir` line (36):
 
@@ -439,17 +439,17 @@ git config gitlore.hooksDir "${plugin_root}/scripts/git-hooks"
 git config gitlore.commitCommand "${plugin_root}/scripts/commit-memory.sh"
 ```
 
-- [ ] **Step 8: Run the install suite to verify it passes**
+- [x] **Step 8: Run the install suite to verify it passes**
 
 Run: `bats tests/install_run.bats`
 Expected: PASS — install now seeds `gitlore.commitCommand`.
 
-- [ ] **Step 9: Run the full suite**
+- [x] **Step 9: Run the full suite**
 
 Run: `bats tests/`
 Expected: PASS — entire suite green (prior count + the new `commit_memory.bats` tests + 2 assertions).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add scripts/cc-hooks/session-start.sh scripts/install/write-settings.sh \
@@ -466,7 +466,7 @@ The design decision (D16) and Architecture subsection already landed in `docs/de
 **Files:**
 - Modify: `docs/design.md` (Changelog table, top row)
 
-- [ ] **Step 1: Add the Changelog row**
+- [x] **Step 1: Add the Changelog row**
 
 At the top of the Changelog table in `docs/design.md` (just under the header row), add:
 
@@ -474,7 +474,7 @@ At the top of the Changelog table in `docs/design.md` (just under the header row
 | 2026-06-12 | **Implemented D16 — standalone memory-commit entry point.** New `scripts/commit-memory.sh` (arg-driven `-m`/`-F`/`-F -`) commits the memory submodule with the `GITLORE_MEMORY_COMMIT` sentinel and advances local `live` without a parent commit. The commit-and-advance-live body is factored out of `pre-commit` into `gitlore_sync_memory_to_live` (`lib/resolve.sh`); both call it. Discovery via a `gitlore.commitCommand` git config key, re-pinned every `SessionStart` and seeded at install (`write-settings.sh`). Freshness gate kept inside the shared body (pre-commit still needs it; the script satisfies it by writing the summary first). Tests: `commit_memory.bats` (8) + session-start/install key assertions. |
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/design.md

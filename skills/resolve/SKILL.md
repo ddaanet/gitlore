@@ -1,5 +1,6 @@
 ---
-description: Resolve gitlore memory divergence. Activate when a git commit or push fails with output containing "gitlore: memory merge prepared", or when the user invokes /gitlore:resolve.
+name: resolve
+description: Resolve or repair a diverged gitlore memory store or tier. Use when a git commit or push fails with output containing "gitlore: memory merge prepared" — invoke it without waiting to be asked. Also use when the user runs /gitlore:resolve, reports that memory has stopped publishing, or hands back a divergence message from a push they ran in their own terminal.
 allowed-tools: ["Bash", "Task", "SendMessage"]
 ---
 

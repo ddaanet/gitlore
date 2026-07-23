@@ -38,7 +38,7 @@ Before writing propagation code, pin *how git actually behaves* when a submodule
 - Produces: `make_tier_in_memory [tier_subpath] [bare_seed]` — a bats helper that, given a repo already built by `make_parent_with_memory`, creates a bare tier remote, `git submodule add`s it at `memory/<tier_subpath>` (default `ddaanet`) with `--name <tier_subpath>`, seeds a `MEMORY.md` with frontmatter `description:`, and commits inside the memory submodule using the blessed sentinel `GITLORE_MEMORY_COMMIT=1`. Leaves the parent staged (mirrors `make_parent_with_memory`'s contract).
 - Produces (findings): documented answers recorded as comments at the top of `tier-fixtures.bash` — the nested gitdir path (expected `<parent>/.git/modules/gitlore-memory/modules/<tier>`), whether `git -C memory submodule add` works when `memory` is a linked worktree (`git worktree add`), and whether the tier checks out cleanly from a session-less linked worktree.
 
-- [ ] **Step 1: Observe the mechanics in a scratch repo (spike, not committed)**
+- [x] **Step 1: Observe the mechanics in a scratch repo (spike, not committed)**
 
 Run these by hand in a throwaway dir (use the absolute scratchpad path, not `/tmp` — `reference_tmpdir_unset_unsandboxed`) and record each output; they answer the four Global-Constraints/lockstep unknowns:
 
@@ -61,7 +61,7 @@ git -C .git/modules/gitlore-memory worktree add --detach "$D/parent2/memory" liv
 
 Record the actual paths/errors — they set the assertions below and confirm whether a tier can be checked out **detached at `live`** through a linked-worktree memory store (the decided branch model — D17), which is the one materialization risk the later slices inherit.
 
-- [ ] **Step 2: Write the fixture helper `make_tier_in_memory`**
+- [x] **Step 2: Write the fixture helper `make_tier_in_memory`**
 
 Encode the *observed* layout. Skeleton (fill the recorded paths):
 
@@ -87,7 +87,7 @@ make_tier_in_memory() {
 }
 ```
 
-- [ ] **Step 3: Write the characterization test pinning the observed layout**
+- [x] **Step 3: Write the characterization test pinning the observed layout**
 
 ```bash
 @test "make_tier_in_memory places the nested gitdir under the memory module store" {
@@ -102,11 +102,11 @@ make_tier_in_memory() {
 }
 ```
 
-- [ ] **Step 4: Run it and register the suite**
+- [x] **Step 4: Run it and register the suite**
 
 Run: `bats tests/tier_discovery.bats` → PASS. Then add `tier_discovery.bats` to `make test` and run `make test` to confirm it is discovered (`feedback_test_the_invocation_path`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/helpers/tier-fixtures.bash tests/tier_discovery.bats Makefile
@@ -126,7 +126,7 @@ git commit -m "test: characterize nested-tier mount under memory submodule (D17 
 - Consumes: `make_parent_with_memory`, `make_tier_in_memory` (Task 1); `gitlore_memory_path`, `gitlore_git` (util.sh).
 - Produces: `gitlore_tier_paths <mempath>` → prints each tier's path relative to `<mempath>` (one per line), read from `<mempath>/.gitmodules`; prints nothing (exit 0) when there is no `.gitmodules`.
 
-- [ ] **Step 1: Write the failing test for `gitlore_tier_paths`**
+- [x] **Step 1: Write the failing test for `gitlore_tier_paths`**
 
 ```bash
 @test "gitlore_tier_paths lists tiers from the memory store's own .gitmodules" {
@@ -147,11 +147,11 @@ git commit -m "test: characterize nested-tier mount under memory submodule (D17 
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `bats tests/tier_discovery.bats -f tier_paths` → FAIL (`gitlore_tier_paths: command not found`).
 
-- [ ] **Step 3: Implement `gitlore_tier_paths` in util.sh**
+- [x] **Step 3: Implement `gitlore_tier_paths` in util.sh**
 
 ```bash
 # Print each tier submodule's path (relative to the memory worktree), one per
@@ -167,11 +167,11 @@ gitlore_tier_paths() {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `bats tests/tier_discovery.bats -f tier_paths` → PASS.
 
-- [ ] **Step 5: Write the failing test for SessionStart propagation-in**
+- [x] **Step 5: Write the failing test for SessionStart propagation-in**
 
 A tier remote gains a new commit after the tier is mounted here; a fresh SessionStart must fast-forward the local tier to include it and leave the working tree **detached at `live`** (the decided branch model — D17). After SessionStart, local `live` and the detached HEAD both equal the remote commit, and HEAD is *not* on a branch.
 
@@ -194,11 +194,11 @@ A tier remote gains a new commit after the tier is mounted here; a fresh Session
 }
 ```
 
-- [ ] **Step 6: Run to verify failure**
+- [x] **Step 6: Run to verify failure**
 
 Run: `bats tests/tier_discovery.bats -f propagation` → FAIL (local `live` still at the mount SHA).
 
-- [ ] **Step 7: Implement the SessionStart tier block**
+- [x] **Step 7: Implement the SessionStart tier block**
 
 Insert after the memory dirty/ff block (~line 168), before `emit_session_json`. Every `git` is guarded so a bad tier never aborts the session:
 
@@ -232,11 +232,11 @@ done < <(gitlore_tier_paths "$mempath")
 
 Note: `fetch origin live:live` ff-updates the local `live` ref and refuses a non-ff — the ff-only guarantee for free. It works precisely because tiers never check `live` out as a branch (git refuses to update a checked-out branch via fetch); the immediately-following `checkout --detach live` keeps HEAD off the branch.
 
-- [ ] **Step 8: Run to verify pass**
+- [x] **Step 8: Run to verify pass**
 
 Run: `bats tests/tier_discovery.bats -f propagation` → PASS. Then full-file: `bats tests/tier_discovery.bats` → all PASS, and `bats tests/cc_hook_session_start.bats` → still green (no regression to the memory-only path).
 
-- [ ] **Step 9: Lint + commit**
+- [x] **Step 9: Lint + commit**
 
 ```bash
 bash scripts/lint-shell.sh
@@ -258,7 +258,7 @@ git commit -m "feat: fast-forward nested tiers at SessionStart (D17 3-i-a propag
 - Consumes: `gitlore_tier_paths` (Task 2); `gitlore_get_frontmatter_description` (index-sync.sh).
 - Produces: `gitlore_active_tiers <mempath>` → prints the tier paths listed in `<mempath>/.gitlore-tiers`, in file order, trimmed of surrounding whitespace, skipping blank lines; nothing (exit 0) when the manifest is absent. (Presence/validation against the mounted set is a 3-ii concern; here it only gates *advertising*.)
 
-- [ ] **Step 1: Write the failing test for `gitlore_active_tiers`**
+- [x] **Step 1: Write the failing test for `gitlore_active_tiers`**
 
 ```bash
 @test "gitlore_active_tiers reads the manifest in order, skipping blanks" {
@@ -280,11 +280,11 @@ git commit -m "feat: fast-forward nested tiers at SessionStart (D17 3-i-a propag
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `bats tests/tier_discovery.bats -f active_tiers` → FAIL (command not found).
 
-- [ ] **Step 3: Implement `gitlore_active_tiers`**
+- [x] **Step 3: Implement `gitlore_active_tiers`**
 
 ```bash
 # Print the tier paths listed in the activation manifest memory/.gitlore-tiers,
@@ -304,11 +304,11 @@ gitlore_active_tiers() {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `bats tests/tier_discovery.bats -f active_tiers` → PASS.
 
-- [ ] **Step 5: Write the failing test for routing guidance in additionalContext**
+- [x] **Step 5: Write the failing test for routing guidance in additionalContext**
 
 ```bash
 @test "SessionStart advertises an active tier's frontmatter description as routing guidance" {
@@ -335,11 +335,11 @@ Run: `bats tests/tier_discovery.bats -f active_tiers` → PASS.
 }
 ```
 
-- [ ] **Step 6: Run to verify failure**
+- [x] **Step 6: Run to verify failure**
 
 Run: `bats tests/tier_discovery.bats -f "routing guidance"` → FAIL (no `ddaanet` in additionalContext).
 
-- [ ] **Step 7: Implement routing guidance in session-start.sh**
+- [x] **Step 7: Implement routing guidance in session-start.sh**
 
 After the tier propagation block (Task 2), before `emit_session_json`, build the guidance and append to `protocol_ctx` (which `emit_session_json` already emits as `additionalContext`). Source `index-sync.sh` near the other sources at the top if `gitlore_get_frontmatter_description` is not already available.
 
@@ -369,11 +369,11 @@ gitlore memory tiers (write a portable fact into the matching tier directory; pr
 fi
 ```
 
-- [ ] **Step 8: Run to verify pass**
+- [x] **Step 8: Run to verify pass**
 
 Run: `bats tests/tier_discovery.bats -f "routing guidance"` and `-f dormant` → PASS. Full file green: `bats tests/tier_discovery.bats`. Regression: `bats tests/cc_hook_session_start.bats` green.
 
-- [ ] **Step 9: Lint + commit**
+- [x] **Step 9: Lint + commit**
 
 ```bash
 bash scripts/lint-shell.sh
@@ -389,19 +389,19 @@ Not a code task; the required real-world check before declaring 3-i-a done (`fee
 
 **Files:** none (operational).
 
-- [ ] **Step 1: Stand up a real `ddaanet` remote and mount it (create flow)**
+- [x] **Step 1: Stand up a real `ddaanet` remote and mount it (create flow)**
 
 Create an empty `ddaanet` submodule inside `memory/` with a seeded `MEMORY.md` carrying a real frontmatter `description:`, create+push its remote (org-scoped; mirror `create-remote.sh`'s visibility/naming choices — confirm with David whether the org tier is private), and **do not** commit the parent yet. The git mutations inside the memory submodule run via the `!`-shell (the agent cannot; strict-sandbox/classifier — `feedback_strict_sandbox_git`, `reference_memory_gate_commit_path`).
 
-- [ ] **Step 2: Activate it and restart the session**
+- [x] **Step 2: Activate it and restart the session**
 
 Append `ddaanet` to `memory/.gitlore-tiers`; start a fresh Claude Code session in this repo.
 
-- [ ] **Step 3: Confirm propagation + routing**
+- [x] **Step 3: Confirm propagation + routing**
 
 Verify the SessionStart notice/`additionalContext` advertises `memory/ddaanet/` with its description, and that `git -C memory/ddaanet log` shows the remote's `live` (fast-forwarded). Record findings in the D17 changelog.
 
-- [ ] **Step 4: Capture the open lockstep questions the dogfood surfaces**
+- [x] **Step 4: Capture the open lockstep questions the dogfood surfaces**
 
 The moment you author a fact into `memory/ddaanet/` you will hit the deferred 3-i-b territory (it won't commit/push with the tier). Note concretely what the dogfood shows about the `live`-model-for-tiers and summary-granularity questions — this is the input to the 3-i-b plan. Do **not** build lockstep here.
 

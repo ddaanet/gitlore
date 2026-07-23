@@ -98,7 +98,7 @@ Files not yet created appear as "Create:" in the task entries below; modificatio
 - Create: `.editorconfig`
 - Create: `docs/plugin-readme.md` (one-paragraph stub; expanded in Plan 05)
 
-- [ ] **Step 1: Author `plugin.json`.**
+- [x] **Step 1: Author `plugin.json`.**
 
 ```json
 {
@@ -114,7 +114,7 @@ Files not yet created appear as "Create:" in the task entries below; modificatio
 
 > Verify field names against current Claude Code plugin manifest schema before merging. If `commands`/`skills`/`hooks` arrays are auto-discovered from directories in the installed CC version, drop the explicit lists. The `plugin-dev:plugin-structure` skill is the authoritative reference.
 
-- [ ] **Step 2: Author `hooks.json`.**
+- [x] **Step 2: Author `hooks.json`.**
 
 ```json
 {
@@ -146,7 +146,7 @@ Files not yet created appear as "Create:" in the task entries below; modificatio
 
 > Verify against `plugin-dev:hook-development` for current field names. Adjust if CC uses a different matcher shape.
 
-- [ ] **Step 3: Stub the install command/skill files.**
+- [x] **Step 3: Stub the install command/skill files.**
 
 `commands/gitlore/install.md`:
 
@@ -169,7 +169,7 @@ description: Install gitlore memory submodule and wire hooks
 (Stub — replaced in Task 13.)
 ```
 
-- [ ] **Step 4: Create `.editorconfig`.**
+- [x] **Step 4: Create `.editorconfig`.**
 
 ```ini
 root = true
@@ -188,7 +188,7 @@ indent_size = 2
 indent_style = tab
 ```
 
-- [ ] **Step 5: Create `docs/plugin-readme.md` stub.**
+- [x] **Step 5: Create `docs/plugin-readme.md` stub.**
 
 ```markdown
 # gitlore
@@ -197,14 +197,14 @@ A Claude Code plugin that makes Claude's auto-memory versioned, shared, and git-
 See `docs/design.md` for the full design. User-facing docs land in Plan 05.
 ```
 
-- [ ] **Step 6: Verify the plugin loads.**
+- [x] **Step 6: Verify the plugin loads.**
 
 Run: `ls plugin.json hooks.json commands/gitlore/install.md skills/install/SKILL.md`
 Expected: all four paths print.
 
 Optional: `cd /tmp && claude --plugin /Users/david/code/gitlore --help` — if your CC build supports `--plugin`, expect no parse error. Skip if not.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add plugin.json hooks.json commands/gitlore/install.md skills/install/SKILL.md .editorconfig docs/plugin-readme.md
@@ -221,7 +221,7 @@ git commit -m "✨ scaffold gitlore plugin manifest and directory layout"
 - Create: `tests/smoke.bats`
 - Modify: top-level dev docs to mention `bats tests/` (in `docs/plugin-readme.md`).
 
-- [ ] **Step 1: Install bats locally if not present.**
+- [x] **Step 1: Install bats locally if not present.**
 
 ```bash
 command -v bats || brew install bats-core 2>/dev/null || npm install -g bats
@@ -229,7 +229,7 @@ command -v bats || brew install bats-core 2>/dev/null || npm install -g bats
 
 Expected: `bats --version` prints a version ≥ 1.10.
 
-- [ ] **Step 2: Write `tests/helpers/setup.bash`.**
+- [x] **Step 2: Write `tests/helpers/setup.bash`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -261,7 +261,7 @@ for f in "$PLUGIN_ROOT"/scripts/lib/*.sh; do
 done
 ```
 
-- [ ] **Step 3: Write `tests/helpers/fixtures.bash`.**
+- [x] **Step 3: Write `tests/helpers/fixtures.bash`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -290,7 +290,7 @@ make_parent_with_memory() {
 }
 ```
 
-- [ ] **Step 4: Write a smoke test that verifies the harness itself.**
+- [x] **Step 4: Write a smoke test that verifies the harness itself.**
 
 `tests/smoke.bats`:
 
@@ -319,12 +319,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 5: Run the smoke test.**
+- [x] **Step 5: Run the smoke test.**
 
 Run: `bats tests/smoke.bats`
 Expected: 2 passing tests.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add tests/helpers/setup.bash tests/helpers/fixtures.bash tests/smoke.bats
@@ -339,7 +339,7 @@ git commit -m "🧪 add bats test harness and smoke tests"
 - Create: `scripts/lib/util.sh`
 - Create: `tests/lib_util.bats`
 
-- [ ] **Step 1: Write failing tests for `gitlore_memory_path`.**
+- [x] **Step 1: Write failing tests for `gitlore_memory_path`.**
 
 `tests/lib_util.bats`:
 
@@ -395,12 +395,12 @@ EOF
 }
 ```
 
-- [ ] **Step 2: Run tests to see them fail.**
+- [x] **Step 2: Run tests to see them fail.**
 
 Run: `bats tests/lib_util.bats`
 Expected: 5 failures, "gitlore_memory_path: command not found" or similar.
 
-- [ ] **Step 3: Implement `scripts/lib/util.sh`.**
+- [x] **Step 3: Implement `scripts/lib/util.sh`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -474,12 +474,12 @@ gitlore_commit_msg_freshness() {
 
 > `stat`/`find` flags differ between BSD and GNU. The above tries BSD form first, GNU second. If macOS `find` lacks `-printf`, swap to a portable loop. Add a follow-up sub-task if portability fails on CI.
 
-- [ ] **Step 4: Run tests to verify they pass.**
+- [x] **Step 4: Run tests to verify they pass.**
 
 Run: `bats tests/lib_util.bats`
 Expected: 5 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/lib/util.sh tests/lib_util.bats
@@ -495,7 +495,7 @@ git commit -m "✨ feat: shared shell utilities for memory path/state discovery"
 - Modify: `tests/helpers/setup.bash` — picks up the new lib automatically (already globs `scripts/lib/*.sh`).
 - Create: `tests/lib_log.bats`
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -516,12 +516,12 @@ load helpers/setup
 }
 ```
 
-- [ ] **Step 2: Run and confirm failure.**
+- [x] **Step 2: Run and confirm failure.**
 
 Run: `bats tests/lib_log.bats`
 Expected: 2 failures.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/lib/log.sh`:
 
@@ -543,12 +543,12 @@ gitlore_say_for_agent_or_user() {
 }
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/lib_log.bats`
 Expected: 2 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/lib/log.sh tests/lib_log.bats
@@ -573,7 +573,7 @@ Output contract (one of, on stdout, single line):
 
 Exit always 0.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -626,12 +626,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run and confirm failures.**
+- [x] **Step 2: Run and confirm failures.**
 
 Run: `bats tests/hook_manager_detect.bats`
 Expected: 6 failures.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/hook-manager/detect.sh`:
 
@@ -665,12 +665,12 @@ case "${#detected[@]}" in
 esac
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/hook_manager_detect.bats`
 Expected: 6 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/hook-manager/detect.sh tests/hook_manager_detect.bats
@@ -689,7 +689,7 @@ Idempotency strategy: each wiring adds a `# gitlore: managed` marker comment. Re
 
 The lefthook wiring appends entries under `pre-commit` and `pre-push` referencing the wrappers at `.git/gitlore-pre-commit` / `.git/gitlore-pre-push`. Use `yq` if available, otherwise a guarded append-block keyed by the marker.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -732,12 +732,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run and confirm failures.**
+- [x] **Step 2: Run and confirm failures.**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: 3 failures.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/hook-manager/wire-lefthook.sh`:
 
@@ -779,12 +779,12 @@ printf 'lefthook install\n' > .claude/gitlore-hook-setup
 >
 > Add `yq` as a dependency in the readme if used.
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: 3 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/hook-manager/wire-lefthook.sh tests/hook_manager_wire.bats
@@ -799,7 +799,7 @@ git commit -m "✨ feat: lefthook wiring with idempotency marker"
 - Create: `scripts/hook-manager/wire-husky.sh`
 - Modify: `tests/hook_manager_wire.bats` (add husky tests)
 
-- [ ] **Step 1: Append failing tests.**
+- [x] **Step 1: Append failing tests.**
 
 ```bash
 @test "wire-husky appends guarded exec lines to .husky/pre-commit and pre-push" {
@@ -836,11 +836,11 @@ git commit -m "✨ feat: lefthook wiring with idempotency marker"
 }
 ```
 
-- [ ] **Step 2: Run; confirm 4 failures.**
+- [x] **Step 2: Run; confirm 4 failures.**
 
 Run: `bats tests/hook_manager_wire.bats`
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/hook-manager/wire-husky.sh`:
 
@@ -871,12 +871,12 @@ mkdir -p .claude
 printf 'npx husky\n' > .claude/gitlore-hook-setup
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: all (7) passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/hook-manager/wire-husky.sh tests/hook_manager_wire.bats
@@ -895,7 +895,7 @@ Three smaller wirings bundled into one task; each gets its own bats test block.
 - Create: `scripts/hook-manager/wire-manual.sh`
 - Modify: `tests/hook_manager_wire.bats`
 
-- [ ] **Step 1: Append failing tests for all three.**
+- [x] **Step 1: Append failing tests for all three.**
 
 ```bash
 @test "wire-overcommit adds gitlore PreCommit and PrePush entries" {
@@ -945,12 +945,12 @@ EOF
 }
 ```
 
-- [ ] **Step 2: Run; confirm failures.**
+- [x] **Step 2: Run; confirm failures.**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: 4 new failures.
 
-- [ ] **Step 3: Implement wire-overcommit.**
+- [x] **Step 3: Implement wire-overcommit.**
 
 `scripts/hook-manager/wire-overcommit.sh`:
 
@@ -982,7 +982,7 @@ printf 'overcommit --install\n' > .claude/gitlore-hook-setup
 
 > Same warning as lefthook: verify overcommit accepts duplicate top-level keys. If not, switch to `yq` or a Ruby helper.
 
-- [ ] **Step 4: Implement wire-direct.**
+- [x] **Step 4: Implement wire-direct.**
 
 `scripts/hook-manager/wire-direct.sh`:
 
@@ -1015,7 +1015,7 @@ mkdir -p .claude
 printf 'direct\n' > .claude/gitlore-hook-setup
 ```
 
-- [ ] **Step 5: Implement wire-manual.**
+- [x] **Step 5: Implement wire-manual.**
 
 `scripts/hook-manager/wire-manual.sh`:
 
@@ -1037,12 +1037,12 @@ Once wired, run /gitlore:install again to re-detect.
 EOF
 ```
 
-- [ ] **Step 6: Verify all four passing.**
+- [x] **Step 6: Verify all four passing.**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: 11 passing.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add scripts/hook-manager/wire-overcommit.sh scripts/hook-manager/wire-direct.sh scripts/hook-manager/wire-manual.sh tests/hook_manager_wire.bats
@@ -1059,7 +1059,7 @@ git commit -m "✨ feat: overcommit, direct, and manual hook wiring"
 
 The wrappers are flat files written to `.git/`. Each delegates to `$(git config gitlore.hooksDir)/<hook>`. If `gitlore.hooksDir` is unset, exit 0 with a stderr hint.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -1110,9 +1110,9 @@ EOF
 }
 ```
 
-- [ ] **Step 2: Run; confirm 4 failures.**
+- [x] **Step 2: Run; confirm 4 failures.**
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/emit-wrappers.sh`:
 
@@ -1140,12 +1140,12 @@ write_wrapper pre-commit
 write_wrapper pre-push
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/emit_wrappers.bats`
 Expected: 4 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/emit-wrappers.sh tests/emit_wrappers.bats
@@ -1173,7 +1173,7 @@ Effects when both guards pass:
 
 > Branch model side effects (submodule init, ff merge, reserved-name check) come in Task 11. Sentinel replay comes in Task 12. Splitting keeps each task within the 2–5 min/step rule.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -1214,9 +1214,9 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run; confirm 3 failures.**
+- [x] **Step 2: Run; confirm 3 failures.**
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/cc-hooks/session-start.sh`:
 
@@ -1268,12 +1268,12 @@ chmod +x scripts/git-hooks/pre-commit
 cp scripts/git-hooks/pre-commit scripts/git-hooks/pre-push
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/cc_hook_session_start.bats`
 Expected: 3 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/cc-hooks/session-start.sh scripts/git-hooks/pre-commit scripts/git-hooks/pre-push tests/cc_hook_session_start.bats
@@ -1299,7 +1299,7 @@ Behavior to add:
 - If memory worktree is clean → `git merge --ff-only live`. If ff fails → exit 1 with branched message pointing at `/gitlore:resolve` (placeholder for Plan 03).
 - If memory worktree is dirty → emit `systemWarning` (just stderr in Plan 01), skip ff.
 
-- [ ] **Step 1: Append failing tests.**
+- [x] **Step 1: Append failing tests.**
 
 ```bash
 @test "rejects parent branch named 'live'" {
@@ -1356,9 +1356,9 @@ Behavior to add:
 }
 ```
 
-- [ ] **Step 2: Run; confirm 4 failures.**
+- [x] **Step 2: Run; confirm 4 failures.**
 
-- [ ] **Step 3: Extend the SessionStart script.**
+- [x] **Step 3: Extend the SessionStart script.**
 
 Append to `scripts/cc-hooks/session-start.sh` after the wrapper emission:
 
@@ -1407,12 +1407,12 @@ else
 fi
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/cc_hook_session_start.bats`
 Expected: 7 passing (3 from Task 10 + 4 new).
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/cc-hooks/session-start.sh tests/cc_hook_session_start.bats
@@ -1433,7 +1433,7 @@ Behavior: after wrappers are emitted, read `.claude/gitlore-hook-setup`:
 - `manual` → emit `systemWarning` reminding the user to wire manually.
 - Anything else → execute as a shell command in repo root (e.g. `lefthook install`).
 
-- [ ] **Step 1: Append failing tests.**
+- [x] **Step 1: Append failing tests.**
 
 ```bash
 @test "sentinel 'direct' re-applies direct wiring" {
@@ -1465,9 +1465,9 @@ Behavior: after wrappers are emitted, read `.claude/gitlore-hook-setup`:
 }
 ```
 
-- [ ] **Step 2: Run; confirm 3 failures.**
+- [x] **Step 2: Run; confirm 3 failures.**
 
-- [ ] **Step 3: Append sentinel handling to SessionStart.**
+- [x] **Step 3: Append sentinel handling to SessionStart.**
 
 ```bash
 SENTINEL=".claude/gitlore-hook-setup"
@@ -1490,12 +1490,12 @@ if [ -f "$SENTINEL" ]; then
 fi
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/cc_hook_session_start.bats`
 Expected: 10 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/cc-hooks/session-start.sh tests/cc_hook_session_start.bats
@@ -1538,7 +1538,7 @@ Idempotency:
 - Existing `gitlore.enabled: true` → still rewrite (harmless).
 - Existing sentinel + wiring marker → re-run wiring; it's a no-op via marker.
 
-- [ ] **Step 1: Write the command file.**
+- [x] **Step 1: Write the command file.**
 
 `commands/gitlore/install.md`:
 
@@ -1579,7 +1579,7 @@ You are installing gitlore in the user's current repository.
 Note: this is the local-only flow. Remote setup is a separate command (added in a later plan).
 ```
 
-- [ ] **Step 2: Write the skill file.**
+- [x] **Step 2: Write the skill file.**
 
 `skills/install/SKILL.md`:
 
@@ -1599,7 +1599,7 @@ Key invariants:
 - Hook wrappers live at `.git/gitlore-pre-{commit,push}` and are regenerated each SessionStart.
 ```
 
-- [ ] **Step 3: Write failing tests.**
+- [x] **Step 3: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -1655,9 +1655,9 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 4: Run; confirm 6 failures.**
+- [x] **Step 4: Run; confirm 6 failures.**
 
-- [ ] **Step 5: Implement `scripts/install/run.sh`.**
+- [x] **Step 5: Implement `scripts/install/run.sh`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -1700,7 +1700,7 @@ echo "gitlore: install complete." >&2
 echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, .claude/gitlore-hook-setup) and commit when ready." >&2
 ```
 
-- [ ] **Step 6: Implement `scripts/install/init-submodule.sh`.**
+- [x] **Step 6: Implement `scripts/install/init-submodule.sh`.**
 
 Strategy: avoid `git submodule add` (which requires a cloneable URL with a HEAD). Instead, init a plain repo at `<mempath>`, seed and commit, then use `git submodule absorbgitdirs` to relocate its `.git/` into the parent's `.git/modules/gitlore-memory`. Write `.gitmodules` by hand with a placeholder URL; Plan 02 rewrites it to point at a real remote.
 
@@ -1790,7 +1790,7 @@ fi
 > - The placeholder URL means `git submodule update --init` will fail in a fresh clone until Plan 02 wires a real URL. That's expected; clone scenarios are exercised in Plan 05.
 > - The auto-memory hash derivation here is a placeholder — Claude Code uses a specific hashing scheme for its project memory paths. Verify before relying on auto-migration. If wrong, the install still works; it just skips migration and writes the scaffold instead.
 
-- [ ] **Step 7: Implement `scripts/install/write-settings.sh`.**
+- [x] **Step 7: Implement `scripts/install/write-settings.sh`.**
 
 ```bash
 #!/usr/bin/env bash
@@ -1835,12 +1835,12 @@ fi
 git config gitlore.hooksDir "${CLAUDE_PLUGIN_ROOT}/scripts/git-hooks"
 ```
 
-- [ ] **Step 8: Verify.**
+- [x] **Step 8: Verify.**
 
 Run: `bats tests/install_run.bats`
 Expected: 6 passing.
 
-- [ ] **Step 9: Commit.**
+- [x] **Step 9: Commit.**
 
 ```bash
 git add commands/gitlore/install.md skills/install/SKILL.md scripts/install/run.sh scripts/install/init-submodule.sh scripts/install/write-settings.sh tests/install_run.bats
@@ -1866,7 +1866,7 @@ Trigger conditions (ALL):
 
 Output: emit `additionalContext` JSON instructing Claude to summarize, confirm with the user, then write the commit message file.
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -1928,9 +1928,9 @@ stdin() { printf '%s' "$1" | bash "$POST"; }
 }
 ```
 
-- [ ] **Step 2: Run; confirm 5 failures.**
+- [x] **Step 2: Run; confirm 5 failures.**
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/cc-hooks/post-tool-use.sh`:
 
@@ -1972,12 +1972,12 @@ cat <<EOF
 EOF
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/cc_hook_post_tool_use.bats`
 Expected: 5 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/cc-hooks/post-tool-use.sh tests/cc_hook_post_tool_use.bats
@@ -2000,7 +2000,7 @@ Logic (matches design §pre-commit):
 5. If memory dirty **and** commit-msg fresh → commit using `-F`, delete msg file.
 6. If branch ahead of `live` → `git push . <branch>:live` (ff). On failure → `exit 1` with branched message pointing at `/gitlore:resolve` (placeholder for Plan 03).
 
-- [ ] **Step 1: Write failing tests.**
+- [x] **Step 1: Write failing tests.**
 
 ```bash
 #!/usr/bin/env bats
@@ -2071,9 +2071,9 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run; confirm 5 failures (the placeholder always returns 0).**
+- [x] **Step 2: Run; confirm 5 failures (the placeholder always returns 0).**
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
 
 `scripts/git-hooks/pre-commit`:
 
@@ -2128,12 +2128,12 @@ fi
 exit 0
 ```
 
-- [ ] **Step 4: Verify.**
+- [x] **Step 4: Verify.**
 
 Run: `bats tests/git_hook_pre_commit.bats`
 Expected: 5 passing.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add scripts/git-hooks/pre-commit tests/git_hook_pre_commit.bats
@@ -2149,7 +2149,7 @@ git commit -m "✨ feat: pre-commit hook commits memory and ff-pushes to live"
 
 Sim­ulates the full local happy path end-to-end. Doesn't invoke real Claude — it manually performs the steps Claude would, exercising the scripts in sequence.
 
-- [ ] **Step 1: Write the integration test.**
+- [x] **Step 1: Write the integration test.**
 
 ```bash
 #!/usr/bin/env bats
@@ -2195,12 +2195,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run.**
+- [x] **Step 2: Run.**
 
 Run: `bats tests/integration_happy_path.bats`
 Expected: 1 passing.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
 
 ```bash
 git add tests/integration_happy_path.bats
@@ -2215,7 +2215,7 @@ git commit -m "🧪 add end-to-end happy-path integration test"
 - Modify: `docs/plugin-readme.md`
 - Create: `Makefile`
 
-- [ ] **Step 1: Expand `docs/plugin-readme.md`.**
+- [x] **Step 1: Expand `docs/plugin-readme.md`.**
 
 ```markdown
 # gitlore
@@ -2245,7 +2245,7 @@ hook-manager YAML edits.
 - Plans 02–05 — remote, resolve, worktrees, polish — TODO.
 ```
 
-- [ ] **Step 2: Add a `Makefile`.**
+- [x] **Step 2: Add a `Makefile`.**
 
 ```makefile
 .PHONY: test test-unit test-integration
@@ -2259,12 +2259,12 @@ test-integration:
 	bats tests/integration_happy_path.bats
 ```
 
-- [ ] **Step 3: Run the full suite.**
+- [x] **Step 3: Run the full suite.**
 
 Run: `make test`
 Expected: all tests pass.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add docs/plugin-readme.md Makefile
@@ -2275,12 +2275,12 @@ git commit -m "📝 docs: expand readme and add Makefile"
 
 ## Done criteria for Plan 01
 
-- [ ] All bats tests pass: `make test`.
-- [ ] In a scratch repo: `/gitlore:install` succeeds, scaffolds `memory/`, writes `.claude/settings.json` + `.claude/gitlore-hook-setup`, wires the user's hook manager, and creates `live` + parent-branch-name branch inside the memory submodule.
-- [ ] After `git commit` in the parent repo with dirty memory and a fresh commit-msg file, memory advances and `live` fast-forwards to the new commit.
-- [ ] After `git commit` with dirty memory but no fresh msg file, the pre-commit hook fails loudly with the Claude-targeted message (when `$CLAUDECODE` set) or the user-targeted message (when unset).
-- [ ] Restarting Claude Code in the same repo re-emits wrappers, re-applies sentinel wiring, and the system continues to work.
-- [ ] In a repo without a `gitlore-memory` submodule, all hooks no-op silently (FR 12: coexistence).
+- [x] All bats tests pass: `make test`.
+- [x] In a scratch repo: `/gitlore:install` succeeds, scaffolds `memory/`, writes `.claude/settings.json` + `.claude/gitlore-hook-setup`, wires the user's hook manager, and creates `live` + parent-branch-name branch inside the memory submodule.
+- [x] After `git commit` in the parent repo with dirty memory and a fresh commit-msg file, memory advances and `live` fast-forwards to the new commit.
+- [x] After `git commit` with dirty memory but no fresh msg file, the pre-commit hook fails loudly with the Claude-targeted message (when `$CLAUDECODE` set) or the user-targeted message (when unset).
+- [x] Restarting Claude Code in the same repo re-emits wrappers, re-applies sentinel wiring, and the system continues to work.
+- [x] In a repo without a `gitlore-memory` submodule, all hooks no-op silently (FR 12: coexistence).
 
 ---
 

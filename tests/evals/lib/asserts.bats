@@ -239,6 +239,117 @@ EOF
   [[ "$output" =~ "fixture did not hold" ]]
 }
 
+# The state the agent leaves behind once the user has approved: the fact in the
+# tier, the prefixed pointer in the root index, composition run, and the
+# approved summary on disk. Nothing is committed yet — which of the two FR11
+# finishes happens next is what the tests below vary.
+FACT=reference_sentry_dsn.md
+
+_make_tier_write_end_state() {
+  _make_add_tier_end_state
+
+  printf -- '---\nname: reference-sentry-dsn\ndescription: one shared DSN across acme services\n---\n\nEvery acme service shares one Sentry DSN; rotating it takes a coordinated deploy.\n' \
+    > "$EVAL_REPO/memory/acme/$FACT"
+  printf -- '- [shared sentry dsn](acme/%s) — rotating it needs a coordinated deploy\n' "$FACT" \
+    >> "$EVAL_REPO/memory/MEMORY.md"
+  # shellcheck disable=SC1091  # dynamic plugin-root paths, resolved at runtime
+  ( cd "$EVAL_REPO" \
+    && source "$PLUGIN_ROOT/scripts/lib/util.sh" \
+    && source "$PLUGIN_ROOT/scripts/lib/index-compose.sh" \
+    && gitlore_compose memory ) >/dev/null
+
+  printf 'memory: record the shared acme Sentry DSN and its rotation cost\n' \
+    > "$EVAL_REPO/.claude/gitlore-memory-message"
+
+  # The stop path is finished by the parent's pre-commit hook, so the fixture
+  # needs it wired — _make_memory builds the submodule but no hooks, and without
+  # this the assertion's `git commit` is inert and every stop-path test fails
+  # for a reason that has nothing to do with what it grades.
+  ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
+    bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh" ) >/dev/null
+  # The wrapper resolves the real hook through this config key and exits 0 with
+  # a "hooks not installed" notice when it is unset — which is silent enough to
+  # look like a passing commit that simply did nothing.
+  git -C "$EVAL_REPO" config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  cat > "$EVAL_REPO/.git/hooks/pre-commit" <<'HOOK'
+#!/usr/bin/env bash
+exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"
+HOOK
+  chmod +x "$EVAL_REPO/.git/hooks/pre-commit"
+
+  # The judge is the last assertion and it shells out to `claude`. Stub it, or
+  # every test here would spend a real API call to grade a fixture.
+  MOCK_BIN="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$MOCK_BIN"
+  printf '#!/usr/bin/env bash\nprintf "pass fixture\\n"\n' > "$MOCK_BIN/claude"
+  chmod +x "$MOCK_BIN/claude"
+  PATH="$MOCK_BIN:$PATH"
+  export PATH
+}
+
+# The second FR11 finish: the agent wrote the trigger too, so the batch hook
+# committed before the assertion ever ran. commit-memory.sh IS what that hook
+# invokes, so calling it here reproduces the end state rather than imitating it.
+_commit_via_batch_path() {
+  ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
+    bash "$PLUGIN_ROOT/scripts/commit-memory.sh" \
+      -F "$EVAL_REPO/.claude/gitlore-memory-message" ) >/dev/null
+}
+
+@test "tier-write: passes when the agent stopped after writing the summary" {
+  _make_tier_write_end_state
+  _run_assert tier-write
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "tier-write: passes when the batch hook already committed (summary consumed)" {
+  _make_tier_write_end_state
+  _commit_via_batch_path
+  [ ! -f "$EVAL_REPO/.claude/gitlore-memory-message" ]   # the flow consumed it
+  _run_assert tier-write
+  # Report the assertion's own reason: a bare status check here says only that
+  # the end state was rejected, and eight different messages reach that point.
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "tier-write: fails when the trigger is present but no summary was written" {
+  _make_tier_write_end_state
+  rm -f "$EVAL_REPO/.claude/gitlore-memory-message"
+  : > "$EVAL_REPO/.claude/gitlore-commit-memory"
+  _run_assert tier-write
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"trigger IS present"* ]]
+}
+
+@test "tier-write: fails when neither summary nor trigger exists and memory never moved" {
+  _make_tier_write_end_state
+  rm -f "$EVAL_REPO/.claude/gitlore-memory-message"
+  _run_assert tier-write
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"did not write the approved summary"* ]]
+}
+
+@test "tier-write: fails on the one-behind gitlink lag" {
+  _make_tier_write_end_state
+  _commit_via_batch_path
+  # The tier moves after memory recorded it — exactly what committing memory
+  # before the tier would leave behind, and invisible in both working trees.
+  GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory/acme" \
+    commit -q --allow-empty -m "later"
+  git -C "$EVAL_REPO/memory/acme" branch -f live HEAD
+  _run_assert tier-write
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"stale gitlink"* ]]
+}
+
+@test "tier-write: fails when the commit message misses the rubric" {
+  _make_tier_write_end_state
+  printf '#!/usr/bin/env bash\nprintf "fail says nothing about Sentry\\n"\n' > "$MOCK_BIN/claude"
+  _run_assert tier-write
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed judge rubric"* ]]
+}
+
 # ------------------------------------------------------------- memory-commit
 
 # The extraction out of run-evals.sh must not have changed what this grades.
