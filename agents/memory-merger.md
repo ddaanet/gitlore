@@ -30,7 +30,7 @@ You run in **two turns**. The parent dispatches you (turn 1), evaluates your syn
 **Turn 2 — on resume:**
 
 The parent will resume you with one of:
-- `approved` (or any clearly affirmative variant) → run the continuation command verbatim. End your final message with a one-line result (e.g., "head-vs-live merge complete. 3 files reconciled. Continuation exited 0.").
+- `approved` (or any clearly affirmative variant) → run the continuation command verbatim. End your final message with a one-line result (e.g., "head-vs-live merge complete. 3 files reconciled. Continuation exited 0."). The continuation composes the memory indexes before committing, so quote any `gitlore:` line it printed — a composition refusal or a dangling index pointer is an index problem the parent must see, and it does not mean the merge failed.
 - `rejected: <reason>` → re-synthesize incorporating the feedback, run `git add -A` again, and return the new summary. The reason is opaque free text — do not scan it for approval words; a rejection whose reason mentions "approved" is still a rejection. Do not run the continuation.
 - Anything ambiguous → treat as rejected with feedback "ambiguous approval, please clarify". Do not run the continuation.
 
