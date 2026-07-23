@@ -88,3 +88,93 @@ gitlore_set_frontmatter_description() {
 gitlore_index_preimage_file() {
   git -C "$1" rev-parse --git-path gitlore-index-preimage
 }
+
+# --- routing-key advisories --------------------------------------------------
+# The index one-liner is what CC's recall classifier matches against, and the
+# sync above then overwrites the file's own `description:` with it — so a hook
+# that carries no trigger degrades BOTH match surfaces at once, silently. The
+# two checks below give that silence a voice. Neither can decide whether a hook
+# is GOOD; each measures one thing that is countable.
+
+# Byte budget of the always-loaded index blob (25 KiB, the measured ceiling —
+# see memory/feedback_memory_retrieval_in_practice.md) and the fraction at which
+# to speak up. Both overridable so a test drives the threshold instead of
+# writing a 20KB fixture.
+: "${GITLORE_INDEX_BUDGET_BYTES:=25600}"
+: "${GITLORE_INDEX_BUDGET_WARN_PCT:=80}"
+
+# Percent of that budget the index occupies, floored. BYTES, not lines: the
+# blob is loaded verbatim, so a handful of paragraph-length lines costs more
+# than fifty terse ones.
+gitlore_index_budget_pct() {
+  local bytes
+  bytes=$(wc -c < "$1") || return 1
+  printf '%s\n' "$(( bytes * 100 / GITLORE_INDEX_BUDGET_BYTES ))"
+}
+
+# "bytes<TAB>path" for the $2 (default 5) largest bullets, descending — where
+# curation actually pays. LC_ALL=C so awk's length() counts bytes rather than
+# characters; the separator alone is a 3-byte em-dash, so the two differ.
+gitlore_index_largest() {
+  local file="$1" n="${2:-5}"
+  LC_ALL=C awk '
+    /^- \[/ {
+      sep = ") — "
+      d = index($0, sep); if (d == 0) next
+      left = substr($0, 1, d)
+      lp = index(left, "]("); if (lp == 0) next
+      rest = substr(left, lp + 2)
+      rp = index(rest, ")"); if (rp == 0) next
+      print length($0) "\t" substr(rest, 1, rp - 1)
+    }
+  ' "$file" | sort -rn | head -n "$n"
+}
+
+# Return 0 when $1 carries at least one LITERAL token — the kind of thing a
+# future query actually contains: a backticked span, a flag, a path, a dotfile,
+# a filename, $VAR, a key=value, a version, snake_case, camelCase, an acronym.
+#
+# Word-at-a-time rather than one big ERE because ERE word boundaries are not
+# portable (GNU \b vs BSD [[:<:]]); splitting on whitespace makes the boundary
+# safe by construction, so `well-known` is prose while `--flag` is a flag.
+gitlore_index_has_literal() {
+  awk '
+    {
+      n = split($0, w, /[[:space:]]+/)
+      for (i = 1; i <= n; i++) {
+        t = w[i]
+        gsub(/^[[("]+/, "", t); gsub(/[])".,;:?!]+$/, "", t)
+        if (t == "") continue
+        if (index(t, "`") > 0)   { hit = 1; break }   # `backticked span`
+        if (index(t, "/") > 0)   { hit = 1; break }   # a/path or 2>/dev/null
+        if (index(t, "=") > 0)   { hit = 1; break }   # key=value
+        if (t ~ /^--?[A-Za-z]/)  { hit = 1; break }   # --flag, -C
+        if (t ~ /^\.[A-Za-z]/)   { hit = 1; break }   # .gitmodules
+        if (t ~ /^\$/)           { hit = 1; break }   # $VAR
+        if (t ~ /^[0-9]+\.[0-9]/) { hit = 1; break }  # 2.47.3
+        if (t ~ /\.(md|sh|json|py|bats|toml|ya?ml|lock|git|txt)$/) { hit = 1; break }
+        if (t ~ /[A-Za-z0-9]_[A-Za-z0-9]/) { hit = 1; break }   # snake_case
+        if (t ~ /[a-z][A-Z]/)    { hit = 1; break }   # camelCase
+        if (t ~ /^[A-Z][A-Z0-9]+$/) { hit = 1; break }          # CC, FR11, API
+      }
+    }
+    END { exit !hit }
+  ' <<<"$1"
+}
+
+# Print the effective `type:` from a memory file's leading frontmatter — the
+# indented `metadata:` form and the older top-level one both. Return 1 if
+# absent. `node_type:` does not match: the pattern anchors `type:` to the start
+# of the line modulo indentation.
+gitlore_frontmatter_type() {
+  local raw
+  raw=$(awk '
+    BEGIN { dashes = 0 }
+    /^---[[:space:]]*$/ { dashes++; if (dashes == 2) exit; next }
+    (dashes == 1 && /^[[:space:]]*type:[[:space:]]/) {
+      sub(/^[[:space:]]*type:[[:space:]]*/, ""); print; exit
+    }
+  ' "$1") || return 1
+  [ -n "$raw" ] || return 1
+  printf '%s\n' "$raw"
+}
