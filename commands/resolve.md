@@ -66,3 +66,8 @@ If this skill was triggered by a commit failure, retry the original git commit n
 ## Summarize
 
 Tell the user what was merged and what state the repo is in now.
+
+The continuation composes the memory indexes before it commits, so its output may
+carry `gitlore:` lines the merge itself did not cause — a composition refusal, or
+index pointers naming files that are not there. The merge landed either way;
+relay those lines, because they are index problems only you can fix.

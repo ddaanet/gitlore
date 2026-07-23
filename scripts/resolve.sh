@@ -19,6 +19,8 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 
 # Load shared continuation state: require an installed submodule and exactly one
 # prepared merge, then set mempath/statefile/flavor/pending for the caller.
@@ -34,7 +36,10 @@ source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 load_continuation_state() {
   gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
   local found
-  found=$(gitlore_stores_with_merge_state "$(gitlore_memory_path)")
+  # The memory ROOT, kept apart from `mempath`: composition spans the whole
+  # memory tree, so it is anchored here even when the merge sits in a tier.
+  memroot=$(gitlore_memory_path)
+  found=$(gitlore_stores_with_merge_state "$memroot")
   if [ -z "$found" ]; then
     if [ "${1:-}" = "abort" ]; then
       echo "gitlore: no merge state file to abort" >&2
@@ -62,6 +67,45 @@ load_continuation_state() {
   pending=$(jq -r .source_ref "$statefile")
 }
 
+# Compose the memory tree's indexes and stage the result in the store that is
+# about to be committed.
+#
+# A landed merge is the one route into a memory store that no compose trigger
+# covers: the PostToolBatch hook fires on an index EDIT and SessionStart on a new
+# session, so a synthesized index would otherwise sit uncomposed until one of
+# those happened to fire. Running here puts the composed bytes in the merge
+# commit itself rather than in a later, unrelated one.
+#
+# Composition spans the whole tree, so it can write a store OTHER than the one
+# being committed — the root index when a tier merged, a carrier when memory did.
+# Those writes stay dirty and ride the next FR11 commit, the same float the
+# SessionStart recompose already produces.
+#
+# A refusal never blocks the merge. Compose is fail-safe (it writes nothing), and
+# the merge is synthesized and approved by this point: stranding it half-landed
+# over an index problem the agent fixes in one edit is the worse outcome. Report,
+# then commit what the merger produced.
+# Args: $1 = memory root worktree path, $2 = the store being committed.
+compose_merged_indexes() {
+  local memroot="$1" store="$2" composed dangling
+  if composed=$(gitlore_compose "$memroot"); then
+    [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
+    # The dangling pass reports rather than refuses, so it runs on the composed
+    # store and speaks whether or not composition wrote anything.
+    dangling=$(gitlore_compose_dangling "$memroot")
+    if [ -n "$dangling" ]; then
+      echo "gitlore: these index lines name files that are not there. Nothing was rewritten or deleted:" >&2
+      printf '%s\n' "$dangling" | sed 's/^/gitlore:   /' >&2
+    fi
+  else
+    echo "gitlore: tier composition refused — the merge is being committed uncomposed. Fix the store by hand, then edit MEMORY.md to retrigger it:" >&2
+    printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+  fi
+  # The merger already ran `git add -A` here; re-running it is how anything
+  # composition wrote joins the same commit.
+  gitlore_git -C "$store" add -A
+}
+
 # Subcommand dispatch (Plan 03 continuations).
 if [ $# -ge 1 ]; then
   subcmd="$1"
@@ -69,6 +113,9 @@ if [ $# -ge 1 ]; then
   case "$subcmd" in
     continue-after-merge)
       load_continuation_state
+      # Compose before committing, so what lands is composed: a merge is the one
+      # write path into a memory store that no compose trigger sees.
+      compose_merged_indexes "$memroot" "$mempath"
       # Commit the merge (uses git's MERGE_MSG; the authority is HEAD, so it is
       # the first parent per D6). Blessed path: carry the sentinel past the
       # submodule gate (FR11).
