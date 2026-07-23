@@ -71,3 +71,25 @@ there once instead of being duplicated per repo.
 Mounts an existing tier, or creates one. A mounted tier is dormant until it is
 listed in `memory/.gitlore-tiers` — one name per line, file order is precedence.
 Listing it composes its pointer lines into the always-loaded root index.
+
+## When memory diverges
+
+    /gitlore:resolve
+
+Repairs a memory store or tier that has drifted from its authoritative `live`.
+You rarely need to type it: memory has two gates — the pending commit against
+local `live`, and local `live` against the remote — and either one, on failing,
+prints a prepared-merge directive that Claude acts on by itself. A sub-agent
+with fresh context synthesizes the merge, and you approve the summary before
+anything is committed.
+
+Run it yourself in the cases where nothing is left to trigger on:
+
+- `git push` from a plain terminal — the directive went to your shell, not to a
+  Claude session.
+- A new or compacted session, where the directive is no longer in context.
+- No divergence at all: run standalone it is a health check, and repairs a
+  missing memory remote or an unpushed `live` on the spot.
+
+The same two gates and the same command apply to every mounted tier, not just
+the project's own memory.

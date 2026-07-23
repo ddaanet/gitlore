@@ -49,28 +49,80 @@ grep -q "($TIER/$new_file)" "$MEM/MEMORY.md" || \
 grep -q "($new_file)" "$TIERPATH/MEMORY.md" || \
   fail "tier index $TIER/MEMORY.md has no line for $new_file; the compose pass did not mirror it down"
 
-# 4. The approval gate ran and the agent left the approved summary for the hook.
-[ -f "$MSG_FILE" ] || \
-  fail "no commit-msg file (the agent did not write the approved summary after Turn 2)"
+# 4. The approval gate ran, and the approved summary is what commits both stores.
+#
+# FR11 gives the agent two correct ways to finish once the user approves, and
+# which one it picks is not what this scenario grades:
+#
+#   - write the summary and STOP — the user's next parent commit consumes it;
+#   - write the summary AND the commit trigger — the PostToolBatch hook commits
+#     on the spot, which is the standalone path memory-commit-batch.sh exists
+#     for and the one a session with no parent commit pending must take.
+#
+# Grading the stop-point instead of the outcome makes this scenario fail
+# whenever the agent picks the second, which is a defect in the assertion, not
+# in the flow: the fact is committed, the summary is the commit message, and the
+# tier travelled. So establish WHICH path ran, fire the parent commit only if
+# the flow is still waiting on one, and grade the same end state either way.
+baseline=""
+[ -f "$EVAL_OUT_DIR/memory-baseline" ] && baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
+[ -n "$baseline" ] || fail "no memory baseline captured; the harness did not record where the store started"
 
-mem_before=$(git -C "$MEM" rev-parse HEAD)
-tier_before=$(git -C "$TIERPATH" rev-parse HEAD)
-
-# The parent commit is what fires the pre-commit hook: it commits every mounted
-# tier and fast-forwards each tier's live BEFORE memory's own `add -A`, so the
-# gitlink memory records is never stale.
-if ! commit_err=$( (cd "$EVAL_REPO" && git commit --allow-empty -m "chore: trigger eval flow") 2>&1 ); then
-  fail "parent git commit failed — ${commit_err//$'\n'/ }"
+if [ -f "$MSG_FILE" ]; then
+  # Stop path. The parent commit fires the pre-commit hook, which commits every
+  # mounted tier and fast-forwards each tier's live BEFORE memory's own `add -A`,
+  # so the gitlink memory records is never stale.
+  if ! commit_err=$( (cd "$EVAL_REPO" && git commit --allow-empty -m "chore: trigger eval flow") 2>&1 ); then
+    fail "parent git commit failed — ${commit_err//$'\n'/ }"
+  fi
+  path_taken="the agent stopped after writing the summary; the parent commit consumed it"
+else
+  # No summary on disk. Either the hook already consumed it — in which case
+  # memory has moved — or the agent never wrote one, which is a real failure and
+  # has two distinguishable causes worth naming separately.
+  mem_now=$(git -C "$MEM" rev-parse HEAD)
+  if [ "$mem_now" = "$baseline" ]; then
+    if [ -f "$EVAL_REPO/.claude/gitlore-commit-memory" ]; then
+      fail "no commit-msg file, but the commit trigger IS present — the agent asked for the commit without ever writing the approved summary, so the batch hook is parked waiting for it"
+    fi
+    fail "no commit-msg file and no trigger, and memory never moved — the agent did not write the approved summary after Turn 2"
+  fi
+  path_taken="the agent wrote the summary and the trigger; the batch hook committed"
 fi
 
-# 5. Both stores advanced, from the one approved summary.
+# 5. Memory advanced past where the trial started.
 mem_after=$(git -C "$MEM" rev-parse HEAD)
-tier_after=$(git -C "$TIERPATH" rev-parse HEAD)
-[ "$mem_after" != "$mem_before" ] || fail "memory store did not advance; nothing was committed"
-[ "$tier_after" != "$tier_before" ] || \
-  fail "tier did not advance — the fact is written but uncommitted, so it never reaches another repo"
+[ "$mem_after" != "$baseline" ] || fail "memory store did not advance ($path_taken); nothing was committed"
 
-# 6. Both are at their live, the sole travelling ref.
+# 6. The tier committed the fact itself. Checking the file is in the tier's
+#    HEAD tree beats checking the tier merely advanced: an advance can be an
+#    empty or unrelated commit, and what has to travel to another repo is the
+#    body, not the ref move.
+tier_after=$(git -C "$TIERPATH" rev-parse HEAD)
+git -C "$TIERPATH" cat-file -e "HEAD:$new_file" || \
+  fail "the tier commit does not contain $new_file ($path_taken) — the fact is written but uncommitted, so it never reaches another repo"
+tier_dirty=$(git -C "$TIERPATH" status --porcelain)
+[ -z "$tier_dirty" ] || \
+  fail "tier still has uncommitted changes after the flow ($path_taken) — ${tier_dirty//$'\n'/ }"
+
+# 7. Lockstep: the gitlink memory COMMITTED for the tier is the tier's new HEAD.
+#    Checked against the committed tree, and BEFORE the uncommitted-remainder
+#    check below — a one-behind gitlink also shows up as a dirty memory tree, so
+#    ordering these the other way round would report the lag as generic dirt and
+#    leave this check unable to fail at all.
+mem_gitlink=$(git -C "$MEM" rev-parse "HEAD:$TIER") || \
+  fail "memory's committed tree has no gitlink for tier '$TIER'"
+[ "$mem_gitlink" = "$tier_after" ] || \
+  fail "memory committed a stale gitlink for '$TIER' ($mem_gitlink) while the tier is at $tier_after ($path_taken) — the one-behind lag: the tier's fact will not reach a fresh clone"
+
+# 8. No uncommitted remainder in memory — a half-committed store leaves the fact
+#    stranded locally. Everything gitlink-shaped is already ruled out above, so
+#    what reaches here is a memory file the flow failed to include.
+mem_dirty=$(git -C "$MEM" status --porcelain)
+[ -z "$mem_dirty" ] || \
+  fail "memory still has uncommitted changes after the flow ($path_taken) — ${mem_dirty//$'\n'/ }"
+
+# 9. Both are at their live, the sole travelling ref.
 mem_live=$(git -C "$MEM" rev-parse live)
 [ "$mem_after" = "$mem_live" ] || fail "memory HEAD ($mem_after) is not at live ($mem_live)"
 if ! tier_live=$(git -C "$TIERPATH" rev-parse --verify -q refs/heads/live); then
@@ -79,9 +131,17 @@ fi
 [ "$tier_after" = "$tier_live" ] || \
   fail "tier HEAD ($tier_after) is not at live ($tier_live); the tier commit did not fast-forward live"
 
-# 7. The commit-msg file is consumed by the hook that used it.
-[ ! -f "$MSG_FILE" ] || fail "commit-msg file still present at $MSG_FILE"
+# 10. The commit-msg file is consumed by whichever hook used it. One approval is
+#     spent once: a summary left on disk would be re-applied to the next commit.
+[ ! -f "$MSG_FILE" ] || fail "commit-msg file still present at $MSG_FILE ($path_taken)"
 
-# 8. The committed tier actually contains the fact, not just an empty advance.
-git -C "$TIERPATH" cat-file -e "HEAD:$new_file" || \
-  fail "the tier commit does not contain $new_file"
+# 11. The rubric. The scenario grades whether the commit message describes the
+#     fact that was actually recorded, and the fact lives in the TIER commit —
+#     memory's own commit is a gitlink bump plus an index line, which says
+#     nothing about Sentry. Both stores carry the same approved summary, so
+#     judging the tier commit judges the summary the user approved.
+tier_diff=$(git -C "$TIERPATH" show HEAD)
+tier_msg=$(git -C "$TIERPATH" log -1 --format=%B)
+if ! judge_err=$("$LIB_DIR/judge.sh" "$EVAL_RUBRIC" "$tier_diff" "$tier_msg" 2>&1 1>/dev/null); then
+  fail "commit message failed judge rubric — ${judge_err//$'\n'/ } — commit msg: ${tier_msg//$'\n'/ }"
+fi

@@ -31,7 +31,7 @@
 
 The four scripts read `${CLAUDE_PLUGIN_ROOT:?...}` from the environment, which is **unset** under the Claude Code Bash tool (that var is injected for hooks, not Bash commands). `run.sh` self-locates and exports it for its children; the children keep a self-locating fallback so they also work when invoked standalone (as the tests do).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/install_run.bats` (after the existing `run.sh completes a full local install` test):
 
@@ -45,12 +45,12 @@ Add to `tests/install_run.bats` (after the existing `run.sh completes a full loc
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/install_run.bats -f "self-locates"`
 Expected: FAIL — `run.sh: line 7: CLAUDE_PLUGIN_ROOT: CLAUDE_PLUGIN_ROOT must be set`, status 1.
 
-- [ ] **Step 3: Implement self-location in run.sh**
+- [x] **Step 3: Implement self-location in run.sh**
 
 Replace `scripts/install/run.sh:7`:
 
@@ -68,7 +68,7 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &
 export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 ```
 
-- [ ] **Step 4: Implement self-location fallback in the three children**
+- [x] **Step 4: Implement self-location fallback in the three children**
 
 In `scripts/install/create-remote.sh:9`, replace:
 
@@ -107,17 +107,17 @@ plugin_root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." &
 git config gitlore.hooksDir "${plugin_root}/scripts/git-hooks"
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `bats tests/install_run.bats -f "self-locates"`
 Expected: PASS.
 
-- [ ] **Step 6: Run the full install suites to check no regression**
+- [x] **Step 6: Run the full install suites to check no regression**
 
 Run: `bats tests/install_run.bats tests/install_remote.bats tests/emit_launcher.bats`
 Expected: all PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add scripts/install/run.sh scripts/install/create-remote.sh scripts/install/emit-launcher.sh scripts/install/write-settings.sh tests/install_run.bats
@@ -134,7 +134,7 @@ git commit -m "fix: self-locate CLAUDE_PLUGIN_ROOT in install scripts"
 
 `write-settings.sh:24` appends `printf '\n.claude/settings.local.json\n'` to an existing `.gitignore`, leaving a stray blank line. Append the line cleanly.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/install_run.bats`:
 
@@ -149,12 +149,12 @@ Add to `tests/install_run.bats`:
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/install_run.bats -f "stray blank line"`
 Expected: FAIL — `! grep -qxE ''` fails because a blank line is present.
 
-- [ ] **Step 3: Fix the append**
+- [x] **Step 3: Fix the append**
 
 In `scripts/install/write-settings.sh`, replace lines 22-27:
 
@@ -183,12 +183,12 @@ else
 fi
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bats tests/install_run.bats -f "stray blank line"`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/install/write-settings.sh tests/install_run.bats
@@ -205,7 +205,7 @@ git commit -m "fix: no stray blank line when appending to .gitignore"
 
 `emit-wrappers.sh` writes wrappers that `exec "$HOOKS_DIR/<hook>"` where `$HOOKS_DIR` is the version-pinned `gitlore.hooksDir`. After a plugin upgrade the old cache dir is GC'd; in the window before the next SessionStart re-pins the config, a plain-terminal commit `exec`s a missing path and **hard-fails**. Add a guard: if `$HOOKS_DIR/<hook>` is not executable, skip with a hint (exit 0). Matches design.md D5 (two-case degradation).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/emit_wrappers.bats` (after the `wrapper execs the real hook` test):
 
@@ -222,12 +222,12 @@ Add to `tests/emit_wrappers.bats` (after the `wrapper execs the real hook` test)
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/emit_wrappers.bats -f "GC'd"`
 Expected: FAIL — the wrapper `exec`s the missing path; status is non-zero (127 / "not found"), no "stale" message.
 
-- [ ] **Step 3: Add the guard to the wrapper heredoc**
+- [x] **Step 3: Add the guard to the wrapper heredoc**
 
 In `scripts/emit-wrappers.sh`, replace the `write_wrapper` heredoc body (lines 14-23):
 
@@ -264,17 +264,17 @@ exec "\$HOOKS_DIR/$hook" "\$@"
 EOF
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bats tests/emit_wrappers.bats -f "GC'd"`
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole wrapper suite (idempotency test compares wrapper bytes)**
+- [x] **Step 5: Run the whole wrapper suite (idempotency test compares wrapper bytes)**
 
 Run: `bats tests/emit_wrappers.bats`
 Expected: all PASS (the `emit-wrappers is idempotent` test still passes — both emissions produce the identical new body).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts/emit-wrappers.sh tests/emit_wrappers.bats
@@ -293,7 +293,7 @@ git commit -m "fix: hook wrapper skips cleanly when hooksDir is stale after upgr
 
 The installer writes `.gitmodules`, `.git/modules/…`, and pushes — all blocked by the Claude Code command sandbox. The first run died on `.gitmodules: Permission denied` with no hint. Add a writability probe that fails loudly with the exact command to re-run sandbox-disabled.
 
-- [ ] **Step 1: Write the failing test for the probe helper**
+- [x] **Step 1: Write the failing test for the probe helper**
 
 Add to `tests/lib_util.bats`:
 
@@ -313,12 +313,12 @@ Add to `tests/lib_util.bats`:
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/lib_util.bats -f "probe_writable"`
 Expected: FAIL — `gitlore_probe_writable: command not found`.
 
-- [ ] **Step 3: Implement the probe helper**
+- [x] **Step 3: Implement the probe helper**
 
 Append to `scripts/lib/util.sh`:
 
@@ -336,12 +336,12 @@ gitlore_probe_writable() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bats tests/lib_util.bats -f "probe_writable"`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing test for run.sh's loud failure**
+- [x] **Step 5: Write the failing test for run.sh's loud failure**
 
 Add to `tests/install_run.bats`:
 
@@ -360,12 +360,12 @@ Add to `tests/install_run.bats`:
 }
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 Run: `bats tests/install_run.bats -f "paste-able"`
 Expected: FAIL — run.sh currently proceeds and dies later with a raw error (or partially succeeds), not the sandbox message.
 
-- [ ] **Step 7: Add the probe to run.sh**
+- [x] **Step 7: Add the probe to run.sh**
 
 In `scripts/install/run.sh`, insert after the linked-worktree guard block (immediately before `bash "$PLUGIN_ROOT/scripts/install/preflight.sh"` at line 29):
 
@@ -390,12 +390,12 @@ done
 
 (`gitlore_probe_writable` is already in scope: `run.sh:10` sources `scripts/lib/util.sh`.)
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `bats tests/install_run.bats -f "paste-able"`
 Expected: PASS.
 
-- [ ] **Step 9: Add sandbox guidance to install.md**
+- [x] **Step 9: Add sandbox guidance to install.md**
 
 In `commands/install.md`, replace step 2's body:
 
@@ -422,7 +422,7 @@ with:
    the user on success.
 ```
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add scripts/lib/util.sh scripts/install/run.sh commands/install.md tests/lib_util.bats tests/install_run.bats
@@ -439,7 +439,7 @@ git commit -m "feat: probe write capability before install, fail with paste-able
 
 design.md (Remote Repository → Naming) specifies `<parent-remote-name>-memory` derived from the parent's `origin` URL — the current code derives from the local directory basename (`create-remote.sh:19`), which drifts if a repo is cloned into a differently-named directory. Add helpers that parse the parent origin URL (with a repo-basename fallback when there is no origin), and that read the parent's visibility (default private).
 
-- [ ] **Step 1: Write the failing tests for naming**
+- [x] **Step 1: Write the failing tests for naming**
 
 Add to `tests/lib_util.bats`:
 
@@ -471,12 +471,12 @@ Add to `tests/lib_util.bats`:
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `bats tests/lib_util.bats -f "remote_name"`
 Expected: FAIL — `gitlore_memory_remote_name: command not found`.
 
-- [ ] **Step 3: Implement the naming helper**
+- [x] **Step 3: Implement the naming helper**
 
 Append to `scripts/lib/util.sh`:
 
@@ -501,12 +501,12 @@ gitlore_memory_remote_name() {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `bats tests/lib_util.bats -f "remote_name"`
 Expected: all PASS.
 
-- [ ] **Step 5: Write the failing test for visibility**
+- [x] **Step 5: Write the failing test for visibility**
 
 Add to `tests/lib_util.bats`:
 
@@ -518,12 +518,12 @@ Add to `tests/lib_util.bats`:
 }
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 Run: `bats tests/lib_util.bats -f "parent_visibility"`
 Expected: FAIL — `gitlore_parent_visibility: command not found`.
 
-- [ ] **Step 7: Implement the visibility helper**
+- [x] **Step 7: Implement the visibility helper**
 
 Append to `scripts/lib/util.sh`:
 
@@ -544,12 +544,12 @@ gitlore_parent_visibility() {
 }
 ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `bats tests/lib_util.bats -f "parent_visibility"`
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add scripts/lib/util.sh tests/lib_util.bats
@@ -574,7 +574,7 @@ Rewrite `create-remote.sh` to honor design.md's Remote Repository section: oppor
 
 `run.sh` gains a 3rd arg (`remote_mode`, default `auto`) and a 4th (`remote_url`), forwarded to `create-remote.sh`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/install_remote.bats`:
 
@@ -640,12 +640,12 @@ Also **update the existing preflight tests** at `tests/install_remote.bats:42-66
 
 (The `gh missing` case is now covered by the `auto mode with no gh` test above.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `bats tests/install_remote.bats`
 Expected: the new `auto mode with no gh`, `url mode`, `local mode`, `<parent-base>-memory`, and `local-only when gh unauthed` tests FAIL (current `create-remote.sh` ignores mode args, always tries gh, and `preflight.sh` aborts when gh is missing/unauthed).
 
-- [ ] **Step 3: Drop the gh hard-abort from preflight.sh**
+- [x] **Step 3: Drop the gh hard-abort from preflight.sh**
 
 In `scripts/install/preflight.sh`, replace lines 6-18 (the gh-not-found and gh-unauthed hard aborts):
 
@@ -680,7 +680,7 @@ fi
 
 (Leave the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` block and `exit 0` intact.)
 
-- [ ] **Step 4: Rewrite create-remote.sh as a mode dispatcher**
+- [x] **Step 4: Rewrite create-remote.sh as a mode dispatcher**
 
 Replace the body of `scripts/install/create-remote.sh` (everything after the `source` of `util.sh`, i.e. from line 13 to the end) with:
 
@@ -754,7 +754,7 @@ esac
 exit 0
 ```
 
-- [ ] **Step 5: Forward the mode/url args from run.sh**
+- [x] **Step 5: Forward the mode/url args from run.sh**
 
 In `scripts/install/run.sh`, add argument capture near the top (after line 5, `precommit_cmd="${2:-}"`):
 
@@ -775,17 +775,17 @@ with:
 bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath" "$remote_mode" "$remote_url"
 ```
 
-- [ ] **Step 6: Run the remote suite to verify it passes**
+- [x] **Step 6: Run the remote suite to verify it passes**
 
 Run: `bats tests/install_remote.bats`
 Expected: all PASS, including the existing `install rewrites .gitmodules URL`, `records gh repo create`, `aborts cleanly when gh repo create fails`, and `idempotent` tests (auto mode is the default, so they exercise the gh path unchanged — except the name is now `<parent-base>-memory`; the existing `--private` assertion still holds because the test repo has no parent origin → visibility defaults to private).
 
-- [ ] **Step 7: Run the full suite to catch cross-file regressions**
+- [x] **Step 7: Run the full suite to catch cross-file regressions**
 
 Run: `bats tests/`
 Expected: all PASS. Pay attention to `tests/integration_clone_restore.bats` and `tests/integration_happy_path.bats`, which run the full install flow.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add scripts/install/create-remote.sh scripts/install/run.sh scripts/install/preflight.sh tests/install_remote.bats
@@ -802,7 +802,7 @@ git commit -m "feat: provider-agnostic remote creation (auto/url/local) per FR9/
 
 `gitlore_parent_visibility` calls `gh repo view <url> --json visibility -q .visibility`. The current mock returns `GH_MOCK_REMOTE_URL` for any `repo view`, so a visibility query returns a URL string (→ not "public" → private), which is correct-by-accident. Make it explicit so a future public-parent test is possible and the mock's intent is clear.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/install_remote.bats`:
 
@@ -816,12 +816,12 @@ Add to `tests/install_remote.bats`:
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/install_remote.bats -f "public remote"`
 Expected: FAIL — the mock returns the URL for `repo view`, so visibility resolves to private and `--public` is never logged.
 
-- [ ] **Step 3: Teach the mock the visibility query**
+- [x] **Step 3: Teach the mock the visibility query**
 
 In `tests/helpers/gh-mock.bash`, after the existing `repo view ... sshUrl` block (the `if [ -z "$stdout_val" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && [ -n "${GH_MOCK_REMOTE_URL:-}" ]` block), add:
 
@@ -844,17 +844,17 @@ if [ -z "$stdout_val" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && \
 fi
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bats tests/install_remote.bats -f "public remote"`
 Expected: PASS.
 
-- [ ] **Step 5: Run the remote suite to confirm no regression**
+- [x] **Step 5: Run the remote suite to confirm no regression**
 
 Run: `bats tests/install_remote.bats`
 Expected: all PASS (the default-private tests still resolve to private because `GH_MOCK_VISIBILITY` is unset there).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/helpers/gh-mock.bash tests/install_remote.bats
@@ -871,7 +871,7 @@ git commit -m "test: gh-mock answers the repo-visibility query explicitly"
 
 design.md FR10 + D8 require: before creating the remote, show the user the proposed name/owner/visibility and a session-context notice, and get explicit confirmation. Per D7 the *decision* is the agent's; the *execution* is `create-remote.sh`. install.md must drive the mode selection and pass it to `run.sh`.
 
-- [ ] **Step 1: Rewrite install.md to add input + confirmation steps**
+- [x] **Step 1: Rewrite install.md to add input + confirmation steps**
 
 Replace the entire body of `commands/install.md` (keep the frontmatter) with:
 
@@ -895,17 +895,17 @@ Replace the entire body of `commands/install.md` (keep the frontmatter) with:
    If it exits non-zero with a "command sandbox is blocking install" message, re-run the exact command it prints (same invocation, sandbox disabled). Surface stderr verbatim on non-zero exit and stop. Relay stdout and stderr to the user on success.
 ```
 
-- [ ] **Step 2: Self-check the contract against the script**
+- [x] **Step 2: Self-check the contract against the script**
 
 Run: `bash -n scripts/install/run.sh && bash -n scripts/install/create-remote.sh`
 Expected: no syntax errors. Confirm the three documented invocations match `run.sh`'s arg order (`<mempath> <precommit> [mode] [url]`) — they do (Task 6, Step 5).
 
-- [ ] **Step 3: Run the full install integration suite**
+- [x] **Step 3: Run the full install integration suite**
 
 Run: `bats tests/install_run.bats tests/install_remote.bats tests/integration_happy_path.bats tests/integration_clone_restore.bats`
 Expected: all PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add commands/install.md
@@ -918,21 +918,21 @@ git commit -m "docs: install.md drives remote-mode selection + D8 confirmation"
 
 **Files:** none modified (verification only).
 
-- [ ] **Step 1: Run the entire bats suite**
+- [x] **Step 1: Run the entire bats suite**
 
 Run: `bats tests/`
 Expected: all green. Note the count and compare to the pre-change baseline (was 153 per the 2026-05-29 changelog; this plan adds ~12 tests and removes/rewrites 2).
 
-- [ ] **Step 2: shellcheck the changed scripts**
+- [x] **Step 2: shellcheck the changed scripts**
 
 Run: `shellcheck scripts/install/run.sh scripts/install/create-remote.sh scripts/install/write-settings.sh scripts/install/emit-launcher.sh scripts/install/preflight.sh scripts/emit-wrappers.sh scripts/lib/util.sh`
 Expected: no new warnings (pre-existing disables already annotated). Fix any introduced.
 
-- [ ] **Step 3: Confirm design.md already records this work**
+- [x] **Step 3: Confirm design.md already records this work**
 
 Read `docs/design.md` — the 2026-05-31 changelog row and the D5 two-case wrapper text were added during planning. Verify they still match the implemented behavior (wrapper skips on unset AND stale hooksDir; remote naming is `<parent-base>-memory`; gh is opportunistic). No further design edits expected; if behavior drifted from the changelog text, update the row.
 
-- [ ] **Step 4: Final commit (only if Step 2 required fixes)**
+- [x] **Step 4: Final commit (only if Step 2 required fixes)**
 
 ```bash
 git add -A

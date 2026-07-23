@@ -48,7 +48,7 @@ This is a net coverage gain. `sdk-runner.py` had no unit tests at all — its ar
 - Modify: `tests/evals/README.md`
 - Delete: `tests/evals/lib/sdk-runner.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/evals/lib/runner.bats`. The mock records each invocation's argv to `$MOCK_BIN/argv.log` and replies with a canned JSON result, so tests can assert on what the runner asked the CLI to do.
 
@@ -162,14 +162,14 @@ In the same pass, rework the pre-flight test already at lines 8-19 — rename it
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `bats tests/evals/lib/runner.bats`
 Expected: the 8 new tests FAIL — `$RUNNER` does not exist yet.
 
 The reworked pre-flight test is the exception: it may pass for the wrong reason (`run-evals.sh` still probes `sdk-runner.py`, which is absent from `$fake_lib`, so it exits 1 on a missing file and the `sandbox` hint still matches). Its real evidence is Step 5, after the cutover. Do not read an accidental green here as coverage.
 
-- [ ] **Step 3: Write the runner**
+- [x] **Step 3: Write the runner**
 
 Create `tests/evals/lib/claude-runner.sh`:
 
@@ -264,7 +264,7 @@ Make it executable — the suite has shipped a non-executable hook past its own 
 chmod +x tests/evals/lib/claude-runner.sh
 ```
 
-- [ ] **Step 4: Cut `run-evals.sh` over and delete the SDK runner**
+- [x] **Step 4: Cut `run-evals.sh` over and delete the SDK runner**
 
 Replace `run-evals.sh:5-10` (the `uv` dependency check and the false SDK rationale):
 
@@ -299,12 +299,12 @@ Then drop the Python:
 git rm tests/evals/lib/sdk-runner.py
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `bats tests/evals/lib/ && shellcheck tests/evals/lib/claude-runner.sh tests/evals/run-evals.sh`
 Expected: all tests PASS — the 8 new ones plus the pre-flight test, now green because `run-evals.sh` probes the fake `claude-runner.sh` it was given. shellcheck silent.
 
-- [ ] **Step 6: Fix the comments and docs the SDK left behind**
+- [x] **Step 6: Fix the comments and docs the SDK left behind**
 
 In `tests/evals/lib/setup.sh`, replace the comment at lines 44-46:
 
@@ -344,7 +344,7 @@ Under "## Requirements", replace the `uv` bullet:
 
 Under "## What it tests", replace "SDK runner" with "eval runner" in items 2 and 3.
 
-- [ ] **Step 7: Verify nothing still references the SDK, and that the tests actually ran**
+- [x] **Step 7: Verify nothing still references the SDK, and that the tests actually ran**
 
 Run: `grep -rniE "sdk-runner|agent sdk|claude-agent-sdk|\buv\b" tests/evals/ Makefile`
 Expected: the only hits are the README's deliberate history paragraph (`Claude Agent SDK`, `ClaudeSDKClient`, `SDK (query() ×2)`) and `claude-runner.sh`'s explanatory header. No hit names `sdk-runner.py` or requires `uv`.
@@ -352,7 +352,7 @@ Expected: the only hits are the README's deliberate history paragraph (`Claude A
 Run: `make test`
 Expected: the full bats suite green. Confirm `tests/evals/lib/runner.bats` is actually listed in the run and its test count went up — this suite has orphaned test files from `make test` before, and a green count means nothing until you know what ran.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A tests/evals
@@ -367,7 +367,7 @@ The unit tests all speak to a mocked `claude`. Nothing so far proves the runner 
 
 **Files:** `docs/design.md` (one row); the runner only if a defect surfaces.
 
-- [ ] **Step 1: Run the suite for real**
+- [x] **Step 1: Run the suite for real**
 
 This needs network and an unsandboxed environment — the Claude Code sandbox blocks the API, and `dangerouslyDisableSandbox` is unavailable under strict mode, so this may have to run from David's own shell via `!`.
 
@@ -377,15 +377,15 @@ make evals
 
 Expected: `=== Results: 2/2 scenarios passed ===`, 5/5 trials each.
 
-- [ ] **Step 2: Compare against the SDK baseline**
+- [x] **Step 2: Compare against the SDK baseline**
 
 The suite passed 2/2 on the SDK runner. If a scenario now fails, the harness swap is the prime suspect and the diagnosis is a live one — check that turn 1's `--resume` id reaches turn 2, that the PostToolUse hook fired (project settings loaded), and that no trial hit `--max-budget-usd`. Do not adjust the assertions to fit a failure.
 
-- [ ] **Step 3: Record the outcome in the design log**
+- [x] **Step 3: Record the outcome in the design log**
 
 Add one row to `docs/design.md`'s Decision Log, dated `2026-07-17`, stating: the eval harness dropped the Agent SDK for `claude --print --resume`; the SDK's stated rationale (in-process context reuse) was false about its own code since `query()` is stateless; the measured edge was ~$0.05 / ~10s per two-turn trial, of which the ~7k context half is closed by `--setting-sources project`; `--max-turns` has no CLI equivalent, so the runaway guard is `--max-budget-usd`; the runner gained 8 unit tests against a mocked `claude`, where `sdk-runner.py` had none. Include the live `make evals` result.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/design.md

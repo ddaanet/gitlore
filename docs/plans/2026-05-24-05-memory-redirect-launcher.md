@@ -388,7 +388,7 @@
 
 - [x] **7. Register new test files; full suite green.** In `Makefile`, append to the `test-unit` recipe's file list: `tests/launcher_shim.bats tests/emit_launcher.bats tests/global_shim.bats`. Run `make test` → all PASS. Commit: `test: register launcher test files in Makefile`.
 
-- [ ] **8. Docs.**
+- [x] **8. Docs.**
   - `docs/plugin-readme.md`: replace the known-limitation note about the "unbuilt redirect launcher" with the shipped flow — after `/gitlore:install`, run `direnv allow` (or `/gitlore:install-launcher` without direnv); memory then redirects into the submodule. Update the status table row accordingly.
   - `docs/design.md`: add a Decisions Log / changelog row dated 2026-05-24: "Plan 05 built the Memory Redirect Launcher (shim + Placement A direnv + Placement B global + SessionStart guard) and removed the dead `settings.local.json` `autoMemoryDirectory` writes from `write-settings.sh`/`session-start.sh` (the tier CC ignores — D10)."
   - Mark Steps 1-7 `[x]` in this plan as they land.

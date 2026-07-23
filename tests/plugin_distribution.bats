@@ -50,13 +50,37 @@ load helpers/setup
 
 # Regression: slash commands must live directly under commands/ so they expose as
 # /gitlore:<name>. A commands/gitlore/ subdir double-prefixes them to
-# /gitlore:gitlore:<name>. Keep install/resolve flat, and don't reintroduce a
-# redundant skills/install that would collide with the /gitlore:install command.
+# /gitlore:gitlore:<name>. Keep them flat, and don't reintroduce a redundant
+# skills/<name> that would collide with a command of the same name.
 @test "distribution: slash commands are flat (no /gitlore:gitlore: double-prefix)" {
   [ -f "$PLUGIN_ROOT/commands/install.md" ]
-  [ -f "$PLUGIN_ROOT/commands/resolve.md" ]
+  [ -f "$PLUGIN_ROOT/commands/add-tier.md" ]
   [ ! -d "$PLUGIN_ROOT/commands/gitlore" ]
-  [ ! -e "$PLUGIN_ROOT/skills/install/SKILL.md" ]
+  for name in install add-tier; do
+    [ ! -e "$PLUGIN_ROOT/skills/$name/SKILL.md" ]
+  done
+}
+
+# Regression: resolve is a SELF-TRIGGERING skill, not a command (design.md:181 and
+# the 2026-05-26 changelog row have said so since it gained its commit-triggered
+# entry mode; only the file location lagged). A command is invoked deliberately by
+# the user, but resolve's dominant entry is mechanical -- the agent must reach for
+# it on its own when a commit or push emits `gitlore: memory merge prepared`, and
+# only a skill description is matched against context to make that happen. It
+# stays user-invocable as /gitlore:resolve either way, so the standalone repair
+# path (`resolve.sh` health check, post-compaction re-entry, a push run in the
+# user's own terminal) survives the move.
+@test "distribution: resolve is a skill with a self-trigger description" {
+  skill="$PLUGIN_ROOT/skills/resolve/SKILL.md"
+  [ -f "$skill" ]
+  # Must not ALSO exist as a command -- same name in both namespaces collides.
+  [ ! -e "$PLUGIN_ROOT/commands/resolve.md" ]
+  fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
+  # CC does not fall back to the filename for a skill's dispatch id.
+  echo "$fm" | grep -qE '^name:[[:space:]]*resolve[[:space:]]*$'
+  # The description carries the hook's own stderr marker, which is what the
+  # agent matches on when a gate yields mid-task.
+  echo "$fm" | grep -qF 'gitlore: memory merge prepared'
 }
 
 # Regression: D15 — the in-process-worktree memory-drift guard must be registered

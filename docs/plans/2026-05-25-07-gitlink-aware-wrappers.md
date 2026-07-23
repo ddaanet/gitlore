@@ -67,7 +67,7 @@ Run a single file: `bats tests/<file>.bats`. Run the whole suite: `make test` (a
 - Modify: `scripts/emit-wrappers.sh`
 - Test: `tests/emit_wrappers.bats`
 
-- [ ] **Step 1: Add the failing linked-worktree test**
+- [x] **Step 1: Add the failing linked-worktree test**
 
 Append to `tests/emit_wrappers.bats` (the file already defines `EMIT` and the tmp-repo setup/teardown):
 
@@ -85,12 +85,12 @@ Append to `tests/emit_wrappers.bats` (the file already defines `EMIT` and the tm
 }
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
 Run: `export PATH="/tmp/claude-1000/bats-core/bin:$PATH"; bats tests/emit_wrappers.bats`
 Expected: the new test FAILS — `emit-wrappers` aborts with `.git/gitlore-pre-commit: Not a directory` inside the linked worktree.
 
-- [ ] **Step 3: Anchor the writer at the common dir**
+- [x] **Step 3: Anchor the writer at the common dir**
 
 Replace the entire body of `scripts/emit-wrappers.sh` with:
 
@@ -127,12 +127,12 @@ write_wrapper pre-push
 
 (Only the anchor changed — the emitted wrapper body is identical. The wrapper itself still `exec`s `$HOOKS_DIR/<hook>` from the plugin's `gitlore.hooksDir`.)
 
-- [ ] **Step 4: Run the emit-wrappers suite — all green**
+- [x] **Step 4: Run the emit-wrappers suite — all green**
 
 Run: `bats tests/emit_wrappers.bats`
 Expected: PASS, including the new test. The three pre-existing tests still pass because `--git-common-dir` is `.git` in the main (non-worktree) tmp repo, so they write `.git/gitlore-*` exactly as before.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/emit-wrappers.sh tests/emit_wrappers.bats
@@ -149,12 +149,12 @@ git commit -m "fix: anchor hook wrappers at git common dir for linked worktrees"
 
 > The memory-worktree-creation block and its test are already present uncommitted. With Task 1 done, the previously-red test now passes. Do **not** rewrite either file; just confirm and commit. If the working-tree edits are somehow absent, re-create the block exactly as in Step 2.
 
-- [ ] **Step 1: Run the session-start suite**
+- [x] **Step 1: Run the session-start suite**
 
 Run: `export PATH="/tmp/claude-1000/bats-core/bin:$PATH"; bats tests/cc_hook_session_start.bats`
 Expected: PASS, including "creates the memory worktree in a linked (CC-created) worktree on the parent-named branch" — which was red before Task 1.
 
-- [ ] **Step 2: Confirm the in-tree block matches the design**
+- [x] **Step 2: Confirm the in-tree block matches the design**
 
 `git diff scripts/cc-hooks/session-start.sh` must show this block replacing the old single-line `git submodule update --init` (it should already be present verbatim):
 
@@ -179,7 +179,7 @@ fi
 
 The subsequent checkout block (unchanged) then checks out `$parent_branch` from `live`, so a fresh linked worktree ends up on a memory branch named after its parent branch.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/cc-hooks/session-start.sh tests/cc_hook_session_start.bats
@@ -194,7 +194,7 @@ git commit -m "feat: SessionStart creates the memory submodule worktree in linke
 - Modify: `scripts/hook-manager/wire-direct.sh`
 - Test: `tests/hook_manager_wire.bats`
 
-- [ ] **Step 1: Add `EMIT` to the wire test file**
+- [x] **Step 1: Add `EMIT` to the wire test file**
 
 Near the top of `tests/hook_manager_wire.bats`, after the existing `WIRE_*` definitions, add:
 
@@ -202,7 +202,7 @@ Near the top of `tests/hook_manager_wire.bats`, after the existing `WIRE_*` defi
 EMIT="$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 ```
 
-- [ ] **Step 2: Update the existing direct assertions + add a linked-worktree end-to-end test**
+- [x] **Step 2: Update the existing direct assertions + add a linked-worktree end-to-end test**
 
 In `tests/hook_manager_wire.bats`, change the two existing direct tests' `exec .git/gitlore-...` assertions to the new common-dir form, then add a linked-worktree test.
 
@@ -247,12 +247,12 @@ Then add this new test:
 }
 ```
 
-- [ ] **Step 3: Run to confirm the linked-worktree test fails**
+- [x] **Step 3: Run to confirm the linked-worktree test fails**
 
 Run: `export PATH="/tmp/claude-1000/bats-core/bin:$PATH"; bats tests/hook_manager_wire.bats`
 Expected: the existing direct tests fail on the changed assertions (old script still writes `.git/gitlore-*`), and the new linked-worktree test fails (the stub `exec`s the literal `.git/gitlore-pre-commit`, which does not exist in the linked worktree).
 
-- [ ] **Step 4: Rewrite `wire-direct.sh` to be gitlink-aware**
+- [x] **Step 4: Rewrite `wire-direct.sh` to be gitlink-aware**
 
 Replace the entire body of `scripts/hook-manager/wire-direct.sh` with:
 
@@ -291,12 +291,12 @@ mkdir -p .claude
 printf 'direct\n' > .claude/gitlore-hook-setup
 ```
 
-- [ ] **Step 5: Run the wire suite — direct tests green**
+- [x] **Step 5: Run the wire suite — direct tests green**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: all direct tests PASS, including the linked-worktree end-to-end test. (Other managers' tests are still green — untouched.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts/hook-manager/wire-direct.sh tests/hook_manager_wire.bats
@@ -311,7 +311,7 @@ git commit -m "fix: direct hook wiring resolves wrapper via git common dir (D11)
 - Modify: `scripts/hook-manager/wire-husky.sh`
 - Test: `tests/hook_manager_wire.bats`
 
-- [ ] **Step 1: Update the husky assertions**
+- [x] **Step 1: Update the husky assertions**
 
 In `@test "wire-husky appends guarded exec lines to .husky/pre-commit and pre-push"`, replace:
 
@@ -328,12 +328,12 @@ with:
   grep -q 'gitlore-pre-push' .husky/pre-push
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: the husky append test FAILS (old script writes `exec .git/gitlore-...`, no `--git-common-dir`).
 
-- [ ] **Step 3: Update the husky exec line**
+- [x] **Step 3: Update the husky exec line**
 
 In `scripts/hook-manager/wire-husky.sh`, replace the append block:
 
@@ -357,12 +357,12 @@ with:
 
 Also update the first-creation block so a freshly created husky file uses `printf` consistently (optional but tidy) — leave the `if [ ! -f "$f" ]` creation as-is; only the append changed.
 
-- [ ] **Step 4: Run the wire suite — husky tests green**
+- [x] **Step 4: Run the wire suite — husky tests green**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: all husky tests PASS (append, create-missing, idempotent, sentinel).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/hook-manager/wire-husky.sh tests/hook_manager_wire.bats
@@ -377,7 +377,7 @@ git commit -m "fix: husky hook wiring resolves wrapper via git common dir (D11)"
 - Modify: `scripts/hook-manager/wire-lefthook.sh`
 - Test: `tests/hook_manager_wire.bats`
 
-- [ ] **Step 1: Update the lefthook assertions**
+- [x] **Step 1: Update the lefthook assertions**
 
 In `@test "wire-lefthook adds gitlore command under pre-commit and pre-push"`, replace:
 
@@ -401,12 +401,12 @@ with:
   grep -q 'gitlore-pre-commit' lefthook.yml
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: the lefthook add test FAILS (no `--git-common-dir` present yet). This environment has `python3`+PyYAML and no `yq`, so the python branch is what runs.
 
-- [ ] **Step 3: Update both lefthook code paths**
+- [x] **Step 3: Update both lefthook code paths**
 
 In `scripts/hook-manager/wire-lefthook.sh`, in the **yq** branch replace:
 
@@ -437,12 +437,12 @@ for hook, wrapper in (
 ):
 ```
 
-- [ ] **Step 4: Run the wire suite — lefthook tests green**
+- [x] **Step 4: Run the wire suite — lefthook tests green**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: all lefthook tests PASS (add, idempotent, sentinel, preserves-existing, `.lefthook.yml` filename, no-config-exit-1).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/hook-manager/wire-lefthook.sh tests/hook_manager_wire.bats
@@ -459,7 +459,7 @@ git commit -m "fix: lefthook run command resolves wrapper via git common dir (D1
 
 > This task settles the one open design decision: overcommit exec's the `command:` array directly and appends staged files as extra argv. The verification test reproduces that invocation exactly and asserts the wrapper receives the files as `"$@"`.
 
-- [ ] **Step 1: Strengthen the overcommit assertions + add the verification test**
+- [x] **Step 1: Strengthen the overcommit assertions + add the verification test**
 
 In `@test "wire-overcommit adds gitlore PreCommit and PrePush entries"`, after the existing `grep` lines add:
 
@@ -500,12 +500,12 @@ PY
 }
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `export PATH="/tmp/claude-1000/bats-core/bin:$PATH"; bats tests/hook_manager_wire.bats`
 Expected: the new assertions/test FAIL — the old script writes `command: [".git/gitlore-pre-commit"]` (no `sh -c`, no common-dir), so the python `.replace(...)` finds nothing and the array isn't a runnable `sh -c` form.
 
-- [ ] **Step 3: Update both overcommit code paths to the `sh -c` array**
+- [x] **Step 3: Update both overcommit code paths to the `sh -c` array**
 
 In `scripts/hook-manager/wire-overcommit.sh`, in the **yq** branch replace:
 
@@ -551,12 +551,12 @@ for hook, wrapper in (
     }
 ```
 
-- [ ] **Step 4: Run the wire suite — overcommit tests green**
+- [x] **Step 4: Run the wire suite — overcommit tests green**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: all overcommit tests PASS, including the `$@`-forwarding verification test.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/hook-manager/wire-overcommit.sh tests/hook_manager_wire.bats
@@ -571,7 +571,7 @@ git commit -m "fix: overcommit command resolves wrapper via sh -c + git common d
 - Modify: `scripts/hook-manager/wire-manual.sh`
 - Test: `tests/hook_manager_wire.bats`
 
-- [ ] **Step 1: Add an assertion that the printed instructions reference the common-dir wrapper**
+- [x] **Step 1: Add an assertion that the printed instructions reference the common-dir wrapper**
 
 In `@test "wire-manual writes a manual sentinel without modifying any files"`, the call uses `run bash "$WIRE_MANUAL"` without `--separate-stderr`, so the instructions go to stderr and aren't captured in `$output`. Add a dedicated test instead:
 
@@ -583,12 +583,12 @@ In `@test "wire-manual writes a manual sentinel without modifying any files"`, t
 }
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: the new manual test FAILS (current instructions say `.git/gitlore-pre-commit`).
 
-- [ ] **Step 3: Update the printed instructions**
+- [x] **Step 3: Update the printed instructions**
 
 In `scripts/hook-manager/wire-manual.sh`, replace the heredoc:
 
@@ -613,12 +613,12 @@ Once wired, run /gitlore:install again to re-detect.
 EOF
 ```
 
-- [ ] **Step 4: Run the wire suite — manual tests green**
+- [x] **Step 4: Run the wire suite — manual tests green**
 
 Run: `bats tests/hook_manager_wire.bats`
 Expected: all manual tests PASS, including the new instruction-path test. The "writes a manual sentinel without modifying any files" test is unaffected (still no files created beyond the sentinel).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/hook-manager/wire-manual.sh tests/hook_manager_wire.bats
@@ -635,7 +635,7 @@ git commit -m "docs: manual hook instructions reference git-common-dir wrapper (
 
 > When the shared wired hook fires in a linked worktree where no session has run, the memory submodule worktree does not exist. Without a guard, `git -C "$mempath" …` under `set -e` aborts and blocks the commit/push for a *new* reason. The guard makes it a clean no-op.
 
-- [ ] **Step 1: Add the failing pre-commit guard test**
+- [x] **Step 1: Add the failing pre-commit guard test**
 
 Append to `tests/git_hook_pre_commit.bats`:
 
@@ -652,12 +652,12 @@ Append to `tests/git_hook_pre_commit.bats`:
 }
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run: `export PATH="/tmp/claude-1000/bats-core/bin:$PATH"; bats tests/git_hook_pre_commit.bats`
 Expected: the new test FAILS — without the guard the hook reaches `git -C memory …` on a non-existent submodule worktree and exits non-zero.
 
-- [ ] **Step 3: Add the guard to pre-commit**
+- [x] **Step 3: Add the guard to pre-commit**
 
 In `scripts/git-hooks/pre-commit`, immediately after this existing line (near line 19):
 
@@ -676,12 +676,12 @@ fi
 
 (The `if` form is used deliberately — a bare `A && B && exit 0` is unsafe under `set -e`.)
 
-- [ ] **Step 4: Run the pre-commit suite — green**
+- [x] **Step 4: Run the pre-commit suite — green**
 
 Run: `bats tests/git_hook_pre_commit.bats`
 Expected: all tests PASS, including the new guard test and all pre-existing ones (clean, dirty, commit-and-push, divergence, detached, leaked-GIT_DIR).
 
-- [ ] **Step 5: Add the failing pre-push guard test**
+- [x] **Step 5: Add the failing pre-push guard test**
 
 Append to `tests/pre_push_hook.bats` (it loads `helpers/fixtures` and defines `HOOK`; mirror its existing setup):
 
@@ -700,12 +700,12 @@ Append to `tests/pre_push_hook.bats` (it loads `helpers/fixtures` and defines `H
 
 > Before writing, open `tests/pre_push_hook.bats` and confirm `HOOK`, `setup`, and the `make_parent_with_memory`/`CLAUDE_PLUGIN_ROOT` conventions match `git_hook_pre_commit.bats`; adjust the variable name if the file uses a different one.
 
-- [ ] **Step 6: Run to confirm failure**
+- [x] **Step 6: Run to confirm failure**
 
 Run: `bats tests/pre_push_hook.bats`
 Expected: the new test FAILS.
 
-- [ ] **Step 7: Add the same guard to pre-push**
+- [x] **Step 7: Add the same guard to pre-push**
 
 In `scripts/git-hooks/pre-push`, immediately after this existing line (near line 18):
 
@@ -722,12 +722,12 @@ if [ -n "$mempath" ] && [ ! -e "$mempath/.git" ]; then
 fi
 ```
 
-- [ ] **Step 8: Run the pre-push suite — green**
+- [x] **Step 8: Run the pre-push suite — green**
 
 Run: `bats tests/pre_push_hook.bats`
 Expected: all tests PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add scripts/git-hooks/pre-commit scripts/git-hooks/pre-push tests/git_hook_pre_commit.bats tests/pre_push_hook.bats
@@ -743,7 +743,7 @@ git commit -m "fix: pre-commit/pre-push no-op in session-less worktrees (D11)"
 - Modify: `hooks/hooks.json`, `Makefile`
 - Test: `tests/cc_hook_worktree_remove.bats`
 
-- [ ] **Step 1: Write the new test file (red)**
+- [x] **Step 1: Write the new test file (red)**
 
 Create `tests/cc_hook_worktree_remove.bats`:
 
@@ -807,12 +807,12 @@ teardown() {
 }
 ```
 
-- [ ] **Step 2: Run to confirm the file fails (script missing)**
+- [x] **Step 2: Run to confirm the file fails (script missing)**
 
 Run: `export PATH="/tmp/claude-1000/bats-core/bin:$PATH"; bats tests/cc_hook_worktree_remove.bats`
 Expected: tests FAIL — `worktree-remove.sh` does not exist yet.
 
-- [ ] **Step 3: Write `worktree-remove.sh`**
+- [x] **Step 3: Write `worktree-remove.sh`**
 
 Create `scripts/cc-hooks/worktree-remove.sh`:
 
@@ -855,7 +855,7 @@ git -C "$mem_gitdir" worktree prune >/dev/null 2>&1 || true
 exit 0
 ```
 
-- [ ] **Step 4: Make it executable + register in `hooks/hooks.json`**
+- [x] **Step 4: Make it executable + register in `hooks/hooks.json`**
 
 ```bash
 chmod +x scripts/cc-hooks/worktree-remove.sh
@@ -879,21 +879,21 @@ In `hooks/hooks.json`, add a `WorktreeRemove` entry as a sibling of `SessionStar
 
 (Add a comma after the closing `]` of the `PostToolUse` array so the JSON stays valid.)
 
-- [ ] **Step 5: Run the new suite — green**
+- [x] **Step 5: Run the new suite — green**
 
 Run: `bats tests/cc_hook_worktree_remove.bats`
 Expected: all four tests PASS.
 
-- [ ] **Step 6: Validate hooks.json is still valid JSON**
+- [x] **Step 6: Validate hooks.json is still valid JSON**
 
 Run: `jq . hooks/hooks.json >/dev/null && echo OK`
 Expected: `OK`.
 
-- [ ] **Step 7: Add the new test file to the Makefile**
+- [x] **Step 7: Add the new test file to the Makefile**
 
 In `Makefile`, append `tests/cc_hook_worktree_remove.bats` to the end of the `test-unit:` `bats …` line.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add scripts/cc-hooks/worktree-remove.sh hooks/hooks.json Makefile tests/cc_hook_worktree_remove.bats
@@ -907,12 +907,12 @@ git commit -m "feat: advisory WorktreeRemove hook tears down the memory worktree
 **Files:**
 - Modify: `docs/design.md` (changelog), `memory/project_overview.md` (status)
 
-- [ ] **Step 1: Run the entire test suite**
+- [x] **Step 1: Run the entire test suite**
 
 Run: `export PATH="/tmp/claude-1000/bats-core/bin:$PATH"; make test`
 Expected: every suite PASSES. If `tests/plugin_distribution.bats` enumerates hook events, confirm it accepts the new `WorktreeRemove` key; if it asserts an exact event set, update that assertion to include `WorktreeRemove` and re-run.
 
-- [ ] **Step 2: Append a changelog row to `docs/design.md`**
+- [x] **Step 2: Append a changelog row to `docs/design.md`**
 
 Add to the Changelog table:
 
@@ -920,11 +920,11 @@ Add to the Changelog table:
 | 2026-05-25 | **Implemented D11.** All five hook managers (direct, husky, lefthook, overcommit, manual) and `emit-wrappers` now anchor the wrapper at `$(git rev-parse --git-common-dir)/gitlore-<hook>`; direct wiring resolves the hook file via `--git-path hooks/<hook>`. `pre-commit`/`pre-push` early-exit in session-less worktrees (`[ -e "$mempath/.git" ]`). SessionStart lazily creates the memory submodule worktree; new advisory `WorktreeRemove` hook removes it. Overcommit's `sh -c` array `$@`-forwarding verified by test. |
 ```
 
-- [ ] **Step 3: Update `memory/project_overview.md` current-state line**
+- [x] **Step 3: Update `memory/project_overview.md` current-state line**
 
 Update the "Plan 06 superseded → D11" paragraph to note D11 is now **implemented and tested** (Plan 07), not just designed. Keep it to a sentence or two; record the smaller deferred items that remain.
 
-- [ ] **Step 4: Commit (memory submodule first, then root — see memory rule)**
+- [x] **Step 4: Commit (memory submodule first, then root — see memory rule)**
 
 ```bash
 # If memory/ has changes, commit them inside the submodule first.

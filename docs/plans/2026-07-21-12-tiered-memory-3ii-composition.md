@@ -65,7 +65,7 @@ red-green cycles and the two commits — just don't split the dispatch.*
   - `gitlore_index_region FILE` → prints `FIRST LAST` (1-indexed bullet line numbers, space-separated), or `0 0` when the file has no bullets.
   - `gitlore_index_part FILE PART` → prints the `preamble`, `bullets`, or `trailer` part.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/index_compose.bats`:
 
@@ -150,12 +150,12 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/index_compose.bats`
 Expected: FAIL — `scripts/lib/index-compose.sh: No such file or directory`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `scripts/lib/index-compose.sh`:
 
@@ -257,12 +257,12 @@ gitlore_index_part() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bats tests/index_compose.bats`
 Expected: PASS, 10 tests.
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 scripts/lint-shell.sh
@@ -285,7 +285,7 @@ git commit -m "feat: index splitting and bullet path arithmetic (D17 3-ii)"
   - `gitlore_tier_of PATH TIERS` → prints the first path component when it names a tier in the newline-separated list `TIERS`; prints nothing and returns 1 otherwise.
   - `gitlore_compose_check MEMPATH` → prints one human-readable problem per line and returns 1 if the store cannot be safely composed; prints nothing and returns 0 otherwise.
 
-- [ ] **Step 6: Write the failing test**
+- [x] **Step 6: Write the failing test**
 
 First add the fixture factories. Append to `tests/helpers/tier-fixtures.bash`:
 
@@ -400,12 +400,12 @@ Then append to `tests/index_compose.bats` (it must now also `load helpers/fixtur
 }
 ```
 
-- [ ] **Step 7: Run test to verify it fails**
+- [x] **Step 7: Run test to verify it fails**
 
 Run: `bats tests/index_compose.bats`
 Expected: FAIL — `gitlore_tier_of: command not found`.
 
-- [ ] **Step 8: Write minimal implementation**
+- [x] **Step 8: Write minimal implementation**
 
 Append to `scripts/lib/index-compose.sh`:
 
@@ -508,12 +508,12 @@ $path"
 
 Note `${line//[[:space:]]/}` is bash-only (not POSIX sh) — the file is `#!/usr/bin/env bash` and every caller sources it from bash, so this is fine.
 
-- [ ] **Step 9: Run test to verify it passes**
+- [x] **Step 9: Run test to verify it passes**
 
 Run: `bats tests/index_compose.bats`
 Expected: PASS, 19 tests.
 
-- [ ] **Step 10: Lint and commit**
+- [x] **Step 10: Lint and commit**
 
 ```bash
 scripts/lint-shell.sh
@@ -534,7 +534,7 @@ git commit -m "feat: tier attribution and compose validations (D17 3-ii)"
 - Produces:
   - `gitlore_compose MEMPATH` → runs the check, then rewrites the root index and every mounted tier carrier. On check failure: prints the problems, writes nothing, returns 1. On success: prints one summary line per file it actually changed (`composed <path>`), returns 0.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/index_compose.bats`:
 
@@ -665,12 +665,12 @@ Append to `tests/index_compose.bats`:
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/index_compose.bats`
 Expected: FAIL — `gitlore_compose: command not found`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `scripts/lib/index-compose.sh`:
 
@@ -799,12 +799,12 @@ INNER
 
 Declare `line` and `path` `local` in `gitlore_compose` alongside the others.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `bats tests/index_compose.bats`
 Expected: PASS, 29 tests.
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 scripts/lint-shell.sh
@@ -831,7 +831,7 @@ deliverable: "composition actually runs, on both triggers."*
 - Consumes: `gitlore_compose MEMPATH` (Task 2); `gitlore_has_submodule`, `gitlore_memory_path` (existing `util.sh`).
 - Produces: nothing other scripts call.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/cc_hook_index_compose.bats`:
 
@@ -931,12 +931,12 @@ stdin() { printf '%s' "$1" | bash "$HOOK"; }
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `bats tests/cc_hook_index_compose.bats`
 Expected: FAIL — the hook file does not exist.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `scripts/cc-hooks/index-compose.sh` (and `chmod +x` it — a non-executable hook silently no-ops in production while `bash script.sh` in tests still passes):
 
@@ -1018,12 +1018,12 @@ Register it in `hooks/hooks.json` by appending a third entry to the `PostToolBat
       }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `chmod +x scripts/cc-hooks/index-compose.sh && bats tests/cc_hook_index_compose.bats`
 Expected: PASS, 8 tests.
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 scripts/lint-shell.sh
@@ -1043,7 +1043,7 @@ git commit -m "feat: PostToolBatch tier composition hook (D17 3-ii)"
 - Consumes: `gitlore_compose MEMPATH` (Task 2).
 - Produces: nothing.
 
-- [ ] **Step 6: Write the failing test**
+- [x] **Step 6: Write the failing test**
 
 Append to `tests/tier_discovery.bats`:
 
@@ -1080,12 +1080,12 @@ Append to `tests/tier_discovery.bats`:
 }
 ```
 
-- [ ] **Step 7: Run test to verify it fails**
+- [x] **Step 7: Run test to verify it fails**
 
 Run: `bats tests/tier_discovery.bats`
 Expected: FAIL — the root index has no `ddaanet/remote_fact.md` line, and the guidance still says "that tier's MEMORY.md".
 
-- [ ] **Step 8: Write minimal implementation**
+- [x] **Step 8: Write minimal implementation**
 
 In `scripts/cc-hooks/session-start.sh`, source the new library beside the existing ones:
 
@@ -1119,12 +1119,12 @@ New text:
 Write a portable fact into the matching tier's directory (same one-file-per-fact format), and add its index line to the ROOT $mempath/MEMORY.md with the tier prefix — '- [Title](<tier>/<file>.md) — hook'. gitlore mirrors that line down into the tier's own index for you. Facts specific to this project stay in $mempath/ with a bare path.
 ```
 
-- [ ] **Step 9: Run test to verify it passes**
+- [x] **Step 9: Run test to verify it passes**
 
 Run: `bats tests/tier_discovery.bats`
 Expected: PASS, 16 tests.
 
-- [ ] **Step 10: Lint and commit**
+- [x] **Step 10: Lint and commit**
 
 ```bash
 scripts/lint-shell.sh
@@ -1147,17 +1147,17 @@ checkbox. Whoever owns the session runs this task.*
 - Consumes: everything.
 - Produces: nothing.
 
-- [ ] **Step 1: Confirm both new suites are actually collected**
+- [x] **Step 1: Confirm both new suites are actually collected**
 
 Run: `make -n test-unit | tr ' ' '\n' | grep -c 'index_compose'`
 Expected: `2` (both `tests/index_compose.bats` and `tests/cc_hook_index_compose.bats`). If it is not 2, the `wildcard` glob did not pick them up — fix that before proceeding. Green means nothing until you know what ran.
 
-- [ ] **Step 2: Run the whole gate**
+- [x] **Step 2: Run the whole gate**
 
 Run: `just precommit`
 Expected: version check, shellcheck, and the full bats suite all pass. The suite total should be the previous 342 plus the ~37 new cases.
 
-- [ ] **Step 3: Update the design doc**
+- [x] **Step 3: Update the design doc**
 
 In `docs/design.md`, extend the D17 status line (~line 679) after the tier-lockstep clause with:
 
@@ -1171,7 +1171,7 @@ Add a changelog row at the top of the table:
 | 2026-07-21 | **D17 slice 3-ii built — tier pointers reach the always-loaded index.** Composition is placement only: line identity is the path prefix, no sentinel text is injected, and the pass is byte-idempotent. Two refinements the build forced. (1) **Mirror-down runs for every *mounted* tier, splice-up only for *active* ones** — the spec's "a deactivated tier's lines persist in the carrier" only holds if they were mirrored while active, so a root line for a mounted-but-never-active tier would have been silently dropped; the fix is the same data-loss argument the commit/push lockstep used to commit every mounted tier. (2) **The root's hook text wins over a divergent carrier hook**, following D17's settled rule that the root index is canonical for a line's *text*. A fourth validation was added beyond the design's three: a non-blank non-bullet line inside the bullet region refuses the pass, because the layout rule would relocate it and lose its position. The routing guidance now sends the agent to the root index with a prefixed path — the surface it actually has loaded — instead of the tier's own `MEMORY.md`. Composition needs no change to the index→frontmatter sync: `index-sync-post.sh` already resolves an index path as `$mempath/$path`, so a prefixed path lands on the tier file. |
 ```
 
-- [ ] **Step 4: Dogfood against the real store**
+- [x] **Step 4: Dogfood against the real store**
 
 The live store has `memory/ddaanet` mounted and active with a bulletless carrier, so the first compose mirrors down any `ddaanet/`-prefixed root lines and splices nothing up. Run the library by hand against the real store and inspect the diff before committing:
 
@@ -1182,7 +1182,7 @@ git -C memory diff
 
 Expected: either no output and no diff (nothing to compose yet — the root index today has no prefixed lines), or a diff that only moves and reprefixes bullets. If any bullet's *text* changed, stop: that is a bug, not a composition.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/design.md
