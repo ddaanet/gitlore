@@ -80,4 +80,4 @@ pointer in that repo is fine.
   disproportionately more than the value.
 - Dogfood on the real target the day it ships; fixtures miss real-world bugs.
 - `just precommit` is fast and frequent; `just prerelease` adds evals and is
-  slow and rare. Release via `just prerelease release`.
+  slow and rare. `just release` depends on `prerelease`, so it runs both.

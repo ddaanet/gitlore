@@ -5,9 +5,9 @@ import 'plugin-dev/release.just'
 # `just prerelease` right after a green `just precommit` re-runs only the evals,
 # the part precommit does not cover.
 #
-# `just release` depends on `precommit` alone (that dependency lives in the
-# vendored plugin-dev/release.just). Release via `just prerelease release`: the
-# evals run once, and release's own precommit is a sentinel skip.
+# `just release` depends on `prerelease` (that dependency lives in the vendored
+# plugin-dev/release.just, which requires every consumer to define the recipe),
+# so one `just release` runs both gates.
 
 # Fast, frequent. Version drift, shellcheck, then the full bats suite.
 precommit:
