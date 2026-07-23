@@ -51,6 +51,8 @@ replaced="" # newline-joined "  • path: <old> → <new>" bullets, one per
             # considered `description:` and the canonical index hook then
             # overwrites it, so reporting the replaced *text* — not just the
             # filename — is the point: a silent clobber is the failure mode.
+weak=""     # newline-joined bullets for news lines that look like weak routing
+            # keys. Advisory only — see the block below the loop.
 while IFS=$'\t' read -r path hook; do
   [ -n "$path" ] || continue
   case "$path" in
@@ -74,11 +76,33 @@ while IFS=$'\t' read -r path hook; do
   #   • line ADDED this batch (absent from the pre-image) → fill the frontmatter
   #     ONLY when it is empty, so a description authored alongside the new index
   #     line is never clobbered by the terser one-liner that first referenced it.
+  added=""
   if awk -F'\t' -v p="$path" '$1==p{f=1; exit} END{exit !f}' <<<"$pre_pairs"; then
     prehook=$(awk -F'\t' -v p="$path" '$1==p{sub(/^[^\t]*\t/,""); print; exit}' <<<"$pre_pairs")
-    [ "$hook" = "$prehook" ] && continue      # existing line, unchanged → skip
+    [ "$hook" = "$prehook" ] && continue      # existing line, unchanged → not news
   else
-    [ -n "$old" ] && continue                 # added line with authored prose → keep it
+    added=1
+  fi
+
+  # Routing-key advisory, on every NEWS line — deliberately BEFORE the
+  # fill-if-empty bail below, because a line whose frontmatter the sync
+  # declines to touch is still the canonical routing key. Conditioned on the
+  # memory's type: a `reference` fact is reached by an error string, a flag or
+  # an identifier, while a `feedback` rule is reached by topic and is right to
+  # be prose. Ungated, the check fires on a third of a real index and becomes
+  # noise to scroll past.
+  ftype=$(gitlore_frontmatter_type "$target") || ftype=""
+  case "$ftype" in
+    reference|project)
+      if ! gitlore_index_has_literal "$hook"; then
+        weak="$weak
+  • $path: \"$hook\""
+      fi
+      ;;
+  esac
+
+  if [ -n "$added" ] && [ -n "$old" ]; then
+    continue                                  # added line with authored prose → keep it
   fi
   if ! gitlore_set_frontmatter_description "$target" "$hook"; then
     # A single failing target must not abort the loop — the rest still sync.
@@ -105,6 +129,21 @@ rm -f "$stashfile"
 # sync is routine, and the before/after detail is noise they did not ask for.
 # The agent gets the full replacement list: at the explicitness needed for
 # compliance, every clause there earns its place.
+
+# --- byte budget ------------------------------------------------------------
+# Bytes, not lines: the index blob is loaded verbatim into every session, so a
+# handful of paragraph-length lines cost more than fifty terse ones and that is
+# where curation pays. Computed on the post-edit index, so it needs no
+# pre-image; it reports only past the threshold, and only in a batch that
+# touched the index — an untouched index cannot have grown.
+budget=""
+pct=$(gitlore_index_budget_pct "$index") || pct=""
+if [ -n "$pct" ] && [ "$pct" -ge "$GITLORE_INDEX_BUDGET_WARN_PCT" ]; then
+  budget=$(gitlore_index_largest "$index" 5 | while IFS=$'\t' read -r b p; do
+    printf '\n  • %s: %s bytes' "$p" "$b"
+  done)
+fi
+
 sysmsg=""
 ctx=""
 if [ -n "$replaced" ]; then
@@ -115,6 +154,32 @@ if [ -n "$replaced" ]; then
   # what the hook did.
   ctx="The gitlore index→frontmatter sync already rewrote the description: line of these memory files to match the index hook, which is canonical. This is expected and complete — do not re-read or re-edit them to verify. If a replaced description carried meaning the index hook loses, fix the index line, not the file.$replaced"
 fi
+
+# The two advisories REPORT and never refuse — the same asymmetry the dangling
+# pointer pass settled on. A thin hook is a quality regression, not corruption,
+# and PostToolBatch could not undo the write in any case.
+if [ -n "$weak" ]; then
+  n=$(printf '%s' "$weak" | grep -c '•')
+  if [ "$n" -eq 1 ]; then unit="line looks"; else unit="lines look"; fi
+  if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
+"; fi
+  sysmsg="${sysmsg}gitlore: $n MEMORY.md $unit like a weak routing key (no trigger token)"
+  if [ -n "$ctx" ]; then ctx="$ctx
+
+"; fi
+  ctx="${ctx}These reference-type MEMORY.md lines carry no trigger token — no path, flag, error string, identifier, filename or version of the kind a future query would actually contain. The index one-liner is what CC's recall classifier matches on, and the sync above copies it over the file's own description:, so a hook without one weakens both surfaces at once. If a concrete token belongs in the line, edit the INDEX line (never the file). Ignore this where the hook is already as specific as the fact allows — a behavioural rule is reached by topic, and prose is right there.$weak"
+fi
+
+if [ -n "$budget" ]; then
+  if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
+"; fi
+  sysmsg="${sysmsg}gitlore: MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte always-loaded budget"
+  if [ -n "$ctx" ]; then ctx="$ctx
+
+"; fi
+  ctx="${ctx}MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte budget. The whole index is loaded verbatim into every session, so the cost is bytes rather than lines and trimming the longest entries is what pays — a terse behavioural line is a rounding error next to these. Largest lines:$budget"
+fi
+
 if [ -n "$failed" ]; then
   # Never exit 1/2 here: the batch already ran, so a non-zero exit cannot undo
   # it — it would only discard this JSON, since stdout is parsed on exit 0 only

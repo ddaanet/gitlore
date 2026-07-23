@@ -1,20 +1,19 @@
 ## Current task
 
-Nothing is in flight. The merge continuation now composes — the last
-uncomposed write path into a memory store — built, green (513) and
-documented.
+Nothing is in flight. The two routing-key advisories now ride the
+index→frontmatter sync — byte budget and missing-trigger-token — built,
+green (530), documented, and dogfooded both directions against the real
+store, which is now at 0 flags and 71% of budget.
 
-The shape worth carrying: composition is anchored at the memory **root**,
-kept apart from the `store` the merge-state file names, because it spans
-the whole tree while a merge sits in exactly one store. So it can write a
-store *other* than the one being committed (the root index when a tier
-merged, a carrier when memory did); those writes stay dirty and ride the
-next FR11 commit, the same float SessionStart's recompose produces. And a
-refusal reports without blocking: compose writes nothing when it refuses,
-and by then the merge is synthesized and approved, so stranding it
-half-landed over a duplicate pointer line the agent fixes in one edit is
-the worse outcome. Staging is `git add -A` in the merge store — the call
-the merger sub-agent already makes.
+The shape worth carrying: the *named* version of this feature was refuted
+before anything was built. Scoring a hook against its body's distinctive
+tokens (tf-idf) does not discriminate at 76 documents — `df ≤ 3` marks
+ordinary prose as distinctive, so the score tracks hook LENGTH, not
+quality. What replaced it is two countable things, and the second one is
+only usable because it is gated on `metadata.type`: ungated it fires on
+22 of 76 bullets, type-conditioned on 3 of 37. A `reference` fact is
+reached by an error string or a flag; a `feedback` rule is reached by
+topic, where prose is correct.
 
 ## Open decisions
 
@@ -22,13 +21,15 @@ the merger sub-agent already makes.
   one parent push publishes in lockstep via `pre-push`. Not deferred for
   a technical reason — it is outward-facing, so it waits to be asked for.
   Raised repeatedly; stop raising it unprompted.
-- **Index→frontmatter sync has no keyword-density validation.** The index
-  line is canonical and overwrites each file's `description:`; both feed
-  CC's recall classifier, so a teaser-style line silently degrades
-  passive recall.
+- **The third index-quality failure mode is unaddressed and may stay
+  that way** — a trigger that is *present but buried* in a
+  paragraph-length line. Nothing countable can see it; the options are
+  leaving it to the agent (current) or a semantic pass at the artifact
+  boundary, which costs a model call per index write or becomes a
+  `/gitlore:lint-index` command nobody runs.
+- **`just prerelease` has never run against the three eval scenarios.**
+  They have only ever run at `EVAL_K=1`; the real gate is `pass^5`, slow
+  and paid.
 - **`release` depends on a plugin-defined `prerelease`** — the fix
   belongs in `ddaanet/claude-plugin-dev`, not this repo's vendored copy;
   today releases go `just prerelease release`.
-- **`just prerelease` has never run against the three new eval
-  scenarios.** They have only ever run at `EVAL_K=1`; the real gate is
-  `pass^5`, slow and paid.
