@@ -28,6 +28,7 @@ emit() {   # $1 = systemMessage, $2 = additionalContext
       hookSpecificOutput: {hookEventName: "PostToolBatch", additionalContext: $c}}'
 }
 
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
 [ -e "$mempath/.git" ] || exit 0          # session-less worktree: nothing to mount into

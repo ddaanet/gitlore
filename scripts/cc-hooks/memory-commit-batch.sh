@@ -21,6 +21,7 @@ cat >/dev/null || true   # drain stdin; the trigger file, not the payload, drive
 
 emit() { jq -n --arg s "$1" '{systemMessage: $s, suppressOutput: true}'; }
 
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
 [ -e "$mempath/.git" ] || exit 0          # session-less worktree: no memory to commit

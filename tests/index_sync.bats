@@ -576,6 +576,29 @@ batch_payload() {
   [ "${lines[1]#*$'\t'}" = "m.md" ]
 }
 
+@test "index_largest: survives an index too big to fit the pipe buffer" {
+  # Callers run with `set -o pipefail`. An early-exiting consumer (`head -n`)
+  # leaves `sort` writing into a closed pipe once its output exceeds the 64 KiB
+  # pipe buffer: SIGPIPE, exit 141, and the advisory is lost on precisely the
+  # large indexes it exists to report on.
+  # Built in one awk pass: a 3000-iteration shell loop makes this the slowest
+  # test in the suite for no extra coverage.
+  # What has to exceed the 64 KiB pipe buffer is `sort`'s OUTPUT, not the index:
+  # each line it emits is "bytes<TAB>path", so the paths carry the volume.
+  awk 'BEGIN {
+    printf "# Memory Index\n\n"
+    pad = sprintf("%0100d", 0)
+    for (i = 1; i <= 3000; i++) printf "- [t%d](f%050d_%s.md) — %s\n", i, i, pad, pad
+  }' > MEMORY.md
+  [ "$(wc -c < MEMORY.md)" -gt 65536 ]
+
+  set -o pipefail
+  run gitlore_index_largest MEMORY.md 5
+  set +o pipefail
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 5 ]
+}
+
 # shellcheck disable=SC2016   # literal backticks/$VAR are the fixture text
 @test "post: flags a reference line whose hook carries no trigger token" {
   make_parent_with_memory

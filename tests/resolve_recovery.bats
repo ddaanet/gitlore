@@ -27,6 +27,19 @@ teardown() { teardown_tmp_repo; }
   [[ "$output$stderr" == *"abort-then-retry"* ]]
 }
 
+@test "recovery: a merge that never started is reported, not announced as prepared" {
+  # The merge's own output is discarded on purpose — a conflict is the expected
+  # outcome and the conflicted worktree IS the deliverable. But a merge that
+  # never started leaves no MERGE_HEAD, and without checking for it the caller
+  # would write a state file and dispatch a sub-agent to resolve nothing.
+  # Reproduced here with an authority HEAD already contains.
+  run --separate-stderr gitlore_prepare_merge memory live
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"Already up to date"* ]]
+  run git -C memory rev-parse -q --verify MERGE_HEAD
+  [ "$status" -ne 0 ]
+}
+
 @test "recovery: state file without MERGE_HEAD → fatal directive" {
   make_diverged_head_vs_live memory
   bash "$PRE_COMMIT" || true

@@ -15,6 +15,8 @@ cmd=$(jq -r '.tool_input.command // empty' <<<"$payload")
 exit_code=$(jq -r '.tool_response.exit_code // 0' <<<"$payload")
 [ "$exit_code" = "0" ] || exit 0
 
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
+
 [ -f .claude/settings.json ] || exit 0
 # No redirect: the `-f` guard above already covers the file-absent case, so a jq
 # error here means malformed settings.json — which the user needs to hear about

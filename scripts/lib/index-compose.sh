@@ -124,7 +124,7 @@ EOF
 #   4. no non-blank non-bullet line inside an index's bullet region — the
 #      layout rule would relocate it and lose its position.
 gitlore_compose_check() {
-  local mempath="$1" mounted active problems="" tier file
+  local mempath="$1" mounted active problems="" tier file found
   mounted=$(gitlore_tier_paths "$mempath")
   active=$(gitlore_active_tiers "$mempath")
 
@@ -139,13 +139,27 @@ gitlore_compose_check() {
 $active
 EOF
 
-  # Rules 1 and 4 — for the root index and every mounted tier carrier.
+  # Rules 1 and 4 — for the root index and every mounted tier carrier. The
+  # capture drops the helper's trailing newline, so each non-empty batch gets
+  # one back: without it the last problem from one index and the first from the
+  # next share a line. An empty capture must NOT add one — a lone newline would
+  # make $problems non-empty and refuse a healthy store with no message.
   file="$mempath/MEMORY.md"
-  [ -f "$file" ] && problems="${problems}$(gitlore_compose_check_index "$file")"
+  if [ -f "$file" ]; then
+    found=$(gitlore_compose_check_index "$file")
+    if [ -n "$found" ]; then
+      problems="${problems}${found}
+"
+    fi
+  fi
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    problems="${problems}$(gitlore_compose_check_index "$mempath/$tier/MEMORY.md")"
+    found=$(gitlore_compose_check_index "$mempath/$tier/MEMORY.md")
+    if [ -n "$found" ]; then
+      problems="${problems}${found}
+"
+    fi
   done <<EOF
 $mounted
 EOF
@@ -311,10 +325,22 @@ gitlore_compose_write() {
 # Otherwise mirrors down into every MOUNTED tier (a dormant tier still receives
 # its root lines: dropping them would be data loss, not dormancy — the same rule
 # the commit/push lockstep applies) and splices up every ACTIVE tier.
+#
+# Return codes are three, not two, because "nothing was written" and "some of it
+# was" need different words from every caller:
+#   0 — composed (stdout: one "composed <file>" line per index rewritten)
+#   1 — validation refused; nothing written (stdout: the problems)
+#   2 — a write FAILED partway; earlier writes stand (stdout: what was written,
+#       then the file that could not be)
+# Code 2 exists because a write's status is otherwise invisible here: the writes
+# ran inside a command substitution feeding a string append, and every caller
+# invokes this function as an `if` condition, which disables errexit for the
+# whole call — so a failed `mv` or a full disk reported success and left the
+# tier index silently unchanged.
 gitlore_compose() {
   local mempath="$1"
   local root="$mempath/MEMORY.md"
-  local mounted active tier line path changed=""
+  local mounted active tier line path changed="" out
   [ -f "$root" ] || return 0
 
   if ! gitlore_compose_check "$mempath"; then
@@ -328,15 +354,20 @@ gitlore_compose() {
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    changed="$changed$(gitlore_compose_tier_bullets "$mempath" "$tier" \
-      | gitlore_compose_write "$mempath/$tier/MEMORY.md")
+    if ! out=$(gitlore_compose_tier_bullets "$mempath" "$tier" \
+      | gitlore_compose_write "$mempath/$tier/MEMORY.md"); then
+      [ -n "$changed" ] && printf '%s' "$changed"
+      printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
+      return 2
+    fi
+    changed="$changed$out
 "
   done <<EOF
 $mounted
 EOF
 
   # Splice up — active tiers in manifest order, then the project's own bullets.
-  changed="$changed$( {
+  if ! out=$( {
     while IFS= read -r tier; do
       [ -n "$tier" ] || continue
       [ -f "$mempath/$tier/MEMORY.md" ] || continue
@@ -352,7 +383,12 @@ INNER
       case "$path" in */*) continue ;; esac
       printf '%s\n' "$line"
     done < <(gitlore_index_part "$root" bullets)
-  } | gitlore_compose_write "$root" )"
+  } | gitlore_compose_write "$root" ); then
+    [ -n "$changed" ] && printf '%s' "$changed"
+    printf 'could not write %s\n' "$root"
+    return 2
+  fi
+  changed="$changed$out"
 
   [ -n "$changed" ] && printf '%s\n' "$changed"
   return 0

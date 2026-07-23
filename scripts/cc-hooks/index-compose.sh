@@ -16,6 +16,7 @@ files=$(jq -r '
   | .tool_input.file_path // empty' <<<"$payload")
 [ -n "$files" ] || exit 0
 
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
 index="$mempath/MEMORY.md"
@@ -36,7 +37,9 @@ done <<<"$files"
 
 sysmsg=""
 ctx=""
-if result=$(gitlore_compose "$mempath"); then
+compose_rc=0
+result=$(gitlore_compose "$mempath") || compose_rc=$?
+if [ "$compose_rc" -eq 0 ]; then
   if [ -n "$result" ]; then
     n=$(printf '%s\n' "$result" | grep -c '^composed ')
     if [ "$n" -eq 1 ]; then unit="index"; else unit="indexes"; fi
@@ -58,6 +61,14 @@ $result"
 }These memory index lines point at files that do not exist. Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Either restore the file or remove the line — removing it deletes nothing.
 $dangling"
   fi
+elif [ "$compose_rc" -eq 2 ]; then
+  # A write failed partway, so the fail-safe promise does NOT hold here: some
+  # indexes are composed and at least one is not. Say so — the recovery is the
+  # same retrigger, but the store is not in the state a refusal leaves it in.
+  sysmsg="gitlore: tier composition could not write an index — the memory indexes are only partly composed:
+$result"
+  ctx="gitlore tier composition failed while writing. Unlike a refusal, this leaves the memory indexes PARTLY composed: everything listed as composed was written, and the file named after them was not. Investigate that path (permissions, disk space, a read-only worktree), then edit MEMORY.md or memory/.gitlore-tiers again to retrigger the pass:
+$result"
 else
   # Fail-safe: nothing was written. Never exit non-zero — stdout JSON parses on
   # exit 0 only, so a non-zero exit would DISCARD this message and make the

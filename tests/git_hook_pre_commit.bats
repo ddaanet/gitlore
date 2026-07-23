@@ -93,6 +93,24 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "live" ]
 }
 
+@test "a memory pointer that cannot be staged is reported, not a bare git error" {
+  # Both staging branches end the same way — the commit records a stale memory
+  # SHA — so both have to say so. Without a message `set -e` aborts the commit
+  # on git's own "Unable to create index.lock" and nothing connects that to the
+  # memory pointer. This is the branch git takes when the hook runs with no
+  # GIT_INDEX_FILE (a direct invocation, or a hook manager that does not export
+  # it).
+  make_parent_with_memory
+  # A stranded lock is the realistic cause, and it fails `git add` for real.
+  : > .git/index.lock
+
+  CLAUDECODE=1 run --separate-stderr bash "$HOOK"
+  rm -f .git/index.lock
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"pointer could not be staged"* ]]
+  [[ "$output$stderr" == *"stale memory SHA"* ]]
+}
+
 @test "ignores parent GIT_DIR/GIT_INDEX_FILE leaked by 'git commit'" {
   # Regression: when git invokes the pre-commit hook, it sets GIT_DIR /
   # GIT_INDEX_FILE / GIT_WORK_TREE to relative paths under the parent repo.

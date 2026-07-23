@@ -16,6 +16,7 @@ files=$(jq -r '
   | .tool_input.file_path // empty' <<<"$payload")
 [ -n "$files" ] || exit 0   # read-only batch
 
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
 index="$mempath/MEMORY.md"

@@ -79,6 +79,14 @@ if [ -n "$saved_index" ]; then
     exit 1
   }
 else
-  git add -- "$mempath"
+  git add -- "$mempath" || {
+    # Same consequence as the branch above, and it needs saying for the same
+    # reason: without a message `set -e` aborts the commit on git's bare error,
+    # leaving the user to guess that the memory pointer is what failed.
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory was committed but its pointer could not be staged, so this commit would record a stale memory SHA. Inspect the index and retry." \
+      "gitlore: memory was committed but its pointer could not be staged, so this commit would record a stale memory SHA. Inspect the index and retry." >&2
+    exit 1
+  }
 fi
 exit 0

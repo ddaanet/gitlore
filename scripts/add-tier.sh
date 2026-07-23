@@ -163,8 +163,14 @@ if [ "$mode" = "create" ]; then
   # the ff-only `fetch origin live:live` then refuses to update a checked-out
   # branch — propagation-in would die at the first hop.
   git init -q -b main "$seed"
+  # jq quotes the description into a JSON string, which is a valid YAML double-
+  # quoted scalar. Interpolating it raw truncates the frontmatter at the first
+  # `"` the agent supplied — `Facts about the "core" team` reads back as garbage
+  # — and a trailing backslash would eat the closing quote outright. Same
+  # treatment gitlore_set_frontmatter_description already gives an edit.
+  desc_quoted=$(jq -Rn --arg d "$description" '$d')
   {
-    printf -- '---\ndescription: "%s"\n---\n\n' "$description"
+    printf -- '---\ndescription: %s\n---\n\n' "$desc_quoted"
     printf '# %s tier index\n\n' "$name"
     printf 'One line per fact, same format as a project index. Facts here travel\n'
     printf 'to every repo that mounts this tier.\n'
