@@ -103,3 +103,20 @@ load helpers/setup
   [ "$output" = "1" ]
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh" ]
 }
+
+# Positional invariant (add-tier triage-nudge design): add-tier-batch must run
+# BEFORE index-compose in PostToolBatch. If a future edit swaps them back, a
+# one-turn "write the intent file + list the tier" write would have
+# index-compose fire while the tier is still unmounted — it would see a
+# manifest entry for an absent module and refuse, forcing the two-turn flow
+# back. This pins the order so that regression fails loudly here instead of
+# surfacing as a baffling add-tier eval failure.
+@test "distribution: add-tier-batch precedes index-compose in PostToolBatch" {
+  run jq -r '.hooks.PostToolBatch[].hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  add_tier_line=$(printf '%s\n' "$output" | grep -n 'add-tier-batch' | cut -d: -f1)
+  compose_line=$(printf '%s\n' "$output" | grep -n 'index-compose' | cut -d: -f1)
+  [ -n "$add_tier_line" ]
+  [ -n "$compose_line" ]
+  [ "$add_tier_line" -lt "$compose_line" ]
+}

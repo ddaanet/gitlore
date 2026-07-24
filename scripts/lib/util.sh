@@ -339,6 +339,35 @@ gitlore_active_tiers() {
   return 0
 }
 
+# Print "<tierpath>/ — <description>" (or bare "<tierpath>/" when the tier has
+# no MEMORY.md yet or no description) for every ACTIVE tier, in manifest order.
+# A tier listed in the manifest but not actually mounted (`.git` missing) is
+# skipped rather than reported, matching SessionStart's own guard — a stale
+# manifest entry is a dangling-pointer concern, not this helper's job.
+# Shared by SessionStart's routing-guidance banner and the post-mount triage
+# nudge (D17 triage-automation design), so "active tiers and their scopes" has
+# one definition. Depends on gitlore_get_frontmatter_description
+# (scripts/lib/index-sync.sh) — callers must source that file too.
+# Args: $1 = memory worktree path.
+gitlore_active_tier_scopes() {
+  local mempath="$1" tier tierpath desc
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    [ -e "$tierpath/.git" ] || continue
+    desc=""
+    if [ -f "$tierpath/MEMORY.md" ]; then
+      desc=$(gitlore_get_frontmatter_description "$tierpath/MEMORY.md") || desc=""
+    fi
+    if [ -n "$desc" ]; then
+      printf '%s/ — %s\n' "$tierpath" "$desc"
+    else
+      printf '%s/\n' "$tierpath"
+    fi
+  done < <(gitlore_active_tiers "$mempath")
+  return 0
+}
+
 # Print the memory remote's bare name: <parent-remote-base>-memory.
 # Derives the base from the parent repo's origin URL when set, handling both
 # https (.../owner/repo[.git]) and scp-style (git@host:owner/repo[.git]) forms,

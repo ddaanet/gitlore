@@ -250,6 +250,55 @@ teardown() { teardown_tmp_repo; }
   [ ! -e memory/gone.md ]
 }
 
+
+# --- gitlore_active_tier_scopes: helper shared by SessionStart and the triage nudge ---
+
+@test "gitlore_active_tier_scopes emits path and description for an active tier" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  run gitlore_active_tier_scopes memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "memory/ddaanet/ — org-wide facts for ddaanet projects" ]
+}
+
+@test "gitlore_active_tier_scopes skips a mounted but unlisted (dormant) tier" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  run gitlore_active_tier_scopes memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "gitlore_active_tier_scopes skips a listed but unmounted tier" {
+  make_parent_with_memory
+  set_tier_manifest ddaanet
+  run gitlore_active_tier_scopes memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "gitlore_active_tier_scopes emits one line per active tier, in manifest order" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  make_tier_in_memory otherteam
+  set_tier_manifest otherteam ddaanet
+  run gitlore_active_tier_scopes memory
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "memory/otherteam/ — org-wide facts for otherteam projects" ]
+  [ "${lines[1]}" = "memory/ddaanet/ — org-wide facts for ddaanet projects" ]
+}
+
+# Regression: enumeration must not split on whitespace or lose a spaced path.
+@test "gitlore_active_tier_scopes is whitespace-safe on a tier path containing a space" {
+  make_parent_with_memory
+  make_tier_in_memory "spaced tier"
+  set_tier_manifest "spaced tier"
+  run gitlore_active_tier_scopes memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "memory/spaced tier/ — org-wide facts for spaced tier projects" ]
+}
+
 @test "routing guidance points the agent at the ROOT index, prefixed" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
