@@ -79,5 +79,6 @@ pointer in that repo is fine.
 - Automate by default; choose a manual check only when automation costs
   disproportionately more than the value.
 - Dogfood on the real target the day it ships; fixtures miss real-world bugs.
-- `just precommit` is fast and frequent; `just prerelease` adds evals and is
-  slow and rare. `just release` depends on `prerelease`, so it runs both.
+- `just precommit` is fast and frequent. `just evals` drives the real claude
+  CLI and costs time and money — run it explicitly, not as part of a release.
+  `just release` depends on `prerelease`, which is just `precommit`.
