@@ -6,6 +6,10 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+# gitlore_active_tier_scopes (util.sh) calls gitlore_get_frontmatter_description,
+# defined here — needed for the post-mount triage nudge below.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
 # PostToolBatch, like the index→frontmatter sync: it fires once per turn with
 # every call in .tool_calls[], so a turn holding several index edits composes —
@@ -23,17 +27,20 @@ index="$mempath/MEMORY.md"
 manifest="$mempath/.gitlore-tiers"
 [ -e "$index" ] || exit 0
 
-# Did this batch write the root index or the activation manifest? Identity via
-# -ef, as in the sync hooks: the payload carries absolute paths and $mempath is
-# relative to the repo root.
-touched=""
+# Did this batch write the root index or the activation manifest? Tracked
+# separately: the triage nudge below fires on a manifest change specifically
+# (the active-tier set may have changed), not on every memory-writing recompose.
+# Identity via -ef, as in the sync hooks: the payload carries absolute paths
+# and $mempath is relative to the repo root.
+index_touched=""
+manifest_touched=""
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   [ -e "$f" ] || continue
-  if [ "$f" -ef "$index" ]; then touched=1; break; fi
-  if [ -e "$manifest" ] && [ "$f" -ef "$manifest" ]; then touched=1; break; fi
+  if [ "$f" -ef "$index" ]; then index_touched=1; fi
+  if [ -e "$manifest" ] && [ "$f" -ef "$manifest" ]; then manifest_touched=1; fi
 done <<<"$files"
-[ -n "$touched" ] || exit 0
+[ -n "$index_touched$manifest_touched" ] || exit 0
 
 sysmsg=""
 ctx=""
@@ -60,6 +67,30 @@ $result"
 
 }These memory index lines point at files that do not exist. Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Either restore the file or remove the line — removing it deletes nothing.
 $dangling"
+  fi
+
+  # Post-mount triage nudge (D17 triage-automation design): the active-tier
+  # set may just have changed, so gate on the manifest specifically, not any
+  # compose. Scopes come from the live frontmatter of each active tier — never
+  # a fixed dichotomy — so this reads correctly whether one tier is active or
+  # several, and whatever each one's own scope says.
+  if [ -n "$manifest_touched" ]; then
+    scopes=$(gitlore_active_tier_scopes "$mempath")
+    if [ -n "$scopes" ]; then
+      n=$(printf '%s\n' "$scopes" | grep -c .)
+      if [ "$n" -eq 1 ]; then tunit="tier"; else tunit="tiers"; fi
+      # Emit a systemMessage too, not just additionalContext: without one, a
+      # manifest touch that recomposed nothing (no sysmsg from above) would
+      # skip the final emit gate below and silently drop this directive.
+      sysmsg="${sysmsg:+$sysmsg
+}gitlore: active-tier set changed ($n $tunit) — triage local memory against their scopes"
+      scope_lines=$(printf '%s\n' "$scopes" | sed 's/^/  - /')
+      ctx="${ctx:+$ctx
+
+}gitlore: the active-tier set just changed. For each fact in your LOCAL memory (a bare-path \`- [Title](file.md)\` line in $index), judge which active tier's scope best covers it — using each tier's OWN scope below, not a fixed rule:
+$scope_lines
+Route the best-fit ones up: \`mv\` the file into that tier's directory, and reprefix its root index line to \`<tier>/<file>.md\`. A fact no active tier's scope covers stays local. Do not move a fact already in a tier."
+    fi
   fi
 elif [ "$compose_rc" -eq 2 ]; then
   # A write failed partway, so the fail-safe promise does NOT hold here: some

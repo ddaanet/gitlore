@@ -238,27 +238,14 @@ fi
 # Routing guidance (D17): advertise each ACTIVE tier (listed in the manifest)
 # and its self-described purpose, so the agent routes a portable fact to the
 # right tier instead of burying it in project-local memory. A mounted but
-# unlisted tier is dormant and intentionally not advertised.
+# unlisted tier is dormant and intentionally not advertised. The scope
+# resolution itself lives in gitlore_active_tier_scopes (shared with the
+# post-mount triage nudge in index-compose.sh) — this loop only formats it.
 tier_guidance=""
-while IFS= read -r tier; do
-  [ -n "$tier" ] || continue
-  tierpath="$mempath/$tier"
-  [ -e "$tierpath/.git" ] || continue
-  # Guard on the file rather than suppressing the reader's stderr: a tier without
-  # a MEMORY.md yet is normal (it lists without a description), while a genuine
-  # read failure now speaks up instead of silently degrading the routing text.
-  desc=""
-  if [ -f "$tierpath/MEMORY.md" ]; then
-    desc=$(gitlore_get_frontmatter_description "$tierpath/MEMORY.md") || desc=""
-  fi
-  if [ -n "$desc" ]; then
-    tier_guidance="$tier_guidance
-  - $tierpath/ — $desc"
-  else
-    tier_guidance="$tier_guidance
-  - $tierpath/"
-  fi
-done < <(gitlore_active_tiers "$mempath")
+while IFS= read -r line; do
+  tier_guidance="$tier_guidance
+  - $line"
+done < <(gitlore_active_tier_scopes "$mempath")
 
 if [ -n "$tier_guidance" ]; then
   protocol_ctx="$protocol_ctx

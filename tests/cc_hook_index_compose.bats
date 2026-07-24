@@ -107,6 +107,46 @@ feed() { printf '%s' "$1" | bash "$HOOK"; }
   [ ! -e memory/gone.md ]
 }
 
+# --- Post-mount triage nudge (D17 triage-automation design) ---
+
+@test "an index-only batch composes but emits no triage directive" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  run feed "$(batch "$PWD/memory/MEMORY.md")"
+  [ "$status" -eq 0 ]
+  grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  run -1 jq -e '.hookSpecificOutput.additionalContext | test("active-tier")' <<< "$output"
+}
+
+@test "a manifest-touching batch emits a triage directive naming the active tier's scope" {
+  run feed "$(batch "$PWD/memory/.gitlore-tiers")"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory/ddaanet")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for ddaanet")'
+}
+
+@test "the triage directive names every active tier's own scope, not a fixed dichotomy" {
+  make_tier_in_memory otherteam
+  set_tier_manifest ddaanet otherteam
+  run feed "$(batch "$PWD/memory/.gitlore-tiers")"
+  [ "$status" -eq 0 ]
+  hookout="$output"
+  jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for ddaanet")' <<< "$hookout"
+  jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for otherteam")' <<< "$hookout"
+  [[ "$hookout" != *"project-specific"* ]]
+  [[ "$hookout" != *"single user"* ]]
+}
+
+@test "no triage directive when the manifest changes to zero active tiers" {
+  run feed "$(batch "$PWD/memory/.gitlore-tiers")"
+  [ "$status" -eq 0 ]
+  set_tier_manifest
+  run feed "$(batch "$PWD/memory/.gitlore-tiers")"
+  [ "$status" -eq 0 ]
+  # No active tier left to route to, so nothing is emitted at all — check the
+  # raw string, not via jq, since a truly empty (no-JSON) output is the point.
+  [[ "$output" != *"active-tier"* ]]
+}
+
 @test "no-op outside a gitlore repo" {
   local outside="$BATS_TEST_TMPDIR/outside"
   mkdir -p "$outside"
