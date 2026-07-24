@@ -241,6 +241,34 @@ teardown() { teardown_tmp_repo; }
   [ "$(grep -c 'shared.md' memory/MEMORY.md)" -eq 1 ]
 }
 
+@test "removing an active tier's root line drops it from the carrier in one pass" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet keep.md "stays"
+  seed_tier_bullet ddaanet drop.md "goes away"
+  gitlore_compose memory
+  grep -qF 'ddaanet/keep.md' memory/MEMORY.md
+  grep -qF 'ddaanet/drop.md' memory/MEMORY.md
+
+  # The agent deletes the fact and edits only the root index, the way the
+  # write instructions describe — never touching the carrier by hand.
+  sed -i.bak '/ddaanet\/drop\.md/d' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  run ! grep -qF 'drop.md' memory/ddaanet/MEMORY.md
+  grep -qF -- '- [keep](keep.md) — stays' memory/ddaanet/MEMORY.md
+  run ! grep -qF 'ddaanet/drop.md' memory/MEMORY.md
+  grep -qF 'ddaanet/keep.md' memory/MEMORY.md
+
+  # And it stays gone — no later compose resurrects it from a stale mirror.
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  run ! grep -qF 'drop.md' memory/ddaanet/MEMORY.md
+  run ! grep -qF 'ddaanet/drop.md' memory/MEMORY.md
+}
+
 @test "manifest order is tier block order" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
