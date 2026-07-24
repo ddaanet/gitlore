@@ -31,7 +31,7 @@ memory".
 
 Ask the user for whatever is missing. Do not guess a URL.
 
-## 2. Write the intent file, and usually the manifest line too
+## 2. Write the intent file
 
 Write `.claude/gitlore-add-tier` — `key=value`, one per line, value is the rest
 of the line:
@@ -48,33 +48,29 @@ name=ddaanet
 description=Cross-project facts shared by all ddaanet repositories
 ```
 
-A mounted tier is **inactive** until it is listed. Activation and precedence
-are one deliberate file, `memory/.gitlore-tiers`: one tier name per line, file
-order is precedence (top wins), listed = active.
+Activation and precedence live in one file, `memory/.gitlore-tiers`: one tier
+name per line, file order is precedence (top wins), listed = active. The hook
+mounts the tier **and** activates it — appending its name to the bottom of
+`.gitlore-tiers` (lowest precedence, so it never outranks a tier this repo
+already trusted) — as one step, then recomposes the root index within the same
+batch. There is no separate manifest edit for you to make: the intent you just
+wrote already names the one tier being added, so there is nothing left to
+settle deliberately.
 
-**Default to mounting and activating in the same turn**: write the intent file
-above *and* append the tier's name to `memory/.gitlore-tiers` (or insert it
-where the user wants it ranked) before the turn ends. The hook chain mounts
-the tier and composes its pointer lines into the root index within the same
-batch — one turn gets you a usable tier. Write the intent alone only when the
-tier should stay **dormant** (mounted but not yet listed); add the manifest
-line in a later turn to activate it.
-
-Then **stop and let the turn end**. The hooks run at the end of the batch and
-their reports come back to you. Do not poll for them, and do not run
+Then **stop and let the turn end**. The hook runs at the end of the batch and
+its report comes back to you. Do not poll for it, and do not run
 `add-tier.sh` yourself — under the sandbox it cannot reach the remote.
-
-The intent file is consumed either way. If the mount report is a failure, a
-manifest line written in the same turn is left pointing at an absent module —
-composition will refuse and say so; that stray line is inert and costs
-nothing. Fix the intent's cause and write it again; the retry heals both.
 
 Read the composition report:
 
-- **Refused** — the store is left untouched and the reason is named. Fix it and
-  edit the manifest again.
+- **Refused** — the store is left untouched and the reason is named. Fix it,
+  by hand, and re-trigger composition with any index edit.
 - **Composed** — done. Do not re-read the indexes to verify; composition moves
   lines, it never rewrites them.
+
+If you want the new tier ranked somewhere other than the bottom, edit
+`memory/.gitlore-tiers` yourself afterward — a plain reorder, which retriggers
+composition like any other manifest edit.
 
 ## 3. Triage existing local memory against the new tier
 
@@ -91,6 +87,6 @@ tier — that reconcile is a separate, unautomated step.
 ## 4. Report
 
 Tell the user the tier's name, its remote, its routing guidance, and where it
-now ranks (or that it was left dormant). Mention that the mount is staged in
-`memory/.gitmodules` and rides the next ordinary commit — nothing else is
-theirs to do.
+now ranks. Mention that the mount and activation are staged in `memory/`
+(`.gitmodules` and `.gitlore-tiers`) and ride the next ordinary commit —
+nothing else is theirs to do.

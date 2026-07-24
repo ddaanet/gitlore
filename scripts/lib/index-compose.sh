@@ -337,6 +337,91 @@ gitlore_compose_write() {
 # invokes this function as an `if` condition, which disables errexit for the
 # whole call — so a failed `mv` or a full disk reported success and left the
 # tier index silently unchanged.
+
+# Run gitlore_compose + gitlore_compose_dangling and, when $2 is non-empty,
+# the post-mount triage nudge — then set GITLORE_COMPOSE_SYSMSG and
+# GITLORE_COMPOSE_CTX (either may end up empty: nothing worth reporting).
+# Shared by the PostToolBatch recompose hook (cc-hooks/index-compose.sh, which
+# detects a touch via .tool_calls[]) and add-tier-batch.sh (which writes the
+# manifest itself, outside any tool call, and so has nothing for that detection
+# to see — it calls this directly instead, with $2 always set).
+# Depends on gitlore_active_tier_scopes (util.sh) and
+# gitlore_get_frontmatter_description (index-sync.sh); callers must source both.
+# Args: $1 = mempath, $2 = non-empty when the manifest changed this batch.
+gitlore_compose_and_report() {
+  local mempath="$1" manifest_touched="$2"
+  local sysmsg="" ctx="" compose_rc=0 result
+
+  result=$(gitlore_compose "$mempath") || compose_rc=$?
+  if [ "$compose_rc" -eq 0 ]; then
+    if [ -n "$result" ]; then
+      local n unit
+      n=$(printf '%s\n' "$result" | grep -c '^composed ')
+      if [ "$n" -eq 1 ]; then unit="index"; else unit="indexes"; fi
+      sysmsg="gitlore: recomposed tier pointers ($n $unit)"
+      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and mirrored root-authored tier lines down into their carrier. This is expected and complete — do not re-read or re-edit them to verify. Composition moves lines only; it never changes a line's text.
+$result"
+    fi
+
+    # The fifth validation reports rather than refuses, so it runs on the
+    # composed store and rides the same message whether or not anything wrote.
+    local dangling d dunit
+    dangling=$(gitlore_compose_dangling "$mempath")
+    if [ -n "$dangling" ]; then
+      d=$(printf '%s\n' "$dangling" | grep -c .)
+      if [ "$d" -eq 1 ]; then dunit="pointer"; else dunit="pointers"; fi
+      sysmsg="${sysmsg:+$sysmsg
+}gitlore: $d dangling index $dunit — a line names a file that is not there"
+      ctx="${ctx:+$ctx
+
+}These memory index lines point at files that do not exist. Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Either restore the file or remove the line — removing it deletes nothing.
+$dangling"
+    fi
+
+    # Post-mount triage nudge (D17 triage-automation design): the active-tier
+    # set may just have changed, so gate on the manifest specifically, not any
+    # compose. Scopes come from the live frontmatter of each active tier —
+    # never a fixed dichotomy — so this reads correctly whether one tier is
+    # active or several, and whatever each one's own scope says.
+    if [ -n "$manifest_touched" ]; then
+      local scopes n2 tunit scope_lines
+      scopes=$(gitlore_active_tier_scopes "$mempath")
+      if [ -n "$scopes" ]; then
+        n2=$(printf '%s\n' "$scopes" | grep -c .)
+        if [ "$n2" -eq 1 ]; then tunit="tier"; else tunit="tiers"; fi
+        sysmsg="${sysmsg:+$sysmsg
+}gitlore: active-tier set changed ($n2 $tunit) — triage local memory against their scopes"
+        scope_lines=$(printf '%s\n' "$scopes" | sed 's/^/  - /')
+        ctx="${ctx:+$ctx
+
+}gitlore: the active-tier set just changed. For each fact in your LOCAL memory (a bare-path \`- [Title](file.md)\` line in $mempath/MEMORY.md), judge which active tier's scope best covers it — using each tier's OWN scope below, not a fixed rule:
+$scope_lines
+Route the best-fit ones up: \`mv\` the file into that tier's directory, and reprefix its root index line to \`<tier>/<file>.md\`. A fact no active tier's scope covers stays local. Do not move a fact already in a tier."
+      fi
+    fi
+  elif [ "$compose_rc" -eq 2 ]; then
+    # A write failed partway, so the fail-safe promise does NOT hold here: some
+    # indexes are composed and at least one is not.
+    sysmsg="gitlore: tier composition could not write an index — the memory indexes are only partly composed:
+$result"
+    ctx="gitlore tier composition failed while writing. Unlike a refusal, this leaves the memory indexes PARTLY composed: everything listed as composed was written, and the file named after them was not. Investigate that path (permissions, disk space, a read-only worktree), then edit MEMORY.md or memory/.gitlore-tiers again to retrigger the pass:
+$result"
+  else
+    # Fail-safe: nothing was written. Never surfaced with a non-zero hook exit —
+    # stdout JSON parses on exit 0 only, so a non-zero exit would DISCARD this
+    # message and make the failure less visible, not more (D14).
+    sysmsg="gitlore: tier composition refused — the memory indexes were left untouched:
+$result"
+    ctx="gitlore tier composition refused and wrote nothing. Fix the store by hand, then edit MEMORY.md or memory/.gitlore-tiers again to retrigger it. Problems:
+$result"
+  fi
+
+  # shellcheck disable=SC2034
+  GITLORE_COMPOSE_SYSMSG="$sysmsg"
+  # shellcheck disable=SC2034
+  GITLORE_COMPOSE_CTX="$ctx"
+}
+
 gitlore_compose() {
   local mempath="$1"
   local root="$mempath/MEMORY.md"

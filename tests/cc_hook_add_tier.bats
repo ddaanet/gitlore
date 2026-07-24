@@ -71,7 +71,7 @@ write_intent() {
   [ ! -f .claude/gitlore-add-tier ]          # one-shot
 }
 
-@test "add-tier hook: reports on BOTH channels and directs the agent to the manifest" {
+@test "add-tier hook: reports on BOTH channels, activates, and recomposes" {
   make_parent_with_memory
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
@@ -84,9 +84,24 @@ write_intent() {
   ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
   [ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$output")" = "PostToolBatch" ]
   [[ "$sys" == *"mounted at memory/ddaanet"* ]]
-  [[ "$ctx" == *"INACTIVE"* ]]
   [[ "$ctx" == *".gitlore-tiers"* ]]
   [[ "$ctx" == *"Do not run any git yourself"* ]]
+
+  # Activation is folded into the same hook call: no separate manifest edit,
+  # and the recompose + triage nudge already fired.
+  [ "$(cat memory/.gitlore-tiers)" = "ddaanet" ]
+  [[ "$sys" == *"active-tier set changed"* ]]
+}
+
+@test "add-tier hook: splices the tier's own bullets into the root index too" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  push_tier_fact ddaanet >/dev/null
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run run_batch
+  [ "$status" -eq 0 ]
+  grep -q '(ddaanet/x.md)' memory/MEMORY.md
 }
 
 # --- failure ---------------------------------------------------------------
