@@ -269,13 +269,26 @@ gitlore_compose_tier_bullets() {
   fi
 
   # Carrier order first; each line replaced by the root's version when present.
+  # A carrier line absent from rootbullets is dropped, completing a root-side
+  # deletion in this same pass instead of leaving a stale line for the next
+  # splice-up to resurrect into root — UNLESS rootbullets is empty outright,
+  # which means root carries no block for this tier at all yet (a brand-new
+  # tier's seed facts, or a dormant one whose block splice-up stopped writing)
+  # and there is nothing to diff against, so the carrier is the sole copy and
+  # must be preserved whole.
   if [ -f "$carrier" ]; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
       rootline=$(printf '%s' "$rootbullets" | gitlore_compose_pick "$path")
-      if [ -n "$rootline" ]; then printf '%s\n' "$rootline"; else printf '%s\n' "$line"; fi
-      seen="$seen
+      if [ -n "$rootline" ]; then
+        printf '%s\n' "$rootline"
+        seen="$seen
 $path"
+      elif [ -z "$rootbullets" ]; then
+        printf '%s\n' "$line"
+        seen="$seen
+$path"
+      fi
     done < <(gitlore_index_part "$carrier" bullets)
   fi
 
@@ -359,7 +372,7 @@ gitlore_compose_and_report() {
       n=$(printf '%s\n' "$result" | grep -c '^composed ')
       if [ "$n" -eq 1 ]; then unit="index"; else unit="indexes"; fi
       sysmsg="gitlore: recomposed tier pointers ($n $unit)"
-      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and mirrored root-authored tier lines down into their carrier. This is expected and complete — do not re-read or re-edit them to verify. Composition moves lines only; it never changes a line's text.
+      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, mirrored root-authored tier lines down into their carrier, and dropped any carrier line whose root counterpart is gone — so removing a tier fact's line from the root index is enough; its carrier copy is dropped in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition moves or drops lines; it never changes a line's text.
 $result"
     fi
 
