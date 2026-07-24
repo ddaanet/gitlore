@@ -82,7 +82,7 @@ write_intent() {
   [ "$output" = "ddaanet" ]
 }
 
-@test "add-tier: mount does NOT touch the activation manifest" {
+@test "add-tier: mount activates the tier as its own final step" {
   make_parent_with_memory
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
@@ -90,10 +90,25 @@ write_intent() {
   run bash "$ADD_TIER"
   [ "$status" -eq 0 ]
 
-  # Mounted but dormant: activation is the agent's deliberate final step.
-  [ ! -e memory/.gitlore-tiers ]
-  [[ "$output" == *"MOUNTED but INACTIVE"* ]]
+  # The intent already named this exact tier — no separate deliberate edit
+  # needed to activate it.
+  [ -f memory/.gitlore-tiers ]
+  [ "$(cat memory/.gitlore-tiers)" = "ddaanet" ]
+  [[ "$output" == *"activated"* ]]
   [[ "$output" == *".gitlore-tiers"* ]]
+}
+
+@test "add-tier: a second mount appends at the bottom, below an already-active tier" {
+  make_parent_with_memory
+  set_tier_manifest existing
+  bare=$(make_tier_remote ddaanet)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run bash "$ADD_TIER"
+  [ "$status" -eq 0 ]
+
+  # Lowest precedence: never outranks a tier this repo already trusted.
+  [ "$(cat memory/.gitlore-tiers)" = "$(printf 'existing\nddaanet')" ]
 }
 
 @test "add-tier: mount reports the tier's routing guidance" {
@@ -362,7 +377,7 @@ write_intent() {
   [ "$output" = "$desc" ]
 }
 
-@test "add-tier: create leaves the tier inactive too" {
+@test "add-tier: create activates the tier too" {
   make_parent_with_memory
   git init -q --bare "$TMP_REPO/.new-tier.git"
   write_intent "mode=create" "name=orgwide" "url=$TMP_REPO/.new-tier.git" \
@@ -370,8 +385,8 @@ write_intent() {
 
   run bash "$ADD_TIER"
   [ "$status" -eq 0 ]
-  [ ! -e memory/.gitlore-tiers ]
-  [[ "$output" == *"MOUNTED but INACTIVE"* ]]
+  [ "$(cat memory/.gitlore-tiers)" = "orgwide" ]
+  [[ "$output" == *"activated"* ]]
 }
 
 @test "add-tier: create against an unreachable url mounts nothing" {
@@ -387,18 +402,13 @@ write_intent() {
 
 # --- the composed whole ----------------------------------------------------
 
-@test "add-tier: mount then list activates the tier for composition" {
+@test "add-tier: mount activates the tier for composition without a further edit" {
   make_parent_with_memory
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
   run bash "$ADD_TIER"
   [ "$status" -eq 0 ]
 
-  run gitlore_active_tiers memory
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-
-  set_tier_manifest ddaanet
   run gitlore_active_tiers memory
   [ "$status" -eq 0 ]
   [ "$output" = "ddaanet" ]

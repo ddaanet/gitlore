@@ -43,8 +43,9 @@ fi
 [ "$tier_head" = "$tier_live" ] || \
   fail "tier HEAD ($tier_head) is not at live ($tier_live)"
 
-# 5. Activated. add-tier.sh deliberately never touches the manifest; the agent
-#    does, as its final step. An unlisted tier is mounted but dormant.
+# 5. Activated. add-tier.sh appends the tier to the manifest as its own final
+#    step — the intent already named this exact tier, so no separate agent edit
+#    is needed. An unlisted tier would be mounted but dormant.
 [ -f "$MEM/.gitlore-tiers" ] || fail "no activation manifest at memory/.gitlore-tiers"
 grep -qx "$TIER" "$MEM/.gitlore-tiers" || \
   fail "manifest does not list '$TIER' — the tier is mounted but inactive. Manifest: $(tr '\n' ' ' < "$MEM/.gitlore-tiers")"

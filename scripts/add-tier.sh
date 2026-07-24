@@ -6,15 +6,18 @@
 # same route as the FR11 commit path, and doubly necessary here because mounting
 # CLONES and the agent's command sandbox has no network.
 #
-# It deliberately does NOT touch memory/.gitlore-tiers. Activation is the
-# manifest, the manifest is edited deliberately (D17), and the gap between
-# "module exists" and "module self-describes" is exactly what keeps a half-formed
-# tier invisible to composition. The agent lists the tier as its final step,
-# which re-triggers the 3-ii recompose.
+# Activates the tier as its own final step — appends it to
+# memory/.gitlore-tiers, lowest precedence (bottom of the file). The intent
+# already named this exact tier, so there is no half-formed-tier ambiguity left
+# for a second, separate deliberate edit to resolve (unlike SessionStart's
+# passive discovery-by-enclosure, which must never assume a submodule's mere
+# presence means it should be active). Reordering afterward, or listing a tier
+# mounted by hand, stays a plain manual edit to the file.
 #
 # It also makes no commit inside the memory store: gitlore_tier_paths reads
 # memory/.gitmodules from the WORKING TREE, so a staged `submodule add` is
-# already discoverable and the FR11 gate stays the sole committer.
+# already discoverable and the FR11 gate stays the sole committer — the
+# manifest write is the same kind of working-tree-only edit.
 set -euo pipefail
 unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
 
@@ -245,6 +248,16 @@ fi
 if [ -n "$warnings" ]; then
   printf 'gitlore: mounted with warnings:%s\n' "$warnings"
 fi
-printf 'gitlore: it is MOUNTED but INACTIVE. Add the line "%s" to %s/.gitlore-tiers to activate it — the file order is precedence, and that edit recomposes the indexes.\n' \
-  "$name" "$mempath"
+
+# Activate as the final mechanical step. The intent that named this exact tier
+# is already unambiguous — unlike SessionStart's passive discovery-by-enclosure
+# (which must not assume presence implies activation, since a stray or
+# manually-added submodule could exist for unrelated reasons), this run only
+# happens because the agent explicitly asked to add THIS tier. Appended at the
+# bottom (lowest precedence, file order top-to-bottom): the least surprising
+# default, since it never outranks a tier this repo already trusted. Reordering
+# afterward is a plain edit to $mempath/.gitlore-tiers, same as before.
+printf '%s\n' "$name" >> "$mempath/.gitlore-tiers"
+printf 'gitlore: activated — appended to %s/.gitlore-tiers (lowest precedence; reorder the file by hand to change that).\n' \
+  "$mempath"
 exit 0

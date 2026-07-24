@@ -9,6 +9,14 @@ set -euo pipefail
 # self-modification, and mounting CLONES while the command sandbox has no
 # network. A hook runs outside both.
 #
+# add-tier.sh activates the tier as its own final step (appends it to
+# memory/.gitlore-tiers) — the intent already named this exact tier, so there is
+# no half-formed-tier ambiguity left for a second, separate deliberate edit to
+# guard against. That write never goes through a CC Write/Edit tool call, so
+# index-compose.sh's tool_calls-based trigger cannot see it; this hook calls the
+# shared compose-and-report helper directly and folds its result into the one
+# JSON response a hook may emit.
+#
 # The intent file IS the signal, so the batch payload is unused.
 #
 # One-shot, like the recall request and unlike the commit trigger: an add-tier
@@ -19,6 +27,13 @@ set -euo pipefail
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
+# gitlore_compose_and_report, to recompose after add-tier.sh activates the tier.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+# gitlore_get_frontmatter_description / gitlore_active_tier_scopes dependency,
+# needed by gitlore_compose_and_report's triage-nudge block.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
 cat >/dev/null || true   # drain stdin; the intent file, not the payload, drives us
 
@@ -41,9 +56,21 @@ out=$(bash "$PLUGIN_ROOT/scripts/add-tier.sh" 2>&1) || rc=$?
 rm -f "$intent"
 
 if [ "$rc" -eq 0 ]; then
-  emit "$out" "$out
+  # add-tier.sh already appended $name to the manifest — the active-tier set
+  # changed, so recompose and let the triage nudge fire, same as a manual edit.
+  gitlore_compose_and_report "$mempath" 1
+  sysmsg="$out"
+  ctx="$out
 
-The tier is mounted but INACTIVE — nothing composes or advertises until it is listed. Your next step is the deliberate one: add its name as a line in $mempath/.gitlore-tiers (file order is precedence, top wins), which retriggers composition. Do not run any git yourself; the mount is already staged in $mempath/.gitmodules and rides the next parent commit."
+Do not run any git yourself; the mount and activation are already staged in $mempath (the submodule in .gitmodules, the tier's name in .gitlore-tiers) and ride the next parent commit."
+  if [ -n "$GITLORE_COMPOSE_SYSMSG" ]; then
+    sysmsg="$sysmsg
+$GITLORE_COMPOSE_SYSMSG"
+    ctx="$ctx
+
+$GITLORE_COMPOSE_CTX"
+  fi
+  emit "$sysmsg" "$ctx"
 else
   emit "$out" "gitlore add-tier failed and mounted nothing. The intent file was consumed. Fix the cause, then write $intent again with corrected key=value lines. Problem:
 $out"

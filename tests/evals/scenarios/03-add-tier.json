@@ -1,6 +1,6 @@
 {
   "name": "Add tier — mount an existing tier and activate it",
-  "description": "Agent runs /add-tier, writes the intent file and no git; the PostToolBatch hook mounts the tier remote (outside the sandbox, which has no network) and reports back; agent lists the tier in memory/.gitlore-tiers, and that edit recomposes the tier's pointer lines into the root index",
+  "description": "Agent runs /add-tier, writes the intent file and no git; the PostToolBatch hook mounts the tier remote (outside the sandbox, which has no network), activates it in memory/.gitlore-tiers as its own final step, and recomposes the tier's pointer lines into the root index",
   "setup": "tier-remote",
   "assert": "add-tier",
   "initial_memory": "# Memory Index\n",
