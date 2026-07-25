@@ -55,6 +55,8 @@ diverge_memory_with_index() {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   set_tier_manifest ddaanet
+  # A root-authored tier line with no prior compose: the base is empty, so the
+  # merge is a union and the line mirrors down as a fresh add.
   # The project line precedes the tier line, which composition is what reorders:
   # if the committed index is tier-block-first, the pass ran before the commit.
   diverge_memory_with_index '# Memory Index

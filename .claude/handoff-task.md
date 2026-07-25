@@ -1,14 +1,15 @@
-Landed the compose resurrection-bug fix (root/carrier merge drops a carrier
-line once root has an established block for that tier) as commit 420d9dc,
-with tests, the plan brief, and a memory catch-up. The narrower residual gap
-described in docs/plans/brief-compose-full-tier-clear-gap.md — clearing every
-root-authored line for an active tier in one edit doesn't propagate — is
-still open, not started.
+## Current task
+
+The path-keyed three-way root↔carrier compose rework and the live ddaanet heal
+are complete, tested (`just precommit` green), and verified (root ddaanet 78 /
+carrier 78 / 0 dangling / carrier clean at `origin/live`). The FR11 parent commit
+lands this episode. The next body of work is the sibling-repo migration worklist
+documented in `memory/project_gitlore_global_memory.md` — promote each repo's
+portable facts into the `ddaanet/` tier, front-loaded handoff → micro per the
+distinct-yield ranking; every repo's `/gitlore:add-tier` now self-triages.
 
 ## Open decisions
 
-- How (or whether) to close the full-tier-clear gap: accept and document as
-  is; add a persisted last-synced marker per tier; detect the touch via the
-  actual tool-call diff instead of post-hoc file comparison; or require a
-  full-tier clear to go through an explicit deactivate/remount action instead
-  of hand-editing every root line out.
+- Push of the FR11 parent commit is held for David's diff review. Safe when it
+  happens: local ddaanet `live` now equals `origin/live`, so the tier has nothing
+  to push — the corrupt unpushed `cabd7c6` is unreachable and never propagates.

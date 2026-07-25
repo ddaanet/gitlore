@@ -162,6 +162,30 @@ teardown() {
   echo "$output" | jq -e '.systemMessage | test("resolve")'
 }
 
+@test "dangling index pointers: one capped systemMessage + a capped additionalContext (D14)" {
+  make_parent_with_memory
+  # Seven root pointers whose target files do not exist — a dangling report
+  # longer than the 5-line cap. It must arrive as ONE notice that lists five and
+  # counts the rest, on BOTH the user channel (systemMessage) and the agent
+  # channel (additionalContext), never the full flood the raw report would be.
+  for i in 1 2 3 4 5 6 7; do
+    printf -- '- [missing %s](gone_%s.md) — a hook\n' "$i" "$i" >> memory/MEMORY.md
+  done
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  # systemMessage: names the count, lists exactly five targets, summarizes the rest.
+  echo "$output" | jq -e '.systemMessage | test("points at 7 missing files")'
+  echo "$output" | jq -e '.systemMessage | test("… and 2 more")'
+  [ "$(echo "$output" | jq -r '.systemMessage' | grep -c 'names no file')" -eq 5 ]
+  # additionalContext: the agent is told the index is stale — also capped, so the
+  # always-loaded index it is about to trust is not silently believed.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("STALE")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("… and 2 more")'
+  [ "$(echo "$output" | jq -r '.hookSpecificOutput.additionalContext' | grep -c 'names no file')" -eq 5 ]
+}
+
 @test "sentinel 'direct' re-applies direct wiring" {
   make_parent_with_memory
   mkdir -p .claude
