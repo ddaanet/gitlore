@@ -204,6 +204,8 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
+  # No prior compose, so the base is empty: a root-authored line the carrier
+  # lacks is a fresh add and mirrors down.
   seed_root_bullet "ddaanet/new_fact.md" "authored in the root"
   run gitlore_compose memory
   [ "$status" -eq 0 ]
@@ -250,9 +252,12 @@ teardown() { teardown_tmp_repo; }
   gitlore_compose memory
   grep -qF 'ddaanet/keep.md' memory/MEMORY.md
   grep -qF 'ddaanet/drop.md' memory/MEMORY.md
+  # That first compose recorded the three-way base (both facts), so the delete
+  # below has something to diff against.
 
-  # The agent deletes the fact and edits only the root index, the way the
-  # write instructions describe — never touching the carrier by hand.
+  # The agent deletes the fact and edits only the root index, the way the write
+  # instructions describe — never touching the carrier by hand. Against the base
+  # the root omission reads as a delete (not a fresh carrier add), so it drops.
   sed -i.bak '/ddaanet\/drop\.md/d' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
 
   run gitlore_compose memory
@@ -267,6 +272,63 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   run ! grep -qF 'drop.md' memory/ddaanet/MEMORY.md
   run ! grep -qF 'ddaanet/drop.md' memory/MEMORY.md
+}
+
+@test "an upstream-retracted tier fact syncs to a clean drop, not a resurrection" {
+  # The real incident: another consumer deleted a shared fact (carrier line AND
+  # file) and pushed; we fast-forwarded that clean carrier in, but the root
+  # index still carried the stale line. Compose must complete the deletion —
+  # against the base the carrier's omission is a delete, not the root line a new
+  # add — instead of resurrecting the line into the freshly-cleaned carrier.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet kept.md "survives the sync"
+  seed_tier_bullet ddaanet retracted.md "here until upstream drops it"
+  gitlore_compose memory                    # records the base holding both facts
+  grep -qF 'ddaanet/retracted.md' memory/MEMORY.md
+
+  # An upstream fast-forward drops the fact: its carrier line and file are gone,
+  # but the root index (not yet reprojected) still lists it.
+  sed -i.bak '/retracted\.md/d' memory/ddaanet/MEMORY.md && rm -f memory/ddaanet/MEMORY.md.bak
+  rm -f memory/ddaanet/retracted.md
+  grep -qF 'ddaanet/retracted.md' memory/MEMORY.md         # the stale root remnant
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  # The retraction propagated: gone from both indexes, the kept fact untouched.
+  run ! grep -qF 'retracted.md' memory/MEMORY.md
+  run ! grep -qF 'retracted.md' memory/ddaanet/MEMORY.md
+  grep -qF 'ddaanet/kept.md' memory/MEMORY.md
+  grep -qF -- '- [kept](kept.md) — survives the sync' memory/ddaanet/MEMORY.md
+
+  # No dangling remnant lingers, and a second pass changes nothing (idempotent).
+  run gitlore_compose_dangling memory
+  [ -z "$output" ]
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run ! grep -qF 'retracted.md' memory/MEMORY.md
+}
+
+@test "an upstream-added carrier fact reaches the root even when its block is non-empty" {
+  # The mirror of the retraction: a fact another consumer ADDED arrives in the
+  # carrier by fast-forward. Against the base its presence is a new add (not a
+  # root-side deletion), so splice-up lifts it into the root — the case a plain
+  # carrier-not-in-root drop used to eat once the root block was established.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet existing.md "already here"
+  gitlore_compose memory                    # base + root now hold the existing fact
+  grep -qF 'ddaanet/existing.md' memory/MEMORY.md
+
+  # Upstream fast-forward brings a new carrier line the root has never seen.
+  seed_tier_bullet ddaanet arrived.md "new from another repo"
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  grep -qF -- '- [arrived](ddaanet/arrived.md) — new from another repo' memory/MEMORY.md
+  grep -qF 'ddaanet/existing.md' memory/MEMORY.md
 }
 
 @test "manifest order is tier block order" {
@@ -361,8 +423,14 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
-  seed_root_bullet "ddaanet/vanished.md" "authored in the root"
-  gitlore_compose memory                    # mirrors the line down into the carrier
+  # A file-only deletion: the shared carrier still advertises the fact (line
+  # kept), only the local file copy is gone. The carrier line keeps it alive in
+  # both indexes — unlike a retracted fact, whose carrier line is also gone and
+  # which compose drops. So it is a genuine both-indexes dangling: report once.
+  seed_tier_bullet ddaanet vanished.md "a portable fact"
+  rm memory/ddaanet/vanished.md
+  gitlore_compose memory                    # splices the surviving line up into the root
+  grep -qF 'ddaanet/vanished.md' memory/MEMORY.md
   run gitlore_compose_dangling memory
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | grep -c 'vanished.md')" -eq 1 ]
@@ -392,6 +460,28 @@ teardown() { teardown_tmp_repo; }
   grep -qF -- '- [gone](gone.md) — stale line' memory/MEMORY.md
   # And compose's own report stays a list of what it WROTE.
   [[ "$output" != *"names no file"* ]]
+}
+
+@test "cap_list passes a list at or under the cap through unchanged" {
+  run bash -c 'source "$1"; printf "a\nb\nc\n" | gitlore_cap_list' _ "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" = "a
+b
+c" ]
+}
+
+@test "cap_list truncates past the cap and counts the remainder in one summary" {
+  run bash -c 'source "$1"; printf "l%s\n" 1 2 3 4 5 6 7 | gitlore_cap_list' _ "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c '^l')" -eq 5 ]
+  [[ "$output" == *"… and 2 more"* ]]
+}
+
+@test "cap_list ignores blank lines when counting and printing" {
+  run bash -c 'source "$1"; printf "a\n\nb\n\n" | gitlore_cap_list' _ "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" = "a
+b" ]
 }
 
 @test "a failed index write is reported, not reported as success" {

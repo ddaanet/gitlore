@@ -122,3 +122,4 @@ seed_tier_bullet() {
 seed_root_bullet() {
   printf -- '- [%s](%s) — %s\n' "$(basename "${1%.md}")" "$1" "$2" >> memory/MEMORY.md
 }
+

@@ -230,8 +230,22 @@ else
   # absent leaves the composed output correct, so it is named, not acted on.
   dangling=$(gitlore_compose_dangling "$mempath")
   if [ -n "$dangling" ]; then
-    add_sysmsg "gitlore: the memory index points at files that do not exist. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
-$dangling"
+    # One synthetic notice, capped: a whole tier's worth of stale pointers must
+    # not flood the user's systemMessage (nor get UI-truncated to "and many more
+    # lines"). List a few, count the rest.
+    dangling_count=$(printf '%s\n' "$dangling" | grep -c .)
+    if [ "$dangling_count" -eq 1 ]; then dangling_unit="file"; else dangling_unit="files"; fi
+    dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
+    add_sysmsg "gitlore: the memory index points at $dangling_count missing $dangling_unit. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
+$dangling_capped"
+    # The agent gets a matching, equally-capped additionalContext: the
+    # systemMessage is user-only (D14), so without this the agent has no idea the
+    # always-loaded index it is about to trust is stale. Terse on purpose — enough
+    # to know it is broken and what to do, not the whole list.
+    protocol_ctx="$protocol_ctx
+
+gitlore: the memory index is STALE — $dangling_count root MEMORY.md pointer $dangling_unit name a target absent from the memory store (composition still produced a correct index; nothing was deleted). Likely another consumer merged or renamed those facts in a shared tier. Reconcile the root index: drop each stale line, or redirect it to where the fact now lives.
+$dangling_capped"
   fi
 fi
 

@@ -203,6 +203,27 @@ $path"
   return 0
 }
 
+# Echo at most GITLORE_DANGLING_CAP non-empty lines of stdin; when more remain,
+# append a "… and N more" summary in their place. One whole tier going stale at
+# once (another consumer merging or renaming a cluster of facts in a shared tier)
+# produces a dangling report as long as the cluster — dozens of lines — which
+# floods the user's systemMessage AND the agent's additionalContext and, in the
+# UI, gets truncated to an unhelpful "and many more lines". The cap keeps the
+# report legible: enough lines to see what kind of breakage it is, a count for
+# the rest. Non-empty lines only, so a trailing blank from a "$var" append is
+# neither counted nor shown.
+GITLORE_DANGLING_CAP="${GITLORE_DANGLING_CAP:-5}"
+gitlore_cap_list() {
+  local input total
+  input=$(grep . || true)
+  [ -n "$input" ] || return 0
+  total=$(printf '%s\n' "$input" | wc -l | tr -d ' ')
+  printf '%s\n' "$input" | head -n "$GITLORE_DANGLING_CAP"
+  if [ "$total" -gt "$GITLORE_DANGLING_CAP" ]; then
+    printf '… and %d more\n' "$((total - GITLORE_DANGLING_CAP))"
+  fi
+}
+
 # Print one report line per pointer bullet whose target file is absent; return 0
 # either way. This is the fifth compose validation, and the only one that
 # REPORTS instead of refusing: a dangling line does not make the composed output
@@ -247,60 +268,91 @@ EOF
   return 0
 }
 
-# Print the merged bullet list for tier $2 under store $1, unprefixed and in
-# carrier order with root-only lines appended. The ROOT's text wins on a path
-# present in both: the root index is canonical for a line's text (D17).
+# Print the merged carrier bullet list for tier $2 under store $1, unprefixed,
+# in carrier order with root-only survivors appended. A path-keyed THREE-WAY
+# merge of root (ours) and carrier (theirs) against a base — the only thing that
+# tells an ADD apart from a DELETE, which two snapshots alone cannot.
+#
+# The base is the carrier as of the LAST COMPOSE — the point root and carrier
+# were last reconciled — held in `refs/gitlore/compose-base` in the tier and
+# refreshed at the end of every successful pass (`gitlore_compose_save_base`).
+# It deliberately tracks composes, not commits: a commit can record a carrier
+# edit without composing root (the float the design allows), so the committed
+# gitlink runs AHEAD of what root reflects and would read a not-yet-projected
+# add as a delete. No base ref yet (before the first compose) → an empty base,
+# so the merge is a union — nothing existed to have been deleted.
+#
+# Presence per path: present at base survives only if BOTH sides still carry it
+# (a delete on either side wins); new since base survives if EITHER side added
+# it. The root's text wins wherever root has the line (the canonical index D17);
+# otherwise the carrier's text stands. Order: carrier first, then root-only.
 gitlore_compose_tier_bullets() {
   local mempath="$1" tier="$2"
   local carrier="$mempath/$tier/MEMORY.md"
   local root="$mempath/MEMORY.md"
-  local line path stripped rootline seen=""
+  local line path
 
-  # Root bullets belonging to this tier, prefix stripped, keyed by path.
-  local rootbullets=""
+  # ours — root's bullets for this tier, prefix stripped; the canonical text.
+  local ours="" ourpaths=""
   if [ -f "$root" ]; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in "$tier"/*) ;; *) continue ;; esac
-      stripped=$(gitlore_bullet_deprefix "$line" "$tier") || continue
-      rootbullets="$rootbullets$stripped
+      line=$(gitlore_bullet_deprefix "$line" "$tier") || continue
+      ours="$ours$line
+"
+      ourpaths="$ourpaths${path#"$tier"/}
 "
     done < "$root"
   fi
 
-  # Carrier order first; each line replaced by the root's version when present.
-  # A carrier line absent from rootbullets is dropped, completing a root-side
-  # deletion in this same pass instead of leaving a stale line for the next
-  # splice-up to resurrect into root — UNLESS rootbullets is empty outright,
-  # which means root carries no block for this tier at all yet (a brand-new
-  # tier's seed facts, or a dormant one whose block splice-up stopped writing)
-  # and there is nothing to diff against, so the carrier is the sole copy and
-  # must be preserved whole.
+  # theirs — the carrier working tree's bullets, in carrier order.
+  local theirs="" theirpaths=""
   if [ -f "$carrier" ]; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
-      rootline=$(printf '%s' "$rootbullets" | gitlore_compose_pick "$path")
-      if [ -n "$rootline" ]; then
-        printf '%s\n' "$rootline"
-        seen="$seen
-$path"
-      elif [ -z "$rootbullets" ]; then
-        printf '%s\n' "$line"
-        seen="$seen
-$path"
-      fi
+      theirs="$theirs$line
+"
+      theirpaths="$theirpaths$path
+"
     done < <(gitlore_index_part "$carrier" bullets)
   fi
 
-  # Then root-only lines, in root order.
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    path=$(gitlore_bullet_path "$line") || continue
+  # base — presence only, from the last-compose marker. -q keeps rev-parse
+  # silent when the ref is absent (before the first compose), leaving base empty.
+  local basepaths=""
+  if git -C "$mempath/$tier" rev-parse -q --verify refs/gitlore/compose-base >/dev/null; then
+    while IFS= read -r line; do
+      path=$(gitlore_bullet_path "$line") || continue
+      basepaths="$basepaths$path
+"
+    done < <(git -C "$mempath/$tier" cat-file -p refs/gitlore/compose-base)
+  fi
+
+  # Merge: carrier order first, then root-only survivors, each path once.
+  local seen="" b o t
+  {
+    printf '%s' "$theirpaths"
+    printf '%s' "$ourpaths"
+  } | while IFS= read -r path; do
+    [ -n "$path" ] || continue
     printf '%s\n' "$seen" | grep -qxF -- "$path" && continue
-    printf '%s\n' "$line"
-  done <<EOF
-$rootbullets
-EOF
+    seen="$seen$path
+"
+    printf '%s\n' "$basepaths"  | grep -qxF -- "$path" && b=1 || b=0
+    printf '%s\n' "$ourpaths"   | grep -qxF -- "$path" && o=1 || o=0
+    printf '%s\n' "$theirpaths" | grep -qxF -- "$path" && t=1 || t=0
+    if [ "$b" = 1 ]; then
+      { [ "$o" = 1 ] && [ "$t" = 1 ]; } || continue   # base line: a delete on either side wins
+    else
+      { [ "$o" = 1 ] || [ "$t" = 1 ]; } || continue   # new line: an add on either side wins
+    fi
+    if [ "$o" = 1 ]; then
+      printf '%s' "$ours"   | gitlore_compose_pick "$path"   # root's text is canonical
+    else
+      printf '%s' "$theirs" | gitlore_compose_pick "$path"
+    fi
+  done
 }
 
 # Filter stdin (bullets) to the first one whose path is $1. Helper for the
@@ -378,17 +430,18 @@ $result"
 
     # The fifth validation reports rather than refuses, so it runs on the
     # composed store and rides the same message whether or not anything wrote.
-    local dangling d dunit
+    local dangling d dunit dangling_capped
     dangling=$(gitlore_compose_dangling "$mempath")
     if [ -n "$dangling" ]; then
       d=$(printf '%s\n' "$dangling" | grep -c .)
       if [ "$d" -eq 1 ]; then dunit="pointer"; else dunit="pointers"; fi
+      dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
       sysmsg="${sysmsg:+$sysmsg
 }gitlore: $d dangling index $dunit — a line names a file that is not there"
       ctx="${ctx:+$ctx
 
-}These memory index lines point at files that do not exist. Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Either restore the file or remove the line — removing it deletes nothing.
-$dangling"
+}These memory index lines point at files that do not exist ($d total). Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Either restore the file or remove the line — removing it deletes nothing.
+$dangling_capped"
     fi
 
     # Post-mount triage nudge (D17 triage-automation design): the active-tier
@@ -433,6 +486,18 @@ $result"
   GITLORE_COMPOSE_SYSMSG="$sysmsg"
   # shellcheck disable=SC2034
   GITLORE_COMPOSE_CTX="$ctx"
+}
+
+# Refresh a tier's three-way base to its just-composed carrier — a blob held in
+# refs/gitlore/compose-base (a ref, hence a GC root, so the blob is never
+# pruned). A later compose diffs both root and carrier against it to tell an add
+# from a delete. A missing carrier or a failed hash leaves the old base standing
+# rather than clearing it.
+gitlore_compose_save_base() {
+  local carrier="$1" tierpath="$2" blob
+  [ -f "$carrier" ] || return 0
+  blob=$(git -C "$tierpath" hash-object -w --stdin < "$carrier") || return 1
+  git -C "$tierpath" update-ref refs/gitlore/compose-base "$blob"
 }
 
 gitlore_compose() {
@@ -487,6 +552,17 @@ INNER
     return 2
   fi
   changed="$changed$out"
+
+  # Refresh each mounted tier's three-way base to the carrier just composed —
+  # the state root and carrier now agree on, the baseline the next pass diffs
+  # against. Guarded so a git -C never escapes an unchecked-out submodule.
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -e "$mempath/$tier/.git" ] || continue
+    gitlore_compose_save_base "$mempath/$tier/MEMORY.md" "$mempath/$tier"
+  done <<EOF
+$mounted
+EOF
 
   [ -n "$changed" ] && printf '%s\n' "$changed"
   return 0
