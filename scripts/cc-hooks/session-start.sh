@@ -13,6 +13,10 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+# gitlore_detect_stale_merge_state, so the tier re-detach below can tell a store
+# with a merge prepared in it from one it may safely check out.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 # Guard 1: gitlore.enabled
 # Guard on the file rather than suppressing jq: "no settings.json" is the normal
@@ -204,8 +208,32 @@ while IFS= read -r tier; do
         add_sysmsg "gitlore: tier '$tier' could not fetch from its remote; it may be stale. git said: $fetch_err" ;;
     esac
   fi
-  # Detach the working tree at live (the tier branch model — no named branch).
-  if git -C "$tierpath" show-ref --verify --quiet refs/heads/live; then
+  # Detach the working tree at live (the tier branch model — no named branch),
+  # unless a merge is prepared here. `git checkout` calls remove_branch_state(),
+  # which unlinks MERGE_HEAD and MERGE_MSG silently and on success; a prepared
+  # merge leaves the tier detached AT live, and a clean auto-merge stages no
+  # unmerged entries — so even this no-op re-checkout of the commit HEAD is
+  # already on succeeds and destroys the merge pointers while leaving the staged
+  # result behind. What survives is a state file with no MERGE_HEAD, which every
+  # guard reports as "manual intervention required": a merge that outlived one
+  # session was dead. Skip, and say so — a suppressed re-detach must not be
+  # silent, or the tier looks synced when it is mid-merge.
+  # `detect` rather than `guard_stale_merge_state`: the guard's directive tells
+  # the agent to abort and retry, which is wrong for a merge that is simply
+  # waiting to be landed, and it writes to stderr, which SessionStart does not
+  # show the user (D14).
+  if [ "$(gitlore_detect_stale_merge_state "$tierpath")" != "clean" ] \
+     || git -C "$tierpath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    add_sysmsg "gitlore: tier '$tier' has an unfinished merge, so its working tree was left as it is this session. Run /gitlore:resolve to land it."
+    # The agent gets its own line: systemMessage is user-only (D14), and the
+    # destructive acts here are ones the agent takes unprompted, so the
+    # prohibition leads and the remedy follows. Uncapped, unlike the dangling
+    # report — a gate yields on the first divergence it meets and stops, so two
+    # tiers mid-merge at once is not a state the tooling produces.
+    protocol_ctx="$protocol_ctx
+
+gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset it, or commit into it. Run /gitlore:resolve to land the merge before writing anything to that tier."
+  elif git -C "$tierpath" show-ref --verify --quiet refs/heads/live; then
     gitlore_git -C "$tierpath" checkout -q --detach live >/dev/null \
       || add_sysmsg "gitlore: tier '$tier' could not be checked out at live; skipped."
   fi

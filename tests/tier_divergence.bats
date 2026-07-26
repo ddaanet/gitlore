@@ -21,6 +21,7 @@ load helpers/divergence-fixtures
 PRE_COMMIT="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
 PRE_PUSH="$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
+SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 
 setup() {
   setup_tmp_repo
@@ -172,6 +173,49 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
   all="${output}${stderr}"
   [[ "$all" == *"not because of divergence"* ]]
   [ ! -f "$(tier_state_file ddaanet)" ]
+}
+
+# --- a prepared merge must survive the next session start ---
+
+# A prepared merge leaves the tier detached AT live with the merge staged, and a
+# clean auto-merge stages no unmerged entries — so SessionStart's tier re-detach
+# had nothing to refuse over: `checkout --detach live` succeeded on the commit
+# HEAD was already on and `remove_branch_state()` unlinked MERGE_HEAD/MERGE_MSG.
+# The state file then survived without MERGE_HEAD, which every guard reports as
+# "manual intervention required": any merge that outlived one session was dead.
+# Cleanliness is what makes it bite, so the fixture must merge cleanly — the
+# two sides touch different files.
+@test "SessionStart leaves a tier's prepared merge intact instead of re-detaching over it" {
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  advance_branch_with_file memory/ddaanet live other.md body "sideways" live
+  echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  approve "memory: record the org fact"
+  bash "$PRE_COMMIT" || true
+  merge_head=$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)
+  [ -n "$merge_head" ]
+  [ -f "$(git -C memory/ddaanet rev-parse --git-path MERGE_MSG)" ]
+  [ -f "$(tier_state_file ddaanet)" ]
+
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+
+  [ "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" = "$merge_head" ]
+  [ -f "$(git -C memory/ddaanet rev-parse --git-path MERGE_MSG)" ]
+  # And the skipped re-detach is reported, not silent: an untouched tier that
+  # says nothing is indistinguishable from one that synced.
+  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has an unfinished merge")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:resolve")'
+  # On BOTH channels: systemMessage is user-only (D14), and the acts that would
+  # destroy the merge — check out, reset, commit into — are the agent's to take.
+  # Matched on the whole phrase, not on the tier path alone: this store also has
+  # a dangling pointer, and its report names "memory/ddaanet/MEMORY.md", so a
+  # bare path match passes with no guard context emitted at all.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory/ddaanet holds an unfinished merge")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("Do not check it out, reset it, or commit into it")'
 }
 
 # --- the continuation follows the merge to its store ---
