@@ -20,6 +20,9 @@ trace := "false"
 # every memory commit. `.gitignore` is in, since it decides which not-yet-added
 # files the hash enumerates at all.
 #
+# Naming paths rather than inferring the tree is also what keeps the phantom
+# home dotfiles the sandbox surfaces in the working directory out of the hash.
+#
 # The declaration is an allow-list, so it narrows silently in two ways — a
 # pathspec matching nothing draws no complaint from `git ls-files`, and a new
 # top-level directory is simply never enumerated. The `justfile_gates` suite
