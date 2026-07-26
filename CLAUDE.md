@@ -39,7 +39,10 @@ you decide read-or-skip; the fact lives in the file.
 - Handoff files (`.claude/handoff-task.md`, `.claude/handoff.md`) are
   tooling-managed. Write them only through the handoff skill, and fold them into
   the same commit as the work they describe.
-- Conventional-commit prefixes are required; the gitmoji hook rewrites them.
+- Conventional-commit prefixes are required in the **parent** repo; the gitmoji
+  hook rewrites them. The memory approval summary is still a commit message —
+  subject line, blank line, body — but takes no prefix: a memory commit is
+  always documentation, so the prefix carries no information.
 - After a compaction, check `PWD`, `CLAUDE_PROJECT_DIR` and the gitStatus block
   against what the summary describes before acting — a summary says what, not
   where. If they disagree, stop and say so; don't `cd` to reconcile.
@@ -74,7 +77,7 @@ pointer in that repo is fine.
 - Encode behavior in the bats suite. Don't hand-build a fixture and assert in
   the shell — grep the suite first, the path is usually already covered.
 - Test the invocation path, not just the code: assert discovery and `[ -x ]`,
-  and that the suite is listed in `make test`. Green means nothing until you
+  and that `just test` actually reaches the suite. Green means nothing until you
   know what ran.
 - Automate by default; choose a manual check only when automation costs
   disproportionately more than the value.

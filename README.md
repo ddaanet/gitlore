@@ -26,14 +26,21 @@ the next session.
 
 ## Development
 
-    make test       # runs the bats suite
+    just test       # runs the bats suite
     just precommit  # version drift, shellcheck, then the bats suite
-    just prerelease # adds the happy-path evals — slow, and drives the real CLI
+    just evals      # the happy-path evals — slow, paid, drives the real CLI
+    just prerelease # the release gate
     just release    # depends on prerelease; bumps, tags, publishes
 
-Each gate records a content hash of the tree on success and skips when the tree
-is unchanged, so `just prerelease` right after a green `just precommit` re-runs
-only the evals.
+Each gate records a content hash of its declared inputs on success and skips
+when they are unchanged, so `just prerelease` right after a green
+`just precommit` skips outright. `GITLORE_GATE_FORCE=1` runs one anyway.
+
+The inputs are the `precommit_inputs` and `evals_inputs` variables at the top of
+the `justfile`. `memory/` and `docs/` are in neither, so a memory-only or
+docs-only commit leaves a green gate green. `agents/`, `commands/` and `skills/`
+are in the evals set only: editing what the plugin ships invalidates the evals,
+not the fast gate.
 
 Dependencies:
 - `bash` ≥ 3.2

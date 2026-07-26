@@ -1,0 +1,60 @@
+--- a/scripts/cc-hooks/memory-commit-batch.sh
++++ b/scripts/cc-hooks/memory-commit-batch.sh
+@@ -19,7 +19,17 @@
+
+ cat >/dev/null || true   # drain stdin; the trigger file, not the payload, drives us
+
+-emit() { jq -n --arg s "$1" '{systemMessage: $s, suppressOutput: true}'; }
++# $1 = systemMessage (user), $2 = additionalContext (model). Both, always.
++#
++# systemMessage is user-only (D14), so a hook that emits it alone leaves the
++# agent blind to the outcome of a commit it requested — and it then goes
++# looking. Measured over every landing in the transcript corpus: on this
++# trigger-file path the agent re-checks the IPC files or the memory log after
++# 62 of 68 successful commits, a mean of 1.97 extra assistant messages and a
++# median 6.4 s each. On the parent-commit path, where the outcome comes back in
++# a Bash tool result the model can read, the same check happens 5 times in 14.
++# Every other batch hook here already pairs the two channels.
++emit() {
++  jq -n --arg s "$1" --arg c "$2" \
++    '{systemMessage: $s, suppressOutput: true,
++      hookSpecificOutput: {hookEventName: "PostToolBatch", additionalContext: $c}}'
++}
+
+ gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
+ gitlore_has_submodule || exit 0
+@@ -31,7 +41,8 @@
+ if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
+   # Nothing to commit: the request is satisfied (or was spurious). Clear it.
+   rm -f "$trigger"
+-  emit "gitlore: commit-memory trigger cleared — memory was already clean, nothing to commit."
++  emit "gitlore: commit-memory trigger cleared — memory was already clean, nothing to commit." \
++    "gitlore: memory was already clean, so there was nothing to commit; the trigger file has been removed. Both IPC files are gone. Do not check for them and do not re-trigger."
+   exit 0
+ fi
+
+@@ -39,7 +50,8 @@
+ if [ ! -s "$msgfile" ]; then
+   # Keep the trigger: the moment the approved summary lands, the next
+   # PostToolBatch commits transparently — the agent need not re-trigger.
+-  emit "gitlore: commit-memory is pending but no approved summary exists yet at $msgfile. ..."
++  emit "gitlore: commit-memory is pending but no approved summary exists yet at $msgfile. Summarize the pending memory changes, present the summary to the user as a markdown blockquote (\`> …\`) rather than a code fence, get their approval, and write the summary to $msgfile — the commit then completes on its own." \
++    "gitlore: a memory commit is pending, but no approved summary exists yet. Summarize the pending memory changes as a commit message, present it to the user as a markdown blockquote (\`> …\`) rather than a code fence, and once they approve write it to $msgfile. The commit then completes on its own — do not re-trigger it."
+   exit 0
+ fi
+
+@@ -53,9 +65,12 @@
+ # place, so the next PostToolBatch retries transparently — no agent action, no
+ # lost approval.
+ if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile" 2>&1); then
+   rm -f "$trigger"
+-  emit "gitlore: memory committed and local live advanced."
++  memhead=$(git -C "$mempath" log -1 --format='%h %s') || memhead='(unavailable)'
++  emit "gitlore: memory committed and local live advanced." \
++    "gitlore: the memory commit you requested has landed. Memory HEAD is now $memhead, local live is advanced, and both IPC files have been removed. This is the authoritative outcome — do not run git status, git log, or ls to confirm it."
+ else
+-  emit "gitlore: memory commit deferred, will retry automatically. $out"
++  emit "gitlore: memory commit deferred, will retry automatically. $out" \
++    "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved. No action is needed from you and re-triggering will not help. Reason: $out"
+ fi
+ exit 0
