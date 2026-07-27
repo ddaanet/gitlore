@@ -142,6 +142,10 @@ fi
 #     judging the tier commit judges the summary the user approved.
 tier_diff=$(git -C "$TIERPATH" show HEAD)
 tier_msg=$(git -C "$TIERPATH" log -1 --format=%B)
-if ! judge_err=$("$LIB_DIR/judge.sh" "$EVAL_RUBRIC" "$tier_diff" "$tier_msg" 2>&1 1>/dev/null); then
+judge_err=$("$LIB_DIR/judge.sh" "$EVAL_RUBRIC" "$tier_diff" "$tier_msg" 2>&1 1>/dev/null)
+judge_exit=$?
+if [ "$judge_exit" -eq 1 ]; then
   fail "commit message failed judge rubric — ${judge_err//$'\n'/ } — commit msg: ${tier_msg//$'\n'/ }"
+elif [ "$judge_exit" -ne 0 ]; then
+  fail "judge could not render a verdict (exit $judge_exit) — ${judge_err//$'\n'/ } — commit msg: ${tier_msg//$'\n'/ }"
 fi

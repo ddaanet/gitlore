@@ -39,3 +39,21 @@ EOF
   run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: add eval suite note"
   [ "$status" -eq 0 ]
 }
+
+@test "judge.sh exits 2 when claude invocation fails" {
+  cat > "$MOCK_BIN/claude" <<'EOF'
+#!/usr/bin/env bash
+echo "rate limited" >&2
+exit 1
+EOF
+  chmod +x "$MOCK_BIN/claude"
+  run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: update"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"rate limited"* ]]
+}
+
+@test "judge.sh exits 2 when the verdict hedges instead of a clean pass/fail" {
+  _make_mock_claude "FAIL, but wait, on reflection this is fine — PASS"
+  run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: update"
+  [ "$status" -eq 2 ]
+}
