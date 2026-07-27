@@ -22,7 +22,32 @@ mempath=$(gitlore_memory_path) || mempath=""
 
 # D11 corollary: in a session-less worktree the memory submodule worktree may not
 # exist yet. Nothing to push — never block the parent push.
+#
+# The skip stays non-blocking, but it is not unconditionally silent. It also
+# fires when memory IS initialized in this clone and its pinned commit sits ahead
+# of the memory remote, and then the parent push publishes a gitlink no clone can
+# resolve (NFR 2; the tier loop below refuses the same silence for the same
+# reason). Warn on exactly that case, decided from the module store without a
+# fetch: no module store means memory was never initialized here, so nothing
+# local can be ahead; a gitlink already reachable from the memory remote's `live`
+# is published and needs no warning. Every other outcome — no gitlink in HEAD, no
+# remote-tracking ref, an unreadable store — warns, since the question the check
+# asks cannot be answered and an unpublished gitlink is the costlier miss.
 if [ -n "$mempath" ] && [ ! -e "$mempath/.git" ]; then
+  # Off `--git-common-dir`, never `--git-path`: the module store is shared across
+  # worktrees, but `--git-path modules/x` resolves against the *per-worktree*
+  # gitdir and hands back `.git/worktrees/<wt>/modules/x`, which never exists —
+  # so the check would read every linked worktree as a fresh clone and stay
+  # silent in precisely the case it exists for. Relative (`.git`) in a main
+  # worktree, absolute in a linked one; only used as a prefix, never cd'd into.
+  modstore="$(git rev-parse --git-common-dir)/modules/$GITLORE_SUBMODULE_NAME"
+  if [ -d "$modstore" ] &&
+     ! git -C "$modstore" merge-base --is-ancestor \
+         "$(git rev-parse "HEAD:$mempath")" refs/remotes/origin/live; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory is not checked out in this worktree, so the memory push was skipped, and the memory commit this push publishes may not be on the memory remote. Run \`git submodule update --init $mempath\` here, then push again." \
+      "gitlore: memory is not checked out in this worktree, so the memory push was skipped, and the memory commit this push publishes may not be on the memory remote. Run \`git submodule update --init $mempath\` here, then push again." >&2
+  fi
   exit 0
 fi
 
