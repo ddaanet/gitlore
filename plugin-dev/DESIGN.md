@@ -363,6 +363,32 @@ with `prerelease` missing — and asserts via `--dry-run` that `release`
 resolves to the right gate chain in the first two and that the third fails
 with an error naming `prerelease`. Verified against just 1.46.0.
 
+### `check-version.sh`: catching a partially-completed release
+
+`release`'s marketplace step (see "Marketplace entry" above) runs *after*
+`plugin.json` is bumped, committed, tagged, pushed, and the GitHub release
+created. If anything from `gh release create` onward fails, the plugin is
+left tagged and pushed at the new version while `marketplace.json` is still
+at the old one — invisible to end users, and nothing in the toolkit
+previously detected it: the pre-flight in `release` only compares
+`plugin.json` against the latest tag, and the version-guard hook only fires
+on edits to `plugin.json`, not on marketplace staleness.
+
+`check-version.sh` closes this by comparing `plugin.json`'s `.version`
+against the consumer's entry in `$MARKETPLACE_DIR/.claude-plugin/marketplace.json`.
+It's exposed as a `just check-version` recipe and also runs automatically as
+a `release` pre-flight step, so a new release refuses to start on top of a
+drifted marketplace from a previous incomplete one.
+
+It was originally a gitlore-local script (motivating the `prerelease` gate
+above), hardcoded to gitlore's plugin name and a `../claude-plugins` sibling
+path. Absorbed into the toolkit with two fixes: the plugin name is read from
+`plugin.json` instead of hardcoded, and the marketplace path comes from
+`$MARKETPLACE_DIR` (matching `release.just`'s own convention) instead of an
+assumed sibling directory. A missing marketplace entry is treated as
+pre-first-publication state (skip), not drift (fail) — consistent with how
+`release.just`'s marketplace step treats a missing entry.
+
 ### Default branch detection via `origin/HEAD`
 
 The release recipe doesn't hardcode `main` — it reads the default
@@ -411,6 +437,13 @@ fallback fires cleanly.
   recipe. May change if patterns converge across enough consumers.
 
 ## History
+
+- **Unreleased.** Added `check-version.sh` and a `check-version` recipe,
+  absorbed from a gitlore-local script and generalized (plugin name read
+  from `plugin.json`, marketplace path from `$MARKETPLACE_DIR`). Runs as a
+  `release` pre-flight step so a partially-completed prior release (tag
+  pushed, marketplace bump never landed) is caught before starting a new
+  one. See "`check-version.sh`: catching a partially-completed release".
 
 - **Unreleased — breaking.** `release` now depends on a consumer-defined
   `prerelease` recipe instead of `precommit` directly, so a consumer whose
