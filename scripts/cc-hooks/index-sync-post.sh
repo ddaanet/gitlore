@@ -10,11 +10,14 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # PostToolBatch, not PostToolUse: it fires once per turn carrying every call in
 # .tool_calls[], so a turn with three Edits to the index syncs — and reports —
 # once, instead of repeating itself per edit.
-payload=$(cat)
-files=$(jq -r '
-  .tool_calls[]? | select(.tool_name == "Write" or .tool_name == "Edit")
-  | .tool_input.file_path // empty' <<<"$payload")
-[ -n "$files" ] || exit 0   # read-only batch
+#
+# The batch's own calls are not inspected. What matters is whether the index
+# CHANGED, and a tool call is a poor proxy for that in both directions: an Edit
+# can rewrite a line to itself, and a `sed -i` under Bash never names its target
+# at all. The pre-hook's stash answers the question directly — its presence says
+# a watched call ran this batch, and comparing it to the file on disk says
+# whether that call moved anything.
+cat >/dev/null   # drain the payload; the stash, not its contents, is the signal
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
@@ -24,23 +27,16 @@ index="$mempath/MEMORY.md"
 
 stashfile=$(gitlore_index_preimage_file "$mempath")   # absolute
 
-# Did any call in this batch write the index? Identity via -ef, as in the pre-hook.
-touched=""
-while IFS= read -r f; do
-  [ -n "$f" ] || continue
-  if [ -e "$f" ] && [ "$f" -ef "$index" ]; then touched=1; break; fi
-done <<<"$files"
+[ -f "$stashfile" ] || exit 0   # no baseline → no watched call, nothing to diff
 
-if [ -z "$touched" ]; then
-  # The index survived this batch untouched, so there is nothing to propagate.
-  # Still drop any stash: one stranded by an interrupted batch would otherwise
-  # become the baseline for a later, unrelated edit and over-propagate. This
-  # bounds a stale pre-image to a single batch.
+if cmp -s "$stashfile" "$index"; then
+  # The index survived this batch byte-identical, so there is nothing to
+  # propagate. Drop the stash regardless: one stranded by an interrupted batch
+  # would otherwise become the baseline for a later, unrelated edit and
+  # over-propagate. This bounds a stale pre-image to a single batch.
   rm -f "$stashfile"
   exit 0
 fi
-
-[ -f "$stashfile" ] || exit 0   # no baseline → nothing to diff
 
 pre_pairs=$(gitlore_index_pairs "$stashfile")
 post_pairs=$(gitlore_index_pairs "$index")

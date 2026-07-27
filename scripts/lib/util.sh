@@ -189,6 +189,27 @@ gitlore_merge_state_file() {
   git -C "$mempath" rev-parse --git-path gitlore-merge-state
 }
 
+# Print abs path to one of the merge's read-only briefing artifacts — the two
+# side diffs and the store's file tree, written at prepare time for the merger
+# sub-agent. They live beside the state file in the gitdir, so they are invisible
+# to `git status` and need no `.gitignore` entry, and they are named in the state
+# file rather than reconstructed: the sub-agent runs no git of its own beyond
+# `add`. Args: $1 = memory path, $2 = artifact suffix (mine.diff, theirs.diff, tree).
+gitlore_merge_artifact_file() {
+  git -C "$1" rev-parse --git-path "gitlore-merge-$2"
+}
+
+# Remove the merge state file and every artifact that was written with it.
+# One remover, so a continuation cannot drop the state and leave the briefing
+# behind for the next merge to be read against. Args: $1 = memory path.
+gitlore_clear_merge_state() {
+  local mempath="$1" name
+  rm -f "$(gitlore_merge_state_file "$mempath")"
+  for name in mine.diff theirs.diff tree; do
+    rm -f "$(gitlore_merge_artifact_file "$mempath" "$name")"
+  done
+}
+
 # Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
 # callers should compare with `[ "$(gitlore_memory_dirty PATH)" = "1" ]`.
 gitlore_memory_dirty() {

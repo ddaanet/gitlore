@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # Shared functions for memory divergence detection, state-file IO, and
 # directive emission. Source; do not exec.
+#
+# Preparing a merge re-merges the index files, so this library pulls its own
+# index dependencies in rather than making all five callers (both git hooks,
+# session-start, commit-memory, resolve) declare a transitive need. Both are
+# function-only and safe to source twice; util.sh is NOT (it declares a
+# `readonly`), so it stays the caller's job, as does log.sh.
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-compose.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-merge.sh"
 
 # Print every store under this memory tree — memory itself, then each mounted
 # tier — in the order the gates visit them. One merge policy applies at every
@@ -96,13 +106,35 @@ gitlore_write_merge_state() {
   local changed conflicted
   # Union of files changed on either side of the merge — target_ref (HEAD post-checkout)
   # AND source_ref (the incoming branch). diff base...HEAD alone misses source-side files.
+  # The `||` sits OUTSIDE the substitution so the fallback REPLACES the capture.
+  # Inside it, a producer that fails after jq already printed `[]` — which
+  # `pipefail` propagates through the whole pipeline — appends a second array and
+  # hands jq's --argjson two JSON documents.
   changed=$({ git -C "$mempath" diff --name-only "$base...$target"; \
               git -C "$mempath" diff --name-only "$base...$source"; } \
-    | sort -u | jq -R . | jq -s . || echo '[]')
-  conflicted=$(git -C "$mempath" diff --name-only --diff-filter=U \
-    | jq -R . | jq -s . || echo '[]')
+    | sort -u | jq -R . | jq -s .) || changed='[]'
+  # Git's unmerged entries, plus any index file the entry-wise re-merge left
+  # with markers. The second set is not in the first: an index conflict git
+  # never saw is precisely what the entry-wise pass exists to surface, and it
+  # resolves the file in the worktree without staging it.
+  conflicted=$({ git -C "$mempath" diff --name-only --diff-filter=U; \
+                 gitlore_conflicted_indexes "$mempath"; } \
+    | sort -u | jq -R . | jq -s .) || conflicted='[]'
   [ -n "$changed" ] || changed='[]'
   [ -n "$conflicted" ] || conflicted='[]'
+
+  # The briefing: what each side DID, and what the store holds. Reading the
+  # merged worktree shows the outcome but not the intent — which side introduced
+  # a line, and which merely carried it — and that is the judgement the merge
+  # asks for. Written as files rather than inlined: they are unbounded, and the
+  # state file is parsed by jq on every later gate.
+  local minef theirsf treef
+  minef=$(gitlore_merge_artifact_file "$mempath" mine.diff)
+  theirsf=$(gitlore_merge_artifact_file "$mempath" theirs.diff)
+  treef=$(gitlore_merge_artifact_file "$mempath" tree)
+  git -C "$mempath" diff "$base" "$target" > "$minef" || : > "$minef"
+  git -C "$mempath" diff "$base" "$source" > "$theirsf" || : > "$theirsf"
+  git -C "$mempath" ls-files | sort -u > "$treef" || : > "$treef"
   # jq builds the JSON rather than a heredoc interpolating into it: $store_abs is
   # a filesystem path, and one containing a `"` or a `\` produces a file that the
   # first reader — `jq -r .flavor` in the stale-state guard — cannot parse, which
@@ -116,11 +148,15 @@ gitlore_write_merge_state() {
     --arg source "$source" \
     --arg target "$target" \
     --arg cont "$cont" \
+    --arg mine "$minef" \
+    --arg theirs_diff "$theirsf" \
+    --arg tree "$treef" \
     --argjson changed "$changed" \
     --argjson conflicted "$conflicted" \
     '{flavor: $flavor, store: $store, base: $base, source_ref: $source,
       target_ref: $target, changed_files: $changed,
-      conflicted_files: $conflicted, continuation: $cont}' \
+      conflicted_files: $conflicted, mine_diff: $mine,
+      theirs_diff: $theirs_diff, tree: $tree, continuation: $cont}' \
     > "$statefile.tmp" || { rm -f "$statefile.tmp"; return 1; }
   mv "$statefile.tmp" "$statefile" || { rm -f "$statefile.tmp"; return 1; }
 }
@@ -176,11 +212,24 @@ gitlore_prepare_merge() {
   # something else) leaves no MERGE_HEAD, and the directive would then announce a
   # merge nobody prepared. MERGE_HEAD is the discriminator; git's own words are
   # what the user gets when it is absent.
-  merge_err=$(gitlore_git -C "$mempath" merge --no-commit --no-ff "$pending" 2>&1) || true
+  #
+  # `merge.conflictStyle=diff3` is set per invocation rather than in the store's
+  # config: this merge is gitlore's, and a store's config is also the user's.
+  # The base section is what makes a memory conflict resolvable — with only two
+  # versions, "one side added this sentence" and "the other side deleted it" are
+  # the same picture, and the resolver has to guess which.
+  merge_err=$(gitlore_git -C "$mempath" -c merge.conflictStyle=diff3 \
+    merge --no-commit --no-ff "$pending" 2>&1) || true
   if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
     printf '%s\n' "$merge_err" >&2
     return 1
   fi
+  # Redo every index file entry-wise, over git's line-wise result. Unconditional:
+  # the failure this catches — both sides adding the same pointer path at
+  # different offsets, which merges CLEANLY into a duplicate — leaves no
+  # conflict for a conditional to test.
+  gitlore_merge_indexes "$mempath" "$base" "$authority" "$pending" >/dev/null || \
+    echo "gitlore: the entry-wise index merge could not run in $mempath; git's line-wise result stands." >&2
   printf '%s:%s\n' "$base" "$pending"
 }
 

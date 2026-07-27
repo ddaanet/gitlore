@@ -48,6 +48,8 @@ Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass both the
 
 Read the sub-agent's summary. Compare against session context: does the synthesis match what we'd expect from the changes seen this session?
 
+`No conflict.` is one of its valid answers — the prepared merge was already right and it changed nothing. Judge it as you would any other summary, against what the two sides actually did; it is a finding to check, not an admission that the sub-agent skipped the work.
+
 Resume via `SendMessage` to the `agentId`:
 - If correct: `"approved"`.
 - If anything is off: `"rejected: <specific reason>"` — the sub-agent re-synthesizes and returns a new summary; loop back to evaluating it.

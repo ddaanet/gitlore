@@ -173,7 +173,21 @@ batch_payload() {
   [ "$output" = 'description: "new"' ]
 }
 
-@test "post: a batch that never touched the index still clears a leftover stash" {
+@test "post: an unchanged index clears the stash and propagates nothing" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\ndescription: keep me\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old\n' > memory/MEMORY.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  cp memory/MEMORY.md "$stash"              # baseline taken; the batch moved nothing
+  run post_stdin "$(batch_payload "$PWD/unrelated.txt")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: keep me' ]
+  [ ! -f "$stash" ]
+}
+
+@test "post: a stash stranded by an interrupted batch is consumed, not discarded" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   printf -- '---\ndescription: keep me\n---\n' > memory/a.md
@@ -182,9 +196,12 @@ batch_payload() {
   printf -- '- [A](a.md) — new\n' > memory/MEMORY.md
   run post_stdin "$(batch_payload "$PWD/unrelated.txt")"
   [ "$status" -eq 0 ]
+  # The propagation that batch owed lands now. The hook keys on the difference
+  # between the baseline and the file, not on this batch's calls, so a baseline
+  # that outlived its batch is a propagation still due — deferred, not dropped.
   run grep '^description:' memory/a.md
-  [ "$output" = 'description: keep me' ]   # no sync — the index was not edited
-  [ ! -f "$stash" ]                        # but staleness is bounded to one batch
+  [ "$output" = 'description: "new"' ]
+  [ ! -f "$stash" ]                        # and staleness stays bounded to one batch
 }
 
 @test "post: hookEventName is PostToolBatch and stdout is suppressed from the transcript" {
@@ -466,6 +483,36 @@ batch_payload() {
   [ "$output" = 'description: "brand new hook line"' ]
 }
 
+@test "e2e: a sed -i under Bash propagates, though the call named no file" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+  # A Bash call announces nothing, so the pre hook takes the baseline for every
+  # one of them and the post hook decides from what actually changed. This is
+  # the desync the tool_calls-based trigger left behind: the edit landed and no
+  # propagation ran.
+  printf '{"tool_name":"Bash","tool_input":{"command":"sed -i ..."}}' \
+    | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
+  sed -i'' -e 's/old hook/new hook/' memory/MEMORY.md
+  printf '%s' "$(batch_payload)" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "new hook"' ]
+}
+
+@test "e2e: a Bash call that leaves the index alone propagates nothing" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+  printf '{"tool_name":"Bash","tool_input":{"command":"ls"}}' \
+    | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
+  printf '%s' "$(batch_payload)" | bash "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: OLD' ]
+  [ ! -f "$(git -C memory rev-parse --git-path gitlore-index-preimage)" ]
+}
+
 @test "e2e: TWO index edits in one batch diff against the pre-BATCH state, not the last edit" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
@@ -493,12 +540,16 @@ batch_payload() {
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh" ]
 }
 
-@test "e2e: hooks.json registers pre on PreToolUse(Write|Edit) and post on PostToolBatch" {
-  run jq -r '.hooks.PreToolUse[] | select(.matcher=="Write|Edit") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
+@test "e2e: hooks.json registers pre on PreToolUse(Write|Edit|Bash) and post on PostToolBatch" {
+  # Bash is in the matcher because a `sed -i` on the index names no file: the
+  # pre hook takes the baseline for every Bash call and the post hooks decide
+  # from what actually changed.
+  run jq -r '.hooks.PreToolUse[] | select(.matcher=="Write|Edit|Bash") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
   [[ "$output" == *index-sync-pre.sh ]]
-  # PostToolBatch takes no matcher — it carries the whole batch, and the hook
-  # filters .tool_calls[] itself. The event is shared (memory-commit-batch.sh is
-  # also registered here), so select the index-sync entry by command.
+  # PostToolBatch takes no matcher — it carries the whole batch, and the hooks
+  # key on their own pre-batch baseline rather than on its calls. The event is
+  # shared (memory-commit-batch.sh is also registered here), so select the
+  # index-sync entry by command.
   run jq -r '.hooks.PostToolBatch[].hooks[].command | select(test("index-sync-post"))' "$PLUGIN_ROOT/hooks/hooks.json"
   [[ "$output" == *index-sync-post.sh ]]
   # ...and is no longer double-registered on the per-call event.

@@ -89,6 +89,34 @@ gitlore_index_preimage_file() {
   git -C "$1" rev-parse --git-path gitlore-index-preimage
 }
 
+# Abs/relative path of the compose hook's own pre-batch stamp. A second,
+# independently-owned file rather than a field in the sync's stash: each
+# PostToolBatch hook consumes and deletes its own baseline, so neither depends
+# on running before or after the other. $1 = memory path.
+gitlore_compose_stamp_file() {
+  git -C "$1" rev-parse --git-path gitlore-compose-stamp
+}
+
+# Print the compose trigger's stamp: one `key<TAB>checksum` line per watched
+# file, with a literal `absent` for one that is not there — so a file appearing
+# or vanishing registers as a change like any other. Cheap by design: it runs
+# ahead of every Bash call, where keeping whole copies would not be.
+# Args: $1 = root index path, $2 = tier manifest path.
+gitlore_compose_stamp() {
+  printf 'index\t%s\n' "$(_gitlore_file_stamp "$1")"
+  printf 'manifest\t%s\n' "$(_gitlore_file_stamp "$2")"
+}
+
+_gitlore_file_stamp() {
+  if [ -f "$1" ]; then cksum < "$1"; else printf 'absent'; fi
+}
+
+# Print the checksum a stamp records for key $1. Reads the stamp on stdin, so
+# the same reader serves the file on disk and the one just computed.
+gitlore_compose_stamp_get() {
+  awk -F'\t' -v k="$1" '$1==k { sub(/^[^\t]*\t/, ""); print; exit }'
+}
+
 # --- routing-key advisories --------------------------------------------------
 # The index one-liner is what CC's recall classifier matches against, and the
 # sync above then overwrites the file's own `description:` with it — so a hook

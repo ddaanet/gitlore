@@ -391,6 +391,17 @@ gitlore_compose_write() {
 # its root lines: dropping them would be data loss, not dormancy — the same rule
 # the commit/push lockstep applies) and splices up every ACTIVE tier.
 #
+# The second argument picks the direction. `full` (default) is both halves and
+# is what the hooks run. `up` splices into the root index only, writes no
+# carrier and leaves the compose-base ref where it is; the merge continuation
+# uses it, because a merge is an approval of ONE store's content and mirroring
+# down would carry that approval into stores nobody reviewed. Root still has to
+# move in that pass: the always-loaded index is the only surface a merged tier
+# fact is reachable from, so leaving it stale would land facts nothing can
+# recall. Downward propagation is not skipped, only deferred to the next hook
+# compose, which runs against a settled tree and a base that still means what
+# it says.
+#
 # Return codes are three, not two, because "nothing was written" and "some of it
 # was" need different words from every caller:
 #   0 — composed (stdout: one "composed <file>" line per index rewritten)
@@ -501,7 +512,7 @@ gitlore_compose_save_base() {
 }
 
 gitlore_compose() {
-  local mempath="$1"
+  local mempath="$1" direction="${2:-full}"
   local root="$mempath/MEMORY.md"
   local mounted active tier line path changed="" out
   [ -f "$root" ] || return 0
@@ -513,23 +524,30 @@ gitlore_compose() {
   mounted=$(gitlore_tier_paths "$mempath")
   active=$(gitlore_active_tiers "$mempath")
 
-  # Mirror down — every mounted tier with a checked-out carrier.
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    if ! out=$(gitlore_compose_tier_bullets "$mempath" "$tier" \
-      | gitlore_compose_write "$mempath/$tier/MEMORY.md"); then
-      [ -n "$changed" ] && printf '%s' "$changed"
-      printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
-      return 2
-    fi
-    changed="$changed$out
+  # Mirror down — every mounted tier with a checked-out carrier. Skipped in `up`
+  # mode, which the merge continuation uses: see the direction contract above.
+  if [ "$direction" != "up" ]; then
+    while IFS= read -r tier; do
+      [ -n "$tier" ] || continue
+      [ -f "$mempath/$tier/MEMORY.md" ] || continue
+      if ! out=$(gitlore_compose_tier_bullets "$mempath" "$tier" \
+        | gitlore_compose_write "$mempath/$tier/MEMORY.md"); then
+        [ -n "$changed" ] && printf '%s' "$changed"
+        printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
+        return 2
+      fi
+      changed="$changed$out
 "
-  done <<EOF
+    done <<EOF
 $mounted
 EOF
+  fi
 
   # Splice up — active tiers in manifest order, then the project's own bullets.
+  # The source is the MERGED bullet list, not the carrier file: in `full` mode
+  # the two are identical (mirror-down just wrote it), and in `up` mode reading
+  # the carrier would drop every root-authored tier line the carrier has not
+  # received yet.
   if ! out=$( {
     while IFS= read -r tier; do
       [ -n "$tier" ] || continue
@@ -537,7 +555,7 @@ EOF
       while IFS= read -r line; do
         [ -n "$line" ] || continue
         gitlore_bullet_reprefix "$line" "$tier"
-      done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
+      done < <(gitlore_compose_tier_bullets "$mempath" "$tier")
     done <<INNER
 $active
 INNER
@@ -556,13 +574,21 @@ INNER
   # Refresh each mounted tier's three-way base to the carrier just composed —
   # the state root and carrier now agree on, the baseline the next pass diffs
   # against. Guarded so a git -C never escapes an unchecked-out submodule.
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -e "$mempath/$tier/.git" ] || continue
-    gitlore_compose_save_base "$mempath/$tier/MEMORY.md" "$mempath/$tier"
-  done <<EOF
+  #
+  # NOT in `up` mode: nothing was written to a carrier there, so root and
+  # carrier have not been reconciled and the base must not move. Advancing it
+  # would tell the next full pass that the carrier's current state is what root
+  # last agreed to — reading every line root added during the merge as a
+  # deletion, and dropping it.
+  if [ "$direction" != "up" ]; then
+    while IFS= read -r tier; do
+      [ -n "$tier" ] || continue
+      [ -e "$mempath/$tier/.git" ] || continue
+      gitlore_compose_save_base "$mempath/$tier/MEMORY.md" "$mempath/$tier"
+    done <<EOF
 $mounted
 EOF
+  fi
 
   [ -n "$changed" ] && printf '%s\n' "$changed"
   return 0
