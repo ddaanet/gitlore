@@ -48,6 +48,10 @@ release bump='patch': prerelease
     # fallback. symbolic-ref is silent on stdout when the ref is unset.
     main_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo "main")
     [ "$branch" = "$main_branch" ] || { echo "error: must be on $main_branch (currently $branch)" >&2; exit 1; }
+    # Catch a previous release that didn't fully complete (tag/manifest bumped,
+    # marketplace bump never landed) before starting a new one on top of it.
+    bash "{{toolkit_prefix}}/check-version.sh" \
+      || { echo "error: fix the version drift above before releasing" >&2; exit 1; }
     manifest_version=$(jq -r .version "$manifest")
     latest_tag=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)
     if [ -n "$latest_tag" ] && [ "$manifest_version" != "$latest_tag" ]; then
@@ -133,6 +137,12 @@ release bump='patch': prerelease
         echo "Release $tag complete (marketplace entry created at $new_version)"
       fi
     fi
+
+# Check plugin.json's version against its marketplace.json entry. Skips
+# non-fatally when MARKETPLACE_DIR is unset, the marketplace repo isn't
+# checked out, or the plugin has no entry yet (pre-first-publication).
+check-version:
+    bash "{{toolkit_prefix}}/check-version.sh"
 
 # Pull the vendored plugin-dev toolkit up to a tag. Plugin root, clean tree.
 update-plugin-dev ref:

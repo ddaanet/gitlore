@@ -5,7 +5,7 @@ _default:
 
 # Run all syntax + style checks on the toolkit's own scripts.
 precommit: whitespace
-    shellcheck install.sh version-guard.sh
+    shellcheck install.sh version-guard.sh check-version.sh
     bash -n tests/hook-test.sh
     just _import-check
     bash tests/hook-test.sh
