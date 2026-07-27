@@ -17,8 +17,8 @@
   and the input-hash sentinel lands that cost exactly when a change is in
   flight (`docs/design.md` NFR 10). `bats -T` gives the per-test breakdown
   free on the next full run.
-- Explain the live pointer loss and tag 0.4.2, with `just evals`
-  (`03-add-tier`, `04-tier-write`) on the same investigation.
+- Explain the live pointer loss and tag gitlore's own 0.4.2, with
+  `just evals` (`03-add-tier`, `04-tier-write`) on the same investigation.
 - Migrate `micro` (~40 facts) — settle a real memory remote first; it and
   `general` still point at a local `./.git/gitlore-placeholder`. Then
   `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature`

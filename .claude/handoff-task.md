@@ -1,13 +1,18 @@
 ## Current task
 
-Two threads carried from the prior handoff: the open-decisions walk and
-the memory proof pass (items 9-16, not started). This session resolved
-decision 1 — `check-version.sh`'s three mis-wirings fixed and the script
-moved into the `claude-plugin-dev` toolkit repo (committed there as
-4f68836, unreleased — no tag cut yet). Two open decisions remain.
+This session cut `claude-plugin-dev` v0.4.2 (a retried `just release`
+briefly produced a local-only v0.4.1 tag — never pushed, no GitHub
+release, deleted) and pulled it into gitlore's `plugin-dev/` subtree.
+gitlore's local `scripts/check-version.sh` (the mis-wired copy) is
+deleted; the justfile's `check-version` recipe now calls the vendored
+`release.just` recipe of the same name. `just precommit` is green.
+Asked whether to push gitlore's `main` (several commits ahead of
+`origin/main`, most pre-existing from before this session) — awaiting
+an answer.
 
 ## Open decisions
 
+- Push gitlore's `main` to `origin`, or hold.
 - `tests/evals/lib/judge.sh`: land the 3-state exit (0 pass / 1 fail / 2
   invalid-or-unavailable, dropping the `2>/dev/null`) before or instead of
   hardening the verdict parse. Hardening the parse first strictly worsens
@@ -20,7 +25,3 @@ moved into the `claude-plugin-dev` toolkit repo (committed there as
   the audit chain records only from this point forward, and the ref never
   left the machine (outside `refs/heads`, nothing pushes it), so a fresh
   clone starts blank. No path to close this one.
-- When to cut a `claude-plugin-dev` release including `check-version.sh`,
-  then run `just update-plugin-dev` in gitlore to adopt it and delete
-  gitlore's local `scripts/check-version.sh` (still the old hardcoded,
-  mis-wired version until then).

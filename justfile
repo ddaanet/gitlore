@@ -67,10 +67,6 @@ evals:
 # `release`'s dependency and for the option to widen it later.
 prerelease: precommit
 
-# Guard .claude-plugin/plugin.json against the sibling marketplace entry.
-check-version:
-    scripts/check-version.sh
-
 # shellcheck over every tracked shell file, discovered by extension or shebang.
 lint:
     scripts/lint-shell.sh
