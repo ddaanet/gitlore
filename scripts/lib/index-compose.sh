@@ -300,8 +300,11 @@ EOF
 # snapshots alone cannot.
 #
 # The base is the carrier as of the LAST COMPOSE — the point root and carrier
-# were last reconciled — held in `refs/gitlore/compose-base` in the tier and
-# refreshed at the end of every successful pass (`gitlore_compose_save_base`).
+# were last reconciled — read from `carrier.md` in the tip commit of the tier's
+# `refs/gitlore/compose-base` audit chain, which `gitlore_compose_save_base`
+# extends at the end of every successful pass. A ref naming a bare BLOB is the
+# pre-log shape, and the blob itself is the carrier: it is read as the base, and
+# the next save migrates the ref to a chain.
 # It deliberately tracks composes, not commits: a commit can record a carrier
 # edit without composing root (the float the design allows), so the committed
 # gitlink runs AHEAD of what root reflects and would read a not-yet-projected
@@ -357,11 +360,17 @@ gitlore_compose_tier_bullets() {
   # base — the last-compose marker, for presence AND for the order the two sides
   # last agreed on. -q keeps rev-parse silent when the ref is absent (before the
   # first compose), leaving the base empty: a union, with nothing to have moved.
+  # The carrier lives at `carrier.md` in the audit commit; a ref left over as a
+  # bare blob IS the carrier, so it is read directly.
   if git -C "$mempath/$tier" rev-parse -q --verify refs/gitlore/compose-base >/dev/null; then
+    local basespec=refs/gitlore/compose-base
+    if [ "$(git -C "$mempath/$tier" cat-file -t refs/gitlore/compose-base)" = commit ]; then
+      basespec=refs/gitlore/compose-base:carrier.md
+    fi
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
       printf '%s\n' "$path" >> "$tmpd/base.paths"
-    done < <(git -C "$mempath/$tier" cat-file -p refs/gitlore/compose-base)
+    done < <(git -C "$mempath/$tier" cat-file -p "$basespec")
   fi
 
   while IFS= read -r path; do
@@ -529,16 +538,63 @@ $result"
   GITLORE_COMPOSE_CTX="$ctx"
 }
 
-# Refresh a tier's three-way base to its just-composed carrier — a blob held in
-# refs/gitlore/compose-base (a ref, hence a GC root, so the blob is never
-# pruned). A later compose diffs both root and carrier against it to tell an add
-# from a delete. A missing carrier or a failed hash leaves the old base standing
-# rather than clearing it.
+# Run git with a fixed gitlore identity. `commit-tree` needs a committer, and
+# neither a repo without `user.email` nor a hook environment supplies one — so
+# the audit commit states its own author instead of borrowing whoever happens to
+# be configured where the pass fired.
+gitlore_git_as_gitlore() {
+  GIT_AUTHOR_NAME=gitlore GIT_AUTHOR_EMAIL=gitlore@localhost \
+  GIT_COMMITTER_NAME=gitlore GIT_COMMITTER_EMAIL=gitlore@localhost \
+  git "$@"
+}
+
+# Append one audit commit to a tier's refs/gitlore/compose-base, recording the
+# two inputs the pass just reconciled: carrier.md (the base the next pass merges
+# against) and root.md (the other input — otherwise unrecoverable, since root
+# composition is allowed to float ahead of any commit). The ref is a GC root, so
+# the chain and every blob in it survive.
+# Args: $1 = composed carrier, $2 = tier worktree, $3 = composed root index.
+#
+# The commit is skipped when its tree matches the tip's: gitlore_compose calls
+# this at the end of every successful pass, so without the guard an idempotent
+# pass would grow a log that says nothing about what moved.
+#
+# A ref naming a BLOB is the shape every store carries from before the log
+# existed; it is still read as the base (see gitlore_compose_tier_bullets), but
+# there is no chain to graft onto, so the first commit over it is parentless.
+#
+# A missing index or a failed write leaves the previous base standing rather
+# than clearing it.
 gitlore_compose_save_base() {
-  local carrier="$1" tierpath="$2" blob
+  local carrier="$1" tierpath="$2" root="$3"
+  local cblob rblob tree tip parent="" msg
   [ -f "$carrier" ] || return 0
-  blob=$(git -C "$tierpath" hash-object -w --stdin < "$carrier") || return 1
-  git -C "$tierpath" update-ref refs/gitlore/compose-base "$blob"
+  [ -f "$root" ] || return 0
+  cblob=$(git -C "$tierpath" hash-object -w --stdin < "$carrier") || return 1
+  rblob=$(git -C "$tierpath" hash-object -w --stdin < "$root") || return 1
+  tree=$(printf '100644 blob %s\tcarrier.md\n100644 blob %s\troot.md\n' \
+    "$cblob" "$rblob" | git -C "$tierpath" mktree) || return 1
+
+  if tip=$(git -C "$tierpath" rev-parse -q --verify refs/gitlore/compose-base); then
+    local tiptype
+    tiptype=$(git -C "$tierpath" cat-file -t "$tip") || return 1
+    if [ "$tiptype" = commit ]; then
+      [ "$(git -C "$tierpath" rev-parse "$tip^{tree}")" = "$tree" ] && return 0
+      parent="$tip"
+    fi
+  fi
+
+  msg="gitlore compose: reconcile ${tierpath##*/}
+
+carrier.md is the state root and this tier's carrier now agree on, and the base
+the next compose merges against. root.md is the other input of the same pass."
+  local commit
+  if [ -n "$parent" ]; then
+    commit=$(gitlore_git_as_gitlore -C "$tierpath" commit-tree "$tree" -p "$parent" -m "$msg") || return 1
+  else
+    commit=$(gitlore_git_as_gitlore -C "$tierpath" commit-tree "$tree" -m "$msg") || return 1
+  fi
+  git -C "$tierpath" update-ref refs/gitlore/compose-base "$commit"
 }
 
 gitlore_compose() {
@@ -601,9 +657,11 @@ INNER
   fi
   changed="$changed$out"
 
-  # Refresh each mounted tier's three-way base to the carrier just composed —
-  # the state root and carrier now agree on, the baseline the next pass diffs
-  # against. Guarded so a git -C never escapes an unchecked-out submodule.
+  # Record this pass in each mounted tier's compose-base chain: the carrier just
+  # composed — the state root and carrier now agree on, the baseline the next
+  # pass diffs against — together with the root it agrees with. A pass that
+  # reconciled nothing new appends nothing. Guarded so a git -C never escapes an
+  # unchecked-out submodule.
   #
   # NOT in `up` mode: nothing was written to a carrier there, so root and
   # carrier have not been reconciled and the base must not move. Advancing it
@@ -614,7 +672,7 @@ INNER
     while IFS= read -r tier; do
       [ -n "$tier" ] || continue
       [ -e "$mempath/$tier/.git" ] || continue
-      gitlore_compose_save_base "$mempath/$tier/MEMORY.md" "$mempath/$tier"
+      gitlore_compose_save_base "$mempath/$tier/MEMORY.md" "$mempath/$tier" "$root"
     done <<EOF
 $mounted
 EOF
