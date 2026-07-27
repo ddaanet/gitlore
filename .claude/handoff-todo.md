@@ -10,8 +10,8 @@
 - `reference_nested_submodule_tier.md` — the largest local index line; several
   distinct claims, so expect a split rather than a single verdict.
 - `reference_own_hooks_json_sandbox_erofs.md` — an environment fact about
-  gitlore's own tree; it reproduced again this session (a mutation write to
-  `hooks/hooks.json` failed EROFS under the sandbox).
+  gitlore's own tree; it reproduced again (a mutation write to `hooks/hooks.json`
+  failed EROFS under the sandbox).
 - `reference_cc_memory_retrieval_agentic.md`, then
   `feedback_memory_retrieval_in_practice.md`, `feedback_recall_checkpoints.md` —
   all three about recall, and `CLAUDE.md` already carries the checkpoint rule.
@@ -22,16 +22,13 @@
 Then, cross-cutting: normalize `name:` frontmatter to the filename stem, and
 re-audit dangling `[[...]]` links across the whole store.
 
-**Standing work, from before this pass**
+**Standing work**
 
-- Delete or upstream `scripts/check-version.sh`. `plugin-dev/release.just`
-  already bumps, commits and pushes `marketplace.json` and synthesizes a missing
-  entry, so a release cannot produce the drift it detects; `version-guard.sh`
-  (wired at `.claude/settings.json:9`) blocks the hand-edit path. It guards a
-  hole closed at both ends and costs a `just precommit` dependency. Its header
-  comment still says "Run via `make check-version`" — stale either way.
-- Give compose a way to record which base it merged; dig the vanished-pointer
-  drop. A green suite must not be read as closing this.
+- Make the test suite faster. Precommit's body is ~600 s over 605 cases, and the
+  input-hash sentinel means the cost lands exactly when a change is in flight
+  (`docs/design.md` NFR 10). `bats -T` gives the per-test breakdown free on the
+  next full run.
+- Dogfood the `Bash` arm of the `PreToolUse` index trigger in a fresh session.
 - Explain the live pointer loss and tag 0.4.2, with `just evals` (`03-add-tier`,
   `04-tier-write`) on the same investigation.
 - Migrate `micro` (~40) — settle a real memory remote first; it and `general`

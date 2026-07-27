@@ -152,6 +152,21 @@ diverge_index_same_path_different_offsets() {
   git -C memory update-ref refs/heads/live "$commit"
 }
 
+@test "an index conflict is labelled in git's vocabulary, not a second one" {
+  # Prose memory files in the same merge are marked by git itself, as
+  # `<<<<<<< HEAD` … `>>>>>>> <sha>`. The entry-wise pass writes its own chunks,
+  # so if it named the same two sides differently the sub-agent would face two
+  # vocabularies for one merge and the agent doc would have to reconcile them.
+  diverge_index_same_path_different_offsets
+  run bash "$PRE_COMMIT"
+  [ "$status" -ne 0 ]
+
+  grep -q '^<<<<<<< HEAD$' memory/MEMORY.md
+  grep -qE '^>>>>>>> [0-9a-f]{40}$' memory/MEMORY.md
+  run ! grep -q '^<<<<<<< MINE' memory/MEMORY.md
+  run ! grep -q '^>>>>>>> THEIRS' memory/MEMORY.md
+}
+
 @test "conflicted_files names an index only the entry-wise pass found" {
   diverge_index_same_path_different_offsets
   run bash "$PRE_COMMIT"

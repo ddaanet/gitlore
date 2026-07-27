@@ -50,22 +50,19 @@ _gitlore_index_merge_split() {
   return 0
 }
 
-# Emit the merged bullet block on stdout. Order is OURS order for every
-# surviving path, then the paths only THEIRS has, in theirs order — the same
-# rule `gitlore_compose_tier_bullets` uses, and the reason no insertion-point
-# arithmetic is needed: for the root index composition reorders the tier blocks
-# straight afterwards anyway, and for a carrier the incoming side's new facts
-# belong at the end.
+# Emit the merged bullet block on stdout. Order is itself merged, through
+# `gitlore_order_merge` over the three path sequences — both sides' placements
+# are honoured, and only a shared offset falls back to ours-then-theirs. Merging
+# the paths rather than the bullets is what keeps a reworded hook from reading
+# as a positional edit, so a description change never moves its entry and never
+# conflicts with an insertion beside it.
 # Always returns 0; the caller detects conflicts from the emitted markers.
 # Args: $1 = tmpdir, $2/$3/$4 = ours/base/theirs labels.
 _gitlore_index_merge_bullets() {
   local tmpd="$1" olabel="$2" blabel="$3" tlabel="$4"
-  local path seen="" b o t oline tline bline
+  local path b o t oline tline bline
   while IFS= read -r path; do
     [ -n "$path" ] || continue
-    printf '%s\n' "$seen" | grep -qxF -- "$path" && continue
-    seen="$seen
-$path"
     grep -qxF -- "$path" "$tmpd/base.paths"   && b=1 || b=0
     grep -qxF -- "$path" "$tmpd/ours.paths"   && o=1 || o=0
     grep -qxF -- "$path" "$tmpd/theirs.paths" && t=1 || t=0
@@ -88,9 +85,7 @@ $path"
     printf '<<<<<<< %s\n%s\n||||||| %s\n' "$olabel" "$oline" "$blabel"
     [ "$b" = 1 ] && printf '%s\n' "$bline"
     printf '=======\n%s\n>>>>>>> %s\n' "$tline" "$tlabel"
-  done <<EOF
-$(cat "$tmpd/ours.paths" "$tmpd/theirs.paths")
-EOF
+  done < <(gitlore_order_merge "$tmpd/base.paths" "$tmpd/ours.paths" "$tmpd/theirs.paths")
   return 0
 }
 
@@ -206,8 +201,14 @@ gitlore_merge_indexes() {
       fi
     done
     rc=0
+    # Git's own vocabulary, not a second one. The prepared merge checks the
+    # authority out detached and runs `git merge "$theirs"`, so every prose
+    # memory file in the same merge is already marked `<<<<<<< HEAD` … `>>>>>>>
+    # <sha>`. Labelling the indexes MINE/THEIRS would put two namings of the
+    # same two sides in front of the sub-agent and leave the doc to reconcile
+    # them in prose; matching git's is one argument instead.
     gitlore_index_merge "$tmpd/base" "$tmpd/ours" "$tmpd/theirs" \
-      "MINE ($ours)" "BASE" "THEIRS ($theirs)" > "$tmpd/merged" || rc=$?
+      "HEAD" "$base" "$theirs" > "$tmpd/merged" || rc=$?
     [ "$rc" -ge 2 ] && continue        # unmergeable: leave git's own result be
     cp "$tmpd/merged" "$store/$path" || continue
     if [ "$rc" -eq 0 ]; then
