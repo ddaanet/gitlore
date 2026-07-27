@@ -17,14 +17,14 @@
   and the input-hash sentinel lands that cost exactly when a change is in
   flight (`docs/design.md` NFR 10). `bats -T` gives the per-test breakdown
   free on the next full run.
-- Explain the live pointer loss and tag gitlore's own 0.4.2, with
-  `just evals` (`03-add-tier`, `04-tier-write`) on the same investigation.
+- Explain the live pointer loss and tag gitlore's own 0.4.2. The eval half
+  of this (`just evals` on `03-add-tier`, `04-tier-write`) is done — both
+  passed at EVAL_K=1 against the new judge.sh; the pointer investigation
+  and the tag are not.
 - Migrate `micro` (~40 facts) — settle a real memory remote first; it and
   `general` still point at a local `./.git/gitlore-placeholder`. Then
   `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature`
   → `edify` → `Emploi` → `cwd-safety`.
 - Compact the memory index — 90% of the 25600-byte budget, and the hook
-  nags on every index write. Largest: `ddaanet/reference_git_stderr_and_parsing`
-  456 B, `reference_nested_submodule_tier` 451 B,
-  `ddaanet/feedback_classifier_denied_self_config` 449 B. Trimming needs an
-  adversarial audit of the diff (`feedback_index_compaction_triggers`).
+  nags on every index write. Trimming needs an adversarial audit of the
+  diff (`feedback_index_compaction_triggers`).

@@ -56,6 +56,10 @@ live=$(git -C "$EVAL_REPO/memory" rev-parse live)
 # failure — else a rubric miss reports THAT but not WHAT.
 diff=$(git -C "$EVAL_REPO/memory" show HEAD)
 msg=$(git -C "$EVAL_REPO/memory" log -1 --format=%B)
-if ! judge_err=$("$LIB_DIR/judge.sh" "$EVAL_RUBRIC" "$diff" "$msg" 2>&1 1>/dev/null); then
+judge_err=$("$LIB_DIR/judge.sh" "$EVAL_RUBRIC" "$diff" "$msg" 2>&1 1>/dev/null)
+judge_exit=$?
+if [ "$judge_exit" -eq 1 ]; then
   fail "commit message failed judge rubric — ${judge_err//$'\n'/ } — commit msg: ${msg//$'\n'/ }"
+elif [ "$judge_exit" -ne 0 ]; then
+  fail "judge could not render a verdict (exit $judge_exit) — ${judge_err//$'\n'/ } — commit msg: ${msg//$'\n'/ }"
 fi
