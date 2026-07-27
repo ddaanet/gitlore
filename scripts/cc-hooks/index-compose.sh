@@ -11,7 +11,7 @@ source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
-# PostToolBatch, like the index→frontmatter sync: it fires once per turn with
+# PostToolBatch, like the index→frontmatter sync: it fires once per batch with
 # every call in .tool_calls[], so a turn holding several index edits composes —
 # and reports — once instead of per edit.
 #
