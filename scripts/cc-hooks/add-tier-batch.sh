@@ -61,8 +61,17 @@ if [ "$rc" -eq 0 ]; then
   gitlore_compose_and_report "$mempath" 1
   # This batch's compose is done. Drop index-compose.sh's baseline so it does not
   # re-report the same manifest change: it keys on a pre-batch stamp, and the
-  # activation write above moved it. Best-effort tidying of a duplicate message —
-  # a second pass would be idempotent, not wrong.
+  # activation write above moved it.
+  #
+  # This does NOT assume the two hooks run in the order hooks.json lists them.
+  # Either sequential order composes exactly once: run first, this rm makes
+  # index-compose.sh bail on the missing stamp; run second, index-compose.sh saw
+  # the manifest before add-tier.sh appended to it and found nothing changed.
+  # Only genuine concurrency composes twice — index-compose.sh reading the stamp
+  # after the activation write and before this rm — and a second pass is
+  # idempotent, not wrong: gitlore_compose writes each index temp+mv, and its
+  # output is a deterministic function of the root index and the carriers. So
+  # the cost of the assumption failing is one duplicate systemMessage.
   rm -f "$(gitlore_compose_stamp_file "$mempath")"
   sysmsg="$out"
   ctx="$out
