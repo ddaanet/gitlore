@@ -213,6 +213,89 @@ teardown() { teardown_tmp_repo; }
   run ! grep -qF 'ddaanet/new_fact.md' memory/ddaanet/MEMORY.md
 }
 
+# --- ordering ---
+#
+# The root index is the surface the agent edits, so the order it states there is
+# an authored choice and mirror-down carries it into the carrier. A carrier-only
+# arrival still lands where the carrier put it: the base makes that a positional
+# merge, not an append.
+
+# Replace $1's bullet block with the remaining args, preamble and trailer intact.
+set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write "$f" >/dev/null; }
+
+@test "mirror down carries the root's order into the carrier" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet one.md "first"
+  seed_tier_bullet ddaanet two.md "second"
+  gitlore_compose memory                    # base recorded: one, two
+
+  # The agent reorders the tier block in the root index — the only index it edits.
+  set_bullets memory/MEMORY.md \
+    '- [two](ddaanet/two.md) — second' \
+    '- [one](ddaanet/one.md) — first'
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  twoline=$(grep -n '](two.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
+  oneline=$(grep -n '](one.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
+  [ "$twoline" -lt "$oneline" ]
+  # And splice-up reproduces it, so the reorder is stable rather than undone.
+  rtwo=$(grep -n 'ddaanet/two.md' memory/MEMORY.md | cut -d: -f1)
+  rone=$(grep -n 'ddaanet/one.md' memory/MEMORY.md | cut -d: -f1)
+  [ "$rtwo" -lt "$rone" ]
+}
+
+@test "a carrier-only arrival lands at its own offset, not at the end" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet a.md "first"
+  seed_tier_bullet ddaanet c.md "last"
+  gitlore_compose memory                    # base recorded: a, c
+
+  # Another consumer inserted a fact BETWEEN the two and we fast-forwarded it in.
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [b](b.md) — arrived between' \
+    '- [c](c.md) — last'
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  la=$(grep -n 'ddaanet/a.md' memory/MEMORY.md | cut -d: -f1)
+  lb=$(grep -n 'ddaanet/b.md' memory/MEMORY.md | cut -d: -f1)
+  lc=$(grep -n 'ddaanet/c.md' memory/MEMORY.md | cut -d: -f1)
+  [ "$la" -lt "$lb" ]
+  [ "$lb" -lt "$lc" ]
+}
+
+@test "root and carrier inserting at one offset order the root's line first" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet a.md "first"
+  seed_tier_bullet ddaanet z.md "last"
+  gitlore_compose memory                    # base recorded: a, z
+
+  set_bullets memory/MEMORY.md \
+    '- [a](ddaanet/a.md) — first' \
+    '- [r](ddaanet/r.md) — authored in the root' \
+    '- [z](ddaanet/z.md) — last'
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [t](t.md) — arrived in the carrier' \
+    '- [z](z.md) — last'
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  lr=$(grep -n '](r.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
+  lt=$(grep -n '](t.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
+  lz=$(grep -n '](z.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
+  [ "$lr" -lt "$lt" ]
+  [ "$lt" -lt "$lz" ]
+}
+
 @test "compose is byte-idempotent" {
   make_parent_with_memory
   make_tier_in_memory ddaanet

@@ -57,6 +57,32 @@ gitlore_bullet_deprefix() {
   printf '%s](%s)%s\n' "$left" "${path#"$prefix"/}" "$tail"
 }
 
+# Print the merged ORDER of pointer paths for a three-way merge, one per line,
+# each path once. Args: $1/$2/$3 = base/ours/theirs path-list files.
+#
+# Order is a merge INPUT, not a rule applied afterwards: each side states where
+# its entries go, and both statements are honoured, so an insertion keeps the
+# offset its author chose instead of being appended to the block. Only a genuine
+# disagreement about ONE offset needs a tiebreak, and `--union` is it — ours'
+# block, then theirs'. Marking that as a conflict would sit a human in front of
+# two facts nothing is actually disputing.
+#
+# The lists are PATHS only, never whole bullets. Feeding text in would make
+# every reworded hook a positional edit: a routine description change would
+# relocate its entry and collide with an unrelated insertion beside it.
+#
+# `--union` can emit one path twice, when the two sides placed it differently.
+# The first occurrence wins, which is ours' offset.
+gitlore_order_merge() {
+  local basef="$1" oursf="$2" theirsf="$3" merged mrc=0
+  # merge-file returns the conflict COUNT; --union resolves every one of them, so
+  # only git's own -1 (a merge it could not attempt) is a failure here.
+  merged=$(git merge-file -p --union "$oursf" "$basef" "$theirsf") || mrc=$?
+  [ "$mrc" -ge 128 ] && return 1
+  printf '%s\n' "$merged" | awk 'length($0) && !seen[$0]++'
+  return 0
+}
+
 # Print "FIRST LAST", the 1-indexed line numbers of the first and last pointer
 # bullet in $1, or "0 0" when there are none. Space-separated so callers can
 # `read` the pair instead of doing tab arithmetic in a parameter expansion.
@@ -268,10 +294,10 @@ EOF
   return 0
 }
 
-# Print the merged carrier bullet list for tier $2 under store $1, unprefixed,
-# in carrier order with root-only survivors appended. A path-keyed THREE-WAY
-# merge of root (ours) and carrier (theirs) against a base — the only thing that
-# tells an ADD apart from a DELETE, which two snapshots alone cannot.
+# Print the merged carrier bullet list for tier $2 under store $1, unprefixed.
+# A path-keyed THREE-WAY merge of root (ours) and carrier (theirs) against a
+# base — the only thing that tells an ADD apart from a DELETE, which two
+# snapshots alone cannot.
 #
 # The base is the carrier as of the LAST COMPOSE — the point root and carrier
 # were last reconciled — held in `refs/gitlore/compose-base` in the tier and
@@ -285,74 +311,78 @@ EOF
 # Presence per path: present at base survives only if BOTH sides still carry it
 # (a delete on either side wins); new since base survives if EITHER side added
 # it. The root's text wins wherever root has the line (the canonical index D17);
-# otherwise the carrier's text stands. Order: carrier first, then root-only.
+# otherwise the carrier's text stands.
+#
+# Order comes from `gitlore_order_merge` over the same three sides, so the root's
+# is carried down — the root index is the surface the agent edits, and where it
+# puts a line is an authored choice, not an accident to normalize away. A fact
+# that arrived in the carrier from another consumer keeps the offset that
+# consumer gave it, because the base makes its arrival a positional insertion
+# rather than an append. Root and carrier inserting at one offset resolves to the
+# root's line first.
 gitlore_compose_tier_bullets() {
   local mempath="$1" tier="$2"
   local carrier="$mempath/$tier/MEMORY.md"
   local root="$mempath/MEMORY.md"
-  local line path
+  local line path tmpd b o t
 
-  # ours — root's bullets for this tier, prefix stripped; the canonical text.
-  local ours="" ourpaths=""
+  tmpd=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-compose-order.XXXXXX") || return 1
+  local side
+  for side in ours theirs base; do
+    : > "$tmpd/$side.paths" || { rm -rf "$tmpd"; return 1; }
+    : > "$tmpd/$side.bullets" || { rm -rf "$tmpd"; return 1; }
+  done
+
+  # ours — root's bullets for this tier, prefix stripped; the canonical text and
+  # the authored order.
   if [ -f "$root" ]; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in "$tier"/*) ;; *) continue ;; esac
       line=$(gitlore_bullet_deprefix "$line" "$tier") || continue
-      ours="$ours$line
-"
-      ourpaths="$ourpaths${path#"$tier"/}
-"
+      printf '%s\n' "$line" >> "$tmpd/ours.bullets"
+      printf '%s\n' "${path#"$tier"/}" >> "$tmpd/ours.paths"
     done < "$root"
   fi
 
   # theirs — the carrier working tree's bullets, in carrier order.
-  local theirs="" theirpaths=""
   if [ -f "$carrier" ]; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
-      theirs="$theirs$line
-"
-      theirpaths="$theirpaths$path
-"
+      printf '%s\n' "$line" >> "$tmpd/theirs.bullets"
+      printf '%s\n' "$path" >> "$tmpd/theirs.paths"
     done < <(gitlore_index_part "$carrier" bullets)
   fi
 
-  # base — presence only, from the last-compose marker. -q keeps rev-parse
-  # silent when the ref is absent (before the first compose), leaving base empty.
-  local basepaths=""
+  # base — the last-compose marker, for presence AND for the order the two sides
+  # last agreed on. -q keeps rev-parse silent when the ref is absent (before the
+  # first compose), leaving the base empty: a union, with nothing to have moved.
   if git -C "$mempath/$tier" rev-parse -q --verify refs/gitlore/compose-base >/dev/null; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
-      basepaths="$basepaths$path
-"
+      printf '%s\n' "$path" >> "$tmpd/base.paths"
     done < <(git -C "$mempath/$tier" cat-file -p refs/gitlore/compose-base)
   fi
 
-  # Merge: carrier order first, then root-only survivors, each path once.
-  local seen="" b o t
-  {
-    printf '%s' "$theirpaths"
-    printf '%s' "$ourpaths"
-  } | while IFS= read -r path; do
+  while IFS= read -r path; do
     [ -n "$path" ] || continue
-    printf '%s\n' "$seen" | grep -qxF -- "$path" && continue
-    seen="$seen$path
-"
-    printf '%s\n' "$basepaths"  | grep -qxF -- "$path" && b=1 || b=0
-    printf '%s\n' "$ourpaths"   | grep -qxF -- "$path" && o=1 || o=0
-    printf '%s\n' "$theirpaths" | grep -qxF -- "$path" && t=1 || t=0
+    grep -qxF -- "$path" "$tmpd/base.paths"   && b=1 || b=0
+    grep -qxF -- "$path" "$tmpd/ours.paths"   && o=1 || o=0
+    grep -qxF -- "$path" "$tmpd/theirs.paths" && t=1 || t=0
     if [ "$b" = 1 ]; then
       { [ "$o" = 1 ] && [ "$t" = 1 ]; } || continue   # base line: a delete on either side wins
     else
       { [ "$o" = 1 ] || [ "$t" = 1 ]; } || continue   # new line: an add on either side wins
     fi
     if [ "$o" = 1 ]; then
-      printf '%s' "$ours"   | gitlore_compose_pick "$path"   # root's text is canonical
+      gitlore_compose_pick "$path" < "$tmpd/ours.bullets"   # root's text is canonical
     else
-      printf '%s' "$theirs" | gitlore_compose_pick "$path"
+      gitlore_compose_pick "$path" < "$tmpd/theirs.bullets"
     fi
-  done
+  done < <(gitlore_order_merge "$tmpd/base.paths" "$tmpd/ours.paths" "$tmpd/theirs.paths")
+
+  rm -rf "$tmpd"
+  return 0
 }
 
 # Filter stdin (bullets) to the first one whose path is $1. Helper for the
