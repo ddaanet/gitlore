@@ -84,3 +84,54 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   rm -rf "$WT"
 }
+
+# The skip at the top of the hook is silent by design so a session-less worktree
+# never blocks the parent push. But it also fires when memory IS initialized in
+# this clone and its pinned commit sits ahead of the memory remote — and then the
+# parent push publishes a gitlink nobody can resolve. The three cases below pin
+# the discrimination: warn only when the committed gitlink is not already
+# reachable on the memory remote.
+
+@test "memory-absent skip warns when the committed gitlink is unpublished" {
+  # memory `live` is one commit ahead of its origin (setup made it so). Commit
+  # that gitlink in the parent, then push from a worktree with no memory.
+  git add memory
+  git commit -q -m "Bump memory gitlink"
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  [ ! -e "$WT/memory/.git" ]
+  cd "$WT"
+  run --separate-stderr bash "$PRE_PUSH"
+  [ "$status" -eq 0 ]
+  [[ "$output$stderr" == *"not checked out"* ]]
+  [[ "$output$stderr" == *"submodule update --init"* ]]
+  rm -rf "$WT"
+}
+
+@test "memory-absent skip stays silent when the gitlink is already published" {
+  git -C memory push -q origin HEAD:live
+  git add memory
+  git commit -q -m "Bump memory gitlink"
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  cd "$WT"
+  run --separate-stderr bash "$PRE_PUSH"
+  [ "$status" -eq 0 ]
+  [ -z "$output$stderr" ]
+  rm -rf "$WT"
+}
+
+@test "memory-absent skip stays silent when memory was never initialized here" {
+  # Fresh-clone shape: the module store does not exist, so nothing local can be
+  # ahead of the remote and there is nothing to warn about.
+  CLONE="$TMP_REPO-clone"
+  git clone -q "$TMP_REPO" "$CLONE"
+  cd "$CLONE"
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  [ ! -e "$(git rev-parse --git-path modules/gitlore-memory)" ]
+  run --separate-stderr bash "$PRE_PUSH"
+  [ "$status" -eq 0 ]
+  [ -z "$output$stderr" ]
+  cd "$TMP_REPO"
+  rm -rf "$CLONE"
+}

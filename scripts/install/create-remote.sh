@@ -56,6 +56,14 @@ case "$mode" in
       repo_name=$(gitlore_memory_remote_name)
       visibility=$(gitlore_parent_visibility)
       full_name="${owner}/${repo_name}"
+      # Create, resolve, wire, push as four steps — do NOT collapse this into
+      # `gh repo create --source=. --push`. That form rejects the memory
+      # submodule outright ("current directory is not a git repository", gh
+      # 2.88.1): its working tree has a `.git` *file*, not a directory, and gh's
+      # source discovery does not follow the gitdir pointer even though
+      # `git rev-parse --is-inside-work-tree` says true from the same directory.
+      # Resolving the URL via `gh repo view` also respects the user's
+      # gh-configured protocol, which `--push` would decide for them.
       if ! gh repo create "$full_name" --"$visibility"; then
         echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover, or re-run install with a remote URL." >&2
         exit 1

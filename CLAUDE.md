@@ -2,6 +2,11 @@
 
 @.claude/token-efficient.md
 
+gitlore is a Claude Code plugin that makes Claude's auto-memory versioned,
+shared and git-backed. `docs/design.md` is the living design doc and the
+memory of the design — read it before touching anything structural, and
+record decisions there rather than in a memory file.
+
 ## Recall
 
 Spontaneous recall is nil, and CC's passive recall fires a per-query classifier
