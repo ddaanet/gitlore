@@ -1,52 +1,42 @@
 ## Remaining
 
-**The proof pass, items 9-16** — eight local files, in presentation order:
-
-- `reference_submodule_config_visibility.md` — hooks firing inside the submodule
-  read its own config; check whether `docs/design.md` owns the mirroring rule.
-- `reference_auto_memory_directory.md` — near-certainly category 2: the
-  `autoMemoryDirectory` wiring is design, and install plus the session-start hook
-  are its implementation.
-- `reference_nested_submodule_tier.md` — the largest local index line; several
-  distinct claims, so expect a split rather than a single verdict.
-- `reference_own_hooks_json_sandbox_erofs.md` — an environment fact about
-  gitlore's own tree; it reproduced again (a mutation write to `hooks/hooks.json`
-  failed EROFS under the sandbox).
-- `reference_cc_memory_retrieval_agentic.md`, then
-  `feedback_memory_retrieval_in_practice.md`, `feedback_recall_checkpoints.md` —
-  all three about recall, and `CLAUDE.md` already carries the checkpoint rule.
-  Consider one merged fact, or none.
-- `feedback_memory_before_root_commit.md` — lockstep is stated in `CLAUDE.md` and
-  in `docs/design.md` NFR 5; expect delete.
-
-Then, cross-cutting: normalize `name:` frontmatter to the filename stem, and
-re-audit dangling `[[...]]` links across the whole store.
-
-**Standing work**
-
-- Make the test suite faster. Precommit's body is ~600 s over 605 cases, and the
-  input-hash sentinel means the cost lands exactly when a change is in flight
-  (`docs/design.md` NFR 10). `bats -T` gives the per-test breakdown free on the
-  next full run.
-- Dogfood the `Bash` arm of the `PreToolUse` index trigger in a fresh session.
-- Explain the live pointer loss and tag 0.4.2, with `just evals` (`03-add-tier`,
-  `04-tier-write`) on the same investigation.
-- Migrate `micro` (~40) — settle a real memory remote first; it and `general`
-  still point at a local `./.git/gitlore-placeholder`.
-- Then: `gitmoji` → `general` → `home` → `devddaanet` → `skills` →
-  `candidature` → `edify` → `Emploi` → `cwd-safety`.
-- Land `onekeys`' parent commit — mount and 3-fact promotion dogfooded
-  2026-07-24, FR11 gate left open in that repo.
+- Time `index-sync-pre.sh` over N runs against this repo's real memory tree,
+  so the cost side of the `Bash` trigger is a number: it runs on every `Bash`
+  call to catch the ~0.2% that mutate memory.
+- Record the corpus measurement in `docs/design.md` as the rationale for the
+  `Write|Edit|Bash` `PreToolUse` matcher.
+- Confirm the `Bash` arm actually fires end to end — a `sed -i` on the real
+  `memory/MEMORY.md`, checking that propagation and composition both run.
+  Evidence now says the arm belongs; this only proves the widened matcher works.
+- Memory proof pass, items 9-16, in presentation order:
+  `reference_submodule_config_visibility` (does `docs/design.md` own the
+  mirroring rule?), `reference_auto_memory_directory` (near-certainly a
+  delete — the wiring is design, install plus the session-start hook its
+  implementation), `reference_nested_submodule_tier` (several distinct
+  claims; expect a split, not one verdict),
+  `reference_own_hooks_json_sandbox_erofs` (reproduced again),
+  `reference_cc_memory_retrieval_agentic` +
+  `feedback_memory_retrieval_in_practice` + `feedback_recall_checkpoints`
+  (all three about recall, and `CLAUDE.md` already carries the checkpoint
+  rule — consider one merged fact, or none), `feedback_memory_before_root_commit`
+  (lockstep is in `CLAUDE.md` and design NFR 5; expect delete).
+- Cross-cutting after the proof pass: normalize `name:` frontmatter to the
+  filename stem, re-audit dangling `[[...]]` links across the whole store.
+- Make the test suite faster. Precommit's body is ~600 s over 605 cases, and
+  the input-hash sentinel lands that cost exactly when a change is in flight
+  (`docs/design.md` NFR 10). `bats -T` gives the per-test breakdown free on
+  the next full run.
+- Explain the live pointer loss and tag 0.4.2, with `just evals`
+  (`03-add-tier`, `04-tier-write`) on the same investigation.
+- Migrate `micro` (~40 facts) — settle a real memory remote first; it and
+  `general` still point at a local `./.git/gitlore-placeholder`. Then
+  `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature` →
+  `edify` → `Emploi` → `cwd-safety`.
 - Harden `judge.sh`'s verdict parse: a delimited `VERDICT:` or a structured
-  enum, fail-closed when absent. Fail-closed noise today, so not urgent. It has
-  no mention in `docs/design.md`; record it there or in a code comment.
-- Compact the memory index — 89% of the 25600-byte budget, and the hook nags on
-  every index write. Largest: `ddaanet/reference_git_stderr_and_parsing` 456 B,
-  `reference_nested_submodule_tier` 451 B,
+  enum, fail-closed when absent. Fail-closed noise today, so not urgent. It
+  has no mention in `docs/design.md`; record it there or in a code comment.
+- Compact the memory index — 89% of the 25600-byte budget, and the hook nags
+  on every index write. Largest: `ddaanet/reference_git_stderr_and_parsing`
+  456 B, `reference_nested_submodule_tier` 451 B,
   `ddaanet/feedback_classifier_denied_self_config` 449 B. Trimming needs an
   adversarial audit of the diff (`feedback_index_compaction_triggers`).
-
-**Handed to David, awaiting his edit (untracked briefs in his repos)**
-
-- `/Users/david/code/skills/docs/plans/2026-07-27-preflight-generic-scope-brief.md`
-- `/Users/david/code/gitmoji/docs/2026-07-27-sessionstart-message-brief.md`
