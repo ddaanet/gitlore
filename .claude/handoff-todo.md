@@ -10,7 +10,8 @@
 - `reference_nested_submodule_tier.md` — the largest local index line; several
   distinct claims, so expect a split rather than a single verdict.
 - `reference_own_hooks_json_sandbox_erofs.md` — an environment fact about
-  gitlore's own tree; check it still reproduces before ruling.
+  gitlore's own tree; it reproduced again this session (a mutation write to
+  `hooks/hooks.json` failed EROFS under the sandbox).
 - `reference_cc_memory_retrieval_agentic.md`, then
   `feedback_memory_retrieval_in_practice.md`, `feedback_recall_checkpoints.md` —
   all three about recall, and `CLAUDE.md` already carries the checkpoint rule.
@@ -33,10 +34,6 @@ re-audit dangling `[[...]]` links across the whole store.
   drop. A green suite must not be read as closing this.
 - Explain the live pointer loss and tag 0.4.2, with `just evals` (`03-add-tier`,
   `04-tier-write`) on the same investigation.
-- Migrate `handoff` onto the `ddaanet` tier (~42 portable facts) — the first
-  migration to run under the four-way test the proof pass converged on, so
-  expect a large fraction to resolve as code comments or design-doc text rather
-  than as tier facts.
 - Migrate `micro` (~40) — settle a real memory remote first; it and `general`
   still point at a local `./.git/gitlore-placeholder`.
 - Then: `gitmoji` → `general` → `home` → `devddaanet` → `skills` →
@@ -46,6 +43,11 @@ re-audit dangling `[[...]]` links across the whole store.
 - Harden `judge.sh`'s verdict parse: a delimited `VERDICT:` or a structured
   enum, fail-closed when absent. Fail-closed noise today, so not urgent. It has
   no mention in `docs/design.md`; record it there or in a code comment.
+- Compact the memory index — 89% of the 25600-byte budget, and the hook nags on
+  every index write. Largest: `ddaanet/reference_git_stderr_and_parsing` 456 B,
+  `reference_nested_submodule_tier` 451 B,
+  `ddaanet/feedback_classifier_denied_self_config` 449 B. Trimming needs an
+  adversarial audit of the diff (`feedback_index_compaction_triggers`).
 
 **Handed to David, awaiting his edit (untracked briefs in his repos)**
 

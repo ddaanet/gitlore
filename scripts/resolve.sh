@@ -67,7 +67,7 @@ load_continuation_state() {
   pending=$(jq -r .source_ref "$statefile")
 }
 
-# Compose the memory tree's indexes and stage the result in the store that is
+# Compose the memory tree's indexes UP and stage the result in the store that is
 # about to be committed.
 #
 # A landed merge is the one route into a memory store that no compose trigger
@@ -76,10 +76,14 @@ load_continuation_state() {
 # those happened to fire. Running here puts the composed bytes in the merge
 # commit itself rather than in a later, unrelated one.
 #
-# Composition spans the whole tree, so it can write a store OTHER than the one
-# being committed — the root index when a tier merged, a carrier when memory did.
-# Those writes stay dirty and ride the next FR11 commit, the same float the
-# SessionStart recompose already produces.
+# Up only. A merged tier's facts have to reach the root index — that is the only
+# surface CC recalls from, so a merge that skipped it would land facts nothing
+# can retrieve — and the root write lands in the memory store, which stays dirty
+# and rides the next FR11 commit (the same float the SessionStart recompose
+# produces). The other direction is the hooks' job: mirroring down would write a
+# carrier the user never reviewed as a side effect of approving this merge, and
+# would have to advance that tier's compose-base past a reconciliation that did
+# not happen.
 #
 # A refusal never blocks the merge. Compose is fail-safe (it writes nothing), and
 # the merge is synthesized and approved by this point: stranding it half-landed
@@ -88,7 +92,7 @@ load_continuation_state() {
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
   local memroot="$1" store="$2" composed dangling rc=0
-  composed=$(gitlore_compose "$memroot") || rc=$?
+  composed=$(gitlore_compose "$memroot" up) || rc=$?
   if [ "$rc" -eq 0 ]; then
     [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
     # The dangling pass reports rather than refuses, so it runs on the composed
@@ -159,7 +163,7 @@ if [ $# -ge 1 ]; then
       # the first parent per D6). Blessed path: carry the sentinel past the
       # submodule gate (FR11).
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
-      rm -f "$statefile"
+      gitlore_clear_merge_state "$mempath"
       gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
       # Restore the invariant: fast-forward local `live` onto the merge commit,
       # then — when the merge was against the remote — the remote's `live` too.
@@ -190,7 +194,7 @@ if [ $# -ge 1 ]; then
       # Aborting leaves HEAD at the authority, where the divergence is invisible;
       # re-detaching there is what makes the re-entry below detect it again.
       gitlore_git -C "$mempath" checkout -q --detach "$pending" || true
-      rm -f "$statefile"
+      gitlore_clear_merge_state "$mempath"
       gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
       # Re-enter the default mode to detect the original divergence freshly.
       exec bash "$0"

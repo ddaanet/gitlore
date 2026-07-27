@@ -12,10 +12,10 @@ set -euo pipefail
 # add-tier.sh activates the tier as its own final step (appends it to
 # memory/.gitlore-tiers) — the intent already named this exact tier, so there is
 # no half-formed-tier ambiguity left for a second, separate deliberate edit to
-# guard against. That write never goes through a CC Write/Edit tool call, so
-# index-compose.sh's tool_calls-based trigger cannot see it; this hook calls the
-# shared compose-and-report helper directly and folds its result into the one
-# JSON response a hook may emit.
+# guard against. That write happens after index-compose.sh's baseline was taken
+# and cannot be attributed to a tool call, so this hook calls the shared
+# compose-and-report helper directly and folds its result into the one JSON
+# response a hook may emit.
 #
 # The intent file IS the signal, so the batch payload is unused.
 #
@@ -59,6 +59,11 @@ if [ "$rc" -eq 0 ]; then
   # add-tier.sh already appended $name to the manifest — the active-tier set
   # changed, so recompose and let the triage nudge fire, same as a manual edit.
   gitlore_compose_and_report "$mempath" 1
+  # This batch's compose is done. Drop index-compose.sh's baseline so it does not
+  # re-report the same manifest change: it keys on a pre-batch stamp, and the
+  # activation write above moved it. Best-effort tidying of a duplicate message —
+  # a second pass would be idempotent, not wrong.
+  rm -f "$(gitlore_compose_stamp_file "$mempath")"
   sysmsg="$out"
   ctx="$out
 
