@@ -627,7 +627,7 @@ The entry point is `scripts/commit-memory.sh`: it commits the dirty memory submo
 
 FR15 calls for shared tiers (a truly-global `lore`, an org-scoped `ddaanet`, …) surfacing in *every* participating repo alongside its local memory, without a flat merge that would blow the always-loaded index budget. Motivation: across N sibling repos, `user`, CC-platform `reference`, and portable `feedback` facts duplicate and drift, while `project` facts are correctly repo-local. The mechanism:
 
-*Empirical grounding (retrieval instrumentation, 2026-07-14; see `reference_cc_memory_retrieval_agentic` in memory).* CC auto-recall was characterized in both `--print` and a real interactive (tmux PTY) session against a scratch `autoMemoryDirectory`:
+*Empirical grounding (retrieval instrumentation, 2026-07-14; full evidence trail in `docs/references/cc-memory-retrieval.md`).* CC auto-recall was characterized in both `--print` and a real interactive (tmux PTY) session against a scratch `autoMemoryDirectory`:
 
 - Only the **root `MEMORY.md`** is always-loaded; a nested `team/MEMORY.md` is **not** auto-loaded.
 - Bodies are **not** bulk-loaded. Recall is a **tool-gated `Read`** of a selected file (surfaced interactively as "Recalled 1 memory"; an auto-issued, empty-thinking Read in the transcript), steered by the root index. Disable file tools → no body, in both modes.

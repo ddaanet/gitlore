@@ -1,19 +1,17 @@
 ## Remaining
 
-- Memory proof pass, items 9-16, in presentation order:
-  `reference_submodule_config_visibility` (does `docs/design.md` own the
-  mirroring rule?), `reference_auto_memory_directory` (near-certainly a
-  delete — the wiring is design, install plus the session-start hook its
-  implementation), `reference_nested_submodule_tier` (several distinct
-  claims; expect a split, not one verdict), `reference_own_hooks_json_sandbox_erofs`
-  (reproduced again), `reference_cc_memory_retrieval_agentic` +
-  `feedback_memory_retrieval_in_practice` + `feedback_recall_checkpoints`
-  (all three about recall, and `CLAUDE.md` already carries the checkpoint
-  rule — consider one merged fact, or none), `feedback_memory_before_root_commit`
-  (lockstep is in `CLAUDE.md` and design NFR 5; expect delete).
-- Cross-cutting after the proof pass: normalize `name:` frontmatter to the
-  filename stem, re-audit dangling `[[...]]` links across the whole store.
-- Make the test suite faster. Precommit's body is ~600 s over 605 cases,
+- Cross-cutting memory cleanup: normalize `name:` frontmatter to the
+  filename stem across the whole store (confirmed drift example:
+  `memory/reference_nested_submodule_tier.md`'s `name:` was
+  `nested-submodule-tier-mechanics` before that file was deleted this
+  session — the pattern likely recurs elsewhere), and re-audit dangling
+  `[[...]]` links store-wide (beyond the ones this session's deletions
+  caused, which are already fixed).
+- Compact the `MEMORY.md` index. At 20.8KB / 83% of the 25600-byte budget,
+  harness-flagged twice as approaching the read-truncation limit. Needs
+  an adversarial audit of the diff per `feedback_index_compaction_triggers`
+  — don't trim solo.
+- Make the test suite faster. Precommit's body is ~600s over 605 cases,
   and the input-hash sentinel lands that cost exactly when a change is in
   flight (`docs/design.md` NFR 10). `bats -T` gives the per-test breakdown
   free on the next full run.
@@ -25,6 +23,3 @@
   `general` still point at a local `./.git/gitlore-placeholder`. Then
   `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature`
   → `edify` → `Emploi` → `cwd-safety`.
-- Compact the memory index — 90% of the 25600-byte budget, and the hook
-  nags on every index write. Trimming needs an adversarial audit of the
-  diff (`feedback_index_compaction_triggers`).
