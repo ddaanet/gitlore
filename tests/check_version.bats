@@ -10,7 +10,7 @@
 
 load helpers/setup
 
-SCRIPT() { run "$PLUGIN_ROOT/scripts/check-version.sh" "$@"; }
+SCRIPT() { run "$PLUGIN_ROOT/plugin-dev/check-version.sh" "$@"; }
 
 setup() {
   setup_tmp_repo
@@ -50,9 +50,10 @@ write_market() {
   [[ "$output" == *"skip"* ]]
 }
 
-@test "check-version: gitlore absent from marketplace exits non-zero" {
+@test "check-version: gitlore absent from marketplace skips with exit 0 (pre-first-publication)" {
   write_plugin "0.1.1"
   printf '{"plugins":[{"name":"other","version":"9.9.9"}]}\n' >"$MARKET_JSON"
   SCRIPT "$PLUGIN_JSON" "$MARKET_JSON"
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skip"* ]]
 }
