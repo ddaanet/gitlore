@@ -7,9 +7,10 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
-# PostToolBatch, not PostToolUse: it fires once per turn carrying every call in
-# .tool_calls[], so a turn with three Edits to the index syncs — and reports —
-# once, instead of repeating itself per edit.
+# PostToolBatch, not PostToolUse: it fires once per batch carrying every call in
+# .tool_calls[], so a batch with three Edits to the index syncs — and reports —
+# once, instead of repeating itself per edit. A batch is one assistant message's
+# calls, not a user turn: one turn fires this as many times as it takes batches.
 #
 # The batch's own calls are not inspected. What matters is whether the index
 # CHANGED, and a tool call is a poor proxy for that in both directions: an Edit

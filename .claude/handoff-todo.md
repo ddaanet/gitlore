@@ -1,13 +1,5 @@
 ## Remaining
 
-- Time `index-sync-pre.sh` over N runs against this repo's real memory tree,
-  so the cost side of the `Bash` trigger is a number: it runs on every `Bash`
-  call to catch the ~0.2% that mutate memory.
-- Record the corpus measurement in `docs/design.md` as the rationale for the
-  `Write|Edit|Bash` `PreToolUse` matcher.
-- Confirm the `Bash` arm actually fires end to end — a `sed -i` on the real
-  `memory/MEMORY.md`, checking that propagation and composition both run.
-  Evidence now says the arm belongs; this only proves the widened matcher works.
 - Memory proof pass, items 9-16, in presentation order:
   `reference_submodule_config_visibility` (does `docs/design.md` own the
   mirroring rule?), `reference_auto_memory_directory` (near-certainly a
