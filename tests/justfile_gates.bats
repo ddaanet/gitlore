@@ -87,9 +87,11 @@ all_suites() {
     | sort
 }
 
-# What `just test` would hand to bats, with bats stubbed out.
+# What `just test` would hand to bats, with bats stubbed out. Filtered to
+# *.bats lines: the recipes also pass `--jobs <n>`, which the stub echoes
+# like any other arg but which isn't a suite.
 discovered_suites() {
-  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" just test-unit test-integration )
+  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" just test-unit test-integration ) | grep '\.bats$'
 }
 
 @test "every suite under tests/ is run by one of the test recipes" {

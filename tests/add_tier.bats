@@ -302,12 +302,15 @@ write_intent() {
 
 @test "add-tier: the ordinary remote spellings are accepted" {
   make_parent_with_memory
-  # Reaching git is enough — these must fail on the network/path, not the guard.
-  for u in "https://example.invalid/x.git" "ssh://git@example.invalid/x.git" \
-           "git@example.invalid:org/x.git" "git://example.invalid/x.git"; do
+  # Reaching git is enough — these must fail on the network/path, not the
+  # guard. A closed local port refuses instantly; a DNS-based unreachable
+  # host (example.invalid) can stall for 10+ seconds per scheme behind a
+  # proxying sandbox, which made this loop the suite's slowest single test.
+  for u in "https://127.0.0.1:1/x.git" "ssh://git@127.0.0.1:1/x.git" \
+           "git@127.0.0.1:x.git" "git://127.0.0.1:1/x.git"; do
     write_intent "mode=mount" "name=t" "url=$u"
     run bash "$ADD_TIER"
-    [ "$status" -ne 0 ]                       # no such host, of course
+    [ "$status" -ne 0 ]                       # connection refused, of course
     [[ "$output" == *"submodule add failed"* ]]   # …but it got past the guard
   done
 }
