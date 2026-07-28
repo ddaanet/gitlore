@@ -36,6 +36,15 @@ teardown() { teardown_tmp_repo; }
   [[ "${output}${stderr}" == *blockquote* ]]   # present as a draft (> ...), not a code fence
 }
 
+@test "dirty-no-summary hint interpolates the canonical memory-approval clause" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  clause=$(cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt")
+  CLAUDECODE=1 run --separate-stderr bash "$HOOK"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"$clause"* ]]
+}
+
 @test "commits and ff-pushes to live when summary is fresh" {
   make_parent_with_memory
   echo dirty > memory/notes.md

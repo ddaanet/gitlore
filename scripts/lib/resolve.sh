@@ -358,7 +358,7 @@ gitlore_sync_memory_to_live() {
     fresh=$(gitlore_commit_msg_freshness "$mempath")
     if [ "$fresh" != "yes" ]; then
       gitlore_say_for_agent_or_user \
-        "gitlore: memory is dirty and has no approved commit summary. Prepare a summary and present it to the user as a markdown blockquote (\`> …\`), not a code fence, for confirmation; treat only a clear, un-negated affirmative as approval (a hedge, a question, or any negation is a rejection). Only once approved, write it to $msgfile, then retry." \
+        "gitlore: memory is dirty and has no approved commit summary. Prepare a summary with a body $(gitlore_memory_approval_clause) and present it to the user as a markdown blockquote (\`> …\`), not a code fence, for confirmation; treat only a clear, un-negated affirmative as approval (a hedge, a question, or any negation is a rejection). Only once approved, write it to $msgfile, then retry." \
         "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry." >&2
       return 1
     fi

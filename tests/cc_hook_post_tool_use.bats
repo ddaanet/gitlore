@@ -46,6 +46,14 @@ stdin() { printf '%s' "$1" | bash "$POST"; }
   [[ "$output" == *blockquote* ]]   # present as a draft (> ...), not a code fence
 }
 
+@test "additionalContext interpolates the canonical memory-approval clause" {
+  echo dirty > memory/notes.md
+  clause=$(cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt")
+  payload='{"tool_name":"Bash","tool_input":{"command":"lefthook run pre-commit"},"tool_response":{"exit_code":0}}'
+  run stdin "$payload"
+  [[ "$output" == *"$clause"* ]]
+}
+
 @test "no-op when .claude/settings.json is missing" {
   rm -f .claude/settings.json
   payload='{"tool_name":"Bash","tool_input":{"command":"lefthook run pre-commit"},"tool_response":{"exit_code":0}}'

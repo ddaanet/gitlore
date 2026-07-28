@@ -408,6 +408,15 @@ gitlore_memory_remote_name() {
   printf '%s-memory\n' "$base"
 }
 
+# Print the canonical memory-approval clause: the mid-sentence fragment every
+# call site that asks the user to approve a pending memory commit interpolates
+# into its own surrounding sentence. One file so the three call sites
+# (post-tool-use.sh, memory-commit-batch.sh, resolve.sh) cannot drift on what
+# "approve" means — see docs/design.md D19.
+gitlore_memory_approval_clause() {
+  cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
+}
+
 # Print the visibility to use for the memory remote: "public" or "private".
 # Matches the parent repo (design: public parent → public memory). Defaults to
 # "private" when there is no parent origin or gh cannot report it — the safe

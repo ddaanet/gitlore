@@ -44,7 +44,7 @@ cat <<EOF
 {
   "hookSpecificOutput": {
     "hookEventName": "PostToolUse",
-    "additionalContext": "gitlore: memory ($mempath) has uncommitted changes. Summarize pending memory changes in prose, present the summary to the user as a markdown blockquote (\`> …\`) — not a code fence, which frames it as a verbatim artifact rather than an editable draft — and await confirmation. Treat only a clear, un-negated affirmative as approval; a hedge, a question, or any negation ('not yet', 'no', 'disapprove') is a rejection. Only once approved, write the summary to $msgfile. On rejection or anything unclear, discuss and ask again — do not write $msgfile."
+    "additionalContext": "gitlore: memory ($mempath) has uncommitted changes. Summarize pending memory changes $(gitlore_memory_approval_clause), present the summary to the user as a markdown blockquote (\`> …\`) — not a code fence, which frames it as a verbatim artifact rather than an editable draft — and await confirmation. Treat only a clear, un-negated affirmative as approval; a hedge, a question, or any negation ('not yet', 'no', 'disapprove') is a rejection. Only once approved, write the summary to $msgfile. On rejection or anything unclear, discuss and ask again — do not write $msgfile."
   }
 }
 EOF
