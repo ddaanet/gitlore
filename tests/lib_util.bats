@@ -118,6 +118,13 @@ EOF
   [ "$output" = "private" ]
 }
 
+@test "gitlore_memory_approval_clause prints the canonical clause from reference/" {
+  run gitlore_memory_approval_clause
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt")" ]
+  [[ "$output" == *"New, Update, Augment, Reduce, or Remove"* ]]
+}
+
 @test "gitlore_is_migration_stub true for a dir holding only the migration breadcrumb" {
   local dir="$TMP_REPO/cc-mem"
   mkdir -p "$dir"

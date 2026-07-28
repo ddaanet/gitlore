@@ -47,7 +47,11 @@ you decide read-or-skip; the fact lives in the file.
 - Conventional-commit prefixes are required in the **parent** repo; the gitmoji
   hook rewrites them. The memory approval summary is still a commit message —
   subject line, blank line, body — but takes no prefix: a memory commit is
-  always documentation, so the prefix carries no information.
+  always documentation, so the prefix carries no information. The body is one
+  line per changed memory file: its kind (New, Update, Augment, Reduce, or
+  Remove), its `tier/slug`, and a one-line summary of what changed — the
+  canonical wording lives in `reference/memory-approval-clause.txt` (see
+  docs/design.md D19).
 - After a compaction, check `PWD`, `CLAUDE_PROJECT_DIR` and the gitStatus block
   against what the summary describes before acting — a summary says what, not
   where. If they disagree, stop and say so; don't `cd` to reconcile.

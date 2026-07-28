@@ -20,3 +20,8 @@ teardown() { teardown_tmp_repo; }
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
   [ "$(git config gitlore.hooksDir)" = "$PLUGIN_ROOT/scripts/git-hooks" ]
 }
+
+@test "seeds gitlore.memoryApprovalClauseFile pointing at the reference clause" {
+  bash "$WRITE_SETTINGS" "lefthook run pre-commit"
+  [ "$(git config gitlore.memoryApprovalClauseFile)" = "$PLUGIN_ROOT/reference/memory-approval-clause.txt" ]
+}

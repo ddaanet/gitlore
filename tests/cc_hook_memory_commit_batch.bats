@@ -83,6 +83,19 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [ -f "$(gitlore_commit_trigger_file memory)" ]
 }
 
+@test "pending-summary message interpolates the canonical memory-approval clause" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  : > "$(gitlore_commit_trigger_file memory)"
+  clause=$(cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt")
+
+  run run_batch
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$clause"* ]]
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"$clause"* ]]
+}
+
 @test "a locked repo keeps both IPC files so the next batch retries transparently" {
   make_parent_with_memory
   echo dirty > memory/notes.md
