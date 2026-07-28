@@ -140,7 +140,8 @@ batch_payload() {
   for f in "$@"; do
     json=$(jq -c --arg f "$f" '. + [{tool_name:"Edit",tool_input:{file_path:$f}}]' <<<"$json")
   done
-  jq -n --argjson c "$json" '{hook_event_name:"PostToolBatch", tool_calls:$c, tool_results:[]}'
+  jq -n --argjson c "$json" --arg s "${TEST_SESSION_ID:-test-session}" \
+    '{hook_event_name:"PostToolBatch", session_id:$s, tool_calls:$c, tool_results:[]}'
 }
 
 @test "post: fires ONCE for a batch containing several index edits" {
@@ -729,20 +730,77 @@ batch_payload() {
   [[ "$output" == *"trigger"* ]]
 }
 
-@test "post: warns past the byte threshold, naming the largest lines" {
+@test "post: warns past the byte threshold, states pct and the hard limit only" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GITLORE_INDEX_BUDGET_BYTES=200
-  printf -- '---\nmetadata:\n  type: feedback\n---\n' > memory/a.md
+  hook="$(printf '%0.sx' $(seq 1 190))"
+  # frontmatter already matches the hook, so the routine sync stays silent
+  # (no "replaced" bullets) and the additionalContext carries ONLY the
+  # budget advisory — isolates the assertion below from the sync's own bullets.
+  printf -- '---\ndescription: "%s"\nmetadata:\n  type: feedback\n---\n' "$hook" > memory/a.md
   stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
   printf -- '- [A](a.md) — old\n' > "$stash"
-  printf -- '- [A](a.md) — %s\n' "$(printf '%0.sx' $(seq 1 190))" > memory/MEMORY.md
+  printf -- '- [A](a.md) — %s\n' "$hook" > memory/MEMORY.md
   run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   json="$output"
   run jq -r '.systemMessage' <<<"$json"
   [[ "$output" == *"budget"* ]]
   run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
-  [[ "$output" == *"a.md"* ]]
+  [[ "$output" == *"budget"* ]]
+  [[ "$output" == *"24.4KB"* ]]
+  [[ "$output" != *"is what pays"* ]]
+  [[ "$output" != *"•"* ]]
+}
+
+@test "post: does NOT re-warn the SAME session on a later over-threshold batch" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GITLORE_INDEX_BUDGET_BYTES=200
+  export TEST_SESSION_ID=same-session
+  printf -- '---\nmetadata:\n  type: feedback\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old\n' > "$stash"
+  printf -- '- [A](a.md) — %s\n' "$(printf '%0.sx' $(seq 1 190))" > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  run jq -r '.systemMessage' <<<"$output"
+  [[ "$output" == *"budget"* ]]
+
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — %s\n' "$(printf '%0.sx' $(seq 1 190))" > "$stash"
+  printf -- '- [A](a.md) — %s\n' "$(printf '%0.sy' $(seq 1 190))" > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  run jq -r '.systemMessage // ""' <<<"$output"
+  [[ "$output" != *"budget"* ]]
+}
+
+@test "post: a DIFFERENT session still gets the full budget warning" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GITLORE_INDEX_BUDGET_BYTES=200
+  printf -- '---\nmetadata:\n  type: feedback\n---\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old\n' > "$stash"
+  printf -- '- [A](a.md) — %s\n' "$(printf '%0.sx' $(seq 1 190))" > memory/MEMORY.md
+  run post_stdin "$(TEST_SESSION_ID=session-one batch_payload "$PWD/memory/MEMORY.md")"
+  run jq -r '.systemMessage' <<<"$output"
+  [[ "$output" == *"budget"* ]]
+
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — %s\n' "$(printf '%0.sx' $(seq 1 190))" > "$stash"
+  printf -- '- [A](a.md) — %s\n' "$(printf '%0.sy' $(seq 1 190))" > memory/MEMORY.md
+  run post_stdin "$(TEST_SESSION_ID=session-two batch_payload "$PWD/memory/MEMORY.md")"
+  run jq -r '.systemMessage' <<<"$output"
+  [[ "$output" == *"budget"* ]]
+}
+
+@test "gitlore_index_budget_nudge_reset: re-arms the warning for its session" {
+  make_parent_with_memory
+  session="reset-session"
+  marker=$(gitlore_index_budget_nudge_file memory "$session")
+  mkdir -p "$(dirname "$marker")"
+  touch "$marker"
+  [ -f "$marker" ]
+  gitlore_index_budget_nudge_reset memory "$session"
+  [ ! -f "$marker" ]
 }
 
 # shellcheck disable=SC2016   # literal backticks/$VAR are the fixture text

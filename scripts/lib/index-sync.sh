@@ -140,6 +140,30 @@ gitlore_index_budget_pct() {
   printf '%s\n' "$(( bytes * 100 / GITLORE_INDEX_BUDGET_BYTES ))"
 }
 
+# Path to this session's budget-nudge marker: has the byte-budget advisory
+# already fired once this episode? Lives in the memory gitdir, keyed by
+# session, mirroring gitlore_recall_ledger. Args: $1 = memory worktree path;
+# $2 = session id.
+gitlore_index_budget_nudge_file() {
+  local safe
+  safe=$(printf '%s' "${2:-nosession}" | LC_ALL=C sed 's/[^A-Za-z0-9-]/_/g')
+  git -C "$1" rev-parse --git-path "gitlore-budget-nudged-$safe"
+}
+
+# Clear this session's budget-nudge marker, and sweep markers left by sessions
+# that ended without one. Called at SessionStart and PreCompact, the same
+# episode boundary as gitlore_recall_reset. Args: $1 = memory worktree path;
+# $2 = session id.
+gitlore_index_budget_nudge_reset() {
+  local mempath="$1" marker dir
+  marker=$(gitlore_index_budget_nudge_file "$mempath" "$2")
+  rm -f "$marker"
+  dir=$(dirname -- "$marker")
+  [ -d "$dir" ] || return 0
+  find "$dir" -maxdepth 1 -name 'gitlore-budget-nudged-*' -type f -mtime +7 -delete
+  return 0
+}
+
 # "bytes<TAB>path" for the $2 (default 5) largest bullets, descending — where
 # curation actually pays. LC_ALL=C so awk's length() counts bytes rather than
 # characters; the separator alone is a 3-byte em-dash, so the two differ.

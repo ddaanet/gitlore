@@ -18,7 +18,8 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # at all. The pre-hook's stash answers the question directly — its presence says
 # a watched call ran this batch, and comparing it to the file on disk says
 # whether that call moved anything.
-cat >/dev/null   # drain the payload; the stash, not its contents, is the signal
+payload=$(cat)
+session=$(jq -r '.session_id // ""' <<<"$payload")
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
@@ -136,10 +137,10 @@ rm -f "$stashfile"
 # touched the index — an untouched index cannot have grown.
 budget=""
 pct=$(gitlore_index_budget_pct "$index") || pct=""
-if [ -n "$pct" ] && [ "$pct" -ge "$GITLORE_INDEX_BUDGET_WARN_PCT" ]; then
-  budget=$(gitlore_index_largest "$index" 5 | while IFS=$'\t' read -r b p; do
-    printf '\n  • %s: %s bytes' "$p" "$b"
-  done)
+nudge_file=$(gitlore_index_budget_nudge_file "$mempath" "$session")
+if [ -n "$pct" ] && [ "$pct" -ge "$GITLORE_INDEX_BUDGET_WARN_PCT" ] && [ ! -f "$nudge_file" ]; then
+  budget=1
+  touch "$nudge_file"
 fi
 
 sysmsg=""
@@ -175,7 +176,7 @@ if [ -n "$budget" ]; then
   if [ -n "$ctx" ]; then ctx="$ctx
 
 "; fi
-  ctx="${ctx}MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte budget. The whole index is loaded verbatim into every session, so the cost is bytes rather than lines and trimming the longest entries is what pays — a terse behavioural line is a rounding error next to these. Largest lines:$budget"
+  ctx="${ctx}MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte budget. Past 24.4KB, Claude Code's own loader silently truncates the tail of this file — entries beyond the cutoff never reach a session."
 fi
 
 if [ -n "$failed" ]; then
