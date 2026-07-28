@@ -31,7 +31,10 @@ you decide read-or-skip; the fact lives in the file.
 - He engages with LLM internals. Ground mechanism and cost claims or don't make
   them; "be contrarian" means real pushback, not performative disagreement.
 - Decide as late as the evidence allows, but before inaction decides for you.
-  Don't build code that presupposes an unsettled question.
+  Don't build code that presupposes an unsettled question. Once the evidence is
+  in hand, act on it: a defect you have verified is not made someone else's call
+  by who authored it, and flagging is not the cautious option when the fix is
+  cheap and removes nothing.
 - Match plan length to the work — a full spec is for real design decisions.
 
 ## Memory and commits
