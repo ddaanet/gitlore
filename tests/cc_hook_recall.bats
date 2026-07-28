@@ -144,6 +144,16 @@ read_call() { printf '[{"tool_name":"Read","tool_input":{"file_path":"%s"}}]' "$
   [[ "$ctx" == *"body of A"* ]]      # re-fetched, not skipped
 }
 
+@test "reset also clears the budget-nudge marker" {
+  make_parent_with_memory
+  marker=$(gitlore_index_budget_nudge_file memory sess-1)
+  mkdir -p "$(dirname "$marker")"
+  touch "$marker"
+  run run_reset
+  [ "$status" -eq 0 ]
+  [ ! -f "$marker" ]
+}
+
 @test "batch and reset agree on one ledger when the session cwd has drifted" {
   # CC's in-process EnterWorktree moves the session cwd but freezes
   # CLAUDE_PROJECT_DIR (D15). Every hook anchors on the launch repo, because

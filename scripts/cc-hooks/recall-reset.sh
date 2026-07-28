@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SessionStart + PreCompact: drop the recall ledger.
+# SessionStart + PreCompact: drop the recall ledger and the budget-nudge marker.
 #
 # The ledger answers "is this memory body already in context?", so it is only
 # valid for as long as the context is. Two events end that:
@@ -23,6 +23,8 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/recall.sh"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
 payload=$(cat)
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
@@ -33,4 +35,5 @@ mempath=$(gitlore_memory_path)
 
 session=$(jq -r '.session_id // ""' <<<"$payload")
 gitlore_recall_reset "$mempath" "$session"
+gitlore_index_budget_nudge_reset "$mempath" "$session"
 exit 0
