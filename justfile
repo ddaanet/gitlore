@@ -31,7 +31,7 @@ trace := "false"
 #
 # The paths contain no whitespace, so the shell's word splitting of these
 # interpolations is the intended reading.
-precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules hooks justfile plugin-dev scripts tests"
+precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules hooks justfile plugin-dev reference scripts tests"
 
 # The evals drive the real CLI against the installed plugin, so they also
 # depend on what the plugin ships: its agents, commands and skills. The bats
@@ -84,14 +84,14 @@ test-unit:
         suites+=("$suite")
     done
     [ "${#suites[@]}" -gt 0 ] || { echo "test-unit: no suites matched tests/*.bats" >&2; exit 1; }
-    bats "${suites[@]}"
+    scripts/run-bats.sh --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "${suites[@]}"
 
 test-integration:
     #!{{ bash_prolog }}
     shopt -s nullglob
     suites=(tests/integration_*.bats tests/evals/lib/*.bats)
     [ "${#suites[@]}" -gt 0 ] || { echo "test-integration: no suites matched" >&2; exit 1; }
-    bats "${suites[@]}"
+    scripts/run-bats.sh --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "${suites[@]}"
 
 # Bash prolog: the shebang line every recipe above uses, plus the gate-sentinel
 # helpers. A gate is a pure function of its declared inputs, so re-running it

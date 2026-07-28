@@ -94,3 +94,10 @@ pointer in that repo is fine.
 - `just precommit` is fast and frequent. `just evals` drives the real claude
   CLI and costs time and money — run it explicitly, not as part of a release.
   `just release` depends on `prerelease`, which is just `precommit`.
+- `test-unit`/`test-integration` run bats through `scripts/run-bats.sh`, not
+  bare `bats`: it shows only `not ok` blocks plus a pass/fail count and
+  stashes the full TAP stream in a logged tmp file. Don't pipe raw `bats`
+  output through `tail` — a run is hundreds of lines and a truncated tail can
+  crop the one `not ok` line that matters. Invoke `bats` directly only when
+  deliberately inspecting the full stream (e.g. debugging the wrapper
+  itself).

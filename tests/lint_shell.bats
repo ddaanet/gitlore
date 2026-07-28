@@ -4,19 +4,16 @@
 # The planted scripts below carry literal `$foo` on purpose (to trigger SC2086
 # in the *target*); the single-quoted printf is intentional, not a bug.
 # shellcheck disable=SC2016
+#
+# No test here runs this script against the real repo — `just lint`, a
+# sibling precommit step (`justfile`'s `precommit: check-version lint test`),
+# already asserts that. Doing it again here doubled shellcheck's ~64s repo-wide
+# cost inside `test-unit` for no added coverage in the gate that matters.
 
 load helpers/setup
 
 setup()    { setup_tmp_repo; }
 teardown() { teardown_tmp_repo; }
-
-@test "lint-shell: the repository's own shell files are clean" {
-  # setup() leaves us in an empty tmp repo; the script keys off cwd's toplevel,
-  # so run it from within the real repo to lint the actual tracked scripts.
-  cd "$PLUGIN_ROOT" || return 1
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
-  [ "$status" -eq 0 ]
-}
 
 @test "lint-shell: catches a shellcheck violation in a tracked .sh file" {
   printf '#!/usr/bin/env bash\nfoo=$(echo hi)\necho $foo\n' > bad.sh
