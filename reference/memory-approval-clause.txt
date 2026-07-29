@@ -1,1 +1,17 @@
-as one line per memory file — New, Update, Augment, Reduce, or Remove, its tier/slug, and a one-line summary of what changed
+The commit message is a subject line, a blank line, then one paragraph per
+changed memory file. Each paragraph opens with a bold prefix naming the file's
+kind — New, Update, Augment, Reduce, or Remove — and its tier/slug, then says
+in prose what the fact now claims and what prompted the change. A MEMORY.md —
+root or tier — gets no paragraph: an index line moves with the fact it points
+at, so its changes are already implied. Template:
+
+    <subject line, no conventional-commit prefix>
+
+    **New <tier>/<slug>:** what the fact records, and what prompted writing it
+    now rather than earlier.
+
+    **Update <tier>/<slug>:** what the wording claimed before, what it claims
+    now, and the evidence that moved it.
+
+    **Remove <tier>/<slug>:** what it claimed, and what showed it was wrong or
+    redundant.

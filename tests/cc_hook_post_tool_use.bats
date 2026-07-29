@@ -17,6 +17,10 @@ teardown() { teardown_tmp_repo; }
 
 stdin() { printf '%s' "$1" | bash "$POST"; }
 
+# The model channel, which is what the agent actually reads. The clause is
+# multi-line, so it only survives as JSON — decode before matching on it.
+ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
+
 @test "no-op when tool_name is not Bash" {
   payload='{"tool_name":"Read","tool_input":{},"tool_response":{"exit_code":0}}'
   run stdin "$payload"
@@ -51,7 +55,11 @@ stdin() { printf '%s' "$1" | bash "$POST"; }
   clause=$(cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt")
   payload='{"tool_name":"Bash","tool_input":{"command":"lefthook run pre-commit"},"tool_response":{"exit_code":0}}'
   run stdin "$payload"
-  [[ "$output" == *"$clause"* ]]
+  # The clause spans lines, so the emission must be real JSON — a hand-written
+  # string would carry a raw newline and parse as nothing at all.
+  echo "$output" | jq -e . >/dev/null
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"$clause"* ]]
 }
 
 @test "no-op when .claude/settings.json is missing" {

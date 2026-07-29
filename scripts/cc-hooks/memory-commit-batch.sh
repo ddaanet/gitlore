@@ -84,8 +84,15 @@ fi
 if [ ! -s "$msgfile" ]; then
   # Keep the trigger: the moment the approved summary lands, the next
   # PostToolBatch commits transparently — the agent need not re-trigger.
-  emit "gitlore: commit-memory is pending but no approved summary exists yet at $msgfile. Summarize the pending memory changes $(gitlore_memory_approval_clause), present the summary to the user as a markdown blockquote (\`> …\`) rather than a code fence, get their approval, and write the summary to $msgfile — the commit then completes on its own." \
-    "gitlore: a memory commit is pending, but no approved summary exists yet. Summarize the pending memory changes as a commit message with a body $(gitlore_memory_approval_clause), present it to the user as a markdown blockquote (\`> …\`) rather than a code fence, and once they approve write it to $msgfile. The commit then completes on its own — do not re-trigger it."
+  # The clause is a multi-line block and goes last in each message; emit() builds
+  # the JSON with --arg, so the newlines survive escaping.
+  clause=$(gitlore_memory_approval_clause)
+  emit "$(printf '%s\n\n%s\n' \
+      "gitlore: commit-memory is pending but no approved summary exists yet at $msgfile. Summarize the pending memory changes, present the summary to the user as a markdown blockquote (\`> …\`) rather than a code fence, get their approval, and write the summary to $msgfile — the commit then completes on its own." \
+      "$clause")" \
+    "$(printf '%s\n\n%s\n' \
+      "gitlore: a memory commit is pending, but no approved summary exists yet. Summarize the pending memory changes as a commit message, present it to the user as a markdown blockquote (\`> …\`) rather than a code fence, and once they approve write it to $msgfile. The commit then completes on its own — do not re-trigger it." \
+      "$clause")"
   exit 0
 fi
 

@@ -1,9 +1,11 @@
 ## Current task
 
-No thread is mid-flight. The `docs/design.md` cleanup is finished end to end: the changelog is its own file, the tables are prose, D10-D19 state present-tense mechanism, and NFR10 carries a measured figure (530 s over 620 cases, 2-vCPU droplet, `--jobs 2`, `user + sys` 566 s — the suite is barely parallel, so per-case work is the lever rather than `--jobs`).
+Nothing in flight. The FR11 approval-clause change is complete and verified: the clause is now a sentence-final block carrying a literal body template — one paragraph per changed memory file, `**<Kind> <tier>/<slug>:**` prefix, MEMORY.md excluded from the listing.
 
-The next substantial thread is the `memory/MEMORY.md` compaction, at ~92% of the 25600-byte advisory budget. It is deliberately not started: `feedback_index_compaction_triggers` requires an adversarial audit of the diff by someone other than the author, and a rushed trim silently misroutes recall.
+The only live thread is the memory-store cleanup below, untouched this session.
 
 ## Open decisions
 
-- Upstream's compaction (`b044d35`/`d7a39ed`) cut `phantom dotfiles` and `own hooks.json unlink EROFS` from the `sandbox effects` index line, and `a brief dropped there leaves your task frame` from `no_in_place_other_repos`. Each of those literals now has zero occurrences anywhere in the index, so the facts are unreachable by their symptom strings even though the bodies still carry them. Restore the triggers, or accept the loss as intended compaction? The parallel `PostToolBatch` cut was restored on the different ground that it fell to one occurrence on a wrong line, which misroutes rather than merely losing reach.
+- `handoff`'s `scripts/_checkpoint-lib.sh` still renders gitlore's clause mid-sentence (`"…then a body with $clause."`), which now prints a multi-line block inside a sentence — degraded rendering, not a break, and its own tests use a single-line fixture clause so they stay green. The proposed patch: move `"$clause"` to its own trailing `printf` argument after a blank line, and reword the sentence to `"Summarize these changes as a commit message, its title line at most 72 characters."` — keeping the 72-char limit, which the clause does not carry, and dropping the structure words it does. Read-only rule for David's other repos: he applies it.
+
+- Upstream's index compaction (`b044d35`/`d7a39ed`) cut `phantom dotfiles`, `own hooks.json unlink EROFS` and `a brief dropped there leaves your task frame` from index lines. Each literal now has zero occurrences anywhere in the index, so those facts are unreachable by their symptom strings even though the bodies still carry them. Restore the triggers, or accept the loss as intended compaction? The parallel `PostToolBatch` cut was restored on different grounds — it fell to one occurrence on a wrong line, which misroutes rather than merely losing reach.
