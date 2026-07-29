@@ -91,9 +91,13 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
 
   run run_batch
   [ "$status" -eq 0 ]
-  [[ "$output" == *"$clause"* ]]
+  # Multi-line clause: it survives only through jq's escaping, so both channels
+  # are decoded before matching. A raw-$output match would test the escaping,
+  # not the wording.
   agent="$(echo "$output" | ctx)"
   [[ "$agent" == *"$clause"* ]]
+  user="$(echo "$output" | jq -r '.systemMessage // ""')"
+  [[ "$user" == *"$clause"* ]]
 }
 
 @test "a locked repo keeps both IPC files so the next batch retries transparently" {

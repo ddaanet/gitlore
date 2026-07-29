@@ -40,11 +40,12 @@ touch "$notifyfile"
 
 msgfile=$(gitlore_commit_msg_file "$mempath")
 
-cat <<EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PostToolUse",
-    "additionalContext": "gitlore: memory ($mempath) has uncommitted changes. Summarize pending memory changes $(gitlore_memory_approval_clause), present the summary to the user as a markdown blockquote (\`> …\`) — not a code fence, which frames it as a verbatim artifact rather than an editable draft — and await confirmation. Treat only a clear, un-negated affirmative as approval; a hedge, a question, or any negation ('not yet', 'no', 'disapprove') is a rejection. Only once approved, write the summary to $msgfile. On rejection or anything unclear, discuss and ask again — do not write $msgfile."
-  }
-}
-EOF
+# jq, not a heredoc: the approval clause is a multi-line block (it carries the
+# body template), and a literal newline inside a hand-written JSON string is
+# invalid JSON. --arg escapes it, and $mempath/$msgfile with it.
+ctx=$(printf '%s\n\n%s\n' \
+  "gitlore: memory ($mempath) has uncommitted changes. Summarize pending memory changes, present the summary to the user as a markdown blockquote (\`> …\`) — not a code fence, which frames it as a verbatim artifact rather than an editable draft — and await confirmation. Treat only a clear, un-negated affirmative as approval; a hedge, a question, or any negation ('not yet', 'no', 'disapprove') is a rejection. Only once approved, write the summary to $msgfile. On rejection or anything unclear, discuss and ask again — do not write $msgfile." \
+  "$(gitlore_memory_approval_clause)")
+
+jq -n --arg c "$ctx" \
+  '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}'
