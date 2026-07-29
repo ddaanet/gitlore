@@ -83,6 +83,26 @@ load helpers/setup
   echo "$fm" | grep -qF 'gitlore: memory merge prepared'
 }
 
+# D20: push is a skill, not a command, for the same reason resolve is -- it is
+# user-initiated at the front door (/gitlore:push) but must ALSO be reachable
+# from context, at the end of a session that committed memory and will make no
+# parent push. Only a skill description is matched against context. It stays out
+# of commands/ so the two namespaces cannot collide on the name.
+@test "distribution: push is a skill (not a command) and its script is executable" {
+  skill="$PLUGIN_ROOT/skills/push/SKILL.md"
+  [ -f "$skill" ]
+  [ ! -e "$PLUGIN_ROOT/commands/push.md" ]
+  fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
+  # CC does not fall back to the filename for a skill's dispatch id.
+  echo "$fm" | grep -qE '^name:[[:space:]]*push[[:space:]]*$'
+  # The script the skill shells out to must ship executable -- a 100644 here
+  # makes the skill's one Bash call fail for every installed user.
+  [ -x "$PLUGIN_ROOT/scripts/push-memory.sh" ]
+  # The skill must reach the script through the config key, never a hardcoded
+  # plugin path: CLAUDE_PLUGIN_ROOT is unset in agent Bash.
+  grep -qF 'git config gitlore.pushCommand' "$skill"
+}
+
 # Regression: D15 — the in-process-worktree memory-drift guard must be registered
 # as a PostToolUse hook on the EnterWorktree|ExitWorktree matcher, and its script
 # must exist and be executable (verified to fire; targeted matcher chosen).

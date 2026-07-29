@@ -408,3 +408,128 @@ $push_err" >&2
 
   return 0
 }
+
+# Publish every store to its own remote: each tier's `live` first, then memory's.
+# Assumes the memory worktree exists (caller guards `[ -e "$mempath/.git" ]`).
+# Returns 0 when everything is published (already-up-to-date included). Returns 1
+# after emitting a message when a store has no remote, a stale merge state is
+# present, a push is refused, or the remote is unreachable; a refusal that git
+# attributes to divergence yields a prepared merge for `/gitlore:resolve`.
+#
+# Shared by `pre-push` (publishing alongside the parent) and `push-memory.sh`
+# (publishing on its own, with no parent push — D20). One implementation, so the
+# ordering guarantee below cannot drift between the two entry points.
+# Args: $1 = memory worktree path.
+gitlore_push_stores() {
+  local mempath="$1" remote_url tier tierpath tier_err push_err
+
+  # Never publish on top of a half-finished merge, at any level.
+  gitlore_guard_stale_merge_state "$mempath" || return 1
+
+  remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
+  if [ -z "$remote_url" ]; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory submodule has no remote configured. Run /gitlore:resolve to create one." \
+      "gitlore: memory submodule has no remote configured. Open this project in Claude Code and run /gitlore:resolve." >&2
+    return 1
+  fi
+
+  # Tier push lockstep (D17). Each tier is an independent repo with its own remote,
+  # and the memory commit about to be published records its gitlink — so every tier
+  # commit must reach its remote BEFORE that pointer goes out, or a colleague
+  # fetches memory and cannot resolve the tier. Driver-side, like memory's own
+  # push: the memory store gets no recursing pre-push.
+  # Failure here is fatal. A tier that silently stops publishing is indistinguish-
+  # able from one with nothing to say, which is exactly how shared memory rots.
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # Unchecked-out tier: `git -C` escapes to the enclosing repo, which would push
+    # MEMORY's live to memory's origin under the tier's name.
+    [ -e "$tierpath/.git" ] || continue
+    # `-q --verify` is silent on the expected miss: a tier never fetched has no
+    # local `live` and so has nothing of its own to publish.
+    git -C "$tierpath" rev-parse -q --verify live >/dev/null || continue
+    if [ -z "$(git -C "$tierpath" config --get remote.origin.url || true)" ]; then
+      gitlore_say_for_agent_or_user \
+        "gitlore: tier '$tier' has no remote configured, so nothing written there is being shared. Mount it against a remote or unmount it." \
+        "gitlore: tier '$tier' has no remote configured, so nothing written there is being shared." >&2
+      return 1
+    fi
+    # Never push on top of a half-finished merge, at any level.
+    gitlore_guard_stale_merge_state "$tierpath" || return 1
+    # `origin/live` has to be current before it can serve as the merge authority.
+    # Non-fatal, exactly as memory's is: the push below is what decides.
+    git -C "$tierpath" fetch -q origin live || true
+    if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
+      # Same discriminator as memory's push below: git's parenthesized reason
+      # separates divergence from policy/credential/quota refusals.
+      case "$tier_err" in
+        *"(fetch first)"*|*"(non-fast-forward)"*)
+          # One merge policy at every level: prepare against the tier's own
+          # `origin/live` and yield, exactly as memory does below.
+          gitlore_yield_merge "$tierpath" origin/live head-vs-remote || return 1
+          return 1
+          ;;
+        *)
+          gitlore_say_for_agent_or_user \
+            "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" \
+            "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" >&2
+          ;;
+      esac
+      return 1
+    fi
+  done < <(gitlore_tier_paths "$mempath")
+
+  # No redirect: `-q` already silences progress, so anything fetch writes here is a
+  # real problem. Non-fatal (`|| true`) — the push below is the operation that counts.
+  git -C "$mempath" fetch -q origin live || true
+
+  # Capture rather than discard the push error: the two branches below diagnose
+  # only "unreachable" and "divergence", and a push can fail for neither reason
+  # (protected branch, pre-receive rejection, bad credentials on a reachable host,
+  # quota). Those used to land in the divergence branch and start a bogus merge
+  # resolution with git's actual explanation thrown away. Keeping the text lets the
+  # fall-through report the real cause.
+  push_err=""
+  if push_err=$(gitlore_git -C "$mempath" push -q origin live 2>&1); then
+    return 0
+  fi
+
+  # Push failed. Distinguish unreachable from divergence. Provoking the error IS
+  # the mechanism here — the question is only whether the remote answers at all —
+  # so the redirect is the point rather than a swallowed message.
+  if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory remote unreachable. Check network or 'gh auth status'." \
+      "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
+    return 1
+  fi
+
+  # Reachable, and the push was refused. Divergence is the only cause a merge can
+  # fix; anything else (policy hook, protected branch, quota, credentials) is not,
+  # and used to be misdiagnosed as divergence with git's explanation discarded.
+  # The discriminator is git's parenthesized reason, verified against real output:
+  #   divergence → " ! [rejected]        HEAD -> live (fetch first)"
+  #                (or "(non-fast-forward)")
+  #   policy     → " ! [remote rejected] HEAD -> live (pre-receive hook declined)"
+  case "$push_err" in
+    *"(fetch first)"*|*"(non-fast-forward)"*) ;;
+    *)
+      if [ -n "$push_err" ]; then
+        gitlore_say_for_agent_or_user \
+          "gitlore: pushing memory to its remote failed, and not because of divergence. git said:
+$push_err" \
+          "gitlore: pushing memory to its remote failed, and not because of divergence. git said:
+$push_err" >&2
+        return 1
+      fi
+      ;;
+  esac
+
+  # Reachable → HEAD-vs-remote divergence. Prepare and yield.
+  gitlore_yield_merge "$mempath" origin/live head-vs-remote || return 1
+  return 1
+}
