@@ -23,7 +23,7 @@ built that way. It is kept in the present tense — how it got here is in
 5. When any divergence is detected (local branch vs. trunk, or local trunk vs. remote), `/gitlore:resolve` performs a semantic merge. A sub-agent with fresh context synthesizes the merged content; the parent agent approves the summary with the user before the merge is committed.
 6. One-command install configures the entire system.
 7. After `git clone`, the first `SessionStart` restores working state automatically. Running `/gitlore:install` again is not required; the plugin's own install is the only prerequisite.
-8. Memory is pushed to a dedicated remote repository with double-commit semantics — memory `live` is pushed before the parent push on every `git push`.
+8. Memory is pushed to a dedicated remote repository with double-commit semantics — memory `live` is pushed before the parent push on every `git push`. It is also publishable on its own, with no parent push and no `git` command typed by hand, so a session that commits memory and ends does not leave those facts in the local clone only. *(Mechanism in D20.)*
 9. Remote creation is provider-agnostic; `gh` CLI is used opportunistically when available.
 10. **Install-time disclosure (informational).** Before creating the memory remote, the user is shown the proposed name, owner, visibility, and a notice that memory may contain session context. This is orientation, not a hard gate.
 11. **Per-commit review gate.** Every memory commit (including merge commits produced by `/gitlore:resolve`) requires explicit user approval of a prose summary before the commit message file is written and the commit executes. This is the effective control over what reaches the remote.
@@ -78,7 +78,7 @@ Configuration splits three ways by what has to travel: tracked files travel with
 
 **Tracked — travels with the repo.** `.claude/settings.json` carries `gitlore.enabled: true` (the activation flag every hook guards on) and `gitlore.precommitCommand`, the project's own pre-commit check (e.g. `lefthook run pre-commit`) that the `PostToolUse` nudge watches for. `.gitlore/bin/claude` is the launcher shim and `.envrc` puts it on `PATH` (`source_up_if_exists` plus `PATH_add .gitlore/bin`) — see Memory Redirect Launcher. `.claude/gitlore-hook-setup` is the hook-manager sentinel, below. Inside the memory submodule, `memory/.gitlore-tiers` lists the active tiers in precedence order (D17).
 
-**Local git config — never tracked, re-pinned every session.** Three keys point at the installed plugin, whose cache path changes on every upgrade: `gitlore.hooksDir` (the hook scripts the wrappers exec), `gitlore.commitCommand` (`commit-memory.sh`, D16) and `gitlore.memoryApprovalClauseFile` (the canonical approval wording, D19). All three are seeded at install and re-written by every `SessionStart`, which is what makes them self-healing; each consumer verifies the resolved path before using it rather than trusting the key (D5).
+**Local git config — never tracked, re-pinned every session.** Four keys point at the installed plugin, whose cache path changes on every upgrade: `gitlore.hooksDir` (the hook scripts the wrappers exec), `gitlore.commitCommand` (`commit-memory.sh`, D16), `gitlore.pushCommand` (`push-memory.sh`, D20) and `gitlore.memoryApprovalClauseFile` (the canonical approval wording, D19). All four are seeded at install and re-written by every `SessionStart`, which is what makes them self-healing; each consumer verifies the resolved path before using it rather than trusting the key (D5).
 
 **IPC files — the agent writes, a hook acts.** `.claude/gitlore-memory-message` (the approved commit summary), `.claude/gitlore-commit-memory` (standalone-commit trigger), `.claude/gitlore-add-tier` (mount intent) and `.claude/gitlore-recall` (recall request) all sit in the parent working tree, gitignored. They live there rather than in a gitdir because a gitdir write is blocked by the CC sandbox and read as self-configuration by the auto-mode classifier — the agent can write an ordinary project file and nothing else. Hook-owned state that the agent must *not* write goes the other way, into the store's gitdir: the once-per-episode nudge marker `gitlore-nudged`, the recall ledger, and the merge-state file.
 
@@ -199,6 +199,8 @@ The division of labour is D7's: the script decides, the agent writes prose.
 
 A crashed merge leaves the state file behind. Every gate guards on it: with `MERGE_HEAD` present the directive says abort-then-retry; without it, the merge is dead and the message says manual intervention is required rather than operating on top of it.
 
+**`push`** — publish every store to its own remote with no parent push. Front door is `/gitlore:push`, but it is a skill rather than a command because its second entry is contextual: a session that committed memory and will make no parent push has to reach for it unprompted, and only a description is matched against context. The body makes one call — `bash "$(git config gitlore.pushCommand)"` — and reads the exit: `0` relays the report, a non-zero carrying `gitlore: memory merge prepared` loops through `/gitlore:resolve` and pushes again, any other non-zero is surfaced verbatim. There is no approval step; FR11 gated the content at commit time. See D20.
+
 **`recall`** — fetch specific memory bodies into context mid-task, from a trigger the user's prompt never carried. The agent writes up to five store-relative paths (or `no match`) to `.claude/gitlore-recall`; a `PostToolBatch` hook reads them and emits the bodies as `additionalContext`. See D18.
 
 #### Claude Code Hooks
@@ -208,7 +210,7 @@ A crashed merge leaves the state file behind. Every gate guards on it: with `MER
 Guards: if `gitlore.enabled` is not `true`, or `.gitmodules` has no `gitlore-memory` entry, no-op.
 
 1. **Launcher guard.** If `GITLORE_LAUNCHED` is unset, the session was started with a plain `claude` — memory is *not* redirected and will strand in the default directory. Say so on `systemMessage`, naming the fix (`direnv allow`, or the global shim on a machine without direnv). Nothing is written to any settings file; that tier is ignored (D10).
-2. **Re-pin the three plugin-path keys** — `gitlore.hooksDir`, `gitlore.commitCommand`, `gitlore.memoryApprovalClauseFile` — so a plugin upgrade heals itself.
+2. **Re-pin the four plugin-path keys** — `gitlore.hooksDir`, `gitlore.commitCommand`, `gitlore.pushCommand`, `gitlore.memoryApprovalClauseFile` — so a plugin upgrade heals itself.
 3. **Emit the wrappers** `gitlore-pre-commit` and `gitlore-pre-push` into the git common dir, and the FR11 commit gate into the memory store and each tier. Idempotent and worktree-agnostic (D11, D12).
 4. **Replay the hook-manager sentinel** to reinstate wiring after a clone or a new machine (`direct` and `manual` are keywords, not commands — see Hook Manager Support).
 5. **Materialize the store.** Initialize the submodule if needed; add a memory worktree for a linked parent worktree; create local `live` from `origin/live` (or from the checked-out gitlink when there is no remote) after a clone without `--recurse-submodules`, since the branch model references `live` as a local ref.
@@ -282,6 +284,18 @@ Arg-driven, `git commit`-style: `-m <summary>`, `-F <file>`, or `-F -` (stdin/he
 
 **Shared body.** `gitlore_sync_memory_to_live` (lib) is the commit-and-advance-live logic factored out of `pre-commit`: dirty/freshness gate → `add -A` → `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>` → `rm <msgfile>` → `push . HEAD:live` (ff) → divergence (prepare / write merge-state / emit directive / exit 1). Both `pre-commit` and `commit-memory.sh` call it — one implementation, no drift.
 
+#### Memory Push Entry Point
+
+**`push-memory.sh`** — the sibling of `commit-memory.sh` on the publish side: it pushes each tier's `live` and then memory's to their own remotes **without a parent push**, so an agent or skill can satisfy FR8 at a moment when no parent commit is in flight. See D20.
+
+Takes no arguments — there is nothing to approve, because FR11 gated this content when it was committed and publishing an already-approved commit adds no disclosure decision. Guards (exit 0): not a gitlore repo / no `gitlore-memory` submodule / memory worktree absent. Exit 1 carries a message on stderr naming the next action, including a prepared merge routed to `/gitlore:resolve` when a remote has diverged.
+
+On success it reports what moved, per store — commits published and where `origin/live` now sits — from remote-tracking refs captured before the push. Uncommitted changes are named as **not** published rather than left to be assumed so: a push publishes commits, and the one wrong inference available to someone who just asked to publish is that dirty work went with it.
+
+**Discovery.** `gitlore.pushCommand`, seeded at install and re-pinned every `SessionStart`, exactly as `gitlore.commitCommand` is (D5, D16).
+
+**Shared body.** `gitlore_push_stores` (lib) is the tier-then-memory publish logic factored out of `pre-push`: memory's stale-merge guard → remote-configured check → per tier (checkout guard, `live` guard, remote check, stale-merge guard, fetch, ff push, divergence → yield) → memory fetch → memory push → unreachable-vs-refused discrimination → divergence yield. Both `pre-push` and `push-memory.sh` call it, so the tier-before-memory ordering that FR8 rests on cannot drift between them; `pre-push` keeps only what is its own, the session-less-worktree warning about an unpublished gitlink.
+
 ### Hook Manager Support
 
 Detection script outputs structured results. Each hook manager has an idempotent wiring step (uses marker comment `# gitlore: managed` to detect and skip duplicates) and a sentinel command stored in `.claude/gitlore-hook-setup` and replayed by SessionStart on clone or plugin reinstall.
@@ -337,6 +351,14 @@ Idempotency: every wiring modification uses a detection marker (`# gitlore: mana
 **Tier write**
 
 A portable fact authored into `memory/<tier>/` rides the ordinary commit flow: the tier is committed and its `live` advanced before memory's own `add -A`, so the memory commit records the moved gitlink rather than lagging it, and the tier is pushed before memory is. One approval summary covers the whole episode, grouped by destination — a line bound for a shared tier is more public than one bound for project memory.
+
+**Publish without a parent push**
+
+1. The user runs `/gitlore:push`, or a session that committed memory is ending with no parent push in sight.
+2. The skill runs `push-memory.sh` through the `gitlore.pushCommand` key.
+3. Each tier's `live` goes to its own remote, then memory's — the same order `pre-push` uses, from the same shared body.
+4. The skill relays which stores moved and how far, and names any uncommitted memory as unpublished.
+5. On divergence: `/gitlore:resolve` merges the store that diverged, then the skill pushes again, until the command exits 0.
 
 **Resolve (on divergence) — primary path: agent-driven**
 
@@ -664,6 +686,16 @@ The FR11 approval prompt — "summarize pending memory changes, present as a blo
 **No fallback copy in the consumer, and no silent skip on a missing key.** A hardcoded fallback in `handoff` was considered and rejected: the clause is only ever needed when gitlore is genuinely active, and a submodule registered without a working gitlore install already makes `handoff`'s *existing* approval instructions a dead letter (nothing consumes the IPC files they describe) — a fallback would just be one more set of instructions nothing downstream honors. The alternative to a fallback is not silence either: when the key or file can't be resolved, `handoff` reports the problem explicitly and names the fix ("gitlore plugin looks disabled — check `/plugin`") rather than skipping the whole memory-approval directive, so a broken discovery path fails loud instead of quietly dropping FR11's gate on the consumer side.
 
 **`resolve.sh` reaches the clause through its callers, never by sourcing `util.sh` itself.** `util.sh` declares `readonly` globals, so sourcing it twice fails; `resolve.sh` leaves that to the caller and says so in its own header comment. All four scripts that source `resolve.sh` (`commit-memory.sh`, `git-hooks/pre-push`, `git-hooks/pre-commit`, `cc-hooks/session-start.sh`) source `util.sh` first, so `gitlore_memory_approval_clause` is already in scope at `resolve.sh`'s one call site — a defensive `source` line there would break every caller on a `readonly` redeclaration.
+
+**D20 — Standalone push entry point, invoked directly by the skill rather than through a trigger file**
+
+Memory `live` advances locally on every memory commit, but nothing reaches a remote until a parent `git push` runs `pre-push`. The standalone commit path (D16) made that gap routine rather than rare: a session can commit memory at an interactive moment and end without any parent push, leaving every fact in the local clone only. `push-memory.sh` closes it, and the split with `pre-push` is the same one `commit-memory.sh` has with `pre-commit` — the shared body in the lib, the entry-point-specific guards at each caller.
+
+**Why the skill calls the script directly, unlike the standalone commit.** The commit path routes through an IPC file and a `PostToolBatch` hook because the auto-mode classifier refuses agent writes it reads as self-configuration, and because a denial there strands a summary the user already approved — the approval is the expensive, unrepeatable thing. Push has no approval to lose, and the classifier's objection to a submodule push does not survive an explicit `/gitlore:push`: the action *is* what the user asked for. Should a call be denied anyway, nothing has happened — no ref moved, no merge was prepared — so the recovery is one turn (re-run behind a `!` prefix) rather than a lost gate. A trigger file would buy nothing against that and would put a second IPC file, a second hook and a second stranded-trigger check in the way.
+
+**Push is not fire-and-forget, and the skill is shaped around that.** A refused push whose reason git attributes to divergence prepares a merge and yields — which dispatches the memory-merger sub-agent, synthesizes content, and lands a merge commit under its own approval gate. So divergence is a first-class outcome in the skill body, not an error branch: resolve, then **push again**, because tiers publish before memory and resolve handles one store per pass, so a second store can still be unpublished when the first one's merge lands. That loop, not the exit code alone, is what makes "published" true.
+
+**No approval gate of its own.** FR11 is a gate on what enters the history, applied where content is composed. Re-asking at publish time would gate a decision already made, and would train the user to approve a prompt carrying no new information — the failure mode that makes a gate ornamental. What the run *does* owe the user is an accurate report: which stores moved, how far, and — named explicitly rather than left to inference — that uncommitted changes did not go with them.
 
 ---
 

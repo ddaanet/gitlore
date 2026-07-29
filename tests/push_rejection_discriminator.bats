@@ -252,14 +252,19 @@ HOOK
   [ "$status" -ne 0 ]
 }
 
-@test "all four sites still key on the pinned patterns" {
+@test "every discriminating site still keys on the pinned patterns" {
   # Guards the mirror above from drifting away from the code it stands in for:
   # if a site stops using this pattern pair, the scenarios go on passing while
   # testing nothing.
+  #
+  # pre-push is NOT in this list any more, and its absence is asserted below
+  # rather than assumed: since D20 it discriminates nothing itself, it calls
+  # gitlore_push_stores in scripts/lib/resolve.sh (already covered here) so the
+  # standalone push entry point cannot diverge from the hook. Dropping a site
+  # from this loop would otherwise be indistinguishable from losing its coverage.
   for site in \
     scripts/lib/resolve.sh \
     scripts/resolve.sh \
-    scripts/git-hooks/pre-push \
     scripts/cc-hooks/session-start.sh
   do
     run grep -c -e '"(fetch first)"\*|\*"(non-fast-forward)"' \
@@ -270,4 +275,11 @@ HOOK
       return 1
     }
   done
+
+  # pre-push delegates instead of discriminating. If someone re-inlines the push
+  # logic there, this fails and the site belongs back in the loop above.
+  grep -qF 'gitlore_push_stores' "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
+  run grep -c '"(fetch first)"\*|\*"(non-fast-forward)"' \
+      "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
+  [ "$status" -ne 0 ]
 }

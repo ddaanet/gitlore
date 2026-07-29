@@ -84,6 +84,7 @@ fi
 # Hook dir + wrappers.
 git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
 git config gitlore.commitCommand "$PLUGIN_ROOT/scripts/commit-memory.sh"
+git config gitlore.pushCommand "$PLUGIN_ROOT/scripts/push-memory.sh"
 git config gitlore.memoryApprovalClauseFile "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
