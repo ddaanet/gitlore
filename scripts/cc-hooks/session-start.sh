@@ -176,7 +176,8 @@ fi
 # the memory store so a portable fact authored in another repo arrives here.
 # Discovery is by enclosure — every entry in memory/.gitmodules is a tier. Tiers
 # use the detached-at-live branch model (D17): no named working branch, HEAD is
-# detached at live. Propagation-in only; commit/push lockstep is a later slice.
+# detached at live. This pass is propagation-in only; tier commits and pushes
+# ride the parent's pre-commit/pre-push lockstep.
 # Every git call is guarded: a broken tier must never abort the session.
 while IFS= read -r tier; do
   [ -n "$tier" ] || continue
@@ -192,10 +193,11 @@ while IFS= read -r tier; do
   # ff local `live` from the remote's `live`. A refspec fetch into a branch ref
   # refuses a non-fast-forward without '+', so this is ff-only by construction —
   # and it works precisely because a tier never checks `live` out AS a branch.
-  # Non-fatal (tier writes are a later slice), but NOT silent: a tier that has
-  # quietly stopped propagating is indistinguishable from one with nothing new,
-  # so capture the reason and report it. The ff-rejection is the interesting
-  # case — it means this tier has diverged and needs the lockstep slice.
+  # Non-fatal — a session must start whatever a tier's remote says — but NOT
+  # silent: a tier that has quietly stopped propagating is indistinguishable
+  # from one with nothing new, so capture the reason and report it. The
+  # ff-rejection is the interesting case: this tier has diverged and needs
+  # /gitlore:resolve.
   # No `-q`: unlike `push -q`, which still reports its rejection reason, a quiet
   # fetch prints NOTHING on a non-fast-forward — it just exits 1. With `-q` the
   # divergence arm below could never match, and the fall-through reported "git

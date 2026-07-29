@@ -1,7 +1,7 @@
 # gitlore
 
 A Claude Code plugin that makes Claude's auto-memory versioned, shared, and git-backed.
-See `docs/design.md` for the design and `docs/plans/` for implementation plans.
+See `docs/design.md` for the design, `docs/changelog.md` for how it got there, and `docs/plans/` for implementation plans.
 
 ## Install
 
@@ -52,7 +52,7 @@ Dependencies:
 ## Status
 
 Feature-complete: every functional requirement and design decision in
-`docs/design.md` (FR1–FR16, D1–D18) is implemented and tested.
+`docs/design.md` (FR1–FR16, D1–D19) is implemented and tested.
 
 - **Plan 01 — local memory pipeline** ✅
 - **Plan 02 — remote and push** ✅
