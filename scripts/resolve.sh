@@ -67,23 +67,24 @@ load_continuation_state() {
   pending=$(jq -r .source_ref "$statefile")
 }
 
-# Compose the memory tree's indexes UP and stage the result in the store that is
-# about to be committed.
+# Adopt a merged tier into the root index: project the merged carrier UP, so
+# root's block for that tier becomes what the merge produced.
 #
-# A landed merge is the one route into a memory store that no compose trigger
-# covers: the PostToolBatch hook fires on an index EDIT and SessionStart on a new
-# session, so a synthesized index would otherwise sit uncomposed until one of
-# those happened to fire. Running here puts the composed bytes in the merge
-# commit itself rather than in a later, unrelated one.
+# This is the step that makes a tier merge reach the surface CC recalls from. A
+# tier is pinned at its gitlink and composition projects the ROOT down, so
+# nothing else would ever move the merged lines into root — the in-session pass
+# would read them as carrier lines root chose not to carry, keep them where they
+# are, and report them. The adoption is also the one moment a carrier outranks
+# root's text: it is the artifact the user just approved, line by line.
 #
-# Up only. A merged tier's facts have to reach the root index — that is the only
-# surface CC recalls from, so a merge that skipped it would land facts nothing
-# can retrieve — and the root write lands in the memory store, which stays dirty
-# and rides the next FR11 commit (the same float the SessionStart recompose
-# produces). The other direction is the hooks' job: mirroring down would write a
-# carrier the user never reviewed as a side effect of approving this merge, and
-# would have to advance that tier's compose-base past a reconciliation that did
-# not happen.
+# Once, here, and in this direction only. Projecting down would write a carrier
+# the user never reviewed as a side effect of approving this merge.
+#
+# A memory-store merge adopts nothing: root's own `MEMORY.md` is one of the files
+# git merged, so the propagation is already in the merged content. The pass still
+# runs, with no tier named — the merge produced whatever order the two sides
+# implied, and the layout, the four validations and the dangling report all still
+# have something to say about it.
 #
 # A refusal never blocks the merge. Compose is fail-safe (it writes nothing), and
 # the merge is synthesized and approved by this point: stranding it half-landed
@@ -91,8 +92,23 @@ load_continuation_state() {
 # then commit what the merger produced.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
-  local memroot="$1" store="$2" composed dangling rc=0
-  composed=$(gitlore_compose "$memroot" up) || rc=$?
+  local memroot="$1" store="$2" tier="" memroot_abs composed dangling rc=0
+  # The state file records an absolute store path while `memroot` is the
+  # submodule path as `.gitmodules` spells it, so the two are compared in one
+  # form. `-ef` rather than string equality: this decides whether a tier is
+  # adopted at all, and a path spelled two ways would adopt a tier named after
+  # the memory root itself.
+  memroot_abs=$(CDPATH='' cd -- "$memroot" && pwd) || memroot_abs="$memroot"
+  if ! [ "$store" -ef "$memroot" ]; then
+    tier=${store#"$memroot_abs"/}
+    if [ "$tier" = "$store" ]; then
+      echo "gitlore: the merged store $store is not inside the memory root $memroot_abs; the root index was left uncomposed." >&2
+      gitlore_git -C "$store" add -A
+      return 0
+    fi
+  fi
+
+  composed=$(gitlore_compose_up "$memroot" "$tier") || rc=$?
   if [ "$rc" -eq 0 ]; then
     [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
     # The dangling pass reports rather than refuses, so it runs on the composed
@@ -103,15 +119,20 @@ compose_merged_indexes() {
       printf '%s\n' "$dangling" | sed 's/^/gitlore:   /' >&2
     fi
   elif [ "$rc" -eq 2 ]; then
-    echo "gitlore: tier composition could not write an index — the merge is being committed with the indexes only PARTLY composed. Investigate the path named below, then edit MEMORY.md to retrigger the pass:" >&2
+    echo "gitlore: the root index could not be written — the merge is being committed without the adopted tier's lines. Investigate the path named below, then edit MEMORY.md to retrigger composition:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
   else
-    echo "gitlore: tier composition refused — the merge is being committed uncomposed. Fix the store by hand, then edit MEMORY.md to retrigger it:" >&2
+    echo "gitlore: tier composition refused — the merge is being committed without the adopted tier's lines in the root index. Fix the store by hand, then edit MEMORY.md to retrigger it:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
   fi
-  # The merger already ran `git add -A` here; re-running it is how anything
-  # composition wrote joins the same commit.
+  # The merger already ran `git add -A` in the store being committed; re-running
+  # it is how anything written there joins the same commit. Then the root index,
+  # which for a tier merge lives in a DIFFERENT store: staging it there is what
+  # puts it in the next FR11 commit rather than leaving it as an unexplained
+  # working-tree change. For a memory merge the two calls are the same repo, and
+  # the second is what stages the compose write the first ran too early to see.
   gitlore_git -C "$store" add -A
+  gitlore_git -C "$memroot" add -- MEMORY.md
 }
 
 # Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on

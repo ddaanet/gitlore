@@ -117,6 +117,15 @@ seed_tier_bullet() {
   printf -- '---\nname: %s\ndescription: ""\n---\n\nbody\n' "${file%.md}" > "memory/$tier/$file"
 }
 
+# Commit the memory store's current tree. The down projection reads root at HEAD
+# to tell a line root DELETED from one it never carried, so a test about a
+# deletion has to establish that HEAD first. The blessed sentinel carries the
+# commit past the FR11 gate. Args: $1 = commit subject (optional).
+commit_memory_state() {
+  git -C memory add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "${1:-memory: checkpoint}"
+}
+
 # Append a bullet to the ROOT index. Args: $1 = path (may be tier-prefixed),
 # $2 = hook.
 seed_root_bullet() {

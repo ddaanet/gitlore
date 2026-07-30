@@ -294,104 +294,211 @@ EOF
   return 0
 }
 
-# Print the merged carrier bullet list for tier $2 under store $1, unprefixed.
-# A path-keyed THREE-WAY merge of root (ours) and carrier (theirs) against a
-# base — the only thing that tells an ADD apart from a DELETE, which two
-# snapshots alone cannot.
+# Print tier $2's new carrier bullet list, unprefixed: root's lines for that tier,
+# projected DOWN. Root is canonical (D17), so every line root carries is emitted
+# with root's text and root's placement — this is where a line authored in the
+# root index becomes a line the tier can travel with.
 #
-# The base is the carrier as of the LAST COMPOSE — the point root and carrier
-# were last reconciled — read from `carrier.md` in the tip commit of the tier's
-# `refs/gitlore/compose-base` audit chain, which `gitlore_compose_save_base`
-# extends at the end of every successful pass. A ref naming a bare BLOB is the
-# pre-log shape, and the blob itself is the carrier: it is read as the base, and
-# the next save migrates the ref to a chain.
-# It deliberately tracks composes, not commits: a commit can record a carrier
-# edit without composing root (the float the design allows), so the committed
-# gitlink runs AHEAD of what root reflects and would read a not-yet-projected
-# add as a delete. No base ref yet (before the first compose) → an empty base,
-# so the merge is a union — nothing existed to have been deleted.
+# A tier is pinned at its gitlink, so the carrier cannot have moved on its own
+# since the memory commit that recorded both surfaces. What is left to decide is
+# a carrier path root does not carry, and "root lacks it" alone is ambiguous —
+# root may have deleted it, or may never have had it. Root at HEAD answers:
 #
-# Presence per path: present at base survives only if BOTH sides still carry it
-# (a delete on either side wins); new since base survives if EITHER side added
-# it. The root's text wins wherever root has the line (the canonical index D17);
-# otherwise the carrier's text stands.
+#   present there → root deleted the line → drop it from the carrier;
+#   absent there  → nobody authored it in root → keep it (a line written straight
+#                   into the carrier, or one left there while the tier slept),
+#                   and gitlore_compose_orphans names it.
 #
-# Order comes from `gitlore_order_merge` over the same three sides, so the root's
-# is carried down — the root index is the surface the agent edits, and where it
-# puts a line is an authored choice, not an accident to normalize away. A fact
-# that arrived in the carrier from another consumer keeps the offset that
-# consumer gave it, because the base makes its arrival a positional insertion
-# rather than an append. Root and carrier inserting at one offset resolves to the
-# root's line first.
-gitlore_compose_tier_bullets() {
+# One lookup against a commit git already holds. Nothing is remembered between
+# passes: a reconciliation ref would be state that can outlive what it describes,
+# and the pin is what makes it unnecessary.
+#
+# Order is merged through gitlore_order_merge over the three path lists, so a
+# kept carrier-only line stays at its own offset instead of collecting at the end.
+gitlore_compose_down() {
   local mempath="$1" tier="$2"
   local carrier="$mempath/$tier/MEMORY.md"
   local root="$mempath/MEMORY.md"
   local line path tmpd b o t
 
-  tmpd=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-compose-order.XXXXXX") || return 1
+  tmpd=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-compose-down.XXXXXX") || return 1
   local side
-  for side in ours theirs base; do
+  for side in root carrier head; do
     : > "$tmpd/$side.paths" || { rm -rf "$tmpd"; return 1; }
     : > "$tmpd/$side.bullets" || { rm -rf "$tmpd"; return 1; }
   done
 
-  # ours — root's bullets for this tier, prefix stripped; the canonical text and
-  # the authored order.
+  # root — its bullets for this tier, prefix stripped: the canonical text and the
+  # authored order.
   if [ -f "$root" ]; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in "$tier"/*) ;; *) continue ;; esac
       line=$(gitlore_bullet_deprefix "$line" "$tier") || continue
-      printf '%s\n' "$line" >> "$tmpd/ours.bullets"
-      printf '%s\n' "${path#"$tier"/}" >> "$tmpd/ours.paths"
+      printf '%s\n' "$line" >> "$tmpd/root.bullets"
+      printf '%s\n' "${path#"$tier"/}" >> "$tmpd/root.paths"
     done < "$root"
   fi
 
-  # theirs — the carrier working tree's bullets, in carrier order.
+  # carrier — the working tree's bullets, in carrier order.
   if [ -f "$carrier" ]; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
-      printf '%s\n' "$line" >> "$tmpd/theirs.bullets"
-      printf '%s\n' "$path" >> "$tmpd/theirs.paths"
+      printf '%s\n' "$line" >> "$tmpd/carrier.bullets"
+      printf '%s\n' "$path" >> "$tmpd/carrier.paths"
     done < <(gitlore_index_part "$carrier" bullets)
   fi
 
-  # base — the last-compose marker, for presence AND for the order the two sides
-  # last agreed on. -q keeps rev-parse silent when the ref is absent (before the
-  # first compose), leaving the base empty: a union, with nothing to have moved.
-  # The carrier lives at `carrier.md` in the audit commit; a ref left over as a
-  # bare blob IS the carrier, so it is read directly.
-  if git -C "$mempath/$tier" rev-parse -q --verify refs/gitlore/compose-base >/dev/null; then
-    local basespec=refs/gitlore/compose-base
-    if [ "$(git -C "$mempath/$tier" cat-file -t refs/gitlore/compose-base)" = commit ]; then
-      basespec=refs/gitlore/compose-base:carrier.md
-    fi
+  # root at HEAD — paths only, and only this tier's. `-q --verify` is silent on
+  # the one expected miss: a store whose root index is not committed yet, which
+  # leaves the list empty and makes every carrier line a keep.
+  if git -C "$mempath" rev-parse -q --verify HEAD:MEMORY.md >/dev/null; then
     while IFS= read -r line; do
       path=$(gitlore_bullet_path "$line") || continue
-      printf '%s\n' "$path" >> "$tmpd/base.paths"
-    done < <(git -C "$mempath/$tier" cat-file -p "$basespec")
+      case "$path" in "$tier"/*) ;; *) continue ;; esac
+      printf '%s\n' "${path#"$tier"/}" >> "$tmpd/head.paths"
+    done < <(git -C "$mempath" show HEAD:MEMORY.md)
   fi
 
   while IFS= read -r path; do
     [ -n "$path" ] || continue
-    grep -qxF -- "$path" "$tmpd/base.paths"   && b=1 || b=0
-    grep -qxF -- "$path" "$tmpd/ours.paths"   && o=1 || o=0
-    grep -qxF -- "$path" "$tmpd/theirs.paths" && t=1 || t=0
-    if [ "$b" = 1 ]; then
-      { [ "$o" = 1 ] && [ "$t" = 1 ]; } || continue   # base line: a delete on either side wins
-    else
-      { [ "$o" = 1 ] || [ "$t" = 1 ]; } || continue   # new line: an add on either side wins
-    fi
+    grep -qxF -- "$path" "$tmpd/head.paths"    && b=1 || b=0
+    grep -qxF -- "$path" "$tmpd/root.paths"    && o=1 || o=0
+    grep -qxF -- "$path" "$tmpd/carrier.paths" && t=1 || t=0
     if [ "$o" = 1 ]; then
-      gitlore_compose_pick "$path" < "$tmpd/ours.bullets"   # root's text is canonical
-    else
-      gitlore_compose_pick "$path" < "$tmpd/theirs.bullets"
+      gitlore_compose_pick "$path" < "$tmpd/root.bullets"
+    elif [ "$t" = 1 ] && [ "$b" = 0 ]; then
+      gitlore_compose_pick "$path" < "$tmpd/carrier.bullets"
     fi
-  done < <(gitlore_order_merge "$tmpd/base.paths" "$tmpd/ours.paths" "$tmpd/theirs.paths")
+  done < <(gitlore_order_merge "$tmpd/head.paths" "$tmpd/root.paths" "$tmpd/carrier.paths")
 
   rm -rf "$tmpd"
   return 0
+}
+
+# Return 0 when index $1 carries at least one pointer line prefixed with tier $2.
+gitlore_index_has_tier() {
+  local file="$1" tier="$2" line path
+  [ -f "$file" ] || return 1
+  while IFS= read -r line; do
+    path=$(gitlore_bullet_path "$line") || continue
+    case "$path" in "$tier"/*) return 0 ;; esac
+  done < "$file"
+  return 1
+}
+
+# Print the root index's composed bullet block: each ACTIVE tier's lines, in
+# manifest order, then the project's own bare-path lines in the order they
+# already have.
+#
+# A tier's lines are taken from ROOT, which is what keeps the in-session pass
+# placement-only — it moves lines, it never rewrites one. Two cases read the
+# carrier instead:
+#
+#   - $2 names the tier. An explicit adoption (gitlore_compose_up), run once when
+#     a merge lands a carrier the user has approved: there the carrier is the
+#     reviewed artifact and its text wins over whatever root still holds.
+#   - root carries no line at all for an active tier. That is what a freshly
+#     mounted or freshly activated tier looks like, and root has no opinion about
+#     it yet, so it takes the carrier's — the augmentation a mount owes the
+#     index. Deleting every one of a tier's lines from root does NOT resurrect
+#     the block: the down projection runs first and has already dropped those
+#     lines from the carrier by the time this reads it.
+#
+# Lines prefixed with a mounted but DORMANT tier are dropped: root does not
+# represent a dormant tier. They keep living in its carrier, and reactivating the
+# tier brings them back through the case above.
+gitlore_compose_root_bullets() {
+  local mempath="$1" adopt="${2:-}"
+  local root="$mempath/MEMORY.md" active tier line path
+  active=$(gitlore_active_tiers "$mempath")
+
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -f "$mempath/$tier/MEMORY.md" ] || continue
+    if [ "$tier" = "$adopt" ] || ! gitlore_index_has_tier "$root" "$tier"; then
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        gitlore_bullet_reprefix "$line" "$tier" || continue
+      done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
+    else
+      while IFS= read -r line; do
+        path=$(gitlore_bullet_path "$line") || continue
+        case "$path" in "$tier"/*) printf '%s\n' "$line" ;; esac
+      done < <(gitlore_index_part "$root" bullets)
+    fi
+  done <<EOF
+$active
+EOF
+
+  while IFS= read -r line; do
+    path=$(gitlore_bullet_path "$line") || continue
+    case "$path" in */*) continue ;; esac
+    printf '%s\n' "$line"
+  done < <(gitlore_index_part "$root" bullets)
+}
+
+# Project tier $2's carrier UP into the root index and write it: root's block for
+# that tier becomes the carrier's lines, prefixed, and every other line stays
+# exactly where it is. This is the adoption step of a merge — the only moment a
+# carrier is authoritative over root's text, because it is the artifact the user
+# just approved.
+#
+# Writes no carrier, so a merge in one store never propagates into another the
+# user did not review. Same three return codes as gitlore_compose.
+gitlore_compose_up() {
+  local mempath="$1" tier="$2"
+  local root="$mempath/MEMORY.md"
+  [ -f "$root" ] || return 0
+  if ! gitlore_compose_check "$mempath"; then
+    return 1
+  fi
+  local out
+  if ! out=$(gitlore_compose_root_bullets "$mempath" "$tier" | gitlore_compose_write "$root"); then
+    printf 'could not write %s\n' "$root"
+    return 2
+  fi
+  [ -n "$out" ] && printf '%s\n' "$out"
+  return 0
+}
+
+# Print one report line per ACTIVE tier carrier path that the composed root index
+# does not carry; return 0 either way. Run AFTER a pass, like the dangling report
+# and for the same reason: it describes the store as it now stands.
+#
+# A carrier line reaches the root unless root already had a block for that tier
+# and never mentioned this path — a line written straight into the carrier, or
+# one left there while the tier slept. Nothing is rewritten or dropped over it:
+# it is a line whose two surfaces disagree about whether the fact is in play
+# here, and which way to settle that is the agent's call, not the pass's.
+gitlore_compose_orphans() {
+  local mempath="$1" active tier line path
+  active=$(gitlore_active_tiers "$mempath")
+  [ -f "$mempath/MEMORY.md" ] || return 0
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -f "$mempath/$tier/MEMORY.md" ] || continue
+    while IFS= read -r line; do
+      path=$(gitlore_bullet_path "$line") || continue
+      gitlore_index_has_path "$mempath/MEMORY.md" "$tier/$path" && continue
+      printf '%s: %s is in the tier but not in the root index\n' \
+        "$mempath/$tier/MEMORY.md" "$path"
+    done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
+  done <<EOF
+$active
+EOF
+  return 0
+}
+
+# Return 0 when index $1 carries a pointer line for exactly path $2.
+gitlore_index_has_path() {
+  local file="$1" want="$2" line path
+  [ -f "$file" ] || return 1
+  while IFS= read -r line; do
+    path=$(gitlore_bullet_path "$line") || continue
+    [ "$path" = "$want" ] && return 0
+  done < "$file"
+  return 1
 }
 
 # Filter stdin (bullets) to the first one whose path is $1. Helper for the
@@ -424,22 +531,10 @@ gitlore_compose_write() {
   printf 'composed %s\n' "$file"
 }
 
-# The whole pass. Validates first; on any problem prints the problems, writes
-# nothing, and returns 1 — fail-safe, so a broken store is never half-rewritten.
-# Otherwise mirrors down into every MOUNTED tier (a dormant tier still receives
-# its root lines: dropping them would be data loss, not dormancy — the same rule
-# the commit/push lockstep applies) and splices up every ACTIVE tier.
-#
-# The second argument picks the direction. `full` (default) is both halves and
-# is what the hooks run. `up` splices into the root index only, writes no
-# carrier and leaves the compose-base ref where it is; the merge continuation
-# uses it, because a merge is an approval of ONE store's content and mirroring
-# down would carry that approval into stores nobody reviewed. Root still has to
-# move in that pass: the always-loaded index is the only surface a merged tier
-# fact is reachable from, so leaving it stale would land facts nothing can
-# recall. Downward propagation is not skipped, only deferred to the next hook
-# compose, which runs against a settled tree and a base that still means what
-# it says.
+# The whole in-session pass. Validates first; on any problem prints the problems,
+# writes nothing, and returns 1 — fail-safe, so a broken store is never
+# half-rewritten. Otherwise it projects root's lines DOWN into every ACTIVE
+# tier's carrier, then rewrites the root index's layout.
 #
 # Return codes are three, not two, because "nothing was written" and "some of it
 # was" need different words from every caller:
@@ -474,8 +569,24 @@ gitlore_compose_and_report() {
       n=$(printf '%s\n' "$result" | grep -c '^composed ')
       if [ "$n" -eq 1 ]; then unit="index"; else unit="indexes"; fi
       sysmsg="gitlore: recomposed tier pointers ($n $unit)"
-      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, mirrored root-authored tier lines down into their carrier, and dropped any carrier line whose root counterpart is gone — so removing a tier fact's line from the root index is enough; its carrier copy is dropped in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition moves or drops lines; it never changes a line's text.
+      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and projected root-authored tier lines down into their carrier — including deletions, so removing a tier fact's line from the root index is enough; its carrier copy goes in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition moves or drops lines; it never changes a line's text.
 $result"
+    fi
+
+    # Carrier lines the root index does not carry. Reported, never resolved:
+    # which surface is right is a judgement about the fact, not about placement.
+    local orphans o ounit orphans_capped
+    orphans=$(gitlore_compose_orphans "$mempath")
+    if [ -n "$orphans" ]; then
+      o=$(printf '%s\n' "$orphans" | grep -c .)
+      if [ "$o" -eq 1 ]; then ounit="line"; else ounit="lines"; fi
+      orphans_capped=$(printf '%s\n' "$orphans" | gitlore_cap_list)
+      sysmsg="${sysmsg:+$sysmsg
+}gitlore: $o tier index $ounit not in the root index"
+      ctx="${ctx:+$ctx
+
+}These lines are in an active tier's own index but not in the root index ($o total), so they are not recallable here and nothing propagates them: composition projects the ROOT down, and root never carried them. Nothing was rewritten or deleted. Either add the line to $mempath/MEMORY.md with its tier prefix — \`- [Title](<tier>/<file>.md) — hook\` — if the fact belongs in this repo, or remove it from the tier's index if it does not.
+$orphans_capped"
     fi
 
     # The fifth validation reports rather than refuses, so it runs on the
@@ -538,145 +649,53 @@ $result"
   GITLORE_COMPOSE_CTX="$ctx"
 }
 
-# Run git with a fixed gitlore identity. `commit-tree` needs a committer, and
-# neither a repo without `user.email` nor a hook environment supplies one — so
-# the audit commit states its own author instead of borrowing whoever happens to
-# be configured where the pass fired.
-gitlore_git_as_gitlore() {
-  GIT_AUTHOR_NAME=gitlore GIT_AUTHOR_EMAIL=gitlore@localhost \
-  GIT_COMMITTER_NAME=gitlore GIT_COMMITTER_EMAIL=gitlore@localhost \
-  git "$@"
-}
-
-# Append one audit commit to a tier's refs/gitlore/compose-base, recording the
-# two inputs the pass just reconciled: carrier.md (the base the next pass merges
-# against) and root.md (the other input — otherwise unrecoverable, since root
-# composition is allowed to float ahead of any commit). The ref is a GC root, so
-# the chain and every blob in it survive.
-# Args: $1 = composed carrier, $2 = tier worktree, $3 = composed root index.
-#
-# The commit is skipped when its tree matches the tip's: gitlore_compose calls
-# this at the end of every successful pass, so without the guard an idempotent
-# pass would grow a log that says nothing about what moved.
-#
-# A ref naming a BLOB is the shape every store carries from before the log
-# existed; it is still read as the base (see gitlore_compose_tier_bullets), but
-# there is no chain to graft onto, so the first commit over it is parentless.
-#
-# A missing index or a failed write leaves the previous base standing rather
-# than clearing it.
-gitlore_compose_save_base() {
-  local carrier="$1" tierpath="$2" root="$3"
-  local cblob rblob tree tip parent="" msg
-  [ -f "$carrier" ] || return 0
-  [ -f "$root" ] || return 0
-  cblob=$(git -C "$tierpath" hash-object -w --stdin < "$carrier") || return 1
-  rblob=$(git -C "$tierpath" hash-object -w --stdin < "$root") || return 1
-  tree=$(printf '100644 blob %s\tcarrier.md\n100644 blob %s\troot.md\n' \
-    "$cblob" "$rblob" | git -C "$tierpath" mktree) || return 1
-
-  if tip=$(git -C "$tierpath" rev-parse -q --verify refs/gitlore/compose-base); then
-    local tiptype
-    tiptype=$(git -C "$tierpath" cat-file -t "$tip") || return 1
-    if [ "$tiptype" = commit ]; then
-      [ "$(git -C "$tierpath" rev-parse "$tip^{tree}")" = "$tree" ] && return 0
-      parent="$tip"
-    fi
-  fi
-
-  msg="gitlore compose: reconcile ${tierpath##*/}
-
-carrier.md is the state root and this tier's carrier now agree on, and the base
-the next compose merges against. root.md is the other input of the same pass."
-  local commit
-  if [ -n "$parent" ]; then
-    commit=$(gitlore_git_as_gitlore -C "$tierpath" commit-tree "$tree" -p "$parent" -m "$msg") || return 1
-  else
-    commit=$(gitlore_git_as_gitlore -C "$tierpath" commit-tree "$tree" -m "$msg") || return 1
-  fi
-  git -C "$tierpath" update-ref refs/gitlore/compose-base "$commit"
-}
 
 gitlore_compose() {
-  local mempath="$1" direction="${2:-full}"
+  local mempath="$1"
   local root="$mempath/MEMORY.md"
-  local mounted active tier line path changed="" out
+  local active tier changed="" out
   [ -f "$root" ] || return 0
 
   if ! gitlore_compose_check "$mempath"; then
     return 1
   fi
 
-  mounted=$(gitlore_tier_paths "$mempath")
   active=$(gitlore_active_tiers "$mempath")
 
-  # Mirror down — every mounted tier with a checked-out carrier. Skipped in `up`
-  # mode, which the merge continuation uses: see the direction contract above.
-  if [ "$direction" != "up" ]; then
-    while IFS= read -r tier; do
-      [ -n "$tier" ] || continue
-      [ -f "$mempath/$tier/MEMORY.md" ] || continue
-      if ! out=$(gitlore_compose_tier_bullets "$mempath" "$tier" \
-        | gitlore_compose_write "$mempath/$tier/MEMORY.md"); then
-        [ -n "$changed" ] && printf '%s' "$changed"
-        printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
-        return 2
-      fi
-      changed="$changed$out
+  # Down first, then the root layout. The order is load-bearing: the layout pass
+  # adopts a carrier for any active tier root has no line for, and deleting a
+  # tier's last root line must not resurrect its block. Running down first means
+  # those carrier lines are already gone when the layout reads it.
+  #
+  # ACTIVE tiers only. Root does not represent a dormant tier — it holds no line
+  # for one — so it has no authority over that tier's carrier, and projecting an
+  # empty opinion down would delete a whole store's index.
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -f "$mempath/$tier/MEMORY.md" ] || continue
+    # Root with no line at all for this tier states nothing about it — the same
+    # condition the layout pass adopts on, and projecting an absence down here
+    # would empty the carrier a moment before the layout reads it. That is what
+    # a mount, and a deactivate/reactivate round trip, both look like.
+    gitlore_index_has_tier "$root" "$tier" || continue
+    if ! out=$(gitlore_compose_down "$mempath" "$tier" \
+      | gitlore_compose_write "$mempath/$tier/MEMORY.md"); then
+      [ -n "$changed" ] && printf '%s' "$changed"
+      printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
+      return 2
+    fi
+    changed="$changed$out
 "
-    done <<EOF
-$mounted
-EOF
-  fi
-
-  # Splice up — active tiers in manifest order, then the project's own bullets.
-  # The source is the MERGED bullet list, not the carrier file: in `full` mode
-  # the two are identical (mirror-down just wrote it), and in `up` mode reading
-  # the carrier would drop every root-authored tier line the carrier has not
-  # received yet.
-  if ! out=$( {
-    while IFS= read -r tier; do
-      [ -n "$tier" ] || continue
-      [ -f "$mempath/$tier/MEMORY.md" ] || continue
-      while IFS= read -r line; do
-        [ -n "$line" ] || continue
-        gitlore_bullet_reprefix "$line" "$tier"
-      done < <(gitlore_compose_tier_bullets "$mempath" "$tier")
-    done <<INNER
+  done <<EOF
 $active
-INNER
-    while IFS= read -r line; do
-      path=$(gitlore_bullet_path "$line") || continue
-      case "$path" in */*) continue ;; esac
-      printf '%s\n' "$line"
-    done < <(gitlore_index_part "$root" bullets)
-  } | gitlore_compose_write "$root" ); then
+EOF
+
+  if ! out=$(gitlore_compose_root_bullets "$mempath" | gitlore_compose_write "$root"); then
     [ -n "$changed" ] && printf '%s' "$changed"
     printf 'could not write %s\n' "$root"
     return 2
   fi
   changed="$changed$out"
-
-  # Record this pass in each mounted tier's compose-base chain: the carrier just
-  # composed — the state root and carrier now agree on, the baseline the next
-  # pass diffs against — together with the root it agrees with. A pass that
-  # reconciled nothing new appends nothing. Guarded so a git -C never escapes an
-  # unchecked-out submodule.
-  #
-  # NOT in `up` mode: nothing was written to a carrier there, so root and
-  # carrier have not been reconciled and the base must not move. Advancing it
-  # would tell the next full pass that the carrier's current state is what root
-  # last agreed to — reading every line root added during the merge as a
-  # deletion, and dropping it.
-  if [ "$direction" != "up" ]; then
-    while IFS= read -r tier; do
-      [ -n "$tier" ] || continue
-      [ -e "$mempath/$tier/.git" ] || continue
-      gitlore_compose_save_base "$mempath/$tier/MEMORY.md" "$mempath/$tier" "$root"
-    done <<EOF
-$mounted
-EOF
-  fi
 
   [ -n "$changed" ] && printf '%s\n' "$changed"
   return 0
