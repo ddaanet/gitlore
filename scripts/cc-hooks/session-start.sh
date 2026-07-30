@@ -173,61 +173,42 @@ else
   add_sysmsg "gitlore: memory ready (detached at live); uncommitted changes present, skipped live sync."
 fi
 
-# Nested tiers (D17 3-i-a): materialize + fast-forward each tier submodule inside
-# the memory store so a portable fact authored in another repo arrives here.
-# Discovery is by enclosure — every entry in memory/.gitmodules is a tier. Tiers
-# use the detached-at-live branch model (D17): no named working branch, HEAD is
-# detached at live. This pass is propagation-in only; tier commits and pushes
-# ride the parent's pre-commit/pre-push lockstep.
+# Nested tiers (D17 3-i-a): check each tier submodule inside the memory store out
+# at the commit the memory tree records for it. Discovery is by enclosure — every
+# entry in memory/.gitmodules is a tier. Tiers use the detached branch model
+# (D17): no named working branch.
+#
+# A tier is PINNED at its gitlink and never fast-forwarded here. One memory
+# commit records `MEMORY.md` and the tier gitlink together, so root's tier block
+# and the carrier index it projects are consistent by construction; advancing the
+# tier behind root's back breaks that pairing, and nothing downstream can repair
+# it — composition places lines, it does not merge them. Taking an upstream
+# commit is a merge, and it goes through /gitlore:merge or /gitlore:push.
+#
 # Every git call is guarded: a broken tier must never abort the session.
 while IFS= read -r tier; do
   [ -n "$tier" ] || continue
   tierpath="$mempath/$tier"
-  # Materialize if this worktree never checked the tier out. Guard submodule
-  # escape: only operate once the tier working tree exists (a `git -C` into an
-  # unchecked-out submodule path walks up to the enclosing repo).
-  if [ ! -e "$tierpath/.git" ]; then
-    gitlore_git -C "$mempath" submodule update --init -- "$tier" >&2 \
-      || add_sysmsg "gitlore: tier '$tier' could not be initialized; skipped."
-  fi
-  [ -e "$tierpath/.git" ] || continue
-  # ff local `live` from the remote's `live`. A refspec fetch into a branch ref
-  # refuses a non-fast-forward without '+', so this is ff-only by construction —
-  # and it works precisely because a tier never checks `live` out AS a branch.
-  # Non-fatal — a session must start whatever a tier's remote says — but NOT
-  # silent: a tier that has quietly stopped propagating is indistinguishable
-  # from one with nothing new, so capture the reason and report it. The
-  # ff-rejection is the interesting case: this tier has diverged and needs
-  # /gitlore:resolve.
-  # No `-q`: unlike `push -q`, which still reports its rejection reason, a quiet
-  # fetch prints NOTHING on a non-fast-forward — it just exits 1. With `-q` the
-  # divergence arm below could never match, and the fall-through reported "git
-  # said:" followed by empty space. The output is captured either way, so the
-  # only cost of dropping it is progress text nobody sees on success.
-  if ! fetch_err=$(git -C "$tierpath" fetch origin "live:live" 2>&1); then
-    case "$fetch_err" in
-      *non-fast-forward*|*"fetch first"*)
-        add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — local commits are not being propagated. Left untouched." ;;
-      *)
-        add_sysmsg "gitlore: tier '$tier' could not fetch from its remote; it may be stale. git said: $fetch_err" ;;
-    esac
-  fi
-  # Detach the working tree at live (the tier branch model — no named branch),
-  # unless a merge is prepared here. `git checkout` calls remove_branch_state(),
-  # which unlinks MERGE_HEAD and MERGE_MSG silently and on success; a prepared
-  # merge leaves the tier detached AT live, and a clean auto-merge stages no
-  # unmerged entries — so even this no-op re-checkout of the commit HEAD is
-  # already on succeeds and destroys the merge pointers while leaving the staged
-  # result behind. What survives is a state file with no MERGE_HEAD, which every
-  # guard reports as "manual intervention required": a merge that outlived one
-  # session was dead. Skip, and say so — a suppressed re-detach must not be
-  # silent, or the tier looks synced when it is mid-merge.
+  # A prepared merge is detected FIRST, before anything that checks out. `git
+  # checkout` — which `submodule update` runs — calls remove_branch_state(),
+  # unlinking MERGE_HEAD and MERGE_MSG silently and on success; a clean
+  # auto-merge stages no unmerged entries, so even a no-op re-checkout of the
+  # commit HEAD is already on succeeds and destroys the merge pointers while
+  # leaving the staged result behind. What survives is a state file with no
+  # MERGE_HEAD, which every guard reports as "manual intervention required": a
+  # merge that outlived one session was dead. Skip the whole tier, and say so —
+  # a suppressed pass must not be silent, or the tier looks synced when it is
+  # mid-merge.
   # `detect` rather than `guard_stale_merge_state`: the guard's directive tells
   # the agent to abort and retry, which is wrong for a merge that is simply
   # waiting to be landed, and it writes to stderr, which SessionStart does not
   # show the user (D14).
-  if [ "$(gitlore_detect_stale_merge_state "$tierpath")" != "clean" ] \
-     || git -C "$tierpath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+  # The `.git` test leads: `git -C` into an unchecked-out submodule path walks up
+  # to the enclosing repo, so an unmaterialized tier would be answered for by
+  # memory's own merge state.
+  if [ -e "$tierpath/.git" ] \
+     && { [ "$(gitlore_detect_stale_merge_state "$tierpath")" != "clean" ] \
+          || git -C "$tierpath" rev-parse -q --verify MERGE_HEAD >/dev/null; }; then
     add_sysmsg "gitlore: tier '$tier' has an unfinished merge, so its working tree was left as it is this session. Run /gitlore:resolve to land it."
     # The agent gets its own line: systemMessage is user-only (D14), and the
     # destructive acts here are ones the agent takes unprompted, so the
@@ -237,9 +218,45 @@ while IFS= read -r tier; do
     protocol_ctx="$protocol_ctx
 
 gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset it, or commit into it. Run /gitlore:resolve to land the merge before writing anything to that tier."
-  elif git -C "$tierpath" show-ref --verify --quiet refs/heads/live; then
-    gitlore_git -C "$tierpath" checkout -q --detach live >/dev/null \
-      || add_sysmsg "gitlore: tier '$tier' could not be checked out at live; skipped."
+    continue
+  fi
+  # Pin, unconditionally — not only when the tier was never checked out. Every
+  # clone made before tiers were pinned sits ahead of its gitlink already, so a
+  # pass that only materializes a missing tier would pin nothing that exists.
+  # `--init` covers materialization in the same call.
+  gitlore_git -C "$mempath" submodule update --init -- "$tier" >&2 \
+    || add_sysmsg "gitlore: tier '$tier' could not be checked out at its recorded commit; skipped."
+  [ -e "$tierpath/.git" ] || continue
+  # Detach in place (no ref argument, so the commit does not move) when the tier
+  # arrived on a named branch — a mount checks the remote's default branch out
+  # attached, and `submodule update` leaves it that way whenever that branch's
+  # tip already IS the gitlink. The tier branch model has no working branch: a
+  # commit made on one would advance a ref the lockstep does not read.
+  if git -C "$tierpath" symbolic-ref -q HEAD >/dev/null; then
+    gitlore_git -C "$tierpath" checkout -q --detach \
+      || add_sysmsg "gitlore: tier '$tier' could not be detached from its branch."
+  fi
+  # Fetch read-only: `origin live` with no refspec moves no local branch, so the
+  # pin holds and the remote tip is still in hand to compare against. Non-fatal —
+  # a session must start whatever a tier's remote says — but NOT silent: a tier
+  # that has quietly stopped talking to its remote is indistinguishable from one
+  # with nothing new, so capture the reason and report it.
+  if ! fetch_err=$(git -C "$tierpath" fetch origin live 2>&1); then
+    add_sysmsg "gitlore: tier '$tier' could not fetch from its remote; it may be stale. git said: $fetch_err"
+    continue
+  fi
+  # Name what is waiting. Three outcomes, two of them worth a word: the remote
+  # contained in HEAD is the lockstep's business (local commits awaiting a push),
+  # and saying "waiting" there would send the user into a merge with nothing to
+  # merge.
+  tier_head=$(git -C "$tierpath" rev-parse HEAD) || continue
+  tier_remote=$(git -C "$tierpath" rev-parse FETCH_HEAD) || continue
+  if git -C "$tierpath" merge-base --is-ancestor "$tier_remote" "$tier_head"; then
+    :
+  elif git -C "$tierpath" merge-base --is-ancestor "$tier_head" "$tier_remote"; then
+    add_sysmsg "gitlore: tier '$tier' has upstream facts waiting — its remote 'live' is ahead of the pinned commit. Run /gitlore:merge to take them, or /gitlore:push to take them and publish."
+  else
+    add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:merge to reconcile them, or /gitlore:push to reconcile and publish."
   fi
 done < <(gitlore_tier_paths "$mempath")
 

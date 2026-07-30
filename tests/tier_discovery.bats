@@ -104,41 +104,103 @@ teardown() { teardown_tmp_repo; }
 
 # --- SessionStart propagation-in ---
 
-@test "SessionStart ff's a mounted tier and leaves it detached at live (propagation)" {
+@test "SessionStart leaves a tier pinned at its gitlink when the remote is ahead" {
+  # The tier is checked out at the commit the memory tree records and NOTHING
+  # advances it silently: root's index and the carrier are written by one commit
+  # and stay consistent by construction. Taking an upstream commit is a merge,
+  # which composition is no longer in a position to paper over.
   make_parent_with_memory
   make_tier_in_memory ddaanet
+  gitlink="$(git -C memory rev-parse HEAD:ddaanet)"
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   export GITLORE_LAUNCHED=1
   remote_sha="$(push_tier_fact ddaanet)"
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" != "$remote_sha" ]
+  # Still detached — `submodule update` checks the gitlink out, it does not
+  # attach a branch — and the local `live` did not move either.
   run git -C memory/ddaanet symbolic-ref -q HEAD
   [ "$status" -ne 0 ]
+  run git -C memory/ddaanet rev-parse -q --verify live
+  [ "$output" != "$remote_sha" ]
 }
 
-@test "SessionStart reports a diverged tier with git's own reason" {
-  # Regression: the tier fetch ran with `-q`, and a quiet fetch prints NOTHING
-  # on a non-fast-forward — it only exits 1. The divergence arm could never
-  # match, so a tier that had stopped propagating was reported as merely
-  # "stale", with "git said:" trailing into empty space. Asserted through the
-  # hook, not against a hand-rolled `git fetch`: the invocation is the bug.
+@test "SessionStart pins a tier that had outrun its gitlink" {
+  # Removing the fetch and the checkout pins nothing on its own: a clone from
+  # before the change already sits ahead of the gitlink, so the pass has to put
+  # it back. `submodule update` therefore runs on every session, not only when
+  # the tier was never checked out.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  gitlink="$(git -C memory rev-parse HEAD:ddaanet)"
+  remote_sha="$(push_tier_fact ddaanet)"
+  git -C memory/ddaanet fetch -q origin "live:live"
+  git -C memory/ddaanet checkout -q --detach live
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
+}
+
+@test "SessionStart names a tier whose remote is ahead, and how to take it" {
+  # The fetch stays, read-only: it moves no local ref, and it is the only thing
+  # that can tell the user upstream facts are waiting. A pinned tier that says
+  # nothing is indistinguishable from one with nothing to take.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   export GITLORE_LAUNCHED=1
-  git -C memory/ddaanet fetch -q origin "live:live"
-  git -C memory/ddaanet checkout -q -B live
-  echo "local only" >> memory/ddaanet/MEMORY.md
-  git -C memory/ddaanet commit -aqm "local divergent"
-  git -C memory/ddaanet checkout -q --detach live
   push_tier_fact ddaanet >/dev/null
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("has diverged")'
+  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has upstream facts waiting")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:merge")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
+  echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
+}
+
+@test "SessionStart says nothing about a tier whose remote it already contains" {
+  # The other direction of the same comparison: local commits not yet published
+  # are the lockstep's business, not an upstream arrival. Reporting them as
+  # "waiting" would send the user to a merge that has nothing to merge.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  git -C memory/ddaanet commit -q --allow-empty -m "local, unpublished"
+  git -C memory add ddaanet
+  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "record the tier commit"
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("upstream facts waiting") | not'
+  echo "$output" | jq -e '.systemMessage | test("has diverged") | not'
+}
+
+@test "SessionStart reports a tier that has diverged from its remote" {
+  # Neither side contains the other. The read-only fetch cannot surface this the
+  # way the old refspec fetch did — nothing is refused, because nothing is
+  # attempted — so the comparison has to say it.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  git -C memory/ddaanet commit -q --allow-empty -m "local, unpublished"
+  git -C memory add ddaanet
+  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "record the tier commit"
+  push_tier_fact ddaanet >/dev/null
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has diverged")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:merge")'
   echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
 }
 
@@ -210,17 +272,21 @@ teardown() { teardown_tmp_repo; }
   run -1 jq -e '.hookSpecificOutput.additionalContext | test("ddaanet")' <<< "$output"
 }
 
-@test "SessionStart composes propagated tier lines into the root index" {
+@test "SessionStart composes the memory store's indexes" {
+  # A pinned tier takes nothing from its remote at SessionStart, so the pass
+  # that still has to run here is composition itself: a root-authored tier line
+  # written in a session that ended without one reaches the carrier at the start
+  # of the next.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
+  seed_root_bullet "ddaanet/authored.md" "written in the root index"
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  push_tier_fact ddaanet '- [remote_fact](remote_fact.md) — arrived by propagation' >/dev/null
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  grep -qF -- '- [remote_fact](ddaanet/remote_fact.md) — arrived by propagation' memory/MEMORY.md
+  grep -qF -- '- [authored](authored.md) — written in the root index' memory/ddaanet/MEMORY.md
 }
 
 @test "SessionStart survives a store that fails composition" {
