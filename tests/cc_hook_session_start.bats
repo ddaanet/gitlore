@@ -39,6 +39,7 @@ teardown() {
   [ "$(git config gitlore.hooksDir)" = "$CLAUDE_PLUGIN_ROOT/scripts/git-hooks" ]
   [ "$(git config gitlore.commitCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" ]
   [ "$(git config gitlore.pushCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/push-memory.sh" ]
+  [ "$(git config gitlore.mergeCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/merge-memory.sh" ]
   [ "$(git config gitlore.memoryApprovalClauseFile)" = "$CLAUDE_PLUGIN_ROOT/reference/memory-approval-clause.txt" ]
   [ -x .git/gitlore-pre-commit ]
   [ -x .git/gitlore-pre-push ]

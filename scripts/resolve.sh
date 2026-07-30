@@ -65,6 +65,9 @@ load_continuation_state() {
   fi
   flavor=$(jq -r .flavor "$statefile")
   pending=$(jq -r .source_ref "$statefile")
+  # `// ""` covers a state file written before the field existed, and jq's own
+  # `null` for a key present but empty: both mean "publish", the gate default.
+  publish=$(jq -r '.publish // ""' "$statefile")
 }
 
 # Adopt a merged tier into the root index: project the merged carrier UP, so
@@ -193,6 +196,13 @@ if [ $# -ge 1 ]; then
       if ! push_or_report "$mempath" . HEAD:live; then
         gitlore_yield_merge "$mempath" live head-vs-live || exit 1
         exit 1
+      fi
+      # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
+      # gate leaves it empty, because a merge a refused push prepared exists to
+      # let that push through.
+      if [ "$publish" = "no" ]; then
+        echo "gitlore: merged without publishing, as /gitlore:merge asks. Run /gitlore:push when you want these facts on the remote." >&2
+        exit 0
       fi
       if [ "$flavor" = "head-vs-remote" ]; then
         if ! push_or_report "$mempath" origin live; then

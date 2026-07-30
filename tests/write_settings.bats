@@ -25,6 +25,13 @@ teardown() { teardown_tmp_repo; }
   [ -x "$(git config gitlore.pushCommand)" ]
 }
 
+@test "seeds gitlore.mergeCommand pointing at merge-memory.sh" {
+
+  bash "$WRITE_SETTINGS" "lefthook run pre-commit"
+  [ "$(git config gitlore.mergeCommand)" = "$PLUGIN_ROOT/scripts/merge-memory.sh" ]
+  [ -x "$(git config gitlore.mergeCommand)" ]
+}
+
 @test "seeds gitlore.hooksDir alongside commitCommand" {
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
   [ "$(git config gitlore.hooksDir)" = "$PLUGIN_ROOT/scripts/git-hooks" ]
