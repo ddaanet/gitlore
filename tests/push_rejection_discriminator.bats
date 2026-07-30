@@ -257,15 +257,16 @@ HOOK
   # if a site stops using this pattern pair, the scenarios go on passing while
   # testing nothing.
   #
-  # pre-push is NOT in this list any more, and its absence is asserted below
-  # rather than assumed: since D20 it discriminates nothing itself, it calls
-  # gitlore_push_stores in scripts/lib/resolve.sh (already covered here) so the
-  # standalone push entry point cannot diverge from the hook. Dropping a site
-  # from this loop would otherwise be indistinguishable from losing its coverage.
+  # pre-push and session-start are NOT in this list, and their absence is
+  # asserted below rather than assumed: since D20 pre-push discriminates nothing
+  # itself, it calls gitlore_push_stores in scripts/lib/resolve.sh (already
+  # covered here) so the standalone push entry point cannot diverge from the
+  # hook; and a pinned tier's fetch is read-only, so nothing there is ever
+  # refused for divergence. Dropping a site from this loop would otherwise be
+  # indistinguishable from losing its coverage.
   for site in \
     scripts/lib/resolve.sh \
-    scripts/resolve.sh \
-    scripts/cc-hooks/session-start.sh
+    scripts/resolve.sh
   do
     run grep -c -e '"(fetch first)"\*|\*"(non-fast-forward)"' \
                 -e '\*non-fast-forward\*|\*"fetch first"\*' \
@@ -281,5 +282,15 @@ HOOK
   grep -qF 'gitlore_push_stores' "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
   run grep -c '"(fetch first)"\*|\*"(non-fast-forward)"' \
       "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
+  [ "$status" -ne 0 ]
+
+  # SessionStart compares commits instead of reading a refusal. Its tier fetch
+  # moves no local ref, so git refuses nothing and there is no message to key
+  # on; re-introducing a refspec fetch there would make the pattern relevant
+  # again — and would also unpin the tier.
+  grep -qF 'merge-base --is-ancestor' "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
+  run grep -c -e '"(fetch first)"\*|\*"(non-fast-forward)"' \
+              -e '\*non-fast-forward\*|\*"fetch first"\*' \
+              "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
   [ "$status" -ne 0 ]
 }
