@@ -52,8 +52,7 @@ precommit:
     just check-version lint test
     record-sentinel
 
-# Slow, rare. Drives the real claude CLI, so it costs time and money. Run
-# explicitly, not part of the default release gate.
+# Slow and paid: drives the real claude CLI. Run explicitly, never as a gate.
 evals:
     #!{{ bash_prolog }}
     if check-sentinel evals {{ evals_inputs }}; then
@@ -63,8 +62,7 @@ evals:
     tests/evals/run-evals.sh
     record-sentinel
 
-# The pre-release gate. Same as precommit; kept as its own name for
-# `release`'s dependency and for the option to widen it later.
+# The pre-release gate. Same as precommit, under its own name so it can widen.
 prerelease: precommit
 
 # shellcheck over every tracked shell file, discovered by extension or shebang.
@@ -73,10 +71,11 @@ lint:
 
 test: test-unit test-integration
 
-# The suites are discovered by glob, never hand-listed: an explicit list drifted
-# once and orphaned five suites, including the one covering the memory gate.
+# Every tests/*.bats suite except the integration ones, discovered by glob.
 test-unit:
     #!{{ bash_prolog }}
+    # Discovered by glob, never hand-listed: an explicit list drifted once and
+    # orphaned five suites, including the one covering the memory gate.
     shopt -s nullglob
     suites=()
     for suite in tests/*.bats; do
