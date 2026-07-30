@@ -247,53 +247,53 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   [ "$rtwo" -lt "$rone" ]
 }
 
-@test "a carrier-only arrival lands at its own offset, not at the end" {
+@test "a kept carrier-only line stays at its own offset, not at the end" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet a.md "first"
   seed_tier_bullet ddaanet c.md "last"
-  gitlore_compose memory                    # base recorded: a, c
+  gitlore_compose memory                    # root adopts the carrier: a, c
+  commit_memory_state
 
-  # Another consumer inserted a fact BETWEEN the two and we fast-forwarded it in.
+  # A line written straight into the carrier, between the two root knows about.
+  # Root never carried it, so the projection keeps it — where the carrier put it.
   set_bullets memory/ddaanet/MEMORY.md \
     '- [a](a.md) — first' \
-    '- [b](b.md) — arrived between' \
+    '- [b](b.md) — written into the carrier' \
     '- [c](c.md) — last'
 
   run gitlore_compose memory
   [ "$status" -eq 0 ]
-  la=$(grep -n 'ddaanet/a.md' memory/MEMORY.md | cut -d: -f1)
-  lb=$(grep -n 'ddaanet/b.md' memory/MEMORY.md | cut -d: -f1)
-  lc=$(grep -n 'ddaanet/c.md' memory/MEMORY.md | cut -d: -f1)
+  la=$(grep -n '](a.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
+  lb=$(grep -n '](b.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
+  lc=$(grep -n '](c.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
   [ "$la" -lt "$lb" ]
   [ "$lb" -lt "$lc" ]
 }
 
-@test "root and carrier inserting at one offset order the root's line first" {
+@test "a carrier line the root never carried is kept and reported" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet a.md "first"
-  seed_tier_bullet ddaanet z.md "last"
-  gitlore_compose memory                    # base recorded: a, z
-
-  set_bullets memory/MEMORY.md \
-    '- [a](ddaanet/a.md) — first' \
-    '- [r](ddaanet/r.md) — authored in the root' \
-    '- [z](ddaanet/z.md) — last'
-  set_bullets memory/ddaanet/MEMORY.md \
-    '- [a](a.md) — first' \
-    '- [t](t.md) — arrived in the carrier' \
-    '- [z](z.md) — last'
+  seed_tier_bullet ddaanet known.md "root knows this one"
+  gitlore_compose memory                    # root adopts it
+  commit_memory_state
+  seed_tier_bullet ddaanet stray.md "nobody authored this in the root"
 
   run gitlore_compose memory
   [ "$status" -eq 0 ]
-  lr=$(grep -n '](r.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
-  lt=$(grep -n '](t.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
-  lz=$(grep -n '](z.md)' memory/ddaanet/MEMORY.md | cut -d: -f1)
-  [ "$lr" -lt "$lt" ]
-  [ "$lt" -lt "$lz" ]
+  # Kept: absent from root at HEAD, so it is not a deletion — and destroying it
+  # over an ambiguity is the one thing the pass must not do.
+  grep -qF -- '- [stray](stray.md) — nobody authored this in the root' memory/ddaanet/MEMORY.md
+  # Not spliced into the root either: root has a block for this tier and did not
+  # ask for this line.
+  run ! grep -qF 'ddaanet/stray.md' memory/MEMORY.md
+  # And named, so it is not silently stranded out of recall.
+  run gitlore_compose_orphans memory
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stray.md is in the tier but not in the root index"* ]]
+  [[ "$output" != *"known.md"* ]]
 }
 
 @test "compose is byte-idempotent" {
@@ -335,8 +335,9 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   gitlore_compose memory
   grep -qF 'ddaanet/keep.md' memory/MEMORY.md
   grep -qF 'ddaanet/drop.md' memory/MEMORY.md
-  # That first compose recorded the three-way base (both facts), so the delete
-  # below has something to diff against.
+  # Commit, so root at HEAD carries both facts: that is what makes the omission
+  # below a deletion rather than a line root never had.
+  commit_memory_state
 
   # The agent deletes the fact and edits only the root index, the way the write
   # instructions describe — never touching the carrier by hand. Against the base
@@ -357,61 +358,106 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   run ! grep -qF 'ddaanet/drop.md' memory/MEMORY.md
 }
 
-@test "an upstream-retracted tier fact syncs to a clean drop, not a resurrection" {
-  # The real incident: another consumer deleted a shared fact (carrier line AND
-  # file) and pushed; we fast-forwarded that clean carrier in, but the root
-  # index still carried the stale line. Compose must complete the deletion —
-  # against the base the carrier's omission is a delete, not the root line a new
-  # add — instead of resurrecting the line into the freshly-cleaned carrier.
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet kept.md "survives the sync"
-  seed_tier_bullet ddaanet retracted.md "here until upstream drops it"
-  gitlore_compose memory                    # records the base holding both facts
-  grep -qF 'ddaanet/retracted.md' memory/MEMORY.md
+# --- adoption: the up projection a landed merge runs ---
+#
+# Taking an upstream commit is a merge, and the merged carrier is what the user
+# approved. Adoption is how it reaches the root index — the only surface CC
+# recalls from — and it is the one moment the carrier outranks root's text.
 
-  # An upstream fast-forward drops the fact: its carrier line and file are gone,
-  # but the root index (not yet reprojected) still lists it.
-  sed -i.bak '/retracted\.md/d' memory/ddaanet/MEMORY.md && rm -f memory/ddaanet/MEMORY.md.bak
-  rm -f memory/ddaanet/retracted.md
-  grep -qF 'ddaanet/retracted.md' memory/MEMORY.md         # the stale root remnant
-
-  run gitlore_compose memory
-  [ "$status" -eq 0 ]
-  # The retraction propagated: gone from both indexes, the kept fact untouched.
-  run ! grep -qF 'retracted.md' memory/MEMORY.md
-  run ! grep -qF 'retracted.md' memory/ddaanet/MEMORY.md
-  grep -qF 'ddaanet/kept.md' memory/MEMORY.md
-  grep -qF -- '- [kept](kept.md) — survives the sync' memory/ddaanet/MEMORY.md
-
-  # No dangling remnant lingers, and a second pass changes nothing (idempotent).
-  run gitlore_compose_dangling memory
-  [ -z "$output" ]
-  run gitlore_compose memory
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  run ! grep -qF 'retracted.md' memory/MEMORY.md
-}
-
-@test "an upstream-added carrier fact reaches the root even when its block is non-empty" {
-  # The mirror of the retraction: a fact another consumer ADDED arrives in the
-  # carrier by fast-forward. Against the base its presence is a new add (not a
-  # root-side deletion), so splice-up lifts it into the root — the case a plain
-  # carrier-not-in-root drop used to eat once the root block was established.
+@test "adoption replaces the root's tier block with the merged carrier" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet existing.md "already here"
-  gitlore_compose memory                    # base + root now hold the existing fact
+  gitlore_compose memory
+  commit_memory_state
   grep -qF 'ddaanet/existing.md' memory/MEMORY.md
 
-  # Upstream fast-forward brings a new carrier line the root has never seen.
-  seed_tier_bullet ddaanet arrived.md "new from another repo"
-  run gitlore_compose memory
+  # What a landed merge leaves in the carrier: one fact retracted upstream, one
+  # added, one rewritten — against a root index that still says the old thing.
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [existing](existing.md) — reworded by the merge' \
+    '- [arrived](arrived.md) — new from another repo'
+
+  run gitlore_compose_up memory ddaanet
   [ "$status" -eq 0 ]
   grep -qF -- '- [arrived](ddaanet/arrived.md) — new from another repo' memory/MEMORY.md
-  grep -qF 'ddaanet/existing.md' memory/MEMORY.md
+  # The carrier's TEXT wins: root's own wording for the same path is replaced,
+  # not preserved as it is in every other pass.
+  grep -qF -- '- [existing](ddaanet/existing.md) — reworded by the merge' memory/MEMORY.md
+  run ! grep -qF 'already here' memory/MEMORY.md
+  # And the carrier is not written: a merge approves one store's content, so
+  # nothing propagates into a store nobody reviewed.
+  run ! grep -qF 'ddaanet/' memory/ddaanet/MEMORY.md
+}
+
+@test "adoption drops a root line the merged carrier retracted" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet kept.md "survives the merge"
+  seed_tier_bullet ddaanet retracted.md "here until upstream drops it"
+  gitlore_compose memory
+  commit_memory_state
+  grep -qF 'ddaanet/retracted.md' memory/MEMORY.md
+
+  # The merge landed a carrier from which another consumer removed the fact.
+  sed -i.bak '/retracted\.md/d' memory/ddaanet/MEMORY.md && rm -f memory/ddaanet/MEMORY.md.bak
+  rm -f memory/ddaanet/retracted.md
+
+  run gitlore_compose_up memory ddaanet
+  [ "$status" -eq 0 ]
+  run ! grep -qF 'retracted.md' memory/MEMORY.md
+  grep -qF 'ddaanet/kept.md' memory/MEMORY.md
+  # No dangling remnant, and the project's own lines are untouched.
+  run gitlore_compose_dangling memory
+  [ -z "$output" ]
+}
+
+@test "adoption leaves other tiers and the project's lines where they are" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  make_tier_in_memory lore
+  set_tier_manifest ddaanet lore
+  seed_tier_bullet ddaanet d.md "dd fact"
+  seed_tier_bullet lore l.md "lore fact"
+  seed_root_bullet "project_overview.md" "the project"
+  gitlore_compose memory
+  commit_memory_state
+
+  set_bullets memory/ddaanet/MEMORY.md '- [d](d.md) — merged wording'
+  run gitlore_compose_up memory ddaanet
+  [ "$status" -eq 0 ]
+  grep -qF -- '- [d](ddaanet/d.md) — merged wording' memory/MEMORY.md
+  grep -qF -- '- [l](lore/l.md) — lore fact' memory/MEMORY.md
+  grep -qF -- '- [project_overview](project_overview.md) — the project' memory/MEMORY.md
+  # Manifest order still holds, and project lines stay last.
+  d=$(grep -n 'ddaanet/d.md' memory/MEMORY.md | cut -d: -f1)
+  l=$(grep -n 'lore/l.md' memory/MEMORY.md | cut -d: -f1)
+  p=$(grep -n 'project_overview.md' memory/MEMORY.md | cut -d: -f1)
+  [ "$d" -lt "$l" ]
+  [ "$l" -lt "$p" ]
+}
+
+@test "a tier activated after its mount takes its carrier's lines into the root" {
+  # Deactivate/reactivate round-trips through the same path a mount uses: root
+  # holds no line for the tier, so it has no opinion to defend and adopts.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  gitlore_compose memory
+  commit_memory_state
+  grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+
+  set_tier_manifest                       # dormant
+  gitlore_compose memory
+  run ! grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+
+  set_tier_manifest ddaanet               # active again
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  grep -qF -- '- [shared](ddaanet/shared.md) — a portable fact' memory/MEMORY.md
 }
 
 @test "manifest order is tier block order" {
@@ -441,15 +487,24 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   grep -qF -- '- [shared](shared.md) — a portable fact' memory/ddaanet/MEMORY.md
 }
 
-@test "a dormant tier still receives mirror-down, so no root line is lost" {
+@test "a dormant tier's carrier survives two consecutive passes untouched" {
+  # Root holds no line for a dormant tier, so it has no authority over that
+  # tier's carrier and the down projection skips it entirely. Under the previous
+  # model the second pass was the one that bit: the reconciliation base recorded
+  # a carrier holding lines the root splice had already stripped, and read them
+  # as deletions.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest                       # mounted, never active
-  seed_root_bullet "ddaanet/rescued.md" "would be dropped"
+  seed_tier_bullet ddaanet sleeping.md "still here"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
+
+  gitlore_compose memory
   run gitlore_compose memory
   [ "$status" -eq 0 ]
-  grep -qF -- '- [rescued](rescued.md) — would be dropped' memory/ddaanet/MEMORY.md
-  run ! grep -qF 'ddaanet/rescued.md' memory/MEMORY.md
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
+  grep -qF -- '- [sleeping](sleeping.md) — still here' memory/ddaanet/MEMORY.md
+  run ! grep -qF 'ddaanet/sleeping.md' memory/MEMORY.md
 }
 
 @test "preamble and trailer are preserved verbatim" {
@@ -583,137 +638,6 @@ b" ]
   chmod u+w memory/ddaanet
   [ "$status" -eq 2 ]
   [[ "$output" == *"could not write memory/ddaanet/MEMORY.md"* ]]
-}
-
-# --- compose-base audit log ---
-#
-# refs/gitlore/compose-base is a COMMIT CHAIN, not a bare blob. Each successful
-# full compose appends one commit whose tree holds BOTH merge inputs of that
-# pass: carrier.md (the base the next pass merges against) and root.md (the
-# other input, otherwise unrecoverable — root composition is allowed to float
-# ahead of any commit). `git log refs/gitlore/compose-base` in the tier is then
-# the audit log, and `refs/gitlore/compose-base~N:carrier.md` recovers what any
-# past pass merged against — which is what a vanished pointer line needs to be
-# diagnosable at all.
-
-# Echo the number of audit commits on a tier's compose-base ref. Args: $1 = tier.
-base_count() { git -C "memory/$1" rev-list --count refs/gitlore/compose-base; }
-
-@test "compose-base is a commit recording both merge inputs" {
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  seed_root_bullet "project_overview.md" "the project"
-  run gitlore_compose memory
-  [ "$status" -eq 0 ]
-
-  run git -C memory/ddaanet cat-file -t refs/gitlore/compose-base
-  [ "$status" -eq 0 ]
-  [ "$output" = "commit" ]
-
-  git -C memory/ddaanet cat-file -p refs/gitlore/compose-base:carrier.md \
-    > "$BATS_TEST_TMPDIR/carrier.audit"
-  cmp -s "$BATS_TEST_TMPDIR/carrier.audit" memory/ddaanet/MEMORY.md
-  git -C memory/ddaanet cat-file -p refs/gitlore/compose-base:root.md \
-    > "$BATS_TEST_TMPDIR/root.audit"
-  cmp -s "$BATS_TEST_TMPDIR/root.audit" memory/MEMORY.md
-}
-
-@test "a second compose appends a second audit commit over the first" {
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  gitlore_compose memory
-  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.1"
-
-  # A root-authored add: mirror-down rewrites the carrier, so the pass really
-  # does compose something new rather than re-recording the same state.
-  seed_root_bullet "ddaanet/added.md" "authored in the root"
-  run gitlore_compose memory
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-
-  run base_count ddaanet
-  [ "$status" -eq 0 ]
-  [ "$output" = "2" ]
-
-  # The FIRST pass's inputs are still recoverable behind the new tip.
-  git -C memory/ddaanet cat-file -p 'refs/gitlore/compose-base~1:carrier.md' \
-    > "$BATS_TEST_TMPDIR/carrier.audit1"
-  cmp -s "$BATS_TEST_TMPDIR/carrier.audit1" "$BATS_TEST_TMPDIR/carrier.1"
-}
-
-@test "an idempotent compose appends no audit commit" {
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  seed_root_bullet "project_overview.md" "the project"
-  gitlore_compose memory
-  run base_count ddaanet
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
-
-  # Nothing changed, so nothing was reconciled: the log records passes that
-  # moved the store, not every time the hook fired.
-  run gitlore_compose memory
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  run base_count ddaanet
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
-}
-
-@test "a legacy blob compose-base is still the base, and becomes a commit" {
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet keep.md "stays"
-  seed_tier_bullet ddaanet drop.md "goes away"
-  # Root omits one of the two facts — a delete only if the base below is read.
-  seed_root_bullet "ddaanet/keep.md" "stays"
-
-  # The shape every live store carries today: the ref names the carrier BLOB.
-  blob=$(git -C memory/ddaanet hash-object -w --stdin < memory/ddaanet/MEMORY.md)
-  git -C memory/ddaanet update-ref refs/gitlore/compose-base "$blob"
-
-  run gitlore_compose memory
-  [ "$status" -eq 0 ]
-  # Observable proof the blob was read as the base: drop.md is at base and the
-  # root dropped it, so it goes. With an unread (empty) base it would be a fresh
-  # carrier add and survive.
-  run ! grep -qF 'drop.md' memory/ddaanet/MEMORY.md
-  grep -qF -- '- [keep](keep.md) — stays' memory/ddaanet/MEMORY.md
-  grep -qF 'ddaanet/keep.md' memory/MEMORY.md
-
-  # And the store is migrated in place: the next pass has a chain to append to.
-  run git -C memory/ddaanet cat-file -t refs/gitlore/compose-base
-  [ "$status" -eq 0 ]
-  [ "$output" = "commit" ]
-}
-
-@test "an up-only compose appends no audit commit and leaves the ref alone" {
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  gitlore_compose memory
-  before=$(git -C memory/ddaanet rev-parse refs/gitlore/compose-base)
-
-  # A carrier arrival the up-only pass splices into the root while writing no
-  # carrier: root and carrier were never reconciled, so there is nothing to
-  # record and the base must not move.
-  seed_tier_bullet ddaanet arrived.md "new from another repo"
-  run gitlore_compose memory up
-  [ "$status" -eq 0 ]
-  grep -qF 'ddaanet/arrived.md' memory/MEMORY.md
-
-  [ "$(git -C memory/ddaanet rev-parse refs/gitlore/compose-base)" = "$before" ]
-  run base_count ddaanet
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
 }
 
 @test "a failing check writes nothing at all" {

@@ -71,18 +71,12 @@ diverge_memory_with_index() {
 
   committed=$(git -C memory show HEAD:MEMORY.md)
   [[ "$committed" == *"- [T](ddaanet/x.md) — org"$'\n'"- [P](p.md) — project"* ]]
-  # The compose is up-only, so the carrier is NOT written: mirroring down would
-  # push a line into a second store as a side effect of approving this merge,
-  # and the user approved one index.
+  # The pass writes the root index only, so the carrier is NOT touched:
+  # projecting down would push a line into a second store as a side effect of
+  # approving this merge, and the user approved one index.
   run grep -qxF -- '- [T](x.md) — org' memory/ddaanet/MEMORY.md
   [ "$status" -ne 0 ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
-  # And the reconciliation base — which lives in the TIER — did not move.
-  # Advancing it here would tell the next full compose that the carrier's
-  # current state is what root last agreed to, reading every root-side addition
-  # as a deletion.
-  run git -C memory/ddaanet rev-parse --verify -q refs/gitlore/compose-base
-  [ "$status" -ne 0 ]
 }
 
 @test "a tier merge splices its merged carrier lines up into the root index" {
