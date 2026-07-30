@@ -103,6 +103,19 @@ load helpers/setup
   grep -qF 'git config gitlore.pushCommand' "$skill"
 }
 
+# merge is push's other half — take without publishing — and is a skill for the
+# same reasons: /gitlore:merge is the front door, but a session start that named
+# an upstream-ahead tier has to reach it from context.
+@test "distribution: merge is a skill (not a command) and its script is executable" {
+  skill="$PLUGIN_ROOT/skills/merge/SKILL.md"
+  [ -f "$skill" ]
+  [ ! -e "$PLUGIN_ROOT/commands/merge.md" ]
+  fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
+  echo "$fm" | grep -qE '^name:[[:space:]]*merge[[:space:]]*$'
+  [ -x "$PLUGIN_ROOT/scripts/merge-memory.sh" ]
+  grep -qF 'git config gitlore.mergeCommand' "$skill"
+}
+
 # Regression: D15 — the in-process-worktree memory-drift guard must be registered
 # as a PostToolUse hook on the EnterWorktree|ExitWorktree matcher, and its script
 # must exist and be executable (verified to fire; targeted matcher chosen).

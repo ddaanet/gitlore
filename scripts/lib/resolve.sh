@@ -135,6 +135,12 @@ gitlore_write_merge_state() {
   git -C "$mempath" diff "$base" "$target" > "$minef" || : > "$minef"
   git -C "$mempath" diff "$base" "$source" > "$theirsf" || : > "$theirsf"
   git -C "$mempath" ls-files | sort -u > "$treef" || : > "$treef"
+  # `publish` records whether landing this merge should also push the result. It
+  # is empty for every gate — a merge prepared because a push was refused exists
+  # to let that push succeed — and "no" only when /gitlore:merge asked to
+  # reconcile without publishing. Carried in the state file rather than inferred
+  # at continuation time: by then the entry point that had the intent is gone.
+  #
   # jq builds the JSON rather than a heredoc interpolating into it: $store_abs is
   # a filesystem path, and one containing a `"` or a `\` produces a file that the
   # first reader — `jq -r .flavor` in the stale-state guard — cannot parse, which
@@ -153,10 +159,12 @@ gitlore_write_merge_state() {
     --arg tree "$treef" \
     --argjson changed "$changed" \
     --argjson conflicted "$conflicted" \
+    --arg publish "${GITLORE_MERGE_NO_PUBLISH:+no}" \
     '{flavor: $flavor, store: $store, base: $base, source_ref: $source,
       target_ref: $target, changed_files: $changed,
       conflicted_files: $conflicted, mine_diff: $mine,
-      theirs_diff: $theirs_diff, tree: $tree, continuation: $cont}' \
+      theirs_diff: $theirs_diff, tree: $tree, continuation: $cont,
+      publish: $publish}' \
     > "$statefile.tmp" || { rm -f "$statefile.tmp"; return 1; }
   mv "$statefile.tmp" "$statefile" || { rm -f "$statefile.tmp"; return 1; }
 }
@@ -532,4 +540,131 @@ $push_err" >&2
   # Reachable → HEAD-vs-remote divergence. Prepare and yield.
   gitlore_yield_merge "$mempath" origin/live head-vs-remote || return 1
   return 1
+}
+
+# Take whatever each store's remote is holding, without publishing anything:
+# every tier first, then memory. The counterpart of gitlore_push_stores, and the
+# only path by which a pinned tier advances (D17) — SessionStart names an
+# upstream-ahead tier, this is what acts on it.
+#
+# Three outcomes per store, decided by ancestry against the fetched `origin/live`:
+#
+#   - the remote is already contained in HEAD → nothing to take. Local commits
+#     awaiting publication are /gitlore:push's business, not this one's.
+#   - HEAD is an ancestor of the remote → take it by fast-forward, then ADOPT:
+#     for a tier, its merged carrier becomes root's block for it. No sub-agent —
+#     nothing is in dispute, and spending a synthesis on a fast-forward would
+#     make taking upstream facts expensive enough to skip.
+#   - neither contains the other → prepare a merge and yield, exactly as a
+#     refused push does, but marked not-to-publish.
+#
+# A dirty store is refused rather than checked out over: the working tree may
+# hold this session's uncommitted facts, and a fast-forward would either fail
+# mid-way or carry them onto a commit nobody approved them against.
+#
+# Returns 0 when every store is reconciled (nothing-to-take included), 1 after
+# emitting a message otherwise — including the prepared-merge directive.
+# Args: $1 = memory worktree path.
+gitlore_merge_stores() {
+  local mempath="$1" tier tierpath
+
+  gitlore_guard_stale_merge_state "$mempath" || return 1
+
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
+    [ -e "$tierpath/.git" ] || continue
+    gitlore_guard_stale_merge_state "$tierpath" || return 1
+    gitlore_merge_one_store "$mempath" "$tierpath" "$tier" || return 1
+  done < <(gitlore_tier_paths "$mempath")
+
+  gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
+  return 0
+}
+
+# One store's reconcile. Args: $1 = memory worktree, $2 = store worktree,
+# $3 = tier name ("" when the store IS the memory root, which adopts nothing —
+# its own MEMORY.md moves with the fast-forward).
+gitlore_merge_one_store() {
+  local mempath="$1" store="$2" tier="$3"
+  local label remote head fetch_err
+
+  if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
+
+  if [ -z "$(git -C "$store" config --get remote.origin.url || true)" ]; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $label has no remote configured, so there is nothing to take. Mount it against a remote or unmount it." \
+      "gitlore: $label has no remote configured, so there is nothing to take." >&2
+    return 1
+  fi
+  if ! fetch_err=$(git -C "$store" fetch -q origin live 2>&1); then
+    gitlore_say_for_agent_or_user \
+      "gitlore: could not fetch $label from its remote. git said:
+$fetch_err" \
+      "gitlore: could not fetch $label from its remote. git said:
+$fetch_err" >&2
+    return 1
+  fi
+  # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
+  remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || {
+    printf 'gitlore: %s — its remote has no '\''live'\'' branch yet; nothing to take.\n' "$label"
+    return 0
+  }
+  head=$(git -C "$store" rev-parse HEAD) || return 1
+
+  if git -C "$store" merge-base --is-ancestor "$remote" "$head"; then
+    printf 'gitlore: %s — already holds everything its remote does.\n' "$label"
+    return 0
+  fi
+
+  if [ "$(gitlore_memory_dirty "$store")" = "1" ]; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $label has uncommitted changes, so its remote was left untouched. Commit them (approved summary, then a memory commit) and run /gitlore:merge again." \
+      "gitlore: $label has uncommitted changes, so its remote was left untouched. Commit them and merge again." >&2
+    return 1
+  fi
+
+  if ! git -C "$store" merge-base --is-ancestor "$head" "$remote"; then
+    # Diverged. Same preparation a refused push yields, marked not-to-publish so
+    # the continuation stops after the local `HEAD:live` fast-forward.
+    GITLORE_MERGE_NO_PUBLISH=1 gitlore_yield_merge "$store" origin/live head-vs-remote || return 1
+    return 1
+  fi
+
+  # Fast-forward: advance the local `live` (created here when the store never had
+  # one), then move the working tree onto it. `push .` is ff-checked, so a race
+  # that advanced `live` underneath us is refused rather than overwritten.
+  local ff_err
+  if ! ff_err=$(gitlore_git -C "$store" push -q . "$remote:refs/heads/live" 2>&1); then
+    gitlore_say_for_agent_or_user \
+      "gitlore: could not advance $label's local 'live'. git said:
+$ff_err" \
+      "gitlore: could not advance $label's local 'live'. git said:
+$ff_err" >&2
+    return 1
+  fi
+  if ! ff_err=$(gitlore_git -C "$store" checkout -q --detach live 2>&1); then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $label's 'live' advanced but its working tree could not follow. git said:
+$ff_err" \
+      "gitlore: $label's 'live' advanced but its working tree could not follow. git said:
+$ff_err" >&2
+    return 1
+  fi
+  printf 'gitlore: %s — fast-forwarded to %s\n' "$label" "$(git -C "$store" rev-parse --short HEAD)"
+
+  # Adopt: the carrier that just arrived becomes root's block for this tier. The
+  # memory root adopts nothing — its own index is one of the files that moved.
+  if [ -n "$tier" ]; then
+    local composed rc=0
+    composed=$(gitlore_compose_up "$mempath" "$tier") || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /'
+    else
+      printf 'gitlore: the root index could not take %s'\''s lines, so they are not recallable yet. Fix the store, then edit MEMORY.md to retrigger composition:\n' "$label" >&2
+      printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+    fi
+  fi
+  return 0
 }
