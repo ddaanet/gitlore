@@ -1,8 +1,22 @@
 ## Remaining
 
-- Land or discard the uncommitted memory-writing consolidation in the `ddaanet` tier worktree.
-- Bump the plugin version before releasing; `check-version` is in sync at 0.4.3.
-- Normalize `name:` frontmatter to the filename stem across the whole memory store (`ddaanet/feedback_no_in_place_other_repos.md` carries hyphens against an underscored stem), and re-audit dangling `[[...]]` links store-wide.
+- Rewrite gitlore's bats negatives per `brief-test-suite-negatives-rewrite.md`,
+  and report where the paired-structure rule does not hold. The D21 suite is the
+  first dogfooding: the rule caught a real vacuous negative, but only under
+  mutation — the prose pairing claim did not.
+- Add guardrails against snake_case and `name:`/filename drift, then normalise
+  every memory `name:` and cross-link to kebab-case. The link parser must skip
+  fenced code, or it will rewrite bash `[[ "$output" == ... ]]` conditionals;
+  roughly two dozen links dangle, split between dropped type prefixes and
+  cross-store targets that may legitimately live in another repo.
+- Retire superseded memory facts to buy index headroom. `memory/MEMORY.md` is at
+  ~24.1KB against the 24.4KB loader cutoff, past which the tail is silently
+  truncated; merging is exhausted as a lever.
+- Bump the plugin version and release, so the D21 detector reaches other repos.
 - Explain the live pointer loss for gitlore's own memory store.
-- Place or apply the `brief-*.md` files sitting at the repo root, in their target repos.
-- Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it and `general` still point at a local `./.git/gitlore-placeholder`. Then `gitmoji` to `general` to `home` to `devddaanet` to `skills` to `candidature` to `edify` to `Emploi` to `cwd-safety`.
+- Apply the five remaining root `brief-*.md` files — they were dropped here by
+  sibling projects for handling in this repo.
+- Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it
+  and `general` still point at a local `./.git/gitlore-placeholder`. Then
+  `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature` →
+  `edify` → `Emploi` → `cwd-safety`.

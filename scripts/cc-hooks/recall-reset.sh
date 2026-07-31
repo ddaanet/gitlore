@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SessionStart + PreCompact: drop the recall ledger and the budget-nudge marker.
+# SessionStart + PreCompact: drop the recall ledger and the once-per-episode
+# nudge markers (index byte budget, mid-session plugin upgrade).
 #
 # The ledger answers "is this memory body already in context?", so it is only
 # valid for as long as the context is. Two events end that:
@@ -36,4 +37,5 @@ mempath=$(gitlore_memory_path)
 session=$(jq -r '.session_id // ""' <<<"$payload")
 gitlore_recall_reset "$mempath" "$session"
 gitlore_index_budget_nudge_reset "$mempath" "$session"
+gitlore_upgrade_nudge_reset "$mempath" "$session"
 exit 0

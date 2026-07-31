@@ -45,7 +45,7 @@ if [ -z "\$HOOKS_DIR" ]; then
 fi
 if [ ! -x "\$HOOKS_DIR/$hook" ]; then
   echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
-  echo "Start Claude Code in this repo to refresh the hooks dir, then retry." >&2
+  echo "Relaunch Claude Code in this repo with 'claude -c' to refresh the hooks dir, then retry." >&2
   exit 0
 fi
 exec "\$HOOKS_DIR/$hook" "\$@"
