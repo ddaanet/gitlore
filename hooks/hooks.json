@@ -96,6 +96,14 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/recall-batch.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/plugin-upgrade-batch.sh"
+          }
+        ]
       }
     ],
     "WorktreeRemove": [

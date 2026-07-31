@@ -99,7 +99,7 @@ Each wrapper delegates to the current plugin via `git config gitlore.hooksDir` (
 
 ```sh
 #!/bin/sh
-HOOKS_DIR=$(git config gitlore.hooksDir 2>/dev/null)
+HOOKS_DIR=$(git config gitlore.hooksDir)
 if [ -z "$HOOKS_DIR" ]; then
   echo "gitlore skipped: hooks not installed." >&2
   echo "Install the gitlore plugin from the Claude Code marketplace, then start Claude Code in this repo." >&2
@@ -107,7 +107,7 @@ if [ -z "$HOOKS_DIR" ]; then
 fi
 if [ ! -x "$HOOKS_DIR/pre-commit" ]; then
   echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
-  echo "Start Claude Code in this repo to refresh the hooks dir, then retry." >&2
+  echo "Relaunch Claude Code in this repo with 'claude -c' to refresh the hooks dir, then retry." >&2
   exit 0
 fi
 exec "$HOOKS_DIR/pre-commit" "$@"
@@ -258,7 +258,9 @@ The standalone commit is the `handoff` plugin's path, not the general one (D16).
 
 **Both IPC files are removed only on a complete commit.** A locked repo and an in-flight merge are expected transients, so on any failure the trigger *and* the message file stay put and the next batch retries — no agent action, no lost approval. A trigger with no approved summary is likewise kept, so the commit completes on its own the moment the summary lands.
 
-**`SessionStart` and `PreCompact` — the recall reset.** `recall-reset.sh` clears the recall ledger. Both events end the context the ledger describes; see D18.
+**`PostToolBatch` — the plugin-upgrade notice.** `plugin-upgrade-batch.sh` compares the plugin root this session froze at against what the install record says is installed for this repo, and reports a mid-session upgrade once per episode. It reports and never repairs; see D21.
+
+**`SessionStart` and `PreCompact` — the recall reset.** `recall-reset.sh` clears the recall ledger and the once-per-episode nudge markers (index byte budget, plugin upgrade). All three describe a context those events end; see D18 and D21.
 
 #### Git Hooks
 
@@ -464,9 +466,11 @@ Tracking hook scripts in the repo would cause commit churn on every plugin updat
 Wrappers exec the real hook scripts via `$(git config gitlore.hooksDir)/<hook>`. The wrapper degrades to a clean skip (exit 0 + stderr hint) in **two** cases, not one:
 
 1. **`gitlore.hooksDir` unset** — a plain `git commit` outside any Claude session before SessionStart has fired. Hint: install the marketplace, plugin, and start Claude.
-2. **`gitlore.hooksDir` set but `$HOOKS_DIR/<hook>` does not exist** — the version-pinned config points at a plugin-cache dir that was GC'd after a plugin upgrade, in the window before the next SessionStart re-pins it. Without this guard the wrapper `exec`s a missing path and the commit/push **hard-fails** with `exec: …: not found`. Hint: start Claude Code in this repo to refresh the hooks dir.
+2. **`gitlore.hooksDir` set but `$HOOKS_DIR/<hook>` does not exist** — the version-pinned config points at a plugin-cache dir that was GC'd after a plugin upgrade, in the window before the next SessionStart re-pins it. Without this guard the wrapper `exec`s a missing path and the commit/push **hard-fails** with `exec: …: not found`. Hint: relaunch with `claude -c`.
 
 Both keep git operations unblocked rather than breaking a commit on a transient/stale-config condition.
+
+**The refresh is `claude -c`, not a cold session.** Any process start re-pins the five keys — `SessionStart` fires on a resume as it does on a startup, with `source=resume` (D21) — so a resume closes the staleness window while keeping the conversation that hit it. A cold session closes the same window and throws the context away. This is the same remedy the upgrade notice names, for the same reason: what went stale was frozen at process start, and only a new process re-reads it.
 
 **D11 — Gitlink-aware wrapper paths (common-dir anchor) for linked-worktree support**
 
@@ -710,6 +714,20 @@ Memory `live` advances locally on every memory commit, but nothing reaches a rem
 
 **No approval gate of its own.** FR11 is a gate on what enters the history, applied where content is composed. Re-asking at publish time would gate a decision already made, and would train the user to approve a prompt carrying no new information — the failure mode that makes a gate ornamental. What the run *does* owe the user is an accurate report: which stores moved, how far, and — named explicitly rather than left to inference — that uncommitted changes did not go with them.
 
+**D21 — A mid-session plugin upgrade is a notice, not a self-healing config**
+
+`CLAUDE_PLUGIN_ROOT` is resolved once, at process start, from `~/.claude/plugins/installed_plugins.json`. That record keeps moving while a session runs: another repo's session installs, or the user runs `/plugin update`. Everything this session froze at start then belongs to the *old* version — hook event registration, skill bodies, agent definitions, and the five `gitlore.*` keys that point into the plugin root (D5). The `PostToolBatch` hook `plugin-upgrade-batch.sh` notices the disagreement and names the remedy, once per episode.
+
+**Everything frozen at process start is re-read on a resume, so `claude -c` is the entire remedy.** Verified 2026-07-31 by a two-run `--plugin-dir` probe whose `SessionStart` hook logged its root and the payload's `source`, with `hooks.json` rewritten between the runs to point at a different script: the second run fired `SessionStart` with `source=resume` and ran the **new** command, under the **same** `session_id`. The transcript records no plugin path or version anywhere, so a resumed process has no stale root to restore — it re-resolves the root from the install record and re-pins the five keys, re-emits the wrappers and re-wires the memory gate exactly as a cold start does. The conversation survives. Nothing available inside a live session substitutes for it.
+
+**Why reporting is the whole fix.** Both ways of making a live session adopt the upgrade produce a *split-version* session, which is strictly worse than uniform staleness: the git-config keys would point into the new version while CC-side hook registration, skill bodies and agent definitions stayed on the old one. Uniform staleness has one failure mode and one remedy; a split has neither. So gitlore reports and never repairs.
+
+**Detection.** The hook compares the frozen root against the entries the record holds for this plugin — the user-scoped one, plus any entry pinned to this project — and fires only when that set is non-empty and holds no entry equal to the frozen root. A repo deliberately pinned behind the user-scoped version is therefore silent, which is the point: installs are pinned per scope, not globally, and repos routinely sit at different versions. The family is identified by the frozen root's parent directory rather than a `gitlore@ddaanet` literal, so a fork or a renamed marketplace works unchanged. Three guards precede it: no `CLAUDE_PLUGIN_ROOT`, no `gitlore-memory` submodule, and a frozen root outside the plugin cache — the last because a `--plugin-dir` checkout is never stale, and its parent is an ordinary source directory whose neighbours the record may well name for some *other* locally-installed plugin. There is no `grep -F` short-circuit ahead of the record query: the frozen root can appear in the record under a different `projectPath`, where a bare match would read as "installed here" and suppress a real notice.
+
+**Both channels, and the user-facing one carries the instruction.** D14's house style keeps `systemMessage` curt and free of actionable phrases, leaving remedies to `additionalContext`. This is the deliberate exception, on D7 grounds: only the user can exit and relaunch, and a hot-path notice routed through the agent is model-dependent. So the user's line names the remedy directly. The agent's line is mostly a prohibition — `/plugin`, `/reload-plugins` and rewriting the `gitlore.*` keys are all dead ends, none of them re-fires `SessionStart` — because the session that prompted this work ran two full cycles of exactly those repairs before the cause was found.
+
+**Once per episode, re-armed by a compaction.** A marker in the memory store's gitdir, keyed by session and swept after seven days, mirrors the index byte-budget nudge; `recall-reset.sh` clears both at `SessionStart` and `PreCompact`. A compaction re-arms the notice deliberately: what survives is a summary, and the session is still running the old root.
+
 ---
 
 ## Rejected Alternatives
@@ -761,6 +779,10 @@ Grouped by the part of the system they belong to. Each entry states the alternat
 **A strictly non-empty initial commit at install.** Install passes `--allow-empty` as a safety net: the commit normally carries migrated auto-memory or a `MEMORY.md` scaffold, but a prior failed install can leave the migration source a stub, and a hard failure there helps nobody.
 
 **`gh repo create` as the only remote-creation method.** Locks out non-GitHub users; the provider-agnostic copy-paste flow covers them.
+
+**A version-less plugin pointer, resolved at hook runtime.** Pointing the five `gitlore.*` keys at a symlink refreshed per lookup would let git-side hooks follow an upgrade mid-session — while CC-side hook registration, skill bodies and agent definitions stayed on the version the process froze at. That split-version session is worse than uniform staleness, which has one failure mode and one remedy (D21). The premise was also wrong: installs are pinned per scope and per project, not globally, so "the newest directory in the cache" is not what a given repo loads.
+
+**Wrappers self-healing from `CLAUDE_PLUGIN_ROOT`.** That variable is exported to Claude Code hooks only. A git hook fires from agent Bash, where it is unset, so the wrapper has nothing to heal from — and the split-version objection above stands regardless (D21).
 
 **A separate `gitlore.memoryPath` config key.** `.gitmodules` plus the fixed submodule name `gitlore-memory` is already canonical; a second source is a divergence risk.
 

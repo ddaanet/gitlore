@@ -140,29 +140,43 @@ gitlore_index_budget_pct() {
   printf '%s\n' "$(( bytes * 100 / GITLORE_INDEX_BUDGET_BYTES ))"
 }
 
-# Path to this session's budget-nudge marker: has the byte-budget advisory
-# already fired once this episode? Lives in the memory gitdir, keyed by
-# session, mirroring gitlore_recall_ledger. Args: $1 = memory worktree path;
-# $2 = session id.
-gitlore_index_budget_nudge_file() {
+# Once-per-episode markers. A nudge that fires on every batch is noise, so each
+# advisory drops a marker keyed by session in the memory gitdir (mirroring
+# gitlore_recall_ledger) and checks for it before speaking. Args: $1 = memory
+# worktree path; $2 = session id; $3 = marker kind.
+_gitlore_nudge_file() {
   local safe
   safe=$(printf '%s' "${2:-nosession}" | LC_ALL=C sed 's/[^A-Za-z0-9-]/_/g')
-  git -C "$1" rev-parse --git-path "gitlore-budget-nudged-$safe"
+  git -C "$1" rev-parse --git-path "gitlore-$3-nudged-$safe"
 }
 
-# Clear this session's budget-nudge marker, and sweep markers left by sessions
-# that ended without one. Called at SessionStart and PreCompact, the same
-# episode boundary as gitlore_recall_reset. Args: $1 = memory worktree path;
-# $2 = session id.
-gitlore_index_budget_nudge_reset() {
-  local mempath="$1" marker dir
-  marker=$(gitlore_index_budget_nudge_file "$mempath" "$2")
+# Clear this session's marker of that kind, and sweep markers left by sessions
+# that ended without one. Args as _gitlore_nudge_file.
+_gitlore_nudge_reset() {
+  local mempath="$1" kind="$3" marker dir
+  marker=$(_gitlore_nudge_file "$mempath" "$2" "$kind")
   rm -f "$marker"
   dir=$(dirname -- "$marker")
   [ -d "$dir" ] || return 0
-  find "$dir" -maxdepth 1 -name 'gitlore-budget-nudged-*' -type f -mtime +7 -delete
+  find "$dir" -maxdepth 1 -name "gitlore-$kind-nudged-*" -type f -mtime +7 -delete
   return 0
 }
+
+# Has the index byte-budget advisory already fired this episode?
+# Args: $1 = memory worktree path; $2 = session id.
+gitlore_index_budget_nudge_file() { _gitlore_nudge_file "$1" "$2" budget; }
+
+# Re-arm the byte-budget advisory. Called at SessionStart and PreCompact, the
+# same episode boundary as gitlore_recall_reset.
+gitlore_index_budget_nudge_reset() { _gitlore_nudge_reset "$1" "$2" budget; }
+
+# Has the mid-session plugin-upgrade notice already fired this episode (D21)?
+# Args: $1 = memory worktree path; $2 = session id.
+gitlore_upgrade_nudge_file() { _gitlore_nudge_file "$1" "$2" upgrade; }
+
+# Re-arm the upgrade notice. A compaction re-arms it deliberately: what survives
+# is a summary, and the session is still running the old plugin root.
+gitlore_upgrade_nudge_reset() { _gitlore_nudge_reset "$1" "$2" upgrade; }
 
 # "bytes<TAB>path" for the $2 (default 5) largest bullets, descending — where
 # curation actually pays. LC_ALL=C so awk's length() counts bytes rather than

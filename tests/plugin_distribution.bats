@@ -137,6 +137,22 @@ load helpers/setup
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh" ]
 }
 
+# D21: the mid-session upgrade notice must be registered on PostToolBatch and
+# ship executable. It is the one gitlore notice a stale session can still emit —
+# hooks.json invokes by path, so a 100644 here would silence exactly the sessions
+# whose plugin root has gone stale, in every installed repo.
+@test "distribution: plugin-upgrade-batch hook is wired on PostToolBatch and executable" {
+  run jq -r '[.hooks.PostToolBatch[].hooks[].command | select(test("plugin-upgrade-batch"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/plugin-upgrade-batch.sh" ]
+  # Recorded mode, not the local filesystem mode: a marketplace clone reproduces
+  # git's mode, and a local chmod would mask the bug.
+  run git -C "$PLUGIN_ROOT" ls-files -s scripts/cc-hooks/plugin-upgrade-batch.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == 100755* ]]
+}
+
 # Positional invariant (add-tier triage-nudge design): add-tier-batch must run
 # BEFORE index-compose in PostToolBatch. If a future edit swaps them back, a
 # one-turn "write the intent file + list the tier" write would have
