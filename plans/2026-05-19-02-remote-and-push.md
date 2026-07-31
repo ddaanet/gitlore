@@ -4,7 +4,7 @@
 
 **Goal:** After `/gitlore:install` completes on a fresh repo, the user can `git commit` and `git push` and their memory submodule's `live` branch propagates to a remote, all in one command. No second step.
 
-**Reference:** `docs/design.md` is the authoritative spec. Where this plan disagrees with the design, the design wins; flag the divergence in a PR comment before deviating. Plan 01 (`docs/plans/2026-05-15-01-local-memory-pipeline.md`) is the predecessor; this plan builds on its installed state.
+**Reference:** `docs/design.md` is the authoritative spec. Where this plan disagrees with the design, the design wins; flag the divergence in a PR comment before deviating. Plan 01 (`plans/2026-05-15-01-local-memory-pipeline.md`) is the predecessor; this plan builds on its installed state.
 
 ---
 
@@ -269,7 +269,7 @@ tests/resolve.bats                       # NEW — /gitlore:resolve detection + 
 
 ## Conventions for every task
 
-- Same as Plan 01 (`docs/plans/2026-05-15-01-local-memory-pipeline.md`): bats files load `helpers/setup`, scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`, hook scripts exit 0 (silent ok) or 1 (loud failure), commit prefix per gitmoji convention.
+- Same as Plan 01 (`plans/2026-05-15-01-local-memory-pipeline.md`): bats files load `helpers/setup`, scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`, hook scripts exit 0 (silent ok) or 1 (loud failure), commit prefix per gitmoji convention.
 - Tests use the `gh-mock.bash` helper (Task 1) for any test that would otherwise hit real `gh`. Tests *never* hit the real GitHub API — that's what Dogfood B is for.
 
 ---

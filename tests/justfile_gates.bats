@@ -176,8 +176,8 @@ discovered_suites() {
   [ "$status" -eq 0 ]
   declared=" $output "
   # Excluded on purpose: no check reads them, and including them would re-run
-  # the whole suite on a memory-only or docs-only commit.
-  excluded=" memory docs README.md CLAUDE.md .claude .editorconfig .envrc "
+  # the whole suite on a memory-only or prose-only commit.
+  excluded=" memory docs plans README.md CLAUDE.md .claude .editorconfig .envrc "
   while IFS= read -r entry; do
     [[ "$declared" == *" $entry "* ]] || [[ "$excluded" == *" $entry "* ]] || {
       echo "top-level entry '$entry' is neither a declared gate input nor a deliberate exclusion" >&2

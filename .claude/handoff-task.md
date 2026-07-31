@@ -1,15 +1,16 @@
 ## Current task
 
-Nothing is mid-flight. `docs/plans/2026-07-31-14-stale-plugin-root-notice.md` is
-executed in full — the `PostToolBatch` upgrade detector, its bats cover, D21 and
-the D5 extension, the memory update, and the brief handed to `handoff` — and
-`just precommit` is green.
+Nothing is mid-flight. The `docs/` + `plans/` layout from
+`brief-docs-plans-layout.md` is adopted in full: plans and specs live in a root
+`plans/`, and `docs/changelog.md` is an index over 61 frozen per-entry bodies.
 
 ## Open decisions
 
-- Whether to carry out the `docs/plans/` → root `plans/` migration. It was
-  deferred only until the D21 plan stopped being in flight, which it now is.
-  `handoff` already keeps plans at its repo root.
+- Whether an applied brief belongs in `plans/` or stays in the root inbox.
+  `brief-docs-plans-layout.md` is now applied and still sits at the repo root,
+  while `brief-compose-full-tier-clear-gap.md` and
+  `brief-memory-commit-batch-model-channel.md` moved into `plans/` with the
+  other prospective content.
 - Whether to bump the plugin version and release now, or batch the release with
   the remaining memory work. The D21 detector reaches no other repo until a
   release lands and each repo runs `/plugin update`, so every session started

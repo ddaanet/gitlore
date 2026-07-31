@@ -15,9 +15,9 @@ trace := "false"
 # What a gate outcome depends on, and nothing else. Two sets, because the two
 # gates read different things.
 #
-# `memory/` and `docs/` are out of both, deliberately: no check reads either,
-# and memory is staged as a gitlink, so including it re-ran the whole suite on
-# every memory commit. `.gitignore` is in, since it decides which not-yet-added
+# `memory/`, `docs/` and `plans/` are out of both, deliberately: no check reads
+# any of them, and memory is staged as a gitlink, so including it re-ran the
+# whole suite on every memory commit. `.gitignore` is in, since it decides which not-yet-added
 # files the hash enumerates at all.
 #
 # Naming paths rather than inferring the tree is also what keeps the phantom

@@ -8,7 +8,7 @@
 
 **Tech Stack:** bash (3.2-compatible), `jq` for hook JSON, `bats` 1.5+ for tests. No awk needed for the new path arithmetic — bash parameter expansion is whitespace-safe here and avoids the `awk '{print $2}'` class of bug.
 
-**Spec:** `docs/superpowers/specs/2026-07-21-tier-index-composition-design.md`. **Design decision:** D17 in `docs/design.md`.
+**Spec:** `plans/2026-07-21-tier-index-composition-design.md`. **Design decision:** D17 in `docs/design.md`.
 
 ## Global Constraints
 

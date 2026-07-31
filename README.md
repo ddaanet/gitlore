@@ -1,7 +1,7 @@
 # gitlore
 
 A Claude Code plugin that makes Claude's auto-memory versioned, shared, and git-backed.
-See `docs/design.md` for the design, `docs/changelog.md` for how it got there, and `docs/plans/` for implementation plans.
+See `docs/design.md` for the design, `docs/changelog.md` for how it got there, and `plans/` for implementation plans and specs.
 
 ## Install
 
@@ -37,8 +37,8 @@ when they are unchanged, so `just prerelease` right after a green
 `just precommit` skips outright. `GITLORE_GATE_FORCE=1` runs one anyway.
 
 The inputs are the `precommit_inputs` and `evals_inputs` variables at the top of
-the `justfile`. `memory/` and `docs/` are in neither, so a memory-only or
-docs-only commit leaves a green gate green. `agents/`, `commands/` and `skills/`
+the `justfile`. `memory/`, `docs/` and `plans/` are in neither, so a memory-only
+or prose-only commit leaves a green gate green. `agents/`, `commands/` and `skills/`
 are in the evals set only: editing what the plugin ships invalidates the evals,
 not the fast gate.
 

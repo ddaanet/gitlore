@@ -84,6 +84,9 @@ pointer in that repo is fine.
 - State current truth in the present tense. Don't frame text as a correction of
   a previous version — git history is the changelog. Commit messages excepted.
 - `docs/design.md` follows the six-section living-doc structure.
+- `docs/` holds what is true now — the living design, the changelog, and
+  reference material. Prospective content — plans, specs, briefs — goes in
+  `plans/` at the repo root.
 
 ## Testing
 
