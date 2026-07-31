@@ -24,7 +24,7 @@
 | `tests/cc_hook_session_start.bats` | modify | Add a test: linked worktree gets its memory worktree created on the parent-named branch. |
 | `tests/cc_hook_worktree_remove.bats` | **create** | Cover the remove hook: clean removal, parent-dir-already-gone, dirty-warns, no-op guards, and hooks.json registration. |
 | `Makefile` | modify | Add `tests/cc_hook_worktree_remove.bats` to the `test-unit` list. |
-| `docs/plans/2026-05-25-06-worktree-lifecycle.md` | (this file) | Mark steps `[x]` as they land; record dogfood findings. |
+| `plans/2026-05-25-06-worktree-lifecycle.md` | (this file) | Mark steps `[x]` as they land; record dogfood findings. |
 
 Note: `docs/design.md` was already updated during brainstorming (the WorktreeCreate/WorktreeRemove rewrite, Coexistence bullet, Rejected-Alternatives row, changelog — commit `930fbaa`). `docs/plugin-readme.md` has no worktree section, so no readme change is needed.
 

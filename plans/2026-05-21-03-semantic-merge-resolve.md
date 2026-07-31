@@ -4,7 +4,7 @@
 
 **Goal:** When pre-commit fails to ff-push the worktree branch into `live`, or pre-push fails to ff-push `live` to its remote, the user gets an end-to-end semantic merge instead of "manual fix required." The agent's only job is to dispatch the `memory-merger` sub-agent and approve its summary with the user; every other decision is in shell scripts.
 
-**Reference:** `docs/design.md` is the authoritative spec (FR 5, D6, D7, D9 in particular). Plan 02 (`docs/plans/2026-05-19-02-remote-and-push.md`) is the immediate predecessor — pre-commit, pre-push, and `/gitlore:resolve` exist as primitives; this plan upgrades them to drive semantic merge.
+**Reference:** `docs/design.md` is the authoritative spec (FR 5, D6, D7, D9 in particular). Plan 02 (`plans/2026-05-19-02-remote-and-push.md`) is the immediate predecessor — pre-commit, pre-push, and `/gitlore:resolve` exist as primitives; this plan upgrades them to drive semantic merge.
 
 ---
 
@@ -329,7 +329,7 @@ tests/install_run.bats                 # MODIFY — assert preflight warns when 
 
 ## Conventions for every task
 
-- Same as Plan 02 (`docs/plans/2026-05-19-02-remote-and-push.md`): bats files load `helpers/setup`, scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`, hook scripts exit 0 (silent OK) or non-zero (loud directive on stderr), commit prefix per gitmoji convention.
+- Same as Plan 02 (`plans/2026-05-19-02-remote-and-push.md`): bats files load `helpers/setup`, scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`, hook scripts exit 0 (silent OK) or non-zero (loud directive on stderr), commit prefix per gitmoji convention.
 - State file at `<mempath>/.git/gitlore-merge-state`, resolved via `gitlore_merge_state_file` (Task 1 step 3). JSON shape per spec §3.5.
 - Continuation stored as a subcommand name (e.g., `continue-after-branch-merge`). The sub-agent runs it as `bash "$CLAUDE_PLUGIN_ROOT/scripts/resolve.sh" <continuation>`.
 - Hook scripts source `scripts/lib/resolve.sh` after `util.sh`/`log.sh`.

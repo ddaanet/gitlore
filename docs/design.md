@@ -7,8 +7,8 @@ across repos through nested *tier* submodules.
 
 This is the living design: what the system does, how it is built, and why it is
 built that way. It is kept in the present tense — how it got here is in
-[changelog.md](changelog.md). Plans live in `docs/plans/`, reference material in
-`docs/references/`.
+[changelog.md](changelog.md). Plans and specs live in `plans/` at the repo root,
+reference material in `docs/references/`.
 
 **Created:** 2026-04-11
 
