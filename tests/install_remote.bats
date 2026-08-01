@@ -29,7 +29,7 @@ teardown() { teardown_tmp_repo; }
 @test "install rewrites .gitmodules URL from placeholder to real remote" {
   bash "$RUN_INSTALL" memory "echo precommit"
   url=$(git config --file .gitmodules submodule.gitlore-memory.url)
-  [[ "$url" != *"gitlore-placeholder"* ]]
+  [[ "$url" != *"$GITLORE_T_PLACEHOLDER_URL"* ]]
 }
 
 @test "install records gh repo create with --private (no --source flag)" {
@@ -49,7 +49,7 @@ teardown() { teardown_tmp_repo; }
   [ -d memory ]
   [ -f .claude/settings.json ]
   url=$(git config --file .gitmodules submodule.gitlore-memory.url)
-  [[ "$url" == *"gitlore-placeholder"* ]]
+  [ "$url" = "$GITLORE_T_PLACEHOLDER_URL" ]
 }
 
 @test "install aborts cleanly when gh repo create fails (name collision)" {

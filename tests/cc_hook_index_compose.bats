@@ -49,8 +49,13 @@ seed_root_fact() {
 }
 
 @test "no-op for a batch that touched neither the index nor the manifest" {
-  pre "$PWD/some/other/file.txt"
   seed_tier_bullet ddaanet shared.md "a portable fact"
+  pre "$PWD/some/other/file.txt"
+  # The pre hook's target filter is what this test is really about: an Edit to an
+  # unrelated file leaves no baseline, so the batch is never even a candidate.
+  # Without this line the silence below is the missing-baseline guard's, and
+  # widening the filter to every file would go unnoticed.
+  [ ! -f "$(gitlore_compose_stamp_file memory)" ]
   run feed
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -65,10 +70,19 @@ seed_root_fact() {
 }
 
 @test "no-op when a watched call named the index but moved nothing" {
+  # The tier bullet is unspliced and stays that way: a compose here would have
+  # something to say, so the silence is the moved-nothing check and not an empty
+  # store with nothing to report either way.
+  seed_tier_bullet ddaanet shared.md "a portable fact"
   pre "$PWD/memory/MEMORY.md"
+  # The positive half of the filter, over the same fixture as the test above:
+  # naming the index DOES take a baseline. A rename of the stamp file turns this
+  # red rather than quietly satisfying the other test's absence check.
+  [ -f "$(gitlore_compose_stamp_file memory)" ]
   run feed
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+  run ! grep -qF 'ddaanet/shared.md' memory/MEMORY.md
 }
 
 @test "an index-touching batch composes and reports on both channels" {

@@ -571,6 +571,10 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   [ "$status" -eq 0 ]
   [[ "$output" == *"gone.md"* ]]
   [[ "$output" == *"memory/MEMORY.md"* ]]
+  # The phrase every "compose said nothing about dangling" negative refutes,
+  # pinned here so a rewording of the report turns this red instead of leaving
+  # them watching a string nothing emits.
+  [[ "$output" == *"$GITLORE_T_DANGLING"* ]]
 }
 
 @test "dangling is silent when every pointer resolves" {
@@ -637,7 +641,7 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   # The stale line survives: an index edit is the agent's, never the hook's.
   grep -qF -- '- [gone](gone.md) — stale line' memory/MEMORY.md
   # And compose's own report stays a list of what it WROTE.
-  [[ "$output" != *"names no file"* ]]
+  [[ "$output" != *"$GITLORE_T_DANGLING"* ]]
 }
 
 @test "cap_list passes a list at or under the cap through unchanged" {

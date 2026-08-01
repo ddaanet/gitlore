@@ -15,18 +15,52 @@ teardown() {
   teardown_tmp_repo
 }
 
-@test "no-op when gitlore.enabled is missing" {
-  run bash "$SESSION_START"
+# What "no-op" means here, asserted as one thing so every negative below says
+# it. settings.local.json is NOT it: D10 forbids writing that file on the
+# enabled path too, so its absence is true either way and pins nothing. The
+# config keys, the wrappers and the stdout JSON are what the enabled path
+# produces, and a no-op is their absence.
+assert_session_start_did_nothing() {
   [ "$status" -eq 0 ]
-  [ ! -f .claude/settings.local.json ]
+  [ -z "$output" ]                                  # no JSON on the CC channel
+  run git config --get gitlore.hooksDir
+  [ "$status" -ne 0 ]
+  [ ! -e .git/gitlore-pre-commit ]
+  [ ! -e .git/gitlore-pre-push ]
+}
+
+@test "no-op when there is no settings.json at all" {
+  make_parent_with_memory
+  run --separate-stderr bash "$SESSION_START"
+  assert_session_start_did_nothing
+}
+
+@test "no-op when gitlore.enabled is false" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":false}}\n' > .claude/settings.json
+  run --separate-stderr bash "$SESSION_START"
+  assert_session_start_did_nothing
+}
+
+@test "a malformed settings.json no-ops but says why" {
+  # Why the file-existence guard is separate from the jq read rather than folded
+  # into a `2>/dev/null`: absent is the ordinary not-a-gitlore-repo case, but
+  # unparseable is a fault, and swallowing jq's complaint downgrades it to
+  # "gitlore disabled" with no explanation anywhere.
+  make_parent_with_memory
+  mkdir -p .claude
+  printf 'this is not json\n' > .claude/settings.json
+  run --separate-stderr bash "$SESSION_START"
+  assert_session_start_did_nothing
+  [[ "$stderr" == *"parse error"* ]]
 }
 
 @test "no-op when .gitmodules has no gitlore-memory entry" {
   mkdir .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  run bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  [ ! -f .claude/settings.local.json ]
+  run --separate-stderr bash "$SESSION_START"
+  assert_session_start_did_nothing
 }
 
 @test "does not write settings.local.json (D10); sets hooksDir and emits wrappers" {

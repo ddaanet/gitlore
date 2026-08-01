@@ -38,12 +38,41 @@ read_call() { printf '[{"tool_name":"Read","tool_input":{"file_path":"%s"}}]' "$
 }
 
 @test "no-op (exit 0, silent) when gitlore is not configured" {
+  # A repo that has a memory/ directory and even a pending request in it, but no
+  # .gitmodules entry — so gitlore does not manage this store and must not read
+  # from it. Named after the submodule path on purpose: the guard is what tells
+  # the two apart, and a fixture without the directory would be silent whether
+  # the guard held or not.
+  git init -q -b main memory
+  printf 'body of A\n' > memory/feedback_a.md
+  mkdir -p .claude
+  printf 'feedback_a.md\n' > "$(gitlore_recall_file memory)"
+
   run run_batch
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   run run_reset
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+  [ -f "$(gitlore_recall_file memory)" ]   # and the request is left untouched
+}
+
+@test "no-op in a session-less worktree where the memory worktree is absent" {
+  # git creates the gitlink directory but leaves the submodule uninitialised, so
+  # there is no store to read. The request is present, so the silence is this
+  # guard's and not the missing-request one's.
+  make_parent_with_memory
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  [ ! -e "$WT/memory/.git" ]
+  cd "$WT"
+  mkdir -p .claude
+  printf 'feedback_a.md\n' > "$(gitlore_recall_file memory)"
+
+  run run_batch
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  rm -rf "$WT"
 }
 
 @test "no-op when no request file is present" {
@@ -88,7 +117,7 @@ read_call() { printf '[{"tool_name":"Read","tool_input":{"file_path":"%s"}}]' "$
   [[ "$ctx" == *"REFUSED"* ]]
   [[ "$ctx" == *"feedback_nope.md"* ]]
   # The banner states it once; the resolver's report must not repeat it.
-  [ "$(printf '%s\n' "${ctx,,}" | grep -c 'nothing was read')" -eq 1 ]
+  [ "$(printf '%s\n' "${ctx,,}" | grep -c "${GITLORE_T_NOTHING_READ,,}")" -eq 1 ]
   [ ! -f "$(gitlore_recall_file memory)" ]
 
   run run_batch          # nothing left to report

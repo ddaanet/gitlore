@@ -30,8 +30,9 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   run gitlore_commit_msg_file memory
   [ "$status" -eq 0 ]
+  # The equality is the whole assertion: any path inside a gitdir fails it, so a
+  # separate "not under .git/" check could only ever restate it.
   [ "$output" = "$TMP_REPO/.claude/gitlore-memory-message" ]
-  [[ "$output" != *".git/"* ]]   # no longer inside any gitdir
 }
 
 @test "exits 0 in a session-less worktree where the memory worktree is absent" {

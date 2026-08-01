@@ -24,9 +24,18 @@ run_batch() {
 ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
 
 @test "no-op (exit 0, silent) when gitlore is not configured" {
+  # The commit fixture minus exactly the memory submodule: an approved summary
+  # and a trigger are both waiting, so but for the configuration gate this batch
+  # would act and speak. With no trigger written the run reaches the no-trigger
+  # branch and comes out silent whether the gate is there or not.
+  mkdir -p "$(dirname "$(gitlore_commit_trigger_file memory)")"
+  printf 'memory: record notes\n' > "$(gitlore_commit_msg_file memory)"
+  : > "$(gitlore_commit_trigger_file memory)"
+
   run run_batch
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+  [ -f "$(gitlore_commit_trigger_file memory)" ]   # and nothing was consumed
 }
 
 @test "no-op when no trigger file is present" {

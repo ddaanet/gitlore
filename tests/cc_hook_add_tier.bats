@@ -45,9 +45,17 @@ write_intent() {
 # --- no-op paths -----------------------------------------------------------
 
 @test "add-tier hook: no-op (exit 0, silent) when gitlore is not configured" {
+  # The mount fixture minus exactly the submodule: a well-formed intent is
+  # waiting, so but for the not-configured guard this batch would mount and
+  # speak. Without the intent the run would reach the no-intent guard and come
+  # out silent whether the configured check is there or not.
+  bare=$(make_tier_remote ddaanet)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
   run run_batch
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+  [ -f .claude/gitlore-add-tier ]           # and the intent is left for later
 }
 
 @test "add-tier hook: no-op when no intent file is present" {

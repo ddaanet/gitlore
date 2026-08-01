@@ -69,7 +69,7 @@ feedback_a.md'
   req 'feedback_nope.md'
   run gitlore_recall_resolve memory "$SESSION"
   [ "$status" -eq 1 ]
-  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "${output,,}" != *"${GITLORE_T_NOTHING_READ,,}"* ]]
   [[ "$output" == "The request names"* ]]
 
   req 'feedback_a.md
@@ -80,21 +80,21 @@ feedback_a.md
 feedback_a.md'
   run gitlore_recall_resolve memory "$SESSION"
   [ "$status" -eq 1 ]
-  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "${output,,}" != *"${GITLORE_T_NOTHING_READ,,}"* ]]
   [[ "$output" == "The request lists"* ]]
 
   req '
    '
   run gitlore_recall_resolve memory "$SESSION"
   [ "$status" -eq 1 ]
-  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "${output,,}" != *"${GITLORE_T_NOTHING_READ,,}"* ]]
   [[ "$output" == "The request is empty"* ]]
 
   req 'no match
 feedback_a.md'
   run gitlore_recall_resolve memory "$SESSION"
   [ "$status" -eq 1 ]
-  [[ "${output,,}" != *"nothing was read"* ]]
+  [[ "${output,,}" != *"${GITLORE_T_NOTHING_READ,,}"* ]]
   [[ "$output" == "The request mixes"* ]]
 }
 
@@ -190,7 +190,10 @@ feedback_a.md'
 
 @test "the ledger lives in the gitdir, so it never dirties memory" {
   gitlore_recall_record memory "$SESSION" feedback_a.md
-  printf '%s' "$(git -C memory status --porcelain)" | grep -qv 'gitlore-recall' || true
+  # There IS a ledger, and it is in the gitdir: without this the absence check
+  # below passes just as well when the record was never written anywhere.
+  run gitlore_recall_known memory "$SESSION" feedback_a.md
+  [ "$status" -eq 0 ]
   run git -C memory status --porcelain
   [[ "$output" != *"gitlore-recall"* ]]
 }

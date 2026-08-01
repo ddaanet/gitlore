@@ -30,6 +30,30 @@ GITLORE_T_TRIAGE_MARK='active-tier'
 # message gitlore exists to avoid producing.
 GITLORE_T_EMBEDDED_REPO='embedded git repository'
 
+# The dangling-pointer report's wording (scripts/lib/index-compose.sh). Pinned by
+# "a dangling pointer names the file and the index that carries it" in
+# tests/index_compose.bats; refuted where compose has nothing dangling to say.
+GITLORE_T_DANGLING='names no file'
+
+# The recall refusal banner's clause (scripts/cc-hooks/recall-batch.sh). The
+# resolver's own report must never repeat it. Pinned by "a rejected request is
+# consumed too" in tests/cc_hook_recall.bats, which counts it exactly once;
+# refuted in tests/lib_recall.bats for every resolver-side problem report.
+# Consumers that match case-insensitively use "${GITLORE_T_NOTHING_READ,,}".
+GITLORE_T_NOTHING_READ='Nothing was read'
+
+# The submodule url install writes before a real remote exists
+# (scripts/install/init-submodule.sh). Pinned by "local mode keeps placeholder
+# and never calls gh" in tests/install_remote.bats.
+GITLORE_T_PLACEHOLDER_URL='./.git/gitlore-placeholder'
+
+# Git's own error when a hook runs with the parent's GIT_DIR still exported.
+# Not gitlore's wording — pinned by provoking it directly with the same leaked
+# environment in "ignores parent GIT_DIR/GIT_INDEX_FILE leaked by 'git commit'"
+# (tests/git_hook_pre_commit.bats), which is the only way to show the message is
+# still live in this git and that this fixture reaches the producer at all.
+GITLORE_T_LEAKED_GITDIR='index file open failed'
+
 # scripts/install/global-shim.sh's `${CLAUDE_PLUGIN_ROOT:?…}` bail. Pinned by
 # "the shim refuses without CLAUDE_PLUGIN_ROOT" in tests/global_shim.bats;
 # refuted in tests/resolve.bats, where resolve.sh must derive its own root
