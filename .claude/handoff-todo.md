@@ -1,9 +1,5 @@
 ## Remaining
 
-- Rewrite gitlore's bats negatives per `brief-test-suite-negatives-rewrite.md`,
-  and report where the paired-structure rule does not hold. The D21 suite is the
-  first dogfooding: the rule caught a real vacuous negative, but only under
-  mutation — the prose pairing claim did not.
 - Add guardrails against snake_case and `name:`/filename drift, then normalise
   every memory `name:` and cross-link to kebab-case, per
   `brief-memory-name-drift.md`. The link parser must skip fenced code, or it

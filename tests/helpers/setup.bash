@@ -5,6 +5,11 @@ set -euo pipefail
 PLUGIN_ROOT="${BATS_TEST_DIRNAME}/.."
 export PLUGIN_ROOT
 
+# Trigger strings shared between a negative assertion and the positive that
+# pins the wording. Loaded here so every suite has them without a second `load`.
+# shellcheck source=tests/helpers/triggers.bash
+source "${BATS_TEST_DIRNAME}/helpers/triggers.bash"
+
 setup_tmp_repo() {
   TMP_REPO="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-test.XXXXXX")"
   export TMP_REPO

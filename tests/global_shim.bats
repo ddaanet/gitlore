@@ -13,6 +13,15 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
+@test "refuses without CLAUDE_PLUGIN_ROOT" {
+  # This message is what tests/resolve.bats refutes, to say resolve.sh derives
+  # its own root instead of bailing this way. Asserted here so that refutation
+  # keeps watching a string production still emits.
+  run --separate-stderr env -u CLAUDE_PLUGIN_ROOT bash "$GLOBAL"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"$GITLORE_T_PLUGIN_ROOT_UNSET"* ]]
+}
+
 @test "writes an executable global shim matching the source" {
   SHELL=/bin/bash bash "$GLOBAL"
   [ -x "$GITLORE_HOME/bin/claude" ]
