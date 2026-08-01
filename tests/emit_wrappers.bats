@@ -18,8 +18,14 @@ teardown() { teardown_tmp_repo; }
   bash "$EMIT"
   run .git/gitlore-pre-commit
   [ "$status" -eq 0 ]
-  [[ "$output" == *"gitlore skipped"* ]] || \
-    [[ "$(cat <<<"$output")" == *"gitlore skipped"* ]]
+  [[ "$output" == *"gitlore skipped"* ]]
+  # "gitlore skipped" alone is emitted by BOTH branches: drop the -z guard and
+  # an empty HOOKS_DIR falls through to the stale branch, which says the plugin
+  # was upgraded when it was never installed. Pin the discriminator...
+  [[ "$output" == *"not installed"* ]]
+  # ...and the recovery act, which is the only thing this exit-0 path gives the
+  # user (NFR8/D5). Token, not sentence: rewording stays free.
+  [[ "$output" == *"marketplace"* ]]
 }
 
 @test "wrapper execs the real hook when gitlore.hooksDir set" {
@@ -47,6 +53,7 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"gitlore skipped"* ]]
   [[ "$output" == *"stale"* ]]
+  [[ "$output" == *"claude -c"* ]]   # the recovery act for this branch
 }
 
 @test "emit-wrappers is idempotent" {
