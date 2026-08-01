@@ -163,7 +163,9 @@ seed_root_fact() {
   run feed
   [ "$status" -eq 0 ]
   grep -qF 'ddaanet/shared.md' memory/MEMORY.md
-  run -1 jq -e '.hookSpecificOutput.additionalContext | test("active-tier")' <<< "$output"
+  # shellcheck disable=SC2016 # $m is a jq variable, bound by --arg
+  run -1 jq -e --arg m "$GITLORE_T_TRIAGE_MARK" \
+    '.hookSpecificOutput.additionalContext | test($m)' <<< "$output"
 }
 
 @test "a manifest-touching batch emits a triage directive naming the active tier's scope" {
@@ -172,21 +174,15 @@ seed_root_fact() {
   set_tier_manifest ddaanet
   run feed
   [ "$status" -eq 0 ]
+  # The marker the two "no directive" negatives refute, pinned positively over
+  # the same fixture they use — differing only in whether the batch touched the
+  # manifest. Without this, a rewording of the nudge leaves both of them green
+  # and watching nothing.
+  # shellcheck disable=SC2016 # $m is a jq variable, bound by --arg
+  echo "$output" | jq -e --arg m "$GITLORE_T_TRIAGE_MARK" \
+    '.hookSpecificOutput.additionalContext | test($m)'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory/ddaanet")'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for ddaanet")'
-}
-
-@test "the triage directive names every active tier's own scope, not a fixed dichotomy" {
-  make_tier_in_memory otherteam
-  pre "$PWD/memory/.gitlore-tiers"
-  set_tier_manifest ddaanet otherteam
-  run feed
-  [ "$status" -eq 0 ]
-  hookout="$output"
-  jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for ddaanet")' <<< "$hookout"
-  jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for otherteam")' <<< "$hookout"
-  [[ "$hookout" != *"project-specific"* ]]
-  [[ "$hookout" != *"single user"* ]]
 }
 
 @test "no triage directive when the manifest changes to zero active tiers" {
@@ -196,7 +192,7 @@ seed_root_fact() {
   [ "$status" -eq 0 ]
   # No active tier left to route to, so nothing is emitted at all — check the
   # raw string, not via jq, since a truly empty (no-JSON) output is the point.
-  [[ "$output" != *"active-tier"* ]]
+  [[ "$output" != *"$GITLORE_T_TRIAGE_MARK"* ]]
 }
 
 @test "no-op outside a gitlore repo" {

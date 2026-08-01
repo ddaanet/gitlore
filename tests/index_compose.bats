@@ -209,8 +209,11 @@ teardown() { teardown_tmp_repo; }
   seed_root_bullet "ddaanet/new_fact.md" "authored in the root"
   run gitlore_compose memory
   [ "$status" -eq 0 ]
-  grep -qF -- '- [new_fact](new_fact.md) — authored in the root' memory/ddaanet/MEMORY.md
-  run ! grep -qF 'ddaanet/new_fact.md' memory/ddaanet/MEMORY.md
+  # Exactly the one line, unprefixed. The prefix stripping is what the block
+  # equality pins: a prefixed twin alongside it fails the same assertion the
+  # missing line does.
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [new_fact](new_fact.md) — authored in the root'
 }
 
 # --- ordering ---
@@ -321,9 +324,10 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   seed_root_bullet "ddaanet/shared.md" "fresh curated text"
   run gitlore_compose memory
   [ "$status" -eq 0 ]
-  grep -qF -- '— fresh curated text' memory/ddaanet/MEMORY.md
-  run ! grep -qF 'stale carrier text' memory/ddaanet/MEMORY.md
-  [ "$(grep -c 'shared.md' memory/MEMORY.md)" -eq 1 ]
+  # Replaced, not appended beside: block equality says the carrier holds the
+  # root's wording once and the superseded wording not at all.
+  assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — fresh curated text'
+  assert_bullets memory/MEMORY.md '- [shared](ddaanet/shared.md) — fresh curated text'
 }
 
 @test "removing an active tier's root line drops it from the carrier in one pass" {
@@ -346,16 +350,49 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
 
   run gitlore_compose memory
   [ "$status" -eq 0 ]
-  run ! grep -qF 'drop.md' memory/ddaanet/MEMORY.md
-  grep -qF -- '- [keep](keep.md) — stays' memory/ddaanet/MEMORY.md
-  run ! grep -qF 'ddaanet/drop.md' memory/MEMORY.md
-  grep -qF 'ddaanet/keep.md' memory/MEMORY.md
+  # Both surfaces pinned independently: dropping the fact from one index and
+  # leaving it in the other fails exactly one of these two.
+  assert_bullets memory/ddaanet/MEMORY.md '- [keep](keep.md) — stays'
+  assert_bullets memory/MEMORY.md '- [keep](ddaanet/keep.md) — stays'
 
   # And it stays gone — no later compose resurrects it from a stale mirror.
   run gitlore_compose memory
   [ "$status" -eq 0 ]
-  run ! grep -qF 'drop.md' memory/ddaanet/MEMORY.md
-  run ! grep -qF 'ddaanet/drop.md' memory/MEMORY.md
+  assert_bullets memory/ddaanet/MEMORY.md '- [keep](keep.md) — stays'
+  assert_bullets memory/MEMORY.md '- [keep](ddaanet/keep.md) — stays'
+}
+
+@test "a root deletion lands even where the carrier added a line beside it" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet a.md "first"
+  seed_tier_bullet ddaanet drop.md "goes away"
+  seed_tier_bullet ddaanet c.md "last"
+  gitlore_compose memory
+  commit_memory_state
+
+  # The odd layout the HEAD-base check defends against. Root deletes the fact;
+  # the carrier independently gains a line right where it was. The path-list
+  # merge sees one hunk carrying a delete and an insert, and its --union
+  # resolution keeps BOTH — so the deleted path reaches the pick loop after
+  # all, and only the base check still distinguishes it from a carrier-only
+  # arrival. Every other deletion fixture is resolved before that check runs.
+  sed -i.bak '/ddaanet\/drop\.md/d' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [drop](drop.md) — goes away' \
+    '- [new](new.md) — written into the carrier' \
+    '- [c](c.md) — last'
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  # The carrier-only arrival is kept and the root's deletion still lands — the
+  # two halves of the same union hunk, decided oppositely.
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [new](new.md) — written into the carrier' \
+    '- [c](c.md) — last'
 }
 
 # --- adoption: the up projection a landed merge runs ---
@@ -378,17 +415,20 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   set_bullets memory/ddaanet/MEMORY.md \
     '- [existing](existing.md) — reworded by the merge' \
     '- [arrived](arrived.md) — new from another repo'
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
 
   run gitlore_compose_up memory ddaanet
   [ "$status" -eq 0 ]
-  grep -qF -- '- [arrived](ddaanet/arrived.md) — new from another repo' memory/MEMORY.md
   # The carrier's TEXT wins: root's own wording for the same path is replaced,
   # not preserved as it is in every other pass.
-  grep -qF -- '- [existing](ddaanet/existing.md) — reworded by the merge' memory/MEMORY.md
-  run ! grep -qF 'already here' memory/MEMORY.md
-  # And the carrier is not written: a merge approves one store's content, so
-  # nothing propagates into a store nobody reviewed.
-  run ! grep -qF 'ddaanet/' memory/ddaanet/MEMORY.md
+  assert_bullets memory/MEMORY.md \
+    '- [existing](ddaanet/existing.md) — reworded by the merge' \
+    '- [arrived](ddaanet/arrived.md) — new from another repo'
+  # And the carrier is not written at all: a merge approves one store's content,
+  # so nothing propagates into a store nobody reviewed. Byte equality, not the
+  # absence of a prefix — a write that reflowed or reordered the carrier without
+  # adding one is just as much a write.
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
 }
 
 @test "adoption drops a root line the merged carrier retracted" {

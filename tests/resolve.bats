@@ -30,9 +30,12 @@ teardown() { teardown_tmp_repo; }
   # not inherit CLAUDE_PLUGIN_ROOT. The script must derive its root from $0.
   unset CLAUDE_PLUGIN_ROOT
   run --separate-stderr bash "$RESOLVE"
-  # Either "not installed" (gitmodules empty) or some other gitlore-prefixed
-  # message — never "CLAUDE_PLUGIN_ROOT must be set".
-  [[ "$output$stderr" != *"CLAUDE_PLUGIN_ROOT must be set"* ]]
+  # The positive is what proves the run got past root derivation: with the
+  # variable unset the script still reaches its own logic and says gitlore's
+  # own thing. On its own the refutation below cannot tell that apart from a
+  # script that died earlier for some other reason.
+  [[ "$output$stderr" == *"not installed"* ]] || [[ "$output$stderr" == *"/gitlore:install"* ]]
+  [[ "$output$stderr" != *"$GITLORE_T_PLUGIN_ROOT_UNSET"* ]]
 }
 
 @test "resolve: creates remote when memory has no origin.url" {

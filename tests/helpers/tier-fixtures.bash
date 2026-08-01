@@ -132,3 +132,24 @@ seed_root_bullet() {
   printf -- '- [%s](%s) — %s\n' "$(basename "${1%.md}")" "$1" "$2" >> memory/MEMORY.md
 }
 
+# Assert index $1's bullet block is EXACTLY the remaining args, in order.
+#
+# Use this instead of a presence grep paired with an absence grep whenever the
+# absent string is a variant of the present one — a prefixed twin of an
+# unprefixed line, the superseded wording of a line whose new wording is
+# asserted. Such a pair cannot both be satisfied by the code that produces
+# either, so no mutation makes the negative fail on its own: it restates the
+# positive and can only ever go vacuous. An exact block has no absent string to
+# go stale, and a dropped line, a stray duplicate, a reorder and a wording drift
+# each fail it.
+assert_bullets() {
+  local f="$1"; shift
+  local want got
+  want=$(printf '%s\n' "$@")
+  got=$(gitlore_index_part "$f" bullets)
+  if [ "$got" != "$want" ]; then
+    printf 'bullets of %s\n--- want ---\n%s\n--- got ---\n%s\n' "$f" "$want" "$got" >&2
+    return 1
+  fi
+}
+

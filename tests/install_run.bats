@@ -98,8 +98,24 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "install does not emit the embedded-git-repository advice" {
+  # Paired over one fixture. The advice is git's, not gitlore's, so the only
+  # way to pin that the refuted string is still live — and that a nested store
+  # in THIS repo reaches the producer at all — is to stage one the plain way
+  # first. Install then differs in exactly one thing, registering the store as a
+  # gitlink, and must come out silent.
+  git init -q -b main nested
+  git -C nested config user.email test@example.com
+  git -C nested config user.name Test
+  printf 'x\n' > nested/f
+  git -C nested add f
+  git -C nested commit -qm x
+  run --separate-stderr git add nested
+  [[ "$output$stderr" == *"$GITLORE_T_EMBEDDED_REPO"* ]]
+  git rm -q --cached -rf nested   # -f: the repo has no HEAD to compare against
+  rm -rf nested
+
   output=$(bash "$RUN_INSTALL" memory "echo precommit" 2>&1)
-  [[ "$output" != *"embedded git repository"* ]]
+  [[ "$output" != *"$GITLORE_T_EMBEDDED_REPO"* ]]
 }
 
 @test "install is idempotent" {
