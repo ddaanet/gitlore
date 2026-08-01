@@ -42,6 +42,10 @@ teardown() { teardown_tmp_repo; }
   run "$hookfile"
   [ "$status" -eq 0 ]
   [[ "$output" == *"gitlore skipped"* ]]
+  # Shared by both branches — see emit_wrappers.bats. These two are what tell
+  # the unset branch apart from the stale one, and pin its recovery act.
+  [[ "$output" == *"not installed"* ]]
+  [[ "$output" == *"marketplace"* ]]
 }
 
 @test "emitted wrapper exits 0 with hint when gitlore.hooksDir is stale (GC'd)" {
@@ -53,6 +57,7 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   [[ "$output" == *"gitlore skipped"* ]]
   [[ "$output" == *"stale"* ]]
+  [[ "$output" == *"claude -c"* ]]   # the recovery act for this branch
 }
 
 @test "emitted wrapper execs memory-pre-commit when gitlore.hooksDir is set" {
