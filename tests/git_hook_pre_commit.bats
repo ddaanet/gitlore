@@ -138,10 +138,18 @@ teardown() { teardown_tmp_repo; }
   export GIT_INDEX_FILE=.git/index
   export GIT_WORK_TREE=.
 
+  # Git's message, not gitlore's, so the pairing has to provoke it: the same
+  # leaked environment, aimed at the submodule the hook works in. One assertion
+  # shows the message is still what this git prints and that this fixture
+  # reaches the producer; the other shows the hook clears the leak first.
+  run --separate-stderr git -C memory status --porcelain
+  [ "$status" -ne 0 ]
+  [[ "${output}${stderr}" == *"$GITLORE_T_LEAKED_GITDIR"* ]]
+
   CLAUDECODE=1 run --separate-stderr bash "$HOOK"
   unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
   [ "$status" -eq 0 ]
-  [[ "${output}${stderr}" != *"index file open failed"* ]]
+  [[ "${output}${stderr}" != *"$GITLORE_T_LEAKED_GITDIR"* ]]
   # And the commit-and-push path actually fired:
   wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)

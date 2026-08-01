@@ -38,13 +38,18 @@ teardown() { teardown_tmp_repo; }
 # Write the install record. $1 = directory the installs sit under, $2 = version
 # pinned for THIS project, $3 = version pinned at user scope (defaults to $2).
 # installPath is what the hook compares; the directory it names need not exist.
+#
+# The USER entry comes first on purpose. The hook falls back to the first
+# candidate when no project-scoped one applies, so a record listing the project
+# entry first would satisfy "names the project-scoped version" by accident of
+# ordering, and that test could not tell the preference from the fallback.
 write_record_under() {
   jq -n --arg proj "$TMP_REPO" --arg base "$1" \
         --arg pv "$2" --arg uv "${3:-$2}" '
     {plugins: {"gitlore@ddaanet": [
+      {scope: "user", version: $uv, installPath: ($base + "/" + $uv)},
       {scope: "project", version: $pv, projectPath: $proj,
-       installPath: ($base + "/" + $pv)},
-      {scope: "user", version: $uv, installPath: ($base + "/" + $uv)}
+       installPath: ($base + "/" + $pv)}
     ]}}' > "$GITLORE_PLUGIN_RECORD"
 }
 write_record() { write_record_under "$CACHE_FAMILY" "$@"; }
@@ -174,6 +179,23 @@ ctx_of() { printf '%s' "$1" | jq -r '.hookSpecificOutput.additionalContext'; }
   sys=$(sys_of "$output")
   [[ "$sys" == *"$NEW_VER"* ]]
   [[ "$sys" != *"0.9.9"* ]]
+}
+
+# Pairs with the firing test again: a record under the same cache family, past
+# the prefix guard, whose only entry applies to a DIFFERENT project. The
+# candidate set is then empty and there is no version to report — without the
+# emptiness guard the hook announces an upgrade to nothing at all.
+@test "silent when the record names no install that applies here" {
+  make_parent_with_memory
+  jq -n --arg base "$CACHE_FAMILY" --arg v "$NEW_VER" '
+    {plugins: {"gitlore@ddaanet": [
+      {scope: "project", version: $v, projectPath: "/somewhere/else",
+       installPath: ($base + "/" + $v)}
+    ]}}' > "$GITLORE_PLUGIN_RECORD"
+
+  run run_batch
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 # The hook is advisory. Neither absence nor corruption of the record may put

@@ -374,8 +374,10 @@ teardown() { teardown_tmp_repo; }
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  # The sentence is generic — the tiers themselves are enumerated below it.
-  [[ "$output" == *'<tier>/<file>.md'* ]]
-  [[ "$output" == *"ROOT"* ]]
-  [[ "$output" != *"that tier's MEMORY.md"* ]]
+  # The whole sentence, verbatim. An absence check on a superseded wording no
+  # producer emits cannot fail — nothing that drops the routing rule brings it
+  # back. This equality does: naming the tier's own index instead of the root's,
+  # dropping the prefix from the example, and losing the sentence altogether
+  # each fail it. The tiers themselves are enumerated separately, below.
+  [[ "$output" == *"add its index line to the ROOT memory/MEMORY.md with the tier prefix — '- [Title](<tier>/<file>.md) — hook'. gitlore mirrors that line down into the tier's own index for you."* ]]
 }

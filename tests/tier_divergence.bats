@@ -135,8 +135,9 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
   [[ "$all" == *"gitlore: memory merge prepared"* ]]
   [[ "$all" == *"head-vs-remote"* ]]
   [[ "$all" == *"memory/ddaanet"* ]]
-  # The old behaviour was to report and stop.
-  [[ "$all" != *"not yet automated"* ]]
+  # The old behaviour was to report and stop, and the state file is what tells
+  # the two apart: a merge was actually prepared, not just announced.
+  [ -f "$(tier_state_file ddaanet)" ]
 }
 
 @test "pre-commit prepares a merge when a tier commit diverged from its own live" {

@@ -130,7 +130,13 @@ discovered_suites() {
 }
 
 @test "the Makefile is gone, so nothing can quietly still run make" {
+  # Paired with the runner that replaced it: if the build entry point moves
+  # again, the positive reds rather than this absence quietly staying true of a
+  # repo with no build system at all.
+  [ -f "$PLUGIN_ROOT/justfile" ]
   [ ! -e "$PLUGIN_ROOT/Makefile" ]
+  [ ! -e "$PLUGIN_ROOT/GNUmakefile" ]
+  [ ! -e "$PLUGIN_ROOT/makefile" ]
 }
 
 @test "every declared gate input exists in the repo" {

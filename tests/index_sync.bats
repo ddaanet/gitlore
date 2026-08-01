@@ -709,6 +709,9 @@ batch_payload() {
   printf -- '- [A](a.md) — thin prose\n- [B](b.md) — now `tokenised`\n' > memory/MEMORY.md
   run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   run jq -r '.hookSpecificOutput.additionalContext // ""' <<<"$output"
+  # b.md IS flagged over the same fixture, in the same channel: without it the
+  # absence of a.md is satisfied by the advisory never running at all.
+  [[ "$output" == *"b.md"* ]]
   [[ "$output" != *"a.md"* ]]
 }
 
@@ -744,13 +747,16 @@ batch_payload() {
   run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   [ "$status" -eq 0 ]
   json="$output"
+  pct=$(( $(wc -c < memory/MEMORY.md) * 100 / 200 ))
+  # Exact blocks, not a presence check paired with the absence of wording no
+  # producer emits. The fixture keeps the sync itself silent, so each channel
+  # carries the advisory and nothing else — and an equality catches an added
+  # rationale line, a dropped clause and a reworded one alike, where refuting a
+  # phrase production never had could only ever pass.
   run jq -r '.systemMessage' <<<"$json"
-  [[ "$output" == *"budget"* ]]
+  [ "$output" = "gitlore: MEMORY.md is at ${pct}% of the 200-byte always-loaded budget" ]
   run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
-  [[ "$output" == *"budget"* ]]
-  [[ "$output" == *"24.4KB"* ]]
-  [[ "$output" != *"is what pays"* ]]
-  [[ "$output" != *"•"* ]]
+  [ "$output" = "MEMORY.md is at ${pct}% of the 200-byte budget. Past 24.4KB, Claude Code's own loader silently truncates the tail of this file — entries beyond the cutoff never reach a session." ]
 }
 
 @test "post: does NOT re-warn the SAME session on a later over-threshold batch" {

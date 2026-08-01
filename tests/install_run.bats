@@ -269,7 +269,10 @@ EOF
   unset CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
   [ "$status" -eq 0 ]
-  [[ "$output$stderr" == *"AGENT_TEAMS"* ]] || [[ "$output$stderr" == *"experimental"* ]]
+  # The exact name the silent case refutes. A disjunction here would let the
+  # warning drop the variable name and still satisfy this, leaving the negative
+  # below watching a string nothing emits.
+  [[ "$output$stderr" == *"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"* ]]
 }
 
 @test "preflight is silent when CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1" {

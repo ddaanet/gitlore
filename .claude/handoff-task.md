@@ -1,17 +1,14 @@
 ## Current task
 
 Nothing is mid-flight. `brief-test-suite-negatives-rewrite.md` is applied over
-its named scope — the `run !` sites — and the four clauses of the paired-negative
-rule that did not survive contact with a real suite are recorded in
+its named `run !` scope and over the three classes its census missed —
+`[ -z "$output" ]`, `[ ! -f/-e ]` and `[[ … != *…* ]]` — with each guard mutated
+singly to confirm which test watches it. The clauses of the paired-negative rule
+that did not survive contact with a real suite are recorded in
 `memory/ddaanet/feedback_mutation_check_negatives.md`.
 
 ## Open decisions
 
-- Whether to extend the rewrite to the three classes the brief's census missed.
-  It counted 20 sites as `refute_output`/`refute_line`/`assert_failure`, forms
-  this suite does not use; those 20 map onto the `run !` sites. The untouched
-  remainder is roughly 155 assertions: `[ -z "$output" ]` ~49, `[ ! -f/-e ]`
-  ~70, `[[ … != *…* ]]` ~40.
 - Whether an applied brief belongs in `plans/` or stays in the root inbox.
   `brief-docs-plans-layout.md` and `brief-test-suite-negatives-rewrite.md` are
   both applied and both still sit at the repo root, while
@@ -22,6 +19,10 @@ rule that did not survive contact with a real suite are recorded in
   release lands and each repo runs `/plugin update`, so every session started
   elsewhere in the meantime keeps the failure it exists to explain.
 - `scripts/lib/util.sh`'s stale-hooksDir wrapper hint is pinned by no test — the
-  same unpinned-literal class the rewrite just closed in four other places.
-  Whether the emitted wrapper text is worth pinning, or is deliberately left
-  loose.
+  same unpinned-literal class the rewrite just closed elsewhere, and outside the
+  three classes this pass covered. Whether the emitted wrapper text is worth
+  pinning, or is deliberately left loose.
+- Whether the ~58 `[ ! -f/-e ]` sites that sit beside a positive in their own
+  test body are worth mutating individually. They were read and screened
+  mechanically for tests whose only assertion is a file absence, not pinned one
+  guard at a time the way the rest of the pass was.
