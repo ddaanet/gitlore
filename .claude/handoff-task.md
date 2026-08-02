@@ -1,28 +1,9 @@
 ## Current task
 
-Nothing is mid-flight. `brief-test-suite-negatives-rewrite.md` is applied over
-its named `run !` scope and over the three classes its census missed —
-`[ -z "$output" ]`, `[ ! -f/-e ]` and `[[ … != *…* ]]` — with each guard mutated
-singly to confirm which test watches it. The clauses of the paired-negative rule
-that did not survive contact with a real suite are recorded in
-`memory/ddaanet/feedback_mutation_check_negatives.md`.
+The mutation-testing doctrine is retired from the `ddaanet` tier. Four facts are gone — `mutate-code-to-test-the-tests`, `mutation-sweep-must-survive-a-kill`, `unkillable-mutation-means-a-wrong-model`, `stale-artifact-is-not-agent-death` — and the prescriptions they seeded are cut from `tests-must-go-red`, `tests-pass-for-the-wrong-reason` and the `plan-contracts-not-full-code` template, which had mandated a killing mutation in every function contract. The eight weak-test shapes salvaged out of the first survive as `tests-that-cannot-discriminate`, whose fate is the first open decision below. The rule that replaces the doctrine: a surviving mutation is a test that needs to become a positive, or a negative pinned by a positive over the same fixture — write the discriminating test rather than validating a loose one by hand.
 
 ## Open decisions
 
-- Whether an applied brief belongs in `plans/` or stays in the root inbox.
-  `brief-docs-plans-layout.md` and `brief-test-suite-negatives-rewrite.md` are
-  both applied and both still sit at the repo root, while
-  `brief-compose-full-tier-clear-gap.md` and
-  `brief-memory-commit-batch-model-channel.md` moved into `plans/`.
-- Whether to bump the plugin version and release now, or batch the release with
-  the remaining memory work. The D21 detector reaches no other repo until a
-  release lands and each repo runs `/plugin update`, so every session started
-  elsewhere in the meantime keeps the failure it exists to explain.
-- `scripts/lib/util.sh`'s stale-hooksDir wrapper hint is pinned by no test — the
-  same unpinned-literal class the rewrite just closed elsewhere, and outside the
-  three classes this pass covered. Whether the emitted wrapper text is worth
-  pinning, or is deliberately left loose.
-- Whether the ~58 `[ ! -f/-e ]` sites that sit beside a positive in their own
-  test body are worth mutating individually. They were read and screened
-  mechanically for tests whose only assertion is a file absence, not pinned one
-  guard at a time the way the rest of the pass was.
+- Whether `tests-that-cannot-discriminate` should exist at all. The instruction was to get rid of mutations; keeping the catalogue — birth state, algebraic tautology, two empty derived states compared, parallel counts all equal, an isolation fixture with nothing to leak, upsert idempotence standing in for teardown, a substring another line satisfies — was a judgment call on the grounds that its body is test-design rules and only its frame was mutation. Not ratified.
+- Where the plan-level escalation rule lands, now that `unkillable-mutation-means-a-wrong-model` is retired as an instance of the general "faulty assumption in the test plan" class. A memory cannot fix it, since its only trigger was an unkillable mutation; the durable form is that a plan assumption which will not hold escalates to plan level rather than being adjusted locally. That is `superpowers:executing-plans` material, in a repo that stays read-only — proposable as a patch, not editable.
+- Whether to act on the index compaction hook. It asks for `memory/MEMORY.md` under 17.1KB; the file is ~21.3KB, under CC's 24.4KB loader cutoff, which is the actual gate. Declined this session because trimming lines to hit a byte target cuts the symptoms and identifiers that make a line findable. Upstream retirement already bought ~2.4KB, so the pressure is lower than the hook implies.

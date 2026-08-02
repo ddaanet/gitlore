@@ -1,20 +1,8 @@
 ## Remaining
 
-- Add guardrails against snake_case and `name:`/filename drift, then normalise
-  every memory `name:` and cross-link to kebab-case, per
-  `brief-memory-name-drift.md`. The link parser must skip fenced code, or it
-  will rewrite bash `[[ "$output" == ... ]]` conditionals; roughly two dozen
-  links dangle, split between dropped type prefixes and cross-store targets that
-  may legitimately live in another repo.
-- Retire superseded memory facts to buy index headroom. `memory/MEMORY.md` is at
-  ~24.1KB against the 24.4KB loader cutoff, past which the tail is silently
-  truncated; merging is exhausted as a lever.
-- Bump the plugin version and release, so the D21 detector reaches other repos.
+- Add guardrails against snake_case and `name:`/filename drift. The tier is already kebab-normalised upstream, so what remains is the checks plus six dangling wikilinks — `ghmem-project`, `micro-colwrap-project`, `auto-memory-directory`, `worktree-handoff-root`, `links`, `some-project` — some of which may legitimately target another store.
+- Bump the plugin version and release, so the D21 detector reaches other repos; until then every session started elsewhere keeps the failure it exists to explain.
 - Explain the live pointer loss for gitlore's own memory store.
-- Apply the three remaining root briefs that have no line of their own here:
-  `brief-hook-exec-and-compose-revert.md`, `brief-memory-index-glued-bullets.md`
-  and `brief-merge-dispatch-authorization.md`.
-- Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it
-  and `general` still point at a local `./.git/gitlore-placeholder`. Then
-  `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature` →
-  `edify` → `Emploi` → `cwd-safety`.
+- Apply the root-inbox briefs: `brief-hook-exec-and-compose-revert.md`, `brief-memory-index-glued-bullets.md`, `brief-merge-dispatch-authorization.md`, `brief-memory-name-drift.md`, `brief-shared-claude-import.md`.
+- Propose the plan-escalation rule as a patch to `superpowers:executing-plans`, which is another repo and stays read-only.
+- Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it and `general` still point at a local `./.git/gitlore-placeholder`. Then `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature` → `edify` → `Emploi` → `cwd-safety`.
