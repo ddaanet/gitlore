@@ -68,6 +68,13 @@ Read the composition report:
 - **Composed** — done. Do not re-read the indexes to verify; composition moves
   lines, it never rewrites them.
 
+If the report names an `@<tier>/shared-claude.md` import line, the tier carries
+conventions that must act without being looked up. Append that line, verbatim,
+as the final line of this repo's `CLAUDE.md`. Then read the file it points at
+and delete from `CLAUDE.md` every rule it already states — the shared file
+occupies the cross-repo scope between this repo's `CLAUDE.md` and the user's own
+`~/.claude/CLAUDE.md`, so repo-specific rules stay where they are.
+
 If you want the new tier ranked somewhere other than the bottom, edit
 `memory/.gitlore-tiers` yourself afterward — a plain reorder, which retriggers
 composition like any other manifest edit.

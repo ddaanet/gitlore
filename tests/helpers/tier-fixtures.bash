@@ -25,9 +25,10 @@
 # Default branch main with `live` alongside — the shape a tier remote must have
 # (a `live` default gets checked out as a branch by the mount, and the ff-only
 # `fetch origin live:live` then refuses).
-# Args: $1 = tier name (default "ddaanet"); $2 = "nolive" to omit the live branch.
+# Args: $1 = tier name (default "ddaanet"); $2 = "nolive" to omit the live branch;
+#       $3 = "shared" to seed a shared-claude.md alongside the index.
 make_tier_remote() {
-  local tier="${1:-ddaanet}" live="${2:-live}"
+  local tier="${1:-ddaanet}" live="${2:-live}" shared="${3-}"
   local bare="$TMP_REPO/.bare-$tier.git" seed_dir
   seed_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-tier-seed.XXXXXX")"
   git init -q -b main "$seed_dir"
@@ -37,7 +38,8 @@ make_tier_remote() {
     git config user.name  "Test"
     printf -- '---\ndescription: "org-wide facts for %s projects"\n---\n\n# %s tier index\n' \
       "$tier" "$tier" > MEMORY.md
-    git add MEMORY.md
+    [ "$shared" != "shared" ] || printf '# %s conventions\n\nAlways-on rules.\n' "$tier" > shared-claude.md
+    git add -A
     git commit -q -m "Initial $tier"
     [ "$live" = "nolive" ] || git branch live
   )

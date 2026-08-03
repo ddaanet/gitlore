@@ -25,16 +25,8 @@ you decide read-or-skip; the fact lives in the file.
 
 ## Working with David
 
-- No `AskUserQuestion` (`#no-askuserquestion`). Ask in plain prose: number the
-  questions, state your default so the thread can proceed, decide the rest and
-  say what you assumed.
-- He engages with LLM internals. Ground mechanism and cost claims or don't make
-  them; "be contrarian" means real pushback, not performative disagreement.
-- Decide as late as the evidence allows, but before inaction decides for you.
-  Don't build code that presupposes an unsettled question. Once the evidence is
-  in hand, act on it: a defect you have verified is not made someone else's call
-  by who authored it, and flagging is not the cautious option when the fix is
-  cheap and removes nothing.
+- A defect you have verified is not made someone else's call by who authored it.
+  Flagging is not the cautious option when the fix is cheap and removes nothing.
 - Match plan length to the work — a full spec is for real design decisions.
 
 ## Memory and commits
@@ -60,22 +52,8 @@ you decide read-or-skip; the fact lives in the file.
   against what the summary describes before acting — a summary says what, not
   where. If they disagree, stop and say so; don't `cd` to reconcile.
 
-## Scope
-
-Stay read-only on the *code* of David's other repos (`handoff`,
-`unsandbox-git-status`, `cwd-safety`, …), even for a small verified fix.
-Investigate and propose a patch; he applies it. Dropping a `NOTES`/`TODO`
-pointer in that repo is fine.
-
 ## Design
 
-- Scripts decide, the agent executes. Detection, branching and state checks live
-  in shell scripts that emit structured output; the skill or hook acts on that
-  output instead of reasoning its way to the answer.
-- Commands emitted for a sub-agent are self-contained: absolute paths, explicit
-  `cd`, every `$VAR` resolved at emit time.
-- Always-on context carries prohibitions, not procedures. A resident recipe
-  reads as ceremony to run; surface procedures at the trigger that fires them.
 - Self-triggering skill when the condition is mechanical and detectable; a
   command only for an explicitly user-initiated action.
 
@@ -90,14 +68,9 @@ pointer in that repo is fine.
 
 ## Testing
 
-- Encode behavior in the bats suite. Don't hand-build a fixture and assert in
-  the shell — grep the suite first, the path is usually already covered.
 - Test the invocation path, not just the code: assert discovery and `[ -x ]`,
   and that `just test` actually reaches the suite. Green means nothing until you
   know what ran.
-- Automate by default; choose a manual check only when automation costs
-  disproportionately more than the value.
-- Dogfood on the real target the day it ships; fixtures miss real-world bugs.
 - `just precommit` is fast and frequent. `just evals` drives the real claude
   CLI and costs time and money — run it explicitly, not as part of a release.
   `just release` depends on `prerelease`, which is just `precommit`.
@@ -108,3 +81,5 @@ pointer in that repo is fine.
   crop the one `not ok` line that matters. Invoke `bats` directly only when
   deliberately inspecting the full stream (e.g. debugging the wrapper
   itself).
+
+@memory/ddaanet/shared-claude.md

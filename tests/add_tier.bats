@@ -121,6 +121,45 @@ write_intent() {
   [[ "$output" == *"org-wide facts for ddaanet projects"* ]]
 }
 
+@test "add-tier: mount reports the import line for a tier carrying shared-claude.md" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet live shared)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run bash "$ADD_TIER"
+  [ "$status" -eq 0 ]
+
+  # Repo-root relative, so appending it verbatim to CLAUDE.md resolves.
+  [[ "$output" == *"@memory/ddaanet/shared-claude.md"* ]]
+  [[ "$output" == *"CLAUDE.md"* ]]
+}
+
+@test "add-tier: a tier with no shared-claude.md gets no import line" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run bash "$ADD_TIER"
+  [ "$status" -eq 0 ]
+
+  # A dangling `@` import loads nothing and says nothing, so the line is
+  # reported only once the file is actually in the mounted tier.
+  [[ "$output" != *"shared-claude"* ]]
+}
+
+@test "add-tier: mount stays quiet when CLAUDE.md already carries the import" {
+  make_parent_with_memory
+  printf '# Agent instructions\n\n@memory/ddaanet/shared-claude.md\n' > CLAUDE.md
+  bare=$(make_tier_remote ddaanet live shared)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run bash "$ADD_TIER"
+  [ "$status" -eq 0 ]
+
+  # Same tier as the positive above; only CLAUDE.md differs.
+  [[ "$output" != *"Append to CLAUDE.md"* ]]
+}
+
 @test "add-tier: mount consumes nothing — the caller owns the intent file" {
   make_parent_with_memory
   bare=$(make_tier_remote ddaanet)
