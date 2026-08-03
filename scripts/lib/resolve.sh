@@ -419,8 +419,9 @@ $push_err" >&2
 
 # Publish every store to its own remote: each tier's `live` first, then memory's.
 # Assumes the memory worktree exists (caller guards `[ -e "$mempath/.git" ]`).
-# Returns 0 when everything is published (already-up-to-date included). Returns 1
-# after emitting a message when a store has no remote, a stale merge state is
+# Returns 0 when everything is published (already-up-to-date included, and a
+# memory store that has no remote of its own once its tiers are out). Returns 1
+# after emitting a message when a tier has no remote, a stale merge state is
 # present, a push is refused, or the remote is unreachable; a refusal that git
 # attributes to divergence yields a prepared merge for `/gitlore:resolve`.
 #
@@ -434,12 +435,16 @@ gitlore_push_stores() {
   # Never publish on top of a half-finished merge, at any level.
   gitlore_guard_stale_merge_state "$mempath" || return 1
 
+  # Resolved here but acted on AFTER the tiers: memory having no remote says
+  # nothing about theirs. A repo whose memory is deliberately local can still
+  # mount a shared tier, and that tier is the part other repositories read.
   remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-  if [ -z "$remote_url" ]; then
-    gitlore_say_for_agent_or_user \
-      "gitlore: memory submodule has no remote configured. Run /gitlore:resolve to create one." \
-      "gitlore: memory submodule has no remote configured. Open this project in Claude Code and run /gitlore:resolve." >&2
-    return 1
+  # A `git submodule sync` on a local-only install copies the placeholder out of
+  # `.gitmodules` into origin, where it names no repository. Same state as an
+  # unset remote, and diagnosing it as an unreachable host would send the user
+  # after a network problem they do not have.
+  if gitlore_is_placeholder_url "$remote_url"; then
+    remote_url=""
   fi
 
   # Tier push lockstep (D17). Each tier is an independent repo with its own remote,
@@ -490,6 +495,19 @@ $tier_err" >&2
       return 1
     fi
   done < <(gitlore_tier_paths "$mempath")
+
+  # A memory store with no remote of its own is a supported end state, not a
+  # broken install: `/gitlore:install` keeps the placeholder when no provider is
+  # available, and a repo can share its tiers while keeping its project facts
+  # local. Say so and stop, having published what there was to publish. Failing
+  # instead would make memory's local-only-ness withhold the tiers — the one part
+  # other repositories actually read.
+  if [ -z "$remote_url" ]; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published. Run /gitlore:resolve to give memory a remote if it is meant to be shared." \
+      "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published." >&2
+    return 0
+  fi
 
   # No redirect: `-q` already silences progress, so anything fetch writes here is a
   # real problem. Non-fatal (`|| true`) — the push below is the operation that counts.
@@ -588,11 +606,19 @@ gitlore_merge_stores() {
 # its own MEMORY.md moves with the fast-forward).
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
-  local label remote head fetch_err
+  local label remote_url remote head fetch_err
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
-  if [ -z "$(git -C "$store" config --get remote.origin.url || true)" ]; then
+  remote_url=$(git -C "$store" config --get remote.origin.url || true)
+  if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
+    # A tier exists to be shared, so one with no remote is a misconfiguration
+    # worth stopping on. The memory root is not: a local-only install is a
+    # supported end state (D20), and there is genuinely nothing to take.
+    if [ -z "$tier" ]; then
+      printf 'gitlore: memory has no remote of its own; nothing to take.\n'
+      return 0
+    fi
     gitlore_say_for_agent_or_user \
       "gitlore: $label has no remote configured, so there is nothing to take. Mount it against a remote or unmount it." \
       "gitlore: $label has no remote configured, so there is nothing to take." >&2

@@ -162,12 +162,43 @@ push_memory_fact() {
   [ "$(jq -r '.publish // ""' "$statefile")" = "" ]
 }
 
-@test "fails when a store has no remote configured" {
+@test "fails when a TIER has no remote configured" {
+  # A tier exists to be shared, so one with no remote is a misconfiguration and
+  # the whole reconcile stops on it.
   wire_memory_remote
-  git -C memory remote remove origin
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  git -C memory/ddaanet remote remove origin
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"no remote configured"* ]]
+}
+
+@test "memory with no remote is nothing to take, and the tiers still reconcile" {
+  # The counterpart of the push side: a local-only memory store is a supported
+  # end state, and its remote-lessness must not withhold the shared half.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  remote_sha=$(push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo')
+  git -C memory remote remove origin
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"nothing to take"* ]]
+  # The tier took what its own remote held.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+}
+
+@test "a synced placeholder origin is nothing to take, not an unreachable remote" {
+  wire_memory_remote
+  # What `git submodule sync` leaves on a local-only install.
+  git -C memory remote set-url origin "$TMP_REPO/.git/gitlore-placeholder"
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"nothing to take"* ]]
+  [[ "$output$stderr" != *"could not fetch"* ]]
 }
 
 @test "fast-forwards a pinned tier and adopts its lines into the root index" {

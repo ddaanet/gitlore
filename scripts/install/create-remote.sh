@@ -16,16 +16,24 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 mode="${2:-auto}"
 url_arg="${3:-}"
 
-# Idempotency: a real (non-placeholder) origin already wired → nothing to do.
+# Idempotency: a real (non-placeholder) origin already wired → nothing to do. A
+# placeholder origin is a local-only install a `git submodule sync` has copied
+# out of `.gitmodules`; it names no repository, so the slot is still ours.
 existing=$(git -C "$mempath" config --get remote.origin.url || true)
-if [ -n "$existing" ] && [ "$existing" != "./.git/gitlore-placeholder" ]; then
+if [ -n "$existing" ] && ! gitlore_is_placeholder_url "$existing"; then
   exit 0
 fi
 
 wire_and_push() {
-  # Args: $1 = remote URL. Adds origin, pushes live, rewrites .gitmodules URL.
+  # Args: $1 = remote URL. Wires origin, pushes live, rewrites .gitmodules URL.
   local remote_url="$1"
-  git -C "$mempath" remote add origin "$remote_url"
+  # `remote add` fails outright on an existing origin, which is exactly the
+  # placeholder case reaching here — set-url is what repoints it.
+  if git -C "$mempath" remote get-url origin >/dev/null 2>&1; then
+    git -C "$mempath" remote set-url origin "$remote_url"
+  else
+    git -C "$mempath" remote add origin "$remote_url"
+  fi
   if ! gitlore_git -C "$mempath" push -u origin live; then
     echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:resolve to retry." >&2
     exit 1

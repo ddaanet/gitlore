@@ -27,8 +27,8 @@ Exit codes:
 - Non-zero **with `gitlore: memory merge prepared` in the output** — a store
   diverged. Go to **Diverged** below.
 - Non-zero **without** it — surface the output verbatim and stop. It names the
-  cause (no remote configured, an unreachable host, uncommitted changes in a
-  store) and the next action.
+  cause (a tier with no remote configured, an unreachable host, uncommitted
+  changes in a store) and the next action.
 
 If the call is denied rather than failing, nothing has happened — no ref moved
 and no merge was prepared. Hand the user the same command with a `!` prefix to

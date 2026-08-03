@@ -252,7 +252,7 @@ mempath=$(gitlore_memory_path)
 # Existing Plan 02 simple repairs (remote.origin.url, ls-remote, push live)
 # happen first — they precede semantic-merge detection.
 remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-if [ -z "$remote_url" ] || [ "$remote_url" = "./.git/gitlore-placeholder" ]; then
+if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
   echo "gitlore: no memory remote configured. Creating one." >&2
   bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
   echo "gitlore: memory remote created and live pushed." >&2

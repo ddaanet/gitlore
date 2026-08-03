@@ -105,13 +105,50 @@ add_memory_commit() {
   [[ "$output" == *"memory"* ]]
 }
 
-@test "fails with the /gitlore:resolve hint when memory has no remote" {
+@test "says memory stays local when it has no remote, and offers /gitlore:resolve" {
   wire_memory_remote
   add_memory_commit
   git -C memory remote remove origin
   run --separate-stderr bash "$CMD"
-  [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"/gitlore:resolve"* ]]
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"no remote of its own"* ]]
+  [[ "$stderr" == *"/gitlore:resolve"* ]]
+}
+
+@test "reads a synced placeholder origin as no remote, not as an unreachable one" {
+  wire_memory_remote
+  add_memory_commit
+  # What `git submodule sync` leaves on a local-only install: the .gitmodules
+  # placeholder, absolutized against the superproject's location.
+  git -C memory remote set-url origin "$TMP_REPO/.git/gitlore-placeholder"
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"no remote of its own"* ]]
+  # Not a network diagnosis: there is no host here to be unreachable.
+  [[ "$stderr" != *"unreachable"* ]]
+}
+
+@test "publishes a mounted tier when memory itself has no remote" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  git -C memory/ddaanet fetch -q origin "live:live"
+  git -C memory/ddaanet checkout -q --detach live
+  tier_remote="$TMP_REPO/.bare-ddaanet.git"
+  set_tier_manifest ddaanet
+  (
+    cd memory/ddaanet || exit 1
+    printf 'tier-fact\n' > TIERFACT.md
+    git add -A
+    git -c user.email=t@t -c user.name=t commit -q -m "tier fact"
+    git push -q . HEAD:live
+  )
+  # The store that is shared is the tier; memory's own remote-lessness is a
+  # deliberate configuration and must not withhold it.
+  git -C memory remote remove origin
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$(git --git-dir="$tier_remote" rev-parse live)" ]
+  [[ "$output" == *"ddaanet"* ]]
 }
 
 @test "prepares a merge and yields when the memory remote has diverged" {

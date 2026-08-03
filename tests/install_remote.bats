@@ -85,6 +85,21 @@ teardown() { teardown_tmp_repo; }
   [[ "$stderr" == *"local-only"* ]]
 }
 
+@test "url mode repoints a synced placeholder origin instead of reading it as wired" {
+  # `git submodule sync` on a local-only install copies the .gitmodules
+  # placeholder into the store's origin, absolutized. It names no repository, so
+  # the slot is still gitlore's to fill — and `remote add` would fail on it.
+  bash "$RUN_INSTALL" memory "echo pc" local
+  git -C memory remote add origin "$TMP_REPO/.git/gitlore-placeholder"
+  local remote="$TMP_REPO/.existing-remote.git"
+  git init -q --bare "$remote"
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" memory url "$remote"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory config --get remote.origin.url)" = "$remote" ]
+  git -C "$remote" show-ref --verify --quiet refs/heads/live
+  [ "$(git config --file .gitmodules submodule.gitlore-memory.url)" = "$remote" ]
+}
+
 @test "url mode wires an existing remote and pushes live" {
   local remote="$TMP_REPO/.existing-remote.git"
   git init -q --bare "$remote"

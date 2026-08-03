@@ -1,5 +1,7 @@
 ## Remaining
 
+- Compact `memory/MEMORY.md`: 21.3KB against Claude Code's 24.4KB loader
+  cutoff, so the tail is one growth spurt away from silently not loading.
 - Write the recall redesign (`additionalContext` → batch-Read) as a
   `docs/design.md` decision entry.
 - Add guardrails against snake_case and `name:`/filename drift, plus the six
