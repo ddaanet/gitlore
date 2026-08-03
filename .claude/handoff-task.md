@@ -1,9 +1,27 @@
 ## Current task
 
-The mutation-testing doctrine is retired from the `ddaanet` tier. Four facts are gone — `mutate-code-to-test-the-tests`, `mutation-sweep-must-survive-a-kill`, `unkillable-mutation-means-a-wrong-model`, `stale-artifact-is-not-agent-death` — and the prescriptions they seeded are cut from `tests-must-go-red`, `tests-pass-for-the-wrong-reason` and the `plan-contracts-not-full-code` template, which had mandated a killing mutation in every function contract. The eight weak-test shapes salvaged out of the first survive as `tests-that-cannot-discriminate`, whose fate is the first open decision below. The rule that replaces the doctrine: a surviving mutation is a test that needs to become a positive, or a negative pinned by a positive over the same fixture — write the discriminating test rather than validating a loose one by hand.
+The ddaanet test memories are consolidated. `green-is-not-evidence` replaces
+`tests-must-go-red`, `tests-that-cannot-discriminate` and
+`tests-pass-for-the-wrong-reason` — eleven fixture and assertion shapes in one
+catalogue, the structural rules for negatives carried over intact, roughly
+2.5KB of duplication removed. The write-time residue moved to
+`genuine-red-not-missing-sut`: green-at-first is not evidence, and one
+inert-stub run reds a whole batch but proves absence rather than wrongness.
+Nine inbound wikilinks across seven files were repointed and no reference to
+the three retired slugs survives. `shared-trigger-means-merge` records the
+heuristic that produced the merge.
+
+The merged index hook keeps its full nine-shape enumeration: findability wins
+over the roughly 400 bytes a trimmed hook would recover, so collapsing three
+lines to one bought no index relief and none is sought.
 
 ## Open decisions
 
-- Whether `tests-that-cannot-discriminate` should exist at all. The instruction was to get rid of mutations; keeping the catalogue — birth state, algebraic tautology, two empty derived states compared, parallel counts all equal, an isolation fixture with nothing to leak, upsert idempotence standing in for teardown, a substring another line satisfies — was a judgment call on the grounds that its body is test-design rules and only its frame was mutation. Not ratified.
-- Where the plan-level escalation rule lands, now that `unkillable-mutation-means-a-wrong-model` is retired as an instance of the general "faulty assumption in the test plan" class. A memory cannot fix it, since its only trigger was an unkillable mutation; the durable form is that a plan assumption which will not hold escalates to plan level rather than being adjusted locally. That is `superpowers:executing-plans` material, in a repo that stays read-only — proposable as a patch, not editable.
-- Whether to act on the index compaction hook. It asks for `memory/MEMORY.md` under 17.1KB; the file is ~21.3KB, under CC's 24.4KB loader cutoff, which is the actual gate. Declined this session because trimming lines to hit a byte target cuts the symptoms and identifiers that make a line findable. Upstream retirement already bought ~2.4KB, so the pressure is lower than the hook implies.
+- Whether gitlore's recall replaces `additionalContext` injection with an
+  instruction to batch-Read the memory files not yet in context. Injection
+  truncates past ~2KB into a spill file and does not satisfy the Read
+  requirement, so a memory just shown still needs a Read before it can be
+  edited; a Read-based recall primes the update path and simplifies the ledger.
+  What it gives up is unconditional delivery, since an instruction can be
+  deferred mid-task — which is the condition recall exists for. Needs a
+  `docs/design.md` entry stating what happens on non-compliance.
