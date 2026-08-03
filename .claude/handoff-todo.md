@@ -1,7 +1,9 @@
 ## Remaining
 
-- Compact `memory/MEMORY.md`: 21.3KB against Claude Code's 24.4KB loader
+- Compact `memory/MEMORY.md`: 21.7KB against Claude Code's 24.4KB loader
   cutoff, so the tail is one growth spurt away from silently not loading.
+- Close the tier re-pin hole per `brief-tier-repin-eats-merge.md`, with a test
+  that asserts the tier HEAD still contains the merge after a SessionStart pass.
 - Write the recall redesign (`additionalContext` → batch-Read) as a
   `docs/design.md` decision entry.
 - Add guardrails against snake_case and `name:`/filename drift, plus the six
@@ -14,7 +16,7 @@
 - Explain the live pointer loss for gitlore's own memory store.
 - Apply the root-inbox briefs: `brief-hook-exec-and-compose-revert.md`,
   `brief-memory-index-glued-bullets.md`, `brief-merge-dispatch-authorization.md`,
-  `brief-memory-name-drift.md`, `brief-shared-claude-import.md`.
+  `brief-memory-name-drift.md`.
 - Propose the plan-escalation rule as a patch to `superpowers:executing-plans`,
   which is another repo and stays read-only.
 - Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it
