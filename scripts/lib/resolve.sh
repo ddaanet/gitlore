@@ -691,6 +691,17 @@ $ff_err" >&2
       printf 'gitlore: the root index could not take %s'\''s lines, so they are not recallable yet. Fix the store, then edit MEMORY.md to retrigger composition:\n' "$label" >&2
       printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
     fi
+    # Stage the pair the fast-forward just produced. `submodule update` reads the
+    # gitlink from the superproject's INDEX, so an unstaged one is walked back to
+    # the pre-merge commit by the next SessionStart tier pass — and the composed
+    # root index, being an ordinary working-tree write, survives to describe
+    # facts the tier no longer holds. Staged, the unconditional pin is idempotent
+    # rather than destructive. Both still ride the next FR11 memory commit; this
+    # commits nothing. Staging is best-effort: a failure here must not turn a
+    # landed fast-forward into a failed merge.
+    # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+    gitlore_git -C "$mempath" add -- MEMORY.md "$tier" \
+      || printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C %s add -- MEMORY.md %s` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$mempath" "$tier" >&2
   fi
   return 0
 }

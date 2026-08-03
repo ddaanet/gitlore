@@ -1,23 +1,13 @@
 ## Current task
 
-No thread is mid-flight. One finding from this session is written up but not
-acted on: `brief-tier-repin-eats-merge.md` records that `SessionStart`'s
-unconditional `git submodule update` re-pins a tier to its recorded gitlink,
-so any session starting between `/gitlore:merge` and the memory commit walks
-the tier's HEAD back off the merge commit and reverts the merged fact files,
-silently. `/gitlore:push` shares the continuation and the window. The instance
-that happened this session was repaired from the tier's `live` branch and
-recorded; the hole is still open.
+No thread is mid-flight. The tier re-pin hole described in
+`plans/brief-tier-repin-eats-merge.md` is closed: both paths that advance a tier
+— the fast-forward branch of `gitlore_merge_stores` and the merge continuation —
+stage the moved gitlink in the memory store, so `SessionStart`'s unconditional
+`submodule update` pins at the advanced commit instead of reverting to it.
 
 ## Open decisions
 
-- Whether to land the proposed fix: stage the moved tier gitlink in
-  `continue-after-merge` (`git -C "$mempath" add -- "$tier"`), so
-  `submodule update` — which reads the index — pins at the merged commit
-  instead of reverting to it. Cheap, but it touches a documented invariant
-  on a path `/gitlore:push` shares, and it needs a bats test asserting the
-  tier HEAD still *contains the merge commit* after a SessionStart pass — a
-  test that only checks `git status` clean passes in both worlds.
 - `memory/ddaanet/shared-claude.md` states "refer to the user as 'my human
   partner', never by name" and its own final section says "get David's
   call". Correcting it is a shared-tier edit that changes what every

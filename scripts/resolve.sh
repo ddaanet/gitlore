@@ -93,9 +93,13 @@ load_continuation_state() {
 # the merge is synthesized and approved by this point: stranding it half-landed
 # over an index problem the agent fixes in one edit is the worse outcome. Report,
 # then commit what the merger produced.
+# Sets `merged_tier` for the caller: the store's path relative to the memory
+# root, or empty when the merge is memory's own. The continuation needs it after
+# the commit to stage the moved gitlink, and this is where it is already derived.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
-  local memroot="$1" store="$2" tier="" memroot_abs composed dangling rc=0
+  local memroot="$1" store="$2" memroot_abs composed dangling rc=0
+  merged_tier=""
   # The state file records an absolute store path while `memroot` is the
   # submodule path as `.gitmodules` spells it, so the two are compared in one
   # form. `-ef` rather than string equality: this decides whether a tier is
@@ -103,15 +107,16 @@ compose_merged_indexes() {
   # the memory root itself.
   memroot_abs=$(CDPATH='' cd -- "$memroot" && pwd) || memroot_abs="$memroot"
   if ! [ "$store" -ef "$memroot" ]; then
-    tier=${store#"$memroot_abs"/}
-    if [ "$tier" = "$store" ]; then
+    merged_tier=${store#"$memroot_abs"/}
+    if [ "$merged_tier" = "$store" ]; then
+      merged_tier=""
       echo "gitlore: the merged store $store is not inside the memory root $memroot_abs; the root index was left uncomposed." >&2
       gitlore_git -C "$store" add -A
       return 0
     fi
   fi
 
-  composed=$(gitlore_compose_up "$memroot" "$tier") || rc=$?
+  composed=$(gitlore_compose_up "$memroot" "$merged_tier") || rc=$?
   if [ "$rc" -eq 0 ]; then
     [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
     # The dangling pass reports rather than refuses, so it runs on the composed
@@ -187,6 +192,19 @@ if [ $# -ge 1 ]; then
       # the first parent per D6). Blessed path: carry the sentinel past the
       # submodule gate (FR11).
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
+      # Stage the gitlink the commit above just moved — after it, because the
+      # merge commit does not exist until then and an earlier `add` would pin
+      # the pre-merge authority. Not cosmetic: `submodule update` checks a tier
+      # out at the sha the superproject's INDEX holds, so a gitlink left in the
+      # working tree alone is walked back to the pre-merge commit by the next
+      # SessionStart tier pass — silently, while the recomposed root index
+      # survives to describe facts the tier no longer carries. Staged, the
+      # unconditional pin is idempotent rather than destructive. It commits
+      # nothing: the pair still rides the next FR11 memory commit.
+      if [ -n "$merged_tier" ]; then
+        gitlore_git -C "$memroot" add -- "$merged_tier" \
+          || echo "gitlore: the merge landed, but $merged_tier's moved pointer could not be staged in the memory store. Stage it before the next session, or the tier will be reset to its pre-merge commit." >&2
+      fi
       gitlore_clear_merge_state "$mempath"
       gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
       # Restore the invariant: fast-forward local `live` onto the merge commit,

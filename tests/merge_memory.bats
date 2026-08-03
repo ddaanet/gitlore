@@ -9,6 +9,7 @@ load helpers/tier-fixtures
 load helpers/stub-synth
 
 CMD="$PLUGIN_ROOT/scripts/merge-memory.sh"
+SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 
 # /gitlore:merge is the half of /gitlore:push that takes without publishing, and
 # under pinned tiers it is the only path by which a tier advances at all. What is
@@ -222,6 +223,40 @@ push_memory_fact() {
   # the FR11 commit — and the user is told rather than left to find it.
   [[ "$output" == *"uncommitted changes"* ]]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$gitlink" ]
+  # Uncommitted, but STAGED: `submodule update` pins from the index, so a
+  # gitlink left in the working tree alone is walked back at the next session.
+  [ "$(git -C memory rev-parse :ddaanet)" = "$remote_sha" ]
+}
+
+@test "a fast-forwarded tier survives the next SessionStart's unconditional pin" {
+  # The same window the merge continuation has, on the commoner path: the tier
+  # advanced, the memory commit that records it has not happened yet, and the
+  # tier pass re-pins every tier unconditionally and by design.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  gitlink=$(git -C memory rev-parse HEAD:ddaanet)
+  remote_sha=$(push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo')
+
+  bash "$CMD"
+  # The fixture must give the pin somewhere destructive to go: the tier is off
+  # the commit memory records, and memory has not committed the move.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$remote_sha" != "$gitlink" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$gitlink" ]
+
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  # The adopted line and the fact it routes to are still in agreement — the
+  # revert took the carrier back while leaving the composed root index in place,
+  # which is worse than losing both.
+  grep -qF -- '- [upstream](ddaanet/upstream.md) — published by another repo' memory/MEMORY.md
+  grep -qF -- '- [upstream](upstream.md) — published by another repo' memory/ddaanet/MEMORY.md
 }
 
 @test "landing a merge-prepared merge advances local live but publishes nothing" {
