@@ -107,6 +107,10 @@ diverge_memory_with_index() {
   # The commit was the TIER's; the root write is dirty memory, not a commit.
   [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
   [[ "$(git -C memory status --porcelain)" == *"MEMORY.md"* ]]
+  # The moved gitlink is staged beside it. Uncommitted either way, but only a
+  # staged one survives the next SessionStart: `submodule update` pins from the
+  # index, so an unstaged gitlink is checked back out at the pre-merge commit.
+  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }
 
 @test "a compose refusal is reported but never strands the merge" {
