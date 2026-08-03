@@ -5,6 +5,31 @@
 GITLORE_SUBMODULE_NAME="gitlore-memory"
 readonly GITLORE_SUBMODULE_NAME
 
+# The url `.gitmodules` carries for a local-only install, where the memory store
+# is versioned in-repo with nowhere to push. It is a marker, not an address: git
+# needs *some* url on the entry (without one, `submodule update --init` dies with
+# "No url found for submodule path"), and this particular one is what tells the
+# remote-creation and repair paths that the slot is theirs to fill.
+#
+# `git submodule sync` absolutizes a relative url before copying it into the
+# submodule's `remote.origin.url`, so what lands there is
+# `<parent>/.git/gitlore-placeholder` and never the registered spelling. Compare
+# with gitlore_is_placeholder_url, which accepts both.
+GITLORE_PLACEHOLDER_URL="./.git/gitlore-placeholder"
+readonly GITLORE_PLACEHOLDER_URL
+
+# True when $1 is the placeholder in either spelling git may have produced: the
+# registered form in `.gitmodules`, or the absolutized one a `submodule sync`
+# writes into `remote.origin.url`. Matching the basename is what covers the
+# second, since the prefix is whatever the superproject happened to live at.
+# Args: $1 = a url, possibly empty (an unset remote is not a placeholder).
+gitlore_is_placeholder_url() {
+  case "$1" in
+    "$GITLORE_PLACEHOLDER_URL"|*/"${GITLORE_PLACEHOLDER_URL##*/}") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Marker phrase in the in-tree migration breadcrumb. Single source of truth,
 # matched as a fixed string by gitlore_is_migration_stub and written into the
 # stub body by gitlore_mark_migrated.

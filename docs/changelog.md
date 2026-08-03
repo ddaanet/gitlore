@@ -4,6 +4,7 @@ How the design got to its current shape. Each entry is a write-time record of on
 
 Newest first.
 
+- [2026-08-03 — A memory store with no remote of its own stops withholding the tiers, in both `/gitlore:push` and `/gitlore:merge`](changelog/2026-08-03-push-tiers-when-memory-has-no-remote.md) — a deliberately local-only memory store failed the whole operation, and the placeholder url it is recognized by never matched where the checks looked for it
 - [2026-07-31 — The `docs/` + `plans/` layout adopted: prospective content to a root `plans/`, the changelog split into an index and per-entry bodies](changelog/2026-07-31-docs-plans-layout-adopted.md) — plans and specs moved out of `docs/`, and the 61-entry changelog became an index plus one frozen file per entry
 - [2026-07-31 — A mid-session plugin upgrade is reported, not repaired (D21)](changelog/2026-07-31-plugin-upgrade-reported-not-repaired.md) — a live session can't adopt a plugin upgrade; exit + `claude -c` is the only fix, so a new hook reports the drift instead (D21)
 - [2026-07-30 — Tiers are pinned at the gitlink, composition is two projections, and `/gitlore:merge` is the taking half](changelog/2026-07-30-tiers-pinned-compose-projections.md) — auto-fast-forwarding tiers silently reverted upstream facts; tiers now pin at the gitlink, compose splits into down/up projections

@@ -10,14 +10,13 @@ parent_root=$(git rev-parse --show-toplevel)
 # Append the gitlore-memory entry to .gitmodules unless it is already present.
 # Plan 02 rewrites the placeholder URL to a real remote. Idempotent.
 register_in_gitmodules() {
-  local placeholder_url="./.git/gitlore-placeholder"
   if [ -f .gitmodules ] && grep -q '\[submodule "gitlore-memory"\]' .gitmodules; then
     return 0
   fi
   {
     printf '[submodule "gitlore-memory"]\n'
     printf '\tpath = %s\n' "$mempath"
-    printf '\turl = %s\n' "$placeholder_url"
+    printf '\turl = %s\n' "$GITLORE_PLACEHOLDER_URL"
   } >> .gitmodules
 }
 

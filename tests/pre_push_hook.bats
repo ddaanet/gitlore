@@ -38,11 +38,11 @@ teardown() { teardown_tmp_repo; }
   [ "$local_sha" = "$remote_sha" ]
 }
 
-@test "pre-push fails with /gitlore:resolve hint when memory has no remote" {
+@test "pre-push lets the parent push through when memory has no remote" {
   git -C memory remote remove origin
   run --separate-stderr bash "$PRE_PUSH"
-  [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"/gitlore:resolve"* ]] || [[ "${output}${stderr}" == *"no remote"* ]]
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"no remote of its own"* ]]
 }
 
 @test "pre-push fails with divergence hint when remote diverged" {

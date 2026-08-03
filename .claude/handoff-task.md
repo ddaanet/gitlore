@@ -1,19 +1,9 @@
 ## Current task
 
-The ddaanet test memories are consolidated. `green-is-not-evidence` replaces
-`tests-must-go-red`, `tests-that-cannot-discriminate` and
-`tests-pass-for-the-wrong-reason` — eleven fixture and assertion shapes in one
-catalogue, the structural rules for negatives carried over intact, roughly
-2.5KB of duplication removed. The write-time residue moved to
-`genuine-red-not-missing-sut`: green-at-first is not evidence, and one
-inert-stub run reds a whole batch but proves absence rather than wrongness.
-Nine inbound wikilinks across seven files were repointed and no reference to
-the three retired slugs survives. `shared-trigger-means-merge` records the
-heuristic that produced the merge.
-
-The merged index hook keeps its full nine-shape enumeration: findability wins
-over the roughly 400 bytes a trimmed hook would recover, so collapsing three
-lines to one bought no index relief and none is sought.
+No thread is mid-flight. One constraint bears on whatever comes next: the
+memory index is at 21.3KB against Claude Code's 24.4KB loader cutoff, so
+entries past that point silently never reach a session, and each new fact
+narrows the margin.
 
 ## Open decisions
 

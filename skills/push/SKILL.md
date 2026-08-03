@@ -25,12 +25,14 @@ bash "$(git config gitlore.pushCommand)"
 Exit codes:
 
 - `0` — done. Relay the `gitlore:` lines verbatim: which stores moved, how many
-  commits each published, and any trailing notice about uncommitted changes.
+  commits each published, any trailing notice about uncommitted changes, and —
+  on a repo whose memory store is local-only — that memory has no remote of its
+  own and stayed local while its tiers were published.
 - Non-zero **with `gitlore: memory merge prepared` in the output** — a remote
   diverged. Go to **Diverged** below.
 - Non-zero **without** it — surface the output verbatim and stop. It names the
-  cause (no remote configured, unreachable host, a refusal git did not attribute
-  to divergence) and the next action.
+  cause (a tier with no remote configured, unreachable host, a refusal git did
+  not attribute to divergence) and the next action.
 
 If the call is denied rather than failing, nothing has happened — no ref moved
 and no merge was prepared. Hand the user the same command with a `!` prefix to
