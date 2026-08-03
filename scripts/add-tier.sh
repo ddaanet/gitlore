@@ -245,6 +245,19 @@ printf 'gitlore: tier "%s" mounted at %s (%s).\n' "$name" "$tierpath" "$url"
 if [ -n "$desc" ]; then
   printf 'gitlore: it describes itself as: %s\n' "$desc"
 fi
+
+# A tier may carry `shared-claude.md`: cross-repo conventions that must act
+# without being looked up, so they belong in always-on context rather than
+# behind an index pointer. Nothing loads it until the consuming repo imports it,
+# and a dangling `@` import is silent — so only report the line once the file is
+# actually there. The import path is $tierpath, which is already repo-root
+# relative, and the check for an existing import keeps a re-run quiet.
+if [ -f "$tierpath/shared-claude.md" ] &&
+   ! { [ -f CLAUDE.md ] && grep -qF "@$tierpath/shared-claude.md" CLAUDE.md; }; then
+  printf 'gitlore: the tier carries always-on conventions. Append to CLAUDE.md, as its final line:\n'
+  printf 'gitlore:   @%s/shared-claude.md\n' "$tierpath"
+  printf 'gitlore: then read that file and delete from CLAUDE.md every rule it already states.\n'
+fi
 if [ -n "$warnings" ]; then
   printf 'gitlore: mounted with warnings:%s\n' "$warnings"
 fi
