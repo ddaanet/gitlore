@@ -4,6 +4,7 @@ How the design got to its current shape. Each entry is a write-time record of on
 
 Newest first.
 
+- [2026-08-04 — The shipped surface got its own gate, so a skills-only edit stops reporting cached](changelog/2026-08-04-distribution-gate.md) — `precommit_inputs` excludes `agents`/`commands`/`skills` to keep a 7m30s suite off prose edits, and `prerelease` is `precommit`, so nothing on the release path re-read what the plugin distributes
 - [2026-08-03 — Advancing a tier stages its moved gitlink, so the next `SessionStart` stops eating the merge](changelog/2026-08-03-tier-gitlink-staged-after-advance.md) — `submodule update` pins from the index, so an unstaged gitlink let the tier pass silently revert a just-landed merge while its recomposed index survived
 - [2026-08-03 — A tier can carry always-on conventions, and mounting one reports the `CLAUDE.md` import line](changelog/2026-08-03-tier-shared-claude-import.md) — a rule that acts without being looked up has no lookup step for an index pointer to serve; `shared-claude.md` at a tier root loads whole via an `@` import
 - [2026-08-03 — A memory store with no remote of its own stops withholding the tiers, in both `/gitlore:push` and `/gitlore:merge`](changelog/2026-08-03-push-tiers-when-memory-has-no-remote.md) — a deliberately local-only memory store failed the whole operation, and the placeholder url it is recognized by never matched where the checks looked for it

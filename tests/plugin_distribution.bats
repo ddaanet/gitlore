@@ -55,7 +55,9 @@ load helpers/setup
 @test "distribution: slash commands are flat (no /gitlore:gitlore: double-prefix)" {
   [ -f "$PLUGIN_ROOT/commands/install.md" ]
   [ -f "$PLUGIN_ROOT/commands/add-tier.md" ]
-  [ ! -d "$PLUGIN_ROOT/commands/gitlore" ]
+  # `-e`, not `-d`: a plain file named `commands/gitlore` is not a namespace
+  # but is still not a command, and the directory test would pass over it.
+  [ ! -e "$PLUGIN_ROOT/commands/gitlore" ]
   for name in install add-tier; do
     [ ! -e "$PLUGIN_ROOT/skills/$name/SKILL.md" ]
   done
@@ -114,6 +116,19 @@ load helpers/setup
   echo "$fm" | grep -qE '^name:[[:space:]]*merge[[:space:]]*$'
   [ -x "$PLUGIN_ROOT/scripts/merge-memory.sh" ]
   grep -qF 'git config gitlore.mergeCommand' "$skill"
+}
+
+# recall's dominant entry is mid-task and mechanical: a tool result surfaces a
+# string the agent half-recognises. Only a skill description is matched against
+# context, and only if it names that moment -- a description written around the
+# user asking to "check memory" would never fire on the trigger the skill
+# exists for. `tool result` is the phrase that pins it.
+@test "distribution: recall is a skill whose description names the mid-task trigger" {
+  skill="$PLUGIN_ROOT/skills/recall/SKILL.md"
+  [ -f "$skill" ]
+  run head -5 "$skill"
+  [[ "$output" == *"name: recall"* ]]
+  [[ "$output" == *"tool result"* ]]
 }
 
 # Regression: D15 — the in-process-worktree memory-drift guard must be registered

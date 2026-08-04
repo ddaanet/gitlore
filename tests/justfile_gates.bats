@@ -112,9 +112,14 @@ discovered_suites() {
 }
 
 @test "the test recipes discover by glob, never by a hand-written list" {
-  # A list is what drifts. Any literal suite name in the justfile is one.
-  run grep -n '[A-Za-z_]\.bats' "$PLUGIN_ROOT/justfile"
-  [ "$status" -ne 0 ]
+  # A list is what drifts. Any literal suite name in the justfile is one --
+  # except check-distribution's, which names one suite on purpose: it gates a
+  # fixed set of assertions rather than a discovered set. That name cannot
+  # drift silently, because `distribution_inputs` declares the same path and
+  # the declared-inputs test below fails the moment it stops existing.
+  literals="$(grep -n '[A-Za-z_]\.bats' "$PLUGIN_ROOT/justfile" || true)"
+  stray="$(printf '%s\n' "$literals" | grep -v 'tests/plugin_distribution\.bats' || true)"
+  [ -z "$stray" ]
 }
 
 @test "the recipes release and precommit depend on still exist" {
@@ -124,9 +129,26 @@ discovered_suites() {
   # cannot check. Renaming one of those would only surface at gate time.
   run just_here --summary
   [ "$status" -eq 0 ]
-  for recipe in precommit prerelease evals check-version lint test test-unit test-integration release; do
+  for recipe in precommit prerelease evals check-distribution check-version lint test test-unit test-integration release; do
     [[ " $output " == *" $recipe "* ]]
   done
+}
+
+@test "precommit depends on the distribution gate, and prerelease inherits it" {
+  # The wiring the separate gate exists for. `precommit` reaches
+  # check-version/lint/test through a shell line just cannot see, but a
+  # dependency it can -- and `prerelease: precommit` is the link that carries
+  # the distribution suite onto the release path. Dropping either edge would
+  # restore the blind spot without failing anything else here.
+  run just_here --dump --dump-format json
+  [ "$status" -eq 0 ]
+  dump="$output"
+  run jq -r '.recipes.precommit.dependencies[].recipe' <<<"$dump"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"check-distribution"* ]]
+  run jq -r '.recipes.prerelease.dependencies[].recipe' <<<"$dump"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"precommit"* ]]
 }
 
 @test "the Makefile is gone, so nothing can quietly still run make" {
@@ -143,7 +165,7 @@ discovered_suites() {
   # An input path that no longer exists contributes nothing to the hash and says
   # nothing about it: `git ls-files` does not complain about a pathspec that
   # matches nothing, so a stale entry here silently narrows what the gate covers.
-  for var in precommit_inputs evals_inputs; do
+  for var in precommit_inputs evals_inputs distribution_inputs; do
     run just_here --evaluate "$var"
     [ "$status" -eq 0 ]
     for path in $output; do
