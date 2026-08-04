@@ -12,8 +12,8 @@ import 'plugin-dev/release.just'
 # just trace=true precommit
 trace := "false"
 
-# What a gate outcome depends on, and nothing else. Two sets, because the two
-# gates read different things.
+# What a gate outcome depends on, and nothing else. Three sets, because the
+# three gates read different things.
 #
 # `memory/`, `docs/` and `plans/` are out of both, deliberately: no check reads
 # any of them, and memory is staged as a gitlink, so including it re-ran the
@@ -34,22 +34,48 @@ trace := "false"
 precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules hooks justfile plugin-dev reference scripts tests"
 
 # The evals drive the real CLI against the installed plugin, so they also
-# depend on what the plugin ships: its agents, commands and skills. The bats
-# suites read those directories too (`plugin_distribution` asserts on all
-# three; `cc_hook_recall` on skills, `cc_hook_add_tier` on commands), so
-# leaving them out of the precommit set is a deliberate trade — an
-# agents/commands/skills-only edit keeps a green precommit green, and the
-# distribution guard covering it does not re-run until the evals do.
+# depend on what the plugin ships: its agents, commands and skills. Those three
+# stay out of `precommit_inputs` because the full bats suite is 7m30s and an
+# edit to a skill's prose must not pay it. `check-distribution` is what covers
+# them instead, in ~2s, on the commit path and so on the release path too.
 evals_inputs := precommit_inputs + " agents commands skills"
 
+# Everything the distribution suite reads, so that gate is a pure function of
+# its own inputs and needs no argument about what another gate happens to also
+# cover. It overlaps `precommit_inputs` on hooks/scripts/tests: that costs a
+# redundant 2s run when those change, and buys independence from how the other
+# set is drawn — narrowing `precommit_inputs` later cannot silently uncover
+# assertions this suite makes.
+distribution_inputs := ".gitmodules agents commands hooks scripts skills tests/helpers tests/plugin_distribution.bats"
+
 # Fast, frequent. Version drift, shellcheck, then the full bats suite.
-precommit:
+precommit: check-distribution
     #!{{ bash_prolog }}
     if check-sentinel precommit {{ precommit_inputs }}; then
         echo "precommit: cached (inputs unchanged)"
         exit 0
     fi
     just check-version lint test
+    record-sentinel
+
+# The shipped surface: that Claude Code can discover and dispatch what the
+# plugin distributes. Its own gate, with its own sentinel, because the paths it
+# reads are the ones `precommit_inputs` deliberately leaves out — a
+# skills/commands/agents-only edit moves no hash there, so without this the
+# whole suite reports cached and the assertions on the edited file never run.
+# Cheap enough to hang off `precommit` outright, and so off `prerelease`: 10
+# tests, ~2s, file reads and frontmatter greps with no fixture repos.
+#
+# Its own recipe, not a second block inside `precommit`: `check-sentinel` sets
+# `sentinel` and `gate_inputs` for `record-sentinel` to read back, so two gates
+# sharing one shebang body would have the second clobber the first's state.
+check-distribution:
+    #!{{ bash_prolog }}
+    if check-sentinel distribution {{ distribution_inputs }}; then
+        echo "check-distribution: cached (inputs unchanged)"
+        exit 0
+    fi
+    scripts/run-bats.sh tests/plugin_distribution.bats
     record-sentinel
 
 # Slow and paid: drives the real claude CLI. Run explicitly, never as a gate.

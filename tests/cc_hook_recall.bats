@@ -226,11 +226,3 @@ read_call() { printf '[{"tool_name":"Read","tool_input":{"file_path":"%s"}}]' "$
     }
   done
 }
-
-@test "the skill is discoverable with a description that names the mid-task trigger" {
-  skill="$PLUGIN_ROOT/skills/recall/SKILL.md"
-  [ -f "$skill" ]
-  run head -5 "$skill"
-  [[ "$output" == *"name: recall"* ]]
-  [[ "$output" == *"tool result"* ]]
-}

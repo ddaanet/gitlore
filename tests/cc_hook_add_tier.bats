@@ -37,11 +37,6 @@ write_intent() {
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/add-tier-batch.sh" ]
 }
 
-@test "add-tier hook: the command file is flat under commands/ (no double prefix)" {
-  [ -f "$PLUGIN_ROOT/commands/add-tier.md" ]
-  [ ! -e "$PLUGIN_ROOT/commands/gitlore" ]
-}
-
 # --- no-op paths -----------------------------------------------------------
 
 @test "add-tier hook: no-op (exit 0, silent) when gitlore is not configured" {
