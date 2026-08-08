@@ -58,7 +58,7 @@ Fixtures reach no network — every remote in here is a local bare repo, and `GI
 | 02 dirty, no precommit | `memory-commit` | the pre-commit hook's exit-1 path as the fallback trigger |
 | 03 add tier | `add-tier` | intent file → PostToolBatch hook mounts (agent runs no git) → manifest edit recomposes the root index |
 | 04 tier write | `tier-write` | routing a portable fact to the tier, the mirror-down, and one approved summary committing memory *and* the tier |
-| 05 active recall | `recall` | request file → hook injects the body → the answer uses it, without the agent Reading the file |
+| 05 active recall | `recall` | a probe surfaces the trigger mid-task → the agent Reads the body *after* it → the answer uses it |
 
 ### Trigger paths
 
@@ -91,7 +91,7 @@ The runner processes all `*.json` files in scenarios/ alphabetically.
 
 `asserts/<name>.sh` runs after the turns with `EVAL_REPO`, `EVAL_OUT_DIR`, `EVAL_RUBRIC`, `EVAL_TRIGGER`, `PLUGIN_ROOT` and `LIB_DIR` in the environment. Exit 0 to pass; exit non-zero with the reason on stdout to fail.
 
-`EVAL_OUT_DIR` holds `turn1.txt` / `turn2.txt` (each turn's final text), `session-id`, `memory-baseline` (memory's HEAD before the agent ran), and `transcript.jsonl` — the session transcript, which is how an assertion sees which *tools* ran. Some contracts are only visible there: active recall is meant to fetch a body through the hook, and an agent that instead Read the file itself leaves an identical repo and an identical answer.
+`EVAL_OUT_DIR` holds `turn1.txt` / `turn2.txt` (each turn's final text), `session-id`, `memory-baseline` (memory's HEAD before the agent ran), and `transcript.jsonl` — the session transcript, which is how an assertion sees which *tools* ran. Some contracts are only visible there: active recall is meant to fire on a trigger that surfaced mid-task, and Claude Code's own prompt-time recall leaves an identical repo and an identical answer — only the order of the tool calls tells them apart.
 
 Assertions are themselves tested, in `lib/asserts.bats`, against a good end state and against the specific breakage each one exists to catch. An assertion that always passes turns its scenario into an expensive no-op, and the eval run looks green either way.
 

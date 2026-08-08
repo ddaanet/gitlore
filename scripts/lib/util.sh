@@ -43,8 +43,8 @@ readonly GITLORE_MIGRATION_MARKER
 # environment — CLAUDE_PROJECT_DIR and the auto-memory directory both — so
 # memory keeps landing in the launch repo's store (D15). A hook that followed
 # cwd would read and write a different store from the one being written to, and
-# from the one recall-reset.sh clears: the recall ledger would then never be
-# reset across a compaction.
+# from the one nudge-reset.sh clears: a once-per-episode marker would then never
+# be re-armed across a compaction.
 #
 # Every hook calls this before it touches a repo. worktree-drift.sh is the one
 # exception, because comparing the two locations IS its job.

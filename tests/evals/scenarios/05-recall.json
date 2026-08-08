@@ -1,8 +1,8 @@
 {
-  "name": "Active recall — fetch a memory body the index only points at",
-  "description": "The index line carries the trigger keywords; the answer lives only in the body. The agent must write .claude/gitlore-recall, let the PostToolBatch hook inject the body, and answer from it — without Reading the file itself",
+  "name": "Active recall — fetch a memory body from a mid-task trigger",
+  "description": "The index line carries the trigger keywords; the answer lives only in the body. Recall is user-triggered, so the prompt asks for it the way a user actually would — in the skill description's own conversational wording, never by skill name, since naming it would grade nothing. Nothing in the prompt names the memory trigger either: it surfaces only when the probe runs, so CC's prompt-time recall has nothing to match and the body can only arrive if the agent selects it from the index on what the tool result showed, then Reads it",
   "setup": "recall-corpus",
   "assert": "recall",
   "initial_memory": "# Memory Index\n\n- [stuck deploy lock](reference_deploy_lock.md) — a `deploy.lock` left behind by a failed rollout; clearing it by hand corrupts the rollout ledger\n",
-  "prompt": "A rollout died halfway and now every retry prints `error: deploy.lock exists (held by pid 8123)`. Check what memory has on this before you answer, then give me the exact command to run."
+  "prompt": "Our nightly job stopped working last night. Run ./nightly-retry.sh, then recall what we know about what it reports. I want the exact command that fixes it, not a workaround."
 }

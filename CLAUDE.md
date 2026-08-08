@@ -23,7 +23,7 @@ and Read them in one batch.
 `memory/MEMORY.md` is a routing table, not the content. Its lines exist to let
 you decide read-or-skip; the fact lives in the file.
 
-## Working with David
+## Working with my human partner
 
 - A defect you have verified is not made someone else's call by who authored it.
   Flagging is not the cautious option when the fix is cheap and removes nothing.

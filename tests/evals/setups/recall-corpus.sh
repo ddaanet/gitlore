@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Scenario fixture: a memory body whose payload is NOT in its index line.
+# Scenario fixture: a memory body whose payload is NOT in its index line, and a
+# probe that surfaces the trigger only when it runs.
 #
 # The index line carries the trigger keywords and nothing else — that is what an
 # index line is for. The canary lives only in the body, so an answer containing
@@ -7,8 +8,21 @@
 # alone was never enough. The scenario's `initial_memory` supplies the matching
 # root index line.
 #
+# The probe is what makes this grade ACTIVE recall. Every trigger token — the
+# error string, "lock", "rollout" — reaches the agent as a tool result and
+# appears nowhere in the user's prompt, so CC's own prompt-time classifier has
+# nothing to match and the body can only arrive if the agent goes and gets it.
+#
 # Runs with cwd = $EVAL_REPO, after setup_eval_repo.
 set -euo pipefail
+
+cat > nightly-retry.sh <<'EOF'
+#!/usr/bin/env bash
+echo "starting attempt 4 of 4"
+echo "error: deploy.lock exists (held by pid 8123)"
+exit 1
+EOF
+chmod +x nightly-retry.sh
 
 cat > memory/reference_deploy_lock.md <<'EOF'
 ---
