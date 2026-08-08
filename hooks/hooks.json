@@ -10,7 +10,7 @@
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/recall-reset.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/nudge-reset.sh"
           }
         ]
       }
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/recall-reset.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/nudge-reset.sh"
           }
         ]
       }
@@ -86,14 +86,6 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/memory-commit-batch.sh"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/recall-batch.sh"
           }
         ]
       },

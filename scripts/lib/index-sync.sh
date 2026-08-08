@@ -141,9 +141,9 @@ gitlore_index_budget_pct() {
 }
 
 # Once-per-episode markers. A nudge that fires on every batch is noise, so each
-# advisory drops a marker keyed by session in the memory gitdir (mirroring
-# gitlore_recall_ledger) and checks for it before speaking. Args: $1 = memory
-# worktree path; $2 = session id; $3 = marker kind.
+# advisory drops a marker keyed by session in the memory gitdir — hook-owned
+# state the agent must never write — and checks for it before speaking.
+# Args: $1 = memory worktree path; $2 = session id; $3 = marker kind.
 _gitlore_nudge_file() {
   local safe
   safe=$(printf '%s' "${2:-nosession}" | LC_ALL=C sed 's/[^A-Za-z0-9-]/_/g')
@@ -167,7 +167,7 @@ _gitlore_nudge_reset() {
 gitlore_index_budget_nudge_file() { _gitlore_nudge_file "$1" "$2" budget; }
 
 # Re-arm the byte-budget advisory. Called at SessionStart and PreCompact, the
-# same episode boundary as gitlore_recall_reset.
+# two events that end the context a marker's "already told" claim rests on.
 gitlore_index_budget_nudge_reset() { _gitlore_nudge_reset "$1" "$2" budget; }
 
 # Has the mid-session plugin-upgrade notice already fired this episode (D21)?

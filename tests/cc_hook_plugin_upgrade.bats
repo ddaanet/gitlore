@@ -10,7 +10,7 @@ load helpers/setup
 load helpers/fixtures
 
 BATCH="$PLUGIN_ROOT/scripts/cc-hooks/plugin-upgrade-batch.sh"
-RESET="$PLUGIN_ROOT/scripts/cc-hooks/recall-reset.sh"
+RESET="$PLUGIN_ROOT/scripts/cc-hooks/nudge-reset.sh"
 
 # Trigger strings, defined HERE rather than sourced from the production lib, so
 # that a rename in the hook turns the positive assertions red and the negatives

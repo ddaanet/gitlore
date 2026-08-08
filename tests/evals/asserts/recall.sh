@@ -1,67 +1,57 @@
 #!/usr/bin/env bash
-# Assertion: the active-recall round trip put a memory BODY into context.
+# Assertion: the agent recalled a memory body from a trigger that surfaced
+# MID-TASK, and answered from it.
 #
-# The mechanism is invisible from the repo alone — a hook read some files and
-# injected text — so the proof is the canary: a token that appears nowhere but
-# inside the memory body, and which the agent could not answer with unless the
-# body actually reached it. The index line the agent starts with deliberately
-# does not carry it.
+# The canary is a token that appears nowhere but inside the memory body, so an
+# answer carrying it proves the body reached context. That alone is not enough:
+# CC's own recall would also produce it if the trigger were in the user's
+# prompt. So the scenario keeps every trigger token OUT of the prompt — the
+# error string only ever appears in a tool result — and this assertion checks
+# the ORDER: the body was read after the command that surfaced the error, which
+# is the one thing native prompt-time recall cannot do.
 #
 # See asserts/memory-commit.sh for the shared contract.
 set -uo pipefail
 
 fail() { printf '%s\n' "$1"; exit 1; }
 
-MEM="$EVAL_REPO/memory"
 WANT=reference_deploy_lock.md
+PROBE=nightly-retry.sh
 CANARY=ORBITAL-PANGOLIN-4471
 
-# 1. The request file is one-shot: served or refused, the hook consumes it.
-#    Still present means no PostToolBatch hook ever saw it.
-[ ! -f "$EVAL_REPO/.claude/gitlore-recall" ] || \
-  fail "recall request still present — the recall hook never consumed it"
+[ -f "$EVAL_OUT_DIR/transcript.jsonl" ] || \
+  fail "no session transcript captured; cannot tell a mid-task recall from a prompt-time one"
 
-# 2. The ledger records what this session holds. Path spelled out rather than
-#    resolved through scripts/lib/recall.sh: black-box, and it must fail if
-#    production moves the ledger.
-[ -f "$EVAL_OUT_DIR/session-id" ] || fail "runner captured no session id"
-session=$(cat "$EVAL_OUT_DIR/session-id")
-safe=$(printf '%s' "$session" | LC_ALL=C sed 's/[^A-Za-z0-9-]/_/g')
-ledger=$(git -C "$MEM" rev-parse --git-path "gitlore-recall-$safe")
-[ -f "$ledger" ] || fail "no recall ledger at $ledger — nothing was ever recorded as in-context"
+# One line per tool call, in order, numbered: "<n>\t<Tool>\t<path-or-command>".
+tools=$(jq -r '.message.content[]? | select(.type == "tool_use")
+               | "\(.name)\t\(.input.file_path // .input.command // .input.skill // "")"' \
+          "$EVAL_OUT_DIR/transcript.jsonl" | cat -n)
 
-# Records are "<hash> <relpath>", hash first so a spaced path survives the split.
-hits=$(grep -c " $WANT\$" "$ledger") || hits=0
-[ "$hits" -ge 1 ] || \
-  fail "ledger does not record $WANT; the request named something else or resolved nothing. Ledger: $(tr '\n' '; ' < "$ledger")"
+# 1. The scenario has to have happened at all: the agent ran the probe, and the
+#    error string reached it as a tool result rather than as prose.
+probe_at=$(printf '%s\n' "$tools" | grep -m1 "	Bash	.*$PROBE" | cut -f1) || probe_at=
+[ -n "$probe_at" ] || \
+  fail "the agent never ran $PROBE, so the mid-task trigger never surfaced — the scenario did not exercise recall"
 
-# 3. Exactly one record. A second means the agent Read the file itself AFTER the
-#    hook injected it — the one thing the skill tells it not to do, and the whole
-#    reason the ledger exists.
-[ "$hits" -eq 1 ] || \
-  fail "ledger records $WANT $hits times — the body was fetched and then Read again, spending the context twice"
+# 2. The skill was what fetched it. Without this the scenario grades the model's
+#    common sense: an agent that simply opened the file on the user's say-so
+#    leaves the same answer and the same tool trace minus this one call.
+skill_at=$(printf '%s\n' "$tools" | grep -m1 "	Skill	.*recall" | cut -f1) || skill_at=
+[ -n "$skill_at" ] || \
+  fail "the recall skill was never invoked — the agent answered without it, so this run grades nothing the skill contributes. Tool calls: $(printf '%s' "$tools" | tr '\n' ';')"
 
-# 4. The canary reached the answer. This is the only assertion that proves the
-#    injected body was actually usable rather than merely delivered.
+# 3. The body was read.
+read_at=$(printf '%s\n' "$tools" | grep -m1 "	Read	.*/$WANT\$" | cut -f1) || read_at=
+[ -n "$read_at" ] || \
+  fail "the agent never Read $WANT — it answered without recalling the body. Tool calls: $(printf '%s' "$tools" | tr '\n' ';')"
+
+# 4. After the probe. A Read that precedes it is CC's native recall firing on
+#    the user's prompt, which is exactly the mechanism FR16 exists to supplement
+#    — counting it as a pass would grade the harness instead of the skill.
+[ "$((read_at))" -gt "$((probe_at))" ] || \
+  fail "$WANT was read at call $read_at, before the probe at call $probe_at — that is prompt-time recall, not the mid-task recall this grades"
+
+# 5. The canary reached the answer: delivered AND usable.
 [ -f "$EVAL_OUT_DIR/turn1.txt" ] || fail "runner captured no turn 1 transcript"
 grep -qF "$CANARY" "$EVAL_OUT_DIR/turn1.txt" || \
-  fail "the agent's answer does not carry the canary from the memory body — the fact never reached it. Answer: $(tr '\n' ' ' < "$EVAL_OUT_DIR/turn1.txt")"
-
-# 5. It got there via the recall route, not by reading the file. Everything
-#    above passes identically if the agent simply opened the body itself: the
-#    ledger records plain Reads too, and the answer looks the same. Only the
-#    tool calls tell the two apart, and telling them apart is the point — the
-#    mechanism exists for the mid-task triggers a Read would never be issued for.
-[ -f "$EVAL_OUT_DIR/transcript.jsonl" ] || \
-  fail "no session transcript captured; cannot tell an injected body from a self-issued Read"
-
-tools=$(jq -r '.message.content[]? | select(.type == "tool_use")
-               | "\(.name)\t\(.input.file_path // "")"' \
-          "$EVAL_OUT_DIR/transcript.jsonl")
-
-printf '%s\n' "$tools" | grep -q "^Write	.*/\.claude/gitlore-recall$" || \
-  fail "the agent never wrote .claude/gitlore-recall — it answered without going through active recall"
-
-if printf '%s\n' "$tools" | grep -q "^Read	.*/$WANT$"; then
-  fail "the agent Read $WANT itself; the skill says not to, and the body was already injected — the context is spent twice"
-fi
+  fail "the agent's answer does not carry the canary from the memory body — the fact never reached the answer. Answer: $(tr '\n' ' ' < "$EVAL_OUT_DIR/turn1.txt")"

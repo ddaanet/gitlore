@@ -1,29 +1,29 @@
 ## Current task
 
-No thread is mid-flight. The distribution-checks brief is applied:
-`check-distribution` gates `tests/plugin_distribution.bats` behind its own
-sentinel and hangs off `precommit`, so `agents/`, `commands/` and `skills/` can
-no longer change while the gate reports cached. Its coverage was proven
-empirically on each of the three directories rather than reasoned about, and
-`tests/justfile_gates.bats` asserts both dependency edges via
-`just --dump --dump-format json`, since dropping either would restore the blind
-spot without failing anything else.
+No thread is mid-flight. Active recall is `skills/recall/SKILL.md` and nothing
+else — decide from the in-context index with no tool calls, at most five
+entries, one batch Read. The request file, the `PostToolBatch` hook, the
+resolver library and the content-addressed ledger are gone, and `recall-reset.sh`
+is reduced to `nudge-reset.sh`. D18 was rewritten around the two measured limits
+that sank hook-side injection: `additionalContext` spills past ~2KB into a
+pointer file, and injected bytes never satisfy `Read`-before-`Edit`.
 
-The brief's claim that the hole was live at v0.4.5 did not hold — both commits
-since v0.4.4 that touched those directories also touched `scripts/` and
-`tests/`, so the hash moved and the suite ran.
+The eval was rebuilt on the same seam, because removing the request file removed
+the only proof the mechanism had run. Its trigger now reaches the agent solely
+as the output of a probe it executes, and the assertion checks that both the
+`Skill` call and the body's `Read` follow that call.
 
 ## Open decisions
 
-- `memory/ddaanet/shared-claude.md` states "refer to the user as 'my human
-  partner', never by name" and its own final section says "get David's call".
-  Correcting it is a shared-tier edit that changes what every mounting repo
-  loads, so it is my human partner's to make.
-- Whether gitlore's recall replaces `additionalContext` injection with an
-  instruction to batch-Read the memory files not yet in context. Injection
-  truncates past ~2KB into a spill file and does not satisfy the Read
-  requirement, so a memory just shown still needs a Read before it can be
-  edited; a Read-based recall primes the update path and simplifies the ledger.
-  What it gives up is unconditional delivery, since an instruction can be
-  deferred mid-task — which is the condition recall exists for. Needs a
-  `docs/design.md` entry stating what happens on non-compliance.
+- Whether `CLAUDE.md`'s Recall section keeps prescribing self-recall at two
+  checkpoints. Spontaneous invocation is expected to be nil and recall is
+  intended as user-triggered; what settles it is dogfooding logs, not argument.
+- Whether the skill `description:` keeps advertising an agent-side trigger for
+  the same reason. Its conversational wording is what the eval proved fires,
+  so the two halves of the description are not equally load-bearing.
+- Whether obliging the checkpoint deserves a `Stop` hook. Raised, not designed:
+  nothing in the current design detects a skipped recall, and D18 states that
+  on non-compliance nothing arrives and nothing reports it.
+- What to do with the 14 memory files that still name my human partner directly
+  against the shared-tier rule. Most are attributed quotes, where rewriting
+  changes how the evidence reads.

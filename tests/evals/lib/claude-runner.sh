@@ -92,8 +92,9 @@ save_turn() {
 
 # Copy the session transcript out, so an assertion can see which TOOLS ran and
 # not just what the agent said. Some contracts are only visible there: active
-# recall is meant to fetch a body via the hook, and an agent that instead Read
-# the file itself produces an identical answer and an identical repo.
+# recall is meant to fire on a trigger that surfaced mid-task, and CC's own
+# prompt-time recall produces an identical answer and an identical repo — only
+# the order of the tool calls separates them.
 #
 # Found by session id rather than by deriving the project directory name — that
 # encoding is a mangling of cwd and reverse-engineering it here would be a second

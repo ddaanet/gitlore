@@ -132,6 +132,14 @@ EOF
 
 # --------------------------------------------------------------------- recall
 
+_PROBE_CALL='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"./nightly-retry.sh"}}]}}'
+_SKILL_CALL='{"message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"gitlore:recall"}}]}}'
+
+_read_call() {
+  printf '{"message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"%s/memory/reference_deploy_lock.md"}}]}}\n' \
+    "$EVAL_REPO"
+}
+
 _make_recall_end_state() {
   _make_memory
   ( cd "$EVAL_REPO" && bash "$SETUPS/recall-corpus.sh" ) >/dev/null
@@ -139,30 +147,14 @@ _make_recall_end_state() {
   printf 'sid-recall-1\n' > "$EVAL_OUT_DIR/session-id"
   printf 'Run svc-unlock --force --token ORBITAL-PANGOLIN-4471\n' > "$EVAL_OUT_DIR/turn1.txt"
 
-  local ledger hash
-  ledger=$(git -C "$EVAL_REPO/memory" rev-parse --git-path "gitlore-recall-sid-recall-1")
-  hash=$(git -C "$EVAL_REPO/memory" hash-object -- reference_deploy_lock.md)
-  printf '%s %s\n' "$hash" "reference_deploy_lock.md" > "$ledger"
-  LEDGER="$ledger"
-
-  cat > "$EVAL_OUT_DIR/transcript.jsonl" <<EOF
-{"message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"$EVAL_REPO/.claude/gitlore-recall"}}]}}
-{"message":{"content":[{"type":"text","text":"answering"}]}}
-EOF
+  # The passing shape: probe, then the skill, then the body read.
+  { printf '%s\n%s\n' "$_PROBE_CALL" "$_SKILL_CALL"; _read_call; } > "$EVAL_OUT_DIR/transcript.jsonl"
 }
 
-@test "recall: passes when the body was injected and used" {
+@test "recall: passes when the body was read after the mid-task trigger" {
   _make_recall_end_state
   _run_assert recall
   [ "$status" -eq 0 ]
-}
-
-@test "recall: fails when the request file was never consumed" {
-  _make_recall_end_state
-  printf 'reference_deploy_lock.md\n' > "$EVAL_REPO/.claude/gitlore-recall"
-  _run_assert recall
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "never consumed it" ]]
 }
 
 @test "recall: fails when the canary never reached the answer" {
@@ -173,34 +165,43 @@ EOF
   [[ "$output" =~ "does not carry the canary" ]]
 }
 
-# The hole this closes: reading the file directly leaves an identical repo, an
-# identical ledger record and an identical answer. Only the tool calls differ.
-@test "recall: fails when the agent Read the body instead of requesting it" {
+@test "recall: fails when the agent answered without reading the body" {
   _make_recall_end_state
-  cat > "$EVAL_OUT_DIR/transcript.jsonl" <<EOF
-{"message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"$EVAL_REPO/memory/reference_deploy_lock.md"}}]}}
-EOF
+  printf '%s\n%s\n' "$_PROBE_CALL" "$_SKILL_CALL" > "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
   [ "$status" -ne 0 ]
-  [[ "$output" == *"never wrote .claude/gitlore-recall"* ]]
+  [[ "$output" == *"never Read reference_deploy_lock.md"* ]]
 }
 
-@test "recall: fails when the agent both requested and Read the body" {
+# Without this the scenario grades the model's common sense: an agent that opens
+# the file on the user's say-so leaves the same answer and the same trace.
+@test "recall: fails when the body was read without the skill being invoked" {
   _make_recall_end_state
-  cat >> "$EVAL_OUT_DIR/transcript.jsonl" <<EOF
-{"message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"$EVAL_REPO/memory/reference_deploy_lock.md"}}]}}
-EOF
+  { printf '%s\n' "$_PROBE_CALL"; _read_call; } > "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
   [ "$status" -ne 0 ]
-  [[ "$output" == *"Read reference_deploy_lock.md itself"* ]]
+  [[ "$output" == *"recall skill was never invoked"* ]]
 }
 
-@test "recall: fails when the ledger recorded nothing" {
+# The hole this closes: prompt-time recall delivers the same body, leaves the
+# same answer and the same repo. Only the ORDER tells them apart, and grading a
+# prompt-time fetch as a pass would grade CC's harness instead of this skill.
+@test "recall: fails when the body was read before the trigger surfaced" {
   _make_recall_end_state
-  : > "$LEDGER"
+  # Native recall's shape: the body is already in context when the probe runs,
+  # so invoking the skill afterwards changes nothing it could have fetched.
+  { _read_call; printf '%s\n%s\n' "$_PROBE_CALL" "$_SKILL_CALL"; } > "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
   [ "$status" -ne 0 ]
-  [[ "$output" =~ "does not record" ]]
+  [[ "$output" == *"that is prompt-time recall"* ]]
+}
+
+@test "recall: fails when the agent never ran the probe" {
+  _make_recall_end_state
+  _read_call > "$EVAL_OUT_DIR/transcript.jsonl"
+  _run_assert recall
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"never ran nightly-retry.sh"* ]]
 }
 
 @test "recall: fails when no transcript was captured" {

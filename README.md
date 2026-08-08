@@ -63,7 +63,7 @@ Feature-complete: every functional requirement and design decision in
 - **Dogfood-driven hardening (D12–D16)** ✅ (submodule-side commit gate; git lock-contention retry; SessionStart output on `systemMessage`; in-process-worktree memory-drift guard; standalone memory-commit entry point; SessionStart disclosure trimmed to prohibition + seamless happy path)
 - **FR11 memory-commit batch** ✅ (a `PostToolBatch` file-trigger hook commits memory from an agent-written message, sidestepping the sandbox and commit-approval classifier — no Stop hook)
 - **D17 — tiered memory (FR15)** ✅ index→frontmatter sync, nested tier submodules discovered by enclosure, detach-at-`live` propagation, commit/push lockstep, index composition, and `/gitlore:add-tier`. One merge policy applies at every level: memory and each tier get the same two gates and the same `/gitlore:resolve`
-- **D18 — active recall (FR16)** ✅ the agent names memory files in `.claude/gitlore-recall` and a `PostToolBatch` hook injects their bodies, so a fact whose trigger only appears mid-task can still reach context
+- **D18 — active recall (FR16)** ✅ a skill has the agent pick up to five entries from the index it already holds and Read them in one batch, so a fact whose trigger only appears mid-task can still reach context
 - **Index authority** ✅ the always-loaded index one-liner is canonical for a pointer line's text *and* its presence, enforced non-destructively — removing a line never deletes the file, and a bullet whose file is missing is reported rather than repaired by deletion
 - **Routing-key advisories** ✅ the index→frontmatter sync reports, without ever refusing a write, when the index outgrows its byte budget and when a `reference` or `project` line carries no literal trigger token
 

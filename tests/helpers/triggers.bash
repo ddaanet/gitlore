@@ -35,13 +35,6 @@ GITLORE_T_EMBEDDED_REPO='embedded git repository'
 # tests/index_compose.bats; refuted where compose has nothing dangling to say.
 GITLORE_T_DANGLING='names no file'
 
-# The recall refusal banner's clause (scripts/cc-hooks/recall-batch.sh). The
-# resolver's own report must never repeat it. Pinned by "a rejected request is
-# consumed too" in tests/cc_hook_recall.bats, which counts it exactly once;
-# refuted in tests/lib_recall.bats for every resolver-side problem report.
-# Consumers that match case-insensitively use "${GITLORE_T_NOTHING_READ,,}".
-GITLORE_T_NOTHING_READ='Nothing was read'
-
 # The submodule url install writes before a real remote exists
 # (scripts/install/init-submodule.sh). Pinned by "local mode keeps placeholder
 # and never calls gh" in tests/install_remote.bats.

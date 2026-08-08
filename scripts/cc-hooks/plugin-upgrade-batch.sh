@@ -53,7 +53,7 @@ esac
 
 session=$(jq -r '.session_id // ""' <<<"$payload")
 marker=$(gitlore_upgrade_nudge_file "$mempath" "$session")
-if [ -f "$marker" ]; then exit 0; fi   # once per episode; recall-reset.sh re-arms it
+if [ -f "$marker" ]; then exit 0; fi   # once per episode; nudge-reset.sh re-arms it
 
 # Every install of THIS plugin that applies here: the user-scoped entry, plus
 # any entry pinned to this project. Owner-agnostic — the parent of the frozen
