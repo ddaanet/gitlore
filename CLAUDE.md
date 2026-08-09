@@ -40,14 +40,10 @@ you decide read-or-skip; the fact lives in the file.
   tooling-managed. Write them only through the handoff skill, and fold them into
   the same commit as the work they describe.
 - Conventional-commit prefixes are required in the **parent** repo; the gitmoji
-  hook rewrites them. The memory approval summary is still a commit message —
-  subject line, blank line, body — but takes no prefix: a memory commit is
-  always documentation, so the prefix carries no information. The body is one
-  **paragraph** per changed memory file, opening with a bold
-  `**<Kind> <tier>/<slug>:**` prefix — the kind being New, Update, Augment,
-  Reduce, or Remove — then prose on what the fact now claims and what prompted
-  the change. The canonical wording, with a literal template, lives in
-  `reference/memory-approval-clause.txt` (see docs/design.md D19).
+  hook rewrites them. A memory approval summary takes none. Don't prepare that
+  summary in advance: commit the parent, and the pre-commit hook emits the
+  format, the file to write it to, and the approval protocol at the moment it
+  blocks.
 - After a compaction, check `PWD`, `CLAUDE_PROJECT_DIR` and the gitStatus block
   against what the summary describes before acting — a summary says what, not
   where. If they disagree, stop and say so; don't `cd` to reconcile.
