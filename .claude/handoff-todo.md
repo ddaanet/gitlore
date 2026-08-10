@@ -1,21 +1,12 @@
 ## Remaining
 
-- Bump the plugin version and release. Until then a session elsewhere that
-  invokes recall gets the old body, instructing it to write an IPC file whose
-  hook no longer exists — and the D21 detector still does not reach other repos.
-- Compact `memory/MEMORY.md`: 22KB against Claude Code's 24.4KB loader cutoff,
-  so the tail is one growth spurt away from silently not loading.
-- Add guardrails against snake_case and `name:`/filename drift, plus the six
-  dangling wikilinks — `ghmem-project`, `micro-colwrap-project`,
-  `auto-memory-directory`, `worktree-handoff-root`, `links`, `some-project` —
-  some of which may legitimately target another store.
+- Bump the plugin version and release. Until then a session elsewhere that invokes recall gets the old body, instructing it to write an IPC file whose hook no longer exists, and the D21 detector still does not reach other repos.
+- Compact `memory/MEMORY.md` — 22.2KB against Claude Code's 24.4KB loader cutoff, so the tail is one growth spurt away from silently not loading.
+- Widen the `gate-cache-must-cover-every-check` routing line: it describes only the silent-red symptom, leaving the merged-in trigger (a gated recipe is slow and wants a cheap extra check) unroutable.
+- Add guardrails against snake_case and `name:`/filename drift, plus the dangling wikilinks — `ghmem-project`, `micro-colwrap-project`, `auto-memory-directory`, `worktree-handoff-root`, `links`, `some-project` — some of which may legitimately target another store.
+- Rewrite the memory files that still name my human partner directly against the shared-tier rule. Most are attributed quotes, where rewriting changes how the evidence reads.
 - Explain the live pointer loss for gitlore's own memory store.
-- Apply the root-inbox briefs: `brief-hook-exec-and-compose-revert.md`,
-  `brief-memory-index-glued-bullets.md`, `brief-merge-dispatch-authorization.md`,
-  `brief-memory-name-drift.md`, `brief-handoff-integration-evals.md`.
-- Propose the plan-escalation rule as a patch to `superpowers:executing-plans`,
-  which is another repo and stays read-only.
-- Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it
-  and `general` still point at a local `./.git/gitlore-placeholder`. Then
-  `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature` →
-  `edify` → `Emploi` → `cwd-safety`.
+- Apply the briefs now filed under `plans/`: hook-exec-and-compose-revert, memory-index-glued-bullets, merge-dispatch-authorization, memory-name-drift, handoff-integration-evals.
+- Propose the memory-submodule carve-out to `ddaa:preflight`'s clean-tree and submodule checks — another repo, so a proposal only.
+- Propose the plan-escalation rule as a patch to `superpowers:executing-plans`, likewise read-only.
+- Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it and `general` still point at a local `./.git/gitlore-placeholder`. Then `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature` → `edify` → `Emploi` → `cwd-safety`.
