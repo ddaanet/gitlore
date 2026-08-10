@@ -7,22 +7,6 @@ shared and git-backed. `docs/design.md` is the living design doc and the
 memory of the design — read it before touching anything structural, and
 record decisions there rather than in a memory file.
 
-## Recall
-
-Spontaneous recall is nil, and CC's passive recall fires a per-query classifier
-against the *user prompt* that does not re-select later in the conversation.
-Facts whose trigger only appears mid-task — a git error string, a `2>/dev/null`
-in a file you just read, an empty `$TMPDIR` — never surface on their own.
-
-So recall actively, at two checkpoints: after reading the task input, and again
-after exploring the code, before writing anything durable. Scan the index in
-`memory/MEMORY.md` (already in context — re-read it only after a compaction, or
-if it was edited this session), name the entries that match what you now know,
-and Read them in one batch.
-
-`memory/MEMORY.md` is a routing table, not the content. Its lines exist to let
-you decide read-or-skip; the fact lives in the file.
-
 ## Working with my human partner
 
 - A defect you have verified is not made someone else's call by who authored it.
