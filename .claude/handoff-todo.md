@@ -1,11 +1,12 @@
 ## Remaining
 
-- Compact `memory/MEMORY.md` — 22.3KB against Claude Code's 24.4KB loader cutoff, and the index-sync hook now asks for under 17.1KB.
-- Widen the `gate-cache-must-cover-every-check` routing line: it describes only the silent-red symptom, leaving the merged-in trigger (a gated recipe is slow and wants a cheap extra check) unroutable.
-- Add guardrails against snake_case and `name:`/filename drift, plus the dangling wikilinks — `ghmem-project`, `micro-colwrap-project`, `auto-memory-directory`, `worktree-handoff-root`, `links`, `some-project` — some of which may legitimately target another store.
-- Rewrite the memory files that still name my human partner directly against the shared-tier rule. Most are attributed quotes, where rewriting changes how the evidence reads.
-- Explain the live pointer loss for gitlore's own memory store.
-- Apply the briefs filed under `plans/`: hook-exec-and-compose-revert, memory-index-glued-bullets, merge-dispatch-authorization, memory-name-drift, handoff-integration-evals.
-- Propose the memory-submodule carve-out to `ddaa:preflight`'s clean-tree and submodule checks — another repo, so a proposal only.
+- Fix `/gitlore:push` misreading a *behind* store as diverged and dying at `scripts/lib/resolve.sh` — brief at `plans/brief-push-misreads-behind-as-diverged.md`, filed from a micro session against 0.4.5. The file is byte-identical in 0.5.0, so the defect is in the shipped release.
+- Run Sweep A per `plans/memory-hygiene-sweep.md`: build the checker, clear the violations it finds, then wire it into `just precommit`. Confirm it flags the three pre-rename `memory/feedback_*.md` paths cited in `.claude/rules/shell.md`.
+- Run Sweep B: ownership audit over the 99 ddaanet facts, classify only, output the verdict table.
+- Compact `memory/MEMORY.md` — 22.5KB against the hook's 17.1KB ask and the 24.4KB loader cap. Strategy waits on Sweep B.
+- Class A prose deletions from `shared-claude.md` and `CLAUDE.md`: the memory-commit rule stated three times, the `.gitignore` line, the conventional-commit prefixes. Blocked until the `prohibitions@ddaanet` hooks exist and are verified.
+- gitlore SessionStart pairing check: warn when the ddaanet tier is mounted but `prohibitions@ddaanet` is absent from `enabledPlugins`.
+- Apply the briefs under `plans/`: hook-exec-and-compose-revert, memory-index-glued-bullets, merge-dispatch-authorization, handoff-integration-evals. The memory-name-drift brief is subsumed by Sweep A.
+- Propose the memory-submodule carve-out to `ddaa:preflight`'s clean-tree and submodule checks — another repo, proposal only.
 - Propose the plan-escalation rule as a patch to `superpowers:executing-plans`, likewise read-only.
 - Migrate the `micro` tier (~40 facts) once a real memory remote is settled; it and `general` still point at a local `./.git/gitlore-placeholder`. Then `gitmoji` → `general` → `home` → `devddaanet` → `skills` → `candidature` → `edify` → `Emploi` → `cwd-safety`.
