@@ -60,5 +60,15 @@ unpublished and why. If the run reported uncommitted changes, say plainly that
 those facts are **not** on the remote and what would publish them — an approved
 summary and a memory commit, then this skill again.
 
+Getting that commit does not mean creating a parent commit whose only content
+is the memory pointer. Bundle memory with the source change it corresponds
+to, not with whatever happens to be unpushed: if the memory content documents
+the commit just made, amend it in (only an option while that commit is
+unpushed). If it documents still-uncommitted changes, or stands alone with no
+parent-side counterpart, leave the approved summary file
+(`.claude/gitlore-memory-message`) for whichever parent commit comes next —
+the pre-commit hook consumes it then. A standalone commit path exists (D16)
+but is reserved for the handoff skill; this skill does not invoke it.
+
 Do not run `git log`, `git status`, or `git -C memory rev-parse` to confirm the
 outcome. The command's output is the authoritative report.
