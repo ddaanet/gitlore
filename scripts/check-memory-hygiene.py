@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""Hygiene gate over the memory store and the surfaces that cite it.
+
+Six checks, split by how much the gate can prove. A *blocking* check has a
+pattern with no legitimate reading; a *warning* check has real recall and a
+false-positive rate too high to stop a commit on — `here` and `now` are
+anaphoric far more often than deictic, and a dangling `[[link]]` is a
+write-it-later marker as often as a dead cross-boundary one.
+
+Prose checks read the file with fenced blocks and inline code spans blanked
+out: a fact quoting `No agent named 'X' is currently addressable` is citing an
+error string, not writing from its own present. The reference checks read the
+file raw, because a stale memory path's natural habitat *is* a code span.
+
+A line carrying `<!-- hygiene-ok -->` is exempt from every check. It exists for
+the guide files that must quote the vocabulary they forbid.
+
+Python, not shell, for one reason the sweep plan makes non-negotiable: the
+frontmatter is parsed with a real YAML parser. A regex for `name:` is the
+defect this gate exists to catch, and reproducing it here would be absurd.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+
+import yaml
+
+# The literal has to appear somewhere for the check to exist at all; this file
+# is not a memory file, so it is the right place for it to live.
+GIVEN_NAME = "David"
+
+# Directories whose citations are records rather than instructions. `tests/`
+# names `memory/notes.md` and `memory/a.md` by the hundred as fixtures;
+# `plans/` and `docs/changelog/` are dated history and cite the pre-rename
+# names because those were the names at the time. `plugin-dev/` is a vendored
+# subtree. None of them route a live agent anywhere.
+REFERENCE_SCAN_EXCLUDES = ("tests", "plans", "docs", "plugin-dev", ".git")
+
+# Where a stale memory citation would actually misroute someone: the store
+# itself, the always-on context, and the prose the plugin ships.
+REFERENCE_SCAN_ROOTS = (
+    "memory",
+    "CLAUDE.md",
+    ".claude/rules",
+    ".claude/token-efficient.md",
+    "skills",
+    "agents",
+    "commands",
+    "scripts",
+    "hooks",
+)
+
+# Files under memory/ that are not facts: the index, and the tier's always-on
+# conventions file. Both are written in an instructional voice that the prose
+# checks would fight, and neither carries frontmatter.
+NON_FACT_BASENAMES = ("MEMORY.md", "shared-claude.md")
+
+SUPPRESS = "<!-- hygiene-ok"
+
+# `my own` is matched in any casing — it opens sentences as often as it sits
+# mid-one. The bare pronoun stays case-sensitive: a case-folded `\bi\b` claims
+# every `i.e.` in the store.
+FIRST_PERSON = re.compile(r"\bI\b|\b(?i:my own)\b")
+
+# `(?<![-\w])` and `(?![-\w])` keep the compounds out: `now-trivial`,
+# `most-recently-modified`, `here-doc` are ordinary English, not a vantage
+# anchored to the session that wrote the file.
+DEICTIC = re.compile(
+    r"(?<![-\w])(now|here|today|currently|recently)(?![-\w])"
+    r"|this session|needs a fresh session"
+)
+
+DIRECT_NAMING = re.compile(rf"\b{GIVEN_NAME}\b")
+
+# The pre-rename scheme was `<type>_<slug>`, the four types being the
+# frontmatter `metadata.type` values. Anchoring on those prefixes is what
+# separates a stale memory name from every other snake_case identifier in a
+# repo full of shell.
+PRE_RENAME = re.compile(r"\b(?:feedback|reference|project|user)_[a-z0-9]+(?:_[a-z0-9]+)+\b")
+
+MEMORY_REF = re.compile(r"\bmemory/[A-Za-z0-9_./-]+\.md\b")
+
+WIKILINK = re.compile(r"\[\[([^\[\]]+)\]\]")
+
+FENCE = re.compile(r"^\s*(```|~~~)")
+
+CODE_SPAN = re.compile(r"`[^`]*`")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--root", help="repository root (default: the git toplevel)")
+    args = ap.parse_args()
+
+    root = args.root or git_toplevel()
+    if root is None:
+        print("check-memory-hygiene: not a git repository and no --root", file=sys.stderr)
+        return 2
+
+    memory_dir = os.path.join(root, "memory")
+    if not os.path.isdir(memory_dir):
+        print(f"check-memory-hygiene: no memory store at {memory_dir}", file=sys.stderr)
+        return 2
+
+    facts = discover_facts(memory_dir)
+    names, findings = parse_frontmatter(facts, root)
+
+    for path in facts:
+        findings += check_prose(path, root)
+    for path in facts:
+        findings += check_wikilinks(path, root, names)
+
+    ref_files = discover_reference_files(root)
+    for path in ref_files:
+        findings += check_references(path, root, memory_scope=under(path, memory_dir))
+
+    return report(findings, len(facts), len(ref_files))
+
+
+def git_toplevel() -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out.stdout.strip() or None
+
+
+def under(path: str, directory: str) -> bool:
+    return os.path.commonpath([os.path.abspath(path), os.path.abspath(directory)]) == \
+        os.path.abspath(directory)
+
+
+def discover_facts(memory_dir: str) -> list[str]:
+    facts = []
+    for dirpath, dirnames, filenames in os.walk(memory_dir):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        for name in filenames:
+            if name.endswith(".md") and name not in NON_FACT_BASENAMES:
+                facts.append(os.path.join(dirpath, name))
+    return sorted(facts)
+
+
+def discover_reference_files(root: str) -> list[str]:
+    found = []
+    for entry in REFERENCE_SCAN_ROOTS:
+        target = os.path.join(root, entry)
+        if os.path.isfile(target):
+            found.append(target)
+            continue
+        if not os.path.isdir(target):
+            continue
+        for dirpath, dirnames, filenames in os.walk(target):
+            dirnames[:] = [d for d in dirnames if d not in REFERENCE_SCAN_EXCLUDES]
+            for name in filenames:
+                path = os.path.join(dirpath, name)
+                # `-type f` equivalent: .claude/ carries character devices
+                # under a live agent sandbox, and reading one blocks forever.
+                if os.path.isfile(path) and not os.path.islink(path):
+                    found.append(path)
+    return sorted(set(found))
+
+
+def read_text(path: str) -> str | None:
+    """Return the file's text, or None when it is not text at all."""
+    try:
+        with open(path, "rb") as fh:
+            raw = fh.read()
+    except OSError:
+        return None
+    if b"\0" in raw:
+        return None
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def strip_code(text: str) -> list[str]:
+    """Blank fenced blocks and inline spans, preserving line numbering."""
+    out = []
+    in_fence = False
+    for line in text.splitlines():
+        if FENCE.match(line):
+            in_fence = not in_fence
+            out.append("")
+            continue
+        out.append("" if in_fence else CODE_SPAN.sub(lambda m: " " * len(m.group(0)), line))
+    return out
+
+
+def parse_frontmatter(facts: list[str], root: str) -> tuple[set[str], list[tuple]]:
+    """Map every fact's frontmatter `name:` and flag drift against the basename."""
+    names: set[str] = set()
+    findings: list[tuple] = []
+    for path in facts:
+        rel = os.path.relpath(path, root)
+        text = read_text(path)
+        if text is None:
+            findings.append(("BLOCK", "frontmatter", rel, 1, "unreadable or not UTF-8"))
+            continue
+        match = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+        if not match:
+            findings.append(("BLOCK", "frontmatter", rel, 1, "no YAML frontmatter block"))
+            continue
+        try:
+            data = yaml.safe_load(match.group(1)) or {}
+        except yaml.YAMLError as exc:
+            first = str(exc).splitlines()[0]
+            findings.append(("BLOCK", "frontmatter", rel, 1, f"unparseable: {first}"))
+            continue
+        if not isinstance(data, dict):
+            findings.append(("BLOCK", "frontmatter", rel, 1, "frontmatter is not a mapping"))
+            continue
+        name = data.get("name")
+        base = os.path.basename(path)[: -len(".md")]
+        if not isinstance(name, str) or not name:
+            findings.append(("BLOCK", "frontmatter", rel, 1, "missing `name:`"))
+            continue
+        names.add(name)
+        if name != base:
+            findings.append(
+                ("BLOCK", "name-drift", rel, 1, f"name: {name!r} != basename {base!r}")
+            )
+    return names, findings
+
+
+def check_prose(path: str, root: str) -> list[tuple]:
+    rel = os.path.relpath(path, root)
+    text = read_text(path)
+    if text is None:
+        return []
+    findings = []
+    for lineno, line in enumerate(strip_code(text), 1):
+        if SUPPRESS in line:
+            continue
+        for level, check, pattern in (
+            ("BLOCK", "first-person", FIRST_PERSON),
+            ("BLOCK", "direct-naming", DIRECT_NAMING),
+            ("WARN", "deictic", DEICTIC),
+        ):
+            hit = pattern.search(line)
+            if hit:
+                findings.append((level, check, rel, lineno, hit.group(0)))
+    return findings
+
+
+def check_wikilinks(path: str, root: str, names: set[str]) -> list[tuple]:
+    rel = os.path.relpath(path, root)
+    text = read_text(path)
+    if text is None:
+        return []
+    findings = []
+    for lineno, line in enumerate(strip_code(text), 1):
+        if SUPPRESS in line:
+            continue
+        for slug in WIKILINK.findall(line):
+            if slug not in names:
+                findings.append(("WARN", "dangling-wikilink", rel, lineno, f"[[{slug}]]"))
+    return findings
+
+
+def check_references(path: str, root: str, memory_scope: bool) -> list[tuple]:
+    """Stale memory citations. Read raw — a dead path lives inside backticks."""
+    rel = os.path.relpath(path, root)
+    text = read_text(path)
+    if text is None:
+        return []
+    findings = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if SUPPRESS in line:
+            continue
+        hit = PRE_RENAME.search(line)
+        if hit:
+            findings.append(("BLOCK", "pre-rename", rel, lineno, hit.group(0)))
+        # Only inside the store, where every cited path must resolve. Shipped
+        # prose uses `memory/ddaanet/foo.md` as a placeholder and is right to.
+        if memory_scope:
+            for ref in MEMORY_REF.findall(line):
+                if not os.path.exists(os.path.join(root, ref)):
+                    findings.append(("BLOCK", "broken-reference", rel, lineno, ref))
+    return findings
+
+
+BLOCKING_CHECKS = (
+    "frontmatter",
+    "name-drift",
+    "first-person",
+    "direct-naming",
+    "pre-rename",
+    "broken-reference",
+)
+WARNING_CHECKS = ("deictic", "dangling-wikilink")
+
+
+def report(findings: list[tuple], n_facts: int, n_files: int) -> int:
+    for level, check, rel, lineno, detail in sorted(findings, key=lambda f: (f[0], f[2], f[3])):
+        print(f"{level:<5} {check:<18} {rel}:{lineno}: {detail}")
+
+    counts = {c: 0 for c in BLOCKING_CHECKS + WARNING_CHECKS}
+    for _, check, _, _, _ in findings:
+        counts[check] += 1
+    blocking = sum(counts[c] for c in BLOCKING_CHECKS)
+
+    if findings:
+        print()
+    print(
+        f"check-memory-hygiene: {n_facts} fact{'' if n_facts == 1 else 's'}, "
+        f"{n_files} file{'' if n_files == 1 else 's'} scanned"
+    )
+    # Every blocking check is named whether or not it fired: a check that
+    # printed nothing must not look like a check that never ran.
+    for check in BLOCKING_CHECKS:
+        print(f"  {check:<18} {counts[check]}")
+    for check in WARNING_CHECKS:
+        if counts[check]:
+            print(f"  {check:<18} {counts[check]} (warn)")
+
+    return 1 if blocking else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
