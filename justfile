@@ -51,6 +51,12 @@ distribution_inputs := ".gitmodules agents commands hooks scripts skills tests/h
 # Fast, frequent. Version drift, shellcheck, then the full bats suite.
 precommit: check-distribution
     #!{{ bash_prolog }}
+    # Uncached, and ahead of the sentinel deliberately. The checker's largest
+    # input is `memory/`, which is a gitlink here: `git ls-files` yields the one
+    # path and nothing to `cat`, so no input hash can ever see a fact change. A
+    # cached pass would skip this on exactly the commit that edits a memory
+    # file. It costs 0.4s, so there is nothing worth caching.
+    scripts/check-memory-hygiene.py
     if check-sentinel precommit {{ precommit_inputs }}; then
         echo "precommit: cached (inputs unchanged)"
         exit 0
@@ -181,6 +187,11 @@ gate-inputs-hash () {
         bats --version || exit 1
         shellcheck --version || exit 1
         jq --version || exit 1
+        # Not for the hygiene checker, which runs uncached — for
+        # `scripts/hook-manager/wire-*.sh`, whose python3/PyYAML probe decides
+        # what the hook-manager wiring suite asserts under the cached `test`
+        # gate.
+        python3 --version || exit 1
         git ls-files -z --cached --others --exclude-standard -- "${gate_inputs[@]}" \
             | sort -z \
             | while IFS= read -r -d '' file; do
