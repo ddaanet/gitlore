@@ -124,10 +124,11 @@ gitlore_compose_stamp_get() {
 # two checks below give that silence a voice. Neither can decide whether a hook
 # is GOOD; each measures one thing that is countable.
 
-# Byte budget of the always-loaded index blob (25 KiB, the measured ceiling —
-# see memory/feedback_memory_retrieval_in_practice.md) and the fraction at which
-# to speak up. Both overridable so a test drives the threshold instead of
-# writing a 20KB fixture.
+# Advisory byte budget of the always-loaded index blob (25 KiB) and the fraction
+# at which to speak up. Both overridable so a test drives the threshold instead
+# of writing a 20KB fixture. This budget only reports; Claude Code's own loader
+# is the hard cap, and it truncates lower — see
+# memory/ddaanet/index-compaction-triggers.md.
 : "${GITLORE_INDEX_BUDGET_BYTES:=25600}"
 : "${GITLORE_INDEX_BUDGET_WARN_PCT:=80}"
 

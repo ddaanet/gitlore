@@ -105,6 +105,37 @@ with no false positives.
 `<!-- hygiene-ok -->` on a line exempts it, for the guide files that must quote
 the vocabulary they forbid.
 
+### The warning review, done once
+
+All 42 deictic and 3 dangling-wikilink warnings were read against their lines.
+**One is a real defect; the other 44 are legitimate** — which retires the
+review rather than leaving it standing:
+
+- **16 are the two guide files quoting their own forbidden vocabulary** —
+  `design-doc-writing.md` and `memory-writing.md` exist to name `now`, `here`,
+  `today` and `needs a fresh session` as the tokens that do not survive the
+  trip. They are the case `<!-- hygiene-ok -->` was built for.
+- **The remaining 26 are anaphoric or terms of art.** `here` resolves to a case
+  just described ("a false positive here", "required there → required here");
+  `now` to a state the text established ("authored now" at replay time, "now
+  MISROUTES" after the drop); and `this session` is the mechanism's own
+  vocabulary in `sandbox-effects.md` and `verify-session-root.md`, not the
+  session that wrote the file.
+- **2 of 3 dangling wikilinks are illustrations.** `[[ghmem-project]]` and
+  `[[some-project]]` appear inside `tier-links-cross-a-boundary.md`, the fact
+  explaining dead cross-boundary links, as examples of the very thing.
+
+The defect is `stale-plugin-code.md:92`'s `[[auto-memory-directory]]`, naming a
+fact that does not exist while the same sentence cites
+`[[cc-worktree-memory-freeze]]` four lines up — which already covers
+`autoMemoryDirectory`. The pointer is deleted rather than repointed: it was the
+whole reference, which is the delete case in `tier-links-cross-a-boundary`.
+
+This measures the warn-only severities rather than the store: precision is high
+enough that the two imprecise tokens carry their weight, and the standing
+question of dropping `here`/`now` to make the check blocking can be closed as
+unnecessary — there is nothing for it to catch.
+
 ## Sweep B — ownership audit, classify only
 
 For each of the 99 facts:
