@@ -1,9 +1,8 @@
 ## Remaining
 
-- Fix `/gitlore:push` misreading a *behind* store as diverged and dying at `scripts/lib/resolve.sh` — brief at `plans/brief-push-misreads-behind-as-diverged.md`, filed from a micro session against 0.4.5. The file is byte-identical in 0.5.0, so the defect is in the shipped release.
 - Run Sweep A per `plans/memory-hygiene-sweep.md`: build the checker, clear the violations it finds, then wire it into `just precommit`. Confirm it flags the three pre-rename `memory/feedback_*.md` paths cited in `.claude/rules/shell.md`.
-- Run Sweep B: ownership audit over the 99 ddaanet facts, classify only, output the verdict table.
-- Compact `memory/MEMORY.md` — 22.5KB against the hook's 17.1KB ask and the 24.4KB loader cap. Strategy waits on Sweep B.
+- Run Sweep B: ownership audit over the 99 ddaanet facts, classify only, output the verdict table — root `memory/MEMORY.md` has only ~503B of headroom left before Claude Code's 24.4KB loader cutoff, so the retirement call this sweep feeds is close to forced by the next memory write.
+- Compact `memory/MEMORY.md` — strategy waits on Sweep B.
 - Class A prose deletions from `shared-claude.md` and `CLAUDE.md`: the memory-commit rule stated three times, the `.gitignore` line, the conventional-commit prefixes. Blocked until the `prohibitions@ddaanet` hooks exist and are verified.
 - gitlore SessionStart pairing check: warn when the ddaanet tier is mounted but `prohibitions@ddaanet` is absent from `enabledPlugins`.
 - Apply the briefs under `plans/`: hook-exec-and-compose-revert, memory-index-glued-bullets, merge-dispatch-authorization, handoff-integration-evals. The memory-name-drift brief is subsumed by Sweep A.
