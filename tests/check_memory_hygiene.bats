@@ -235,6 +235,60 @@ plant_fact() {
 
 # --- suppression, scope, discovery -----------------------------------------
 
+# --- check 7: volatile git state -------------------------------------------
+
+@test "volatile state: an abbreviated sha in a fact body blocks" {
+  plant_fact "ddaanet/a-fact.md" "a-fact" 'Fixed in commit `7c0471b`.'
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"volatile-state"* ]]
+  [[ "$output" == *"7c0471b"* ]]
+}
+
+@test "volatile state: read raw, since a sha's habitat is a code span" {
+  plant_fact "ddaanet/a-fact.md" "a-fact" '```' 'fixed (`e205aa6`)' '```'
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"e205aa6"* ]]
+}
+
+@test "volatile state: frontmatter originSessionId is not a violation" {
+  mkdir -p memory/ddaanet
+  {
+    printf -- '---\n'
+    printf 'name: a-fact\ndescription: a fact\n'
+    printf 'metadata:\n  type: reference\n'
+    printf '  originSessionId: 94e0a066-a634-4a25-a32d-b0f53b992c25\n'
+    printf -- '---\n\nA body naming no sha.\n'
+  } > memory/ddaanet/a-fact.md
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"94e0a066"* ]]
+}
+
+@test "volatile state: all-digit runs are numbers, not shas" {
+  plant_fact "ddaanet/a-fact.md" "a-fact" \
+    'Mode 100644 and a 160000 gitlink; the budget is 25600 bytes, seen at 26754.'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"100644"* ]]
+}
+
+@test "volatile state: a hex word is a word, not a sha" {
+  plant_fact "ddaanet/a-fact.md" "a-fact" \
+    'The next line added a facade; the entry acceded and was defaced.'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"acceded"* ]]
+}
+
+@test "volatile state: uppercase hex is an acronym, a sha is lowercase" {
+  plant_fact "ddaanet/a-fact.md" "a-fact" 'The FDA and the CDC once used EBCDIC.'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"EBCDIC"* ]]
+}
+
 @test "suppression: a hygiene-ok marker clears the line it sits on" {
   plant_fact "ddaanet/a-fact.md" "a-fact" \
     'The brief said "I cut only elaboration". <!-- hygiene-ok -->'

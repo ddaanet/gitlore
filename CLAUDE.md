@@ -15,27 +15,16 @@ record decisions there rather than in a memory file.
 
 ## Memory and commits
 
-- Never `git commit` inside `memory/` or a tier. Writing a memory file is an
-  ordinary edit; committing the parent repo records, gates and pushes it.
 - `memory/` moves in lockstep with the parent: committed before the root commit,
   pushed alongside every parent push. Lockstep is `live` vs `origin/live` — the
   memory tree's `main` may legitimately sit ahead.
 - Handoff files (`.claude/handoff-task.md`, `.claude/handoff.md`) are
   tooling-managed. Write them only through the handoff skill, and fold them into
   the same commit as the work they describe.
-- Conventional-commit prefixes are required in the **parent** repo; the gitmoji
-  hook rewrites them. A memory approval summary takes none. Don't prepare that
-  summary in advance: commit the parent, and the pre-commit hook emits the
+- A memory approval summary takes no conventional-commit prefix. Don't prepare
+  that summary in advance: commit the parent, and the pre-commit hook emits the
   format, the file to write it to, and the approval protocol at the moment it
   blocks.
-- After a compaction, check `PWD`, `CLAUDE_PROJECT_DIR` and the gitStatus block
-  against what the summary describes before acting — a summary says what, not
-  where. If they disagree, stop and say so; don't `cd` to reconcile.
-
-## Design
-
-- Self-triggering skill when the condition is mechanical and detectable; a
-  command only for an explicitly user-initiated action.
 
 ## Writing
 
