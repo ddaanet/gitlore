@@ -84,6 +84,7 @@ gitlore_push_stores "$mempath"
 # happen. `origin/live` has been fetched and advanced by now, so old..new is what
 # this run put on the remote.
 published=0
+held=0
 i=0
 while [ "$i" -lt "${#store_paths[@]}" ]; do
   p="${store_paths[$i]}"
@@ -91,6 +92,17 @@ while [ "$i" -lt "${#store_paths[@]}" ]; do
   i=$((i + 1))
   new=$(git -C "$p" rev-parse -q --verify refs/remotes/origin/live) || new="-"
   [ "$old" = "$new" ] && continue
+  # origin/live also moves when the push's own fetch takes in what SOMEONE ELSE
+  # published — the store is behind, this run sent nothing, and old..new is
+  # their commits. Credit only a tip this store's `live` actually contains.
+  # `-q --verify` is silent on the expected miss: a store with no local `live`
+  # published nothing either way.
+  live_sha=$(git -C "$p" rev-parse -q --verify live) || live_sha=""
+  if [ "$new" != "-" ] && \
+     { [ -z "$live_sha" ] || ! git -C "$p" merge-base --is-ancestor "$new" "$live_sha"; }; then
+    held=1
+    continue
+  fi
   published=1
   if [ "$old" = "-" ]; then
     printf 'gitlore: %s — first publish, origin/live now %s\n' \
@@ -101,8 +113,12 @@ while [ "$i" -lt "${#store_paths[@]}" ]; do
       "$p" "$n" "$(git -C "$p" rev-parse --short "$new")"
   fi
 done
-[ "$published" = "1" ] || \
+# Only when nothing was published AND nothing was held back: a store whose
+# remote is ahead is not "already up to date", and gitlore_push_stores has
+# already said what it is and which skill takes those facts.
+if [ "$published" = "0" ] && [ "$held" = "0" ]; then
   printf 'gitlore: every store was already up to date; nothing needed publishing.\n'
+fi
 
 # A push publishes commits, so uncommitted work is not a failure here — but it is
 # the one thing a user who just asked to publish would be wrong to assume landed.

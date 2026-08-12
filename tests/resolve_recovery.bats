@@ -32,12 +32,17 @@ teardown() { teardown_tmp_repo; }
   # outcome and the conflicted worktree IS the deliverable. But a merge that
   # never started leaves no MERGE_HEAD, and without checking for it the caller
   # would write a state file and dispatch a sub-agent to resolve nothing.
-  # Reproduced here with an authority HEAD already contains.
+  # Reproduced here with an authority HEAD already contains, which is now
+  # recognized by ancestry BEFORE the detach that used to make this diagnosis
+  # move HEAD — so the report names the state rather than relaying git's
+  # "Already up to date" from a checkout already performed.
+  before=$(git -C memory rev-parse HEAD)
   run --separate-stderr gitlore_prepare_merge memory live
   [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"Already up to date"* ]]
+  [[ "$output$stderr" == *"already contains HEAD"* ]]
   run git -C memory rev-parse -q --verify MERGE_HEAD
   [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$before" ]
 }
 
 @test "recovery: state file without MERGE_HEAD → fatal directive" {
