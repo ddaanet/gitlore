@@ -207,8 +207,20 @@ EOF
 # Stdout: `<base_sha>:<pending_sha>`.
 gitlore_prepare_merge() {
   local mempath="$1" authority="$2"
-  local pending base merge_err
+  local pending base merge_err restore_err
   pending=$(git -C "$mempath" rev-parse HEAD)
+  # Nothing to merge: the authority already contains the pending commit, so the
+  # merge below would report "Already up to date." and leave no MERGE_HEAD.
+  # Tested BEFORE the checkout, because that checkout is a side effect — a
+  # failed diagnosis that moves HEAD onto the authority is what silently
+  # un-adopts a store, by making the next `/gitlore:merge` take its
+  # "already holds everything" early return and skip the adopt step. Callers
+  # classify by ancestry and do not reach here in this state; this is the lock
+  # on the mutating path itself.
+  if git -C "$mempath" merge-base --is-ancestor "$pending" "$authority"; then
+    printf 'gitlore: %s already contains HEAD, so there is no merge to prepare.\n' "$authority" >&2
+    return 1
+  fi
   base=$(git -C "$mempath" merge-base "$pending" "$authority")
   gitlore_git -C "$mempath" update-ref "$GITLORE_PENDING_REF" "$pending"
   gitlore_git -C "$mempath" checkout -q --detach "$authority"
@@ -230,6 +242,15 @@ gitlore_prepare_merge() {
     merge --no-commit --no-ff "$pending" 2>&1) || true
   if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
     printf '%s\n' "$merge_err" >&2
+    # Put HEAD back where it was. The checkout above was preparation for a merge
+    # that did not happen, and handing the caller a moved HEAD makes a failed
+    # diagnosis indistinguishable from a landed one. No --force: the stores
+    # reaching here are clean, and a checkout refused by real content is a
+    # message worth having rather than a tree worth discarding.
+    if ! restore_err=$(gitlore_git -C "$mempath" checkout -q --detach "$pending" 2>&1); then
+      printf 'gitlore: HEAD in %s is still at %s after a merge that could not be prepared. Restore it with: git -C "%s" checkout --detach %s\ngit said: %s\n' \
+        "$mempath" "$authority" "$mempath" "$pending" "$restore_err" >&2
+    fi
     return 1
   fi
   # Redo every index file entry-wise, over git's line-wise result. Unconditional:
@@ -265,6 +286,74 @@ gitlore_yield_merge() {
   statefile=$(gitlore_merge_state_file "$mempath")
   gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
   return 0
+}
+
+# Why a push was refused, decided by ancestry rather than by git's wording.
+#
+# git rejects a merely BEHIND ref with the same "(fetch first)" /
+# "(non-fast-forward)" it gives a genuinely DIVERGED one — both are
+# non-fast-forward pushes — and only divergence has a merge to prepare. A behind
+# store has nothing of its own to publish at all, so routing it into the merge
+# flow ends in a preparation that finds nothing and a diagnostic naming a
+# worktree that is clean. The parenthesized reason still separates "the ref
+# could not fast-forward" from a policy or credential refusal; this separates
+# the two ancestries hiding behind that one reason.
+#
+# `ahead` is the pushed ref already containing the target, which means the
+# refusal was not about ancestry: the remote moved during the push, or the fetch
+# that precedes it failed and the target ref is stale.
+# Args: $1 = store, $2 = pushed ref, $3 = target ref.
+# Stdout: behind | diverged | ahead | unknown.
+gitlore_classify_refusal() {
+  local store="$1" pushed="$2" target="$3" p t
+  # `-q --verify` on both: a ref that cannot be read is not a classification,
+  # and answering "diverged" for one would start a merge on a guess.
+  p=$(git -C "$store" rev-parse -q --verify "$pushed") || { printf 'unknown\n'; return 0; }
+  t=$(git -C "$store" rev-parse -q --verify "$target") || { printf 'unknown\n'; return 0; }
+  if git -C "$store" merge-base --is-ancestor "$p" "$t"; then
+    printf 'behind\n'
+  elif git -C "$store" merge-base --is-ancestor "$t" "$p"; then
+    printf 'ahead\n'
+  else
+    printf 'diverged\n'
+  fi
+}
+
+# Refuse to publish a store whose HEAD and local `live` name different commits.
+#
+# A store is checked out DETACHED AT `live` (D17), so the two agree in every
+# state the tooling produces. They are read by different halves of the publish,
+# though: the push sends `live`, while a merge preparation — and the gitlink the
+# enclosing commit records — reason from HEAD. Once they disagree, a push can
+# succeed while the recorded pointer never reaches the remote (lockstep broken
+# silently), or be refused on a ref the merge preparation never looks at, which
+# is how a rejection gets diagnosed against a HEAD that has nothing to say.
+#
+# Reported, never repaired: which ref is the intended one is not recoverable
+# from the refs themselves, and the drift means some earlier step left the store
+# in a state no normal path produces.
+# Args: $1 = store, $2 = label. Returns 1 after emitting when they disagree.
+gitlore_check_head_live_agree() {
+  local store="$1" label="$2" head live abs remedy
+  head=$(git -C "$store" rev-parse -q --verify HEAD) || return 0
+  # No local `live` yet (a tier never fetched) — nothing to disagree with.
+  live=$(git -C "$store" rev-parse -q --verify live) || return 0
+  [ "$head" != "$live" ] || return 0
+  # `--show-toplevel` rather than a subshell `cd`: the remedy below is printed
+  # for a human to paste, so the path has to be absolute, and CDPATH turns
+  # `$(cd … && pwd)` into a path with a directory listing glued to the front.
+  abs=$(git -C "$store" rev-parse --show-toplevel) || abs="$store"
+  if git -C "$store" merge-base --is-ancestor "$head" "$live"; then
+    remedy="Put HEAD back on 'live': git -C \"$abs\" checkout --detach live"
+  elif git -C "$store" merge-base --is-ancestor "$live" "$head"; then
+    remedy="Advance 'live' to HEAD: git -C \"$abs\" push . HEAD:live"
+  else
+    remedy="HEAD and 'live' have each moved since they last agreed; run /gitlore:resolve to reconcile them."
+  fi
+  gitlore_say_for_agent_or_user \
+    "gitlore: $label's HEAD is not at its local 'live' (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so nothing was published. $remedy" \
+    "gitlore: $label's HEAD is not at its local 'live' (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so nothing was published. $remedy" >&2
+  return 1
 }
 
 # Commit every dirty tier and fast-forward each one's local `live`, reusing the
@@ -326,9 +415,21 @@ $push_err" >&2
             return 1
             ;;
         esac
-        # Diverged from its own local `live` — the same gate memory has here, and
-        # the same resolution. The prepared merge lands in the tier's gitdir.
-        gitlore_yield_merge "$tierpath" live head-vs-live || return 1
+        # Same two ancestries behind the one reason: `live` already containing
+        # HEAD is drift, not divergence, and has no merge to prepare.
+        if [ "$(gitlore_classify_refusal "$tierpath" HEAD live)" = "diverged" ]; then
+          # Diverged from its own local `live` — the same gate memory has here,
+          # and the same resolution. The merge lands in the tier's gitdir.
+          gitlore_yield_merge "$tierpath" live head-vs-live || return 1
+        elif gitlore_check_head_live_agree "$tierpath" "tier '$tier'"; then
+          # Refused with the two refs in agreement and no divergence: neither
+          # diagnosis applies, so git's own words are all there is to go on.
+          gitlore_say_for_agent_or_user \
+            "gitlore: tier '$tier' was committed but its local 'live' could not be advanced, though HEAD and 'live' agree and neither has diverged. git said:
+$push_err" \
+            "gitlore: tier '$tier' was committed but its local 'live' could not be advanced. git said:
+$push_err" >&2
+        fi
         return 1
       fi
     fi
@@ -408,8 +509,20 @@ $push_err" >&2
           fi
           ;;
       esac
-      # ff-push failed → the pending commit has diverged from local `live`.
-      gitlore_yield_merge "$mempath" live head-vs-live || return 1
+      # ff-push failed. Divergence is one of the two ancestries git reports that
+      # way; the other is `live` already containing HEAD, where there is nothing
+      # to fast-forward and nothing to merge.
+      if [ "$(gitlore_classify_refusal "$mempath" HEAD live)" = "diverged" ]; then
+        gitlore_yield_merge "$mempath" live head-vs-live || return 1
+      elif gitlore_check_head_live_agree "$mempath" "memory"; then
+        # Refused with the two refs in agreement and no divergence: neither
+        # diagnosis applies, so git's own words are all there is to go on.
+        gitlore_say_for_agent_or_user \
+          "gitlore: updating the local 'live' ref failed, though HEAD and 'live' agree and neither has diverged. git said:
+$push_err" \
+          "gitlore: updating the local 'live' ref failed. git said:
+$push_err" >&2
+      fi
       return 1
     fi
   fi
@@ -471,18 +584,49 @@ gitlore_push_stores() {
     fi
     # Never push on top of a half-finished merge, at any level.
     gitlore_guard_stale_merge_state "$tierpath" || return 1
+    # Before anything is published: what goes out is `live`, what the memory
+    # commit records is HEAD. A store whose refs disagree publishes something
+    # other than the commit its pointer names.
+    gitlore_check_head_live_agree "$tierpath" "tier '$tier'" || return 1
     # `origin/live` has to be current before it can serve as the merge authority.
     # Non-fatal, exactly as memory's is: the push below is what decides.
     git -C "$tierpath" fetch -q origin live || true
     if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
       # Same discriminator as memory's push below: git's parenthesized reason
-      # separates divergence from policy/credential/quota refusals.
+      # separates divergence from policy/credential/quota refusals, and ancestry
+      # then separates the two states that share the divergence reason.
       case "$tier_err" in
         *"(fetch first)"*|*"(non-fast-forward)"*)
-          # One merge policy at every level: prepare against the tier's own
-          # `origin/live` and yield, exactly as memory does below.
-          gitlore_yield_merge "$tierpath" origin/live head-vs-remote || return 1
-          return 1
+          case "$(gitlore_classify_refusal "$tierpath" live origin/live)" in
+            behind)
+              # Nothing of ours to publish, which is `/gitlore:merge`'s business
+              # rather than a failure: the tier commit this memory push records
+              # is already contained in the remote, so the lockstep this loop
+              # exists to guarantee holds. Carry on to the next tier.
+              gitlore_say_for_agent_or_user \
+                "gitlore: tier '$tier' has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." \
+                "gitlore: tier '$tier' has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." >&2
+              continue
+              ;;
+            diverged)
+              # One merge policy at every level: prepare against the tier's own
+              # `origin/live` and yield, exactly as memory does below.
+              gitlore_yield_merge "$tierpath" origin/live head-vs-remote || return 1
+              return 1
+              ;;
+            *)
+              # Refused as non-fast-forward while `live` already contains
+              # origin/live, or with a ref that could not be read. Nothing here
+              # is a merge: preparing one against a stale authority would send
+              # out a merge missing the work that caused the refusal.
+              gitlore_say_for_agent_or_user \
+                "gitlore: pushing tier '$tier' was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
+$tier_err" \
+                "gitlore: pushing tier '$tier' was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
+$tier_err" >&2
+              return 1
+              ;;
+          esac
           ;;
         *)
           gitlore_say_for_agent_or_user \
@@ -508,6 +652,10 @@ $tier_err" >&2
       "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published." >&2
     return 0
   fi
+
+  # The same pre-publish invariant the tiers get: `live` is what goes out, HEAD
+  # is what the parent's gitlink records.
+  gitlore_check_head_live_agree "$mempath" "memory" || return 1
 
   # No redirect: `-q` already silences progress, so anything fetch writes here is a
   # real problem. Non-fatal (`|| true`) — the push below is the operation that counts.
@@ -555,7 +703,30 @@ $push_err" >&2
       ;;
   esac
 
-  # Reachable → HEAD-vs-remote divergence. Prepare and yield.
+  # Reachable, and refused for an ancestry reason. Which one decides everything:
+  # only divergence has a merge to prepare.
+  case "$(gitlore_classify_refusal "$mempath" live origin/live)" in
+    behind)
+      # Every tier is published and memory has nothing of its own to send. Taking
+      # the remote's facts is `/gitlore:merge`'s job, and reporting this as a
+      # failed push would send the user after a merge that has nothing to merge.
+      gitlore_say_for_agent_or_user \
+        "gitlore: memory has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." \
+        "gitlore: memory has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." >&2
+      return 0
+      ;;
+    diverged) ;;
+    *)
+      gitlore_say_for_agent_or_user \
+        "gitlore: pushing memory was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
+$push_err" \
+        "gitlore: pushing memory was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
+$push_err" >&2
+      return 1
+      ;;
+  esac
+
+  # HEAD-vs-remote divergence. Prepare and yield.
   gitlore_yield_merge "$mempath" origin/live head-vs-remote || return 1
   return 1
 }

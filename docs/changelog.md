@@ -4,6 +4,7 @@ How the design got to its current shape. Each entry is a write-time record of on
 
 Newest first.
 
+- [2026-08-12 — A push classifies a refusal by ancestry, not by git's wording, and a failed diagnosis stops moving HEAD](changelog/2026-08-12-behind-is-not-diverged.md) — git rejects a merely *behind* ref with the same reason it gives a diverged one, so a store with nothing to publish was sent into a merge that found nothing and left HEAD detached on the authority, silently un-adopting the tier
 - [2026-08-08 — Active recall became a skill the agent runs, and the hook, request file and ledger came out](changelog/2026-08-08-recall-skill-no-hook.md) — `additionalContext` spills past ~2KB and never satisfies `Read`-before-`Edit`, so injecting bodies delivered a preview and charged twice for anything the agent then corrected
 - [2026-08-04 — The shipped surface got its own gate, so a skills-only edit stops reporting cached](changelog/2026-08-04-distribution-gate.md) — `precommit_inputs` excludes `agents`/`commands`/`skills` to keep a 7m30s suite off prose edits, and `prerelease` is `precommit`, so nothing on the release path re-read what the plugin distributes
 - [2026-08-03 — Advancing a tier stages its moved gitlink, so the next `SessionStart` stops eating the merge](changelog/2026-08-03-tier-gitlink-staged-after-advance.md) — `submodule update` pins from the index, so an unstaged gitlink let the tier pass silently revert a just-landed merge while its recomposed index survived
