@@ -7,6 +7,9 @@
 # grades the wrong flow, or grades nothing, and either way the suite still says
 # "passed".
 
+# shellcheck source=tests/helpers/run-asserts.bash
+source "$BATS_TEST_DIRNAME/../../helpers/run-asserts.bash"
+
 RUN_EVALS="$BATS_TEST_DIRNAME/../run-evals.sh"
 
 setup() {
@@ -64,9 +67,8 @@ _run_evals() {
   _assert memory-commit
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p"}'
   _run_evals
-  [ "$status" -eq 0 ]
-  run grep -qx "ASSERT memory-commit" "$LOG"
-  [ "$status" -eq 0 ]
+  assert_ok
+  assert_grep -qx "ASSERT memory-commit" "$LOG"
 }
 
 @test "dispatch: a scenario's assert field selects its assertion script" {
@@ -74,36 +76,30 @@ _run_evals() {
   _assert add-tier
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p","assert":"add-tier"}'
   _run_evals
-  [ "$status" -eq 0 ]
-  run grep -qx "ASSERT add-tier" "$LOG"
-  [ "$status" -eq 0 ]
-  run grep -qx "ASSERT memory-commit" "$LOG"
-  [ "$status" -ne 0 ]
+  assert_ok
+  assert_grep -qx "ASSERT add-tier" "$LOG"
+  refute_grep -qx "ASSERT memory-commit" "$LOG"
 }
 
 # An eval that quietly grades nothing is worse than one that is red.
 @test "dispatch: a scenario naming a missing assertion fails, it does not skip" {
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p","assert":"nope"}'
   _run_evals
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "no executable assertion" ]]
-  [[ "$output" =~ "0/1 scenarios passed" ]]
+  assert_fails "no executable assertion" "0/1 scenarios passed"
 }
 
 @test "dispatch: a non-executable assertion script fails the scenario" {
   printf '#!/usr/bin/env bash\nexit 0\n' > "$STUB/asserts/limp.sh"
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p","assert":"limp"}'
   _run_evals
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "no executable assertion" ]]
+  assert_fails "no executable assertion"
 }
 
 @test "dispatch: the assertion's non-zero exit fails the trial with its own text" {
   _assert memory-commit 'echo "the tier never mounted"; exit 1'
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p"}'
   _run_evals
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "the tier never mounted" ]]
+  assert_fails "the tier never mounted"
 }
 
 @test "dispatch: a scenario's setup field runs its fixture before the agent" {
@@ -112,14 +108,13 @@ _run_evals() {
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "SETUP $PWD" >> "$LOG"\n' > "$STUB/setups/tiered.sh"
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p","setup":"tiered"}'
   _run_evals
-  [ "$status" -eq 0 ]
+  assert_ok
   # Ordering matters: the fixture must be in place before the agent starts.
   run grep -n "SETUP\|RUNNER" "$LOG"
   [[ "${lines[0]}" =~ SETUP ]]
   [[ "${lines[1]}" =~ RUNNER ]]
   # …and it runs inside the throwaway repo, so its paths are plain and relative.
-  run grep -q "SETUP .*dispatch-eval" "$LOG"
-  [ "$status" -eq 0 ]
+  assert_grep -q "SETUP .*dispatch-eval" "$LOG"
 }
 
 # A broken fixture and a failed flow are different problems with different fixes;
@@ -129,41 +124,34 @@ _run_evals() {
   printf '#!/usr/bin/env bash\necho "no tier remote"; exit 1\n' > "$STUB/setups/tiered.sh"
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p","setup":"tiered"}'
   _run_evals
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "scenario setup 'tiered' failed" ]]
-  [[ "$output" =~ "no tier remote" ]]
+  assert_fails "scenario setup 'tiered' failed" "no tier remote"
   # The agent must not have run against a fixture that never came up.
-  run grep -q RUNNER "$LOG"
-  [ "$status" -ne 0 ]
+  refute_grep -q RUNNER "$LOG"
 }
 
 @test "dispatch: {{EVAL_REPO}} in a prompt expands to the trial's repo" {
   _assert memory-commit
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"mount {{EVAL_REPO}}/.tier-remote.git"}'
   _run_evals
-  [ "$status" -eq 0 ]
-  run grep -q "mount /.*dispatch-eval.*/.tier-remote.git" "$LOG"
-  [ "$status" -eq 0 ]
-  run grep -q "{{EVAL_REPO}}" "$LOG"
-  [ "$status" -ne 0 ]
+  assert_ok
+  assert_grep -q "mount /.*dispatch-eval.*/.tier-remote.git" "$LOG"
+  refute_grep -q "{{EVAL_REPO}}" "$LOG"
 }
 
 @test "dispatch: a scenario without approval_message runs one turn" {
   _assert memory-commit
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p"}'
   _run_evals
-  [ "$status" -eq 0 ]
-  run grep -q -- "--approval" "$LOG"
-  [ "$status" -ne 0 ]
+  assert_ok
+  refute_grep -q -- "--approval" "$LOG"
 }
 
 @test "dispatch: a scenario with approval_message passes it through" {
   _assert memory-commit
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p","approval_message":"go ahead"}'
   _run_evals
-  [ "$status" -eq 0 ]
-  run grep -q -- "--approval go ahead" "$LOG"
-  [ "$status" -eq 0 ]
+  assert_ok
+  assert_grep -q -- "--approval go ahead" "$LOG"
 }
 
 @test "dispatch: the memory baseline is captured after the fixture, not before" {
@@ -178,7 +166,6 @@ git -C memory rev-parse HEAD > "$LOG.fixture-head"
 EOF
   _scenario 01 '{"name":"n","initial_memory":"# m","prompt":"p","setup":"tiered"}'
   _run_evals
-  [ "$status" -eq 0 ]
-  run grep -qx "baseline=$(cat "$LOG.fixture-head")" "$LOG"
-  [ "$status" -eq 0 ]
+  assert_ok
+  assert_grep -qx "baseline=$(cat "$LOG.fixture-head")" "$LOG"
 }

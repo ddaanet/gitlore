@@ -1,5 +1,8 @@
 #!/usr/bin/env bats
 
+# shellcheck source=tests/helpers/run-asserts.bash
+source "$BATS_TEST_DIRNAME/../../helpers/run-asserts.bash"
+
 EVAL_LIB_DIR="$BATS_TEST_DIRNAME"
 JUDGE_SCRIPT="$EVAL_LIB_DIR/judge.sh"
 
@@ -25,19 +28,19 @@ EOF
 @test "judge.sh exits 0 when claude outputs 'pass'" {
   _make_mock_claude "pass the message mentions evals"
   run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: add eval suite note"
-  [ "$status" -eq 0 ]
+  assert_ok
 }
 
 @test "judge.sh exits 1 when claude outputs 'fail'" {
   _make_mock_claude "fail message is too generic"
   run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: update"
-  [ "$status" -eq 1 ]
+  assert_status 1
 }
 
 @test "judge.sh handles uppercase PASS output" {
   _make_mock_claude "PASS the message is specific"
   run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: add eval suite note"
-  [ "$status" -eq 0 ]
+  assert_ok
 }
 
 @test "judge.sh exits 2 when claude invocation fails" {
@@ -48,12 +51,11 @@ exit 1
 EOF
   chmod +x "$MOCK_BIN/claude"
   run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: update"
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"rate limited"* ]]
+  assert_status 2 "rate limited"
 }
 
 @test "judge.sh exits 2 when the verdict hedges instead of a clean pass/fail" {
   _make_mock_claude "FAIL, but wait, on reflection this is fine — PASS"
   run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: update"
-  [ "$status" -eq 2 ]
+  assert_status 2
 }
