@@ -22,13 +22,11 @@ roughly 1800 test executions.
   explicit go-ahead rather than an inferred one.
 - Whether to chase the fixture flake further. At roughly one failure per 1800
   test executions, any hunt is a long-loop job.
-- The glued-bullets brief's request 4: a self-retiring `PreToolUse` marker keyed
-  on the risky `Edit` argument shape. It introduces a new hook, so it is
-  separable from the glued-bullet rule itself.
 - Which of the three fixes the orphaned-`MERGE_HEAD` brief offers to take —
   read `pending` from `live`, make the stale-merge guard `MERGE_HEAD`-aware, or
   write the state file before the risky work. The brief recommends none
   decisively.
-- Whether to delete two brief files whose work has already landed:
-  `brief-stale-plugin-root-detector-confirmed.md` and
-  `plans/brief-push-misreads-behind-as-diverged.md`.
+- Whether to cut a release. `edify`'s `memory/ddaanet/MEMORY.md` is still
+  unterminated at HEAD, so that store drops the same carrier line on its next
+  compose pass until it picks up the fixed plugin. `just release` must run
+  unsandboxed or it dies at the marketplace bump.
