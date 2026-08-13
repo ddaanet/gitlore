@@ -147,12 +147,54 @@ routine replacement. A description holding a second `](` and a second ` — ` is
 structurally impossible as a hook, so rejecting it is cheap and independent of
 whatever produced the glue.
 
-**Request 4 (new): make the workaround self-retiring.** The repair will outlive
-the defect unless something reports that it has. A PreToolUse marker keyed on
-the *argument shape alone* — empty `new_string`, `old_string` beginning with a
-newline — costs no file content and lets the batch-end check distinguish "no
-glue because `Edit` is fixed" from "no glue because nothing risky happened".
-When a risky-shaped edit stops producing a join, say so, and the rule can go.
+**Request 4 (new): a `PreToolUse`/`PostToolUse` pair that repairs the edit and
+reports its own obsolescence.** Decided 2026-08-13. A marker that only records
+"something risky happened" leaves the corruption in place and leaves the agent
+to infer, from a downstream check finding nothing, that the defect is gone.
+Computing the intended result up front turns that inference into an observation
+and a repair.
+
+`PreToolUse` on `Edit` tests the argument shape alone — `new_string` empty,
+`old_string` beginning with a newline. On a match it reads the target, computes
+the intended result, and writes it to a temp file keyed by `session_id` plus
+`file_path` (`PreToolUse` stdin carries no `tool_use_id`). `PostToolUse`
+compares the file against that expectation and unlinks the temp file
+unconditionally:
+
+- **identical** — `Edit` no longer welds neighbours on this shape. Say so and
+  count it; at a run of clean observations the pair and the glued-bullet rule
+  both retire.
+- **different** — write the expectation over the file. The join is undone at the
+  edit site, before composition, the sync, or any pattern check sees it.
+
+**Computing the intended result is three lines, not a reimplementation of
+`Edit`.** For the risky shape, naive single-occurrence string replacement is
+correct: `"A\nX\nB\n"` minus `"\nX"` is `"A\nB\n"`, the table's correct row. The
+line-oriented deletion special case — emptying a line removes it rather than
+leaving it blank — only applies when `old_string` carries no separator, and that
+shape never reaches the branch. `replace_all: true` replaces every occurrence
+under the same rule.
+
+**Both output channels are load-bearing on the repair path.** `systemMessage`
+carries one curt line so the human sees it. `updatedToolOutput` rewrites what
+`Edit` reported, because the agent otherwise holds the corrupted diff as its
+model of the file and edits against it; `additionalContext` alone leaves it
+re-reading the file to check. `PostToolUse` cannot block, but it can write, and
+the write is the whole point.
+
+**Rejected: rewriting the arguments via `PreToolUse` `updatedInput`.** Moving
+the leading newline from `old_string` into `new_string` sidesteps the defect
+entirely and costs no temp file — and no divergence is ever observable again, so
+the workaround can never be retired. The pair pays one file write per risky edit
+to keep the observation.
+
+**Scope: every `Edit`, not only index files.** The shape test is cheap and the
+defect is not index-specific; narrowing to `MEMORY.md` would leave other files
+silently welded and would starve the retirement signal of samples.
+
+Requests 1 and 2 stand alongside it. The pair sees only glue that arrives
+through `Edit`; a merge, a hand-edited carrier or a `Write` reaches the index
+without passing it.
 
 **Coverage note against a preimage-based design.** `index-sync-pre.sh:35-36`
 takes its baseline only when the target is the root index or the tier manifest,
