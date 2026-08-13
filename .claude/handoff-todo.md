@@ -1,26 +1,45 @@
 ## Remaining
 
-- Add a gitlore SessionStart pairing check: warn when the ddaanet tier is
-  mounted but `prohibitions@ddaanet` is absent from `enabledPlugins`. The
-  tier and the plugin install independently and nothing couples them, so a
-  repo mounting one without the other is permanently unguarded with no
-  visible symptom.
-- Apply the briefs under `plans/`: hook-exec-and-compose-revert,
-  memory-index-glued-bullets, merge-dispatch-authorization,
-  handoff-integration-evals.
-- Apply the briefs at the repo root: `brief-plugin-dev-0.5.3.md`,
-  `brief-stale-plugin-root-detector-confirmed.md`,
-  `brief-index-compose-drops-unterminated-final-line.md`,
-  `brief-orphaned-merge-head-no-state-file.md`.
-- Propose to `shell-scripting` (another repo, proposal only): the
-  `GIT_INDEX_FILE` save/restore around a staging `git add`, and the
-  `160000` gitlink symptom. Landing both would make `git-hook-env-leak`
-  and `submodule-escape-to-parent` genuinely retirable.
-- Propose the memory-submodule carve-out to `ddaa:preflight`'s clean-tree
-  and submodule checks — another repo, proposal only.
-- Propose the plan-escalation rule as a patch to
-  `superpowers:executing-plans`, likewise read-only.
-- Migrate the `micro` tier (~40 facts) once a real memory remote is
-  settled; it and `general` still point at `./.git/gitlore-placeholder`.
-  Then `gitmoji` -> `general` -> `home` -> `devddaanet` -> `skills` ->
-  `candidature` -> `edify` -> `Emploi` -> `cwd-safety`.
+Brief application, ordered by increasing risk and size. Paths are `plans/`
+unless the brief sits at the repo root.
+
+1. **`brief-plugin-dev-0.5.3.md`** (root) — one command, `just
+   update-plugin-dev v0.5.3`, as its own commit; verify `just check-version`
+   and `just --list`. Caveat found 2026-08-13: the vendored recipe is 0.5.0,
+   predating the 0.5.2 `-c fetch.recurseSubmodules=no` fix, and this repo has
+   a top-level `memory` submodule — the exact collision shape that fix
+   addresses. The old recipe is what performs the pull, so expect
+   `upload-pack: not our ref` and supply the flag by hand for that one fetch.
+2. **`brief-merge-dispatch-authorization.md`** — wording only: make a hook
+   directive that names a sub-agent read as authorized by the command the
+   user already ran. Applies to the whole class of such directives, not the
+   one instance; tests asserting hook text move with it.
+3. **`brief-index-compose-drops-unterminated-final-line.md`** (root) —
+   mechanical: `|| [ -n "$line" ]` on the 13 unguarded `read -r line` sites
+   in `scripts/lib/index-compose.sh` (91 and 217 are already guarded), plus a
+   regression test in `tests/index_compose.bats` needing a helper that seeds
+   an index with no trailing newline. Confirmed data loss, repro in the brief.
+4. **`brief-memory-index-glued-bullets.md`** — a glued-bullet rule in
+   `gitlore_compose_check_index` (decided: no backtick-awareness) and a `](`
+   refusal in `index-sync-post.sh`. Its request 3 is item 3's fix — do not
+   apply twice. Request 4 is an optional add that introduces a new hook;
+   decide separately.
+5. **`brief-hook-exec-and-compose-revert.md`, defect 1** — the installer
+   appends its line after an existing `exec`, leaving it unreachable. Refuse
+   or interpose rather than append silently. Self-contained to the install
+   path.
+6. **`brief-orphaned-merge-head-no-state-file.md`** (root) — merge core.
+   `gitlore_prepare_merge` reads `pending` from `HEAD` rather than `live`,
+   and the stale-merge guard keys on the state file rather than `MERGE_HEAD`.
+   The brief offers three fixes and recommends none decisively; pick one
+   before writing code.
+7. **`brief-hook-exec-and-compose-revert.md`, defect 2** — composition
+   reverts an incoming tier merge by mirroring root's wording down over a
+   merged carrier. Highest blast radius of the set: it changes which surface
+   is canonical, and a wrong answer silently destroys merged memory. Touches
+   the same file as items 3 and 4, so sequence it after them.
+8. **`brief-handoff-integration-evals.md`** — largest by effort, lowest blast
+   radius: new eval scenarios only, no production code. Needs `lib/setup.sh`
+   to become two-plugin aware, and the brief names PATH resolution for
+   handoff's `bin/` as its single largest unknown. Evals cost money per run
+   and are opt-in, not in the default gate.
