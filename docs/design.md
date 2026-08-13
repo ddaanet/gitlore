@@ -736,6 +736,14 @@ Memory `live` advances locally on every memory commit, but nothing reaches a rem
 
 **Once per episode, re-armed by a compaction.** A marker in the memory store's gitdir, keyed by session and swept after seven days, mirrors the index byte-budget nudge; `nudge-reset.sh` clears both at `SessionStart` and `PreCompact`. A compaction re-arms the notice deliberately: what survives is a summary, and the session is still running the old root.
 
+**D22 — The memory-hygiene checker is a repo-local gate, not shipped surface**
+
+`scripts/check-memory-hygiene.py` runs uncached at the head of `just precommit` (the cache cannot see a fact change through the `memory` gitlink) and checks prose shape, wikilink targets, reference style and volatile git state across the store. It stays in gitlore's own `scripts/`; the plugin ships none of it.
+
+**Shipping it would make python3 and PyYAML a user-facing dependency.** The install surface is bash, git and jq, and every hook and script on the runtime path stays within that. A gate that runs at *this* repo's commit time is free to reach for a parser; a gate distributed to every consumer repo is not, and swapping YAML parsing for hand-rolled frontmatter regex to dodge the dependency would trade a real dependency for a worse one.
+
+**Most of what it checks is a house style, not a gitlore contract.** Prose shape and reference form are ddaanet-tier writing conventions. A repo that mounts a tier inherits that tier's facts, not gitlore's opinion about how facts are phrased, and a shipped checker would assert the second. `volatile-state` is the exception whose subject really is the store's own design — an abbreviated commit id in a fact body rots because the store outlives the ref that named it, in any repo, under any house style. It matches `\b[0-9a-f]{5,40}\b` over frontmatter-stripped bodies, less all-digit runs and a closed 47-word list of a-f-spellable words; over this store, 4 hits, 4 true positives, with the all-digit exclusion missing roughly 4% of seven-character shas as the stated residual. One generalizable check does not carry a runtime dependency into every consumer. Several would reopen this.
+
 ---
 
 ## Rejected Alternatives
@@ -827,6 +835,8 @@ Grouped by the part of the system they belong to. Each entry states the alternat
 **Deleting a memory file when its pointer line is removed.** Prune's mirror image, refused for the same reason index authority is non-destructive: a destructive edit as the silent consequence of an index edit is the one surprise a memory store must not spring, and the file is the only place the fact still lives. Unlisting a fact and destroying it are different acts (D17).
 
 **Scoring an index hook against its body, tf-idf style,** to flag a line with no routing value. Built and refuted on the real store: over 76 documents `df ≤ 3` marks ordinary prose words as distinctive, so the score tracks hook *length* rather than quality (means 2.06 `reference` vs 1.76 `feedback` — no separation; `reference_git_hook_env_leak` scored 0/10 with a hook carrying `GIT_*`, `unset $(git rev-parse --local-env-vars)` and `GIT_INDEX_FILE`). Document frequency needs a corpus a memory store will never have. The two countable advisories — byte budget and missing trigger token — cover what is checkable (D17).
+
+**A `SessionStart` warning when a tier is mounted without a paired guard plugin.** The `ddaanet` tier and the `prohibitions@ddaanet` plugin install through independent paths, so a repo can hold one and not the other; the proposal was to notice that and say so. Refused because gitlore does not model a dependency from a memory tier to any plugin, and inventing one here would be wrong in the general case: prohibitions are per-project, each repo carrying the set its own work needs, so a tier mount is no evidence about which guards that repo should have. The warning would also make gitlore the enforcement point for a second plugin's installation, reading `enabledPlugins` — a record of what the user chose — as a defect report.
 
 ### Active recall
 
