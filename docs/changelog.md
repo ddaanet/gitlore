@@ -4,6 +4,7 @@ How the design got to its current shape. Each entry is a write-time record of on
 
 Newest first.
 
+- [2026-08-13 — Every index read survives an unterminated final line, and the writer stops welding a bullet onto an unterminated preamble](changelog/2026-08-13-index-reads-survive-unterminated-final-line.md) — a bare `read` discards the last line of an index that ends without a newline, and the order merge reads that absence as a deletion, so a carrier silently lost a pointer in a real store
 - [2026-08-12 — A push classifies a refusal by ancestry, not by git's wording, and a failed diagnosis stops moving HEAD](changelog/2026-08-12-behind-is-not-diverged.md) — git rejects a merely *behind* ref with the same reason it gives a diverged one, so a store with nothing to publish was sent into a merge that found nothing and left HEAD detached on the authority, silently un-adopting the tier
 - [2026-08-08 — Active recall became a skill the agent runs, and the hook, request file and ledger came out](changelog/2026-08-08-recall-skill-no-hook.md) — `additionalContext` spills past ~2KB and never satisfies `Read`-before-`Edit`, so injecting bodies delivered a preview and charged twice for anything the agent then corrected
 - [2026-08-04 — The shipped surface got its own gate, so a skills-only edit stops reporting cached](changelog/2026-08-04-distribution-gate.md) — `precommit_inputs` excludes `agents`/`commands`/`skills` to keep a 7m30s suite off prose edits, and `prerelease` is `precommit`, so nothing on the release path re-read what the plugin distributes

@@ -299,6 +299,76 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   [[ "$output" != *"known.md"* ]]
 }
 
+# --- indexes whose last line carries no newline ---
+#
+# gitlore_compose_write always terminates what it writes, so an unterminated
+# index is never gitlore's own output — it arrives by hand edit, by an agent
+# `Edit`, or from another consumer's writer, and the store travels that way. An
+# unguarded `read` fills $line and *then* returns non-zero at EOF, so the last
+# line is read and thrown away: it drops out of every path list built that way,
+# and the order merge reads its absence on one side as that side deleting it.
+
+@test "an unterminated carrier keeps its last line through a compose" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet alpha.md "a"
+  seed_tier_bullet ddaanet beta.md "b"
+  seed_tier_bullet ddaanet gamma.md "g"
+  gitlore_compose memory                    # root adopts the carrier's three
+  commit_memory_state
+  unterminate_index memory/ddaanet/MEMORY.md
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [alpha](alpha.md) — a' \
+    '- [beta](beta.md) — b' \
+    '- [gamma](gamma.md) — g'
+  # Root is the terminated side here, so it keeps the line either way — assert it
+  # to pin which surface the loss lands on, the asymmetry that let this run
+  # undetected in a real store.
+  assert_bullets memory/MEMORY.md \
+    '- [alpha](ddaanet/alpha.md) — a' \
+    '- [beta](ddaanet/beta.md) — b' \
+    '- [gamma](ddaanet/gamma.md) — g'
+}
+
+@test "both indexes unterminated: neither loses its last line" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet alpha.md "a"
+  seed_tier_bullet ddaanet beta.md "b"
+  seed_tier_bullet ddaanet gamma.md "g"
+  gitlore_compose memory
+  commit_memory_state
+  unterminate_index memory/ddaanet/MEMORY.md
+  unterminate_index memory/MEMORY.md
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  # Both surfaces drop it in one pass, which leaves the fact with no pointer
+  # anywhere while the file itself is still on disk.
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [alpha](alpha.md) — a' \
+    '- [beta](beta.md) — b' \
+    '- [gamma](gamma.md) — g'
+  assert_bullets memory/MEMORY.md \
+    '- [alpha](ddaanet/alpha.md) — a' \
+    '- [beta](ddaanet/beta.md) — b' \
+    '- [gamma](ddaanet/gamma.md) — g'
+}
+
+@test "an unterminated root index still reports its last bullet as dangling" {
+  make_parent_with_memory
+  seed_root_bullet "gone.md" "the file was removed"
+  unterminate_index memory/MEMORY.md
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gone.md names no file in the memory store"* ]]
+}
+
 @test "compose is byte-idempotent" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
@@ -554,6 +624,30 @@ set_bullets() { local f="$1"; shift; printf '%s\n' "$@" | gitlore_compose_write 
   [ "$status" -eq 0 ]
   head -1 memory/MEMORY.md | grep -qF '# Memory Index'
   tail -1 memory/MEMORY.md | grep -qF '<!-- footer -->'
+}
+
+@test "a bulletless unterminated index does not weld its preamble onto a bullet" {
+  # All-preamble is the day-one state of a freshly seeded carrier, and the
+  # preamble is emitted verbatim — so an index that arrived unterminated puts the
+  # first composed bullet on the end of its last line. A glued line does not
+  # parse as a bullet, so the pointer is lost on WRITE, the same fact the
+  # unguarded reads lost on read.
+  printf '# Tier index' > idx.md
+  printf -- '- [A](a.md) — x\n' | gitlore_compose_write idx.md
+  assert_bullets idx.md '- [A](a.md) — x'
+  head -1 idx.md | grep -qxF '# Tier index'
+}
+
+@test "a bulletless unterminated index with nothing to write is left alone" {
+  # The separator is a separator, not normalisation: with no bullets there is
+  # nothing to separate, and rewriting the file would be churn on a store gitlore
+  # was not asked to touch.
+  printf '# Tier index' > idx.md
+  run gitlore_compose_write idx.md < /dev/null
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]                        # no "composed" line: nothing written
+  [ "$(cat idx.md)" = "# Tier index" ]
+  [ "$(tail -c 1 idx.md | wc -l | tr -d ' ')" = 0 ]
 }
 
 @test "project bullets keep their order and are never rewritten" {

@@ -134,6 +134,25 @@ seed_root_bullet() {
   printf -- '- [%s](%s) — %s\n' "$(basename "${1%.md}")" "$1" "$2" >> memory/MEMORY.md
 }
 
+# Strip index $1's final newline, leaving its last line unterminated. Every
+# seed_* helper appends with `printf -- '…\n'`, so nothing else in this file can
+# produce the state a hand edit, an agent `Edit` call or another consumer's
+# writer leaves behind — and which the store then travels in.
+#
+# Exactly one newline goes: awk splits on it, so re-joining without a trailing
+# one removes the last separator and nothing else. A file already unterminated
+# comes back unchanged, which is why the result is asserted rather than assumed —
+# a silent no-op here would make every caller pass whatever the code does.
+unterminate_index() {
+  local f="$1" tmp="$1.unterminated"
+  awk 'NR > 1 { printf "\n" } { printf "%s", $0 }' "$f" > "$tmp" || return 1
+  mv "$tmp" "$f" || return 1
+  if [ "$(tail -c 1 "$f" | wc -l | tr -d ' ')" != 0 ]; then
+    printf 'unterminate_index: %s still ends with a newline\n' "$f" >&2
+    return 1
+  fi
+}
+
 # Assert index $1's bullet block is EXACTLY the remaining args, in order.
 #
 # Use this instead of a presence grep paired with an absence grep whenever the
