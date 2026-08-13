@@ -24,6 +24,14 @@ paths:
   Never replace git's message with a guess.
   Details: `memory/ddaanet/no-stderr-suppression.md`.
 
+- **A bare `read` drops an unterminated final line.** `while IFS= read -r line`
+  fills `$line` and *then* returns non-zero at EOF, so the last line of a file
+  that ends without a newline is read and discarded. Every read of a file a
+  human, an agent `Edit` or another tool may have written carries
+  `|| [ -n "$line" ]` — guarding only the reads whose loss is visible today is
+  what let an index projection count a line it could not see. Concatenating
+  file parts has the mirror hazard: an unterminated part welds onto the next.
+
 - **Git hook env leak.** Git invokes hooks with repo-local `GIT_*` vars. A
   submodule-aware hook must clear the full set — `unset $(git rev-parse
   --local-env-vars)`, not just `GIT_DIR`/`GIT_INDEX_FILE`/`GIT_WORK_TREE` —

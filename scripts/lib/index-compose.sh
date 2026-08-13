@@ -6,6 +6,17 @@
 # Composition is PLACEMENT ONLY: it never edits a bullet's text, never touches
 # project bullets, never creates or deletes a memory file. Line identity is the
 # path prefix — no sentinel text is injected into any index.
+#
+# Every index read carries `|| [ -n "$line" ]`, without exception. An index whose
+# last line has no newline is never gitlore's own output — gitlore_compose_write
+# terminates what it writes — but a hand edit, an agent `Edit` call or another
+# consumer's writer leaves one behind and the store travels that way. A bare
+# `read` fills $line and then returns non-zero at EOF, so that line is read and
+# discarded: it vanishes from the path list, and gitlore_order_merge reads its
+# absence on one side as that side having deleted it. Losing the line from an
+# index is losing the fact, since the index is what memory contains (D17). A
+# guard on only the reads whose loss is currently visible is what produced the
+# defect — the region arithmetic counted a line the projection could not see.
 
 # Print the path of a pointer bullet; return 1 if $1 is not one. A bullet is
 # `- [` ... `](` PATH `)` ... — the hook (if any) is irrelevant here. Pure
@@ -193,7 +204,7 @@ EOF
   # Rule 3 — root bullets only; a carrier's own bullets are bare by construction.
   if [ -f "$mempath/MEMORY.md" ]; then
     local line path
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in */*) ;; *) continue ;; esac
       if ! gitlore_tier_of "$path" "$mounted" >/dev/null; then
@@ -264,7 +275,7 @@ gitlore_compose_dangling() {
 
   file="$mempath/MEMORY.md"
   if [ -f "$file" ]; then
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       [ -e "$mempath/$path" ] && continue
       printf '%s: %s names no file in the memory store\n' "$file" "$path"
@@ -280,7 +291,7 @@ $path"
     [ -n "$tier" ] || continue
     file="$mempath/$tier/MEMORY.md"
     [ -f "$file" ] || continue
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       [ -e "$mempath/$tier/$path" ] && continue
       # An active tier's line lives in both indexes and resolves to one file;
@@ -331,7 +342,7 @@ gitlore_compose_down() {
   # root — its bullets for this tier, prefix stripped: the canonical text and the
   # authored order.
   if [ -f "$root" ]; then
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in "$tier"/*) ;; *) continue ;; esac
       line=$(gitlore_bullet_deprefix "$line" "$tier") || continue
@@ -342,7 +353,7 @@ gitlore_compose_down() {
 
   # carrier — the working tree's bullets, in carrier order.
   if [ -f "$carrier" ]; then
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       printf '%s\n' "$line" >> "$tmpd/carrier.bullets"
       printf '%s\n' "$path" >> "$tmpd/carrier.paths"
@@ -353,7 +364,7 @@ gitlore_compose_down() {
   # the one expected miss: a store whose root index is not committed yet, which
   # leaves the list empty and makes every carrier line a keep.
   if git -C "$mempath" rev-parse -q --verify HEAD:MEMORY.md >/dev/null; then
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in "$tier"/*) ;; *) continue ;; esac
       printf '%s\n' "${path#"$tier"/}" >> "$tmpd/head.paths"
@@ -380,7 +391,7 @@ gitlore_compose_down() {
 gitlore_index_has_tier() {
   local file="$1" tier="$2" line path
   [ -f "$file" ] || return 1
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     path=$(gitlore_bullet_path "$line") || continue
     case "$path" in "$tier"/*) return 0 ;; esac
   done < "$file"
@@ -417,12 +428,12 @@ gitlore_compose_root_bullets() {
     [ -n "$tier" ] || continue
     [ -f "$mempath/$tier/MEMORY.md" ] || continue
     if [ "$tier" = "$adopt" ] || ! gitlore_index_has_tier "$root" "$tier"; then
-      while IFS= read -r line; do
+      while IFS= read -r line || [ -n "$line" ]; do
         [ -n "$line" ] || continue
         gitlore_bullet_reprefix "$line" "$tier" || continue
       done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
     else
-      while IFS= read -r line; do
+      while IFS= read -r line || [ -n "$line" ]; do
         path=$(gitlore_bullet_path "$line") || continue
         case "$path" in "$tier"/*) printf '%s\n' "$line" ;; esac
       done < <(gitlore_index_part "$root" bullets)
@@ -431,7 +442,7 @@ gitlore_compose_root_bullets() {
 $active
 EOF
 
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     path=$(gitlore_bullet_path "$line") || continue
     case "$path" in */*) continue ;; esac
     printf '%s\n' "$line"
@@ -478,7 +489,7 @@ gitlore_compose_orphans() {
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       gitlore_index_has_path "$mempath/MEMORY.md" "$tier/$path" && continue
       printf '%s: %s is in the tier but not in the root index\n' \
@@ -494,7 +505,7 @@ EOF
 gitlore_index_has_path() {
   local file="$1" want="$2" line path
   [ -f "$file" ] || return 1
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     path=$(gitlore_bullet_path "$line") || continue
     [ "$path" = "$want" ] && return 0
   done < "$file"
@@ -505,7 +516,7 @@ gitlore_index_has_path() {
 # merge above; keeps the path comparison out of a subshell-heavy inline loop.
 gitlore_compose_pick() {
   local want="$1" line path
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     path=$(gitlore_bullet_path "$line") || continue
     if [ "$path" = "$want" ]; then printf '%s\n' "$line"; return 0; fi
   done
@@ -518,11 +529,20 @@ gitlore_compose_pick() {
 gitlore_compose_write() {
   local file="$1" tmp="$1.gitlore-compose.tmp" bullets
   bullets=$(cat)
+  gitlore_index_part "$file" preamble > "$tmp" || { rm -f "$tmp"; return 1; }
+  # A bulletless index is ALL preamble, emitted verbatim — so one that arrived
+  # unterminated would take the first bullet onto the end of its last line, and a
+  # glued line is not a bullet: the pointer would be lost on write. Only ever a
+  # separator, never normalisation — with no bullets there is nothing to separate
+  # and the file is left exactly as it came.
+  if [ -n "$bullets" ] && [ -s "$tmp" ] &&
+     [ "$(tail -c 1 "$tmp" | wc -l | tr -d ' ')" = 0 ]; then
+    printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
+  fi
   {
-    gitlore_index_part "$file" preamble
     [ -n "$bullets" ] && printf '%s\n' "$bullets"
     gitlore_index_part "$file" trailer
-  } > "$tmp" || { rm -f "$tmp"; return 1; }
+  } >> "$tmp" || { rm -f "$tmp"; return 1; }
   if cmp -s "$tmp" "$file"; then
     rm -f "$tmp"
     return 0
