@@ -3,17 +3,14 @@
 Brief application, ordered by increasing risk and size. Paths are `plans/`
 unless the brief sits at the repo root.
 
-1. **`brief-plugin-dev-0.5.3.md`** (root) — one command, `just
-   update-plugin-dev v0.5.3`, as its own commit; verify `just check-version`
-   and `just --list`. Caveat found 2026-08-13: the vendored recipe is 0.5.0,
-   predating the 0.5.2 `-c fetch.recurseSubmodules=no` fix, and this repo has
-   a top-level `memory` submodule — the exact collision shape that fix
-   addresses. The old recipe is what performs the pull, so expect
-   `upload-pack: not our ref` and supply the flag by hand for that one fetch.
-2. **`brief-merge-dispatch-authorization.md`** — wording only: make a hook
+1. **`brief-merge-dispatch-authorization.md`** — wording only: make a hook
    directive that names a sub-agent read as authorized by the command the
    user already ran. Applies to the whole class of such directives, not the
    one instance; tests asserting hook text move with it.
+2. **`brief-resolve-noisy-noop-failure.md`** (root) — the standalone resolver
+   fails noisily against a tier already at its remote tip, taking the resolve
+   skill's "surface stderr verbatim and stop" branch on what is a no-op. Found
+   from `onekeys`, so read the brief's own repro before deciding the fix.
 3. **`brief-index-compose-drops-unterminated-final-line.md`** (root) —
    mechanical: `|| [ -n "$line" ]` on the 13 unguarded `read -r line` sites
    in `scripts/lib/index-compose.sh` (91 and 217 are already guarded), plus a

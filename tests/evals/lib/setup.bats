@@ -1,5 +1,8 @@
 #!/usr/bin/env bats
 
+# shellcheck source=tests/helpers/run-asserts.bash
+source "$BATS_TEST_DIRNAME/../../helpers/run-asserts.bash"
+
 EVAL_LIB_DIR="$BATS_TEST_DIRNAME"
 export EVAL_LIB_DIR
 
@@ -15,14 +18,13 @@ teardown() {
 @test "setup_eval_repo creates EVAL_REPO with memory/MEMORY.md containing initial content" {
   setup_eval_repo "# Initial Memory"
   [ -f "$EVAL_REPO/memory/MEMORY.md" ]
-  run grep "# Initial Memory" "$EVAL_REPO/memory/MEMORY.md"
-  [ "$status" -eq 0 ]
+  assert_grep "# Initial Memory" "$EVAL_REPO/memory/MEMORY.md"
 }
 
 @test "setup_eval_repo creates at least one memory commit" {
   setup_eval_repo "# Memory"
   run git -C "$EVAL_REPO/memory" log --oneline
-  [ "$status" -eq 0 ]
+  assert_ok
   [ "${#lines[@]}" -ge 1 ]
 }
 

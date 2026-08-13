@@ -9,6 +9,8 @@
 
 # shellcheck disable=SC1091  # bats resolves the helper at runtime
 source "$BATS_TEST_DIRNAME/../../helpers/fixtures.bash"
+# shellcheck source=tests/helpers/run-asserts.bash
+source "$BATS_TEST_DIRNAME/../../helpers/run-asserts.bash"
 
 ASSERTS="$BATS_TEST_DIRNAME/../asserts"
 SETUPS="$BATS_TEST_DIRNAME/../setups"
@@ -77,39 +79,35 @@ EOF
 @test "add-tier: passes on a mounted, activated, composed tier" {
   _make_add_tier_end_state
   _run_assert add-tier
-  [ "$status" -eq 0 ]
+  assert_ok
 }
 
 @test "add-tier: fails when the intent file was never consumed" {
   _make_add_tier_end_state
   printf 'mode=mount\n' > "$EVAL_REPO/.claude/gitlore-add-tier"
   _run_assert add-tier
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "never consumed it" ]]
+  assert_fails "never consumed it"
 }
 
 @test "add-tier: fails when the tier is mounted but not activated" {
   _make_add_tier_end_state
   : > "$EVAL_REPO/memory/.gitlore-tiers"
   _run_assert add-tier
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "mounted but inactive" ]]
+  assert_fails "mounted but inactive"
 }
 
 @test "add-tier: fails when activation did not recompose the root index" {
   _make_add_tier_end_state
   printf '# Memory Index\n' > "$EVAL_REPO/memory/MEMORY.md"
   _run_assert add-tier
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "composition did not run" ]]
+  assert_fails "composition did not run"
 }
 
 @test "add-tier: fails when the tier is left on a branch instead of detached at live" {
   _make_add_tier_end_state
   git -C "$EVAL_REPO/memory/acme" checkout -q -B main
   _run_assert add-tier
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "not detached at live" ]]
+  assert_fails "not detached at live"
 }
 
 # The FR11 gate is the sole committer. A tier flow that commits inside memory
@@ -118,16 +116,14 @@ EOF
   _make_add_tier_end_state
   GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory" commit -q -m "snuck in"
   _run_assert add-tier
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "bypassing the FR11 gate" ]]
+  assert_fails "bypassing the FR11 gate"
 }
 
 @test "add-tier: fails when the tier was never mounted at all" {
   _make_memory
   printf 'acme\n' > "$EVAL_REPO/memory/.gitlore-tiers"
   _run_assert add-tier
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "not checked out" ]]
+  assert_fails "not checked out"
 }
 
 # --------------------------------------------------------------------- recall
@@ -154,23 +150,21 @@ _make_recall_end_state() {
 @test "recall: passes when the body was read after the mid-task trigger" {
   _make_recall_end_state
   _run_assert recall
-  [ "$status" -eq 0 ]
+  assert_ok
 }
 
 @test "recall: fails when the canary never reached the answer" {
   _make_recall_end_state
   printf 'Just delete the lock file.\n' > "$EVAL_OUT_DIR/turn1.txt"
   _run_assert recall
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "does not carry the canary" ]]
+  assert_fails "does not carry the canary"
 }
 
 @test "recall: fails when the agent answered without reading the body" {
   _make_recall_end_state
   printf '%s\n%s\n' "$_PROBE_CALL" "$_SKILL_CALL" > "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"never Read reference_deploy_lock.md"* ]]
+  assert_fails "never Read reference_deploy_lock.md"
 }
 
 # Without this the scenario grades the model's common sense: an agent that opens
@@ -179,8 +173,7 @@ _make_recall_end_state() {
   _make_recall_end_state
   { printf '%s\n' "$_PROBE_CALL"; _read_call; } > "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"recall skill was never invoked"* ]]
+  assert_fails "recall skill was never invoked"
 }
 
 # The hole this closes: prompt-time recall delivers the same body, leaves the
@@ -192,24 +185,21 @@ _make_recall_end_state() {
   # so invoking the skill afterwards changes nothing it could have fetched.
   { _read_call; printf '%s\n%s\n' "$_PROBE_CALL" "$_SKILL_CALL"; } > "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"that is prompt-time recall"* ]]
+  assert_fails "that is prompt-time recall"
 }
 
 @test "recall: fails when the agent never ran the probe" {
   _make_recall_end_state
   _read_call > "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"never ran nightly-retry.sh"* ]]
+  assert_fails "never ran nightly-retry.sh"
 }
 
 @test "recall: fails when no transcript was captured" {
   _make_recall_end_state
   rm -f "$EVAL_OUT_DIR/transcript.jsonl"
   _run_assert recall
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "no session transcript" ]]
+  assert_fails "no session transcript"
 }
 
 # ----------------------------------------------------------------- tier-write
@@ -227,17 +217,14 @@ EOF
 
   printf -- '---\nname: x\n---\n\nbody\n' > "$EVAL_REPO/memory/reference_sentry_dsn.md"
   _run_assert tier-write
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"was not routed to acme/"* ]]
   # The report must name where it went, or the reader has to go dig.
-  [[ "$output" == *"reference_sentry_dsn.md"* ]]
+  assert_fails "was not routed to acme/" "reference_sentry_dsn.md"
 }
 
 @test "tier-write: fails when the tier is not mounted" {
   _make_memory
   _run_assert tier-write
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "fixture did not hold" ]]
+  assert_fails "fixture did not hold"
 }
 
 # The state the agent leaves behind once the user has approved: the fact in the
@@ -300,7 +287,7 @@ _commit_via_batch_path() {
 @test "tier-write: passes when the agent stopped after writing the summary" {
   _make_tier_write_end_state
   _run_assert tier-write
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_ok
 }
 
 @test "tier-write: passes when the batch hook already committed (summary consumed)" {
@@ -308,9 +295,7 @@ _commit_via_batch_path() {
   _commit_via_batch_path
   [ ! -f "$EVAL_REPO/.claude/gitlore-memory-message" ]   # the flow consumed it
   _run_assert tier-write
-  # Report the assertion's own reason: a bare status check here says only that
-  # the end state was rejected, and eight different messages reach that point.
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  assert_ok
 }
 
 @test "tier-write: fails when the trigger is present but no summary was written" {
@@ -318,16 +303,14 @@ _commit_via_batch_path() {
   rm -f "$EVAL_REPO/.claude/gitlore-memory-message"
   : > "$EVAL_REPO/.claude/gitlore-commit-memory"
   _run_assert tier-write
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"trigger IS present"* ]]
+  assert_fails "trigger IS present"
 }
 
 @test "tier-write: fails when neither summary nor trigger exists and memory never moved" {
   _make_tier_write_end_state
   rm -f "$EVAL_REPO/.claude/gitlore-memory-message"
   _run_assert tier-write
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"did not write the approved summary"* ]]
+  assert_fails "did not write the approved summary"
 }
 
 @test "tier-write: fails on the one-behind gitlink lag" {
@@ -339,16 +322,14 @@ _commit_via_batch_path() {
     commit -q --allow-empty -m "later"
   git -C "$EVAL_REPO/memory/acme" branch -f live HEAD
   _run_assert tier-write
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"stale gitlink"* ]]
+  assert_fails "stale gitlink"
 }
 
 @test "tier-write: fails when the commit message misses the rubric" {
   _make_tier_write_end_state
   printf '#!/usr/bin/env bash\nprintf "fail says nothing about Sentry\\n"\n' > "$MOCK_BIN/claude"
   _run_assert tier-write
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"failed judge rubric"* ]]
+  assert_fails "failed judge rubric"
 }
 
 # ------------------------------------------------------------- memory-commit
@@ -357,8 +338,7 @@ _commit_via_batch_path() {
 @test "memory-commit: fails when the agent wrote no approved summary" {
   _make_memory
   _run_assert memory-commit
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "no commit-msg file" ]]
+  assert_fails "no commit-msg file"
 }
 
 @test "memory-commit: on the precommit_failure path, a leftover commit-msg fails" {
@@ -366,6 +346,5 @@ _commit_via_batch_path() {
   export EVAL_TRIGGER=precommit_failure
   printf 'summary\n' > "$EVAL_REPO/.claude/gitlore-memory-message"
   _run_assert memory-commit
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "did not retry the commit" ]]
+  assert_fails "did not retry the commit"
 }
