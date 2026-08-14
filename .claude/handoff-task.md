@@ -4,18 +4,16 @@ Nothing is mid-flight. `plans/brief-memory-index-glued-bullets.md` is fully
 applied — request 4, the `PreToolUse`/`PostToolUse` pair on `Edit`, landed in
 `32ea556` with `scripts/lib/edit-weld.sh`, `scripts/cc-hooks/edit-weld-pre.sh`
 and `-post.sh`, 32 tests across `tests/edit_weld.bats` and
-`tests/cc_hook_edit_weld.bats`, and D23 in `docs/design.md`. `just precommit`
-green; dogfooded end to end against a real welding `Edit`, which repaired and
-reported on both channels.
+`tests/cc_hook_edit_weld.bats`, and D23 in `docs/design.md`. Dogfooded end to
+end against a real welding `Edit`, which repaired and reported on both
+channels.
 
 Three departures from the brief's decided design, each measured rather than
 argued and each recorded in D23. `updatedToolOutput` is unused: `Edit`'s
-model-visible result is a fixed success string carrying no diff, so nothing
-in the agent's model of the file is there to correct. The arming test is
-narrower than the brief's "risky shape" — the match must also be FOLLOWED by a
-newline, since of 14 risky-shaped calls in 12,407 corpus `Edit` results only 3
-could weld. And `replace_all` disarms, having never once co-occurred with the
-shape.
+model-visible result is a fixed success string carrying no diff, so nothing in
+the agent's model of the file is there to correct. The arming test is narrower
+than the brief's "risky shape" — the match must also be FOLLOWED by a newline.
+And `replace_all` disarms.
 
 The next item is a choice among the remaining briefs, not a continuation of
 this one.
@@ -43,9 +41,3 @@ this one.
   unterminated at HEAD, so that store drops the same carrier line on every
   compose pass until it picks up the fixed plugin. `just release` must run
   unsandboxed or it dies at the marketplace bump.
-
-## Environment note
-
-`git status` in this repo currently lists a set of phantom untracked dotfiles
-(`.bashrc`, `.gitconfig`, `.claude/agents`, `.zshrc`, …). That is the known
-sandbox artifact, not repo state — never `git add -A` while it shows.
