@@ -235,6 +235,56 @@ batch_payload() {
   [ ! -f "$stash" ]   # stash consumed
 }
 
+@test "post: refuses to propagate a hook carrying a markdown link (glue artifact)" {
+  # `gitlore_index_pairs` splits on the FIRST ") — ", so a welded line is one
+  # syntactically valid pair whose hook happens to contain a whole second
+  # bullet. Propagating it faithfully copies the blob into `description:`,
+  # where it is far less visible than in the index. A description holding a
+  # second `](` is structurally impossible as a hook, so the sync refuses it —
+  # independently of whatever produced the glue.
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: stale desc\n---\nbody\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — hook a- [B](b.md) — hook b\n' > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: stale desc' ]   # untouched, not overwritten
+}
+
+@test "post: says which line it refused, on both channels" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: stale desc\n---\nbody\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — hook a- [B](b.md) — hook b\n' > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [[ "$output" == *"a.md"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [[ "$output" == *"a.md"* ]]
+  [[ "$output" == *"welded"* ]]   # names the shape, so the fix is the index line
+}
+
+@test "post: a hook carrying plain brackets still propagates" {
+  # The negative half: only a markdown LINK is a glue artifact. A bracketed
+  # span is ordinary hook text and must reach the frontmatter untouched.
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: stale desc\n---\nbody\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — hook with [a bracket] and (parens)\n' > memory/MEMORY.md
+  run post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "hook with [a bracket] and (parens)"' ]
+}
+
 @test "post: systemMessage is ONE terse line; the replaced text goes to the agent only" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"

@@ -52,6 +52,12 @@ replaced="" # newline-joined "  • path: <old> → <new>" bullets, one per
             # filename — is the point: a silent clobber is the failure mode.
 weak=""     # newline-joined bullets for news lines that look like weak routing
             # keys. Advisory only — see the block below the loop.
+refused=""  # newline-joined bullets for news lines whose hook carries a
+            # markdown link — a welded-bullet artifact, refused rather than
+            # propagated. See the guard in the loop.
+refused_paths="" # the same lines, comma-joined, for the user's channel. A
+            # refusal needs action, so — like a failed write and unlike the
+            # routine sync — it names its files on the terse channel too.
 while IFS=$'\t' read -r path hook; do
   [ -n "$path" ] || continue
   case "$path" in
@@ -82,6 +88,24 @@ while IFS=$'\t' read -r path hook; do
   else
     added=1
   fi
+
+  # A hook holding a markdown link is a welded-bullet artifact, not a hook: the
+  # pair extractor splits on the FIRST ") — ", so two bullets joined onto one
+  # physical line yield one syntactically valid pair whose "hook" contains the
+  # whole second bullet. Propagating it is faithful to the input and exactly
+  # wrong — it moves the corruption from the index, where a compose check and a
+  # human both look, into a `description:` where neither does. The entry
+  # already links its own file, so no legitimate hook needs a link. Refuse and
+  # report; the fix is the index line, which the glued-bullet compose rule
+  # names.
+  case "$hook" in
+    *']('*)
+      refused="$refused
+  • $path: \"$hook\""
+      if [ -z "$refused_paths" ]; then refused_paths="$path"; else refused_paths="$refused_paths, $path"; fi
+      continue
+      ;;
+  esac
 
   # Routing-key advisory, on every NEWS line — deliberately BEFORE the
   # fill-if-empty bail below, because a line whose frontmatter the sync
@@ -167,6 +191,18 @@ if [ -n "$weak" ]; then
 
 "; fi
   ctx="${ctx}These reference-type MEMORY.md lines carry no trigger token — no path, flag, error string, identifier, filename or version of the kind a future query would actually contain. The index one-liner is what CC's recall classifier matches on, and the sync above copies it over the file's own description:, so a hook without one weakens both surfaces at once. If a concrete token belongs in the line, edit the INDEX line (never the file). Ignore this where the hook is already as specific as the fact allows — a behavioural rule is reached by topic, and prose is right there.$weak"
+fi
+
+if [ -n "$refused" ]; then
+  n=$(printf '%s' "$refused" | grep -c '•')
+  if [ "$n" -eq 1 ]; then unit="line"; else unit="lines"; fi
+  if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
+"; fi
+  sysmsg="${sysmsg}gitlore: refused to propagate $n welded MEMORY.md $unit — fix the index line for: $refused_paths"
+  if [ -n "$ctx" ]; then ctx="$ctx
+
+"; fi
+  ctx="${ctx}These MEMORY.md hooks carry a markdown link, which means two pointer bullets are welded onto one physical line: everything after the first \`) — \` is a second entry, not hook text. Nothing was written to their frontmatter. The second path is invisible to every parse of the index, so the next composition reads it as a deletion and drops it — split the line in the INDEX before doing anything else. An \`Edit\` whose old_string begins with a newline and whose new_string is empty is what welds them.$refused"
 fi
 
 if [ -n "$budget" ]; then
