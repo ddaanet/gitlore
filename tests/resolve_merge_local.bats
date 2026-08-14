@@ -51,6 +51,29 @@ teardown() { teardown_tmp_repo; }
   [ "$changed" = "HEAD_SIDE.md,LIVE.md" ]
 }
 
+# The directive's reader is the agent, and the harness above it carries a blanket
+# "do not call the AgentTool unless the user requested it" that nothing in a repo
+# can qualify. A directive that merely NAMES the sub-agent reads as an option, so
+# the agent reports the blocker and stops -- which once stalled a release on a
+# round trip. The text has to carry its own authorization instead: the git
+# operation that triggered the merge IS the request for this dispatch. That
+# argument is scoped to this dispatch and must stay visible in the text, so it
+# never reads as licence to skip a permission gate in general.
+@test "the merge directive authorizes the dispatch it asks for" {
+  run --separate-stderr bash "$PRE_COMMIT"
+  [ "$status" -ne 0 ]
+  local all="$output$stderr"
+  # Plugin-qualified: a bare `memory-merger` fails discovery with
+  # `Agent type not found`.
+  [[ "$all" == *"gitlore:memory-merger"* ]]
+  # The instruction, and the argument that licenses it.
+  [[ "$all" == *"required step of the git operation"* ]]
+  [[ "$all" == *"without asking first"* ]]
+  # Approval still governs the merge the sub-agent proposes. Authorizing the
+  # dispatch must not read as authorizing that too.
+  [[ "$all" == *"on approval of its synthesis"* ]]
+}
+
 @test "head-vs-live loop: continuation yields again if retry-push fails" {
   run --separate-stderr bash "$PRE_COMMIT"
   [ "$status" -ne 0 ]
