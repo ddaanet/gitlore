@@ -37,12 +37,32 @@ teardown() { teardown_tmp_repo; }
   # move HEAD — so the report names the state rather than relaying git's
   # "Already up to date" from a checkout already performed.
   before=$(git -C memory rev-parse HEAD)
-  run --separate-stderr gitlore_prepare_merge memory live
+  run --separate-stderr gitlore_prepare_merge memory live HEAD
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"already contains HEAD"* ]]
   run git -C memory rev-parse -q --verify MERGE_HEAD
   [ "$status" -ne 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$before" ]
+}
+
+@test "recovery: orphaned MERGE_HEAD with no state file is flagged, not reported clean" {
+  make_diverged_head_vs_live memory
+  # Simulate an interrupted gitlore_prepare_merge: it stages a real merge
+  # (MERGE_HEAD set, content staged) but the caller dies before
+  # gitlore_write_merge_state runs — the exact edify incident this guards.
+  run --separate-stderr gitlore_prepare_merge memory live HEAD
+  [ "$status" -eq 0 ]
+  mh=$(git -C memory rev-parse -q --verify MERGE_HEAD)
+  [ -n "$mh" ]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
+
+  run gitlore_detect_stale_merge_state memory
+  [ "$output" = "orphaned-merge-head" ]
+
+  run --separate-stderr gitlore_guard_stale_merge_state memory
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"manual intervention"* ]]
+  [[ "$output$stderr" == *"$mh"* ]]
 }
 
 @test "recovery: state file without MERGE_HEAD → fatal directive" {

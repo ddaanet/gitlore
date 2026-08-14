@@ -212,7 +212,7 @@ if [ $# -ge 1 ]; then
       # Either can lose a race with a concurrent advance; re-prepare against
       # whichever side refused and yield again.
       if ! push_or_report "$mempath" . HEAD:live; then
-        gitlore_yield_merge "$mempath" live head-vs-live || exit 1
+        gitlore_yield_merge "$mempath" live head-vs-live HEAD || exit 1
         exit 1
       fi
       # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
@@ -225,7 +225,7 @@ if [ $# -ge 1 ]; then
       if [ "$flavor" = "head-vs-remote" ]; then
         if ! push_or_report "$mempath" origin live; then
           gitlore_git -C "$mempath" fetch -q origin live || true
-          gitlore_yield_merge "$mempath" origin/live head-vs-remote || exit 1
+          gitlore_yield_merge "$mempath" origin/live head-vs-remote live || exit 1
           exit 1
         fi
       fi
@@ -303,12 +303,43 @@ check_store_gates() {
   local store="$1"
   gitlore_git -C "$store" fetch -q origin live || true
   if ! push_or_report "$store" . HEAD:live; then
-    gitlore_yield_merge "$store" live head-vs-live || exit 1
-    exit 1
+    # git refuses a merely-BEHIND ref with the same wording as a genuinely
+    # diverged one; only ancestry tells them apart. Same discriminator every
+    # other yield site applies (gitlore_sync_tiers_to_live et al.) — this was
+    # the one call site that skipped it and routed straight into a merge
+    # prepare against a store with nothing to merge.
+    if [ "$(gitlore_classify_refusal "$store" HEAD live)" = "diverged" ]; then
+      gitlore_yield_merge "$store" live head-vs-live HEAD || exit 1
+      exit 1
+    elif gitlore_check_head_live_agree "$store" "$store"; then
+      gitlore_say_for_agent_or_user \
+        "gitlore: pushing HEAD to $store's local 'live' was refused, though HEAD and 'live' agree and neither has diverged." \
+        "gitlore: pushing HEAD to $store's local 'live' was refused, though HEAD and 'live' agree and neither has diverged." >&2
+      exit 1
+    else
+      exit 1
+    fi
   fi
   if ! push_or_report "$store" origin live; then
-    gitlore_yield_merge "$store" origin/live head-vs-remote || exit 1
-    exit 1
+    case "$(gitlore_classify_refusal "$store" live origin/live)" in
+      behind)
+        # Nothing of ours to publish — the remote is ahead, which is
+        # /gitlore:merge's business, not a failed push to report on.
+        gitlore_say_for_agent_or_user \
+          "gitlore: $store has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." \
+          "gitlore: $store has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." >&2
+        ;;
+      diverged)
+        gitlore_yield_merge "$store" origin/live head-vs-remote live || exit 1
+        exit 1
+        ;;
+      *)
+        gitlore_say_for_agent_or_user \
+          "gitlore: pushing $store's 'live' to origin was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed." \
+          "gitlore: pushing $store's 'live' to origin was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed." >&2
+        exit 1
+        ;;
+    esac
   fi
 }
 

@@ -1,43 +1,11 @@
-## Current task
+D24 (merge-directive dispatch authorization) landed in `591da7b`: `gitlore_emit_merge_directive` now states that the git operation which triggered a merge is itself the request for the sub-agent dispatch, so the agent no longer has to treat the directive as an offer. Dogfooded by rendering the emitter's real output and reading it, plus the full precommit gate green (667 unit + 72 integration).
 
-Nothing is mid-flight. `plans/brief-memory-index-glued-bullets.md` is fully
-applied — request 4, the `PreToolUse`/`PostToolUse` pair on `Edit`, landed in
-`32ea556` with `scripts/lib/edit-weld.sh`, `scripts/cc-hooks/edit-weld-pre.sh`
-and `-post.sh`, 32 tests across `tests/edit_weld.bats` and
-`tests/cc_hook_edit_weld.bats`, and D23 in `docs/design.md`. Dogfooded end to
-end against a real welding `Edit`, which repaired and reported on both
-channels.
+Next, decided but not yet started: the orphaned-`MERGE_HEAD`/noisy-noop pair — `brief-orphaned-merge-head-no-state-file.md` and `brief-resolve-noisy-noop-failure.md` (both untracked at repo root) — folded into one piece, since brief 4's root-cause fix subsumes brief 2's symptom. Three sub-items, confirmed as 1+2+3 without brief 4's option C:
 
-Three departures from the brief's decided design, each measured rather than
-argued and each recorded in D23. `updatedToolOutput` is unused: `Edit`'s
-model-visible result is a fixed success string carrying no diff, so nothing in
-the agent's model of the file is there to correct. The arming test is narrower
-than the brief's "risky shape" — the match must also be FOLLOWED by a newline.
-And `replace_all` disarms.
+1. `gitlore_prepare_merge` (`scripts/lib/resolve.sh:225`) takes an explicit pending-ref parameter instead of reading `HEAD`. The brief's literal fix (read `live` unconditionally) breaks the `head-vs-live` flavor: that call already passes `live` as the authority, so pending and authority would collapse to the same ref and the ancestor short-circuit would misreport every genuine local divergence as "nothing to merge." Each call site already knows which push was refused — `. HEAD:live` refusal means pending is `HEAD`, `origin live` refusal means pending is `live` — so the fix is to pass that ref through rather than infer it inside the function.
+2. `gitlore_detect_stale_merge_state` (`scripts/lib/resolve.sh:47`) gains a fourth outcome: `MERGE_HEAD` present, state file absent. Route it to its own manual-intervention message naming `MERGE_HEAD`'s value as the pending commit needing re-merge, rather than reporting "clean" — this is the guard's blind spot the orphaned-merge brief demonstrated end to end.
+3. `check_store_gates` (`scripts/resolve.sh:302`) calls `gitlore_classify_refusal` before yielding a merge, matching every other call site (`:437`, `:532`, `:617`, `:725`). It is currently the only one that routes any non-fast-forward push refusal straight into `gitlore_yield_merge` with no classification — the gap that makes the standalone resolver (`scripts/resolve.sh` with no args, the entry point `gitlore:resolve`'s skill doc names for "state is unclear") fail noisily against a store already at its remote tip.
 
-The next item is a choice among the remaining briefs, not a continuation of
-this one.
+Option C from the orphaned-merge brief (write an in-progress state-file marker before `gitlore_prepare_merge`, upgrade to the full state file on success) is explicitly not being taken — item 2 covers the same interruption window more simply, without a marker to remove on the failure path.
 
-## Open decisions
-
-- **The memory index is past Claude Code's loader cutoff.** `memory/MEMORY.md`
-  is 25.1KB against the 24.4KB point where the loader silently truncates, and
-  the budget hook now fires on every index write demanding under 17.1KB.
-  Composition orders tier-first, so it is this project's own lines that fall
-  past the cutoff. The lever is retiring entries and relocating the
-  acted-inline ones into `CLAUDE.md` / `shared-claude.md`; shortening fact
-  bodies measures ~2% and does not move the index. It rewrites the index every
-  ddaanet repo loads, so it wants an explicit go-ahead.
-- Whether to chase the shared-bats-fixture flake further. In the memory-gate
-  integration suite under `--jobs 2`, `make_parent_with_memory` failed its
-  `git -C memory rev-parse HEAD` check with the submodule's working tree
-  absent, while every other test in the file used the same cached template and
-  passed in the same round. The guard ahead of it, `git submodule status`,
-  exits 0 for a submodule whose working tree is missing, so only the rev-parse
-  discriminates. Reproduced once in roughly 1800 executions — a long-loop hunt.
-- Which of the three fixes the orphaned-`MERGE_HEAD` brief offers to take.
-  The brief recommends none decisively.
-- Whether to cut a release. `edify`'s `memory/ddaanet/MEMORY.md` is still
-  unterminated at HEAD, so that store drops the same carrier line on every
-  compose pass until it picks up the fixed plugin. `just release` must run
-  unsandboxed or it dies at the marketplace bump.
+TDD: each of the three needs a red test against current behavior before the fix — brief 4's own repro script (in `brief-orphaned-merge-head-no-state-file.md`, under "Repro") is a ready-made starting point for items 1 and 2.

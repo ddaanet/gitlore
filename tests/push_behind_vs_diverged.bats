@@ -93,9 +93,30 @@ mount_tier_at_live() {
   # HEAD is contained in origin/live, so there is no merge to make. The old
   # implementation detached onto the authority first and discovered that after.
   before=$(git -C memory rev-parse HEAD)
-  run --separate-stderr gitlore_prepare_merge memory origin/live
+  run --separate-stderr gitlore_prepare_merge memory origin/live live
   [ "$status" -eq 1 ]
   [ "$(git -C memory rev-parse HEAD)" = "$before" ]
+}
+
+@test "a preparation resolves pending from the given ref, not a HEAD an earlier interrupted run displaced" {
+  # The edify incident: a prior gitlore_prepare_merge staged a real merge
+  # (checkout --detach onto the authority, MERGE_HEAD set) and the caller died
+  # before gitlore_write_merge_state ran. HEAD is now sitting ON the authority;
+  # local `live` is untouched and still names the real divergent commit. A
+  # retry that reads pending from HEAD would misdiagnose genuine divergence as
+  # "authority already contains HEAD" and silently drop it.
+  wire_memory_remote
+  advance_memory_remote
+  add_memory_commit LOCAL.md "local-only"
+  git -C memory fetch -q origin live
+  live_before=$(git -C memory rev-parse live)
+
+  git -C memory update-ref refs/gitlore/pending "$(git -C memory rev-parse HEAD)"
+  git -C memory checkout -q --detach origin/live
+
+  run --separate-stderr gitlore_prepare_merge memory origin/live live
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse -q --verify MERGE_HEAD)" = "$live_before" ]
 }
 
 # --- remote flavor: behind, diverged, drift ---
