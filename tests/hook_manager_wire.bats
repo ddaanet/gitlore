@@ -208,6 +208,18 @@ EMIT="$PLUGIN_ROOT/scripts/emit-wrappers.sh"
   diff .git/hooks/pre-commit .git/hooks/pre-commit.before
 }
 
+@test "wire-direct refuses to append after an existing hook body that execs" {
+  printf '#!/bin/sh\nexec just precommit\n' > .git/hooks/pre-commit
+  chmod +x .git/hooks/pre-commit
+  cp .git/hooks/pre-commit .git/hooks/pre-commit.before
+  run --separate-stderr bash "$WIRE_DIRECT"
+  [ "$status" -ne 0 ]
+  # File untouched: no unreachable append landed.
+  diff .git/hooks/pre-commit .git/hooks/pre-commit.before
+  [[ "$stderr" == *"exec"* ]]
+  [[ "$stderr" == *"pre-commit"* ]]
+}
+
 @test "wire-direct stub resolves the wrapper from a linked worktree (D11)" {
   echo seed > f && git add f && git commit -q -m seed
   WT="$TMP_REPO-wt"
