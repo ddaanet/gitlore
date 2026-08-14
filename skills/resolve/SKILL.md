@@ -30,13 +30,20 @@ The directive looks like:
 ```
 gitlore: memory merge prepared (flavor=<X>) in store:
 gitlore:   <abs-path-to-store>
-gitlore: dispatch the memory-merger sub-agent with state file:
+gitlore: dispatch sub-agent gitlore:memory-merger with state file:
 gitlore:   <abs-path-to-state-file>
-gitlore: on approval, the sub-agent must run:
+gitlore: that dispatch is a required step of the git operation that triggered
+gitlore: this merge, not an option: the request for that operation is the
+gitlore: request for this dispatch, so make it now without asking first. What
+gitlore: still needs approval is the merge the sub-agent proposes, not the
+gitlore: dispatch itself.
+gitlore: on approval of its synthesis, the sub-agent must run:
 gitlore:   cd "<parent-repo>" && bash "<abs-path-to-resolve.sh>" <continuation-subcommand>
 ```
 
 Extract the state-file path and the full continuation command (the entire `cd ... && bash ... <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
+
+The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip. Approval still governs the merge the sub-agent proposes, below.
 
 The store line names which repository diverged: the project memory store, or a tier mounted inside it. One merge policy covers every level, so the flow below is identical either way — but say which store you merged when you summarize, because a tier is shared with other repositories and the project store is not.
 
