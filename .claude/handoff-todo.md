@@ -1,27 +1,11 @@
+## Open decisions
+
+- The memory index is past Claude Code's loader cutoff. `memory/MEMORY.md` is 25.1KB against the 24.4KB point where the loader silently truncates, and the budget hook now fires on every index write demanding under 17.1KB. Composition orders tier-first, so it is this project's own lines that fall past the cutoff. The lever is retiring entries and relocating the acted-inline ones into `CLAUDE.md` / `shared-claude.md`; shortening fact bodies measures ~2% and does not move the index. It rewrites the index every ddaanet repo loads, so it wants an explicit go-ahead.
+- Whether to chase the shared-bats-fixture flake further. In the memory-gate integration suite under `--jobs 2`, `make_parent_with_memory` failed its `git -C memory rev-parse HEAD` check with the submodule's working tree absent, while every other test in the file used the same cached template and passed in the same round. The guard ahead of it, `git submodule status`, exits 0 for a submodule whose working tree is missing, so only the rev-parse discriminates. Reproduced once in roughly 1800 executions — a long-loop hunt.
+- Whether to cut a release. `edify`'s `memory/ddaanet/MEMORY.md` is still unterminated at HEAD, so that store drops the same carrier line on every compose pass until it picks up the fixed plugin. `just release` must run unsandboxed or it dies at the marketplace bump.
+
 ## Remaining
 
-1. **`plans/brief-merge-dispatch-authorization.md`** — wording only: make a
-   hook directive that names a sub-agent read as authorized by the command the
-   user already ran. Applies to the whole class of such directives, not the one
-   instance; tests asserting hook text move with it.
-2. **`brief-resolve-noisy-noop-failure.md`** (repo root, untracked) — the
-   standalone resolver fails noisily against a tier already at its remote tip,
-   taking the resolve skill's "surface stderr verbatim and stop" branch on what
-   is a no-op. Found from `onekeys`, so read the brief's own repro before
-   deciding the fix.
-3. **`plans/brief-hook-exec-and-compose-revert.md`, defect 1** — the installer
-   appends its line after an existing `exec`, leaving it unreachable. Refuse or
-   interpose rather than append silently. Self-contained to the install path.
-4. **`brief-orphaned-merge-head-no-state-file.md`** (repo root, untracked) —
-   merge core. `gitlore_prepare_merge` reads `pending` from `HEAD` rather than
-   `live`, and the stale-merge guard keys on the state file rather than
-   `MERGE_HEAD`. Pick one of the three fixes before writing code.
-5. **`plans/brief-hook-exec-and-compose-revert.md`, defect 2** — composition
-   reverts an incoming tier merge by mirroring root's wording down over a
-   merged carrier. Highest blast radius of the set: it changes which surface is
-   canonical, and a wrong answer silently destroys merged memory.
-6. **`plans/brief-handoff-integration-evals.md`** — largest by effort, lowest
-   blast radius: new eval scenarios only, no production code. Needs
-   `lib/setup.sh` to become two-plugin aware, and the brief names PATH
-   resolution for handoff's `bin/` as its single largest unknown. Evals cost
-   money per run and are opt-in, not in the default gate.
+- `plans/brief-hook-exec-and-compose-revert.md`, defect 1 — the installer appends its line after an existing `exec`, leaving it unreachable. Refuse or interpose rather than append silently. Self-contained to the install path.
+- `plans/brief-hook-exec-and-compose-revert.md`, defect 2 — composition reverts an incoming tier merge by mirroring root's wording down over a merged carrier. Highest blast radius of the set: it changes which surface is canonical, and a wrong answer silently destroys merged memory.
+- `plans/brief-handoff-integration-evals.md` — largest by effort, lowest blast radius: new eval scenarios only, no production code. Needs `lib/setup.sh` to become two-plugin aware, and the brief names PATH resolution for handoff's `bin/` as its single largest unknown. Evals cost money per run and are opt-in, not in the default gate.

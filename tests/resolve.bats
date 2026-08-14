@@ -98,6 +98,34 @@ teardown() { teardown_tmp_repo; }
   [ "$(jq -r '.changed_files | type' "$statefile")" = "array" ]
 }
 
+@test "resolve: memory behind its remote reports nothing to publish instead of a failed merge" {
+  make_parent_with_memory
+  git -C memory push -q origin live
+  # Advance the remote from a throwaway clone, behind local memory's back: the
+  # local store is then strictly BEHIND, with nothing of its own to publish.
+  # check_store_gates must classify this by ancestry, not by git's refusal
+  # wording alone, or it prepares a merge against a store that is clean.
+  local other
+  other="$(mktemp -d "$TMP_REPO/other.XXXXXX")"
+  git clone -q "$TMP_REPO/.bare-memory.git" "$other"
+  (
+    cd "$other" || exit 1
+    git checkout -q live
+    printf 'remote-only\n' > REMOTE.md
+    git add REMOTE.md
+    git -c user.email=t@t -c user.name=t commit -q -m "remote-only"
+    git push -q origin live
+  )
+  rm -rf "$other"
+
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 0 ]
+  msg="$output$stderr"
+  [[ "$msg" == *"/gitlore:merge"* ]]
+  [[ "$msg" != *"memory merge prepared"* ]]
+  [[ "$msg" != *"could not prepare"* ]]
+}
+
 @test "resolve: no-op when healthy" {
   make_parent_with_memory
   bare="$TMP_REPO/.healthy-remote.git"

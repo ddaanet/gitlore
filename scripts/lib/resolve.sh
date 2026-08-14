@@ -42,18 +42,27 @@ gitlore_stores_with_merge_state() {
   done < <(gitlore_memory_stores "$mempath")
 }
 
-# Detect whether a stale merge-state file + MERGE_HEAD exists.
-# Stdout: "clean" | "stale-with-merge-head" | "stale-no-merge-head".
+# Detect whether a stale merge-state file, or an orphaned MERGE_HEAD with no
+# state file at all, exists.
+# Stdout: "clean" | "stale-with-merge-head" | "stale-no-merge-head" |
+#         "orphaned-merge-head".
 gitlore_detect_stale_merge_state() {
   local mempath="$1"
-  local statefile
+  local statefile gitdir
   statefile=$(gitlore_merge_state_file "$mempath")
+  gitdir=$(git -C "$mempath" rev-parse --git-dir)
   if [ ! -f "$statefile" ]; then
-    printf 'clean\n'
+    # A real MERGE_HEAD with no state file means gitlore_prepare_merge staged
+    # a merge and the caller died before gitlore_write_merge_state recorded
+    # it — the window an interrupted `push-memory.sh` run left open, with real
+    # content staged and nothing pointing at it.
+    if [ -f "$gitdir/MERGE_HEAD" ]; then
+      printf 'orphaned-merge-head\n'
+    else
+      printf 'clean\n'
+    fi
     return 0
   fi
-  local gitdir
-  gitdir=$(git -C "$mempath" rev-parse --git-dir)
   if [ -f "$gitdir/MERGE_HEAD" ]; then
     printf 'stale-with-merge-head\n'
   else
@@ -82,6 +91,12 @@ gitlore_guard_stale_merge_state() {
     stale-no-merge-head)
       statefile=$(gitlore_merge_state_file "$mempath")
       echo "gitlore: merge state file present without MERGE_HEAD — manual intervention required. Inspect $statefile and the memory worktree." >&2
+      return 1
+      ;;
+    orphaned-merge-head)
+      local mh
+      mh=$(git -C "$mempath" rev-parse -q --verify MERGE_HEAD)
+      echo "gitlore: MERGE_HEAD ($mh) is set in $mempath with no merge state file — manual intervention required. An earlier merge was interrupted before its state was recorded; $mh is the pending commit that needs re-merging." >&2
       return 1
       ;;
   esac
@@ -220,12 +235,22 @@ EOF
 # merged in as the second. The pending commit is pinned at
 # `$GITLORE_PENDING_REF` before HEAD moves — nothing else references it once
 # `merge --abort` drops MERGE_HEAD.
-# Args: $1 = memory worktree path, $2 = authority ref (`live` or `origin/live`).
+# The pending ref is taken from the caller rather than assumed to be HEAD: an
+# earlier interrupted run can leave HEAD sitting ON the authority (the checkout
+# below already ran; the caller died before recording state), and a raw
+# `rev-parse HEAD` would then re-diagnose real, still-unmerged divergence as
+# nothing to merge. Callers pass whichever ref their own flavor treats as the
+# pending side — `HEAD` for head-vs-live (this call is inherently about HEAD
+# vs the `live` branch), `live` for head-vs-remote (HEAD can be displaced by a
+# prior interruption; the local `live` branch is untouched by a checkout onto
+# some other authority).
+# Args: $1 = memory worktree path, $2 = authority ref (`live` or `origin/live`),
+#       $3 = pending ref (`HEAD` or `live`).
 # Stdout: `<base_sha>:<pending_sha>`.
 gitlore_prepare_merge() {
-  local mempath="$1" authority="$2"
+  local mempath="$1" authority="$2" pending_ref="$3"
   local pending base merge_err restore_err
-  pending=$(git -C "$mempath" rev-parse HEAD)
+  pending=$(git -C "$mempath" rev-parse "$pending_ref")
   # Nothing to merge: the authority already contains the pending commit, so the
   # merge below would report "Already up to date." and leave no MERGE_HEAD.
   # Tested BEFORE the checkout, because that checkout is a side effect — a
@@ -282,11 +307,12 @@ gitlore_prepare_merge() {
 # Prepare the merge, record its state file, and emit the sub-agent directive.
 # The caller yields (return/exit 1) immediately afterwards. Returns 1 without
 # emitting if the merge could not be prepared at all.
-# Args: $1 = memory worktree path, $2 = authority ref, $3 = flavor label.
+# Args: $1 = memory worktree path, $2 = authority ref, $3 = flavor label,
+#       $4 = pending ref (see gitlore_prepare_merge).
 gitlore_yield_merge() {
-  local mempath="$1" authority="$2" flavor="$3"
+  local mempath="$1" authority="$2" flavor="$3" pending_ref="$4"
   local prep base pending statefile
-  if ! prep=$(gitlore_prepare_merge "$mempath" "$authority"); then
+  if ! prep=$(gitlore_prepare_merge "$mempath" "$authority" "$pending_ref"); then
     gitlore_say_for_agent_or_user \
       "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." \
       "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." >&2
@@ -437,7 +463,7 @@ $push_err" >&2
         if [ "$(gitlore_classify_refusal "$tierpath" HEAD live)" = "diverged" ]; then
           # Diverged from its own local `live` — the same gate memory has here,
           # and the same resolution. The merge lands in the tier's gitdir.
-          gitlore_yield_merge "$tierpath" live head-vs-live || return 1
+          gitlore_yield_merge "$tierpath" live head-vs-live HEAD || return 1
         elif gitlore_check_head_live_agree "$tierpath" "tier '$tier'"; then
           # Refused with the two refs in agreement and no divergence: neither
           # diagnosis applies, so git's own words are all there is to go on.
@@ -530,7 +556,7 @@ $push_err" >&2
       # way; the other is `live` already containing HEAD, where there is nothing
       # to fast-forward and nothing to merge.
       if [ "$(gitlore_classify_refusal "$mempath" HEAD live)" = "diverged" ]; then
-        gitlore_yield_merge "$mempath" live head-vs-live || return 1
+        gitlore_yield_merge "$mempath" live head-vs-live HEAD || return 1
       elif gitlore_check_head_live_agree "$mempath" "memory"; then
         # Refused with the two refs in agreement and no divergence: neither
         # diagnosis applies, so git's own words are all there is to go on.
@@ -628,7 +654,7 @@ gitlore_push_stores() {
             diverged)
               # One merge policy at every level: prepare against the tier's own
               # `origin/live` and yield, exactly as memory does below.
-              gitlore_yield_merge "$tierpath" origin/live head-vs-remote || return 1
+              gitlore_yield_merge "$tierpath" origin/live head-vs-remote live || return 1
               return 1
               ;;
             *)
@@ -744,7 +770,7 @@ $push_err" >&2
   esac
 
   # HEAD-vs-remote divergence. Prepare and yield.
-  gitlore_yield_merge "$mempath" origin/live head-vs-remote || return 1
+  gitlore_yield_merge "$mempath" origin/live head-vs-remote live || return 1
   return 1
 }
 
@@ -842,7 +868,7 @@ $fetch_err" >&2
   if ! git -C "$store" merge-base --is-ancestor "$head" "$remote"; then
     # Diverged. Same preparation a refused push yields, marked not-to-publish so
     # the continuation stops after the local `HEAD:live` fast-forward.
-    GITLORE_MERGE_NO_PUBLISH=1 gitlore_yield_merge "$store" origin/live head-vs-remote || return 1
+    GITLORE_MERGE_NO_PUBLISH=1 gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || return 1
     return 1
   fi
 
