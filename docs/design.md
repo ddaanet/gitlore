@@ -486,6 +486,14 @@ Considered and rejected: a **per-worktree** anchor via `git rev-parse --git-path
 
 Corollary fix: once the wrapper *fires* in a linked worktree, the git-hook runs `git -C "$mempath" …` under `set -e`. If the memory submodule worktree was never created there (session-less worktree), this would abort and block the commit for a *new* reason. Both `pre-commit` and `pre-push` therefore guard with an early `[ -e "$mempath/.git" ] || exit 0` — nothing to sync, never block.
 
+**D25 — Direct wiring refuses rather than appends after an existing `exec`**
+
+`wire-direct.sh` appends its managed block to an existing `.git/hooks/<hook>` file. `exec` replaces the process, so a pre-existing hook body that already ends in `exec …` (e.g. `exec just precommit`) makes the appended gitlore block unreachable dead code — the commit/push succeeds, the project's own gate runs, and gitlore's sync silently never fires. No warning at install time or commit time.
+
+Detection is a heuristic, not a shell parse: any non-comment line whose first token is `exec`. A false positive (an `exec` inside a string or a conditional branch that never runs) costs a refused install, not a silent miss — the safer direction, since the installer cannot assume it may rewrite or replace the project's own hook body to interpose safely.
+
+Resolution: refuse rather than append — print the conflicting file and the line to interpose manually to stderr, exit 1. Consistent with `wire-lefthook.sh`'s existing exit-1-when-unsafe precedent; both `scripts/install/run.sh` and the `SessionStart` sentinel replay call `wire-direct.sh` unguarded under `set -euo pipefail`, so the refusal aborts the caller instead of leaving a half-wired repo. Considered and rejected: silently interposing the gitlore line before the detected `exec` — the inserted line would itself need to avoid `exec` (or it would swallow the *original* hook's tail instead), which means rewriting the existing hook body's control flow rather than just appending, a rewrite too surprising to do unprompted.
+
 **D6 — Merge direction: more-authoritative side is first parent**
 
 Across all resolve flavors, the merge commit records the more authoritative side as first parent; the divergent side becomes the second parent. This preserves the conventional `git log --first-parent` reading — the authoritative trunk stays linear, divergent work appears as merged-in contributors.
