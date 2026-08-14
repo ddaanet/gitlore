@@ -219,15 +219,50 @@ EOF
   return 1
 }
 
-# Rules 1 and 4 for a single index file. Prints problems; always returns 0 (the
-# caller aggregates).
+# Print the path of a SECOND pointer bullet welded onto line $1; return 1 when
+# there is none. Keyed on the first link's closing paren rather than on the
+# `) — ` separator, so glue that lands ahead of the first hook — leaving no
+# separator between the two links at all — is still caught.
+#
+# No backtick-awareness, by policy rather than by parsing: a hook has no
+# legitimate use for a bare markdown hyperlink, since the entry already links
+# its own file. Residual, accepted: a hook quoting an index-format example is
+# reported spuriously, which is visible and repairable. awk has no
+# backreferences and POSIX leaves them undefined in EREs, so a balanced-span
+# pattern would force this check out of the idiom the rest of the index parsing
+# uses — to buy a guarantee the policy already gives.
+gitlore_welded_path() {
+  local line="$1" tail second
+  gitlore_bullet_path "$line" >/dev/null || return 1
+  tail=${line#*](}
+  tail=${tail#*)}                  # everything past the first link
+  case "$tail" in
+    *"- ["*) ;;
+    *) return 1 ;;
+  esac
+  second="- [${tail#*"- ["}"
+  gitlore_bullet_path "$second"
+}
+
+# Rules 1, 4 and 6 for a single index file. Prints problems; always returns 0
+# (the caller aggregates).
 gitlore_compose_check_index() {
-  local file="$1" first last n=0 line path seen=""
+  local file="$1" first last n=0 line path welded seen=""
   read -r first last < <(gitlore_index_region "$file")
   [ "$first" -eq 0 ] && return 0
   while IFS= read -r line || [ -n "$line" ]; do
     n=$((n + 1))
     if path=$(gitlore_bullet_path "$line"); then
+      # Rule 6 — a welded line parses as ONE valid bullet for its first path,
+      # so nothing else here sees it, and the second path is absent from every
+      # parse: the next compose reads that absence as a root-side delete and
+      # drops the entry from the carrier. Observed in the wild. This is not
+      # defence in depth — it is the only thing between a one-character edit
+      # accident and a silent index deletion.
+      if welded=$(gitlore_welded_path "$line"); then
+        printf '%s: line %d welds two pointer bullets onto one line — %s is invisible to every parse and the next compose will drop it; split them\n' \
+          "$file" "$n" "$welded"
+      fi
       if printf '%s\n' "$seen" | grep -qxF -- "$path"; then
         printf '%s: duplicate pointer path %s\n' "$file" "$path"
       fi

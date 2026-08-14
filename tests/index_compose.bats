@@ -147,6 +147,43 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *"interleaved"* ]]
 }
 
+@test "check fails on a line welding two pointer bullets together" {
+  # The data-loss shape: an `Edit` deletion consuming the separator on both
+  # sides joins two bullets onto one physical line. It parses as ONE valid
+  # bullet for the first path, so neither the duplicate nor the interleaved
+  # rule sees anything — and the second path simply disappears from every
+  # parse of the index, which the next compose reads as a root-side delete.
+  make_parent_with_memory
+  seed_root_bullet "kept.md" "first hook"
+  printf -- '- [A](welded_a.md) — hook a- [B](welded_b.md) — hook b\n' >> memory/MEMORY.md
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"welds"* ]]
+  [[ "$output" == *"welded_b.md"* ]]   # names the path that would vanish
+}
+
+@test "check names the welded line, and the weld survives a missing separator" {
+  # Glue that lands before the first hook's separator leaves the line with no
+  # `) — ` between the two links at all, so a rule keyed on the separator
+  # would miss it. Keyed on the first link's closing paren, it does not.
+  make_parent_with_memory
+  printf -- '- [A](welded_a.md)- [B](welded_b.md) — hook b\n' >> memory/MEMORY.md
+  run gitlore_compose_check memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"welds"* ]]
+  [[ "$output" == *"welded_b.md"* ]]
+}
+
+@test "check leaves a hook carrying parens, dashes and a bracket alone" {
+  # The negative half of the pair: the rule must not fire on ordinary hooks.
+  # A bracketed span and a parenthetical are both common in real hooks; only a
+  # second BULLET is corruption.
+  make_parent_with_memory
+  seed_root_bullet "fine.md" 'hook (with parens) — and [a bracket] and a - dash'
+  run gitlore_compose_check memory
+  [ "$status" -eq 0 ]
+}
+
 @test "check inspects tier carriers too, not just the root" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
