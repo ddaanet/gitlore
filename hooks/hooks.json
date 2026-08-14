@@ -34,9 +34,27 @@
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-sync-pre.sh"
           }
         ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/edit-weld-pre.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/edit-weld-post.sh"
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [
