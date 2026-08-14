@@ -23,9 +23,18 @@
 # --diff3`.
 
 # Print the pointer paths of $1's bullets, one per line, in file order.
+#
+# `|| [ -n "$line" ]` for the same reason every index read in index-compose.sh
+# carries it: an index whose last bullet has no newline is read and discarded by
+# a bare `read`, and here the loss is not a missing line but a WRONG MERGE — the
+# path vanishes from this side's list, the presence rule below reads the absence
+# as that side having deleted the entry, and the merge drops the fact and exits
+# 0. `gitlore_index_part` passes the missing newline through (`sed -n` does), so
+# the bullets file that feeds gitlore_compose_pick still carries the line: only
+# the path list loses it, which is exactly what makes the loss silent.
 gitlore_index_merge_paths() {
   local line path
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     path=$(gitlore_bullet_path "$line") || continue
     printf '%s\n' "$path"
   done < <(gitlore_index_part "$1" bullets)
@@ -131,6 +140,19 @@ gitlore_index_merge() {
   _gitlore_index_merge_bullets "$tmpd" "$olabel" "$blabel" "$tlabel" \
     > "$tmpd/out.bullets" || { rm -rf "$tmpd"; return 2; }
   grep -q '^<<<<<<< ' "$tmpd/out.bullets" && rc=1
+
+  # `git merge-file` passes a missing final newline through, so a side whose
+  # preamble ends unterminated (a bulletless index is ALL preamble) welds the
+  # first bullet onto its last line here — and a glued line is not a bullet, so
+  # the pointer is lost. The mirror of gitlore_compose_write's guard, and only
+  # ever a SEPARATOR: with nothing following, the merged text is emitted exactly
+  # as it merged. out.bullets is printf-terminated, so out.post can only weld
+  # when there are no bullets at all.
+  if [ -s "$tmpd/out.pre" ] &&
+     { [ -s "$tmpd/out.bullets" ] || [ -s "$tmpd/out.post" ]; } &&
+     [ "$(tail -c 1 "$tmpd/out.pre" | wc -l | tr -d ' ')" = 0 ]; then
+    printf '\n' >> "$tmpd/out.pre" || { rm -rf "$tmpd"; return 2; }
+  fi
 
   cat "$tmpd/out.pre" "$tmpd/out.bullets" "$tmpd/out.post" || { rm -rf "$tmpd"; return 2; }
   rm -rf "$tmpd"

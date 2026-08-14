@@ -199,6 +199,39 @@ merge() { gitlore_index_merge base ours theirs "MINE" "BASE" "THEIRS"; }
   [[ "$output" != *'a.md'* ]]
 }
 
+# --- an unterminated final line ---
+#
+# An index whose last line carries no newline is never gitlore's own output, but
+# a hand edit, an agent `Edit` call or another consumer's writer leaves one
+# behind and the store travels that way. Losing that line loses the fact.
+
+@test "a side's unterminated last bullet is not read as a deletion" {
+  printf '# Memory Index\n\n- [A](a.md) — hook\n- [B](b.md) — hook\n' > base
+  printf '# Memory Index\n\n- [A](a.md) — hook\n- [B](b.md) — hook' > ours
+  printf '# Memory Index\n\n- [A](a.md) — hook\n- [B](b.md) — hook\n' > theirs
+  run merge
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'b.md'* ]]
+}
+
+@test "an unterminated bullet a side ADDED survives" {
+  printf '# Memory Index\n\n- [A](a.md) — hook\n' > base
+  printf '# Memory Index\n\n- [A](a.md) — hook\n- [N](n.md) — mine' > ours
+  printf '# Memory Index\n\n- [A](a.md) — hook\n' > theirs
+  run merge
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'n.md'* ]]
+}
+
+@test "an unterminated preamble does not weld onto the first bullet" {
+  printf '# Memory Index\n' > base
+  printf '# Memory Index\nnote appended by hand' > ours
+  printf '# Memory Index\n- [A](a.md) — hook\n' > theirs
+  run merge
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'note appended by hand\n- [A](a.md) — hook'* ]]
+}
+
 # --- refusal ---
 
 @test "a side already naming one path twice is declined, not silently collapsed" {
