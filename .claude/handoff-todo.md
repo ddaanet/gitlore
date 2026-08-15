@@ -1,11 +1,51 @@
 ## Open decisions
 
-- The memory index is past Claude Code's loader cutoff. `memory/MEMORY.md` is 25.1KB against the 24.4KB point where the loader silently truncates, and the budget hook now fires on every index write demanding under 17.1KB. Composition orders tier-first, so it is this project's own lines that fall past the cutoff. The lever is retiring entries and relocating the acted-inline ones into `CLAUDE.md` / `shared-claude.md`; shortening fact bodies measures ~2% and does not move the index. It rewrites the index every ddaanet repo loads, so it wants an explicit go-ahead.
-- Whether to chase the shared-bats-fixture flake further. In the memory-gate integration suite under `--jobs 2`, `make_parent_with_memory` failed its `git -C memory rev-parse HEAD` check with the submodule's working tree absent, while every other test in the file used the same cached template and passed in the same round. The guard ahead of it, `git submodule status`, exits 0 for a submodule whose working tree is missing, so only the rev-parse discriminates. Reproduced once in roughly 1800 executions — a long-loop hunt.
-- Whether to cut a release. `edify`'s `memory/ddaanet/MEMORY.md` is still unterminated at HEAD, so that store drops the same carrier line on every compose pass until it picks up the fixed plugin. `just release` must run unsandboxed or it dies at the marketplace bump.
+- Approve or reject the six changes proposed for `sandbox-effects`, listed in
+  full under entry 2 of `plans/ddaanet-memory-review.md`: route the
+  read-only-inspection standing default to the `prohibitions` plugin rather
+  than to `shared-claude.md`; change the `apply-seccomp:
+  unshare(CLONE_NEWUSER)` remedy from retry-unsandboxed to retry-once-
+  unchanged; demote the strict-sandbox-mode section and state
+  unsandboxed-fallback plus auto mode as the baseline; replace the claim that
+  `Edit` may write `.claude/settings.json` with the built-in `update-config`
+  skill; name backtick-bang expansion as the mechanism behind the sandboxed
+  slash-command `## Context` block; and merge the `/add-dir` section into
+  `classifier-denied-self-config`, carrying the *external repo outside the
+  trusted source control org* verdict string and the ask-rules-are-not-
+  authorization residue with it.
+- Approve or reject the structure section proposed for `memory-writing` under
+  entry 1b — five rules for organising a reference file that holds many
+  independent facts under one trigger, drawn from what is wrong with
+  `sandbox-effects`: order by the literal the reader arrives holding, one
+  section per symptom with a discriminator rather than one per case, a shared
+  remedy discussed once, a lead symptom-to-section map past roughly a screen
+  of sections, and a cost-of-the-remedy fact filed under the remedy.
+- Whether the guide-shaped facts become gitlore skills instead of memories.
+  Deferred by agreement until the pass ends, because `memory-writing`,
+  `index-compaction-triggers`, `design-doc-writing` and `green-is-not-evidence`
+  all raise the same question and it is one decision rather than four.
+- Whether to report the `unsandbox-git-status` scope finding to that repo as a
+  brief. Its hook returns permissionDecision allow together with an
+  `updatedInput` that carries the whole `tool_input` through, so any command
+  holding a matching segment runs unsandboxed *and* pre-approved. Two live
+  confirmations this session: a compound whose first segment was `true`, and a
+  `handoff-checkpoint` call whose only match was the literal phrase appearing
+  inside its JSON payload rather than as a command at all. The repo is outside
+  this session's consent scope, so the brief needs an explicit go-ahead.
 
 ## Remaining
 
-- `plans/brief-hook-exec-and-compose-revert.md`, defect 1 — the installer appends its line after an existing `exec`, leaving it unreachable. Refuse or interpose rather than append silently. Self-contained to the install path.
-- `plans/brief-hook-exec-and-compose-revert.md`, defect 2 — composition reverts an incoming tier merge by mirroring root's wording down over a merged carrier. Highest blast radius of the set: it changes which surface is canonical, and a wrong answer silently destroys merged memory.
-- `plans/brief-handoff-integration-evals.md` — largest by effort, lowest blast radius: new eval scenarios only, no production code. Needs `lib/setup.sh` to become two-plugin aware, and the brief names PATH resolution for handoff's `bin/` as its single largest unknown. Evals cost money per run and are opt-in, not in the default gate.
+- Take the `sandbox.excludedCommands` reading. `~/.claude/settings.json` now
+  carries `"ls -d /Users/david/.claude/ide"` beside the pre-existing entry;
+  the six probes and how to read each are in the entry-2 section of the
+  ledger. Four semantics are possible — whole-command, any-segment,
+  all-segments, and per-`exec` override — and which one holds decides whether
+  `git` can be excluded outright, whether a `prohibitions` hook is needed at
+  all, and whether excluding a bare command name is safe. Remove the probe
+  entry from the settings file once the reading is taken.
+- Review the remaining 98 ddaanet memories, continuing down the index-line size
+  order recorded in the ledger's table. Entry 3 is `green-is-not-evidence` at
+  690 B, then `index-compaction-triggers` at 590 B.
+- Apply every approved edit in one pass at the end, then re-check the index
+  against Claude Code's 24.4 KB loader cap. It stands at 26,219 B across 101
+  lines, so the tail entries do not reach a session today.

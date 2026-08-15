@@ -1,11 +1,15 @@
-D24 (merge-directive dispatch authorization) landed in `591da7b`: `gitlore_emit_merge_directive` now states that the git operation which triggered a merge is itself the request for the sub-agent dispatch, so the agent no longer has to treat the directive as an offer. Dogfooded by rendering the emitter's real output and reading it, plus the full precommit gate green (667 unit + 72 integration).
+## Current task
 
-Next, decided but not yet started: the orphaned-`MERGE_HEAD`/noisy-noop pair — `brief-orphaned-merge-head-no-state-file.md` and `brief-resolve-noisy-noop-failure.md` (both untracked at repo root) — folded into one piece, since brief 4's root-cause fix subsumes brief 2's symptom. Three sub-items, confirmed as 1+2+3 without brief 4's option C:
+Reviewing all 100 `memory/ddaanet/` facts against the `memory-writing` rubric,
+ordered by index-line size largest first, one memory at a time with my human
+partner validating each verdict before the next. The running ledger is
+`plans/ddaanet-memory-review.md`; it holds the verdict table, the per-entry
+reasoning, and the evidence gathered for entries still open. Entry 1
+(`memory-writing`, 867 B) is settled as keep-as-written. Entry 2
+(`sandbox-effects`, 760 B) has six proposed changes recorded and unapproved,
+and one of them waits on an empirical reading that cannot be taken from inside
+the session that configured it.
 
-1. `gitlore_prepare_merge` (`scripts/lib/resolve.sh:225`) takes an explicit pending-ref parameter instead of reading `HEAD`. The brief's literal fix (read `live` unconditionally) breaks the `head-vs-live` flavor: that call already passes `live` as the authority, so pending and authority would collapse to the same ref and the ancestor short-circuit would misreport every genuine local divergence as "nothing to merge." Each call site already knows which push was refused — `. HEAD:live` refusal means pending is `HEAD`, `origin live` refusal means pending is `live` — so the fix is to pass that ref through rather than infer it inside the function.
-2. `gitlore_detect_stale_merge_state` (`scripts/lib/resolve.sh:47`) gains a fourth outcome: `MERGE_HEAD` present, state file absent. Route it to its own manual-intervention message naming `MERGE_HEAD`'s value as the pending commit needing re-merge, rather than reporting "clean" — this is the guard's blind spot the orphaned-merge brief demonstrated end to end.
-3. `check_store_gates` (`scripts/resolve.sh:302`) calls `gitlore_classify_refusal` before yielding a merge, matching every other call site (`:437`, `:532`, `:617`, `:725`). It is currently the only one that routes any non-fast-forward push refusal straight into `gitlore_yield_merge` with no classification — the gap that makes the standalone resolver (`scripts/resolve.sh` with no args, the entry point `gitlore:resolve`'s skill doc names for "state is unclear") fail noisily against a store already at its remote tip.
-
-Option C from the orphaned-merge brief (write an in-progress state-file marker before `gitlore_prepare_merge`, upgrade to the full state file on success) is explicitly not being taken — item 2 covers the same interruption window more simply, without a marker to remove on the failure path.
-
-TDD: each of the three needs a red test against current behavior before the fix — brief 4's own repro script (in `brief-orphaned-merge-head-no-state-file.md`, under "Repro") is a ready-made starting point for items 1 and 2.
+Edits to the memory files themselves are deliberately deferred to the end of
+the pass so the index and the fact-file frontmatter descriptions are rewritten
+once rather than per entry.
