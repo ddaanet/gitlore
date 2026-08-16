@@ -2,21 +2,19 @@
 
 Reviewing all 100 `memory/ddaanet/` facts against the `memory-writing` rubric,
 ordered by index-line size largest first, one memory at a time with my human
-partner validating each verdict before the next. The running ledger is
-`plans/ddaanet-memory-review.md`; it holds the verdict table, the per-entry
-reasoning, and the evidence gathered for entries still open. Entry 1
-(`memory-writing`) is settled as keep-as-written. Entry 2 (`sandbox-effects`)
-has absorbed a decompilation of Claude Code's Bash permission pipeline; the one
-factual correction that came out of it is applied to the memory file, but the
-six rubric changes proposed for that entry remain unapproved.
+partner validating each verdict before the next. The ledger now spans
+`plans/ddaanet-memory-review.md` — a hub holding the verdict table, entry 1 and
+entry 1b — plus parts 2a-2d carrying entry 2. Entry 1 (`memory-writing`) is
+settled as keep-as-written. Entry 2 (`sandbox-effects`) still has six rubric
+changes unapproved. Entry 3 is `green-is-not-evidence` at 690 B, then
+`index-compaction-triggers` at 590 B.
 
-A second thread came out of entry 2 and now has its own decisions block in the
-ledger: how ddaanet repos should configure `sandbox.excludedCommands`, whether
-`unsandbox-git-status` retires in favour of them, and how `cwd-safety` should be
-re-scoped now that its subshell rewrite is known to defeat the exclusion matcher
-and its `permissionDecision: allow` to circumvent the permission gate. The two
-remaining questions there wait on a corpus scrape.
+The sandbox-exclusion thread that came out of entry 2 has both of its blocked
+decisions taken: `git:*` as the exclusion entry, on coverage grounds since no
+narrow prefix reaches `git -C`; and a relaxed `cwd-safety` that always allows a
+`cd`-prefixed composite and keeps only the rule-4 drift block. Neither is
+implemented — both touch files outside this session's consent scope.
 
-Edits to the other memory files stay deliberately deferred to the end of the
-pass, so the index and the fact-file frontmatter descriptions are rewritten once
-rather than per entry.
+Edits to the memory files themselves stay deliberately deferred to the end of
+the pass, so the index and the fact-file frontmatter descriptions are rewritten
+once rather than per entry.
