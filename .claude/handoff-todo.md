@@ -1,6 +1,6 @@
 ## Open decisions
 
-- Approve or reject the six changes proposed for `sandbox-effects`, listed in
+- Approve or reject the six changes proposed for `sandbox-effects`, set out in
   full under entry 2 of `plans/ddaanet-memory-review.md`: route the
   read-only-inspection standing default to the `prohibitions` plugin rather than
   to `shared-claude.md`; change the `apply-seccomp: unshare(CLONE_NEWUSER)`
@@ -14,37 +14,36 @@
   ask-rules-are-not-authorization residue with it.
 - Approve or reject the structure section proposed for `memory-writing` under
   entry 1b — five rules for organising a reference file that holds many
-  independent facts under one trigger, drawn from what is wrong with
-  `sandbox-effects`.
+  independent facts under one trigger.
 - Whether the guide-shaped facts become gitlore skills instead of memories.
   Deferred by agreement until the pass ends, because `memory-writing`,
   `index-compaction-triggers`, `design-doc-writing` and `green-is-not-evidence`
   all raise the same question and it is one decision rather than four.
-- Whether to report the `unsandbox-git-status` scope finding to that repo as a
-  brief. Its hook returns `permissionDecision: allow` together with an
-  `updatedInput` that carries the whole `tool_input` through, so any command
-  holding a matching segment runs unsandboxed *and* pre-approved — where the
-  native `excludedCommands` mechanism unsandboxes without pre-approving. The
-  repo is outside this session's consent scope, so the brief needs an explicit
-  go-ahead.
-- What to do about sandbox exclusions now the matcher is understood. The
-  `"git status"` entry in `~/.claude/settings.json` is an exact match and covers
-  2.8% of real `git status` traffic, while the plugin covers the rest, so
-  dropping either changes accuracy sharply. Open sub-choices: add `git:*`
-  (76% of git-bearing calls are compound, so neighbours lose the sandbox too),
-  `find:*` (100% of its traffic needs it), or `ls:*` (30%).
-- Whether the new `excludedCommands` section belongs in `sandbox-effects` at
-  all, or as its own memory: its trigger — configuring an exclusion, or
-  explaining why an unrelated command ran unsandboxed — is distinct from "the
-  sandbox broke my command".
+- `git:*` versus the narrow entries `git status:*`, `git add:*`, `git commit:*`,
+  `git ls-files:*`. `git:*` unsandboxes roughly a third of all Bash traffic, and
+  since 75.9% of git-bearing calls are compound the neighbours ride free with
+  it. Blocked on the corpus scrape.
+- How `cwd-safety` is re-scoped, which hinges on how often `cd <dir> && …` and
+  `git -C` are actually issued. Blocked on the same scrape. The shape proposed
+  in the ledger: permit `cd <dir> && …` and let cwd drift, block a
+  non-`cd`-prefixed command when cwd is not root, allow a bare `cd <root>` as
+  the restore, and stop advertising the `( … )` form.
+- Whether to report the `unsandbox-git-status` findings to that repo as a brief —
+  the `permissionDecision: allow` scope hole, and its retirement once exclusions
+  are in and verified. That repo is outside this session's consent scope, so
+  either write needs an explicit go-ahead.
 
 ## Remaining
 
+- Split `plans/ddaanet-memory-review.md` into chunks of at most 400 lines. It
+  has outgrown a single file.
+- Scrape the session corpus for `cd <dir> && …` and `git -C` frequency, which
+  settles the two blocked decisions above.
 - Review the remaining 98 ddaanet memories, continuing down the index-line size
   order recorded in the ledger's table. Entry 3 is `green-is-not-evidence` at
   690 B, then `index-compaction-triggers` at 590 B.
 - Apply every approved edit in one pass at the end of the review.
-- Compact the memory index. It stands at 26,327 B against Claude Code's 24.4 KB
-  loader cap, so the tail entries do not reach a session, and gitlore's own gate
-  asks for under 17.1 KB. Retire or merge entries rather than shortening new
-  ones below the point where they still route.
+- Compact the memory index. It stands over Claude Code's 24.4 KB loader cap, so
+  the tail entries do not reach a session, and gitlore's own gate asks for under
+  17.1 KB. Retire or merge entries rather than shortening new ones below the
+  point where they still route.
