@@ -126,46 +126,398 @@ state directly.
 **Probe with `ls`, never `git`** — the existing `git status` entry and the
 `unsandbox-git-status` hook would both confound a git probe.
 
-**Configured.** `~/.claude/settings.json` `sandbox.excludedCommands` now reads
-`["git status", "ls -d /Users/david/.claude/ide"]`. The entry is the exact probe
-string rather than a bare `ls`, so nothing an agent runs incidentally is
-unsandboxed while it sits there — under (b) a bare `ls` entry would unsandbox
-every compound containing one. **Remove the second entry once the reading is
-taken.**
+### Reading taken — the answer is (b), any-segment
 
-Run each row as its own Bash call, in a session started after the settings
-change, with no `dangerouslyDisableSandbox` anywhere:
+Measured 2026-08-15 against CC 2.1.233, with
+`"excludedCommands": ["git status", "ls -d /Users/david/.claude/ide"]`, each row
+its own Bash call and no `dangerouslyDisableSandbox` anywhere. The probe entry
+has since been removed from `~/.claude/settings.json`. `${TMPDIR-UNSET}` is the
+discriminator throughout: `/tmp/claude-1000` sandboxed, `UNSET` not.
 
-| # | probe | reading |
+**The mechanism, in one sentence.** The command string is parsed by tree-sitter-bash
+into a list of simple commands; each one is expanded into a closure of normalised
+variants; if any variant of any segment matches any list entry, the **entire call**
+runs unsandboxed, including segments that match nothing.
+
+### The algorithm, decompiled from the 2.1.233 bundle
+
+Sandboxing is decided once per call, by a function returning a single boolean —
+whole-call granularity is the design, not an oversight:
+
+```js
+function TV(e){                                  // "should this run sandboxed?"
+  if (U$() && DFe()) return true;                // forced-sandbox contexts
+  if (!ei.isSandboxingEnabled()) return false;
+  if (shellType==="bash" && windows && no shell) return false;
+  if (e.dangerouslyDisableSandbox && ei.areUnsandboxedCommandsAllowed()) return false;
+  if (!e.command) return false;
+  if (W_S(e.command)) return false;              // ← the exclusion check
+  return true;
+}
+```
+
+`W_S` splits, normalises, then matches.
+
+**Split — `U0(cmd)`.** A real tree-sitter-bash parse, walked as follows:
+
+- recurse **only** into node types `program`, `list`, `pipeline` (the set `uWs`);
+- skip the operator tokens `&&` `||` `|` `;` `&` `|&` newline (`npd`), and `comment`;
+- for `redirected_statement`, recurse into children whose type does not end in
+  `_redirect` — this is why a trailing redirection is invisible to the match and
+  an interleaved one is not;
+- **anything else** — subshell, `if`/`while`, function definition, command
+  substitution — is pushed whole as `node.text`, a raw source slice.
+
+Bail-outs return the entire string as one segment: empty input, a command longer
+than `$Fe`, or a parse failure.
+
+Two consequences. Every construct that is not a plain list or pipeline **fails
+closed**: `( … )`, `$( … )`, `if …; fi` and `sh -c '…'` are pushed as one blob
+that will not match, so they stay sandboxed. And because the segment is
+`node.text`, the comparison sees source text, not re-rendered argv — which is why
+double spaces and quotes defeat it.
+
+**Normalise.** Each segment seeds a worklist expanded to a fixpoint; every derived
+string is fed through both functions again, and *all* variants are match
+candidates:
+
+- `bHi(s, /^(LD_|DYLD_|PATH$)/)` — repeatedly strip leading `VAR=value`
+  assignments, **stopping** at any name matching `LD_*`, `DYLD_*` or `PATH`.
+- `q_e(s)` — drop comment lines, unquote the first token, and strip leading
+  wrapper commands: `timeout [opts] N[smhd]`, `time`, `nice [-n N]`, `stdbuf
+  -[ioe]X`, `nohup`, `command [-p]`, `builtin`, `noglob`. It also strips
+  assignments, but only for names in an allowlist `F3n` (`GOOS`, `NODE_ENV`,
+  `TZ`, `LANG`, `CI`, `ANTHROPIC_API_KEY`, …).
+
+**Match — entries are permission-rule patterns, not plain strings.** `B4o` parses
+each entry, and `xUf` applies it:
+
+| entry form | type | matches |
 |---|---|---|
-| 0 | `printf '%s\n' "${TMPDIR-UNSET}"` | control — must print `/tmp/claude-1000` |
-| 1 | `ls -d /Users/david/.claude/ide/` | trailing slash, so it cannot match the entry — must **fail**, which is what proves the discriminator works |
-| 2 | `ls -d /Users/david/.claude/ide` | succeeds ⟹ the list matches on argv, not just the command name |
-| 3 | `ls -d /Users/david/.claude/ide && printf '%s\n' "${TMPDIR-UNSET}"` | fails at `ls` ⟹ (a) or (c) · succeeds + `UNSET` ⟹ (b) · succeeds + a path ⟹ **(d)** |
-| 4 | `ls -d /Users/david/.claude/ide && ls -d /Users/david/.claude/ide` | only if row 3 said (a)/(c): succeeds ⟹ (c), fails ⟹ (a) |
-| 5 | `sh -c 'ls -d /Users/david/.claude/ide'` | only if (d): succeeds ⟹ the exclusion reaches descendants, fails ⟹ top-level `exec` only |
+| `foo bar:*` | prefix | `foo bar`, or anything starting `foo bar` + **a space** |
+| `foo *` (unescaped `*`) | wildcard | glob |
+| `foo bar` | exact | only `foo bar` |
 
-Row 1 failing and row 2 succeeding is the pair that makes the rest meaningful:
-together they show the read-deny is live *and* the entry is being matched. If
-row 2 also fails, matching is by command name only — widen the entry to `"ls"`,
-re-run, and remove it immediately afterwards.
+The prefix form requires a space boundary, so `…/probe:*` matches
+`ls -d …/probe /tmp` but **not** `ls -d …/probe-anything`.
 
-Row 3 is what separates (d) from everything else: it reads the excluded and the
-unexcluded command's sandbox state in the same call, which no single-state probe
-can do.
+Four predictions from the decompilation, all confirmed live: `timeout 5 ls -d
+…/ide` matched (wrapper stripped); `TZ=UTC ls -d …/ide` matched (allowlisted
+assignment stripped); `LD_PRELOAD=… ls -d …/ide` did **not** match (guard held);
+and the `:*` prefix form behaved exactly as `xUf` specifies.
 
-The descendant probe matters because it decides how far an exclusion reaches. If
-exclusions apply only at the top-level `exec`, then excluding `git` leaves
-everything git spawns — pager, alias, hook, filter — sandboxed and separately
-evaluated, which contains `git -c core.pager='sh -c …'` on its own. If
-exclusions are inherited, that containment is gone and a bare `git` entry is
-much harder to justify.
+**A strict matcher exists and is not used for bash.** `y5p` runs the same entry
+match but first rejects any command containing `[;|&`$(){}<>#\n\r]` — i.e. it
+refuses to honour an exclusion inside a compound at all. Its only caller is
+`f5p`, on the Windows PowerShell path. The bash path uses the permissive `W_S`.
+
+Twenty probes plus the four predictions, all consistent.
+
+*What splits the command into comparable segments:*
+
+| separator | matched | note |
+|---|---|---|
+| `&&` · `\|\|` · `;` · `\|` · `&` · newline | yes | the full set of list/pipeline separators |
+| `( … )` subshell | **no** | not descended into |
+| `$( … )` substitution | **no** | not descended into |
+| `sh -c '…'` | **no** | the inner string is an argument, never a segment |
+| `if … ; then … ; fi` | **no** | the segment reads `if ls -d …`, so the keyword defeats it |
+
+*What the comparison tolerates, and what defeats it:*
+
+| variation | matched | reading |
+|---|---|---|
+| leading whitespace · extra whitespace before the operator | yes | the span is trimmed |
+| `FOO=1 ls -d …` | yes | leading assignments are excluded from the span |
+| `ls -d … > /dev/null` | yes | a redirection *after* the last word is outside the span |
+| `ls  -d …` (double space) | **no** | internal whitespace is not normalised |
+| `ls -d "…"` (quoted argument) | **no** | quotes are not stripped |
+| `ls -d … -l` (extra word) | **no** | equality, not prefix |
+| `/bin/ls -d …` | **no** | no `PATH` resolution |
+| `D=…; ls -d $D/ide` | **no** | compared before expansion |
+| `ls -d > /dev/null …` (redirection *between* words) | **no** | the redirect falls inside the span ⟹ it is a source slice, not a re-render of tokens |
+| the literal inside a quoted argument | **no** | word position matters; not a substring search |
+
+Two findings carry beyond the mechanism:
+
+**The decision is static.** `false && ls -d …/ide` — where the excluded command
+provably never runs — still unsandboxes the call. Reachability is not consulted,
+so the excluded command can be a decoy that never executes while the payload
+does: `false && git status; <payload>` frees the whole call and runs only the
+payload. (`false && git status && <payload>` does not, because the `&&` chain
+short-circuits the payload as well — the decoy has to be detached from it.)
+
+**Settings reload live.** Confirmed in both directions, mid-session and with no
+restart, on three keys — `excludedCommands`, `autoAllowBashIfSandboxed` and
+`permissions.deny`. The ledger's earlier instruction to probe only from a session
+started after the settings change is unnecessary.
+
+Two smaller notes. The read-deny discriminator the original probe table leaned on
+does not exist — `ls -d /Users/david/.claude/ide/` **succeeded** sandboxed,
+because `ls -d` only stats the path and the sandbox's read-deny does not cover
+that; `${TMPDIR-UNSET}` carried the whole reading instead. And
+`apply-seccomp: unshare(CLONE_NEWUSER): Invalid argument` hit one probe while the
+byte-identical retry succeeded, confirming the retry-once-unchanged remedy
+proposed for that entry.
+
+The descendant question — how far an exclusion reaches — is moot under (b): the
+exclusion already covers everything in the call, and no nesting construct is
+matched into, so there is no narrower containment left to preserve.
 
 ### Excluding `git` outright, or read subcommands only
 
-**Contingent on the result above.** Under (b), exclude nothing: `git status &&
-curl … | sh` would run unsandboxed, reproducing the plugin's hole natively, and
-a deny hook is the only safe slice. Under (a) or (c), exclude `git` **outright**.
+**Settled by the reading: exclude nothing.** Under (b), a bare `git` entry means
+`git status && curl … | sh` runs entirely unsandboxed, reproducing the
+`unsandbox-git-status` hole natively. A deny hook is the only safe slice.
+
+The same finding indicts the entry already in the settings file: `"git status"`
+unsandboxes any compound holding that exact segment, so `git status && <anything>`
+is already free today — and so is `false && git status; <anything>`, where the
+decoy never even runs. It is narrower than the plugin's version — literal equality,
+no substring match, no descent into `sh -c` — but it is the same class of hole,
+and the plugin and the entry are redundant with each other. Whether to keep
+either is a separate call for my human partner.
+
+### What an excluded call still passes through
+
+**`permissions.deny` outranks both sandbox auto-allow and exclusion.** With
+`"Bash(sudo:*)"` temporarily in the deny list, `sudo -n true` was refused in all
+three configurations: sandboxed with `autoAllowBashIfSandboxed` on, sandboxed
+with it off, and carrying an excluded segment. The refusal names the *whole*
+command string, so the rule is matched against the full call rather than the
+segment.
+
+That is the one substantive difference from the `unsandbox-git-status` plugin.
+The plugin returns `permissionDecision: allow` alongside its `updatedInput`, so a
+matching command is unsandboxed **and** pre-approved. The native key only
+unsandboxes; the permission pipeline still runs. A deny rule is therefore a
+usable backstop for `excludedCommands` in a way it is not for the plugin.
+
+**Classifier engagement could not be isolated — the claim that "unsandboxed is
+not unchecked" stays unproven.** No command available to probe safely was ever
+denied by the classifier: `curl -s http://127.0.0.1:1/ | sh`, `sudo -n true`
+before the deny rule existed, `rm -f` against a path under `~/.claude`, and a
+heredoc writing into `.git/` all ran. They ran sandboxed, they ran unsandboxed
+via an excluded segment, and they ran with `autoAllowBashIfSandboxed: false` —
+the last being the strongest of the three, because switching the short-circuit
+off leaves the classifier as the only gate, and a classifier that objected to
+those shapes would have blocked them there.
+
+This is weak evidence of absence, not evidence the classifier is skipped. The
+classifier reads conversation context, and every one of those commands was
+explicitly sanctioned probing in a session about sandbox behaviour — precisely
+the exemption `classifier-denied-self-config` already records as *INCIDENTAL
+writes only, not user-named ones*. Establishing the classifier's role needs a
+payload that is classifier-hostile in a context where the user did not ask for
+it, which is not constructible from inside a session that just asked for it.
+
+**The transcript cannot settle it retroactively.** A Bash `toolUseResult` carries
+only `interrupted` · `isImage` · `noOutputExpected` · `stderr` · `stdout`; no
+permission decision, reason string, or sandbox flag is recorded anywhere in the
+session JSONL. The decision strings quoted from the bundle are never persisted.
+
+All probe state has been reverted: the `ls -d …/ide` and `…/probe:*` exclusion
+entries, the `Bash(sudo:*)` deny rule, the `autoAllowBashIfSandboxed` flip, and a
+stray `.git/gitlore-probe-zzz`. Verified by re-reading the settings file and by
+re-running the canonical probe, which is sandboxed again.
+
+### Naming the regression precisely
+
+`excludedCommands` does not auto-approve. It sets one boolean — *sandboxed or
+not* — and an unsandboxed call loses the `Auto-allowed with sandbox
+(autoAllowBashIfSandboxed enabled)` shortcut by definition, which is why the
+`Bash(sudo:*)` deny rule still fired on it. Auto-approval is the *plugin's*
+regression, from its `permissionDecision: allow`.
+
+The native regression is different and narrower: **a decoy segment silently
+unsandboxes its neighbours.** `timeout 5 git status; <payload>` runs the payload
+outside the sandbox, and nothing in the transcript records that it did.
+
+**The safe approach my human partner describes is already a supported mode.**
+`sandbox.allowUnsandboxedCommands` — the `/sandbox` menu's *Allow unsandboxed
+fallback*, against *Strict sandbox mode* — is precisely "when a command fails due
+to sandbox restrictions, Claude can retry with `dangerouslyDisableSandbox`
+(falling back to default permissions)". Under that mode the retry is per-command,
+visible, and re-enters the permission pipeline, where `excludedCommands` is a
+blanket standing exemption evaluated before anything sees it. That reframes
+`excludedCommands` as strict mode's escape valve rather than the general
+mechanism, and is the strongest argument for dropping the `git status` entry
+rather than widening it to `git status:*`.
+
+### What the sandbox actually breaks: the phantom masks
+
+Measured 2026-08-15 by diffing sandboxed listings against unsandboxed ones
+obtained through the `git status` decoy.
+
+The sandbox bind-mounts **`/dev/null` over 22 paths** in the project root — they
+stat as `crw-rw-rw- nobody nogroup 1, 3`. The set is every file a repository
+could use to hijack execution:
+
+```
+.bash_profile .bashrc .gitconfig .idea .mcp.json .profile .ripgreprc
+.vscode .zprofile .zshrc
+.claude/agents .claude/commands .claude/hooks .claude/launch.json
+.claude/loop.md .claude/output-styles .claude/routines
+.claude/scheduled_tasks.json .claude/skills .claude/workflows
+.git/config.lock .git/config.worktree
+```
+
+**Scope is the project root, not the cwd**, and it reaches into `.claude/` and
+`.git/`. A listing of `scripts/` is clean even with the cwd set there, and so are
+`~`, `/tmp` and the parent directory. The last two entries explain the
+`Device or resource busy` failures on `.git/config` that `sandbox-effects`
+already records under `checkout`/`reset --hard`.
+
+**The corruption is silent and large.** Sandboxed, `git ls-files --others
+--exclude-standard` reports 19 untracked paths in this repo; the truth is 3. An
+agent reading that sees `.claude/skills`, `.claude/hooks` and `.mcp.json` as
+untracked additions and reasons from it. Nothing in the output marks them as
+artefacts.
+
+### Corpus: what commands this actually touches
+
+Tallied across 1,190 session transcripts from the last 45 days — 20,736 Bash
+calls (`scratchpad/tally.py`, `scratchpad/status_forms.py`).
+
+| command | calls | affected because |
+|---|---|---|
+| `git status` (all forms) | 3,043 segments in 2,549 calls | phantoms appear as untracked |
+| `ls` | 2,910 | phantoms listed in the root |
+| `git add` | 728 | `-A`/`.` tries to add character devices |
+| `find` | 627 | traverses the masked paths |
+| `grep` | 8,541 | only the recursive-from-root subset |
+
+**An exact `git status` entry covers 2.8% of the real traffic** — 84 segments out
+of 3,043. The actual distribution is `git status --short` (741),
+`git status --porcelain` (477), `git -C <path> status --short` (186),
+`git status --porcelain=v1` (145), and a long tail.
+
+That is the case against `excludedCommands` for this job, independent of the
+security argument: **it structurally cannot express "any git status"**. The
+prefix form anchors at the start of the segment, so `git status:*` still misses
+every `git -C <path> status` and every `git -c k=v … status` — roughly a fifth of
+the traffic — and a wildcard entry broad enough to catch them would be far too
+broad to be safe. The plugin's best-effort matcher has been carrying that 97%,
+which is why removing it without a replacement would regress accuracy sharply.
+
+This supports my human partner's design directly: **deny rather than exclude, and
+let the agent retry unsandboxed**. A denial is explicit, per-command, visible in
+the transcript, and re-enters the permission pipeline; it cannot silently
+unsandbox a neighbouring segment the way an exclusion match does.
+
+### Exclusion does not grant approval — the code, not a probe
+
+`hUf` is the sandbox auto-allow entry point:
+
+```js
+function hUf(e,t,r,n){
+  if (!ei.isSandboxingEnabled() || !ei.isAutoAllowBashIfSandboxedEnabled()
+      || !TV(e) || HIr(t)) return null;      // ← !TV(e) is exactly the excluded case
+  let o = P_S(e,t,r); ...
+```
+
+`!TV(e)` returns `null`, so an excluded command never reaches the shortcut and
+falls through to the ordinary permission pipeline — deny/ask rules, then the
+auto-mode classifier. `P_S` itself checks deny rules first, and re-checks them
+**per segment** for a compound, which is why the `Bash(sudo:*)` probe was refused
+even behind a decoy.
+
+So an exclusion is equivalent in gating to an agent-declared
+`dangerouslyDisableSandbox`, minus the round-trip. The residual difference is
+only defence-in-depth: the sandbox no longer contains a command the classifier
+waves through.
+
+Even the sandboxed shortcut is guarded — `hUf` also refuses to auto-allow when a
+non-allowlisted env var is set, when a redirect targets `/dev/tcp` or `/dev/udp`,
+or when a `cd` and an `rm` appear in the same call.
+
+### Why a broad `git:*` entry is the wrong shape
+
+Of 6,836 calls containing a `git` segment, **5,187 — 75.9% — are compound**. A
+`git:*` prefix entry would therefore run three quarters of all git work
+completely unsandboxed, neighbours included. What rides alongside git in those
+compounds, by frequency: `echo` (3,272), `head` (1,548), `cd` (1,396), `grep`
+(820), `tail` (701), `ls` (571), `cat` (391), `rm` (232), `mkdir` (123), `bash`
+(90). The `rm` and `bash` rows are the point — the entry cannot distinguish them
+from the git segment that justified it.
+
+The premise also over-reaches: roughly half of git traffic is unaffected by the
+masks. History and tracked-content reads — `log` (2,383), `diff` (1,460), `show`
+(618), `rev-parse` (294), `ls-tree` (77), `rev-list` (51) — never consult
+untracked state and never take a lock. The affected half is `status` (2,401),
+`commit` (901), `add` (781), `ls-files` (127), `checkout` (121), `stash` (69).
+(About 1,400 calls use `git -C <path>` and have their subcommand hidden behind
+the path operand, so these counts are approximate.)
+
+### Listing and search commands mostly do not point at the root
+
+The masks sit in the project root, `.claude/` and `.git/`. Most scanning traffic
+points elsewhere, so a blanket `ls:*` / `find:*` / `grep:*` entry would unsandbox
+thousands of calls to fix a few hundred:
+
+| command | root-scoped (affected) | targeted elsewhere |
+|---|---|---|
+| `ls` | 114 cwd + 189 inside `.claude` | 1,060 absolute · 749 subdir · 621 named |
+| `find` | 133 explicit `.` | 311 absolute · 71 named · 48 subdir |
+| `grep` | 126 explicit `.` + 29 `.claude` | 2,970 named file · 876 subdir · 446 absolute |
+
+The 4,024 `grep` calls classified "implicit cwd" are grep reading **stdin** from
+a pipe, not scanning the filesystem — unaffected either way.
+
+### Only hidden-inclusive enumeration is corrupted
+
+Every one of the 22 masked names begins with a dot, which narrows the blast
+radius sharply. Measured in this repo, sandboxed: plain `ls` shows **none** of
+them, `ls -a` shows them; `rg --files` shows **none** (ripgrep skips hidden by
+default); `grep -r` finds nothing in them (a `/dev/null` mask reads as immediate
+EOF); `find` **does** list them.
+
+Tallied over the same 45-day corpus, by whether the invocation can see dotfiles
+at all:
+
+| command | total segments | hidden-inclusive |
+|---|---|---|
+| `grep` | 8,626 | 1,595 (`-r`/`-R`, but harmless — masks read as empty) |
+| `ls` | 2,941 | **891** (`-a`/`-A`) |
+| `find` | 634 | **634** (always) |
+| `rg` | 243 | **2** (`--hidden`) |
+| `du` | 30 | 30 |
+| `tree` | 8 | 8 |
+| `head` · `tail` · `sed` · `cat` · `wc` · `cp` · `rm` · `sort` | 6,125 · 3,388 · 2,463 · 2,303 · 1,404 · 639 · 586 · 696 | 0 — all path-targeted |
+
+`rg` is barely used (243 against grep's 8,626) and is immune by default, so it is
+not worth a rule; it is also the cleanest workaround for anyone who wants one.
+
+**Exclusion hit-rates**, i.e. how much of what an entry would unsandbox actually
+needs it: `find:*` is **100%** (634/634), `du:*` and `tree:*` are 100% but
+negligible, `ls:*` is **30%** (891/2,941), and `grep:*`/`rg:*` are near zero.
+`find:*` is therefore the best-targeted entry available; `ls:*` is the judgement
+call; grep and rg need nothing.
+
+### The deny predicate: silent corruption, not failure
+
+The distinction that makes the list small is whether the agent can *tell*. A
+sandbox failure that raises an error is self-correcting — the agent sees it and
+retries. Only silently wrong output needs blocking.
+
+Silent, and worth denying:
+
+- the `git status` family, `git ls-files --others`, `git add -A`/`.` — the masks
+  appear as untracked paths, and `add` tries to stage character devices;
+- `ls` / `find` / recursive `grep` **when scoped to the project root or
+  `.claude/`** — not the targeted majority above;
+- `ps` / `pgrep` — measured this session at **5 lines sandboxed against 141
+  real**, so background tasks are simply invisible;
+- `claude -p` — `sandbox-effects` already records that it silently drops every
+  `SessionStart` hook.
+
+Loud, and not worth denying: network commands, `git` write locks, sibling
+worktree `Read-only file system`, `Device or resource busy` on `.git/config`.
+These already announce themselves.
+
+**Mask scope is this session's project root only.** `find -maxdepth 1 -type c`
+returns zero in `/Users/david/code/handoff`, `/micro` and `/edify`, so
+cross-repo commands are not affected by them.
 
 Every sandbox failure this file documents is on a *write* subcommand — the
 `index.lock` stranding is `add`/`commit`, `Device or resource busy` on
