@@ -14,10 +14,10 @@ feature request or bug report).
 
 | # | Bytes | Fact | Verdict | Decided |
 |---|-------|------|---------|---------|
-| 1 | 867 | `memory-writing` | keep | done — skill question deferred to end of pass |
+| 1 | 867 | `memory-writing` | plugin | done — `gitlore:memory-writing` skill, shape in 4c |
 | 2 | 760 | `sandbox-effects` | update (relocate + merge out) | pending |
 | 3 | 691 | `green-is-not-evidence` | update (index line) | pending |
-| 4 | 590 | `index-compaction-triggers` | update (re-split with `memory-writing`) | pending |
+| 4 | 590 | `index-compaction-triggers` | plugin | done — skill + `/gitlore:index-audit`, shape in 4c |
 
 ## Parts
 
@@ -287,26 +287,143 @@ merges and 3,491 B for 24 relocations. Coupling is nearly nil: 8 inbound
 
 **Conditions on the conversion.**
 
-- **The descriptions must be short, and the hooks are what make that safe.**
-  Skill descriptions are injected every session exactly as index lines are, so
-  carrying the index line's routing surface into the description is a lateral
-  move — it buys only escape from the silent-truncation cap, the same
-  accounting relocation to `shared-claude.md` gets. Both triggers are
-  computable (a write under `memory/`; the budget check gitlore already runs),
-  so neither description needs routing surface at all: purpose-first and enough
-  for deliberate invocation ([[skill-description-purpose-first]]). Two ~150 B
-  descriptions against 1,459 B of index nets ~1.15 KB off every session.
-  Shipping the skills without the hooks gives the lateral move plus pressure to
-  write long descriptions to preserve routing, which is no gain.
+- **The descriptions must be short.** Skill and command descriptions are
+  injected every session exactly as index lines are, so carrying the index
+  line's routing surface into a description is a lateral move — it buys only
+  escape from the silent-truncation cap, the same accounting relocation to
+  `shared-claude.md` gets. Both triggers are computable, so neither description
+  needs routing surface at all: purpose-first and enough for deliberate
+  invocation ([[skill-description-purpose-first]]).
 - **What a hook can actually do.** Nothing forces a tool call. A `PreToolUse`
   hook injects `additionalContext`, and a payload over roughly 2 KB is spilled
-  to a file with only the head inlined, so an 11 KB body cannot be injected.
-  The hook carries a compact directive at the moment of the write and the skill
-  body carries the rules — a pointer arriving unmissably at the right moment,
-  which is what beats index recall.
+  to a file with only the head inlined, so a 14 KB body cannot be injected. A
+  hook carries a compact directive at the moment of the write; the skill body
+  carries the rules.
 - The design decision belongs in `docs/design.md`, not in a memory.
-- Entries 1, 3 and 4 and `design-doc-writing` all resolve to verdict
-  **plugin** together, as the deferred question anticipated.
+- Entries 1 and 4 resolve to verdict **plugin**. The settled shape is 4c.
+
+### 4c · The settled shape
+
+**Two artifacts.**
+
+- **`gitlore:memory-writing`**, a skill: `memory-writing` whole, plus the
+  trigger-writing half of `index-compaction-triggers`. What a fact says, whether
+  it should exist at all, which tier it lands in, and whether its index line
+  routes.
+- **`/gitlore:index-audit`**, a command, manual only: the store-wide pass — the
+  two budgets and the loader cap, before-and-after token counts, the two
+  adversarial auditor briefs, the plain-word sweep, and the whole-submodule
+  frontmatter diff.
+
+`index-compaction-triggers` does not survive as a unit, so the naming problem dissolves
+with it: "compaction" named the lever its own body forbids, and "triggers"
+named the authoring concern that moves into the skill.
+
+**The seam runs differently than the A/B split above.** The file is a trigger
+doctrine — an index line's only job, the WHEN/HOW/acted-inline classification,
+the failure has a direction, count tokens index-wide, never under-trigger, sweep
+plain words because bare identifiers carry routing weight. Budgets and the cap
+are the occasion that puts triggers under attack, not the subject. Redirection
+to CLAUDE.md and to skills belongs to `memory-writing`'s *What another artifact
+already owns*; the relocation section here reaches the same destination by a
+different test — no lookup step, so a routing table is the wrong surface — and
+the two get stated once, in the skill.
+
+**Gitlore owns one prompt surface inside handoff, and it lands at a different
+point in each flow.** The approval clause file,
+`reference/memory-approval-clause.txt`, is pinned to `git config
+gitlore.memoryApprovalClauseFile` by `scripts/cc-hooks/session-start.sh` and
+`scripts/install/write-settings.sh`. handoff resolves the key and reads the file
+in `scripts/_checkpoint_lib.py:49-64`, then quotes it inside the directive
+`memory_directive()` emits whenever the memory submodule is dirty. handoff's
+design doc names it as the whole of the coupling — "two IPC filenames plus one
+advertised `git config` key … so the wording has one owner instead of a copy per
+consumer. Never gitlore internals" — so it is an advertised contract, and its
+content is gitlore's to change.
+
+**Where it lands is not uniform, and handoff has a standing decision about
+precisely this.** *A directive is correct only where in the turn it lands*:
+handoff runs its checkpoint in the same turn as the writes, so its directive
+arrives **after** the memory files exist, while **precompact reads its directive
+before it writes**. The `with-commit`/`without-commit` mode is a different axis —
+commit awareness, not flow — and does not bear on timing.
+
+So one file already reaches both moments, split by flow: under **precompact**,
+quoting `gitlore:memory-writing` gives constrained generation before the facts
+are drafted; under **handoff**, the same text is read after the drafts exist, at
+the moment the summary is composed.
+
+That asymmetry is a hazard as much as an opportunity. handoff's decision ends
+"shared prompt text is shared only where the flows agree", and a review pointer
+in shared text does not agree: under handoff the clause is quoted *inside* the
+instruction to summarize the changes and get approval, so a review that rewrites
+a fact falsifies the summary being approved in the same breath. Review guidance
+has to be ordered ahead of the summarize step or hosted elsewhere. A further
+constraint from the same doc: "with nothing to approve, the wrap-up completes in
+a single turn", and "any rebalancing of the gitlore seam must preserve both
+halves" — so nothing added here may introduce a detection round-trip.
+
+**The FR11 pre-commit gate is the unambiguous review surface.** It blocks the
+parent commit and emits its own directive before any summary is composed, so
+review-driven edits land ahead of the message rather than behind it. It fires
+only when a parent commit follows.
+
+**No index-size trigger.** A size threshold fires on a condition that can be
+permanently true — the index is O(N) against a fixed cap, binding near 139 facts
+at a disciplined 180 B per line — so it is a livelock rather than diminishing
+returns, and it would fire at session start, before the task has begun. The
+budget warning gitlore already emits is the right altitude: a notice a human
+acts on.
+
+**No write-time hook in the first cut.** Gitlore already reaches the pre-write
+moment through precompact, so a `PreToolUse` deny on writes under `memory/` is
+not the only route to constrained generation, and it is the expensive one — a
+turn on every session that writes memory. Both arms of the open question are
+reachable by placing text in surfaces that already exist.
+
+That also means the open question does not get a clean experiment for free: the
+arms are split by flow rather than held apart deliberately, and precompact and
+handoff differ in more than directive placement. A comparison has to control for
+that, or run both placements within one flow.
+
+**A command is not free, which changes the accounting and not the verdict.**
+`gitlore:install` is a command with no `skills/` directory and still appears in
+the injected list at <20 tokens; `gitlore:add-tier` at ~70. Plugin commands
+carry their frontmatter description into every session exactly as skills do, so
+the lever is description length rather than the skill-versus-command choice.
+Index 26,327 B − 1,459 B = 24,868 B, under Claude Code's 24,986 B loader cap by
+118 B and under gitlore's 25,600 B advisory, against ~140 B of new always-on
+description. That margin is what keeps retirement live.
+
+**What condensation cuts.** The bulk of both files is evidence rather than
+worked examples, and it is there because a memory has no standing with a reader
+who was not present. Three ways:
+
+- numbers that make a counterintuitive rule survive an agent's disagreement stay
+  inline, compressed to the figure — merging nets ~0, body rewrites moved the
+  index by exactly zero, the 32,405 → 24,316 B trim whose repairs consumed
+  almost the whole 8 KB it bought;
+- rules that stand alone stay bare — present tense, strip deictics, no incident
+  no entry;
+- provenance — dates, session attributions, which repo, who said what — is cut
+  rather than relocated, and it is most of the 30,201 B.
+
+That leaves `references/` with nothing to hold. The one reusable artifact is the
+pair of auditor briefs, which belong to `/gitlore:index-audit` as what it
+dispatches with. Stripped evidence goes to `docs/design.md` and the changelog,
+alongside the design decision. Estimate to verify while writing: ~6-8 KB
+combined, against 30,201 B today.
+
+**Only a fact with a gitlore-owned moment converts.** The conversion works
+because gitlore owns a gate firing at memory-authoring time.
+`green-is-not-evidence` fires at "about to accept a green test" and
+`design-doc-writing` at "about to write a design doc"; gitlore owns neither
+moment, so both stay memories, and entry 3's index-line rewrite stands on its
+own. Guide shape is not the criterion — an owned trigger is.
+
+**Open.** Whether constrained generation or unconstrained-then-review produces
+better facts, which `just evals` can settle and which the first cut deliberately
+leaves open.
 
 ## 1b · `memory-writing` — reopened
 
