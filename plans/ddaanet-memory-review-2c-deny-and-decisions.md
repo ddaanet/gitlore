@@ -120,6 +120,11 @@ identical command once, unchanged.** If it fails the same way immediately, then
 escape. That costs at most one call and keeps the sandbox in the transient case,
 where the current advice gives it up on first sight.
 
+Confirmed live: an `ls` of an unrelated repo failed with `apply-seccomp:
+unshare(CLONE_NEWUSER): Invalid argument`, and the identical command retried
+unchanged succeeded. The transient reading holds, and escaping the sandbox on
+first sight gives it up for nothing.
+
 **(b) Demote "Strict sandbox mode blocks the escape".** Technically correct and
 currently over-salient: unsandboxed-fallback plus auto mode is what ddaanet
 repos are actually configured with, so a reader hitting `Read-only file system`
