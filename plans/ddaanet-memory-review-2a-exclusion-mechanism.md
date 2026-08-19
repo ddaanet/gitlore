@@ -22,6 +22,22 @@ has already failed. Relocation to always-on prose is the wrong lever when the
 condition is mechanically detectable — `prohibitions` exists precisely to pay
 for such a rule at the moment of action instead of in every session's context.
 
+**Superseded by the exclusions taken in
+[2c](ddaanet-memory-review-2c-deny-and-decisions.md).** `git:*`, `ls:*`, `find:*`
+and `claude:*` discharge the paragraph's whole enumeration — every git verb it
+lists, and `ls .claude/` — automatically and with no flag. What survives is
+narrow: `cat`/`head` of a masked path, which returns empty because the mask is
+`/dev/null`; and the standing permission itself, which still has work to do
+wherever the matcher fails closed (a subshell, `$( … )`, `sh -c`, a quoted
+argument, a double space).
+
+That residue is no longer acted-inline. Pre-exclusions the paragraph fired while
+*composing* a command, with no symptom to arrive on — the property that made it
+wrong for a memory. Post-exclusions it fires only after a sandboxed command has
+already returned something odd, which is a lookup with a symptom. So the
+resolution is to **shrink it in place**, not to relocate it to `prohibitions`,
+and the `prohibitions` feature request for it is withdrawn.
+
 **Every noisy case folds into command-pattern matching except one.** Matching on
 error text is a drift surface with a silent failure mode — the same objection
 `git-stderr-and-parsing` already records against git's parenthesized push

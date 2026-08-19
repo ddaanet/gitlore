@@ -15,9 +15,16 @@ feature request or bug report).
 | # | Bytes | Fact | Verdict | Decided |
 |---|-------|------|---------|---------|
 | 1 | 867 | `memory-writing` | plugin | done — `gitlore:memory-writing` skill, shape in 4c |
-| 2 | 760 | `sandbox-effects` | update (relocate + merge out) | pending |
-| 3 | 691 | `green-is-not-evidence` | update (index line) | pending |
+| 2 | 760 | `sandbox-effects` | update (shrink + merge out) | done — (a)-(f) ruled, (a) and (c) as refined |
+| 3 | 691 | `green-is-not-evidence` | update (index line) | done — relink + redrafted line approved |
 | 4 | 590 | `index-compaction-triggers` | plugin | done — skill + `/gitlore:index-audit`, shape in 4c |
+
+**Actions taken alongside the rulings.** The four `sandbox.excludedCommands`
+entries are written to user scope and verified (2c). The `cwd-safety`
+relaxation and the `unsandbox-git-status` scope hole are each proposed as a
+brief in their own repo — `brief-sandbox-exclusions-relaxation.md` and
+`brief-permission-scope-hole-and-retirement.md` — which ends this session's
+involvement with both.
 
 ## Parts
 
@@ -72,6 +79,14 @@ In [2a](ddaanet-memory-review-2a-exclusion-mechanism.md),
 [2c](ddaanet-memory-review-2c-deny-and-decisions.md) and
 [2d](ddaanet-memory-review-2d-corpus-scrape.md).
 
+**Ruled.** All of (a) through (f) approved, two of them as refined during the
+ruling. (a) shrinks the read-only-inspection paragraph in place instead of
+relocating it to `prohibitions`, because the settled `git:*`/`ls:*`/`find:*`/
+`claude:*` exclusions discharge its enumeration and leave only a symptom-driven
+residue. (c) adds `update-config` as the sanctioned writer while keeping the
+`Edit`-versus-raw-unlink contrast, both stated as unverified. The other four
+stand as written in 2a and 2c. Edits batch to the end of the pass.
+
 ## 3 · `green-is-not-evidence` — 691 B
 
 Second largest line, 2.6% of the index. Body 15,073 B, 13 shapes in section 1
@@ -114,6 +129,11 @@ Proposed: cut it. If the intended referent is
 `spec-enumerations-need-rederiving` — a plan that hand-lists call sites while
 conformance passes clean is a brief misdescribing the code — link that instead.
 
+**Ruled: relink to `[[spec-enumerations-need-rederiving]]`** rather than cut. The
+sentence sits in the SDD-dispatch paragraph, and that fact is a brief
+misdescribing the code in exactly that context, so the pairing is live and only
+its referent died.
+
 ### (b) The index line enumerates diagnoses, not symptoms
 
 `index-compaction-triggers` states the direction: an agent arrives holding a
@@ -145,6 +165,25 @@ seam whose value spans more than the thing being faked.
 
 Expected size: roughly unchanged at ~690 B. The rewrite buys routing, not
 headroom; headroom is the separate retirement decision.
+
+**Drafted, 690 B against 691 today:**
+
+> `- [Green is not evidence](ddaanet/green-is-not-evidence.md) — a test that
+> stays green with the code it names deleted, or green you never watched fail
+> (inherited, subagent-authored): the fixture-satisfied shapes and the rebuild
+> for each; a substring or `--partial` another line satisfies; a negative that
+> reds against working code (a gate that waits then proceeds); fixture twins
+> that coincide inside one clock second; a seam that replaces the whole
+> expression; and writing a negative that cannot go vacuous —
+> absent-string/path/proxy staleness, pairing over one fixture, decoy-first
+> ordering, exact-block equality, errexit skipping it behind a positive,
+> deleting an untestable one whole`
+
+The eight fixture-satisfied shapes collapse into the lead clause rather than
+being named, which is what pays for the four arrivals that were missing. The
+`description:` frontmatter takes the same text.
+
+**Ruled: approved.**
 
 ### (c) Two things this raises for later entries
 
@@ -442,3 +481,6 @@ Proposed addition, drawn from what went wrong in `sandbox-effects`:
 - Past roughly a screen of sections, lead with a symptom → section map.
 - A fact that is a *cost of the remedy* files under the remedy, not under the
   symptom that led you to it.
+
+**Ruled: all five approved**, landing in the `gitlore:memory-writing` skill body
+rather than in a memory file.

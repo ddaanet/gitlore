@@ -135,10 +135,17 @@ configuration as the baseline the rest of the file assumes.
 skill.** Verified in the CC 2.1.233 bundle: `name:"update-config"`,
 `menuDescription:"Change settings: hooks, permissions, environment variables"`,
 "Use this skill to configure the Claude Code harness via settings.json". The
-file currently says the `Edit` tool *can* write that path — replace with the
-skill, which is the sanctioned writer and an owner in the memory-writing sense.
-Whether `update-config` also clears the `enabledPlugins` classifier denial is
+file currently says the `Edit` tool *can* write that path. Whether
+`update-config` also clears the `enabledPlugins` classifier denial is
 **untested**; record it as open rather than asserting either way.
+
+**Add rather than replace.** The `Edit` sentence states a mechanical contrast —
+the command sandbox blocks a raw git unlink of the path, and a harness tool is
+not under that sandbox — which nothing here refutes; the bundle read establishes
+only that `update-config` exists and is sanctioned, not that `Edit` fails. Naming
+the skill as the route and keeping the contrast costs a clause. Both are
+unverified in this pass, and probing the `Edit` half means writing user config,
+so neither gets asserted harder than it is.
 
 **(d) Name the mechanism in the slash-command section.** The `## Context`
 injection is `` !`cmd` `` expansion in the command body, not a special harness
@@ -318,6 +325,44 @@ explicit pathspec strands it too. Also corrected: a classifier call is one model
 call over cached context with no generation, so it is cheaper than an agent
 turn; batching `cd <E> && git status` into one call beats splitting it, and the
 cd+git rule is a cost to note rather than a shape to avoid.
+
+### Verification of the exclusions, once written
+
+Written to user-scope `~/.claude/settings.json` through the built-in
+`update-config` skill, using `Edit`; the classifier did not refuse it, so the
+route works for `sandbox.excludedCommands`. Whether it also clears the
+`enabledPlugins` denial stays untested. The superseded `"git status"` exact
+entry was dropped in the same edit — `git:*` strictly covers it.
+
+`${TMPDIR-UNSET}` as the discriminator, each probe its own call:
+
+| probe | result |
+|---|---|
+| `echo` alone (control) | `/tmp/claude-1000` — still sandboxed |
+| `git log -1 --oneline; echo …` | `UNSET` |
+| `ls -a; echo …` | `UNSET`, and the listing carries none of the 22 masks |
+| `find . -maxdepth 1 -type c; echo …` | `UNSET`, zero masks |
+| `claude --version` | ran; **not** discriminated, see below |
+
+Three of the four are confirmed unsandboxed by direct reading. `claude:*` rests
+on the same matcher rather than on its own measurement, because every form
+carrying the discriminator was denied.
+
+**The observed cost: unsandboxed commands reach the classifier, and it denies
+benign compounds unpredictably.** `ls -a | wc -l; echo "…${TMPDIR-UNSET}"`,
+`find … | wc -l; echo …` and `claude --version; echo …` were each refused, while
+`ls -a; echo …`, `find …; echo …`, `git log …; echo …` and a bare
+`claude --version` passed. No stable rule separates them — the pipe is not it,
+since the `claude` denial carries none. This is judgement, not a predicate, and
+it matches the idiosyncrasy `classifier-denied-self-config` already records.
+
+Before the exclusions these calls were auto-allowed by
+`autoAllowBashIfSandboxed` with no classifier involvement, so the denials are
+new. That is the price of the containment decision taken above, now observed
+rather than predicted, and it lands hardest on `git:*` — a third of Bash traffic.
+The mitigation is shape rather than settings: keep an excluded command in its own
+call instead of appending a compound to it. Carry this into the memory pass; no
+existing fact states it.
 
 **Both settled.** The corpus scrape is in
 [2d](ddaanet-memory-review-2d-corpus-scrape.md); my human partner has taken
