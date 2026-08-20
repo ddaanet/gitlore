@@ -1,9 +1,10 @@
 # Claude Code auto-memory retrieval mechanism
 
-Background research for design.md's D17 (tiered memory). Source of the
-empirical claims cited in D17 and the 2026-07-14 changelog entry
-("Designed tiered global/org memory"). The conclusions below are restated
-as settled fact in design.md itself (D17, and the "Skill, not a gate"
+Background research for tiered memory (design.md's D17, detailed in
+`references/tiered-memory.md`'s D26). Source of the empirical claims cited
+there and in the 2026-07-14 changelog entry ("Designed tiered global/org
+memory"). The conclusions below are restated as settled fact in
+`references/tiered-memory.md` (D26, and design.md's "Skill, not a gate"
 section around FR16); this file keeps the underlying evidence trail.
 
 ## Method
