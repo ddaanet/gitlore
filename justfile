@@ -15,10 +15,11 @@ trace := "false"
 # What a gate outcome depends on, and nothing else. Three sets, because the
 # three gates read different things.
 #
-# `memory/`, `docs/` and `plans/` are out of both, deliberately: no check reads
-# any of them, and memory is staged as a gitlink, so including it re-ran the
-# whole suite on every memory commit. `.gitignore` is in, since it decides which not-yet-added
-# files the hash enumerates at all.
+# `memory/`, `docs/` and `plans/` are out of both, deliberately: nothing the
+# sentinel guards reads any of them, and memory is staged as a gitlink, so
+# including it re-ran the whole suite on every memory commit. The two doc/memory
+# checkers run ahead of the sentinel instead, uncached. `.gitignore` is in,
+# since it decides which not-yet-added files the hash enumerates at all.
 #
 # Naming paths rather than inferring the tree is also what keeps the phantom
 # home dotfiles the sandbox surfaces in the working directory out of the hash.
@@ -57,6 +58,10 @@ precommit: check-distribution
     # cached pass would skip this on exactly the commit that edits a memory
     # file. It costs 0.4s, so there is nothing worth caching.
     scripts/check-memory-hygiene.py
+    # Same placement, for the reason `docs/` is out of `precommit_inputs`: a
+    # docs-only commit moves no hash there, so a cached pass would skip the
+    # graph check on precisely the commit that rewires the graph.
+    scripts/check-docs-links.py
     if check-sentinel precommit {{ precommit_inputs }}; then
         echo "precommit: cached (inputs unchanged)"
         exit 0
