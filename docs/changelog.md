@@ -6,6 +6,10 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-25 — Every `docs/` file is capped at 400 lines, and the checker enforces it](changelog/2026-08-25-docs-nodes-capped-at-400-lines.md)
+  — five files still ran 475–930 lines after the graph split; each cut along a
+  need-time seam into 19 reference nodes, the hub's decision conclusions moved
+  into each node's opening summary, and `oversized-file` became a blocking check
 - [2026-08-25 — docs/ and plans/ are hard-wrapped by a formatter, so a line count means something](changelog/2026-08-25-docs-hard-wrap.md)
   — rumdl (MD013 reflow only) was the one candidate with zero rendering changes
   and untouched emphasis markers; pinned through `uv.lock`, run without a

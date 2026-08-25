@@ -260,6 +260,28 @@ plant_ref() {
   [[ "$output" == *"unstubbed-decision"* ]]
 }
 
+# --- the line cap ----------------------------------------------------------
+
+@test "oversized file: a node one line past the cap blocks" {
+  plant_hub 'See [a](references/a.md).'
+  # 401 lines: the first is the heading, the rest filler the checker ignores.
+  { printf '# A\n'; for _ in $(seq 400); do printf 'filler\n'; done; } \
+    > docs/references/a.md
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"oversized-file"* ]]
+  [[ "$output" == *"references/a.md"* ]]
+  [[ "$output" == *"401 lines"* ]]
+}
+
+@test "oversized file: a node exactly at the cap passes" {
+  plant_hub 'See [a](references/a.md).'
+  { printf '# A\n'; for _ in $(seq 399); do printf 'filler\n'; done; } \
+    > docs/references/a.md
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+}
+
 @test "clean tree: the gate signs off with the checks it ran" {
   plant_ref "a.md" '# A — decisions D9' '' '**D9 — First**' '' 'Argument.'
   plant_hub 'See [a](references/a.md).' '' '- **D9** — first'
@@ -271,6 +293,7 @@ plant_ref() {
   [[ "$output" == *"duplicate-decision"* ]]
   [[ "$output" == *"undefined-decision"* ]]
   [[ "$output" == *"enumeration-drift"* ]]
+  [[ "$output" == *"oversized-file"* ]]
   [[ "$output" == *"1 decision"* ]]
 }
 

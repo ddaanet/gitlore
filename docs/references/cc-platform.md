@@ -6,6 +6,11 @@ any hook field that can force a `Read`, and the `Edit` weld defect. Each carries
 the empirical work that established the platform behaviour, which is what makes
 them long and what makes them worth keeping whole.
 
+- Harness workarounds — **D15** an in-process-worktree memory-drift guard ·
+  **D18** active recall is a skill the agent runs itself, with no hook and no
+  state · **D23** the `Edit` weld defect is contained by a pair that computes
+  the intended result, repairs, and reports its own obsolescence
+
 ---
 
 **D15 — In-process-worktree memory-drift guard**
@@ -168,3 +173,24 @@ weldable edit to keep the observation.
 The compose check and the sync refusal stay alongside it. The pair sees only
 glue arriving through `Edit`; a merge, a hand-edited carrier or a `Write`
 reaches an index without passing it.
+
+## Rejected alternatives
+
+**Hook-side injection of the bodies**, from a request file the agent writes:
+`.claude/gitlore-recall` listing up to five store-relative paths, a
+`PostToolBatch` hook validating and resolving it, and a content-addressed ledger
+so a body already in context was never sent twice. It delivers unconditionally,
+which a directive cannot — but `additionalContext` spills past ~2KB into a
+pointer file, and injected bytes never satisfy the `Read`-before-`Edit` ledger,
+so the common case (recall a fact, then correct it) paid for the body twice and
+the large case delivered a preview. The validation, the ledger and its two reset
+events existed only to serve that channel; the selection judgement they
+surrounded was always the agent's (D18).
+
+**A `PreToolUse` deny on the first durable write of an episode,** forcing a
+recall decision before the agent may write. Making a denial the *normal* control
+flow spends a turn on every editing episode forever and trains the agent to read
+denials as routine, corroding the channel that should mean stop. Arming it at
+`UserPromptSubmit` is worse still: it duplicates the native classifier that
+already fires there. The obligation lives in the calling skill's flow instead
+(D18).
