@@ -300,16 +300,11 @@ gitlore_probe_writable() {
 }
 
 # Exit 0 if a git stderr blob signals lock contention worth retrying, 1 if not.
-# Lowercases the haystack so casing in git's messages doesn't matter. Resolve's
-# one-checkout-per-branch error ("'live' is already used by worktree at …", D3)
-# is explicitly NOT a retryable lock — it must fail fast. See D13.
+# Lowercases the haystack so casing in git's messages doesn't matter. See D13.
 # Args: $1 = the captured stderr text.
 gitlore_git_is_lock_error() {
   local err
   err=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
-  case "$err" in
-    *"is already used by worktree at"*) return 1 ;;   # D3 fast-fail, not a lock
-  esac
   case "$err" in
     *index.lock*)               return 0 ;;
     *"file exists"*)            return 0 ;;

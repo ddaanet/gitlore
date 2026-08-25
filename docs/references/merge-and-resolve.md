@@ -26,7 +26,7 @@ Take what every store's remote holds, and publish nothing. A skill for the same 
 
 It is the only path by which a pinned tier advances (D43): per store, an already-contained remote is nothing to do, a strictly-ahead remote is a fast-forward followed by the tier adoption, and a diverged one prepares a merge marked `publish: "no"`, which stops the continuation after the local `HEAD:live` fast-forward. Stores are visited tiers-first, as on the push side, and for the same reason memory's own missing remote is reported as nothing to take rather than a failure: a tier with no remote is a misconfiguration worth stopping on, since it exists to be shared, and the memory root is not. A tier fast-forward writes the root index and commits nothing — the moved gitlink and the recomposed index are one memory change, and recording them is the FR11 commit's job.
 
-## Decisions — D1, D2, D3, D6, D7, D9, D13, D24
+## Decisions — D1, D2, D3, D6, D7, D9, D13, D24, D41
 
 **D1 — `live` branch as memory trunk, independent of parent's default branch**
 
@@ -77,7 +77,7 @@ When the flag stabilizes or the feature becomes default, the install-time check 
 
 SessionStart, `pre-commit`, `pre-push`, and `/gitlore:resolve` all run `git -C <mempath> …` against the memory submodule. Concurrent Claude sessions (or a session racing its own background work) can collide on the index/ref lock, and a transient `index.lock` / `cannot lock ref` failure would abort the operation — blocking a commit or stranding SessionStart under `set -e`. The fix is `gitlore_git` (`scripts/lib/util.sh`), a drop-in wrapper that retries `git "$@"` on transient lock contention with exponential backoff. The default schedule (`0.1 0.2 0.4 0.8 1.6 3.2 3.7`) sums to exactly 10.0s wall-clock — the last term is the budget remainder, not a doubled value — and is overridable via `GITLORE_GIT_RETRY_SCHEDULE` (tests set it to zeros for instant runs).
 
-Only lock-contention failures retry, recognized by `gitlore_git_is_lock_error` matching `index.lock`, `file exists`, `unable to create …*.lock`, `cannot lock ref`, and `another git process`. Every other failure fails fast — retrying a real error wastes the budget. The `is already used by worktree at` message is explicitly **not** retryable: that is D3's one-checkout-per-branch write lock signalling that another session holds the resolve lock, a deliberate fast-fail, not transient contention. The final attempt's stderr and exit code surface unchanged and stdout passes through untouched, so the wrapper is transparent to callers. Applied to mutating calls only (`branch`, `checkout`, `merge`); read-only probes never take the lock and stay on plain `git`.
+Only lock-contention failures retry, recognized by `gitlore_git_is_lock_error` matching `index.lock`, `file exists`, `unable to create …*.lock`, `cannot lock ref`, and `another git process`. Every other failure fails fast — retrying a real error wastes the budget. The final attempt's stderr and exit code surface unchanged and stdout passes through untouched, so the wrapper is transparent to callers. Applied to mutating calls only (`branch`, `checkout`, `merge`); read-only probes never take the lock and stay on plain `git`.
 
 **D24 — A directive that names a sub-agent carries its own authorization**
 
@@ -86,3 +86,9 @@ The reader of a gate's stderr is the agent, and above every surface a repo contr
 The directive therefore states the licence instead of assuming it: **the git operation that triggered the merge is itself the request for the dispatch.** That satisfies the harness rule as written, so no exception, override or per-machine configuration is needed. Keeping the argument in the text is what scopes it — the authorization is visibly *this* dispatch's, derived from *this* operation, never a general licence to skip a permission gate. The directive also separates the two approvals it carries: the dispatch needs none, the merge the sub-agent proposes still does, and the continuation line says so. The name is emitted plugin-qualified (`gitlore:memory-merger`) because a bare one fails discovery. `gitlore_emit_merge_directive` is the single emitter, so the shape reaches both continuations — `continue-after-merge` and the stale-state `abort-then-retry` — and any directive added later that names a sub-agent.
 
 **Rejected: putting the qualification anywhere but the directive.** Amending the harness rule in the consumer's own configuration ("…unless a hook directive instructs it") edits something that is not user configuration, and repeats per machine. Recording it as a memory fact makes every consumer learn separately what one directive could say once, and a reader whose store lacks the fact meets the same wall. Leaving the agent to infer authorization from context is exactly the inference the blanket rule exists to remove.
+
+**D41 — Detached at `live`: one branch model for every store, one commit path**
+
+Memory and every tier are checked out detached at `live`'s commit (design.md's Architecture › Branch Model). Detached HEADs coexist on one commit, which is what a tier needs: its gitdir is shared across a repo's memory worktrees, where named branches would collide. The payoff is **one commit path** — a merge always reduces to "my pending commit vs the authoritative `live`, local then remote", and every resolution re-detaches at the new `live`.
+
+The model is the reason D1, D2, D3 and D6 read as they do, and the reason the tier decisions that build on it (D42, D43) can assume one shape of store rather than two.

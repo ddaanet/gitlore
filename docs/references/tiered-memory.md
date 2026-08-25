@@ -1,6 +1,6 @@
-# Tiered memory — decisions D17, D26–D44
+# Tiered memory — decisions D17, D26–D40, D42–D44
 
-Full decision set for FR15 (tiered memory) — the mechanism `design.md`'s D17 points at. Motivation, FR15 itself, and the Architecture overview stay in `design.md`; this file is the decision-level detail, split out because the cluster runs to ~47 KB, on par with all 24 other decisions combined, and is only needed when touching this subsystem specifically.
+Full decision set for FR15 (tiered memory) — the mechanism `design.md`'s D17 points at. Motivation, FR15 itself, and the Architecture overview stay in `design.md`; this file is the decision-level detail, split out because the cluster runs to ~47 KB, on par with every other decision in the graph combined. Most of it is needed only when touching this subsystem; the exception is the tier-store trio D42–D44, which the commit and merge paths reach from outside it.
 
 ---
 
@@ -8,12 +8,12 @@ Full decision set for FR15 (tiered memory) — the mechanism `design.md`'s D17 p
 
 FR15 calls for shared tiers (a truly-global `lore`, an org-scoped `ddaanet`, …) surfacing in *every* participating repo alongside its local memory, without a flat merge that would blow the always-loaded index budget. Across N sibling repos, `user`, CC-platform `reference` and portable `feedback` facts duplicate and drift, while `project` facts are correctly repo-local. The design keeps Anthropic's memory structure — index, files, agentic recall — and upgrades only gitlore's *composition* of the root index.
 
-The mechanism is a subsystem rather than a single call, so its decisions are recorded individually as **D26 through D44**:
+The mechanism is a subsystem rather than a single call, so its decisions are recorded individually as **D26–D40 and D42–D44**:
 
 - Retrieval and routing — **D26** the root index one-liner is canonical · **D27** materialization by enclosure · **D28** routing without a content classifier · **D32** mount and create · **D33** a tier's always-on conventions
 - Composition — **D29** composition is placement · **D30** the tier manifest · **D31** compose triggers and validation · **D34** presence authority · **D35** the welded-line refusal · **D36** two projections · **D37** order as a merge input
 - The authoring surface — **D38** the one-way sync · **D39** the routing-key advisories · **D40** pre-existing drift
-- Stores and merges — **D41** the branch model · **D42** tier lockstep · **D43** tier pinning · **D44** tier merges
+- Stores and merges — **D42** tier lockstep · **D43** tier pinning · **D44** tier merges. All three assume the detached-at-`live` branch model, which is D41, in [merge-and-resolve.md](merge-and-resolve.md).
 
 **D26 — The root index one-liner is canonical; frontmatter is a secondary surface**
 
@@ -95,7 +95,7 @@ Where a bullet sits in an index is an authored choice — the agent groups relat
 
 **D38 — Authoring-time sync is one-way (index → frontmatter), because the index is canonical**
 
-A separate `PreToolUse(Write|Edit|Bash)` + `PostToolBatch` pair on the root `MEMORY.md` mirrors an edited index one-liner's hook into the target file's frontmatter `description` (after-the-dash hook → `description` only; never `name`/title, which is the `[[wikilink]]` slug and file identity). One-way because a bidirectional sync would resolve conflicts by tool-call order, and since the file body is usually written after the index, the weaker frontmatter would propagate *back* and clobber the curated index hook — the reliable retrieval lever. Index hooks routinely carry content the frontmatter lacks, so letting frontmatter win a conflict is a silent downgrade.
+A separate `PreToolUse(Write|Edit|Bash)` + `PostToolBatch` pair on the root `MEMORY.md` mirrors an edited index one-liner's hook into the target file's frontmatter `description` (after-the-dash hook → `description` only; never `name`/title, which is the `[[wikilink]]` slug and file identity). One-way because a bidirectional sync would resolve conflicts by tool-call order, and since the file body is usually written after the index, the weaker frontmatter would propagate *back* and clobber the curated index hook — the reliable retrieval lever. Index hooks routinely carry content the frontmatter lacks: measured 2026-07-16 over 528 transcripts across 8 projects, agents curate the index one-liner over the `description` about 3:1. Letting frontmatter win a conflict is therefore a silent downgrade.
 
 `PreToolUse` captures the pre-edit index image so the post half acts **per line, keyed by what changed against that image** — not a blanket sweep, which would push an unrelated *stale* index line onto fresh frontmatter. A line whose **hook changed** propagates, overwriting the `description`; a **newly-added** line (absent from the pre-image) fills the `description` *only when it is empty*, never clobbering a description authored alongside the new file in the same batch; an **unchanged or merely reordered** line is a no-op.
 
@@ -120,10 +120,6 @@ What neither can see is the third failure mode — a trigger that is *present bu
 **D40 — Pre-existing index/frontmatter drift is a manual sweep, not a command**
 
 The sync only pushes a *freshly edited* index line onto frontmatter; it never fixes a **stale index** line, the harmful direction, because judging which of two divergent texts is fresher is a semantic call rather than a string op. Pre-existing drift therefore needs a manual sweep that picks the correct one-liner per divergent file and writes it to the canonical index, frontmatter following on that edit. It runs **after the sync is deployed** — reconciling first, then editing without the sync in place, just re-drifts frontmatter. It is per-project plus once per shared tier, and **opportunistic, not mandated**: the index is the reliable lever, while stale frontmatter is low-harm and heals on that line's next index edit. Non-gitlore CC-memory stores are out of scope. **The sweep re-verifies against current reality rather than propagating body→index.** Measured here (2026-07-17): of 60 index lines only 4 were genuinely stale, and *two of those had stale bodies as well* — so "index stale ⇒ trust the body" is unsafe, because bodies rot too, especially platform- and behaviour-dependent ones. A wrong *body* is fixed, along with any downstream code or docs it seeded, not propagated. At 4 files no `/gitlore:reconcile` command is warranted.
-
-**D41 — Detached at `live`: one branch model for every store, one commit path**
-
-Memory and every tier are checked out detached at `live`'s commit (design.md's Architecture › Branch Model). Detached HEADs coexist on one commit, which is what a tier needs: its gitdir is shared across a repo's memory worktrees, where named branches would collide. The payoff is **one commit path** — a merge always reduces to "my pending commit vs the authoritative `live`, local then remote", and every resolution re-detaches at the new `live`.
 
 **D42 — Tier commit/push lockstep is driver-side, with one approval per episode**
 
