@@ -56,8 +56,8 @@ with the gate reporting cached.
 - **Widen `precommit_inputs` to include the three directories.** Correct on
   coverage, wrong on cost: every prose edit to a skill body would re-run the
   entire bats suite to reach assertions that take 1.8s. Measured — the full
-  `plugin_distribution.bats` is 10 tests in 1.8s, pure file reads and frontmatter
-  greps, no fixture repos.
+  `plugin_distribution.bats` is 10 tests in 1.8s, pure file reads and
+  frontmatter greps, no fixture repos.
 - **Rely on `GITLORE_GATE_FORCE=1` before a release.** Manual, undocumented as a
   release step, and depends on someone remembering the blind spot exists.
 - **Rely on `just evals`.** Its input set does cover the three directories, but

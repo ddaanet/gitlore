@@ -1,3 +1,25 @@
 # 2026-07-27 — `refs/gitlore/compose-base` became an audit chain, so a compose can be replayed after the fact
 
-The ref was a bare blob overwritten on every successful pass: it named the base the *next* merge would use, and nothing else. That is enough to merge and not enough to explain a merge, which is why a pointer line that vanished from the live store stayed undiagnosed — the pass that dropped it left no record of what it had read. The ref is now a commit chain, one commit per pass that reconciled something, whose tree holds both merge inputs: `carrier.md` (unchanged in role — the base) and `root.md`. The root side is the one worth adding, because it is the one that cannot be recovered otherwise: root composition floats ahead of any commit, so the state a pass actually read may never have been committed. `git log refs/gitlore/compose-base` is now the history, and `refs/gitlore/compose-base~N:carrier.md` recovers any past base. Three properties beyond the shape, each pinned by a test that was turned red by a deliberate fault: an idempotent pass appends nothing (the tree is compared against the tip's, so the log records what moved, not how often the hook fired); an `up`-only pass still appends nothing and does not move the ref, matching the existing contract that a merge continuation reconciles nothing; and a ref left over as a bare blob is still read as the base, with the next save migrating it to a chain via a parentless first commit — the shape every live store carries today, so the upgrade needs no repair pass. `commit-tree` is run under a fixed `gitlore` identity rather than ambient git config, which a hook environment or a repo without `user.email` would not supply. The chain is local by construction (outside `refs/heads`, so nothing pushes it), which is what an audit of *this* clone's composes should be. 5 cases in `tests/index_compose.bats`.
+The ref was a bare blob overwritten on every successful pass: it named the base
+the *next* merge would use, and nothing else. That is enough to merge and not
+enough to explain a merge, which is why a pointer line that vanished from the
+live store stayed undiagnosed — the pass that dropped it left no record of what
+it had read. The ref is now a commit chain, one commit per pass that reconciled
+something, whose tree holds both merge inputs: `carrier.md` (unchanged in role —
+the base) and `root.md`. The root side is the one worth adding, because it is
+the one that cannot be recovered otherwise: root composition floats ahead of any
+commit, so the state a pass actually read may never have been committed.
+`git log refs/gitlore/compose-base` is now the history, and
+`refs/gitlore/compose-base~N:carrier.md` recovers any past base. Three
+properties beyond the shape, each pinned by a test that was turned red by a
+deliberate fault: an idempotent pass appends nothing (the tree is compared
+against the tip's, so the log records what moved, not how often the hook fired);
+an `up`-only pass still appends nothing and does not move the ref, matching the
+existing contract that a merge continuation reconciles nothing; and a ref left
+over as a bare blob is still read as the base, with the next save migrating it
+to a chain via a parentless first commit — the shape every live store carries
+today, so the upgrade needs no repair pass. `commit-tree` is run under a fixed
+`gitlore` identity rather than ambient git config, which a hook environment or a
+repo without `user.email` would not supply. The chain is local by construction
+(outside `refs/heads`, so nothing pushes it), which is what an audit of *this*
+clone's composes should be. 5 cases in `tests/index_compose.bats`.

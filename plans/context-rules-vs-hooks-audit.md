@@ -38,10 +38,10 @@ prohibition half, keep its lockstep and handoff sentences.
 **`shared-claude.md`: "Commit `memory/` with the code, never `.gitignore` it."**
 `pre-commit` does this unconditionally. Delete.
 
-**`CLAUDE.md`: "Conventional-commit prefixes are required."** The commit-msg hook
-is a hard gate, not merely a rewriter: a missing, malformed or unknown prefix
-exits 1 with the expected grammar and the full list of valid prefixes on stderr.
-Reduce to the exception the gate does not state.
+**`CLAUDE.md`: "Conventional-commit prefixes are required."** The commit-msg
+hook is a hard gate, not merely a rewriter: a missing, malformed or unknown
+prefix exits 1 with the expected grammar and the full list of valid prefixes on
+stderr. Reduce to the exception the gate does not state.
 
 ### Executed
 
@@ -53,8 +53,9 @@ stays, and carries the don't-prepare-it-in-advance rule with it.
 ## Class B — convertible: not gitlore's work
 
 Seven rules are mechanically interceptable and become PreToolUse hooks in the
-`prohibitions@ddaanet` plugin. **That repo owns the list, the matchers and the
-deny/ask decisions** — see `/Users/david/code/prohibitions/brief-prohibitions-plugin-bootstrap.md`.
+`prohibitions@ddaanet` plugin.
+**That repo owns the list, the matchers and the deny/ask decisions** — see
+`/Users/david/code/prohibitions/brief-prohibitions-plugin-bootstrap.md`.
 Deliberately not restated here: a second copy would rot the first time that repo
 revises a decision, and nothing writes back.
 
@@ -63,10 +64,11 @@ cannot come out of `shared-claude.md` until those hooks exist and are verified.
 
 ## Class C — judgement, prose only
 
-Roughly two thirds of `shared-claude.md` has no mechanical trigger and must stay:
-the whole of *Working with my human partner*, *Deciding and planning*, *Tests*,
-*Code*, most of *Dispatch*, and *A brief's recommendation is input, not a
-decision*. Same for `CLAUDE.md`'s design, writing and testing sections.
+Roughly two thirds of `shared-claude.md` has no mechanical trigger and must
+stay: the whole of *Working with my human partner*, *Deciding and planning*,
+*Tests*, *Code*, most of *Dispatch*, and
+*A brief's recommendation is input, not a decision*. Same for `CLAUDE.md`'s
+design, writing and testing sections.
 
 Notably **"don't prepare the memory approval summary in advance"** must stay
 prose. It prohibits unprompted proactive work, and there is no tool call to
@@ -74,18 +76,18 @@ intercept — the failure is work the agent does *instead of* triggering the gat
 
 ## What this actually buys
 
-Class A + Class B removes on the order of 25–30 lines from `shared-claude.md` and
-`CLAUDE.md` combined — real, but it will not transform the file, because Class C
-is the bulk. The larger effect is qualitative: every remaining line becomes a
-judgement rule rather than a tripwire, so the file stops reading as a minefield
-and starts reading as guidance.
+Class A + Class B removes on the order of 25–30 lines from `shared-claude.md`
+and `CLAUDE.md` combined — real, but it will not transform the file, because
+Class C is the bulk. The larger effect is qualitative: every remaining line
+becomes a judgement rule rather than a tripwire, so the file stops reading as a
+minefield and starts reading as guidance.
 
-The governing principle is already in the tier — *a gate that emits its own
-instructions is invoked, not pre-satisfied*. Its precondition is that the gate be
-cheap, reversible and self-describing, which every Class B candidate satisfies:
-the agent proposes, the hook blocks, the block teaches, the agent complies. One
-call, paid only when the situation arises, instead of standing context paid by
-every session in every ddaanet repo.
+The governing principle is already in the tier —
+*a gate that emits its own instructions is invoked, not pre-satisfied*. Its
+precondition is that the gate be cheap, reversible and self-describing, which
+every Class B candidate satisfies: the agent proposes, the hook blocks, the
+block teaches, the agent complies. One call, paid only when the situation
+arises, instead of standing context paid by every session in every ddaanet repo.
 
 ## Constraints on execution
 
@@ -93,8 +95,8 @@ every session in every ddaanet repo.
   The hooks must exist and be verified **before** any prose comes out, or the
   window between removal and enforcement is unguarded across all of them.
 - The hooks live in the **`prohibitions@ddaanet`** plugin, not in gitlore's
-  `hooks/hooks.json` — gitlore ships to consumers of the gitlore plugin, which is
-  not the same population as ddaanet tier mounters.
+  `hooks/hooks.json` — gitlore ships to consumers of the gitlore plugin, which
+  is not the same population as ddaanet tier mounters.
 - **The plugin and the tier are independently installed, and nothing couples
   them.** The tier mounts through gitlore; the plugin installs through the
   marketplace. Once the prose leaves `shared-claude.md`, a repo that mounts the

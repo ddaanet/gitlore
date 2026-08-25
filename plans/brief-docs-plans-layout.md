@@ -73,11 +73,11 @@ are stated to future agents. The two commits are `c37f3cb` (split DESIGN.md) and
 
 Per-repo starting states as of 2026-07-29:
 
-- **handoff** — root `DESIGN.md`; `docs/changelog.md` + `docs/changelog/` already
-  exist and already follow the convention; `plans/` already exists. Loose design
-  docs sit directly in `docs/` (`2026-07-18-precompact-drive-design.md` and
-  three others) — those are prospective and belong in `plans/`. Also has a
-  `docs/superpowers/` tree.
+- **handoff** — root `DESIGN.md`; `docs/changelog.md` + `docs/changelog/`
+  already exist and already follow the convention; `plans/` already exists.
+  Loose design docs sit directly in `docs/`
+  (`2026-07-18-precompact-drive-design.md` and three others) — those are
+  prospective and belong in `plans/`. Also has a `docs/superpowers/` tree.
 - **gitmoji** — root `DESIGN.md`; `docs/superpowers/{specs,plans}`; one loose
   `docs/2026-07-27-sessionstart-message-brief.md`. No changelog yet.
 - **onekeys** — root `DESIGN.md`; `docs/superpowers/{specs,plans}`. No changelog

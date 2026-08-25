@@ -40,6 +40,11 @@ record decisions there rather than in a memory file.
 - Test the invocation path, not just the code: assert discovery and `[ -x ]`,
   and that `just test` actually reaches the suite. Green means nothing until you
   know what ran.
+- `just format-docs` (first step of `precommit`) hard-wraps `docs/` and `plans/`
+  with the rumdl pinned in `uv.lock`; `uv sync` once materializes `.venv/bin`,
+  which `.envrc` puts on `PATH` — with PyYAML, so the wiring suite does not
+  depend on the system python. A pin mismatch stops the recipe rather than
+  wrapping.
 - `just precommit` is fast and frequent. `just evals` drives the real claude
   CLI and costs time and money — run it explicitly, not as part of a release.
   `just release` depends on `prerelease`, which is just `precommit`.

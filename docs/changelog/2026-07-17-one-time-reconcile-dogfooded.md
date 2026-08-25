@@ -1,3 +1,19 @@
 # 2026-07-17 — D17 slice 2 (one-time reconcile) dogfooded on this repo's memory
 
-A per-file audit (5 parallel judges over all 60 index lines) found only **4 genuinely stale index one-liners** — confirming the 3:1 index-fresh finding: the index is almost always accurate or fresher, so the reconcile's real work is a small minority. Two of the four (`reference_cc_agent_discovery`, `reference_git_hook_env_leak`) were index-stale/body-fresh → fixed the index line, sync propagated to frontmatter (dogfooding slice 1's changed-line path). The other two (`feedback_git_status_sandbox`, `feedback_posttooluse_print_mode`) had **stale bodies too** — an `.envrc`-vars claim the platform had changed under, and a `--print`-suppresses-hooks claim a direct test refuted (hooks fire and wrapped `additionalContext` injects under `--print` on 2.1.212; `--print --resume` does scripted multi-turn) — so those were re-verified against reality and both body + index rewritten, plus the false rationale fixed in the downstream eval docs/code it had seeded (`tests/evals/README.md`, `sdk-runner.py`, an `index-sync-post.sh` comment). **Lesson:** the reconcile must re-verify claims against current reality, not blindly propagate body→index (bodies rot too). No `/gitlore:reconcile` command built — 4 files is a manual sweep.
+A per-file audit (5 parallel judges over all 60 index lines) found only
+**4 genuinely stale index one-liners** — confirming the 3:1 index-fresh finding:
+the index is almost always accurate or fresher, so the reconcile's real work is
+a small minority. Two of the four (`reference_cc_agent_discovery`,
+`reference_git_hook_env_leak`) were index-stale/body-fresh → fixed the index
+line, sync propagated to frontmatter (dogfooding slice 1's changed-line path).
+The other two (`feedback_git_status_sandbox`, `feedback_posttooluse_print_mode`)
+had **stale bodies too** — an `.envrc`-vars claim the platform had changed
+under, and a `--print`-suppresses-hooks claim a direct test refuted (hooks fire
+and wrapped `additionalContext` injects under `--print` on 2.1.212;
+`--print --resume` does scripted multi-turn) — so those were re-verified against
+reality and both body + index rewritten, plus the false rationale fixed in the
+downstream eval docs/code it had seeded (`tests/evals/README.md`,
+`sdk-runner.py`, an `index-sync-post.sh` comment). **Lesson:** the reconcile
+must re-verify claims against current reality, not blindly propagate body→index
+(bodies rot too). No `/gitlore:reconcile` command built — 4 files is a manual
+sweep.

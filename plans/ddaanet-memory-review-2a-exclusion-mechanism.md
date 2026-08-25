@@ -1,6 +1,9 @@
 # ddaanet memory review — entry 2a · the exclusion mechanism
 
-Part of [ddaanet memory review](ddaanet-memory-review.md). Entry 2 is `sandbox-effects`; this part holds the rubric, change (a), and the decompiled `excludedCommands` matcher. Continues in [2b](ddaanet-memory-review-2b-exclusion-scope.md).
+Part of [ddaanet memory review](ddaanet-memory-review.md). Entry 2 is
+`sandbox-effects`; this part holds the rubric, change (a), and the decompiled
+`excludedCommands` matcher. Continues in
+[2b](ddaanet-memory-review-2b-exclusion-scope.md).
 
 ## 2 · `sandbox-effects` — 760 B
 
@@ -23,11 +26,11 @@ condition is mechanically detectable — `prohibitions` exists precisely to pay
 for such a rule at the moment of action instead of in every session's context.
 
 **Superseded by the exclusions taken in
-[2c](ddaanet-memory-review-2c-deny-and-decisions.md).** `git:*`, `ls:*`, `find:*`
-and `claude:*` discharge the paragraph's whole enumeration — every git verb it
-lists, and `ls .claude/` — automatically and with no flag. What survives is
-narrow: `cat`/`head` of a masked path, which returns empty because the mask is
-`/dev/null`; and the standing permission itself, which still has work to do
+[2c](ddaanet-memory-review-2c-deny-and-decisions.md).** `git:*`, `ls:*`,
+`find:*` and `claude:*` discharge the paragraph's whole enumeration — every git
+verb it lists, and `ls .claude/` — automatically and with no flag. What survives
+is narrow: `cat`/`head` of a masked path, which returns empty because the mask
+is `/dev/null`; and the standing permission itself, which still has work to do
 wherever the matcher fails closed (a subshell, `$( … )`, `sh -c`, a quoted
 argument, a double space).
 
@@ -110,10 +113,11 @@ its own Bash call and no `dangerouslyDisableSandbox` anywhere. The probe entry
 has since been removed from `~/.claude/settings.json`. `${TMPDIR-UNSET}` is the
 discriminator throughout: `/tmp/claude-1000` sandboxed, `UNSET` not.
 
-**The mechanism, in one sentence.** The command string is parsed by tree-sitter-bash
-into a list of simple commands; each one is expanded into a closure of normalised
-variants; if any variant of any segment matches any list entry, the **entire call**
-runs unsandboxed, including segments that match nothing.
+**The mechanism, in one sentence.** The command string is parsed by
+tree-sitter-bash into a list of simple commands; each one is expanded into a
+closure of normalised variants; if any variant of any segment matches any list
+entry, the **entire call** runs unsandboxed, including segments that match
+nothing.
 
 ### The algorithm, decompiled from the 2.1.233 bundle
 
@@ -136,8 +140,10 @@ function TV(e){                                  // "should this run sandboxed?"
 
 **Split — `U0(cmd)`.** A real tree-sitter-bash parse, walked as follows:
 
-- recurse **only** into node types `program`, `list`, `pipeline` (the set `uWs`);
-- skip the operator tokens `&&` `||` `|` `;` `&` `|&` newline (`npd`), and `comment`;
+- recurse **only** into node types `program`, `list`, `pipeline` (the set
+  `uWs`);
+- skip the operator tokens `&&` `||` `|` `;` `&` `|&` newline (`npd`), and
+  `comment`;
 - for `redirected_statement`, recurse into children whose type does not end in
   `_redirect` — this is why a trailing redirection is invisible to the match and
   an interleaved one is not;
@@ -147,14 +153,14 @@ function TV(e){                                  // "should this run sandboxed?"
 Bail-outs return the entire string as one segment: empty input, a command longer
 than `$Fe`, or a parse failure.
 
-Two consequences. Every construct that is not a plain list or pipeline **fails
-closed**: `( … )`, `$( … )`, `if …; fi` and `sh -c '…'` are pushed as one blob
-that will not match, so they stay sandboxed. And because the segment is
-`node.text`, the comparison sees source text, not re-rendered argv — which is why
-double spaces and quotes defeat it.
+Two consequences. Every construct that is not a plain list or pipeline
+**fails closed**: `( … )`, `$( … )`, `if …; fi` and `sh -c '…'` are pushed as
+one blob that will not match, so they stay sandboxed. And because the segment is
+`node.text`, the comparison sees source text, not re-rendered argv — which is
+why double spaces and quotes defeat it.
 
-**Normalise.** Each segment seeds a worklist expanded to a fixpoint; every derived
-string is fed through both functions again, and *all* variants are match
+**Normalise.** Each segment seeds a worklist expanded to a fixpoint; every
+derived string is fed through both functions again, and *all* variants are match
 candidates:
 
 - `bHi(s, /^(LD_|DYLD_|PATH$)/)` — repeatedly strip leading `VAR=value`
@@ -165,8 +171,8 @@ candidates:
   assignments, but only for names in an allowlist `F3n` (`GOOS`, `NODE_ENV`,
   `TZ`, `LANG`, `CI`, `ANTHROPIC_API_KEY`, …).
 
-**Match — entries are permission-rule patterns, not plain strings.** `B4o` parses
-each entry, and `xUf` applies it:
+**Match — entries are permission-rule patterns, not plain strings.** `B4o`
+parses each entry, and `xUf` applies it:
 
 | entry form | type | matches |
 |---|---|---|
@@ -225,15 +231,15 @@ short-circuits the payload as well — the decoy has to be detached from it.)
 
 **Settings reload live.** Confirmed in both directions, mid-session and with no
 restart, on three keys — `excludedCommands`, `autoAllowBashIfSandboxed` and
-`permissions.deny`. The ledger's earlier instruction to probe only from a session
-started after the settings change is unnecessary.
+`permissions.deny`. The ledger's earlier instruction to probe only from a
+session started after the settings change is unnecessary.
 
-Two smaller notes. The read-deny discriminator the original probe table leaned on
-does not exist — `ls -d /Users/david/.claude/ide/` **succeeded** sandboxed,
+Two smaller notes. The read-deny discriminator the original probe table leaned
+on does not exist — `ls -d /Users/david/.claude/ide/` **succeeded** sandboxed,
 because `ls -d` only stats the path and the sandbox's read-deny does not cover
 that; `${TMPDIR-UNSET}` carried the whole reading instead. And
-`apply-seccomp: unshare(CLONE_NEWUSER): Invalid argument` hit one probe while the
-byte-identical retry succeeded, confirming the retry-once-unchanged remedy
+`apply-seccomp: unshare(CLONE_NEWUSER): Invalid argument` hit one probe while
+the byte-identical retry succeeded, confirming the retry-once-unchanged remedy
 proposed for that entry.
 
 The descendant question — how far an exclusion reaches — is moot under (b): the

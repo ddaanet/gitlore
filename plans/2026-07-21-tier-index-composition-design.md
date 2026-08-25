@@ -19,8 +19,8 @@ file must be mirrored back into the carrier so it travels to other consumers.
 
 **Line identity is the path prefix.** No sentinel text is injected into any
 index. A root-index bullet whose path's first component names a **mounted** tier
-(an entry in `memory/.gitmodules`) is that tier's line. A bullet with no `/` is a
-project line.
+(an entry in `memory/.gitmodules`) is that tier's line. A bullet with no `/` is
+a project line.
 
 **Two directions, one function.**
 
@@ -31,18 +31,20 @@ project line.
 - *Mirror down*: each root bullet attributed to an active tier is written into
   that tier's carrier with the prefix stripped.
 
-**Composed layout.** `[preamble] [tier blocks, manifest order] [project bullets]
-[trailer]`. Each tier block preserves its carrier's line order; project bullets
-keep the order CC arranged them in. No headers, no blank lines, no separators
-between blocks — the region between the first and last bullet is pure bullets, so
-the pass is byte-idempotent and injects no text CC could mistake for content.
+**Composed layout.**
+`[preamble] [tier blocks, manifest order] [project bullets] [trailer]`. Each
+tier block preserves its carrier's line order; project bullets keep the order CC
+arranged them in. No headers, no blank lines, no separators between blocks — the
+region between the first and last bullet is pure bullets, so the pass is
+byte-idempotent and injects no text CC could mistake for content.
 
 **Preamble / trailer** are everything before the first pointer bullet and after
-the last. They are copied verbatim. The same layout rule governs the carrier when
-mirroring down. An index with **no** bullets is all preamble, and mirrored-down
-lines are appended after it — which is the day-one state of `memory/ddaanet`,
-whose carrier is frontmatter and prose only. So the first compose splices nothing
-up and mirrors the existing `ddaanet/`-prefixed root lines, if any, down.
+the last. They are copied verbatim. The same layout rule governs the carrier
+when mirroring down. An index with **no** bullets is all preamble, and
+mirrored-down lines are appended after it — which is the day-one state of
+`memory/ddaanet`, whose carrier is frontmatter and prose only. So the first
+compose splices nothing up and mirrors the existing `ddaanet/`-prefixed root
+lines, if any, down.
 
 ## Composition is placement only
 
@@ -110,28 +112,28 @@ already has open, and composition carries it to the carrier.
 
 ## Components
 
-- **`scripts/lib/index-compose.sh`** — pure functions, no side effects beyond the
-  index writes: split an index into preamble / bullets / trailer; attribute a
-  bullet path to a mounted tier or to the project; add and strip a prefix; build
-  the composed root text; build a carrier's text; run the four validations.
-  Mirrors `index-sync.sh` in shape and is unit-testable directly.
-- **`scripts/cc-hooks/index-compose.sh`** — the `PostToolBatch` hook: decide from
-  `.tool_calls[]` whether this batch touched the root index or the manifest, call
-  the library, emit one message on both channels.
+- **`scripts/lib/index-compose.sh`** — pure functions, no side effects beyond
+  the index writes: split an index into preamble / bullets / trailer; attribute
+  a bullet path to a mounted tier or to the project; add and strip a prefix;
+  build the composed root text; build a carrier's text; run the four
+  validations. Mirrors `index-sync.sh` in shape and is unit-testable directly.
+- **`scripts/cc-hooks/index-compose.sh`** — the `PostToolBatch` hook: decide
+  from `.tool_calls[]` whether this batch touched the root index or the
+  manifest, call the library, emit one message on both channels.
 - **`session-start.sh`** — call the same library after the tier ff block; update
   the routing-guidance text.
 
-Nothing may `exit 2` (a `PostToolBatch` cannot block a tool that already ran) and
-stdout JSON parses only on `exit 0`, so a failure reports on `systemMessage` and
-exits 0 — the D14 rule the sync hooks already follow.
+Nothing may `exit 2` (a `PostToolBatch` cannot block a tool that already ran)
+and stdout JSON parses only on `exit 0`, so a failure reports on `systemMessage`
+and exits 0 — the D14 rule the sync hooks already follow.
 
 ## Testing
 
 `tests/index_compose.bats` unit-tests the library against fixture stores: splice
 up, mirror down, byte-idempotence on an already-canonical index, manifest
-ordering with two tiers, a dormant mounted tier (block dropped, carrier keeps its
-lines), preamble/trailer preserved, and each of the four validations refusing
-with every index unchanged. `tests/cc_hook_index_compose.bats` covers the hook:
-untouched batch → no-op, index-touched batch → composed and reported,
+ordering with two tiers, a dormant mounted tier (block dropped, carrier keeps
+its lines), preamble/trailer preserved, and each of the four validations
+refusing with every index unchanged. `tests/cc_hook_index_compose.bats` covers
+the hook: untouched batch → no-op, index-touched batch → composed and reported,
 manifest-touched batch → recomposed, validation failure → both channels, exit 0.
 Both go in `make test`.

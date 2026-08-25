@@ -195,13 +195,13 @@ if (u.behavior !== "allow") throw new $Ce(...)
 let {data: d} = await i.call({command: a}, c);                 // ordinary tool call
 ```
 
-`i` is the Bash tool. The input is a bare `{command}` — **no
-`dangerouslyDisableSandbox` field** — and the tool's own `call` computes the
-sandbox decision from its input, the same convention visible in the PowerShell
-tool (`let i = Wsi(e)`, where `Wsi(e) = TV({command: e.command,
-dangerouslyDisableSandbox: e.dangerouslyDisableSandbox, shellType:"powershell"})`)
-and in the Monitor tool (`rDe(e, signal, "bash", {shouldUseSandbox: TV({command:
-e}), …})`).
+`i` is the Bash tool. The input is a bare `{command}` —
+**no `dangerouslyDisableSandbox` field** — and the tool's own `call` computes
+the sandbox decision from its input, the same convention visible in the
+PowerShell tool (`let i = Wsi(e)`, where
+`Wsi(e) = TV({command: e.command, dangerouslyDisableSandbox: e.dangerouslyDisableSandbox, shellType:"powershell"})`)
+and in the Monitor tool
+(`rDe(e, signal, "bash", {shouldUseSandbox: TV({command: e}), …})`).
 
 So `TV` runs, `W_S(command)` runs, and **an exclusion entry applies to a
 `` !`cmd` `` expansion exactly as to a typed Bash call**. `git:*` therefore does
@@ -364,8 +364,8 @@ and `git hash-object` are outside the read subcommand set, and
 commands that do accept stdin — `cat`, `wc`, `git cat-file --batch` — write
 nothing whatever they are fed.
 
-*The adjacent vector is `>`, not `<<`, and it is taken as settled.* `verb > file`
-is not classified read-only — the `ls` regex in 2c is
+*The adjacent vector is `>`, not `<<`, and it is taken as settled.*
+`verb > file` is not classified read-only — the `ls` regex in 2c is
 `/^ls(?:\s+[^<>()$`|{}&;\n\r]*)?$/`, which bars `<` and `>` outright, and the
 classifier would be trivially broken otherwise. Either way the write there is
 the redirect: `cat > file` smuggles it identically with no heredoc.

@@ -1,3 +1,11 @@
 # 2026-05-27 — Prep for 0.2.0 release
 
-`direnv allow` in `run.sh` made non-fatal (`|| true`) — a read-only direnv allow-dir (e.g. sandbox) no longer aborts install. `2>/dev/null` suppressions removed from diagnostic-paths in `resolve.sh`, `lib/resolve.sh`, and `create-remote.sh`; retained only where errors are genuinely expected (missing config keys, detection probes, cross-platform fallbacks). `install` step 12 description updated to reflect automatic launcher activation (was "Remind the user to run `direnv allow`"). README updated — launcher activation paragraph now describes the automated behavior instead of instructing the user to run `direnv allow` manually.
+`direnv allow` in `run.sh` made non-fatal (`|| true`) — a read-only direnv
+allow-dir (e.g. sandbox) no longer aborts install. `2>/dev/null` suppressions
+removed from diagnostic-paths in `resolve.sh`, `lib/resolve.sh`, and
+`create-remote.sh`; retained only where errors are genuinely expected (missing
+config keys, detection probes, cross-platform fallbacks). `install` step 12
+description updated to reflect automatic launcher activation (was "Remind the
+user to run `direnv allow`"). README updated — launcher activation paragraph now
+describes the automated behavior instead of instructing the user to run
+`direnv allow` manually.

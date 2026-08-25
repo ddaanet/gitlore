@@ -1,0 +1,13 @@
+# Dev tooling only; nothing here is a Python package. `uv sync` materializes
+# `.venv/bin`, which `.envrc` puts on PATH. PyYAML is there because the venv's
+# python3 shadows the system one, and `scripts/hook-manager/wire-*.sh` probe
+# `python3` for it — without it the wiring suite fails on a box with no `yq`.
+[project]
+name = "gitlore-dev"
+version = "0"
+requires-python = ">=3.9"
+
+[dependency-groups]
+dev = ["rumdl==0.2.60", "pyyaml>=6"]
+[tool.uv]
+package = false

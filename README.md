@@ -26,8 +26,9 @@ the next session.
 
 ## Development
 
-    just test       # runs the bats suite
-    just precommit  # version drift, shellcheck, then the bats suite
+    just test        # runs the bats suite
+    just format-docs # hard-wraps prose in docs/ and plans/ (rumdl)
+    just precommit   # format-docs, version drift, shellcheck, then the bats suite
     just evals      # the happy-path evals — slow, paid, drives the real CLI
     just prerelease # the release gate
     just release    # depends on prerelease; bumps, tags, publishes
@@ -38,15 +39,17 @@ when they are unchanged, so `just prerelease` right after a green
 
 The inputs are the `precommit_inputs` and `evals_inputs` variables at the top of
 the `justfile`. `memory/`, `docs/` and `plans/` are in neither, so a memory-only
-or prose-only commit leaves a green gate green. `agents/`, `commands/` and `skills/`
-are in the evals set only: editing what the plugin ships invalidates the evals,
-not the fast gate.
+or prose-only commit leaves a green gate green; `docs/` and `plans/` are instead
+re-wrapped by `format-docs` on every run, which is fast enough to need no
+sentinel. `agents/`, `commands/` and `skills/` are in the evals set only: editing
+what the plugin ships invalidates the evals, not the fast gate.
 
 Dependencies:
 - `bash` ≥ 3.2
 - `git` ≥ 2.13 (for `git submodule absorbgitdirs`; install also uses manual gitdir absorption that works on older versions)
 - `jq`
 - `bats-core` ≥ 1.10 (`brew install bats-core` or `npm i -g bats`)
+- `uv` and direnv for the dev gate: `uv sync` once materializes `.venv/bin` from `uv.lock` (rumdl for `format-docs`, PyYAML for the wiring suite) and `.envrc` puts it on `PATH`
 - `mikefarah/yq` v4 OR `python3` with PyYAML — required for `wire-lefthook.sh` and `wire-overcommit.sh` to safely merge user YAML configs without clobbering existing keys. Note: yq-based wiring will strip pre-existing YAML comments from `lefthook.yml` / `.overcommit.yml` (the gitlore marker is preserved, user comments are not).
 
 ## Status

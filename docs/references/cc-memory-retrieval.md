@@ -18,12 +18,12 @@ throwaway fixtures, and a real interactive tmux-PTY session (ccVersion
 
 ## Findings
 
-- A **separate per-query classifier** (`agent-prompt-determine-which-memory-files-to-attach.md`)
-  is handed a manifest of `filename + description` pairs plus the live
-  user query, and returns ≤5 filenames it is *certain* are relevant. Told
-  to be conservative — especially with `user`/`project` memories (match on
-  what the question IS ABOUT, not keyword overlap) — and not to re-select
-  within a conversation.
+- A **separate per-query classifier**
+  (`agent-prompt-determine-which-memory-files-to-attach.md`) is handed a
+  manifest of `filename + description` pairs plus the live user query, and
+  returns ≤5 filenames it is *certain* are relevant. Told to be conservative —
+  especially with `user`/`project` memories (match on what the question IS
+  ABOUT, not keyword overlap) — and not to re-select within a conversation.
 - Selected files' contents are injected as `Contents of <path>`
   system-reminders. A distinct reminder template exists for non-root
   paths, so subdir files are attachable.

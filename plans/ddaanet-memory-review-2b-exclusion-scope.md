@@ -1,25 +1,29 @@
 # ddaanet memory review — entry 2b · what an exclusion covers and costs
 
-Part of [ddaanet memory review](ddaanet-memory-review.md), continuing [2a](ddaanet-memory-review-2a-exclusion-mechanism.md). What the sandbox actually breaks, what the corpus says it touches, and which entries are the wrong shape. Continues in [2c](ddaanet-memory-review-2c-deny-and-decisions.md).
+Part of [ddaanet memory review](ddaanet-memory-review.md), continuing
+[2a](ddaanet-memory-review-2a-exclusion-mechanism.md). What the sandbox actually
+breaks, what the corpus says it touches, and which entries are the wrong shape.
+Continues in [2c](ddaanet-memory-review-2c-deny-and-decisions.md).
 
 ### Excluding `git` outright, or read subcommands only
 
 **Overturned — see "The permission pipeline" in
-[2c](ddaanet-memory-review-2c-deny-and-decisions.md).** The verdict recorded here
-rested on the cost of leaving the sandbox, which the read-only auto-allow makes
-near-zero for the commands at issue. The security objection in the next
+[2c](ddaanet-memory-review-2c-deny-and-decisions.md).** The verdict recorded
+here rested on the cost of leaving the sandbox, which the read-only auto-allow
+makes near-zero for the commands at issue. The security objection in the next
 paragraph is untouched and remains the live argument.
 
 Under (b), a bare `git` entry means `git status && curl … | sh` runs entirely
 unsandboxed, reproducing the `unsandbox-git-status` hole natively.
 
 The same finding indicts the entry already in the settings file: `"git status"`
-unsandboxes any compound holding that exact segment, so `git status && <anything>`
-is already free today — and so is `false && git status; <anything>`, where the
-decoy never even runs. It is narrower than the plugin's version — literal equality,
-no substring match, no descent into `sh -c` — but it is the same class of hole,
-and the plugin and the entry are redundant with each other. Whether to keep
-either is a separate call for my human partner.
+unsandboxes any compound holding that exact segment, so
+`git status && <anything>` is already free today — and so is
+`false && git status; <anything>`, where the decoy never even runs. It is
+narrower than the plugin's version — literal equality, no substring match, no
+descent into `sh -c` — but it is the same class of hole, and the plugin and the
+entry are redundant with each other. Whether to keep either is a separate call
+for my human partner.
 
 ### What an excluded call still passes through
 
@@ -31,8 +35,8 @@ command string, so the rule is matched against the full call rather than the
 segment.
 
 That is the one substantive difference from the `unsandbox-git-status` plugin.
-The plugin returns `permissionDecision: allow` alongside its `updatedInput`, so a
-matching command is unsandboxed **and** pre-approved. The native key only
+The plugin returns `permissionDecision: allow` alongside its `updatedInput`, so
+a matching command is unsandboxed **and** pre-approved. The native key only
 unsandboxes; the permission pipeline still runs. A deny rule is therefore a
 usable backstop for `excludedCommands` in a way it is not for the plugin.
 
@@ -59,15 +63,16 @@ writes only, not user-named ones*. Establishing the classifier's role needs a
 payload that is classifier-hostile in a context where the user did not ask for
 it, which is not constructible from inside a session that just asked for it.
 
-**The transcript cannot settle it retroactively.** A Bash `toolUseResult` carries
-only `interrupted` · `isImage` · `noOutputExpected` · `stderr` · `stdout`; no
-permission decision, reason string, or sandbox flag is recorded anywhere in the
-session JSONL. The decision strings quoted from the bundle are never persisted.
+**The transcript cannot settle it retroactively.** A Bash `toolUseResult`
+carries only `interrupted` · `isImage` · `noOutputExpected` · `stderr` ·
+`stdout`; no permission decision, reason string, or sandbox flag is recorded
+anywhere in the session JSONL. The decision strings quoted from the bundle are
+never persisted.
 
 All probe state has been reverted: the `ls -d …/ide` and `…/probe:*` exclusion
-entries, the `Bash(sudo:*)` deny rule, the `autoAllowBashIfSandboxed` flip, and a
-stray `.git/gitlore-probe-zzz`. Verified by re-reading the settings file and by
-re-running the canonical probe, which is sandboxed again.
+entries, the `Bash(sudo:*)` deny rule, the `autoAllowBashIfSandboxed` flip, and
+a stray `.git/gitlore-probe-zzz`. Verified by re-reading the settings file and
+by re-running the canonical probe, which is sandboxed again.
 
 ### Naming the regression precisely
 
@@ -82,15 +87,15 @@ unsandboxes its neighbours.** `timeout 5 git status; <payload>` runs the payload
 outside the sandbox, and nothing in the transcript records that it did.
 
 **The safe approach my human partner describes is already a supported mode.**
-`sandbox.allowUnsandboxedCommands` — the `/sandbox` menu's *Allow unsandboxed
-fallback*, against *Strict sandbox mode* — is precisely "when a command fails due
-to sandbox restrictions, Claude can retry with `dangerouslyDisableSandbox`
-(falling back to default permissions)". Under that mode the retry is per-command,
-visible, and re-enters the permission pipeline, where `excludedCommands` is a
-blanket standing exemption evaluated before anything sees it. That reframes
-`excludedCommands` as strict mode's escape valve rather than the general
-mechanism, and is the strongest argument for dropping the `git status` entry
-rather than widening it to `git status:*`.
+`sandbox.allowUnsandboxedCommands` — the `/sandbox` menu's
+*Allow unsandboxed fallback*, against *Strict sandbox mode* — is precisely "when
+a command fails due to sandbox restrictions, Claude can retry with
+`dangerouslyDisableSandbox` (falling back to default permissions)". Under that
+mode the retry is per-command, visible, and re-enters the permission pipeline,
+where `excludedCommands` is a blanket standing exemption evaluated before
+anything sees it. That reframes `excludedCommands` as strict mode's escape valve
+rather than the general mechanism, and is the strongest argument for dropping
+the `git status` entry rather than widening it to `git status:*`.
 
 ### What the sandbox actually breaks: the phantom masks
 
@@ -111,8 +116,8 @@ could use to hijack execution:
 ```
 
 **Scope is the project root, not the cwd**, and it reaches into `.claude/` and
-`.git/`. A listing of `scripts/` is clean even with the cwd set there, and so are
-`~`, `/tmp` and the parent directory. The last two entries explain the
+`.git/`. A listing of `scripts/` is clean even with the cwd set there, and so
+are `~`, `/tmp` and the parent directory. The last two entries explain the
 `Device or resource busy` failures on `.git/config` that `sandbox-effects`
 already records under `checkout`/`reset --hard`.
 
@@ -135,23 +140,25 @@ calls (`scratchpad/tally.py`, `scratchpad/status_forms.py`).
 | `find` | 627 | traverses the masked paths |
 | `grep` | 8,541 | only the recursive-from-root subset |
 
-**An exact `git status` entry covers 2.8% of the real traffic** — 84 segments out
-of 3,043. The actual distribution is `git status --short` (741),
+**An exact `git status` entry covers 2.8% of the real traffic** — 84 segments
+out of 3,043. The actual distribution is `git status --short` (741),
 `git status --porcelain` (477), `git -C <path> status --short` (186),
 `git status --porcelain=v1` (145), and a long tail.
 
 That is the case against `excludedCommands` for this job, independent of the
 security argument: **it structurally cannot express "any git status"**. The
 prefix form anchors at the start of the segment, so `git status:*` still misses
-every `git -C <path> status` and every `git -c k=v … status` — roughly a fifth of
-the traffic — and a wildcard entry broad enough to catch them would be far too
-broad to be safe. The plugin's best-effort matcher has been carrying that 97%,
-which is why removing it without a replacement would regress accuracy sharply.
+every `git -C <path> status` and every `git -c k=v … status` — roughly a fifth
+of the traffic — and a wildcard entry broad enough to catch them would be far
+too broad to be safe. The plugin's best-effort matcher has been carrying that
+97%, which is why removing it without a replacement would regress accuracy
+sharply.
 
-This supports my human partner's design directly: **deny rather than exclude, and
-let the agent retry unsandboxed**. A denial is explicit, per-command, visible in
-the transcript, and re-enters the permission pipeline; it cannot silently
-unsandbox a neighbouring segment the way an exclusion match does.
+This supports my human partner's design directly:
+**deny rather than exclude, and let the agent retry unsandboxed**. A denial is
+explicit, per-command, visible in the transcript, and re-enters the permission
+pipeline; it cannot silently unsandbox a neighbouring segment the way an
+exclusion match does.
 
 ### Exclusion does not grant approval — the code, not a probe
 
@@ -167,8 +174,8 @@ function hUf(e,t,r,n){
 `!TV(e)` returns `null`, so an excluded command never reaches the shortcut and
 falls through to the ordinary permission pipeline — deny/ask rules, then the
 auto-mode classifier. `P_S` itself checks deny rules first, and re-checks them
-**per segment** for a compound, which is why the `Bash(sudo:*)` probe was refused
-even behind a decoy.
+**per segment** for a compound, which is why the `Bash(sudo:*)` probe was
+refused even behind a decoy.
 
 So an exclusion is equivalent in gating to an agent-declared
 `dangerouslyDisableSandbox`, minus the round-trip. The residual difference is
@@ -176,8 +183,8 @@ only defence-in-depth: the sandbox no longer contains a command the classifier
 waves through.
 
 Even the sandboxed shortcut is guarded — `hUf` also refuses to auto-allow when a
-non-allowlisted env var is set, when a redirect targets `/dev/tcp` or `/dev/udp`,
-or when a `cd` and an `rm` appear in the same call.
+non-allowlisted env var is set, when a redirect targets `/dev/tcp` or
+`/dev/udp`, or when a `cd` and an `rm` appear in the same call.
 
 ### Why a broad `git:*` entry is the wrong shape
 
@@ -200,8 +207,8 @@ the path operand, so these counts are approximate.)
 ### Listing and search commands mostly do not point at the root
 
 The masks sit in the project root, `.claude/` and `.git/`. Most scanning traffic
-points elsewhere, so a blanket `ls:*` / `find:*` / `grep:*` entry would unsandbox
-thousands of calls to fix a few hundred:
+points elsewhere, so a blanket `ls:*` / `find:*` / `grep:*` entry would
+unsandbox thousands of calls to fix a few hundred:
 
 | command | root-scoped (affected) | targeted elsewhere |
 |---|---|---|
@@ -233,8 +240,9 @@ at all:
 | `tree` | 8 | 8 |
 | `head` · `tail` · `sed` · `cat` · `wc` · `cp` · `rm` · `sort` | 6,125 · 3,388 · 2,463 · 2,303 · 1,404 · 639 · 586 · 696 | 0 — all path-targeted |
 
-`rg` is barely used (243 against grep's 8,626) and is immune by default, so it is
-not worth a rule; it is also the cleanest workaround for anyone who wants one.
+`rg` is barely used (243 against grep's 8,626) and is immune by default, so it
+is not worth a rule; it is also the cleanest workaround for anyone who wants
+one.
 
 **Exclusion hit-rates**, i.e. how much of what an entry would unsandbox actually
 needs it: `find:*` is **100%** (634/634), `du:*` and `tree:*` are 100% but

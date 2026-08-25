@@ -1,22 +1,43 @@
 # gitlore Plan 03 — Semantic Merge in `/gitlore:resolve`
 
-> **Status:** spec / design. Implementation plan (task-by-task breakdown) will be expanded from this document by `superpowers:writing-plans`.
+> **Status:** spec / design. Implementation plan (task-by-task breakdown) will
+> be expanded from this document by `superpowers:writing-plans`.
 
-**Goal:** When pre-commit fails to ff-push the worktree branch into `live`, or pre-push fails to ff-push `live` to its remote, the user gets an end-to-end semantic merge instead of "manual fix required." The agent's only job is to dispatch the `memory-merger` sub-agent and approve its summary with the user; every other decision is in shell scripts.
+**Goal:** When pre-commit fails to ff-push the worktree branch into `live`, or
+pre-push fails to ff-push `live` to its remote, the user gets an end-to-end
+semantic merge instead of "manual fix required." The agent's only job is to
+dispatch the `memory-merger` sub-agent and approve its summary with the user;
+every other decision is in shell scripts.
 
-**Reference:** `docs/design.md` is the authoritative spec (FR 5, D6, D7, D9 in particular). Plan 02 (`plans/2026-05-19-02-remote-and-push.md`) is the immediate predecessor — pre-commit, pre-push, and `/gitlore:resolve` exist as primitives; this plan upgrades them to drive semantic merge.
+**Reference:** `docs/design.md` is the authoritative spec (FR 5, D6, D7, D9 in
+particular). Plan 02 (`plans/2026-05-19-02-remote-and-push.md`) is the immediate
+predecessor — pre-commit, pre-push, and `/gitlore:resolve` exist as primitives;
+this plan upgrades them to drive semantic merge.
 
 ---
 
 ## 1. Lessons-learned opener (Plan 02 retrospective)
 
-Plan 02 shipped 89/89 + 1/1 green. Dogfood B on the gitmoji repo caught two real-world bugs the bats suite missed — `.gitmodules` gitignored and `gh repo create --source=.` rejecting gitfile-pointed submodule worktrees. Both were patched and backfilled with regression tests in commit `192d7e8` (see [[feedback-dogfood-b]] for the detailed findings).
+Plan 02 shipped 89/89 + 1/1 green. Dogfood B on the gitmoji repo caught two
+real-world bugs the bats suite missed — `.gitmodules` gitignored and
+`gh repo create --source=.` rejecting gitfile-pointed submodule worktrees. Both
+were patched and backfilled with regression tests in commit `192d7e8` (see
+[[feedback-dogfood-b]] for the detailed findings).
 
 The Plan 03 lesson is process, not content:
 
-**Encode dogfood findings as automation in the same plan, not the next one.** Plan 02 did this — it didn't defer the fixtures to Plan 03. Per [[feedback-automate-default]], Plan 03 follows the same rhythm: any surprise its own dogfood gate surfaces gets a Layer 2 fixture inside Plan 03 before the plan is considered shipped, not handed off as backfill for Plan 04.
+**Encode dogfood findings as automation in the same plan, not the next one.**
+Plan 02 did this — it didn't defer the fixtures to Plan 03. Per
+[[feedback-automate-default]], Plan 03 follows the same rhythm: any surprise its
+own dogfood gate surfaces gets a Layer 2 fixture inside Plan 03 before the plan
+is considered shipped, not handed off as backfill for Plan 04.
 
-**Mock the failure modes, not just the success path.** Plan 02's `gh-mock.bash` initially encoded only successful `gh` responses; the gitfile-submodule rejection only surfaced under real `gh`. Plan 03's stub sub-agent (`tests/helpers/stub-synth.bash`) must encode the merge state on disk it expects to see, including the corrupted-state edge cases, not just a happy concatenation. Same principle.
+**Mock the failure modes, not just the success path.** Plan 02's `gh-mock.bash`
+initially encoded only successful `gh` responses; the gitfile-submodule
+rejection only surfaced under real `gh`. Plan 03's stub sub-agent
+(`tests/helpers/stub-synth.bash`) must encode the merge state on disk it expects
+to see, including the corrupted-state edge cases, not just a happy
+concatenation. Same principle.
 
 ---
 
@@ -24,28 +45,48 @@ The Plan 03 lesson is process, not content:
 
 ### 2.1 In scope
 
-- **Branch-vs-live semantic merge.** Triggered when pre-commit's ff-push of `<branch>` into local `live` fails (live advanced from another worktree).
-- **Local-vs-remote semantic merge.** Triggered when pre-push's ff-push of `live` to `origin` fails (remote advanced).
-- **`memory-merger` sub-agent.** A new agent file at `agents/memory-merger.md` with a tight, single-purpose contract (read state file, synthesize, write, `git add -A`, ask parent for approval, run continuation).
-- **State-machine architecture.** Every script yield to the agent carries (a) the directive to dispatch `memory-merger` and (b) the **continuation command** the sub-agent runs after approval. Continuations may yield again — a single user operation can yield N times.
-- **Recovery edges.** Stale `MERGE_HEAD` + state file from a crashed prior run; state file without `MERGE_HEAD` (manual out-of-band intervention); concurrent resolve in another worktree.
-- **Install-time pre-flight.** `/gitlore:install` checks `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (design step 1) and warns if unset. Install still completes; runtime surfaces a clean error if Task dispatch fails.
-- **Encoding the Plan 03 dogfood gate's findings in-plan.** Any surprise surfaced by §6.3 becomes a Layer 2 fixture inside this plan before ship. (No carry-over from Plan 02 — its surprises were already backfilled in commit `192d7e8`.)
+- **Branch-vs-live semantic merge.** Triggered when pre-commit's ff-push of
+  `<branch>` into local `live` fails (live advanced from another worktree).
+- **Local-vs-remote semantic merge.** Triggered when pre-push's ff-push of
+  `live` to `origin` fails (remote advanced).
+- **`memory-merger` sub-agent.** A new agent file at `agents/memory-merger.md`
+  with a tight, single-purpose contract (read state file, synthesize, write,
+  `git add -A`, ask parent for approval, run continuation).
+- **State-machine architecture.** Every script yield to the agent carries (a)
+  the directive to dispatch `memory-merger` and (b) the **continuation command**
+  the sub-agent runs after approval. Continuations may yield again — a single
+  user operation can yield N times.
+- **Recovery edges.** Stale `MERGE_HEAD` + state file from a crashed prior run;
+  state file without `MERGE_HEAD` (manual out-of-band intervention); concurrent
+  resolve in another worktree.
+- **Install-time pre-flight.** `/gitlore:install` checks
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` (design step 1) and warns if unset.
+  Install still completes; runtime surfaces a clean error if Task dispatch
+  fails.
+- **Encoding the Plan 03 dogfood gate's findings in-plan.** Any surprise
+  surfaced by §6.3 becomes a Layer 2 fixture inside this plan before ship. (No
+  carry-over from Plan 02 — its surprises were already backfilled in commit
+  `192d7e8`.)
 
 ### 2.2 Out of scope (deferred to later plans)
 
 - `WorktreeCreate` / `WorktreeRemove` hooks (Plan 04, unchanged).
 - Clone-from-remote smoke test, polish, expanded docs (Plan 05, unchanged).
 - Non-GitHub remotes / non-`gh` toolchains (still deferred from Plan 02).
-- Multi-repo / multi-remote topologies beyond a single `origin` per memory submodule.
-- Force-push prompts (`memory-merger` never force-pushes; it commits a real merge).
-- Single-agent fallback when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is off (per D9, the flag is the chosen dependency).
+- Multi-repo / multi-remote topologies beyond a single `origin` per memory
+  submodule.
+- Force-push prompts (`memory-merger` never force-pushes; it commits a real
+  merge).
+- Single-agent fallback when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is off (per
+  D9, the flag is the chosen dependency).
 
 ---
 
 ## 3. Architecture — script-driven directives with continuations
 
-Control flow stays in scripts. The agent's role is reduced to: read a directive, dispatch the `memory-merger` sub-agent with a state-file path, and let the sub-agent run the continuation command embedded in that state file.
+Control flow stays in scripts. The agent's role is reduced to: read a directive,
+dispatch the `memory-merger` sub-agent with a state-file path, and let the
+sub-agent run the continuation command embedded in that state file.
 
 ### 3.1 State machine shape
 
@@ -73,7 +114,9 @@ trigger ──► prepare (script) ──► yield ──►│ dispatch memory-
 
 ### 3.2 Entry points
 
-Plan 02's `pre-commit`, `pre-push`, and `/gitlore:resolve` all become entry points to the same library. None of them route to "manual fix required" anymore — divergence is the signal to prepare and yield.
+Plan 02's `pre-commit`, `pre-push`, and `/gitlore:resolve` all become entry
+points to the same library. None of them route to "manual fix required" anymore
+— divergence is the signal to prepare and yield.
 
 | Hook / command | Push attempted | Flavor on failure |
 |---|---|---|
@@ -81,11 +124,13 @@ Plan 02's `pre-commit`, `pre-push`, and `/gitlore:resolve` all become entry poin
 | `scripts/git-hooks/pre-push` | `git push origin live` (ff-push local `live` to remote) | local-vs-remote |
 | `commands/gitlore/resolve.md` (script: `scripts/resolve.sh`) | Both, in turn | Either or both |
 
-`/gitlore:resolve` invoked manually first `git fetch origin`, then attempts both pushes; each failure produces its own yield.
+`/gitlore:resolve` invoked manually first `git fetch origin`, then attempts both
+pushes; each failure produces its own yield.
 
 ### 3.3 Script subcommands
 
-`scripts/resolve.sh` gains subcommands. All other scripts in the library reuse them via shared functions in `scripts/lib/resolve.sh`.
+`scripts/resolve.sh` gains subcommands. All other scripts in the library reuse
+them via shared functions in `scripts/lib/resolve.sh`.
 
 | Subcommand | Role |
 |---|---|
@@ -96,7 +141,8 @@ Plan 02's `pre-commit`, `pre-push`, and `/gitlore:resolve` all become entry poin
 
 ### 3.4 Directive emission
 
-Every yield writes one structured directive to stderr (humans + agent both read it). Format:
+Every yield writes one structured directive to stderr (humans + agent both read
+it). Format:
 
 ```
 gitlore: memory merge prepared (flavor=<X>).
@@ -106,7 +152,11 @@ gitlore: on approval, the sub-agent must run:
 gitlore:   <continuation-command>
 ```
 
-The `commands/gitlore/resolve.md` slash command is updated to recognize the directive shape and dispatch the Task tool with `subagent_type: memory-merger`. (Plan 03 introduces the agent file; the slash command is the dispatch point.) Plan 02's existing fallback message ("manual fix required") is removed from the failure-mode tables.
+The `commands/gitlore/resolve.md` slash command is updated to recognize the
+directive shape and dispatch the Task tool with `subagent_type: memory-merger`.
+(Plan 03 introduces the agent file; the slash command is the dispatch point.)
+Plan 02's existing fallback message ("manual fix required") is removed from the
+failure-mode tables.
 
 ### 3.5 State file
 
@@ -125,7 +175,9 @@ The `commands/gitlore/resolve.md` slash command is updated to recognize the dire
 }
 ```
 
-The state file is the sole contract between phase 1 (prepare), the sub-agent (synthesize), and phase 2 (continuation). The sub-agent never invokes git for state inspection.
+The state file is the sole contract between phase 1 (prepare), the sub-agent
+(synthesize), and phase 2 (continuation). The sub-agent never invokes git for
+state inspection.
 
 ---
 
@@ -133,7 +185,9 @@ The state file is the sole contract between phase 1 (prepare), the sub-agent (sy
 
 ### 4.1 Detection = the outcome of a push
 
-No separate predicate check. The script attempts the push that the current phase requires; success returns clean, failure is the divergence signal. Each flavor is its own loop because a fresh divergence can appear during synthesis.
+No separate predicate check. The script attempts the push that the current phase
+requires; success returns clean, failure is the divergence signal. Each flavor
+is its own loop because a fresh divergence can appear during synthesis.
 
 ### 4.2 Branch-vs-live (in pre-commit and `/gitlore:resolve`)
 
@@ -141,8 +195,11 @@ Per D6, `live` is first parent (trunk stays linear):
 
 **Prepare:**
 1. Attempt `git push . HEAD:live`. Success → exit 0.
-2. Failure → `BASE=$(git merge-base <branch> live)`. `git checkout live`. `git merge --no-commit --no-ff <branch>`.
-3. Write state file with `flavor: "branch-vs-live"`, `source_ref: <branch>`, `target_ref: "live"`, `continuation: "scripts/resolve.sh continue-after-branch-merge"`.
+2. Failure → `BASE=$(git merge-base <branch> live)`. `git checkout live`.
+   `git merge --no-commit --no-ff <branch>`.
+3. Write state file with `flavor: "branch-vs-live"`, `source_ref: <branch>`,
+   `target_ref: "live"`,
+   `continuation: "scripts/resolve.sh continue-after-branch-merge"`.
 4. Emit directive. Exit non-zero (the underlying `git commit` aborts).
 
 **Continuation (`continue-after-branch-merge`):**
@@ -157,8 +214,11 @@ Per D6, `origin/live` is first parent (remote's linear history is preserved):
 
 **Prepare:**
 1. `git fetch origin live`. Attempt `git push origin live`. Success → exit 0.
-2. Failure → `OLD_LOCAL=$(git rev-parse live)`. `git checkout live`. `git reset --hard origin/live`. `git merge --no-commit --no-ff $OLD_LOCAL`.
-3. Write state file with `flavor: "local-vs-remote"`, `source_ref: <OLD_LOCAL sha>`, `target_ref: "live"`, `continuation: "scripts/resolve.sh continue-after-remote-merge"`.
+2. Failure → `OLD_LOCAL=$(git rev-parse live)`. `git checkout live`.
+   `git reset --hard origin/live`. `git merge --no-commit --no-ff $OLD_LOCAL`.
+3. Write state file with `flavor: "local-vs-remote"`,
+   `source_ref: <OLD_LOCAL sha>`, `target_ref: "live"`,
+   `continuation: "scripts/resolve.sh continue-after-remote-merge"`.
 4. Emit directive. Exit non-zero.
 
 **Continuation (`continue-after-remote-merge`):**
@@ -168,7 +228,9 @@ Per D6, `origin/live` is first parent (remote's linear history is preserved):
 
 ### 4.4 First-parent invariant
 
-D6 is non-negotiable. Tests assert that `git log --first-parent live` after each flavor's continuation still reads as the trunk (no divergent branches sneaking into the first-parent line).
+D6 is non-negotiable. Tests assert that `git log --first-parent live` after each
+flavor's continuation still reads as the trunk (no divergent branches sneaking
+into the first-parent line).
 
 ---
 
@@ -179,16 +241,36 @@ D6 is non-negotiable. Tests assert that `git log --first-parent live` after each
 Constraints baked into the system prompt:
 
 - **Inputs:** path to `<mempath>/.git/gitlore-merge-state`. Nothing else.
-- **Process:** read the state file. Read every path in `changed_files` *fresh from disk* (post-merge state). Synthesize holistically — always, regardless of textual conflict presence (semantic conflicts can exist without textual ones). Write synthesized contents. `git add -A` in the memory worktree.
-- **Approval gate:** SendMessage the parent with a prose summary. Parent answers from conversation context, escalating to the user only when needed. Sub-agent commits nothing until parent SendMessages approval.
-- **Continuation:** on approval, run `state.continuation` (a `bash` command). Sub-agent's job ends when that command exits.
-- **Hard rules:** no `git` mutation outside `git add -A`; no merging in additional branches; no touching the state file. If the file is malformed or the merge state on disk doesn't match it, fail loudly to the parent and stop.
+- **Process:** read the state file. Read every path in `changed_files`
+  *fresh from disk* (post-merge state). Synthesize holistically — always,
+  regardless of textual conflict presence (semantic conflicts can exist without
+  textual ones). Write synthesized contents. `git add -A` in the memory
+  worktree.
+- **Approval gate:** SendMessage the parent with a prose summary. Parent answers
+  from conversation context, escalating to the user only when needed. Sub-agent
+  commits nothing until parent SendMessages approval.
+- **Continuation:** on approval, run `state.continuation` (a `bash` command).
+  Sub-agent's job ends when that command exits.
+- **Hard rules:** no `git` mutation outside `git add -A`; no merging in
+  additional branches; no touching the state file. If the file is malformed or
+  the merge state on disk doesn't match it, fail loudly to the parent and stop.
 
 ### 5.2 Pre-flight (install-time)
 
-`/gitlore:install` step 1 (from design): check `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Plan 03 implements this. If unset, warn and offer to enable; install still completes. At runtime, prepare scripts proceed regardless; the agent layer surfaces a clear error if `Task` dispatch fails because the flag is off.
+`/gitlore:install` step 1 (from design): check
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. Plan 03 implements this. If unset, warn
+and offer to enable; install still completes. At runtime, prepare scripts
+proceed regardless; the agent layer surfaces a clear error if `Task` dispatch
+fails because the flag is off.
 
-**Open Plan 04 follow-up — gitlore plugin marketplace install.** Dogfood Task 7 confirmed that having `agents/memory-merger.md` in the repo isn't enough on its own: a CC session only discovers the sub-agent when the plugin is installed via marketplace (`/plugin add`), not when the repo is merely the cwd. Plan 03 ships the file in the correct location; Plan 04 should add a one-time `/plugin add gitlore` step (or equivalent) to the install flow, or document that the agent layer requires marketplace installation. Until then, the script-side state machine still works correctly; the sub-agent dispatch silently no-ops.
+**Open Plan 04 follow-up — gitlore plugin marketplace install.** Dogfood Task 7
+confirmed that having `agents/memory-merger.md` in the repo isn't enough on its
+own: a CC session only discovers the sub-agent when the plugin is installed via
+marketplace (`/plugin add`), not when the repo is merely the cwd. Plan 03 ships
+the file in the correct location; Plan 04 should add a one-time
+`/plugin add gitlore` step (or equivalent) to the install flow, or document that
+the agent layer requires marketplace installation. Until then, the script-side
+state machine still works correctly; the sub-agent dispatch silently no-ops.
 
 ### 5.3 Recovery edges
 
@@ -204,42 +286,85 @@ Constraints baked into the system prompt:
 
 ## 6. Testing strategy — three layers
 
-Per [[feedback-automate-default]]: default to automation. Manual gates only where automation costs disproportionately more than the value.
+Per [[feedback-automate-default]]: default to automation. Manual gates only
+where automation costs disproportionately more than the value.
 
 ### 6.1 Layer 1 — Unit (bats)
 
-Script primitives, state-file shape, detection logic, recovery-edge guards. Same shape as Plan 02's unit tests.
+Script primitives, state-file shape, detection logic, recovery-edge guards. Same
+shape as Plan 02's unit tests.
 
 ### 6.2 Layer 2 — Integration with stub sub-agent
 
-End-to-end script wiring through `prepare → state-file → synthesis → continuation`, with a deterministic stub replacing the LLM-driven `memory-merger`. This covers everything Plan-02-style dogfood would have caught *script-side*.
+End-to-end script wiring through
+`prepare → state-file → synthesis → continuation`, with a deterministic stub
+replacing the LLM-driven `memory-merger`. This covers everything Plan-02-style
+dogfood would have caught *script-side*.
 
-- `tests/helpers/stub-synth.bash` — bash function that mimics the sub-agent contract: reads the state file, performs configurable deterministic synthesis (prefer-A, prefer-B, concatenate, fixed-string), `git add -A`, invokes `state.continuation`. Auto-approves (no SendMessage gate at this layer).
-- Tests assert: state-file contents on yield; post-continuation tree state; first-parent invariant per D6; that the continuation invoked the expected git commands; that the loop re-fires when retry-push fails again.
-- Fixtures (`tests/helpers/divergence-fixtures.bash`): hermetic construction of branch-vs-live and local-vs-remote scenarios using two local bare repos.
+- `tests/helpers/stub-synth.bash` — bash function that mimics the sub-agent
+  contract: reads the state file, performs configurable deterministic synthesis
+  (prefer-A, prefer-B, concatenate, fixed-string), `git add -A`, invokes
+  `state.continuation`. Auto-approves (no SendMessage gate at this layer).
+- Tests assert: state-file contents on yield; post-continuation tree state;
+  first-parent invariant per D6; that the continuation invoked the expected git
+  commands; that the loop re-fires when retry-push fails again.
+- Fixtures (`tests/helpers/divergence-fixtures.bash`): hermetic construction of
+  branch-vs-live and local-vs-remote scenarios using two local bare repos.
 
 ### 6.3 Layer 3 — Manual dogfood (narrowed)
 
-Only what stub-synth can't validate: actual `Task` dispatch, actual `SendMessage` approval gate, LLM synthesis quality with non-trivial content. One gate suffices.
+Only what stub-synth can't validate: actual `Task` dispatch, actual
+`SendMessage` approval gate, LLM synthesis quality with non-trivial content. One
+gate suffices.
 
-- 🐕 **Dogfood (single gate)** — induce branch-vs-live divergence on a test repo with gitlore installed; run a real `git commit` in a real Claude Code session; observe the agent loop end-to-end. Skip local-vs-remote dogfood unless this surfaces something the stub-synth integration missed.
-- **Open question for writing-plans:** can the Claude Agent SDK script `Task` dispatch + `SendMessage` approval deterministically? If yes, even this gate moves to Layer 2. Investigate during plan execution; don't pre-commit to manual.
+- 🐕 **Dogfood (single gate)** — induce branch-vs-live divergence on a test repo
+  with gitlore installed; run a real `git commit` in a real Claude Code session;
+  observe the agent loop end-to-end. Skip local-vs-remote dogfood unless this
+  surfaces something the stub-synth integration missed.
+- **Open question for writing-plans:** can the Claude Agent SDK script `Task`
+  dispatch + `SendMessage` approval deterministically? If yes, even this gate
+  moves to Layer 2. Investigate during plan execution; don't pre-commit to
+  manual.
 
 ### 6.4 In-plan backfill of Plan 03's own dogfood gate findings
 
-No Plan 02 backfill needed — both Plan 02 dogfood surprises (`.gitmodules` gitignored, `gh --source=.` with gitfile submodule) were already automated in commit `192d7e8` and live in `tests/install_run.bats` and `tests/install_remote.bats`.
+No Plan 02 backfill needed — both Plan 02 dogfood surprises (`.gitmodules`
+gitignored, `gh --source=.` with gitfile submodule) were already automated in
+commit `192d7e8` and live in `tests/install_run.bats` and
+`tests/install_remote.bats`.
 
-**Plan 03 dogfood findings (commit `dcaaf75`, all patched + regression-tested):**
+**Plan 03 dogfood findings (commit `dcaaf75`, all patched +
+regression-tested):**
 
-1. **`changed_files` was target-side only.** `gitlore_write_merge_state` ran `git diff base...HEAD` after the prepare phase had already `git checkout`ed the target ref, so source-side files were silently dropped from the state file. Sub-agent would synthesize the wrong set of files. Fixed to union diffs against both source_ref and target_ref. Regression: `resolve_merge_branch.bats` and `resolve_merge_remote.bats` assert both filenames in `changed_files`.
+1. **`changed_files` was target-side only.** `gitlore_write_merge_state` ran
+   `git diff base...HEAD` after the prepare phase had already `git checkout`ed
+   the target ref, so source-side files were silently dropped from the state
+   file. Sub-agent would synthesize the wrong set of files. Fixed to union diffs
+   against both source_ref and target_ref. Regression:
+   `resolve_merge_branch.bats` and `resolve_merge_remote.bats` assert both
+   filenames in `changed_files`.
 
-2. **Directive emitted literal `$CLAUDE_PLUGIN_ROOT`.** Sub-agent shells don't necessarily inherit it; expansion to empty made the bash invocation fail at the path level (before `scripts/resolve.sh`'s own `:?` guard could fire). Fixed: directive now emits the absolute resolve.sh path resolved at hook time. `scripts/resolve.sh` additionally derives `PLUGIN_ROOT` from `$0` as a fallback. Regression: directive-shape assertions in `resolve_merge_{branch,remote}.bats` + `tests/resolve.bats` "derives plugin root from $0" test.
+2. **Directive emitted literal `$CLAUDE_PLUGIN_ROOT`.** Sub-agent shells don't
+   necessarily inherit it; expansion to empty made the bash invocation fail at
+   the path level (before `scripts/resolve.sh`'s own `:?` guard could fire).
+   Fixed: directive now emits the absolute resolve.sh path resolved at hook
+   time. `scripts/resolve.sh` additionally derives `PLUGIN_ROOT` from `$0` as a
+   fallback. Regression: directive-shape assertions in
+   `resolve_merge_{branch,remote}.bats` + `tests/resolve.bats` "derives plugin
+   root from $0" test.
 
-3. **Continuation required CWD = parent repo root.** `gitlore_memory_path` reads `.gitmodules` without `-C`, so the continuation crashed if the sub-agent's CWD wasn't the parent repo (which it isn't by default in many CC dispatch contexts). Fixed: directive prefixes `cd "<parent-repo>" && ` so the sub-agent runs a fully self-contained command with no CWD assumptions. Regression: `cd "$TMP_REPO" && bash ...` shape asserted in the same files.
+3. **Continuation required CWD = parent repo root.** `gitlore_memory_path` reads
+   `.gitmodules` without `-C`, so the continuation crashed if the sub-agent's
+   CWD wasn't the parent repo (which it isn't by default in many CC dispatch
+   contexts). Fixed: directive prefixes `cd "<parent-repo>" && ` so the
+   sub-agent runs a fully self-contained command with no CWD assumptions.
+   Regression: `cd "$TMP_REPO" && bash ...` shape asserted in the same files.
 
 No findings deferred to Plan 04.
 
-What does apply for future plans: anything §6.3's manual gate surfaces gets a Layer 2 fixture *in this plan* before Plan 03 is considered shipped. Following Plan 02's pattern (which patched + backfilled in the same commit).
+What does apply for future plans: anything §6.3's manual gate surfaces gets a
+Layer 2 fixture *in this plan* before Plan 03 is considered shipped. Following
+Plan 02's pattern (which patched + backfilled in the same commit).
 
 ### 6.5 Test layout
 
@@ -268,38 +393,81 @@ scripts/install/preflight.sh           # MODIFY — add CLAUDE_CODE_EXPERIMENTAL
 
 ## 7. Open questions to resolve during writing-plans
 
-1. **Does `commands/gitlore/resolve.md` need `Task` in `allowed-tools`, or is the slash-command-to-Task-tool dispatch implicit?** Check current CC behavior; if explicit, add it. Plan 02's resolve.md only has `Bash`.
-2. **`agents/memory-merger.md` path conventions for CC plugins.** Verify the plugin's `plugin.json` exposes agents from this location. (Plan 02 doesn't ship an agent yet.)
-3. **State-file location.** `<mempath>/.git/gitlore-merge-state` works when `<mempath>/.git` is a directory but the memory submodule's `.git` is a gitfile pointer. Use `git -C <mempath> rev-parse --git-path gitlore-merge-state` instead — matches Plan 01's `gitlore-commit-msg` convention.
-4. **Should `continuation` be an absolute path or a relative subcommand?** Relative `scripts/resolve.sh continue-after-...` requires the sub-agent to be in the right CWD; absolute via `$CLAUDE_PLUGIN_ROOT` is more robust. Pick one during writing-plans.
-5. **Continuation re-entry: same script invocation or new process?** New process is simpler (state file is the handoff); same-process via shell function is faster but tangles the state machine. Recommend new process unless profiling argues otherwise.
-6. **Can the Claude Agent SDK script `Task` dispatch and `SendMessage` deterministically?** If yes, Layer 3 dogfood becomes Layer 2 integration. Investigate.
-7. **`/gitlore:install` step 1 ordering.** The `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` check is informational only; place it before the destructive pre-flight (gh + auth) or after?
+1. **Does `commands/gitlore/resolve.md` need `Task` in `allowed-tools`, or is
+   the slash-command-to-Task-tool dispatch implicit?** Check current CC
+   behavior; if explicit, add it. Plan 02's resolve.md only has `Bash`.
+2. **`agents/memory-merger.md` path conventions for CC plugins.** Verify the
+   plugin's `plugin.json` exposes agents from this location. (Plan 02 doesn't
+   ship an agent yet.)
+3. **State-file location.** `<mempath>/.git/gitlore-merge-state` works when
+   `<mempath>/.git` is a directory but the memory submodule's `.git` is a
+   gitfile pointer. Use
+   `git -C <mempath> rev-parse --git-path gitlore-merge-state` instead — matches
+   Plan 01's `gitlore-commit-msg` convention.
+4. **Should `continuation` be an absolute path or a relative subcommand?**
+   Relative `scripts/resolve.sh continue-after-...` requires the sub-agent to be
+   in the right CWD; absolute via `$CLAUDE_PLUGIN_ROOT` is more robust. Pick one
+   during writing-plans.
+5. **Continuation re-entry: same script invocation or new process?** New process
+   is simpler (state file is the handoff); same-process via shell function is
+   faster but tangles the state machine. Recommend new process unless profiling
+   argues otherwise.
+6. **Can the Claude Agent SDK script `Task` dispatch and `SendMessage`
+   deterministically?** If yes, Layer 3 dogfood becomes Layer 2 integration.
+   Investigate.
+7. **`/gitlore:install` step 1 ordering.** The
+   `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` check is informational only; place it
+   before the destructive pre-flight (gh + auth) or after?
 
 ---
 
 ## Self-review checklist (spec phase)
 
-- ✅ Spec coverage: §2.1's seven in-scope bullets each have a section that owns them (branch-vs-live → §4.2; local-vs-remote → §4.3; memory-merger → §5.1; state-machine → §3; recovery → §5.3; install pre-flight → §5.2; in-plan dogfood backfill → §6.4).
-- ✅ Placeholder scan: no TBDs. §7 enumerates explicit open questions for writing-plans, not placeholders.
-- ✅ Internal consistency: §3.5's state-file path matches §7.3's reminder to use `git rev-parse --git-path`. §4's first-parent invariant matches design D6.
-- ✅ Type consistency: `mempath`, `GITLORE_SUBMODULE_NAME`, `gitlore_memory_path` follow Plan 01/02 conventions; state-file location follows Plan 01's `gitlore-commit-msg` convention.
-- ✅ Outside-in test order to be enforced by writing-plans: each code task writes failing tests first (Layer 1 + Layer 2 stub), drives to green, backfills failures.
-- ✅ Single source of truth: detection in `scripts/lib/resolve.sh`; hooks and `/gitlore:resolve` call into it.
-- ✅ Dogfood gate is narrow and explicit (§6.3), with an open question (§7.6) asking writing-plans to investigate moving it to Layer 2.
+- ✅ Spec coverage: §2.1's seven in-scope bullets each have a section that owns
+  them (branch-vs-live → §4.2; local-vs-remote → §4.3; memory-merger → §5.1;
+  state-machine → §3; recovery → §5.3; install pre-flight → §5.2; in-plan
+  dogfood backfill → §6.4).
+- ✅ Placeholder scan: no TBDs. §7 enumerates explicit open questions for
+  writing-plans, not placeholders.
+- ✅ Internal consistency: §3.5's state-file path matches §7.3's reminder to use
+  `git rev-parse --git-path`. §4's first-parent invariant matches design D6.
+- ✅ Type consistency: `mempath`, `GITLORE_SUBMODULE_NAME`,
+  `gitlore_memory_path` follow Plan 01/02 conventions; state-file location
+  follows Plan 01's `gitlore-commit-msg` convention.
+- ✅ Outside-in test order to be enforced by writing-plans: each code task
+  writes failing tests first (Layer 1 + Layer 2 stub), drives to green,
+  backfills failures.
+- ✅ Single source of truth: detection in `scripts/lib/resolve.sh`; hooks and
+  `/gitlore:resolve` call into it.
+- ✅ Dogfood gate is narrow and explicit (§6.3), with an open question (§7.6)
+  asking writing-plans to investigate moving it to Layer 2.
 - ✅ Open questions enumerated (§7) for writing-plans to resolve.
 
 ---
 
 # Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace Plan 02's "manual fix required" failure paths in `pre-commit` and `pre-push` with a semantic-merge state-machine. Hooks detect divergence by push failure, prepare the merge on disk, write a state file, and emit a directive naming the continuation. A new `memory-merger` sub-agent reads the state file, synthesizes, gets parent approval via `SendMessage`, then invokes the continuation script.
+**Goal:** Replace Plan 02's "manual fix required" failure paths in `pre-commit`
+and `pre-push` with a semantic-merge state-machine. Hooks detect divergence by
+push failure, prepare the merge on disk, write a state file, and emit a
+directive naming the continuation. A new `memory-merger` sub-agent reads the
+state file, synthesizes, gets parent approval via `SendMessage`, then invokes
+the continuation script.
 
-**Architecture:** Yield-with-continuation state machine driven entirely by scripts. Each yield carries (a) directive to dispatch `memory-merger` with a state-file path and (b) a continuation subcommand the sub-agent runs after approval. Continuations may yield again — a single user op may yield N times until a push succeeds.
+**Architecture:** Yield-with-continuation state machine driven entirely by
+scripts. Each yield carries (a) directive to dispatch `memory-merger` with a
+state-file path and (b) a continuation subcommand the sub-agent runs after
+approval. Continuations may yield again — a single user op may yield N times
+until a push succeeds.
 
-**Tech stack:** `bash` 3.2+, `bats-core`, `jq` for state-file IO, POSIX `git`, mocked `gh`. Claude Code `Task` + `SendMessage` at runtime, requiring `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
+**Tech stack:** `bash` 3.2+, `bats-core`, `jq` for state-file IO, POSIX `git`,
+mocked `gh`. Claude Code `Task` + `SendMessage` at runtime, requiring
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
 
 ---
 
@@ -329,11 +497,19 @@ tests/install_run.bats                 # MODIFY — assert preflight warns when 
 
 ## Conventions for every task
 
-- Same as Plan 02 (`plans/2026-05-19-02-remote-and-push.md`): bats files load `helpers/setup`, scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`, hook scripts exit 0 (silent OK) or non-zero (loud directive on stderr), commit prefix per gitmoji convention.
-- State file at `<mempath>/.git/gitlore-merge-state`, resolved via `gitlore_merge_state_file` (Task 1 step 3). JSON shape per spec §3.5.
-- Continuation stored as a subcommand name (e.g., `continue-after-branch-merge`). The sub-agent runs it as `bash "$CLAUDE_PLUGIN_ROOT/scripts/resolve.sh" <continuation>`.
+- Same as Plan 02 (`plans/2026-05-19-02-remote-and-push.md`): bats files load
+  `helpers/setup`, scripts begin with `#!/usr/bin/env bash` +
+  `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`,
+  hook scripts exit 0 (silent OK) or non-zero (loud directive on stderr), commit
+  prefix per gitmoji convention.
+- State file at `<mempath>/.git/gitlore-merge-state`, resolved via
+  `gitlore_merge_state_file` (Task 1 step 3). JSON shape per spec §3.5.
+- Continuation stored as a subcommand name (e.g.,
+  `continue-after-branch-merge`). The sub-agent runs it as
+  `bash "$CLAUDE_PLUGIN_ROOT/scripts/resolve.sh" <continuation>`.
 - Hook scripts source `scripts/lib/resolve.sh` after `util.sh`/`log.sh`.
-- Tests never call git plumbing directly to set up divergence — use `tests/helpers/divergence-fixtures.bash`.
+- Tests never call git plumbing directly to set up divergence — use
+  `tests/helpers/divergence-fixtures.bash`.
 
 ---
 
@@ -348,7 +524,8 @@ tests/install_run.bats                 # MODIFY — assert preflight warns when 
 - Modify: `scripts/git-hooks/pre-commit`
 - Modify: `scripts/resolve.sh` (add `continue-after-branch-merge` subcommand)
 
-Outside-in TDD: red e2e first → build scaffolding + impl in order to drive it green → backfill the loop case.
+Outside-in TDD: red e2e first → build scaffolding + impl in order to drive it
+green → backfill the loop case.
 
 - [x] **Step 1: Write the happy-path test.**
 
@@ -410,8 +587,9 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run to confirm red.**
 
-Run: `bats tests/resolve_merge_branch.bats`
-Expected: 2 failures — pre-commit currently exits 1 with the Plan 02 "manual fix required" message; the state file is never written.
+Run: `bats tests/resolve_merge_branch.bats` Expected: 2 failures — pre-commit
+currently exits 1 with the Plan 02 "manual fix required" message; the state file
+is never written.
 
 - [x] **Step 3: Add `gitlore_merge_state_file` to `scripts/lib/util.sh`.**
 
@@ -580,7 +758,8 @@ run_stub_synth() {
 
 - [x] **Step 7: Modify `scripts/git-hooks/pre-commit`.**
 
-Replace the final `if [ -n "$live_sha" ]; then ... fi` block with a yield path. Full new file:
+Replace the final `if [ -n "$live_sha" ]; then ... fi` block with a yield path.
+Full new file:
 
 ```bash
 #!/usr/bin/env bash
@@ -641,9 +820,11 @@ fi
 exit 0
 ```
 
-- [x] **Step 8: Modify `scripts/resolve.sh` — add `continue-after-branch-merge` subcommand.**
+- [x] **Step 8: Modify `scripts/resolve.sh` — add `continue-after-branch-merge`
+      subcommand.**
 
-Insert this dispatcher block immediately after the `source` lines and before the Plan 02 default-mode logic:
+Insert this dispatcher block immediately after the `source` lines and before the
+Plan 02 default-mode logic:
 
 ```bash
 # Subcommand dispatch (Plan 03 continuations).
@@ -686,7 +867,8 @@ if [ $# -ge 1 ]; then
 fi
 ```
 
-Also add `source "$PLUGIN_ROOT/scripts/lib/resolve.sh"` after the existing `source` lines.
+Also add `source "$PLUGIN_ROOT/scripts/lib/resolve.sh"` after the existing
+`source` lines.
 
 - [x] **Step 9: Run happy-path; confirm green.**
 
@@ -729,7 +911,11 @@ Expected: 2 passing.
 }
 ```
 
-Note: this test is the hardest one to set up cleanly. Refine during execution if the simulated concurrent-advance doesn't trigger the retry-push failure in practice. The intent is: continuation completes its commit, attempts retry-push, the retry fails because of new divergence, and a fresh prepare yields a new directive.
+Note: this test is the hardest one to set up cleanly. Refine during execution if
+the simulated concurrent-advance doesn't trigger the retry-push failure in
+practice. The intent is: continuation completes its commit, attempts retry-push,
+the retry fails because of new divergence, and a fresh prepare yields a new
+directive.
 
 - [x] **Step 11: Run; confirm all green.**
 
@@ -755,7 +941,8 @@ git commit -m "✨ feat: branch-vs-live semantic merge — pre-commit yields, co
 - Modify: `scripts/git-hooks/pre-push`
 - Modify: `scripts/resolve.sh` (add `continue-after-remote-merge` subcommand)
 
-Same outside-in shape as Task 1. The helpers (`scripts/lib/resolve.sh`, `divergence-fixtures.bash`, `stub-synth.bash`) already exist.
+Same outside-in shape as Task 1. The helpers (`scripts/lib/resolve.sh`,
+`divergence-fixtures.bash`, `stub-synth.bash`) already exist.
 
 - [x] **Step 1: Write the happy-path test.**
 
@@ -901,7 +1088,8 @@ Add a new case to the subcommand dispatcher from Task 1 step 8:
 Run: `bats tests/resolve_merge_remote.bats`
 Expected: 2 passing.
 
-- [x] **Step 6: Append loop-case test (concurrent remote advance during synthesis).**
+- [x] **Step 6: Append loop-case test (concurrent remote advance during
+      synthesis).**
 
 ```bash
 @test "local-vs-remote loop: continuation yields again if retry-push fails" {
@@ -944,7 +1132,10 @@ git commit -m "✨ feat: local-vs-remote semantic merge — pre-push yields, con
 - Modify: `scripts/resolve.sh` (default mode: fetch + try-both)
 - Create: `tests/resolve_both_flavors.bats`
 
-The default mode of `scripts/resolve.sh` (no args) replaces Plan 02's "diverged → manual fix" path with the same yield protocol used by the hooks. When both flavors apply, the script tries branch-vs-live first (it's local-only and cheaper); local-vs-remote falls out on the next continuation cycle.
+The default mode of `scripts/resolve.sh` (no args) replaces Plan 02's "diverged
+→ manual fix" path with the same yield protocol used by the hooks. When both
+flavors apply, the script tries branch-vs-live first (it's local-only and
+cheaper); local-vs-remote falls out on the next continuation cycle.
 
 - [x] **Step 1: Write the happy-path test.**
 
@@ -1005,12 +1196,13 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run to confirm red.**
 
-Run: `bats tests/resolve_both_flavors.bats`
-Expected: ≥2 failures (Plan 02's default-mode `resolve.sh` doesn't yield, it reports "manual fix required").
+Run: `bats tests/resolve_both_flavors.bats` Expected: ≥2 failures (Plan 02's
+default-mode `resolve.sh` doesn't yield, it reports "manual fix required").
 
 - [x] **Step 3: Refactor `scripts/resolve.sh` default mode.**
 
-Replace the Plan 02 default-mode body (from "Step 1: gitlore installed?" through the final "healthy" exit) with:
+Replace the Plan 02 default-mode body (from "Step 1: gitlore installed?" through
+the final "healthy" exit) with:
 
 ```bash
 # Default mode: detect + try both pushes in turn. Yield on the first failure;
@@ -1097,14 +1289,18 @@ git commit -m "✨ feat: /gitlore:resolve default mode yields per-flavor directi
 **Files:**
 - Create: `tests/resolve_recovery.bats`
 - Modify: `scripts/lib/resolve.sh` (add `gitlore_detect_stale_merge_state`)
-- Modify: `scripts/resolve.sh` (add `abort-then-retry` subcommand; entry-points check stale state first)
+- Modify: `scripts/resolve.sh` (add `abort-then-retry` subcommand; entry-points
+  check stale state first)
 - Modify: `scripts/git-hooks/pre-commit` (check stale state on entry)
 - Modify: `scripts/git-hooks/pre-push` (check stale state on entry)
 
 Cases:
-1. State file present + `MERGE_HEAD` present → emit `abort-then-retry` directive.
-2. State file present + no `MERGE_HEAD` → fatal directive (no sub-agent), manual intervention.
-3. Concurrent `git checkout live` failure → already handled in Tasks 1-3 via `prepare_*` return-2.
+1. State file present + `MERGE_HEAD` present → emit `abort-then-retry`
+   directive.
+2. State file present + no `MERGE_HEAD` → fatal directive (no sub-agent), manual
+   intervention.
+3. Concurrent `git checkout live` failure → already handled in Tasks 1-3 via
+   `prepare_*` return-2.
 
 - [x] **Step 1: Write failing tests.**
 
@@ -1164,7 +1360,8 @@ teardown() { teardown_tmp_repo; }
 Run: `bats tests/resolve_recovery.bats`
 Expected: 3 failures.
 
-- [x] **Step 3: Add `gitlore_detect_stale_merge_state` to `scripts/lib/resolve.sh`.**
+- [x] **Step 3: Add `gitlore_detect_stale_merge_state` to
+      `scripts/lib/resolve.sh`.**
 
 ```bash
 # Detect whether a stale merge-state file + MERGE_HEAD exists.
@@ -1206,7 +1403,8 @@ Add to the dispatcher case block:
       ;;
 ```
 
-- [x] **Step 5: Add stale-state guard to pre-commit and pre-push (top of file, after sourcing libs).**
+- [x] **Step 5: Add stale-state guard to pre-commit and pre-push (top of file,
+      after sourcing libs).**
 
 In each hook, immediately after sourcing `scripts/lib/resolve.sh`:
 
@@ -1251,7 +1449,8 @@ git commit -m "✨ feat: recovery edges — stale MERGE_HEAD via abort-then-retr
 - Create: `agents/memory-merger.md`
 - Modify: `commands/gitlore/resolve.md`
 
-The sub-agent is invoked by the slash command via the `Task` tool when the slash command sees a yield directive on stderr from the underlying script.
+The sub-agent is invoked by the slash command via the `Task` tool when the slash
+command sees a yield directive on stderr from the underlying script.
 
 - [x] **Step 1: Create `agents/memory-merger.md`.**
 
@@ -1295,7 +1494,7 @@ Your final message to the parent (after approval and continuation exit): a one-l
 
 Full replacement:
 
-```markdown
+````markdown
 ---
 description: Diagnose and recover from gitlore memory divergence (semantic merge included)
 allowed-tools: ["Bash", "Task", "SendMessage"]
@@ -1345,11 +1544,13 @@ You are recovering a gitlore memory submodule from divergence — branch-vs-live
 6. **After the sub-agent exits**, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor or a loop continuation. Repeat steps 2-6 until the script exits 0.
 
 7. **Summarize.** Tell the user what was merged and what state the repo is in now.
-```
+````
 
-- [x] **Step 3: Manual verification (no bats here — Task and SendMessage aren't testable in bats).**
+- [x] **Step 3: Manual verification (no bats here — Task and SendMessage aren't
+      testable in bats).**
 
-This task's correctness is verified by Task 7 (dogfood). Note that in the file layout.
+This task's correctness is verified by Task 7 (dogfood). Note that in the file
+layout.
 
 - [x] **Step 4: Commit.**
 
@@ -1366,7 +1567,8 @@ git commit -m "✨ feat: memory-merger sub-agent + /gitlore:resolve directive di
 - Modify: `scripts/install/preflight.sh`
 - Modify: `tests/install_run.bats`
 
-Warn-only: install completes regardless. Runtime surfaces a clean error if `Task` dispatch fails because the flag is off.
+Warn-only: install completes regardless. Runtime surfaces a clean error if
+`Task` dispatch fails because the flag is off.
 
 - [x] **Step 1: Add a failing test.**
 
@@ -1426,48 +1628,78 @@ git commit -m "🔧 chore: preflight warns when CLAUDE_CODE_EXPERIMENTAL_AGENT_T
 
 **Files:** none (manual validation).
 
-Plan 03 is not shipped until this passes. Per [[feedback-automate-default]] and §6.3 of the spec, this is the one gate that genuinely needs the real agent loop.
+Plan 03 is not shipped until this passes. Per [[feedback-automate-default]] and
+§6.3 of the spec, this is the one gate that genuinely needs the real agent loop.
 
 - [x] **Step 1: Pick a test repo.**
 
-Recommended: the gitlore repo itself (which has gitlore installed). Otherwise: any repo with `/gitlore:install` completed.
+Recommended: the gitlore repo itself (which has gitlore installed). Otherwise:
+any repo with `/gitlore:install` completed.
 
 - [x] **Step 2: Induce branch-vs-live divergence.**
 
 In a Claude Code session (parent worktree):
 1. Make a memory edit (any auto-memory write — e.g., update a feedback memory).
-2. Stage and commit on the parent. The pre-commit hook fires, memory commit is prepared, branch advances live, parent commit completes.
-3. Without committing, create a second linked worktree of the parent (`git worktree add`).
-4. In that second worktree, also make a memory edit and attempt to commit. This should ff-push the second worktree's branch into live and succeed.
-5. Now back in the first worktree, attempt another commit — its memory branch is no longer an ancestor of live. The ff-push fails.
+2. Stage and commit on the parent. The pre-commit hook fires, memory commit is
+   prepared, branch advances live, parent commit completes.
+3. Without committing, create a second linked worktree of the parent
+   (`git worktree add`).
+4. In that second worktree, also make a memory edit and attempt to commit. This
+   should ff-push the second worktree's branch into live and succeed.
+5. Now back in the first worktree, attempt another commit — its memory branch is
+   no longer an ancestor of live. The ff-push fails.
 
 - [x] **Step 3: Observe the agent loop end-to-end.**
 
 Expected:
-1. pre-commit emits the directive (state file written, "flavor=branch-vs-live", continuation `continue-after-branch-merge`).
-2. Claude reads the directive, invokes `Task` with `subagent_type: memory-merger`, passes the state-file path.
-3. The sub-agent reads files, synthesizes, calls `git add -A`, SendMessages a summary.
+1. pre-commit emits the directive (state file written, "flavor=branch-vs-live",
+   continuation `continue-after-branch-merge`).
+2. Claude reads the directive, invokes `Task` with
+   `subagent_type: memory-merger`, passes the state-file path.
+3. The sub-agent reads files, synthesizes, calls `git add -A`, SendMessages a
+   summary.
 4. The parent (Claude) approves with the user.
-5. Sub-agent invokes `bash $CLAUDE_PLUGIN_ROOT/scripts/resolve.sh continue-after-branch-merge`.
-6. Continuation commits with `live` as first parent, advances worktree branch, ff-pushes branch into live, exits 0.
+5. Sub-agent invokes
+   `bash $CLAUDE_PLUGIN_ROOT/scripts/resolve.sh continue-after-branch-merge`.
+6. Continuation commits with `live` as first parent, advances worktree branch,
+   ff-pushes branch into live, exits 0.
 7. User's original commit can now proceed (or they retry it).
 
-- [x] **Step 4: If anything surprises, patch in-plan and add a Layer 2 fixture.**
+- [x] **Step 4: If anything surprises, patch in-plan and add a Layer 2
+      fixture.**
 
-Per [[feedback-automate-default]] and §1 of the spec: dogfood findings become Layer 2 fixtures in Plan 03, not Plan 04. Patch the script, add a regression test under `tests/resolve_merge_branch.bats` (or a new file if the failure is genuinely new), commit, and re-run this step.
+Per [[feedback-automate-default]] and §1 of the spec: dogfood findings become
+Layer 2 fixtures in Plan 03, not Plan 04. Patch the script, add a regression
+test under `tests/resolve_merge_branch.bats` (or a new file if the failure is
+genuinely new), commit, and re-run this step.
 
 - [x] **Step 5: Tick all Plan 03 boxes; ship.**
 
-When this gate passes cleanly, Plan 03 is shipped. Open `/handoff` to summarize and prep the next iteration.
+When this gate passes cleanly, Plan 03 is shipped. Open `/handoff` to summarize
+and prep the next iteration.
 
 ---
 
 ## Self-review checklist (writing-plans)
 
-- ✅ Spec coverage: spec §2.1's seven bullets each have a Task that implements them (Task 1 → branch-vs-live merge; Task 2 → local-vs-remote merge; Task 5 → memory-merger sub-agent; Tasks 1-3 → state-machine architecture; Task 4 → recovery edges; Task 6 → install pre-flight; Task 7 → in-plan backfill discipline).
-- ✅ Placeholder scan: no TBDs, no "implement later", no "similar to Task N" without specifics. The Task 1 step 10 loop test acknowledges its setup difficulty inline rather than masking it.
-- ✅ Type consistency: `mempath`, `GITLORE_SUBMODULE_NAME`, `gitlore_memory_path`, `gitlore_merge_state_file`, `gitlore_write_merge_state`, `gitlore_emit_merge_directive` used consistently from Task 1 onward.
-- ✅ Outside-in test order: each code task writes a failing test first, drives units to green, backfills failures within the same task.
-- ✅ Single source of truth: state-file IO + directive emission + prepare helpers live in `scripts/lib/resolve.sh`; hooks and `/gitlore:resolve` call into it.
+- ✅ Spec coverage: spec §2.1's seven bullets each have a Task that implements
+  them (Task 1 → branch-vs-live merge; Task 2 → local-vs-remote merge; Task 5 →
+  memory-merger sub-agent; Tasks 1-3 → state-machine architecture; Task 4 →
+  recovery edges; Task 6 → install pre-flight; Task 7 → in-plan backfill
+  discipline).
+- ✅ Placeholder scan: no TBDs, no "implement later", no "similar to Task N"
+  without specifics. The Task 1 step 10 loop test acknowledges its setup
+  difficulty inline rather than masking it.
+- ✅ Type consistency: `mempath`, `GITLORE_SUBMODULE_NAME`,
+  `gitlore_memory_path`, `gitlore_merge_state_file`,
+  `gitlore_write_merge_state`, `gitlore_emit_merge_directive` used consistently
+  from Task 1 onward.
+- ✅ Outside-in test order: each code task writes a failing test first, drives
+  units to green, backfills failures within the same task.
+- ✅ Single source of truth: state-file IO + directive emission + prepare
+  helpers live in `scripts/lib/resolve.sh`; hooks and `/gitlore:resolve` call
+  into it.
 - ✅ Dogfood gate explicit (Task 7) with the §1 in-plan backfill discipline.
-- ✅ Continuation invariant: every state file's `continuation` is a subcommand name; sub-agent invokes via `bash $CLAUDE_PLUGIN_ROOT/scripts/resolve.sh <continuation>`.
+- ✅ Continuation invariant: every state file's `continuation` is a subcommand
+  name; sub-agent invokes via
+  `bash $CLAUDE_PLUGIN_ROOT/scripts/resolve.sh <continuation>`.

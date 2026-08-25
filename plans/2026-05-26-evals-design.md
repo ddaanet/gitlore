@@ -7,7 +7,11 @@
 
 ## Goal
 
-Add an end-to-end eval suite that tests the gitlore memory commit flow through a real Claude Code session. Existing bats tests verify the shell pipeline deterministically; evals add coverage of the agent's behavior: does it correctly interpret the `additionalContext` signal, complete the multi-turn approval protocol, and produce a meaningful commit message?
+Add an end-to-end eval suite that tests the gitlore memory commit flow through a
+real Claude Code session. Existing bats tests verify the shell pipeline
+deterministically; evals add coverage of the agent's behavior: does it correctly
+interpret the `additionalContext` signal, complete the multi-turn approval
+protocol, and produce a meaningful commit message?
 
 ---
 
@@ -17,11 +21,13 @@ First scenario: the basic memory commit flow.
 
 1. Agent edits `memory/MEMORY.md`
 2. Agent runs the configured pre-commit command via Bash
-3. `post-tool-use.sh` fires and injects `additionalContext` signaling the agent to write a commit summary
+3. `post-tool-use.sh` fires and injects `additionalContext` signaling the agent
+   to write a commit summary
 4. Agent generates a prose summary and presents it for user approval
 5. User approves (second turn)
 6. Agent writes the commit-msg temp file
-7. Eval runner triggers `git commit`; the pre-commit hook commits memory and ff-pushes to `live`
+7. Eval runner triggers `git commit`; the pre-commit hook commits memory and
+   ff-pushes to `live`
 
 ---
 
@@ -64,11 +70,17 @@ Fields:
 
 `run-evals.sh` runs `k=5` trials per scenario. Each trial:
 
-1. **Setup** — temp git repo, `install/run.sh memory "true"` (dummy pre-commit), write `initial_memory`, commit it, run `session-start.sh`
-2. **Turn 1** — `claude --print --output-format json "$prompt"` in the repo directory; `post-tool-use.sh` fires automatically when the agent calls Bash with the pre-commit command
+1. **Setup** — temp git repo, `install/run.sh memory "true"` (dummy pre-commit),
+   write `initial_memory`, commit it, run `session-start.sh`
+2. **Turn 1** — `claude --print --output-format json "$prompt"` in the repo
+   directory; `post-tool-use.sh` fires automatically when the agent calls Bash
+   with the pre-commit command
 3. **Session ID** — parsed from the JSON output of turn 1
-4. **Turn 2** — `claude --resume "$session_id" --print --output-format json "$approval_message"`; agent writes the commit-msg file
-5. **Parent commit** — `git commit --allow-empty -m "parent: eval test"` triggers the pre-commit hook
+4. **Turn 2** —
+   `claude --resume "$session_id" --print --output-format json "$approval_message"`;
+   agent writes the commit-msg file
+5. **Parent commit** — `git commit --allow-empty -m "parent: eval test"`
+   triggers the pre-commit hook
 6. **Outcome assertions** — must all pass before the judge runs
 7. **LLM judge** — grades commit message quality against the rubric
 8. **Trial result** — pass only if all assertions pass AND judge returns `pass`
@@ -107,7 +119,8 @@ DIFF: <git show output>
 COMMIT_MESSAGE: <log -1 output>
 ```
 
-Runner parses the first word of stdout (`pass`/`fail`). The explanation line is logged per trial for debugging.
+Runner parses the first word of stdout (`pass`/`fail`). The explanation line is
+logged per trial for debugging.
 
 ---
 
@@ -118,15 +131,20 @@ Runner parses the first word of stdout (`pass`/`fail`). The explanation line is 
 | `make test` | bats suite | Yes |
 | `make evals` | `tests/evals/run-evals.sh` | No (opt-in) |
 
-Evals require `ANTHROPIC_API_KEY`. They are slow (multiple CC sessions per trial × 5 trials × N scenarios) and non-deterministic, so they are not wired as a hard PR gate. The runner exits non-zero on any scenario failure, enabling future CI wiring once the suite stabilizes.
+Evals require `ANTHROPIC_API_KEY`. They are slow (multiple CC sessions per trial
+× 5 trials × N scenarios) and non-deterministic, so they are not wired as a hard
+PR gate. The runner exits non-zero on any scenario failure, enabling future CI
+wiring once the suite stabilizes.
 
-A `tests/evals/README.md` documents the `ANTHROPIC_API_KEY` requirement and how to run locally.
+A `tests/evals/README.md` documents the `ANTHROPIC_API_KEY` requirement and how
+to run locally.
 
 ---
 
 ## What This Does Not Cover
 
 - The resolve flow (`/gitlore:resolve`) — separate future eval
-- Session restore after `git clone` — already covered deterministically by `integration_clone_restore.bats`
+- Session restore after `git clone` — already covered deterministically by
+  `integration_clone_restore.bats`
 - The pre-push hook — future eval
 

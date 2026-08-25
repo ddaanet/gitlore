@@ -129,8 +129,8 @@ Proposed: cut it. If the intended referent is
 `spec-enumerations-need-rederiving` — a plan that hand-lists call sites while
 conformance passes clean is a brief misdescribing the code — link that instead.
 
-**Ruled: relink to `[[spec-enumerations-need-rederiving]]`** rather than cut. The
-sentence sits in the SDD-dispatch paragraph, and that fact is a brief
+**Ruled: relink to `[[spec-enumerations-need-rederiving]]`** rather than cut.
+The sentence sits in the SDD-dispatch paragraph, and that fact is a brief
 misdescribing the code in exactly that context, so the pairing is live and only
 its referent died.
 
@@ -354,9 +354,9 @@ merges and 3,491 B for 24 relocations. Coupling is nearly nil: 8 inbound
   adversarial auditor briefs, the plain-word sweep, and the whole-submodule
   frontmatter diff.
 
-`index-compaction-triggers` does not survive as a unit, so the naming problem dissolves
-with it: "compaction" named the lever its own body forbids, and "triggers"
-named the authoring concern that moves into the skill.
+`index-compaction-triggers` does not survive as a unit, so the naming problem
+dissolves with it: "compaction" named the lever its own body forbids, and
+"triggers" named the authoring concern that moves into the skill.
 
 **The seam runs differently than the A/B split above.** The file is a trigger
 doctrine — an index line's only job, the WHEN/HOW/acted-inline classification,
@@ -383,9 +383,10 @@ content is gitlore's to change.
 **Where it lands is not uniform, and handoff has a standing decision about
 precisely this.** *A directive is correct only where in the turn it lands*:
 handoff runs its checkpoint in the same turn as the writes, so its directive
-arrives **after** the memory files exist, while **precompact reads its directive
-before it writes**. The `with-commit`/`without-commit` mode is a different axis —
-commit awareness, not flow — and does not bear on timing.
+arrives **after** the memory files exist, while
+**precompact reads its directive before it writes**. The
+`with-commit`/`without-commit` mode is a different axis — commit awareness, not
+flow — and does not bear on timing.
 
 So one file already reaches both moments, split by flow: under **precompact**,
 quoting `gitlore:memory-writing` gives constrained generation before the facts

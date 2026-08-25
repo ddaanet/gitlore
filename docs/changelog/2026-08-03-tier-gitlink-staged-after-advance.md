@@ -1,13 +1,48 @@
 # 2026-08-03 — Advancing a tier stages its moved gitlink, so the next `SessionStart` stops eating the merge
 
-Observed live, twice in one session. `/gitlore:merge` landed a tier merge, fast-forwarded the tier's local `live` onto it, and left the moved gitlink unstaged in the memory store to ride the next memory commit — the floating pin D17 describes. The `SessionStart` tier pass then ran `submodule update --init -- "$tier"`, which checks a tier out at the sha the superproject's **index** holds, not the one its HEAD records. The index still held the pre-merge commit, so HEAD moved backwards and the tier's fact files reverted. The reflog was the whole story: `checkout: moving from <merge> to <pre-merge>`, one line below `commit (merge)`.
+Observed live, twice in one session. `/gitlore:merge` landed a tier merge,
+fast-forwarded the tier's local `live` onto it, and left the moved gitlink
+unstaged in the memory store to ride the next memory commit — the floating pin
+D17 describes. The `SessionStart` tier pass then ran
+`submodule update --init -- "$tier"`, which checks a tier out at the sha the
+superproject's **index** holds, not the one its HEAD records. The index still
+held the pre-merge commit, so HEAD moved backwards and the tier's fact files
+reverted. The reflog was the whole story:
+`checkout: moving from <merge> to <pre-merge>`, one line below `commit (merge)`.
 
-Nothing reported it. The command that landed the merge had exited 0, and the next session called the tier clean. What survived was the tier's `live` branch — the merge commit stayed reachable, but only for someone who knew to look. Worse than a plain revert, because the recomposed root index is an ordinary file write rather than a gitlink and therefore survived: the store was left internally inconsistent, index lines describing augmented facts whose files no longer carried the augmentation.
+Nothing reported it. The command that landed the merge had exited 0, and the
+next session called the tier clean. What survived was the tier's `live` branch —
+the merge commit stayed reachable, but only for someone who knew to look. Worse
+than a plain revert, because the recomposed root index is an ordinary file write
+rather than a gitlink and therefore survived: the store was left internally
+inconsistent, index lines describing augmented facts whose files no longer
+carried the augmentation.
 
-The unfinished-merge guard did not cover it. That guard keys on a state file and `MERGE_HEAD`, and this merge is *finished* — the window is specifically "landed, not yet recorded in the memory store".
+The unfinished-merge guard did not cover it. That guard keys on a state file and
+`MERGE_HEAD`, and this merge is *finished* — the window is specifically "landed,
+not yet recorded in the memory store".
 
-Both paths that advance a tier now stage the pair — `MEMORY.md` and the tier — in the memory store as their last act. `gitlore_merge_stores`' fast-forward-plus-adoption branch was the commoner case and staged nothing at all; the merge continuation already staged the composed `MEMORY.md` and needed only the gitlink beside it, but *after* its commit rather than in `compose_merged_indexes`, which runs before the merge commit exists and would have pinned the pre-merge authority. The first implementation put it there and the test caught it. Staging is best-effort on the fast-forward path: a failure must not turn a landed advance into a failed merge, so it reports the `git add` to run by hand and returns success.
+Both paths that advance a tier now stage the pair — `MEMORY.md` and the tier —
+in the memory store as their last act. `gitlore_merge_stores`'
+fast-forward-plus-adoption branch was the commoner case and staged nothing at
+all; the merge continuation already staged the composed `MEMORY.md` and needed
+only the gitlink beside it, but *after* its commit rather than in
+`compose_merged_indexes`, which runs before the merge commit exists and would
+have pinned the pre-merge authority. The first implementation put it there and
+the test caught it. Staging is best-effort on the fast-forward path: a failure
+must not turn a landed advance into a failed merge, so it reports the `git add`
+to run by hand and returns success.
 
-Skipping the pin when a tier is *ahead* of its gitlink was rejected on sight. The pin is unconditional on purpose — every clone made before tiers were pinned sits ahead already, and that is the case it exists to correct.
+Skipping the pin when a tier is *ahead* of its gitlink was rejected on sight.
+The pin is unconditional on purpose — every clone made before tiers were pinned
+sits ahead already, and that is the case it exists to correct.
 
-Three tests, red-checked by reverse-applying the fix. `tier_divergence.bats` and `merge_memory.bats` each run the real sequence — advance the tier, then the `SessionStart` tier pass — and assert the tier HEAD against the *commit*; a test that only checks `git status` clean passes in both worlds, since the store is dirty either way. Both fixtures assert first that the tier is off the commit memory records and that memory has not committed the move, without which the pin is a no-op and the test passes with the staging deleted. `resolve_compose.bats` and the existing fast-forward test pin the staged gitlink directly, so the two channels fail independently.
+Three tests, red-checked by reverse-applying the fix. `tier_divergence.bats` and
+`merge_memory.bats` each run the real sequence — advance the tier, then the
+`SessionStart` tier pass — and assert the tier HEAD against the *commit*; a test
+that only checks `git status` clean passes in both worlds, since the store is
+dirty either way. Both fixtures assert first that the tier is off the commit
+memory records and that memory has not committed the move, without which the pin
+is a no-op and the test passes with the staging deleted. `resolve_compose.bats`
+and the existing fast-forward test pin the staged gitlink directly, so the two
+channels fail independently.

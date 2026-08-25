@@ -204,14 +204,40 @@ discovered_suites() {
   [ "$status" -eq 0 ]
   declared=" $output "
   # Excluded on purpose: no check reads them, and including them would re-run
-  # the whole suite on a memory-only or prose-only commit.
-  excluded=" memory docs plans README.md CLAUDE.md .claude .editorconfig .envrc "
+  # the whole suite on a memory-only or prose-only commit. `docs`, `plans` and
+  # the rumdl pin/config are read by `format-docs`, which has no sentinel.
+  excluded=" memory docs plans README.md CLAUDE.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml "
   while IFS= read -r entry; do
     [[ "$declared" == *" $entry "* ]] || [[ "$excluded" == *" $entry "* ]] || {
       echo "top-level entry '$entry' is neither a declared gate input nor a deliberate exclusion" >&2
       return 1
     }
   done < <(git -C "$PLUGIN_ROOT" ls-files | sed 's#/.*##' | sort -u)
+}
+
+@test "format-docs drives rumdl over docs/ and plans/, and refuses a version off the pin" {
+  # The invocation path, with rumdl stubbed through the `rumdl` variable: what
+  # the recipe hands it, and that a `.venv` behind `pyproject.toml` stops with
+  # a message rather than wrapping the tree with whatever version is on PATH.
+  cat > "$STUB_DIR/rumdl" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  --version) echo "rumdl $RUMDL_STUB_VERSION" ;;
+  *) printf '%s\n' "$@" ;;
+esac
+EOF
+  chmod +x "$STUB_DIR/rumdl"
+  pin=$(sed -n 's/.*"rumdl==\([0-9.]*\)".*/\1/p' "$PLUGIN_ROOT/pyproject.toml")
+  [ -n "$pin" ]
+
+  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION='$pin' just rumdl='$STUB_DIR/rumdl' format-docs"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'fmt\n--no-cache\ndocs\nplans' ]
+
+  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION=0.0.1 just rumdl='$STUB_DIR/rumdl' format-docs"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pins $pin"* ]]
+  [[ "$output" != *"fmt"* ]]
 }
 
 # --- the gate sentinel itself -------------------------------------------------

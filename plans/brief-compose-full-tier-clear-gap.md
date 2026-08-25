@@ -4,12 +4,13 @@
 
 ### Decisions
 
-- Fixed the resurrection bug this gap is a residue of: `gitlore_compose_tier_bullets`
-  (`scripts/lib/index-compose.sh:253-296`) now drops a carrier line when root has
-  *some* bullets for that tier but not this specific one — gated on
-  `[ -z "$rootbullets" ]` (empty → preserve; non-empty → root is authoritative,
-  drop what's missing). Confirmed live: stashing the fix and re-running the new
-  test reproduced the resurrection on unmodified `main` (`cd0319b`).
+- Fixed the resurrection bug this gap is a residue of:
+  `gitlore_compose_tier_bullets` (`scripts/lib/index-compose.sh:253-296`) now
+  drops a carrier line when root has *some* bullets for that tier but not this
+  specific one — gated on `[ -z "$rootbullets" ]` (empty → preserve; non-empty →
+  root is authoritative, drop what's missing). Confirmed live: stashing the fix
+  and re-running the new test reproduced the resurrection on unmodified `main`
+  (`cd0319b`).
 - Chosen shape, per David: "transparently support observed agent behavior," not
   "block and tell the agent to hold it better" — the agent edits root only (the
   documented write path), the system completes the removal, no warning message
