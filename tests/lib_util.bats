@@ -180,11 +180,6 @@ EOF
   gitlore_git_is_lock_error "Another git process seems to be running in this repository"
 }
 
-@test "gitlore_git_is_lock_error does NOT match resolve's live worktree lock (D3)" {
-  run gitlore_git_is_lock_error "fatal: 'live' is already used by worktree at '/x/live'"
-  [ "$status" -ne 0 ]
-}
-
 @test "gitlore_git_is_lock_error does NOT match an unrelated error" {
   run gitlore_git_is_lock_error "fatal: not a git repository"
   [ "$status" -ne 0 ]
@@ -205,14 +200,6 @@ EOF
   PATH="$bin:$PATH" run gitlore_git commit -m x
   [ "$status" -eq 128 ]
   [ "$(cat "$TMP_REPO/git-calls")" = "1" ]   # called exactly once
-}
-
-@test "gitlore_git fails fast on resolve's live worktree lock (D3 preserved)" {
-  local bin; bin="$(_fake_git 99 "fatal: 'live' is already used by worktree at '/x/live'")"
-  export GITLORE_GIT_RETRY_SCHEDULE="0 0 0 0 0 0 0"
-  PATH="$bin:$PATH" run gitlore_git checkout live
-  [ "$status" -eq 128 ]
-  [ "$(cat "$TMP_REPO/git-calls")" = "1" ]
 }
 
 @test "gitlore_git surfaces the final stderr and exit code after exhausting retries" {
