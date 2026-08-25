@@ -1,42 +1,67 @@
 # Standalone Memory-Commit Entry Point Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a blessed, callable gitlore entry point (`scripts/commit-memory.sh`) that commits the memory submodule and advances local `live` without a parent commit, so an interactive skill can satisfy the FR11 approval gate up front and later non-interactive commits never trip it.
+**Goal:** Add a blessed, callable gitlore entry point
+(`scripts/commit-memory.sh`) that commits the memory submodule and advances
+local `live` without a parent commit, so an interactive skill can satisfy the
+FR11 approval gate up front and later non-interactive commits never trip it.
 
-**Architecture:** Factor `pre-commit`'s commit-and-advance-live body into one lib function `gitlore_sync_memory_to_live` (in `scripts/lib/resolve.sh`); both `pre-commit` and the new arg-driven `commit-memory.sh` call it. Callers discover the script via a `gitlore.commitCommand` git config key, re-pinned every `SessionStart` and seeded at install. See design.md D16.
+**Architecture:** Factor `pre-commit`'s commit-and-advance-live body into one
+lib function `gitlore_sync_memory_to_live` (in `scripts/lib/resolve.sh`); both
+`pre-commit` and the new arg-driven `commit-memory.sh` call it. Callers discover
+the script via a `gitlore.commitCommand` git config key, re-pinned every
+`SessionStart` and seeded at install. See design.md D16.
 
-**Tech Stack:** Bash (`set -euo pipefail`), git submodules, bats-core (bats 1.5.0+, `tests/helpers/{setup,fixtures}.bash`).
+**Tech Stack:** Bash (`set -euo pipefail`), git submodules, bats-core (bats
+1.5.0+, `tests/helpers/{setup,fixtures}.bash`).
 
 ---
 
 ## File Structure
 
-- **Modify** `scripts/lib/resolve.sh` — add `gitlore_sync_memory_to_live MEMPATH`, the factored commit/advance/divergence body.
-- **Modify** `scripts/git-hooks/pre-commit` — delegate its body (lines 27–90) to the new lib function; keep only prologue + lib sourcing + presence guards.
-- **Create** `scripts/commit-memory.sh` — arg-driven (`-m` / `-F <file>` / `-F -`) entry point; writes the summary to the commit-msg IPC file, then calls the lib function.
-- **Modify** `scripts/cc-hooks/session-start.sh` — re-pin `gitlore.commitCommand` next to `gitlore.hooksDir` (line 64 region).
-- **Modify** `scripts/install/write-settings.sh` — seed `gitlore.commitCommand` next to `gitlore.hooksDir` (line 36 region).
+- **Modify** `scripts/lib/resolve.sh` — add
+  `gitlore_sync_memory_to_live MEMPATH`, the factored commit/advance/divergence
+  body.
+- **Modify** `scripts/git-hooks/pre-commit` — delegate its body (lines 27–90) to
+  the new lib function; keep only prologue + lib sourcing + presence guards.
+- **Create** `scripts/commit-memory.sh` — arg-driven (`-m` / `-F <file>` /
+  `-F -`) entry point; writes the summary to the commit-msg IPC file, then calls
+  the lib function.
+- **Modify** `scripts/cc-hooks/session-start.sh` — re-pin
+  `gitlore.commitCommand` next to `gitlore.hooksDir` (line 64 region).
+- **Modify** `scripts/install/write-settings.sh` — seed `gitlore.commitCommand`
+  next to `gitlore.hooksDir` (line 36 region).
 - **Create** `tests/commit_memory.bats` — entry-point behavior.
 - **Modify** `tests/cc_hook_session_start.bats` — assert the re-pinned key.
 - **Modify** `tests/install_run.bats` — assert the seeded key.
 
-Run the whole suite with `bats tests/` from the repo root. Run one file with `bats tests/commit_memory.bats`.
+Run the whole suite with `bats tests/` from the repo root. Run one file with
+`bats tests/commit_memory.bats`.
 
 ---
 
 ### Task 1: Factor the commit-and-advance-live body into a lib function
 
-Extract `pre-commit`'s stale-merge precheck + dirty/freshness/commit + push/divergence (lines 27–90) into `gitlore_sync_memory_to_live` so both the hook and the new script share one implementation. The existing `git_hook_pre_commit.bats` suite is the regression net; one direct lib test pins the function's contract.
+Extract `pre-commit`'s stale-merge precheck + dirty/freshness/commit +
+push/divergence (lines 27–90) into `gitlore_sync_memory_to_live` so both the
+hook and the new script share one implementation. The existing
+`git_hook_pre_commit.bats` suite is the regression net; one direct lib test pins
+the function's contract.
 
 **Files:**
 - Modify: `scripts/lib/resolve.sh` (append new function)
 - Modify: `scripts/git-hooks/pre-commit:19-90`
-- Test: `tests/git_hook_pre_commit.bats` (existing, must stay green) + `tests/commit_memory.bats` (created in Task 2 also exercises it)
+- Test: `tests/git_hook_pre_commit.bats` (existing, must stay green) +
+  `tests/commit_memory.bats` (created in Task 2 also exercises it)
 
 - [x] **Step 1: Add the function to `scripts/lib/resolve.sh`**
 
-Append at end of file. This is a verbatim relocation of `pre-commit:27-90` with `exit N` → `return N` and `mempath` taken as `$1`:
+Append at end of file. This is a verbatim relocation of `pre-commit:27-90` with
+`exit N` → `return N` and `mempath` taken as `$1`:
 
 ```bash
 
@@ -120,7 +145,8 @@ gitlore_sync_memory_to_live() {
 
 - [x] **Step 2: Rewrite `scripts/git-hooks/pre-commit` to delegate**
 
-Replace the entire file body from line 19 onward (everything after the lib `source` lines) with presence guards + one call. The file becomes:
+Replace the entire file body from line 19 onward (everything after the lib
+`source` lines) with presence guards + one call. The file becomes:
 
 ```bash
 #!/usr/bin/env bash
@@ -154,17 +180,23 @@ gitlore_sync_memory_to_live "$mempath"
 exit $?
 ```
 
-Note: the original `git config --file .gitmodules … || exit 0` guard (old line 44) is subsumed by `[ -z "$mempath" ] && exit 0` — `gitlore_memory_path` already returns empty when the submodule is unregistered.
+Note: the original `git config --file .gitmodules … || exit 0` guard (old line
+44) is subsumed by `[ -z "$mempath" ] && exit 0` — `gitlore_memory_path` already
+returns empty when the submodule is unregistered.
 
-- [x] **Step 3: Run the existing pre-commit suite to verify behavior is preserved**
+- [x] **Step 3: Run the existing pre-commit suite to verify behavior is
+      preserved**
 
-Run: `bats tests/git_hook_pre_commit.bats`
-Expected: PASS — all existing tests green (clean no-op, dirty+fresh commit/push, dirty+no-summary hint, divergence directive, detached HEAD, leaked-GIT_DIR regression, session-less worktree).
+Run: `bats tests/git_hook_pre_commit.bats` Expected: PASS — all existing tests
+green (clean no-op, dirty+fresh commit/push, dirty+no-summary hint, divergence
+directive, detached HEAD, leaked-GIT_DIR regression, session-less worktree).
 
 - [x] **Step 4: Run the resolve suite to confirm no lib regression**
 
-Run: `bats tests/resolve.bats tests/resolve_merge_branch.bats tests/lib_util.bats`
-Expected: PASS — the new function only adds; existing resolve/util behavior unchanged.
+Run:
+`bats tests/resolve.bats tests/resolve_merge_branch.bats tests/lib_util.bats`
+Expected: PASS — the new function only adds; existing resolve/util behavior
+unchanged.
 
 - [x] **Step 5: Commit**
 
@@ -177,7 +209,9 @@ git commit -m "refactor: factor commit-and-advance-live into gitlore_sync_memory
 
 ### Task 2: Create the `commit-memory.sh` entry point
 
-Arg-driven script that resolves the memory path, writes the approved summary to the commit-msg IPC file, then calls `gitlore_sync_memory_to_live`. TDD: write the bats file first, watch it fail (script absent), then implement.
+Arg-driven script that resolves the memory path, writes the approved summary to
+the commit-msg IPC file, then calls `gitlore_sync_memory_to_live`. TDD: write
+the bats file first, watch it fail (script absent), then implement.
 
 **Files:**
 - Create: `scripts/commit-memory.sh`
@@ -363,8 +397,8 @@ Expected: PASS — all 8 tests green.
 
 - [x] **Step 6: Lint the new script**
 
-Run: `shellcheck scripts/commit-memory.sh`
-Expected: no findings (the `SC1091` source-not-followed lines carry inline disables, matching the hooks).
+Run: `shellcheck scripts/commit-memory.sh` Expected: no findings (the `SC1091`
+source-not-followed lines carry inline disables, matching the hooks).
 
 - [x] **Step 7: Commit**
 
@@ -377,7 +411,9 @@ git commit -m "feat: add commit-memory.sh standalone memory-commit entry point"
 
 ### Task 3: Publish the discovery key `gitlore.commitCommand`
 
-Set the key in both the per-session re-pin (`session-start.sh`, the self-healing one) and the install seed (`write-settings.sh`), each pointing at `$PLUGIN_ROOT/scripts/commit-memory.sh`.
+Set the key in both the per-session re-pin (`session-start.sh`, the self-healing
+one) and the install seed (`write-settings.sh`), each pointing at
+`$PLUGIN_ROOT/scripts/commit-memory.sh`.
 
 **Files:**
 - Modify: `scripts/cc-hooks/session-start.sh:63-64`
@@ -386,7 +422,9 @@ Set the key in both the per-session re-pin (`session-start.sh`, the self-healing
 
 - [x] **Step 1: Add the session-start assertion (failing)**
 
-In `tests/cc_hook_session_start.bats`, extend the existing test at line 30 (`"does not write settings.local.json (D10); sets hooksDir and emits wrappers"`). Immediately after the `hooksDir` assertion (line 37) add:
+In `tests/cc_hook_session_start.bats`, extend the existing test at line 30
+(`"does not write settings.local.json (D10); sets hooksDir and emits wrappers"`).
+Immediately after the `hooksDir` assertion (line 37) add:
 
 ```bash
   [ "$(git config gitlore.commitCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" ]
@@ -399,7 +437,8 @@ Expected: FAIL — `git config gitlore.commitCommand` is empty, assertion fails.
 
 - [x] **Step 3: Set the key in `session-start.sh`**
 
-At `scripts/cc-hooks/session-start.sh`, in the "Hook dir + wrappers" block, add the second `git config` line:
+At `scripts/cc-hooks/session-start.sh`, in the "Hook dir + wrappers" block, add
+the second `git config` line:
 
 ```bash
 # Hook dir + wrappers.
@@ -415,13 +454,19 @@ Expected: PASS — all tests green, including the new key assertion.
 
 - [x] **Step 5: Add the install-seed assertion (failing)**
 
-In `tests/install_run.bats`, locate the test that asserts `gitlore.precommitCommand` (line 38) and add, in the same test, after the install run completes:
+In `tests/install_run.bats`, locate the test that asserts
+`gitlore.precommitCommand` (line 38) and add, in the same test, after the
+install run completes:
 
 ```bash
   [ "$(git config gitlore.commitCommand)" = "$PLUGIN_ROOT/scripts/commit-memory.sh" ]
 ```
 
-(If that test does not run the full install through `write-settings.sh`, instead add a focused test that invokes `bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" memory "test-pc"` inside `setup_tmp_repo` and asserts the key. Verify which by reading the test's body first.)
+(If that test does not run the full install through `write-settings.sh`, instead
+add a focused test that invokes
+`bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" memory "test-pc"` inside
+`setup_tmp_repo` and asserts the key. Verify which by reading the test's body
+first.)
 
 - [x] **Step 6: Run it to verify it fails**
 
@@ -446,8 +491,8 @@ Expected: PASS — install now seeds `gitlore.commitCommand`.
 
 - [x] **Step 9: Run the full suite**
 
-Run: `bats tests/`
-Expected: PASS — entire suite green (prior count + the new `commit_memory.bats` tests + 2 assertions).
+Run: `bats tests/` Expected: PASS — entire suite green (prior count + the new
+`commit_memory.bats` tests + 2 assertions).
 
 - [x] **Step 10: Commit**
 
@@ -461,14 +506,17 @@ git commit -m "feat: publish gitlore.commitCommand discovery key"
 
 ### Task 4: Record the Changelog entry
 
-The design decision (D16) and Architecture subsection already landed in `docs/design.md` during brainstorming. Add the shipped-state Changelog row now that the work exists.
+The design decision (D16) and Architecture subsection already landed in
+`docs/design.md` during brainstorming. Add the shipped-state Changelog row now
+that the work exists.
 
 **Files:**
 - Modify: `docs/design.md` (Changelog table, top row)
 
 - [x] **Step 1: Add the Changelog row**
 
-At the top of the Changelog table in `docs/design.md` (just under the header row), add:
+At the top of the Changelog table in `docs/design.md` (just under the header
+row), add:
 
 ```markdown
 | 2026-06-12 | **Implemented D16 — standalone memory-commit entry point.** New `scripts/commit-memory.sh` (arg-driven `-m`/`-F`/`-F -`) commits the memory submodule with the `GITLORE_MEMORY_COMMIT` sentinel and advances local `live` without a parent commit. The commit-and-advance-live body is factored out of `pre-commit` into `gitlore_sync_memory_to_live` (`lib/resolve.sh`); both call it. Discovery via a `gitlore.commitCommand` git config key, re-pinned every `SessionStart` and seeded at install (`write-settings.sh`). Freshness gate kept inside the shared body (pre-commit still needs it; the script satisfies it by writing the summary first). Tests: `commit_memory.bats` (8) + session-start/install key assertions. |
@@ -487,15 +535,29 @@ git commit -m "docs: changelog entry for D16 standalone memory-commit entry poin
 
 **Spec coverage (design.md D16 + Architecture subsection):**
 - Standalone `commit-memory.sh`, arg-driven `-m`/`-F`/`-F -` → Task 2. ✓
-- Factor shared body into `gitlore_sync_memory_to_live`, both callers use it → Task 1. ✓
-- Sentinel commit + `push HEAD:live` only (origin stays with `pre-push`) → Task 1 function body (unchanged from pre-commit). ✓
-- Freshness gate kept inside, satisfied-by-construction in the script → Task 1 (gate in function) + Task 2 (writes msgfile before calling). ✓
-- Graceful no-op guards (not gitlore / no submodule / worktree absent / clean) → Task 2 guards + Task 1 clean-and-synced early return; tested. ✓
-- Divergence reuse (prepare/write-state/emit-directive/exit 1) → Task 1 function body; tested in both suites. ✓
-- Discovery via `gitlore.commitCommand`, re-pinned at SessionStart + seeded at install → Task 3. ✓
-- Activation gate = `.gitmodules` submodule (FR12), not settings.json → Task 2 uses `gitlore_memory_path`; no settings.json read. ✓
-- Caller wiring out of scope → no handoff/commit-commands changes in this plan. ✓
+- Factor shared body into `gitlore_sync_memory_to_live`, both callers use it →
+  Task 1. ✓
+- Sentinel commit + `push HEAD:live` only (origin stays with `pre-push`) → Task
+  1 function body (unchanged from pre-commit). ✓
+- Freshness gate kept inside, satisfied-by-construction in the script → Task 1
+  (gate in function) + Task 2 (writes msgfile before calling). ✓
+- Graceful no-op guards (not gitlore / no submodule / worktree absent / clean) →
+  Task 2 guards + Task 1 clean-and-synced early return; tested. ✓
+- Divergence reuse (prepare/write-state/emit-directive/exit 1) → Task 1 function
+  body; tested in both suites. ✓
+- Discovery via `gitlore.commitCommand`, re-pinned at SessionStart + seeded at
+  install → Task 3. ✓
+- Activation gate = `.gitmodules` submodule (FR12), not settings.json → Task 2
+  uses `gitlore_memory_path`; no settings.json read. ✓
+- Caller wiring out of scope → no handoff/commit-commands changes in this plan.
+  ✓
 
-**Placeholder scan:** No TBD/TODO. Step 5 of Task 3 contains one conditional ("if that test does not run the full install…") — resolved by reading the test body first, with both branches specified, so it is not an open placeholder.
+**Placeholder scan:** No TBD/TODO. Step 5 of Task 3 contains one conditional
+("if that test does not run the full install…") — resolved by reading the test
+body first, with both branches specified, so it is not an open placeholder.
 
-**Type/name consistency:** `gitlore_sync_memory_to_live` (defined Task 1, called Tasks 1 & 2). `gitlore.commitCommand` and `$PLUGIN_ROOT/scripts/commit-memory.sh` identical across Tasks 2, 3, 4. Function returns 0/1 matching `exit $?` in both callers. Memory branch is `worktree` and trunk is `live` per `make_parent_with_memory`. ✓
+**Type/name consistency:** `gitlore_sync_memory_to_live` (defined Task 1, called
+Tasks 1 & 2). `gitlore.commitCommand` and
+`$PLUGIN_ROOT/scripts/commit-memory.sh` identical across Tasks 2, 3, 4. Function
+returns 0/1 matching `exit $?` in both callers. Memory branch is `worktree` and
+trunk is `live` per `make_parent_with_memory`. ✓

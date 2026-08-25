@@ -1,38 +1,68 @@
 # gitlore Plan 02 — Remote Creation and Pre-Push
 
-> **Status:** spec / design. Implementation plan (task-by-task breakdown) will be expanded from this document by `superpowers:writing-plans`.
+> **Status:** spec / design. Implementation plan (task-by-task breakdown) will
+> be expanded from this document by `superpowers:writing-plans`.
 
-**Goal:** After `/gitlore:install` completes on a fresh repo, the user can `git commit` and `git push` and their memory submodule's `live` branch propagates to a remote, all in one command. No second step.
+**Goal:** After `/gitlore:install` completes on a fresh repo, the user can
+`git commit` and `git push` and their memory submodule's `live` branch
+propagates to a remote, all in one command. No second step.
 
-**Reference:** `docs/design.md` is the authoritative spec. Where this plan disagrees with the design, the design wins; flag the divergence in a PR comment before deviating. Plan 01 (`plans/2026-05-15-01-local-memory-pipeline.md`) is the predecessor; this plan builds on its installed state.
+**Reference:** `docs/design.md` is the authoritative spec. Where this plan
+disagrees with the design, the design wins; flag the divergence in a PR comment
+before deviating. Plan 01 (`plans/2026-05-15-01-local-memory-pipeline.md`) is
+the predecessor; this plan builds on its installed state.
 
 ---
 
 ## 1. Lessons-learned opener (Plan 01 retrospective)
 
-Plan 01 shipped with 64 passing tests and was caught short by three classes of issue when dogfooded on the gitlore repo itself. Plan 02 should not repeat them.
+Plan 01 shipped with 64 passing tests and was caught short by three classes of
+issue when dogfooded on the gitlore repo itself. Plan 02 should not repeat them.
 
 ### 1.1 Path-mangling assumption (commit `d47784d`)
 
-Claude Code stores per-project files under `~/.claude/projects/<encoded-path>/`, where the encoding rule replaces `/` with `-` *but also* mangles non-alphanumeric characters in path components. Plan 01's auto-memory migration used a synthetic encoding that matched its own fixture, not real Claude Code behavior. The fixture passed; the real install failed silently.
+Claude Code stores per-project files under `~/.claude/projects/<encoded-path>/`,
+where the encoding rule replaces `/` with `-` *but also* mangles
+non-alphanumeric characters in path components. Plan 01's auto-memory migration
+used a synthetic encoding that matched its own fixture, not real Claude Code
+behavior. The fixture passed; the real install failed silently.
 
-**Lesson for Plan 02:** any path the agent's runtime hands us at install time must be validated against what `claude` itself produces, not what our fixtures assume.
+**Lesson for Plan 02:** any path the agent's runtime hands us at install time
+must be validated against what `claude` itself produces, not what our fixtures
+assume.
 
 ### 1.2 PostToolUse silent failure (commit `041eebf`)
 
-The PostToolUse hook assumed `.claude/settings.json` existed. On repos where it didn't, the hook errored out before its no-op guard could fire, and the error was suppressed by Claude Code's hook plumbing. The hook had a guard for the *content* of settings.json but not for the file's existence.
+The PostToolUse hook assumed `.claude/settings.json` existed. On repos where it
+didn't, the hook errored out before its no-op guard could fire, and the error
+was suppressed by Claude Code's hook plumbing. The hook had a guard for the
+*content* of settings.json but not for the file's existence.
 
-**Lesson for Plan 02:** every hook script must guard its preconditions in the order they could fail. File-existence guards precede content-existence guards. No script may rely on Claude Code surfacing its errors — write failures must be observable to a human running it directly.
+**Lesson for Plan 02:** every hook script must guard its preconditions in the
+order they could fail. File-existence guards precede content-existence guards.
+No script may rely on Claude Code surfacing its errors — write failures must be
+observable to a human running it directly.
 
 ### 1.3 Install staging contract (commit `5fef491`)
 
-Plan 01's install path wrote `.claude/settings.json`, `.gitignore`, and `.claude/gitlore-hook-setup` to disk but never staged them. The fixture suite asserted file existence, not staging state. On the real repo, the user saw an install that promised "review the staged changes" then handed them an empty `git diff --staged`. The same commit also exposed that `git add memory` silently fails to register a submodule as a gitlink in modern git — the install needed `git update-index --add --cacheinfo 160000,<sha>,memory` instead.
+Plan 01's install path wrote `.claude/settings.json`, `.gitignore`, and
+`.claude/gitlore-hook-setup` to disk but never staged them. The fixture suite
+asserted file existence, not staging state. On the real repo, the user saw an
+install that promised "review the staged changes" then handed them an empty
+`git diff --staged`. The same commit also exposed that `git add memory` silently
+fails to register a submodule as a gitlink in modern git — the install needed
+`git update-index --add --cacheinfo 160000,<sha>,memory` instead.
 
-**Lesson for Plan 02:** when install promises "we staged X," tests must assert X is in `git diff --cached`, not just on disk. And gitlink operations need explicit cacheinfo, not naive `git add`.
+**Lesson for Plan 02:** when install promises "we staged X," tests must assert X
+is in `git diff --cached`, not just on disk. And gitlink operations need
+explicit cacheinfo, not naive `git add`.
 
 ### 1.4 Process lesson: dogfood early
 
-These three issues all surfaced within minutes of dogfooding Plan 01 on the gitlore repo itself. They could not have been surfaced by the fixture suite, because the fixtures encoded what was expected to vary. Plan 02 bakes dogfooding *into* its task order — see Section 5.
+These three issues all surfaced within minutes of dogfooding Plan 01 on the
+gitlore repo itself. They could not have been surfaced by the fixture suite,
+because the fixtures encoded what was expected to vary. Plan 02 bakes dogfooding
+*into* its task order — see Section 5.
 
 ---
 
@@ -40,17 +70,26 @@ These three issues all surfaced within minutes of dogfooding Plan 01 on the gitl
 
 ### 2.1 In scope
 
-- **Phase A — pre-push hook.** Before any outer push to the parent repo's remote, the memory submodule's `live` branch ff-pushes to its own remote. If the memory push fails, the outer push aborts.
-- **Phase B — remote creation flow.** `/gitlore:install` proactively creates a GitHub repo for the memory submodule, sets it as `origin`, and pushes the initial `live` branch — all during install, gated by a pre-flight check.
-- **`/gitlore:resolve` — recovery command.** A new CC slash command that diagnoses partial / broken remote state and routes to specific repair actions. In Plan 02, it handles the failure modes that Phase A and Phase B can produce.
-- **Shared remote-creation code path.** The logic Phase B uses to create a remote must be callable from `/gitlore:resolve` too — single source of truth.
+- **Phase A — pre-push hook.** Before any outer push to the parent repo's
+  remote, the memory submodule's `live` branch ff-pushes to its own remote. If
+  the memory push fails, the outer push aborts.
+- **Phase B — remote creation flow.** `/gitlore:install` proactively creates a
+  GitHub repo for the memory submodule, sets it as `origin`, and pushes the
+  initial `live` branch — all during install, gated by a pre-flight check.
+- **`/gitlore:resolve` — recovery command.** A new CC slash command that
+  diagnoses partial / broken remote state and routes to specific repair actions.
+  In Plan 02, it handles the failure modes that Phase A and Phase B can produce.
+- **Shared remote-creation code path.** The logic Phase B uses to create a
+  remote must be callable from `/gitlore:resolve` too — single source of truth.
 
 ### 2.2 Out of scope (deferred to later plans)
 
-- Auto-resolving non-fast-forward divergence between local `live` and remote `live`.
+- Auto-resolving non-fast-forward divergence between local `live` and remote
+  `live`.
 - Interactive force-push prompts.
 - Multi-repo / multi-remote topologies.
-- GitHub Enterprise endpoints, non-GitHub remotes (GitLab, Bitbucket), or non-`gh` toolchains.
+- GitHub Enterprise endpoints, non-GitHub remotes (GitLab, Bitbucket), or
+  non-`gh` toolchains.
 - `WorktreeCreate` / `WorktreeRemove` hooks (Plan 04).
 - Clone-from-remote smoke test, polish, expanded docs (Plan 05).
 
@@ -60,15 +99,28 @@ These three issues all surfaced within minutes of dogfooding Plan 01 on the gitl
 
 ### 3.1 Contract
 
-When the user runs `git push` (or any operation that fires the pre-push git hook) in a parent repo with gitlore installed:
+When the user runs `git push` (or any operation that fires the pre-push git
+hook) in a parent repo with gitlore installed:
 
-1. The user's hook manager (or direct-wired `.git/hooks/pre-push`) invokes `.git/gitlore-pre-push` alongside the user's own pre-push commands. The user's commands run via their hook manager's normal ordering — gitlore does not wrap or execute them.
-2. The `.git/gitlore-pre-push` wrapper invokes `$(git config gitlore.hooksDir)/pre-push`.
-3. That script pushes the memory submodule's `live` branch to its `origin` (ff-only).
+1. The user's hook manager (or direct-wired `.git/hooks/pre-push`) invokes
+   `.git/gitlore-pre-push` alongside the user's own pre-push commands. The
+   user's commands run via their hook manager's normal ordering — gitlore does
+   not wrap or execute them.
+2. The `.git/gitlore-pre-push` wrapper invokes
+   `$(git config gitlore.hooksDir)/pre-push`.
+3. That script pushes the memory submodule's `live` branch to its `origin`
+   (ff-only).
 4. If memory push succeeds, the wrapper exits 0 and the outer push proceeds.
-5. If memory push fails, the wrapper exits non-zero with an actionable message routed (where applicable) to `/gitlore:resolve`.
+5. If memory push fails, the wrapper exits non-zero with an actionable message
+   routed (where applicable) to `/gitlore:resolve`.
 
-> **Architectural correction vs. brainstorm draft:** an earlier version of this section claimed the script would read `gitlore.prepushCommand` and execute the user's pre-push command. That doesn't match Plan 01's architecture. Plan 01's `gitlore.precommitCommand` is a *prefix-match trigger* read by the PostToolUse CC hook to detect when the user is about to commit — not an executor. The user's actual pre-commit/pre-push commands are run by their hook manager, not by gitlore. Plan 02 follows that pattern: no `gitlore.prepushCommand`.
+> **Architectural correction vs. brainstorm draft:** an earlier version of this
+> section claimed the script would read `gitlore.prepushCommand` and execute the
+> user's pre-push command. That doesn't match Plan 01's architecture. Plan 01's
+> `gitlore.precommitCommand` is a *prefix-match trigger* read by the PostToolUse
+> CC hook to detect when the user is about to commit — not an executor. The
+> user's actual pre-commit/pre-push commands are run by their hook manager, not
+> by gitlore. Plan 02 follows that pattern: no `gitlore.prepushCommand`.
 
 ### 3.2 Failure modes
 
@@ -81,12 +133,17 @@ When the user runs `git push` (or any operation that fires the pre-push git hook
 
 ### 3.3 Idempotency
 
-The pre-push hook is read-only on the local memory repo (it pushes, doesn't commit). Re-running it is safe.
+The pre-push hook is read-only on the local memory repo (it pushes, doesn't
+commit). Re-running it is safe.
 
 ### 3.4 Implementation notes for writing-plans
 
-- **Wrapper file already exists.** Plan 01's emitter writes `.git/gitlore-pre-push`, but Plan 01 only created a no-op stub for the underlying hook script at `scripts/git-hooks/pre-push` (exits 0). Plan 02 replaces that stub with the real implementation.
-- **No user-command wrapping.** The pre-push hook only pushes memory. The user's pre-push commands are the hook manager's responsibility.
+- **Wrapper file already exists.** Plan 01's emitter writes
+  `.git/gitlore-pre-push`, but Plan 01 only created a no-op stub for the
+  underlying hook script at `scripts/git-hooks/pre-push` (exits 0). Plan 02
+  replaces that stub with the real implementation.
+- **No user-command wrapping.** The pre-push hook only pushes memory. The user's
+  pre-push commands are the hook manager's responsibility.
 
 ---
 
@@ -94,7 +151,9 @@ The pre-push hook is read-only on the local memory repo (it pushes, doesn't comm
 
 ### 4.1 When it runs
 
-During `/gitlore:install`, after the memory submodule is created and staged, before install reports success. Idempotent on re-run: if the memory submodule already has `remote.origin.url`, the section is a no-op.
+During `/gitlore:install`, after the memory submodule is created and staged,
+before install reports success. Idempotent on re-run: if the memory submodule
+already has `remote.origin.url`, the section is a no-op.
 
 ### 4.2 Pre-flight gate
 
@@ -103,20 +162,28 @@ Before any destructive operation:
 - `gh --version` must succeed
 - `gh auth status` must succeed
 
-Either failure aborts install immediately with a one-line fix-up message, having modified *nothing* in the target repo. The pre-flight gate is the only way Phase B can fail without entering recovery via `/gitlore:resolve`.
+Either failure aborts install immediately with a one-line fix-up message, having
+modified *nothing* in the target repo. The pre-flight gate is the only way Phase
+B can fail without entering recovery via `/gitlore:resolve`.
 
 ### 4.3 Detection
 
-- `git -C <memory-path> config --get remote.origin.url` returns empty → proceed to creation.
+- `git -C <memory-path> config --get remote.origin.url` returns empty → proceed
+  to creation.
 - Non-empty → skip Phase B (idempotent re-run path).
 
 ### 4.4 Creation
 
-- Owner: `gh api user -q .login` — the authenticated user's namespace. Does not require the target repo to exist on GitHub.
+- Owner: `gh api user -q .login` — the authenticated user's namespace. Does not
+  require the target repo to exist on GitHub.
 - Repo name: `<target-repo-name>-gitlore-memory`.
-- Visibility: `--private`. Memory content may carry context the user wouldn't publish.
-- Command: `gh repo create <owner>/<name> --private --source=<memory-path> --push`.
-- `--push` handles the initial `live` branch push as part of creation. (Verify `gh repo create --source` behavior with submodule-relative paths during implementation; may need to `cd` into the memory worktree first.)
+- Visibility: `--private`. Memory content may carry context the user wouldn't
+  publish.
+- Command:
+  `gh repo create <owner>/<name> --private --source=<memory-path> --push`.
+- `--push` handles the initial `live` branch push as part of creation. (Verify
+  `gh repo create --source` behavior with submodule-relative paths during
+  implementation; may need to `cd` into the memory worktree first.)
 
 ### 4.5 Failure modes
 
@@ -131,8 +198,10 @@ Either failure aborts install immediately with a one-line fix-up message, having
 
 ### 4.6 Implementation footprint
 
-- New file: `scripts/install/create-remote.sh` — the remote-creation logic, callable from both install and resolve.
-- Modify: `scripts/install/run.sh` — invoke pre-flight, then `create-remote.sh`, after submodule init.
+- New file: `scripts/install/create-remote.sh` — the remote-creation logic,
+  callable from both install and resolve.
+- Modify: `scripts/install/run.sh` — invoke pre-flight, then `create-remote.sh`,
+  after submodule init.
 - Modify: existing install bats suite — add fixtures that mock `gh`.
 
 ---
@@ -141,15 +210,24 @@ Either failure aborts install immediately with a one-line fix-up message, having
 
 ### 5.1 Order of work (also the task order for Plan 02)
 
-1. Write red e2e happy-path test → fails because Phase A + Phase B code doesn't exist.
-2. Drive units to green: each unit test exists because the e2e couldn't reach further.
-3. Backfill failure-case unit tests for branches the happy-path e2e didn't force.
-4. **🐕 Dogfood A** — install Plan 02's pre-push hook on the gitlore repo itself; push `origin/main`; verify memory's `live` ff-pushes; outer push proceeds only if memory push succeeded. Any surprise patches Phase A before Phase B begins.
+1. Write red e2e happy-path test → fails because Phase A + Phase B code doesn't
+   exist.
+2. Drive units to green: each unit test exists because the e2e couldn't reach
+   further.
+3. Backfill failure-case unit tests for branches the happy-path e2e didn't
+   force.
+4. **🐕 Dogfood A** — install Plan 02's pre-push hook on the gitlore repo
+   itself; push `origin/main`; verify memory's `live` ff-pushes; outer push
+   proceeds only if memory push succeeded. Any surprise patches Phase A before
+   Phase B begins.
 5. Implement Phase B (driven by the install e2e).
 6. Backfill Phase B failure-case unit tests.
-7. **🐕 Dogfood B** — run `/gitlore:install` on the gitmoji repo. One command, end-to-end: install → pre-flight → submodule → remote creation → working pre-commit hook. Any surprise patches Phase B.
+7. **🐕 Dogfood B** — run `/gitlore:install` on the gitmoji repo. One command,
+   end-to-end: install → pre-flight → submodule → remote creation → working
+   pre-commit hook. Any surprise patches Phase B.
 
-Dogfood gates are plan execution steps, not afterthoughts. Plan 02 is not considered shipped until both have been run and any surprises patched.
+Dogfood gates are plan execution steps, not afterthoughts. Plan 02 is not
+considered shipped until both have been run and any surprises patched.
 
 ### 5.2 Two e2e tests, one per user-facing contract
 
@@ -158,27 +236,39 @@ Dogfood gates are plan execution steps, not afterthoughts. Plan 02 is not consid
 | `install` e2e | Phase B: one-command install wires everything | Fresh repo, `gh` mock available + authed → run `/gitlore:install` → assert memory submodule created+staged, remote configured, `live` branch pushed, both hooks installed |
 | `commit-and-push` e2e | Phase A: pre-push hook propagates memory | Post-install repo → make a commit (pre-commit fires, memory commit created) → `git push` (pre-push fires, memory's `live` ff-pushes) → assert remote `live` advanced to match local |
 
-Both are **black-box**: they shell out to the user-facing commands and inspect repo state, never reach into intermediate functions. Aligns with the outside-in-TDD principle: tests survive refactors because they couple to the contract, not the implementation.
+Both are **black-box**: they shell out to the user-facing commands and inspect
+repo state, never reach into intermediate functions. Aligns with the
+outside-in-TDD principle: tests survive refactors because they couple to the
+contract, not the implementation.
 
 ### 5.3 `gh` fixturing
 
-Default to a mocked `gh` on `$PATH` for both bats suites — a script that records calls and returns scripted responses. Real `gh` against real GitHub is what Dogfood B validates.
+Default to a mocked `gh` on `$PATH` for both bats suites — a script that records
+calls and returns scripted responses. Real `gh` against real GitHub is what
+Dogfood B validates.
 
-Rationale: keeps CI fast and hermetic; keeps the "did the contract hold for reality" question explicitly in the dogfood gate where it belongs. Tests verify the contract held against the `gh` interface; dogfood verifies `gh` itself behaves as expected.
+Rationale: keeps CI fast and hermetic; keeps the "did the contract hold for
+reality" question explicitly in the dogfood gate where it belongs. Tests verify
+the contract held against the `gh` interface; dogfood verifies `gh` itself
+behaves as expected.
 
 ### 5.4 Failure-case unit tests (after happy-path green)
 
-- Pre-flight: `gh` missing → install aborts, repo untouched, exit non-zero with fix-up message.
+- Pre-flight: `gh` missing → install aborts, repo untouched, exit non-zero with
+  fix-up message.
 - Pre-flight: `gh` unauthed → same behavior.
 - Detection: existing `remote.origin.url` → Phase B section is a no-op.
-- Creation: `gh repo create` fails → install exits with routing message pointing to `/gitlore:resolve`.
-- Creation: repo created but `--push` failed → install exits with routing message.
+- Creation: `gh repo create` fails → install exits with routing message pointing
+  to `/gitlore:resolve`.
+- Creation: repo created but `--push` failed → install exits with routing
+  message.
 - Re-run after partial install state → idempotent / picks up where it left off.
 
 ### 5.5 Test layout
 
 - New `tests/install_remote.bats` — install e2e + remote-creation unit cases.
-- Extend existing `tests/install_run.bats` only for shared pre-flight assertions.
+- Extend existing `tests/install_run.bats` only for shared pre-flight
+  assertions.
 - New `tests/pre_push_hook.bats` — pre-push contract + failure modes.
 - New `tests/resolve.bats` — `/gitlore:resolve` detection + dispatch.
 
@@ -188,27 +278,41 @@ Rationale: keeps CI fast and hermetic; keeps the "did the contract hold for real
 
 ### 6.1 `/gitlore:resolve` — the recovery command
 
-A new CC slash command (markdown file) that invokes a shell script doing all detection and dispatch logic. Per the project principle "agent executes, scripts decide" ([[feedback-agent-executes]]), the agent doesn't reason about repair — the script decides, the agent reports.
+A new CC slash command (markdown file) that invokes a shell script doing all
+detection and dispatch logic. Per the project principle "agent executes, scripts
+decide" ([[feedback-agent-executes]]), the agent doesn't reason about repair —
+the script decides, the agent reports.
 
 ### 6.2 Detection order (script)
 
-1. Memory submodule exists? If no → "gitlore not installed, run `/gitlore:install`".
-2. Memory submodule has `remote.origin.url`? If no → invoke the shared remote-creation code path (same one Phase B calls).
-3. Remote reachable? (`git -C <memory-path> ls-remote` succeeds?) If no → "check network or `gh auth status`".
-4. Local `live` exists on remote? If no → push local `live` (recovery for "created but `--push` failed").
-5. Local `live` ff-relationship to remote? If diverged → report divergence, point user at manual resolution (Plan 02 does *not* auto-resolve divergence).
+1. Memory submodule exists? If no → "gitlore not installed, run
+   `/gitlore:install`".
+2. Memory submodule has `remote.origin.url`? If no → invoke the shared
+   remote-creation code path (same one Phase B calls).
+3. Remote reachable? (`git -C <memory-path> ls-remote` succeeds?) If no → "check
+   network or `gh auth status`".
+4. Local `live` exists on remote? If no → push local `live` (recovery for
+   "created but `--push` failed").
+5. Local `live` ff-relationship to remote? If diverged → report divergence,
+   point user at manual resolution (Plan 02 does *not* auto-resolve divergence).
 
 ### 6.3 Scope boundary for `/gitlore:resolve` in Plan 02
 
-**Handles:** missing remote, unreachable remote, unpushed remote, name-collision dispatch (during a fresh Phase B attempt), partial install state.
+**Handles:** missing remote, unreachable remote, unpushed remote, name-collision
+dispatch (during a fresh Phase B attempt), partial install state.
 
-**Defers to later plans:** auto-resolving non-ff divergence, force-push prompts, multi-repo recovery, GitHub Enterprise endpoints.
+**Defers to later plans:** auto-resolving non-ff divergence, force-push prompts,
+multi-repo recovery, GitHub Enterprise endpoints.
 
 ### 6.4 Implementation footprint
 
-- New file: `commands/gitlore/resolve.md` — CC slash command stub that invokes the shell script.
+- New file: `commands/gitlore/resolve.md` — CC slash command stub that invokes
+  the shell script.
 - New file: `scripts/resolve.sh` — detection + dispatch logic.
-- New file: `scripts/install/create-remote.sh` (introduced in 4.6) is callable from both `scripts/install/run.sh` and `scripts/resolve.sh`. Single source of truth for remote creation, designed shared from day one rather than retrofitted later.
+- New file: `scripts/install/create-remote.sh` (introduced in 4.6) is callable
+  from both `scripts/install/run.sh` and `scripts/resolve.sh`. Single source of
+  truth for remote creation, designed shared from day one rather than
+  retrofitted later.
 
 ---
 
@@ -231,22 +335,42 @@ tests/helpers/gh-mock.bash                  # NEW — gh mocking utilities
 
 ## Open questions resolved during writing-plans
 
-1. ~~**`gh repo create --source` with submodule paths.**~~ Resolved: run `gh repo create` from inside the memory worktree (`git -C "$mempath"`), with `--source=.`. Avoids relative-path ambiguity.
-2. ~~**Mid-install crash recovery diagnosis.**~~ Resolved: `/gitlore:resolve` uses the detection order in Section 6.2 — each step is a discrete state probe. Partial install is the case where step 1 passes but step 2 fails; partial creation is step 2 passes but step 4 fails.
-3. ~~**`gh-mock.bash` interface.**~~ Resolved: per-test scripted responses. Tests `export` env vars that the mock reads to decide its behavior. See Task 1.
-4. ~~**Submodule URL after remote creation.**~~ Resolved: `create-remote.sh` rewrites `.gitmodules` after a successful `gh repo create` and re-stages it. See Task 8.
+1. ~~**`gh repo create --source` with submodule paths.**~~ Resolved: run
+   `gh repo create` from inside the memory worktree (`git -C "$mempath"`), with
+   `--source=.`. Avoids relative-path ambiguity.
+2. ~~**Mid-install crash recovery diagnosis.**~~ Resolved: `/gitlore:resolve`
+   uses the detection order in Section 6.2 — each step is a discrete state
+   probe. Partial install is the case where step 1 passes but step 2 fails;
+   partial creation is step 2 passes but step 4 fails.
+3. ~~**`gh-mock.bash` interface.**~~ Resolved: per-test scripted responses.
+   Tests `export` env vars that the mock reads to decide its behavior. See Task
+   1.
+4. ~~**Submodule URL after remote creation.**~~ Resolved: `create-remote.sh`
+   rewrites `.gitmodules` after a successful `gh repo create` and re-stages it.
+   See Task 8.
 
 ---
 
 # Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace Plan 01's pre-push no-op stub with a real memory-push hook, and extend `/gitlore:install` to create a GitHub remote for the memory submodule (gated by a pre-flight check). Add `/gitlore:resolve` for recovery from partial / broken remote state.
+**Goal:** Replace Plan 01's pre-push no-op stub with a real memory-push hook,
+and extend `/gitlore:install` to create a GitHub remote for the memory submodule
+(gated by a pre-flight check). Add `/gitlore:resolve` for recovery from partial
+/ broken remote state.
 
-**Architecture:** `bash` shell scripts orchestrated by Claude Code commands and git hooks. The remote-creation logic lives in `scripts/install/create-remote.sh` and is called by both `scripts/install/run.sh` (during install) and `scripts/resolve.sh` (during recovery). Single source of truth.
+**Architecture:** `bash` shell scripts orchestrated by Claude Code commands and
+git hooks. The remote-creation logic lives in `scripts/install/create-remote.sh`
+and is called by both `scripts/install/run.sh` (during install) and
+`scripts/resolve.sh` (during recovery). Single source of truth.
 
-**Tech stack:** `bash` (target 3.2+), `bats-core` for tests, `jq`/`gh` at runtime, POSIX `git`. Test mocks for `gh` via a per-test scripted shim on `$PATH`.
+**Tech stack:** `bash` (target 3.2+), `bats-core` for tests, `jq`/`gh` at
+runtime, POSIX `git`. Test mocks for `gh` via a per-test scripted shim on
+`$PATH`.
 
 ---
 
@@ -269,8 +393,14 @@ tests/resolve.bats                       # NEW — /gitlore:resolve detection + 
 
 ## Conventions for every task
 
-- Same as Plan 01 (`plans/2026-05-15-01-local-memory-pipeline.md`): bats files load `helpers/setup`, scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`, hook scripts exit 0 (silent ok) or 1 (loud failure), commit prefix per gitmoji convention.
-- Tests use the `gh-mock.bash` helper (Task 1) for any test that would otherwise hit real `gh`. Tests *never* hit the real GitHub API — that's what Dogfood B is for.
+- Same as Plan 01 (`plans/2026-05-15-01-local-memory-pipeline.md`): bats files
+  load `helpers/setup`, scripts begin with `#!/usr/bin/env bash` +
+  `set -euo pipefail`, library functions namespaced `gitlore_<verb>_<noun>`,
+  hook scripts exit 0 (silent ok) or 1 (loud failure), commit prefix per gitmoji
+  convention.
+- Tests use the `gh-mock.bash` helper (Task 1) for any test that would otherwise
+  hit real `gh`. Tests *never* hit the real GitHub API — that's what Dogfood B
+  is for.
 
 ---
 ## Task 1: Pre-push hook end-to-end
@@ -279,7 +409,9 @@ tests/resolve.bats                       # NEW — /gitlore:resolve detection + 
 - Create: `tests/pre_push_hook.bats`
 - Modify: `scripts/git-hooks/pre-push` (replaces Plan 01's no-op stub)
 
-Outside-in TDD: write the happy-path e2e first → drive the script to green → backfill failure-case tests. All in one task because the failure cases share setup and the implementation handles them in a single branchy path.
+Outside-in TDD: write the happy-path e2e first → drive the script to green →
+backfill failure-case tests. All in one task because the failure cases share
+setup and the implementation handles them in a single branchy path.
 
 - [x] **Step 1: Write the happy-path test.**
 
@@ -326,8 +458,8 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run to confirm red.**
 
-Run: `bats tests/pre_push_hook.bats`
-Expected: 1 failure — the stub exits 0 without pushing, so the SHA comparison fails.
+Run: `bats tests/pre_push_hook.bats` Expected: 1 failure — the stub exits 0
+without pushing, so the SHA comparison fails.
 
 - [x] **Step 3: Replace the stub with the real implementation.**
 
@@ -417,8 +549,8 @@ Expected: 1 passing.
 
 - [x] **Step 6: Run; confirm all green.**
 
-Run: `bats tests/pre_push_hook.bats`
-Expected: 5 passing. The implementation from Step 3 already handles all four failure paths — no further edits needed.
+Run: `bats tests/pre_push_hook.bats` Expected: 5 passing. The implementation
+from Step 3 already handles all four failure paths — no further edits needed.
 
 - [x] **Step 7: Commit.**
 
@@ -433,11 +565,15 @@ git commit -m "✨ feat: pre-push hook pushes memory live and routes failures to
 
 **Files:** none (manual validation).
 
-The gitlore repo already has a memory submodule with a real remote. The new `scripts/git-hooks/pre-push` becomes active automatically because `gitlore.hooksDir` already points at this plugin's `scripts/git-hooks/`.
+The gitlore repo already has a memory submodule with a real remote. The new
+`scripts/git-hooks/pre-push` becomes active automatically because
+`gitlore.hooksDir` already points at this plugin's `scripts/git-hooks/`.
 
-- [x] **Step 1: Make a memory-affecting change (or skip if memory is already ahead of remote).**
+- [x] **Step 1: Make a memory-affecting change (or skip if memory is already
+      ahead of remote).**
 
-Edit a memory file so the next commit produces a memory commit, or check `git -C memory log live ^origin/live` to see if local is already ahead.
+Edit a memory file so the next commit produces a memory commit, or check
+`git -C memory log live ^origin/live` to see if local is already ahead.
 
 - [x] **Step 2: Trigger a parent push.**
 
@@ -447,11 +583,15 @@ git -C /Users/david/code/gitlore push origin main
 
 - [x] **Step 3: Observe the pre-push hook running.**
 
-Expected: memory's `live` is pushed to its remote before the parent push proceeds. If the memory push fails (auth, network, divergence), the parent push aborts with the routing message.
+Expected: memory's `live` is pushed to its remote before the parent push
+proceeds. If the memory push fails (auth, network, divergence), the parent push
+aborts with the routing message.
 
 - [x] **Step 4: Patch any surprises before starting Task 3.**
 
-Any deviation from expected behavior is a Phase A patch, not a Phase B concern. Patch, commit, re-run this dogfood, then proceed. Do not start install-remote work with a broken pre-push.
+Any deviation from expected behavior is a Phase A patch, not a Phase B concern.
+Patch, commit, re-run this dogfood, then proceed. Do not start install-remote
+work with a broken pre-push.
 
 - [x] **Step 5: If patches were needed, write a feedback memory.**
 
@@ -464,13 +604,17 @@ Capture what the fixture suite missed. Commit with `📝 memory: ...`.
 **Files:**
 - Create: `tests/helpers/gh-mock.bash` — per-test `gh` shim
 - Create: `tests/gh_mock.bats` — sanity tests for the mock itself
-- Create: `tests/install_remote.bats` — install e2e + preflight + failure-case tests
+- Create: `tests/install_remote.bats` — install e2e + preflight + failure-case
+  tests
 - Create: `scripts/install/preflight.sh` — gh + auth checks
 - Create: `scripts/install/create-remote.sh` — shared remote-creation logic
 - Modify: `scripts/install/run.sh` — invoke preflight + create-remote
-- Modify: `tests/install_run.bats` if Plan 01's tests break under the new preflight gate
+- Modify: `tests/install_run.bats` if Plan 01's tests break under the new
+  preflight gate
 
-Outside-in TDD: write red e2e for the full install-with-remote flow → implement preflight (it gates everything) → implement create-remote → wire into `run.sh` → backfill failure-case tests.
+Outside-in TDD: write red e2e for the full install-with-remote flow → implement
+preflight (it gates everything) → implement create-remote → wire into `run.sh` →
+backfill failure-case tests.
 
 - [x] **Step 1: Build the `gh` mock helper.**
 
@@ -554,7 +698,8 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-Run: `bats tests/gh_mock.bats` — expect 4 passing. (If failing, fix the mock before continuing.)
+Run: `bats tests/gh_mock.bats` — expect 4 passing. (If failing, fix the mock
+before continuing.)
 
 - [x] **Step 3: Write red e2e for install remote-creation.**
 
@@ -597,7 +742,8 @@ teardown() { teardown_tmp_repo; }
 }
 ```
 
-Run: `bats tests/install_remote.bats` — expect 3 failures (install doesn't do remote creation yet).
+Run: `bats tests/install_remote.bats` — expect 3 failures (install doesn't do
+remote creation yet).
 
 - [x] **Step 4: Implement preflight.**
 
@@ -678,7 +824,8 @@ exit 0
 
 Modify `scripts/install/run.sh`:
 
-- Insert preflight as the first action after the `cd`-into-repo-root guard, before the "Refuse non-empty existing path" check:
+- Insert preflight as the first action after the `cd`-into-repo-root guard,
+  before the "Refuse non-empty existing path" check:
 
   ```bash
   bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
@@ -712,7 +859,10 @@ Expected: 3 passing.
 Run: `bats tests/install_run.bats`
 Expected: all of Plan 01's install tests still pass.
 
-If any fail because they didn't set up the gh mock, modify `tests/install_run.bats` to `load helpers/gh-mock` and call `install_gh_mock` + `export GH_MOCK_STDOUT_API_USER="alice"` in setup. Plan 02's preflight now requires a working `gh` even in Plan 01's test paths.
+If any fail because they didn't set up the gh mock, modify
+`tests/install_run.bats` to `load helpers/gh-mock` and call `install_gh_mock` +
+`export GH_MOCK_STDOUT_API_USER="alice"` in setup. Plan 02's preflight now
+requires a working `gh` even in Plan 01's test paths.
 
 - [x] **Step 9: Append failure-case tests.**
 
@@ -776,7 +926,8 @@ git commit -m "✨ feat: install creates memory submodule remote via gh, gated b
 - Create: `scripts/resolve.sh` — detection + dispatch logic
 - Create: `tests/resolve.bats` — detection + dispatch tests
 
-The command file is a thin shim. The real work happens in `scripts/resolve.sh`. Tests drive the script.
+The command file is a thin shim. The real work happens in `scripts/resolve.sh`.
+Tests drive the script.
 
 - [x] **Step 1: Write failing tests.**
 
@@ -932,7 +1083,7 @@ Expected: 5 passing.
 
 Create `commands/gitlore/resolve.md`:
 
-```markdown
+````markdown
 ---
 description: Diagnose and recover from a partial or broken gitlore remote setup
 allowed-tools: ["Bash"]
@@ -955,7 +1106,7 @@ You are recovering a gitlore install whose memory remote is missing, unreachable
    Exits 0 on success (state healthy or repaired). Non-zero means manual intervention is needed; surface stderr verbatim and stop.
 
 3. **Summarize.** Tell the user what state was detected and what action was taken (or what they need to do next).
-```
+````
 
 - [x] **Step 5: Commit.**
 
@@ -970,7 +1121,8 @@ git commit -m "✨ feat: /gitlore:resolve detection, dispatch, and command"
 
 **Files:** none (manual validation).
 
-End-to-end: one `/gitlore:install` command on a virgin repo. Tests the full Plan 01 + Plan 02 happy path against real `gh` and a real GitHub remote.
+End-to-end: one `/gitlore:install` command on a virgin repo. Tests the full Plan
+01 + Plan 02 happy path against real `gh` and a real GitHub remote.
 
 - [x] **Step 1: Locate the gitmoji repo and verify virgin state.**
 
@@ -987,39 +1139,54 @@ From inside Claude Code, navigate to the gitmoji repo root and invoke:
 /gitlore:install memory "lefthook run pre-commit"
 ```
 
-Adapt the precommit command to whatever the gitmoji repo actually uses; or pick a sensible no-op like `echo`.
+Adapt the precommit command to whatever the gitmoji repo actually uses; or pick
+a sensible no-op like `echo`.
 
 - [x] **Step 3: Observe the install flow.**
 
 Expected, in order:
 1. Preflight passes (gh + auth ok).
 2. Memory submodule created at `memory/`.
-3. `gh repo create <user>/gitmoji-gitlore-memory --private --source=. --push` succeeds.
+3. `gh repo create <user>/gitmoji-gitlore-memory --private --source=. --push`
+   succeeds.
 4. `.gitmodules` URL points at the real remote (not the placeholder).
-5. `.claude/settings.json`, `.claude/gitlore-hook-setup`, `.gitignore` are staged.
+5. `.claude/settings.json`, `.claude/gitlore-hook-setup`, `.gitignore` are
+   staged.
 6. Memory submodule is staged as a gitlink (mode 160000).
 7. Install completes with "Review the staged changes" message.
 
 - [x] **Step 4: Exercise the full pipeline.**
 
-Make a memory-affecting change, commit (pre-commit fires, memory commit created), then push (pre-push fires, memory's `live` pushes to remote).
+Make a memory-affecting change, commit (pre-commit fires, memory commit
+created), then push (pre-push fires, memory's `live` pushes to remote).
 
 - [x] **Step 5: Patch any surprises.**
 
-Any deviation is a Plan 02 patch. Patch, commit, re-run. Plan 02 is not shipped until this works end-to-end.
+Any deviation is a Plan 02 patch. Patch, commit, re-run. Plan 02 is not shipped
+until this works end-to-end.
 
 - [x] **Step 6: Write a `feedback_dogfood_b.md` memory.**
 
-Record what *did* surface as a second concrete instance of [[feedback-dogfood-early]].
+Record what *did* surface as a second concrete instance of
+[[feedback-dogfood-early]].
 
 ---
 
 ## Self-review checklist (writing-plans)
 
-- ✅ Spec coverage: Sections 2.1's three bullets (Phase A, Phase B, `/gitlore:resolve`) each have dedicated tasks. Sections 3, 4, 5, 6 each map to specific tasks or test files.
-- ✅ Placeholder scan: no TBDs, no "add appropriate error handling", no "similar to Task N", no references to undefined symbols.
-- ✅ Type consistency: `mempath`, `GITLORE_SUBMODULE_NAME` (from Plan 01's `scripts/lib/util.sh`), `gitlore_has_submodule`, `gitlore_memory_path` all used consistently.
-- ✅ Outside-in test order: each code task writes failing tests first, drives to green, backfills failures within the same task.
-- ✅ Single source of truth for remote creation: `create-remote.sh` called from both `install/run.sh` (Task 3) and `resolve.sh` (Task 4).
-- ✅ Dogfood gates explicit: Task 2 between Phase A and Phase B; Task 5 after Phase B before plan is considered shipped.
-- ✅ Spec corrections inline: removed stale `gitlore.prepushCommand` claim, clarified that user pre-push commands are the hook manager's responsibility.
+- ✅ Spec coverage: Sections 2.1's three bullets (Phase A, Phase B,
+  `/gitlore:resolve`) each have dedicated tasks. Sections 3, 4, 5, 6 each map to
+  specific tasks or test files.
+- ✅ Placeholder scan: no TBDs, no "add appropriate error handling", no "similar
+  to Task N", no references to undefined symbols.
+- ✅ Type consistency: `mempath`, `GITLORE_SUBMODULE_NAME` (from Plan 01's
+  `scripts/lib/util.sh`), `gitlore_has_submodule`, `gitlore_memory_path` all
+  used consistently.
+- ✅ Outside-in test order: each code task writes failing tests first, drives to
+  green, backfills failures within the same task.
+- ✅ Single source of truth for remote creation: `create-remote.sh` called from
+  both `install/run.sh` (Task 3) and `resolve.sh` (Task 4).
+- ✅ Dogfood gates explicit: Task 2 between Phase A and Phase B; Task 5 after
+  Phase B before plan is considered shipped.
+- ✅ Spec corrections inline: removed stale `gitlore.prepushCommand` claim,
+  clarified that user pre-push commands are the hook manager's responsibility.

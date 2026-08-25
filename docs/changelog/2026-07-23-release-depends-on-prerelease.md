@@ -1,3 +1,19 @@
 # 2026-07-23 — `just release` runs the evals, because the toolkit now binds `release` to a consumer-defined `prerelease`
 
-The sentinel gates (2026-07-21 below) left `release` depending on `precommit` alone, since that dependency lives in the vendored `plugin-dev/release.just`; the standing workaround was to type `just prerelease release`, which is discipline rather than a gate — plain `just release` still shipped without the evals. Fixed where it belongs, upstream in `ddaanet/claude-plugin-dev` v0.4.0 (vendored here by `just update-plugin-dev v0.4.0`): `release` depends on `prerelease`, which every consumer defines, as `prerelease: precommit` for a plugin whose two gates coincide. Deliberately **mandatory** rather than optional-with-a-default — just rejects a justfile whose dependency names a missing recipe, so a consumer that hasn't defined it finds out on the next `just` invocation, not at release time. A non-breaking variant was probed and rejected: an imported private `_release-gate` that a consumer overrides does work (just 1.46.0, with `set allow-duplicate-recipes := true` declared inside the imported file, importer wins position-independently), but that setting is repo-wide, so the toolkit would trade every consumer's duplicate-recipe detection for one override point. gitlore needed no change — `prerelease: precommit evals` already existed.
+The sentinel gates (2026-07-21 below) left `release` depending on `precommit`
+alone, since that dependency lives in the vendored `plugin-dev/release.just`;
+the standing workaround was to type `just prerelease release`, which is
+discipline rather than a gate — plain `just release` still shipped without the
+evals. Fixed where it belongs, upstream in `ddaanet/claude-plugin-dev` v0.4.0
+(vendored here by `just update-plugin-dev v0.4.0`): `release` depends on
+`prerelease`, which every consumer defines, as `prerelease: precommit` for a
+plugin whose two gates coincide. Deliberately **mandatory** rather than
+optional-with-a-default — just rejects a justfile whose dependency names a
+missing recipe, so a consumer that hasn't defined it finds out on the next
+`just` invocation, not at release time. A non-breaking variant was probed and
+rejected: an imported private `_release-gate` that a consumer overrides does
+work (just 1.46.0, with `set allow-duplicate-recipes := true` declared inside
+the imported file, importer wins position-independently), but that setting is
+repo-wide, so the toolkit would trade every consumer's duplicate-recipe
+detection for one override point. gitlore needed no change —
+`prerelease: precommit evals` already existed.

@@ -1,3 +1,23 @@
 # 2026-07-21 — D17 slice 3-ii built — tier pointers reach the always-loaded index
 
-Composition is placement only: line identity is the path prefix, no sentinel text is injected, and the pass is byte-idempotent. Two refinements the build forced. (1) **Mirror-down runs for every *mounted* tier, splice-up only for *active* ones** — the spec's "a deactivated tier's lines persist in the carrier" only holds if they were mirrored while active, so a root line for a mounted-but-never-active tier would have been silently dropped; the fix is the same data-loss argument the commit/push lockstep used to commit every mounted tier. (2) **The root's hook text wins over a divergent carrier hook**, following D17's settled rule that the root index is canonical for a line's *text*. A fourth validation was added beyond the design's three: a non-blank non-bullet line inside the bullet region refuses the pass, because the layout rule would relocate it and lose its position. The routing guidance now sends the agent to the root index with a prefixed path — the surface it actually has loaded — instead of the tier's own `MEMORY.md`. Composition needs no change to the index→frontmatter sync: `index-sync-post.sh` already resolves an index path as `$mempath/$path`, so a prefixed path lands on the tier file. Two defects in the plan's own test code were caught by the linter and by a failing assertion rather than by review: `! grep` inside a bats `@test` does not fail the test (four assertions, two of which would have passed unconditionally — now `run !`), and a `local a="$1" b="$a/x"` in one declaration does not see the fresh `$1`.
+Composition is placement only: line identity is the path prefix, no sentinel
+text is injected, and the pass is byte-idempotent. Two refinements the build
+forced. (1)
+**Mirror-down runs for every *mounted* tier, splice-up only for *active* ones**
+— the spec's "a deactivated tier's lines persist in the carrier" only holds if
+they were mirrored while active, so a root line for a mounted-but-never-active
+tier would have been silently dropped; the fix is the same data-loss argument
+the commit/push lockstep used to commit every mounted tier. (2)
+**The root's hook text wins over a divergent carrier hook**, following D17's
+settled rule that the root index is canonical for a line's *text*. A fourth
+validation was added beyond the design's three: a non-blank non-bullet line
+inside the bullet region refuses the pass, because the layout rule would
+relocate it and lose its position. The routing guidance now sends the agent to
+the root index with a prefixed path — the surface it actually has loaded —
+instead of the tier's own `MEMORY.md`. Composition needs no change to the
+index→frontmatter sync: `index-sync-post.sh` already resolves an index path as
+`$mempath/$path`, so a prefixed path lands on the tier file. Two defects in the
+plan's own test code were caught by the linter and by a failing assertion rather
+than by review: `! grep` inside a bats `@test` does not fail the test (four
+assertions, two of which would have passed unconditionally — now `run !`), and a
+`local a="$1" b="$a/x"` in one declaration does not see the fresh `$1`.

@@ -1,3 +1,21 @@
 # 2026-07-21 — The memory sync stands down while a rebase, cherry-pick or revert is replaying
 
-Staging the gitlink on every commit (the gitlink-staging entry of the same day) made history surgery hazardous: the memory submodule's worktree does not move when the parent's HEAD does, so an `--amend` at a rebase stop re-pinned the replayed commit to memory's *current* SHA instead of the one it recorded. `pre-commit` now resolves `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` and `REVERT_HEAD` via `--git-path` *before* the `--local-env-vars` unset (replay state is per-worktree, same reason the index is captured there) and exits 0 early when any exists. The guard covers the **whole** sync, not just the staging: a sync that trips the FR11 approval gate exits non-zero, which at pre-commit does not abort a commit but aborts the **rebase**, mid-sequence, leaving history half-replayed. It announces rather than skipping silently — a silent no-op is indistinguishable from a broken hook, and a rebase the user is stuck in is exactly when they need to know memory has stopped syncing. `MERGE_HEAD` is deliberately excluded: a merge commit is authored now and must pin current memory, as must a plain `--amend` on the tip; both are covered as negative controls. `tests/integration_replay_guard.bats` commits by hand at the replay stop rather than through `git rebase --continue`, because `--continue` does not run `pre-commit` at all (probed, git 2.47.3) — a `--continue`-driven test passes without the guard and asserts nothing.
+Staging the gitlink on every commit (the gitlink-staging entry of the same day)
+made history surgery hazardous: the memory submodule's worktree does not move
+when the parent's HEAD does, so an `--amend` at a rebase stop re-pinned the
+replayed commit to memory's *current* SHA instead of the one it recorded.
+`pre-commit` now resolves `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` and
+`REVERT_HEAD` via `--git-path` *before* the `--local-env-vars` unset (replay
+state is per-worktree, same reason the index is captured there) and exits 0
+early when any exists. The guard covers the **whole** sync, not just the
+staging: a sync that trips the FR11 approval gate exits non-zero, which at
+pre-commit does not abort a commit but aborts the **rebase**, mid-sequence,
+leaving history half-replayed. It announces rather than skipping silently — a
+silent no-op is indistinguishable from a broken hook, and a rebase the user is
+stuck in is exactly when they need to know memory has stopped syncing.
+`MERGE_HEAD` is deliberately excluded: a merge commit is authored now and must
+pin current memory, as must a plain `--amend` on the tip; both are covered as
+negative controls. `tests/integration_replay_guard.bats` commits by hand at the
+replay stop rather than through `git rebase --continue`, because `--continue`
+does not run `pre-commit` at all (probed, git 2.47.3) — a `--continue`-driven
+test passes without the guard and asserts nothing.

@@ -1,12 +1,26 @@
 # Plan 05 — Memory Redirect Launcher (D10)
 
-> **For agentic workers:** execute task-by-task with TDD (red → green → commit). Steps use `- [ ]` checkboxes for tracking. Each step lists exact files, code, and commands.
+> **For agentic workers:** execute task-by-task with TDD (red → green → commit).
+> Steps use `- [ ]` checkboxes for tracking. Each step lists exact files, code,
+> and commands.
 
-**Goal:** Build the transparent `claude` shim that injects `--settings '{"autoMemoryDirectory":…}'` at launch so CC's native auto-memory lands in the `memory/` submodule, ship both placements (A: repo-local via direnv, B: global), add a `SessionStart` guard that warns loudly when launched without the shim, and delete the dead `settings.local.json` `autoMemoryDirectory` writes that CC silently ignores (D10).
+**Goal:** Build the transparent `claude` shim that injects
+`--settings '{"autoMemoryDirectory":…}'` at launch so CC's native auto-memory
+lands in the `memory/` submodule, ship both placements (A: repo-local via
+direnv, B: global), add a `SessionStart` guard that warns loudly when launched
+without the shim, and delete the dead `settings.local.json`
+`autoMemoryDirectory` writes that CC silently ignores (D10).
 
-**Why now:** Plan 04 just shipped; the Step 6 verification surfaced the live-dir-vs-submodule divergence this fixes. The design (D10 + Memory Redirect Launcher, `docs/design.md:102-137`, `512-556`) is fully specified — code lags it. The current `write-settings.sh:21-29` and `session-start.sh:21-31` still write `autoMemoryDirectory` to `.claude/settings.local.json`, a tier CC discards; memory strands in `~/.claude/projects/<cwd>/memory/`.
+**Why now:** Plan 04 just shipped; the Step 6 verification surfaced the
+live-dir-vs-submodule divergence this fixes. The design (D10 + Memory Redirect
+Launcher, `docs/design.md:102-137`, `512-556`) is fully specified — code lags
+it. The current `write-settings.sh:21-29` and `session-start.sh:21-31` still
+write `autoMemoryDirectory` to `.claude/settings.local.json`, a tier CC
+discards; memory strands in `~/.claude/projects/<cwd>/memory/`.
 
-**Tech stack:** POSIX `sh` (shim), Bash (orchestrators/hooks, `set -euo pipefail`), `jq`, `bats` tests, direnv (Placement A runtime dependency).
+**Tech stack:** POSIX `sh` (shim), Bash (orchestrators/hooks,
+`set -euo pipefail`), `jq`, `bats` tests, direnv (Placement A runtime
+dependency).
 
 ## File structure
 
@@ -30,7 +44,8 @@
 
 ## Steps
 
-- [x] **1. Canonical shim asset.** Create `scripts/install/launcher-shim` verbatim from `docs/design.md:108-128`:
+- [x] **1. Canonical shim asset.** Create `scripts/install/launcher-shim`
+      verbatim from `docs/design.md:108-128`:
 
   ```sh
   #!/usr/bin/env sh
@@ -58,9 +73,13 @@
   exec "$real" --settings "$json" "$@"
   ```
 
-  `chmod 755 scripts/install/launcher-shim`. Commit: `feat: add canonical gitlore launcher shim (D10)`.
+  `chmod 755 scripts/install/launcher-shim`. Commit:
+  `feat: add canonical gitlore launcher shim (D10)`.
 
-- [x] **2. Shim behavior tests (TDD red).** Create `tests/launcher_shim.bats`. The harness puts the shim in `shimdir` and a recording stub `claude` in `stubdir`, then invokes the shim by full path (so it strips `shimdir` from PATH and chains to the stub):
+- [x] **2. Shim behavior tests (TDD red).** Create `tests/launcher_shim.bats`.
+      The harness puts the shim in `shimdir` and a recording stub `claude` in
+      `stubdir`, then invokes the shim by full path (so it strips `shimdir` from
+      PATH and chains to the stub):
 
   ```bash
   #!/usr/bin/env bats
@@ -121,9 +140,12 @@
   }
   ```
 
-  Run `bats tests/launcher_shim.bats` — all but the trivial passthrough cases fail until Step 1's shim is correct (it is), so this step mainly *locks in* behavior. Commit: `test: cover launcher shim passthrough/inject/127 paths`.
+  Run `bats tests/launcher_shim.bats` — all but the trivial passthrough cases
+  fail until Step 1's shim is correct (it is), so this step mainly *locks in*
+  behavior. Commit: `test: cover launcher shim passthrough/inject/127 paths`.
 
-- [x] **3. Placement A emitter.** Create `scripts/install/emit-launcher.sh` (Bash, run from repo root):
+- [x] **3. Placement A emitter.** Create `scripts/install/emit-launcher.sh`
+      (Bash, run from repo root):
 
   ```bash
   #!/usr/bin/env bash
@@ -185,7 +207,8 @@
   }
   ```
 
-  Run `bats tests/emit_launcher.bats` → PASS. Commit: `feat: emit repo-local launcher shim + .envrc (Placement A)`.
+  Run `bats tests/emit_launcher.bats` → PASS. Commit:
+  `feat: emit repo-local launcher shim + .envrc (Placement A)`.
 
 - [x] **4. Wire Placement A into install; drop dead settings.local.json write.**
 
@@ -195,7 +218,9 @@
   bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
   ```
 
-  Change the staging line (currently `git add .claude/settings.json .claude/gitlore-hook-setup .gitignore`) to also stage the launcher files:
+  Change the staging line (currently
+  `git add .claude/settings.json .claude/gitlore-hook-setup .gitignore`) to also
+  stage the launcher files:
 
   ```bash
   git add .claude/settings.json .claude/gitlore-hook-setup .gitignore .gitlore/bin/claude .envrc
@@ -209,11 +234,18 @@
   echo "Then run 'direnv allow' so the launcher redirects memory into $mempath/ (no direnv? run /gitlore:install-launcher)." >&2
   ```
 
-  In `scripts/install/write-settings.sh`, delete the dead `settings.local.json` write (lines 21-29: the `absmem=…` line through the if/else block). Keep the `.gitignore` block (lines 31-37) and the `git config gitlore.hooksDir` line. The file's remaining job: write `settings.json`, ensure `.gitignore`, set hooksDir.
+  In `scripts/install/write-settings.sh`, delete the dead `settings.local.json`
+  write (lines 21-29: the `absmem=…` line through the if/else block). Keep the
+  `.gitignore` block (lines 31-37) and the `git config gitlore.hooksDir` line.
+  The file's remaining job: write `settings.json`, ensure `.gitignore`, set
+  hooksDir.
 
-  In `commands/install.md` step 4 "Summarize", add a bullet: "and remind them to run `direnv allow` (or `/gitlore:install-launcher` if they don't use direnv) so memory is redirected into the submodule."
+  In `commands/install.md` step 4 "Summarize", add a bullet: "and remind them to
+  run `direnv allow` (or `/gitlore:install-launcher` if they don't use direnv)
+  so memory is redirected into the submodule."
 
-  In `tests/install_run.bats`, extend the "install stages all artifacts" test (after the `.gitignore` assertion) with:
+  In `tests/install_run.bats`, extend the "install stages all artifacts" test
+  (after the `.gitignore` assertion) with:
 
   ```bash
     [[ "$staged" == *".gitlore/bin/claude"* ]]
@@ -221,15 +253,21 @@
     [ -x .gitlore/bin/claude ]
   ```
 
-  Run `bats tests/install_run.bats` → PASS (no test asserted `settings.local.json`, so the removal is clean). Commit: `feat: wire launcher into install; drop dead settings.local.json write (D10)`.
+  Run `bats tests/install_run.bats` → PASS (no test asserted
+  `settings.local.json`, so the removal is clean). Commit:
+  `feat: wire launcher into install; drop dead settings.local.json write (D10)`.
 
 - [x] **5. SessionStart launcher guard; drop dead settings.local.json write.**
 
   In `scripts/cc-hooks/session-start.sh`:
 
-  (a) Delete the dead block (lines 21-31): the `absmem=…` line and the entire `# Update settings.local.json` if/else. Keep line 20 `mempath=$(gitlore_memory_path)` — it's used downstream.
+  (a) Delete the dead block (lines 21-31): the `absmem=…` line and the entire
+  `# Update settings.local.json` if/else. Keep line 20
+  `mempath=$(gitlore_memory_path)` — it's used downstream.
 
-  (b) Immediately after the two guards and `mempath=…` (i.e. before `git config gitlore.hooksDir …`), route the script's own stdout to stderr and reserve real stdout (fd 3) for the guard JSON only:
+  (b) Immediately after the two guards and `mempath=…` (i.e. before
+  `git config gitlore.hooksDir …`), route the script's own stdout to stderr and
+  reserve real stdout (fd 3) for the guard JSON only:
 
   ```bash
   # Keep stdout clean: everything below logs to stderr; only the guard JSON (if any)
@@ -247,19 +285,22 @@
   fi
   ```
 
-  (c) At the very end of the script (after the ff-merge block), emit the guard JSON to fd 3:
+  (c) At the very end of the script (after the ff-merge block), emit the guard
+  JSON to fd 3:
 
   ```bash
   [ -n "$launcher_warning" ] && printf '%s\n' "$launcher_warning" >&3
   exec 3>&- 1>&2
   ```
 
-  Note: the existing `exit 1` divergence/`live`-collision paths return before this — acceptable; on a hard error the warning is moot.
+  Note: the existing `exit 1` divergence/`live`-collision paths return before
+  this — acceptable; on a hard error the warning is moot.
 
   In `tests/cc_hook_session_start.bats`:
 
   - The two no-op tests (`[ ! -f .claude/settings.local.json ]`) stay as-is.
-  - Replace the test "writes autoMemoryDirectory and hooksDir and emits wrappers" with:
+  - Replace the test "writes autoMemoryDirectory and hooksDir and emits
+    wrappers" with:
 
     ```bash
     @test "does not write settings.local.json (D10); sets hooksDir and emits wrappers" {
@@ -296,9 +337,11 @@
     }
     ```
 
-  Run `bats tests/cc_hook_session_start.bats` → PASS. Commit: `feat: SessionStart launcher guard; drop dead settings.local.json write (D10)`.
+  Run `bats tests/cc_hook_session_start.bats` → PASS. Commit:
+  `feat: SessionStart launcher guard; drop dead settings.local.json write (D10)`.
 
-- [x] **6. Placement B: global shim + command.** Create `scripts/install/global-shim.sh`:
+- [x] **6. Placement B: global shim + command.** Create
+      `scripts/install/global-shim.sh`:
 
   ```bash
   #!/usr/bin/env bash
@@ -329,7 +372,7 @@
 
   Create `commands/install-launcher.md`:
 
-  ```markdown
+  ````markdown
   ---
   description: Install the gitlore launcher globally (no-direnv fallback)
   allowed-tools: ["Bash"]
@@ -344,7 +387,7 @@
      "${CLAUDE_PLUGIN_ROOT}/scripts/install/global-shim.sh"
      ```
   2. Relay the printed `PATH` instruction to the user **verbatim**. Tell them to add that line to their shell rc and restart their shell. Do not edit their rc yourself.
-  ```
+  ````
 
   Create `tests/global_shim.bats`:
 
@@ -384,37 +427,79 @@
   }
   ```
 
-  Run `bats tests/global_shim.bats` → PASS. Commit: `feat: global launcher shim + /gitlore:install-launcher (Placement B)`.
+  Run `bats tests/global_shim.bats` → PASS. Commit:
+  `feat: global launcher shim + /gitlore:install-launcher (Placement B)`.
 
-- [x] **7. Register new test files; full suite green.** In `Makefile`, append to the `test-unit` recipe's file list: `tests/launcher_shim.bats tests/emit_launcher.bats tests/global_shim.bats`. Run `make test` → all PASS. Commit: `test: register launcher test files in Makefile`.
+- [x] **7. Register new test files; full suite green.** In `Makefile`, append to
+      the `test-unit` recipe's file list:
+      `tests/launcher_shim.bats tests/emit_launcher.bats tests/global_shim.bats`.
+      Run `make test` → all PASS. Commit:
+      `test: register launcher test files in Makefile`.
 
 - [x] **8. Docs.**
-  - `docs/plugin-readme.md`: replace the known-limitation note about the "unbuilt redirect launcher" with the shipped flow — after `/gitlore:install`, run `direnv allow` (or `/gitlore:install-launcher` without direnv); memory then redirects into the submodule. Update the status table row accordingly.
-  - `docs/design.md`: add a Decisions Log / changelog row dated 2026-05-24: "Plan 05 built the Memory Redirect Launcher (shim + Placement A direnv + Placement B global + SessionStart guard) and removed the dead `settings.local.json` `autoMemoryDirectory` writes from `write-settings.sh`/`session-start.sh` (the tier CC ignores — D10)."
+  - `docs/plugin-readme.md`: replace the known-limitation note about the
+    "unbuilt redirect launcher" with the shipped flow — after
+    `/gitlore:install`, run `direnv allow` (or `/gitlore:install-launcher`
+    without direnv); memory then redirects into the submodule. Update the status
+    table row accordingly.
+  - `docs/design.md`: add a Decisions Log / changelog row dated 2026-05-24:
+    "Plan 05 built the Memory Redirect Launcher (shim + Placement A direnv +
+    Placement B global + SessionStart guard) and removed the dead
+    `settings.local.json` `autoMemoryDirectory` writes from
+    `write-settings.sh`/`session-start.sh` (the tier CC ignores — D10)."
   - Mark Steps 1-7 `[x]` in this plan as they land.
 
   Commit: `docs: launcher shipped — update plugin-readme + design changelog`.
 
-- [x] **9. Dogfood in this repo (the real target).** Per "dogfood early": this repo is the production target and currently suffers the live-dir-vs-submodule divergence.
-  1. `CLAUDE_PLUGIN_ROOT=$PWD bash scripts/install/emit-launcher.sh` → confirm `.gitlore/bin/claude` + `.envrc` `PATH_add` line.
-  2. `direnv allow`, then start a fresh Claude Code session in this repo (under `--plugin-dir`, per the stale-cache lesson in `reference_plugin_cache_staleness`).
-  3. In the new session confirm `echo $GITLORE_LAUNCHED` = `1` and that the `SessionStart` guard did **not** fire (no warning).
-  4. Confirm CC's auto-memory now resolves to `<repo>/memory` (write a throwaway memory, verify it lands in the submodule worktree, then discard).
-  5. Record findings in this plan; fix any in-plan. Then `git add .gitlore/bin/claude .envrc` and commit if adopting the launcher for this repo. Commit: `chore: adopt gitlore launcher in this repo (dogfood)`.
+- [x] **9. Dogfood in this repo (the real target).** Per "dogfood early": this
+      repo is the production target and currently suffers the
+      live-dir-vs-submodule divergence.
+  1. `CLAUDE_PLUGIN_ROOT=$PWD bash scripts/install/emit-launcher.sh` → confirm
+     `.gitlore/bin/claude` + `.envrc` `PATH_add` line.
+  2. `direnv allow`, then start a fresh Claude Code session in this repo (under
+     `--plugin-dir`, per the stale-cache lesson in
+     `reference_plugin_cache_staleness`).
+  3. In the new session confirm `echo $GITLORE_LAUNCHED` = `1` and that the
+     `SessionStart` guard did **not** fire (no warning).
+  4. Confirm CC's auto-memory now resolves to `<repo>/memory` (write a throwaway
+     memory, verify it lands in the submodule worktree, then discard).
+  5. Record findings in this plan; fix any in-plan. Then
+     `git add .gitlore/bin/claude .envrc` and commit if adopting the launcher
+     for this repo. Commit:
+     `chore: adopt gitlore launcher in this repo (dogfood)`.
 
   **Findings (2026-05-25):** Dogfood passed cleanly, no in-plan fixes needed.
-  - `emit-launcher.sh` wrote `.gitlore/bin/claude` (executable, byte-identical to `scripts/install/launcher-shim`) and added `PATH_add .gitlore/bin` to a fresh `.envrc`.
-  - After `direnv allow` + fresh session: `echo $GITLORE_LAUNCHED` → `1`; the launcher shim ran.
-  - The `SessionStart` launcher guard did **not** fire (no warning emitted) — correct, since `GITLORE_LAUNCHED` was set.
-  - CC auto-memory location validated against the open submodule `memory/` directory.
+  - `emit-launcher.sh` wrote `.gitlore/bin/claude` (executable, byte-identical
+    to `scripts/install/launcher-shim`) and added `PATH_add .gitlore/bin` to a
+    fresh `.envrc`.
+  - After `direnv allow` + fresh session: `echo $GITLORE_LAUNCHED` → `1`; the
+    launcher shim ran.
+  - The `SessionStart` launcher guard did **not** fire (no warning emitted) —
+    correct, since `GITLORE_LAUNCHED` was set.
+  - CC auto-memory location validated against the open submodule `memory/`
+    directory.
   - Adopted: `.gitlore/bin/claude` + `.envrc` committed for this repo.
 
 ## Scope
 
-- **In:** the canonical shim; Placement A (direnv) + Placement B (global) + `/gitlore:install-launcher`; the `SessionStart` launcher guard; removal of the dead `settings.local.json` `autoMemoryDirectory` writes; tests; docs; self-dogfood.
-- **Out:** `WorktreeCreate`/`WorktreeRemove` hooks (next plan); auto-editing the user's shell rc (Placement B prints only); pinning a specific `claude` version (shim chains to the next `claude` — CC's own version selector); migrating existing stranded memory out of the default dir (orthogonal one-off).
+- **In:** the canonical shim; Placement A (direnv) + Placement B (global) +
+  `/gitlore:install-launcher`; the `SessionStart` launcher guard; removal of the
+  dead `settings.local.json` `autoMemoryDirectory` writes; tests; docs;
+  self-dogfood.
+- **Out:** `WorktreeCreate`/`WorktreeRemove` hooks (next plan); auto-editing the
+  user's shell rc (Placement B prints only); pinning a specific `claude` version
+  (shim chains to the next `claude` — CC's own version selector); migrating
+  existing stranded memory out of the default dir (orthogonal one-off).
 
 ## Open decisions during execution
 
-- **`.envrc` insertion vs front-most slot.** Design says insert after the *last* existing `PATH_add` so gitlore wins the front. Step 3 implements exactly that; the Step 3 test asserts position. If a project uses a non-`PATH_add` PATH mutation after the last `PATH_add`, gitlore may not be front-most — out of scope; note it if it surfaces in dogfood.
-- **Guard on every unlaunched session.** The guard fires on *every* `SessionStart` without the shim, including legitimate plain-`claude` use during install (before `direnv allow`). That's intended (loud until fixed), but confirm it isn't annoying in the dogfood; if it is, consider gating it on "launcher files exist but weren't used."
+- **`.envrc` insertion vs front-most slot.** Design says insert after the *last*
+  existing `PATH_add` so gitlore wins the front. Step 3 implements exactly that;
+  the Step 3 test asserts position. If a project uses a non-`PATH_add` PATH
+  mutation after the last `PATH_add`, gitlore may not be front-most — out of
+  scope; note it if it surfaces in dogfood.
+- **Guard on every unlaunched session.** The guard fires on *every*
+  `SessionStart` without the shim, including legitimate plain-`claude` use
+  during install (before `direnv allow`). That's intended (loud until fixed),
+  but confirm it isn't annoying in the dogfood; if it is, consider gating it on
+  "launcher files exist but weren't used."

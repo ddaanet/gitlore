@@ -1,3 +1,18 @@
 # 2026-07-16 — D17 SPOT settled empirically + fill-if-empty landed (slice 1 done)
 
-An eval over 528 transcripts across 8 projects showed agents curate the root-index one-liner over frontmatter `description` ~3:1, confirming the index one-liner as canonical (settling the earlier "bidirectional drift" framing as *predominantly* index-fresh, not symmetric). The authoring-time one-way sync's post half (`index-sync-post.sh`) is now **keyed by destination**: a **hook-changed** line propagates (overwrites `description`); a **newly-added** index line (absent from the pre-image) fills `description` *only when empty*, never clobbering prose authored alongside the new file in the same batch; an **unchanged/reordered** line is a no-op. Fixes the live clobber where an added index line overwrote a freshly authored description. Tests: 2 new `index_sync.bats` cases (added-line clobber-protection + empty-fill). The commit-summary gate prompts (`post-tool-use.sh`, `resolve.sh`, `memory-commit-batch.sh`) now direct the agent to present the summary as a markdown **blockquote** (`> …`), not a code fence, so it reads as an editable draft — one prompt fix, three surfaces (from `note-for-gitlore.md`). Slice 1 (one-way sync) complete; slice 2 (one-time reconcile) next.
+An eval over 528 transcripts across 8 projects showed agents curate the
+root-index one-liner over frontmatter `description` ~3:1, confirming the index
+one-liner as canonical (settling the earlier "bidirectional drift" framing as
+*predominantly* index-fresh, not symmetric). The authoring-time one-way sync's
+post half (`index-sync-post.sh`) is now **keyed by destination**: a
+**hook-changed** line propagates (overwrites `description`); a **newly-added**
+index line (absent from the pre-image) fills `description` *only when empty*,
+never clobbering prose authored alongside the new file in the same batch; an
+**unchanged/reordered** line is a no-op. Fixes the live clobber where an added
+index line overwrote a freshly authored description. Tests: 2 new
+`index_sync.bats` cases (added-line clobber-protection + empty-fill). The
+commit-summary gate prompts (`post-tool-use.sh`, `resolve.sh`,
+`memory-commit-batch.sh`) now direct the agent to present the summary as a
+markdown **blockquote** (`> …`), not a code fence, so it reads as an editable
+draft — one prompt fix, three surfaces (from `note-for-gitlore.md`). Slice 1
+(one-way sync) complete; slice 2 (one-time reconcile) next.

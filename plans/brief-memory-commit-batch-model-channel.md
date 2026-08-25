@@ -2,10 +2,10 @@
 
 2026-07-26
 
-Findings from a transcript-corpus measurement run in `/Users/david/code/handoff`.
-Everything below concerns `scripts/cc-hooks/memory-commit-batch.sh` in this repo.
-Proposed patch alongside this file:
-`plans/brief-memory-commit-batch-model-channel.patch`.
+Findings from a transcript-corpus measurement run in
+`/Users/david/code/handoff`. Everything below concerns
+`scripts/cc-hooks/memory-commit-batch.sh` in this repo. Proposed patch alongside
+this file: `plans/brief-memory-commit-batch-model-channel.patch`.
 
 ### Decisions
 

@@ -275,12 +275,25 @@ def collect_summaries(nodes: list[str], root: str) -> dict[int, set[str]]:
     summaries: dict[int, set[str]] = {}
     for path in nodes:
         rel = os.path.relpath(path, root)
-        for line in prose_lines(path):
-            if not SUMMARY_BULLET.match(line):
-                continue
-            for number in SUMMARY_ITEM.findall(line):
+        for item in bullet_items(prose_lines(path)):
+            for number in SUMMARY_ITEM.findall(item):
                 summaries.setdefault(int(number), set()).add(rel)
     return summaries
+
+
+def bullet_items(lines: list[str]) -> list[str]:
+    """Each `- ` bullet joined with its wrapped continuation lines — the
+    indented ones that follow it — so a cluster summary reads as one item
+    however `format-docs` broke it across lines."""
+    items: list[str] = []
+    for line in lines:
+        if SUMMARY_BULLET.match(line):
+            items.append(line)
+        elif items and line.strip() and line[0].isspace():
+            items[-1] += " " + line.strip()
+        else:
+            items.append("")
+    return [item for item in items if item]
 
 
 def check_coverage(

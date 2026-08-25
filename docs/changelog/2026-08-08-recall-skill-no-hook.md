@@ -8,14 +8,15 @@ anyway, so emitting the content directly was one round trip instead of two with
 the selection auditable in a file.
 
 Two measured limits sink that. A large `additionalContext` is not delivered
-whole — at 15.6KB the harness writes it to a `tool-results/…-additionalContext.txt`
-file and inlines about 2KB — and memory bodies are not small: 57 of the 122 in
-this repo's own store exceed 2KB on their own, mean 3.2KB, largest 19KB. A
-five-entry fetch was therefore delivering a fraction of itself. And injected
-text never registers in the file-read ledger, which is keyed off actual `Read`
-calls, so an `Edit` on a recalled memory failed until the agent Read it anyway.
-That is not a corner: a memory worth recalling mid-task is frequently one about
-to be corrected, so the common path paid for the same body twice.
+whole — at 15.6KB the harness writes it to a
+`tool-results/…-additionalContext.txt` file and inlines about 2KB — and memory
+bodies are not small: 57 of the 122 in this repo's own store exceed 2KB on their
+own, mean 3.2KB, largest 19KB. A five-entry fetch was therefore delivering a
+fraction of itself. And injected text never registers in the file-read ledger,
+which is keyed off actual `Read` calls, so an `Edit` on a recalled memory failed
+until the agent Read it anyway. That is not a corner: a memory worth recalling
+mid-task is frequently one about to be corrected, so the common path paid for
+the same body twice.
 
 `skills/recall/SKILL.md` is now the entire mechanism — decide from the index
 already in context with no tool calls, select at most five, `Read` them in one

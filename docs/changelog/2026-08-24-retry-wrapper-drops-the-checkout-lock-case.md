@@ -1,9 +1,36 @@
 # 2026-08-24 — The retry wrapper drops its one-checkout-per-branch exception, which the detached model had already made unreachable (D13)
 
-Surfaced by the review of the doc split. D3 used to carry two sentences: the resolve merge originally acquired `live` with `git checkout live`, which doubled as a write lock, and — under the detached model — the prepare uses `checkout --detach <authority>` instead, so there is no lock and no contention to fail on. The split kept the second and cut the first as history. That left D13 citing "D3's one-checkout-per-branch write lock" against a D3 that denies any such lock exists, and `scripts/lib/util.sh` naming D3 in two comments for the same guard.
+Surfaced by the review of the doc split. D3 used to carry two sentences: the
+resolve merge originally acquired `live` with `git checkout live`, which doubled
+as a write lock, and — under the detached model — the prepare uses
+`checkout --detach <authority>` instead, so there is no lock and no contention
+to fail on. The split kept the second and cut the first as history. That left
+D13 citing "D3's one-checkout-per-branch write lock" against a D3 that denies
+any such lock exists, and `scripts/lib/util.sh` naming D3 in two comments for
+the same guard.
 
-The guard was already unreachable. Every `gitlore_git` call that could take git's one-checkout-per-branch lock is `checkout -q --detach`, across `lib/resolve.sh`, `resolve.sh` and `session-start.sh`; the two `git branch live …` calls in `session-start.sh` create a ref without attaching to it; and the one `worktree add` is both `--detach` and issued on plain `git`, outside the wrapper. No call under `gitlore_git` can produce `is already used by worktree at`, and no call has been able to since the branch model unified.
+The guard was already unreachable. Every `gitlore_git` call that could take
+git's one-checkout-per-branch lock is `checkout -q --detach`, across
+`lib/resolve.sh`, `resolve.sh` and `session-start.sh`; the two
+`git branch live …` calls in `session-start.sh` create a ref without attaching
+to it; and the one `worktree add` is both `--detach` and issued on plain `git`,
+outside the wrapper. No call under `gitlore_git` can produce
+`is already used by worktree at`, and no call has been able to since the branch
+model unified.
 
-`gitlore_git_is_lock_error` therefore loses its explicit non-retryable branch for that message, along with the D3 rationale above it, D13's sentence in `references/merge-and-resolve.md`, and the two cases in `tests/lib_util.bats` that fed the string in by hand. The deletion is behaviour-preserving even in the case it claimed to cover: the message matches none of the five retry patterns, so it still fails fast through the general path — confirmed by sourcing the lib and feeding it the exact string. The special case was never doing work, in production or hypothetically, which is what distinguishes deleting it from keeping it as defence against an attached checkout arriving from outside the model. A store migrated from a pre-D41 install is handled by the in-place detach at session start, not here.
+`gitlore_git_is_lock_error` therefore loses its explicit non-retryable branch
+for that message, along with the D3 rationale above it, D13's sentence in
+`references/merge-and-resolve.md`, and the two cases in `tests/lib_util.bats`
+that fed the string in by hand. The deletion is behaviour-preserving even in the
+case it claimed to cover: the message matches none of the five retry patterns,
+so it still fails fast through the general path — confirmed by sourcing the lib
+and feeding it the exact string. The special case was never doing work, in
+production or hypothetically, which is what distinguishes deleting it from
+keeping it as defence against an attached checkout arriving from outside the
+model. A store migrated from a pre-D41 install is handled by the in-place detach
+at session start, not here.
 
-Negative coverage survives in the two general cases the suite already had — `gitlore_git_is_lock_error does NOT match an unrelated error` and `gitlore_git fails fast on a non-lock error (no retry)` — so removing the pair costs no assertion about the fast-fail path. `just test-unit`: 698 passed.
+Negative coverage survives in the two general cases the suite already had —
+`gitlore_git_is_lock_error does NOT match an unrelated error` and
+`gitlore_git fails fast on a non-lock error (no retry)` — so removing the pair
+costs no assertion about the fast-fail path. `just test-unit`: 698 passed.

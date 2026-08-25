@@ -1,6 +1,7 @@
 ## Brief: a glued MEMORY.md bullet validates clean and propagates into frontmatter
 
-2026-07-29 — reported from `/Users/david/code/handoff` (gitlore 0.4.3 installed cache)
+2026-07-29 — reported from `/Users/david/code/handoff` (gitlore 0.4.3 installed
+cache)
 
 ### What happened
 
@@ -36,18 +37,18 @@ data-loss path — with path 2 absent from `ours.paths`, the next compose reads
 it as a root-side delete and drops it from the carrier.
 
 **Origin not established** — *settled by the 2026-08-04 follow-up below: the
-editing agent's own `Edit` call, reproduced on a fixture.* Ruled out: pre-existing corruption (`HEAD:MEMORY.md`
-and two ancestors have zero glued lines); the awk parser (line-oriented, cannot
-join); composition itself against a copy of the store — inserting a new tier
-bullet mid-block and running `gitlore_compose` on `$TMPDIR/…/memory` rewrote the
-carrier and left root byte-identical, no glue. That copy had **no**
-`refs/gitlore/compose-base` (the tier `.git` file pointed at the original
-gitdir), so the merge ran as a union; the live store does have the ref, and the
-root-rewrite path under a real base is the strongest remaining candidate. The
-other candidate is the editing agent's own `Edit` call, which matters because
-the failure is self-reinforcing: `Edit` is substring-based, so an `old_string`
-matching one bullet's text *inside* an already-glued line splices new content
-mid-line and glues again.
+editing agent's own `Edit` call, reproduced on a fixture.* Ruled out:
+pre-existing corruption (`HEAD:MEMORY.md` and two ancestors have zero glued
+lines); the awk parser (line-oriented, cannot join); composition itself against
+a copy of the store — inserting a new tier bullet mid-block and running
+`gitlore_compose` on `$TMPDIR/…/memory` rewrote the carrier and left root
+byte-identical, no glue. That copy had **no** `refs/gitlore/compose-base` (the
+tier `.git` file pointed at the original gitdir), so the merge ran as a union;
+the live store does have the ref, and the root-rewrite path under a real base is
+the strongest remaining candidate. The other candidate is the editing agent's
+own `Edit` call, which matters because the failure is self-reinforcing: `Edit`
+is substring-based, so an `old_string` matching one bullet's text *inside* an
+already-glued line splices new content mid-line and glues again.
 
 ### Requests
 
@@ -62,9 +63,10 @@ mid-line and glues again.
 3. **Unrelated read-loop gap, found while reading:**
    `scripts/lib/index-compose.sh:342-348` reads the root index with
    `while IFS= read -r line; do … done < "$root"` — no `|| [ -n "$line" ]`
-   guard, unlike `gitlore_index_region:91` and `gitlore_compose_check_index:217`.
-   A root index whose final line lacks a trailing newline silently loses its
-   last bullet from `ours`, which the merge reads as a root-side delete.
+   guard, unlike `gitlore_index_region:91` and
+   `gitlore_compose_check_index:217`. A root index whose final line lacks a
+   trailing newline silently loses its last bullet from `ours`, which the merge
+   reads as a root-side delete.
 
 ### Constraints
 

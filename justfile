@@ -1,66 +1,57 @@
 import 'plugin-dev/release.just'
 
-# `evals` is a separate, opt-in recipe: the 5-round eval grid drives the real
-# claude CLI, so it costs real time and money and doesn't belong in the
-# default release gate. Run it explicitly when a change touches eval-covered
-# behavior.
+# `evals` is opt-in: the 5-round grid drives the real claude CLI, costing time
+# and money, so it stays out of the release gate. Run it when a change touches
+# eval-covered behavior.
 #
-# `just release` depends on `prerelease` (that dependency lives in the vendored
-# plugin-dev/release.just, which requires every consumer to define the recipe).
+# `just release` depends on `prerelease`, which the vendored
+# plugin-dev/release.just requires every consumer to define.
 
-# Enable bash tracing (set -x) for every shebang recipe. Usage:
-# just trace=true precommit
+# Bash tracing (set -x) for every shebang recipe: `just trace=true precommit`.
 trace := "false"
 
-# What a gate outcome depends on, and nothing else. Three sets, because the
-# three gates read different things.
+# Each gate's inputs, and nothing else.
 #
-# `memory/`, `docs/` and `plans/` are out of both, deliberately: nothing the
-# sentinel guards reads any of them, and memory is staged as a gitlink, so
-# including it re-ran the whole suite on every memory commit. The two doc/memory
-# checkers run ahead of the sentinel instead, uncached. `.gitignore` is in,
-# since it decides which not-yet-added files the hash enumerates at all.
+# `memory/`, `docs/` and `plans/` are deliberately out: nothing the sentinel
+# guards reads them, and memory is a gitlink, so including it re-ran the suite
+# on every memory commit. The doc, memory and formatting checks run ahead of
+# the sentinel instead, uncached. `.gitignore` is in: it decides which
+# not-yet-added files the hash enumerates.
 #
-# Naming paths rather than inferring the tree is also what keeps the phantom
-# home dotfiles the sandbox surfaces in the working directory out of the hash.
+# Naming paths, rather than inferring the tree, also keeps the sandbox's
+# phantom home dotfiles out of the hash.
 #
-# The declaration is an allow-list, so it narrows silently in two ways — a
-# pathspec matching nothing draws no complaint from `git ls-files`, and a new
-# top-level directory is simply never enumerated. The `justfile_gates` suite
-# guards both directions: every declared path must exist, and every top-level
-# entry must be declared here or named in that suite's exclusion list.
+# An allow-list narrows silently — `git ls-files` says nothing about a pathspec
+# matching nothing, and a new top-level directory is never enumerated. The
+# `justfile_gates` suite guards both: every declared path must exist, and every
+# top-level entry must be declared here or in that suite's exclusion list.
 #
-# The paths contain no whitespace, so the shell's word splitting of these
-# interpolations is the intended reading.
+# No path contains whitespace, so word-splitting the interpolation is intended.
 precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules hooks justfile plugin-dev reference scripts tests"
 
-# The evals drive the real CLI against the installed plugin, so they also
-# depend on what the plugin ships: its agents, commands and skills. Those three
-# stay out of `precommit_inputs` because the full bats suite is 7m30s and an
-# edit to a skill's prose must not pay it. `check-distribution` is what covers
-# them instead, in ~2s, on the commit path and so on the release path too.
+# The evals reach agents, commands and skills through the installed plugin.
+# Those stay out of `precommit_inputs` because the full bats suite is 7m30s
+# and a skill-prose edit must not pay it; `check-distribution` covers them in
+# ~2s on the commit path, and so on the release path.
 evals_inputs := precommit_inputs + " agents commands skills"
 
-# Everything the distribution suite reads, so that gate is a pure function of
-# its own inputs and needs no argument about what another gate happens to also
-# cover. It overlaps `precommit_inputs` on hooks/scripts/tests: that costs a
-# redundant 2s run when those change, and buys independence from how the other
-# set is drawn — narrowing `precommit_inputs` later cannot silently uncover
-# assertions this suite makes.
+# Everything the distribution suite reads, so the gate is a pure function of
+# its own inputs. The overlap with `precommit_inputs` (hooks/scripts/tests)
+# costs a redundant 2s run and buys independence: narrowing `precommit_inputs`
+# later cannot silently uncover this suite's assertions.
 distribution_inputs := ".gitmodules agents commands hooks scripts skills tests/helpers tests/plugin_distribution.bats"
 
-# Fast, frequent. Version drift, shellcheck, then the full bats suite.
-precommit: check-distribution
+# Fast, frequent.
+precommit: format-docs check-distribution
     #!{{ bash_prolog }}
-    # Uncached, and ahead of the sentinel deliberately. The checker's largest
-    # input is `memory/`, which is a gitlink here: `git ls-files` yields the one
-    # path and nothing to `cat`, so no input hash can ever see a fact change. A
-    # cached pass would skip this on exactly the commit that edits a memory
-    # file. It costs 0.4s, so there is nothing worth caching.
+    # Uncached, ahead of the sentinel: the checker's largest input is
+    # `memory/`, a gitlink here, so `git ls-files` yields one path and nothing
+    # to `cat` — no input hash can see a fact change, and a cached pass would
+    # skip exactly the commit that edits a memory file. 0.4s, nothing to cache.
     scripts/check-memory-hygiene.py
-    # Same placement, for the reason `docs/` is out of `precommit_inputs`: a
-    # docs-only commit moves no hash there, so a cached pass would skip the
-    # graph check on precisely the commit that rewires the graph.
+    # Same placement, because `docs/` is out of `precommit_inputs`: a docs-only
+    # commit moves no hash, and a cached pass would skip the graph check on
+    # precisely the commit that rewires the graph.
     scripts/check-docs-links.py
     if check-sentinel precommit {{ precommit_inputs }}; then
         echo "precommit: cached (inputs unchanged)"
@@ -70,16 +61,15 @@ precommit: check-distribution
     record-sentinel
 
 # The shipped surface: that Claude Code can discover and dispatch what the
-# plugin distributes. Its own gate, with its own sentinel, because the paths it
-# reads are the ones `precommit_inputs` deliberately leaves out — a
-# skills/commands/agents-only edit moves no hash there, so without this the
-# whole suite reports cached and the assertions on the edited file never run.
-# Cheap enough to hang off `precommit` outright, and so off `prerelease`: 10
-# tests, ~2s, file reads and frontmatter greps with no fixture repos.
+# plugin distributes. Its own gate and sentinel, because it reads the paths
+# `precommit_inputs` leaves out — a skills/commands/agents-only edit moves no
+# hash there, so `precommit` would report cached and never run these
+# assertions. Cheap enough to hang off `precommit`, and so off `prerelease`:
+# 10 tests, ~2s, no fixture repos.
 #
-# Its own recipe, not a second block inside `precommit`: `check-sentinel` sets
-# `sentinel` and `gate_inputs` for `record-sentinel` to read back, so two gates
-# sharing one shebang body would have the second clobber the first's state.
+# A separate recipe, not a block inside `precommit`: `check-sentinel` sets
+# `sentinel` and `gate_inputs` for `record-sentinel`, so two gates in one
+# shebang body would clobber each other's state.
 check-distribution:
     #!{{ bash_prolog }}
     if check-sentinel distribution {{ distribution_inputs }}; then
@@ -88,6 +78,20 @@ check-distribution:
     fi
     scripts/run-bats.sh tests/plugin_distribution.bats
     record-sentinel
+
+# Hard-wraps prose in docs/ and plans/ so a line count means something. No
+# sentinel: a full pass is ~0.4s, less than the bookkeeping would cost. rumdl
+# comes from uv.lock via `uv sync`, on PATH through `.envrc`; the pin check
+# turns a stale `.venv` into a message instead of a differently wrapped tree.
+format-docs:
+    #!{{ bash_prolog }}
+    have=$({{ rumdl }} --version) || { echo "format-docs: rumdl not on PATH — run 'uv sync' and let direnv load .envrc" >&2; exit 1; }
+    want=$(sed -n 's/.*"rumdl==\([0-9.]*\)".*/\1/p' pyproject.toml)
+    [ "$have" = "rumdl $want" ] || { echo "format-docs: $have on PATH, pyproject.toml pins $want — run 'uv sync'" >&2; exit 1; }
+    {{ rumdl }} fmt --no-cache docs plans
+
+# Overridable so a test can stand in a stub: `just rumdl=/path/to/stub format-docs`.
+rumdl := "rumdl"
 
 # Slow and paid: drives the real claude CLI. Run explicitly, never as a gate.
 evals:
@@ -99,7 +103,7 @@ evals:
     tests/evals/run-evals.sh
     record-sentinel
 
-# The pre-release gate. Same as precommit, under its own name so it can widen.
+# Its own name so it can widen beyond precommit.
 prerelease: precommit
 
 # shellcheck over every tracked shell file, discovered by extension or shebang.
@@ -108,11 +112,10 @@ lint:
 
 test: test-unit test-integration
 
-# Every tests/*.bats suite except the integration ones, discovered by glob.
 test-unit:
     #!{{ bash_prolog }}
-    # Discovered by glob, never hand-listed: an explicit list drifted once and
-    # orphaned five suites, including the one covering the memory gate.
+    # A glob, never a hand list: a list drifted once and orphaned five suites,
+    # including the memory gate's.
     shopt -s nullglob
     suites=()
     for suite in tests/*.bats; do
@@ -129,28 +132,24 @@ test-integration:
     [ "${#suites[@]}" -gt 0 ] || { echo "test-integration: no suites matched" >&2; exit 1; }
     scripts/run-bats.sh --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "${suites[@]}"
 
-# Bash prolog: the shebang line every recipe above uses, plus the gate-sentinel
-# helpers. A gate is a pure function of its declared inputs, so re-running it
-# over an untouched tree can only reprint the verdict it printed last time —
-# and `precommit` is cheap to invoke twice while working through a change.
+# A gate is a pure function of its declared inputs, so re-running it over an
+# untouched tree only reprints the last verdict — which makes `precommit`
+# cheap to invoke repeatedly while working through a change.
 [private]
 bash_prolog := "/usr/bin/env bash\n" + \
     ( if trace == "true" { "set -xeuo pipefail" } \
     else { "set -euo pipefail" } ) + "\n" + '''
-# Decide whether a gated recipe can skip its work, and say where it should
-# record having passed. Takes the gate name then its input pathspecs; sets
-# `sentinel` and `gate_inputs` for `record-sentinel`, and returns 0 only when
-# the hash recorded on the last pass still matches.
+# Gate name, then input pathspecs. Sets `sentinel` and `gate_inputs` for
+# `record-sentinel`.
 #
-# The sentinel lives under the gitdir, never in the working tree: a gate whose
-# own bookkeeping showed up in `git status` — or in its own input hash — would
-# invalidate itself on every run.
+# The sentinel lives under the gitdir, not the working tree: bookkeeping that
+# showed up in `git status` — or in its own input hash — would invalidate the
+# gate on every run.
 check-sentinel () {
     sentinel_dir=$(git rev-parse --git-path gitlore/gates)
     mkdir -p "$sentinel_dir"
     sentinel="$sentinel_dir/$1"; shift
     gate_inputs=("$@")
-    # Escape hatch for forcing a run over an unchanged tree.
     [ -z "${GITLORE_GATE_FORCE:-}" ] || return 1
     [ -f "$sentinel" ] || return 1
     recorded=$(cat "$sentinel")
@@ -158,12 +157,11 @@ check-sentinel () {
     [ "$recorded" = "$current" ]
 }
 
-# Record a pass, and only a pass — callers run this after the checks, never
-# before. A hash that cannot be computed leaves no sentinel at all: a partial
-# one is a hash of a partial input set, and if the failure is deterministic the
-# next run matches it and skips a tree nothing ever checked. Say so out loud;
-# a cache that has quietly stopped caching is exactly the failure nobody is
-# told about.
+# Run after the checks, never before. A hash
+# that cannot be computed leaves no sentinel: a partial hash would match itself
+# on the next run if the failure is deterministic, skipping a tree nothing
+# checked. Say so loudly; a cache that quietly stopped caching is the failure
+# nobody hears about.
 record-sentinel () {
     if hash=$(gate-inputs-hash); then
         printf '%s\n' "$hash" > "$sentinel"
@@ -173,29 +171,26 @@ record-sentinel () {
     fi
 }
 
-# Everything a gate outcome can depend on: the versions of the tools this repo
-# does not pin, and the declared inputs' names alongside their contents — names
-# too, so a rename or a deletion counts as a change. `--others
-# --exclude-standard` picks up files not yet added to git, since a brand-new
-# test suite is exactly when a stale cached pass would hurt most, while still
-# leaving ignored files out.
+# Names as well as contents, so a rename or deletion counts; tool versions
+# because this repo does not pin them; `--others --exclude-standard` so a
+# brand-new suite is hashed before it is added — when a stale pass hurts most —
+# while ignored files stay out.
 #
-# Every component fails the hash explicitly rather than leaning on errexit:
-# this runs inside a command substitution in a condition, where bash suspends
-# errexit outright, so an unguarded `bats --version` that died would simply
-# drop out of the stream and the gate would go on caching against a hash that
-# no longer covers it.
+# Every component fails explicitly rather than leaning on errexit: this runs in
+# a command substitution inside a condition, where bash suspends errexit, so an
+# unguarded `bats --version` that died would drop out of the stream and the
+# gate would keep caching against a hash that no longer covers it.
 gate-inputs-hash () {
     {
-        # The group is a subshell (it heads a pipeline), so `exit` here fails
-        # the pipeline, and pipefail carries that out to the caller.
+        # The group heads a pipeline, so it is a subshell: `exit` fails the
+        # pipeline and pipefail carries that to the caller.
         bats --version || exit 1
         shellcheck --version || exit 1
         jq --version || exit 1
-        # Not for the hygiene checker, which runs uncached — for
-        # `scripts/hook-manager/wire-*.sh`, whose python3/PyYAML probe decides
-        # what the hook-manager wiring suite asserts under the cached `test`
-        # gate.
+        # For `scripts/hook-manager/wire-*.sh`, whose python3/PyYAML probe
+        # decides what the hook-manager wiring suite asserts under the cached
+        # `test` gate; with `.venv/bin` on PATH this is the venv's python.
+        # The hygiene checker runs uncached and needs no entry.
         python3 --version || exit 1
         git ls-files -z --cached --others --exclude-standard -- "${gate_inputs[@]}" \
             | sort -z \

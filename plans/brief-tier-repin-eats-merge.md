@@ -50,10 +50,10 @@ Rejected on sight: skipping the pin when the tier is *ahead* of its gitlink.
 before tiers were pinned sits ahead already, and that is the case the
 unconditional pin exists to correct.
 
-Needs a bats test over the real sequence: land a tier merge, run the SessionStart
-tier pass, assert the tier HEAD still contains the merge. Assert the negative
-against the *commit*, not a string — a test that only checks `git status` is
-clean passes in both worlds.
+Needs a bats test over the real sequence: land a tier merge, run the
+SessionStart tier pass, assert the tier HEAD still contains the merge. Assert
+the negative against the *commit*, not a string — a test that only checks
+`git status` is clean passes in both worlds.
 
 ### Recovery, if it has already happened
 

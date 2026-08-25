@@ -1,6 +1,9 @@
 # ddaanet memory review — entry 2c · the deny predicate, the remaining changes, and the decisions
 
-Part of [ddaanet memory review](ddaanet-memory-review.md), continuing [2b](ddaanet-memory-review-2b-exclusion-scope.md). The deny predicate, proposed changes (a-bis) through (f), the permission pipeline, and what is taken versus open.
+Part of [ddaanet memory review](ddaanet-memory-review.md), continuing
+[2b](ddaanet-memory-review-2b-exclusion-scope.md). The deny predicate, proposed
+changes (a-bis) through (f), the permission pipeline, and what is taken versus
+open.
 
 ### The deny predicate: silent corruption, not failure
 
@@ -53,12 +56,13 @@ around it. Therefore:
 - `updatedInput` **plus** `permissionDecision: "allow"` → the gate is bypassed
   by the hook's own decision. **Unsafe for compounds.**
 
-`unsandbox-git-status` does the second. `hooks/require-unsandboxed-git-status.sh`
-segments the command only to *detect* `git status`, then re-emits
-`.tool_input` verbatim with one field flipped, alongside
-`permissionDecision: "allow"`. So any command containing a `git status` segment
-runs wholly unsandboxed and pre-approved — `git status && <anything>`. Confirmed
-live: `true && git status --porcelain` was rewritten. Report this to that repo.
+`unsandbox-git-status` does the second.
+`hooks/require-unsandboxed-git-status.sh` segments the command only to *detect*
+`git status`, then re-emits `.tool_input` verbatim with one field flipped,
+alongside `permissionDecision: "allow"`. So any command containing a
+`git status` segment runs wholly unsandboxed and pre-approved —
+`git status && <anything>`. Confirmed live: `true && git status --porcelain` was
+rewritten. Report this to that repo.
 
 That settles rewrite-vs-deny in favour of **deny** for compounds: composite
 commands are the common shape, and rewriting them is precisely the unsafe case.
@@ -88,11 +92,12 @@ keying on command *shape* rather than substring:
 Three slices, and they are not equivalent:
 
 - **`PreToolUse` deny on a sandboxed Bash call matching a sandbox-sensitive
-  pattern** — `git [-C <path>] (status|add|commit|checkout|reset)`, `ls .claude`,
-  `ls -A`, `ps`, `claude` — with the denial message naming the retry. Costs one
-  extra call per sensitive command, no context overhead. This is the only slice
-  that covers the **silent** failures: a sandboxed `git status` returns phantom
-  dotfiles with exit 0 and no error, so nothing downstream can detect it.
+  pattern** — `git [-C <path>] (status|add|commit|checkout|reset)`,
+  `ls .claude`, `ls -A`, `ps`, `claude` — with the denial message naming the
+  retry. Costs one extra call per sensitive command, no context overhead. This
+  is the only slice that covers the **silent** failures: a sandboxed
+  `git status` returns phantom dotfiles with exit 0 and no error, so nothing
+  downstream can detect it.
 - **`PostToolUse` match on the known error strings** (`Unable to create
   '.git/index.lock'`, `Device or resource busy`, `Read-only file system`,
   `apply-seccomp: unshare(CLONE_NEWUSER)`, `No conversation found with session
@@ -142,8 +147,8 @@ file currently says the `Edit` tool *can* write that path. Whether
 **Add rather than replace.** The `Edit` sentence states a mechanical contrast —
 the command sandbox blocks a raw git unlink of the path, and a harness tool is
 not under that sandbox — which nothing here refutes; the bundle read establishes
-only that `update-config` exists and is sanctioned, not that `Edit` fails. Naming
-the skill as the route and keeping the contrast costs a clause. Both are
+only that `update-config` exists and is sanctioned, not that `Edit` fails.
+Naming the skill as the route and keeping the contrast costs a clause. Both are
 unverified in this pass, and probing the `Edit` half means writing user config,
 so neither gets asserted harder than it is.
 
@@ -212,8 +217,8 @@ if (hp.isReadOnly(e) && !H_S(e,n) && !i.some(…))
 
 with `whn = "Read-only command is allowed"`. Nothing on that path consults
 sandbox state — unlike `hUf` and `R_S`, the two sandbox shortcuts, which both
-bail on `!TV(e)`. So `git log`, `git diff`, `git show`, `ls -a`, `find .` cost no
-classifier call whether or not they run in the sandbox, and excluding them is
+bail on `!TV(e)`. So `git log`, `git diff`, `git show`, `ls -a`, `find .` cost
+no classifier call whether or not they run in the sandbox, and excluding them is
 free on the cost axis.
 
 `isReadOnly(e)` is `U2f(e, S3r(e.command)).behavior === "allow"`. `U2f`
@@ -222,7 +227,8 @@ flag-aware table — `git diff|log|show|shortlog|reflog|stash list|ls-remote|
 status|blame|ls-files|config --get|remote show|remote|merge-base|rev-parse|
 rev-list|describe|cat-file|for-each-ref|grep|stash show|worktree list|tag|
 branch`, the `gh …` set, `docker logs|inspect` — plus a plain-command allowlist
-(`cat head tail wc stat du df diff readlink pgrep …`) and regex forms, among them
+(`cat head tail wc stat du df diff readlink pgrep …`) and regex forms, among
+them
 `/^ls(?:\s+[^<>()$`|{}&;\n\r]*)?$/` (so `ls -a` qualifies) and a `find` regex
 excluding only `-delete -exec -execdir -ok -okdir -fprint/-fprint0 -fls
 -fprintf -files0-from`.
@@ -236,24 +242,24 @@ The disqualifiers matter more than the table:
   `if ((t || o.commands.some(gJe)) && a) return passthrough`, where
   `t = S3r(cmd)` is "some segment starts with `cd`/`pushd`/`popd`/`chdir`";
 - **git segments when `isSandboxingEnabled()` and cwd ≠ the original cwd** —
-  keyed on the global setting, so `dangerouslyDisableSandbox` does not exempt it;
-- **`git -C`, `-c`, `--git-dir`, `--work-tree`** — `A4p` scans leading git global
-  options and returns false outright on any member of
-  `Omv = {-c, -C, --exec-path, --config-env, --git-dir, --work-tree, --bare,
-  --attr-source, --help, -h, --shallow-file}`. Options outside that set
-  (`--no-pager`) pass. The table key is built as `git <sub> <sub2>` with a
-  fallback to `git <sub>`, which is how `git config --get` and `git stash list`
-  resolve.
+  keyed on the global setting, so `dangerouslyDisableSandbox` does not exempt
+  it;
+- **`git -C`, `-c`, `--git-dir`, `--work-tree`** — `A4p` scans leading git
+  global options and returns false outright on any member of
+  `Omv = {-c, -C, --exec-path, --config-env, --git-dir, --work-tree, --bare, --attr-source, --help, -h, --shallow-file}`.
+  Options outside that set (`--no-pager`) pass. The table key is built as
+  `git <sub> <sub2>` with a fallback to `git <sub>`, which is how
+  `git config --get` and `git stash list` resolve.
 
 So the only cheap shape is a bare `git <subcommand>` from the original cwd, with
 no `cd`, no `-C`, no subshell and no `$VAR`. Every mechanism for reaching a
 subdirectory — `cd &&`, `(cd …)`, `git -C` — forfeits it.
 
-**(2) Hook position: `updatedInput` alone defers, `permissionDecision` settles.**
-PreToolUse hooks run before any permission evaluation. When a hook returns
-`updatedInput` with no decision, `HRn` yields `{type:"hookUpdatedInput"}` and the
-caller assigns `v = ae.updatedInput`, replacing the working input; `PDb` then
-takes
+**(2) Hook position: `updatedInput` alone defers, `permissionDecision`
+settles.** PreToolUse hooks run before any permission evaluation. When a hook
+returns `updatedInput` with no decision, `HRn` yields
+`{type:"hookUpdatedInput"}` and the caller assigns `v = ae.updatedInput`,
+replacing the working input; `PDb` then takes
 
 ```js
 if (e?.behavior !== "allow" && e?.behavior !== "ask")
@@ -309,22 +315,23 @@ auto-allowed cheaply. Read-only status is lost separately, via `B2f`.
   `KVs`, telemetry `sandbox_exclude_command`. Caveat: a sandboxed `claude -p`
   drops `SessionStart` hooks, so the check silently will not run there.
 
-**Corrected in the reasoning across 2a–2c.** The loud-versus-silent split used to pick
-the deny set is the wrong axis; the question is whether the error leads to a
-correct recovery. Three classes: *silently wrong* (the `git status` family,
-`ls -a`, `find`, `ps`/`pgrep`, dropped `SessionStart` hooks); *misleadingly
-wrong* (`index.lock` — the message names a concurrent git process that does not
-exist, so the agent deletes a lockfile that is not there and then hunts for a
-cause, which is worse than silence); *correctly diagnosable* (`Device or
-resource busy` on `.git/config`, sibling-worktree `Read-only file system`,
-zellij "no active session"). Only the third class is safe to leave sandboxed.
-That puts `git add:*` and `git commit:*` in the exclusion set on their own
-merits — `add` strands the lock, `commit` is where the misleading error
-surfaces — and banning `git add -A`/`.` does not remove the need, since an
-explicit pathspec strands it too. Also corrected: a classifier call is one model
-call over cached context with no generation, so it is cheaper than an agent
-turn; batching `cd <E> && git status` into one call beats splitting it, and the
-cd+git rule is a cost to note rather than a shape to avoid.
+**Corrected in the reasoning across 2a–2c.** The loud-versus-silent split used
+to pick the deny set is the wrong axis; the question is whether the error leads
+to a correct recovery. Three classes: *silently wrong* (the `git status` family,
+`ls -a`, `find`, `ps`/`pgrep`, dropped `SessionStart` hooks);
+*misleadingly wrong* (`index.lock` — the message names a concurrent git process
+that does not exist, so the agent deletes a lockfile that is not there and then
+hunts for a cause, which is worse than silence); *correctly diagnosable*
+(`Device or resource busy` on `.git/config`, sibling-worktree
+`Read-only file system`, zellij "no active session"). Only the third class is
+safe to leave sandboxed. That puts `git add:*` and `git commit:*` in the
+exclusion set on their own merits — `add` strands the lock, `commit` is where
+the misleading error surfaces — and banning `git add -A`/`.` does not remove the
+need, since an explicit pathspec strands it too. Also corrected: a classifier
+call is one model call over cached context with no generation, so it is cheaper
+than an agent turn; batching `cd <E> && git status` into one call beats
+splitting it, and the cd+git rule is a cost to note rather than a shape to
+avoid.
 
 ### Verification of the exclusions, once written
 
@@ -359,10 +366,10 @@ it matches the idiosyncrasy `classifier-denied-self-config` already records.
 Before the exclusions these calls were auto-allowed by
 `autoAllowBashIfSandboxed` with no classifier involvement, so the denials are
 new. That is the price of the containment decision taken above, now observed
-rather than predicted, and it lands hardest on `git:*` — a third of Bash traffic.
-The mitigation is shape rather than settings: keep an excluded command in its own
-call instead of appending a compound to it. Carry this into the memory pass; no
-existing fact states it.
+rather than predicted, and it lands hardest on `git:*` — a third of Bash
+traffic. The mitigation is shape rather than settings: keep an excluded command
+in its own call instead of appending a compound to it. Carry this into the
+memory pass; no existing fact states it.
 
 **Both settled.** The corpus scrape is in
 [2d](ddaanet-memory-review-2d-corpus-scrape.md); my human partner has taken

@@ -1,45 +1,83 @@
 # Tiered memory 3-ii — index composition Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Splice each active tier's pointer bullets into the always-loaded root `MEMORY.md`, and mirror root-authored tier bullets back down into their carrier, so a tier's facts become recall-reachable and travel to every consumer.
+**Goal:** Splice each active tier's pointer bullets into the always-loaded root
+`MEMORY.md`, and mirror root-authored tier bullets back down into their carrier,
+so a tier's facts become recall-reachable and travel to every consumer.
 
-**Architecture:** One pure-bash library (`scripts/lib/index-compose.sh`) does all the work: it splits an index into preamble / bullets / trailer, attributes each bullet to a mounted tier by path prefix, merges root and carrier bullets per tier, and rewrites both surfaces. Two thin callers invoke it — a new `PostToolBatch` hook and the existing `session-start.sh`. The pass is a whole-index rewrite, byte-idempotent, and fail-safe: four validations run first and any failure aborts the whole pass with every file untouched.
+**Architecture:** One pure-bash library (`scripts/lib/index-compose.sh`) does
+all the work: it splits an index into preamble / bullets / trailer, attributes
+each bullet to a mounted tier by path prefix, merges root and carrier bullets
+per tier, and rewrites both surfaces. Two thin callers invoke it — a new
+`PostToolBatch` hook and the existing `session-start.sh`. The pass is a
+whole-index rewrite, byte-idempotent, and fail-safe: four validations run first
+and any failure aborts the whole pass with every file untouched.
 
-**Tech Stack:** bash (3.2-compatible), `jq` for hook JSON, `bats` 1.5+ for tests. No awk needed for the new path arithmetic — bash parameter expansion is whitespace-safe here and avoids the `awk '{print $2}'` class of bug.
+**Tech Stack:** bash (3.2-compatible), `jq` for hook JSON, `bats` 1.5+ for
+tests. No awk needed for the new path arithmetic — bash parameter expansion is
+whitespace-safe here and avoids the `awk '{print $2}'` class of bug.
 
-**Spec:** `plans/2026-07-21-tier-index-composition-design.md`. **Design decision:** D17 in `docs/design.md`.
+**Spec:** `plans/2026-07-21-tier-index-composition-design.md`.
+**Design decision:** D17 in `docs/design.md`.
 
 ## Global Constraints
 
-- A bullet is a line matching `^- \[` **and** containing `](` followed by a `)`. A `^- \[` line without an extractable path is *not* a bullet — it is content, and triggers validation 4 if it sits inside the bullet region.
-- Composition never edits bullet *text*, never touches project bullets, never creates or deletes a memory file.
-- No hook may `exit 2`. Stdout JSON parses only on `exit 0`, so every failure reports on `systemMessage` and exits 0 (D14).
-- Every loop that touches a tier must guard `[ -e "$tierpath/.git" ]` before any `git -C "$tierpath"` — into an unchecked-out submodule `git -C` escapes to the enclosing repo.
-- No `2>/dev/null`. Where a non-zero status is the ordinary case, guard with a test (`[ -f ]`) rather than a redirect.
+- A bullet is a line matching `^- \[` **and** containing `](` followed by a `)`.
+  A `^- \[` line without an extractable path is *not* a bullet — it is content,
+  and triggers validation 4 if it sits inside the bullet region.
+- Composition never edits bullet *text*, never touches project bullets, never
+  creates or deletes a memory file.
+- No hook may `exit 2`. Stdout JSON parses only on `exit 0`, so every failure
+  reports on `systemMessage` and exits 0 (D14).
+- Every loop that touches a tier must guard `[ -e "$tierpath/.git" ]` before any
+  `git -C "$tierpath"` — into an unchecked-out submodule `git -C` escapes to the
+  enclosing repo.
+- No `2>/dev/null`. Where a non-zero status is the ordinary case, guard with a
+  test (`[ -f ]`) rather than a redirect.
 - No `|| true` on a fallible command whose failure matters.
-- Shell must pass `scripts/lint-shell.sh` (shellcheck). A comment may never begin with `# shellcheck` unless it is a real directive.
+- Shell must pass `scripts/lint-shell.sh` (shellcheck). A comment may never
+  begin with `# shellcheck` unless it is a real directive.
 
 ## Refinement of the spec, decided here
 
-The spec says an inactive tier's block is dropped from the root because "the lines persist in the carrier". That only holds if they were mirrored while the tier was active — a root bullet added for a mounted-but-never-active tier would be silently dropped. So: **mirror down runs for every *mounted* tier; splice up runs for *active* tiers only.** This is the same data-loss argument, and the same resolution, that the commit/push lockstep already applied when it chose to commit every mounted tier rather than only the active ones.
+The spec says an inactive tier's block is dropped from the root because "the
+lines persist in the carrier". That only holds if they were mirrored while the
+tier was active — a root bullet added for a mounted-but-never-active tier would
+be silently dropped. So: **mirror down runs for every *mounted* tier; splice up
+runs for *active* tiers only.** This is the same data-loss argument, and the
+same resolution, that the commit/push lockstep already applied when it chose to
+commit every mounted tier rather than only the active ones.
 
-**Text conflict rule:** when a path appears in both the root index and its carrier with different hook text, the **root** wins and is written down. The root index is canonical for a line's text (D17, settled empirically by the SPOT eval).
+**Text conflict rule:** when a path appears in both the root index and its
+carrier with different hook text, the **root** wins and is written down. The
+root index is canonical for a line's text (D17, settled empirically by the SPOT
+eval).
 
 ---
 
 ## File Structure
 
-- **Create `scripts/lib/index-compose.sh`** — the whole mechanism, sourced by both callers and unit-tested directly. Mirrors `index-sync.sh` in shape: small pure functions, one writer.
-- **Create `scripts/cc-hooks/index-compose.sh`** — `PostToolBatch` hook. Decides from `.tool_calls[]` whether the batch touched the root index or the manifest, calls the library, emits one message on both channels.
+- **Create `scripts/lib/index-compose.sh`** — the whole mechanism, sourced by
+  both callers and unit-tested directly. Mirrors `index-sync.sh` in shape: small
+  pure functions, one writer.
+- **Create `scripts/cc-hooks/index-compose.sh`** — `PostToolBatch` hook. Decides
+  from `.tool_calls[]` whether the batch touched the root index or the manifest,
+  calls the library, emits one message on both channels.
 - **Modify `hooks/hooks.json`** — register the new hook on `PostToolBatch`.
-- **Modify `scripts/cc-hooks/session-start.sh`** — call the library after the tier fast-forward block; rewrite the routing-guidance sentence.
+- **Modify `scripts/cc-hooks/session-start.sh`** — call the library after the
+  tier fast-forward block; rewrite the routing-guidance sentence.
 - **Create `tests/index_compose.bats`** — library unit tests.
 - **Create `tests/cc_hook_index_compose.bats`** — hook tests.
-- **Modify `tests/helpers/tier-fixtures.bash`** — add `set_tier_manifest` and `seed_tier_bullet` factories.
+- **Modify `tests/helpers/tier-fixtures.bash`** — add `set_tier_manifest` and
+  `seed_tier_bullet` factories.
 - **Modify `docs/design.md`** — D17 status line + changelog row.
 
-`make test` globs `tests/*.bats`, so both new suites are collected automatically. Verify that in Task 4 rather than assuming it.
+`make test` globs `tests/*.bats`, so both new suites are collected
+automatically. Verify that in Task 4 rather than assuming it.
 
 ---
 
@@ -59,11 +97,17 @@ red-green cycles and the two commits — just don't split the dispatch.*
 **Interfaces:**
 - Consumes: nothing.
 - Produces:
-  - `gitlore_bullet_path LINE` → prints the path; returns 1 if the line is not a pointer bullet.
-  - `gitlore_bullet_reprefix LINE PREFIX` → prints the line with `PREFIX/` inserted before the path.
-  - `gitlore_bullet_deprefix LINE PREFIX` → prints the line with a leading `PREFIX/` removed from the path; returns 1 if the path does not carry that prefix.
-  - `gitlore_index_region FILE` → prints `FIRST LAST` (1-indexed bullet line numbers, space-separated), or `0 0` when the file has no bullets.
-  - `gitlore_index_part FILE PART` → prints the `preamble`, `bullets`, or `trailer` part.
+  - `gitlore_bullet_path LINE` → prints the path; returns 1 if the line is not a
+    pointer bullet.
+  - `gitlore_bullet_reprefix LINE PREFIX` → prints the line with `PREFIX/`
+    inserted before the path.
+  - `gitlore_bullet_deprefix LINE PREFIX` → prints the line with a leading
+    `PREFIX/` removed from the path; returns 1 if the path does not carry that
+    prefix.
+  - `gitlore_index_region FILE` → prints `FIRST LAST` (1-indexed bullet line
+    numbers, space-separated), or `0 0` when the file has no bullets.
+  - `gitlore_index_part FILE PART` → prints the `preamble`, `bullets`, or
+    `trailer` part.
 
 - [x] **Step 1: Write the failing test**
 
@@ -280,10 +324,16 @@ git commit -m "feat: index splitting and bullet path arithmetic (D17 3-ii)"
 - Modify: `tests/helpers/tier-fixtures.bash`
 
 **Interfaces:**
-- Consumes: `gitlore_bullet_path`, `gitlore_index_region`, `gitlore_index_part` (Part A); `gitlore_tier_paths MEMPATH` and `gitlore_active_tiers MEMPATH` (existing, `scripts/lib/util.sh`).
+- Consumes: `gitlore_bullet_path`, `gitlore_index_region`, `gitlore_index_part`
+  (Part A); `gitlore_tier_paths MEMPATH` and `gitlore_active_tiers MEMPATH`
+  (existing, `scripts/lib/util.sh`).
 - Produces:
-  - `gitlore_tier_of PATH TIERS` → prints the first path component when it names a tier in the newline-separated list `TIERS`; prints nothing and returns 1 otherwise.
-  - `gitlore_compose_check MEMPATH` → prints one human-readable problem per line and returns 1 if the store cannot be safely composed; prints nothing and returns 0 otherwise.
+  - `gitlore_tier_of PATH TIERS` → prints the first path component when it names
+    a tier in the newline-separated list `TIERS`; prints nothing and returns 1
+    otherwise.
+  - `gitlore_compose_check MEMPATH` → prints one human-readable problem per line
+    and returns 1 if the store cannot be safely composed; prints nothing and
+    returns 0 otherwise.
 
 - [x] **Step 6: Write the failing test**
 
@@ -313,7 +363,9 @@ seed_root_bullet() {
 }
 ```
 
-Then append to `tests/index_compose.bats` (it must now also `load helpers/fixtures` and `load helpers/tier-fixtures`, and `source .../util.sh` for the tier helpers — update the file header accordingly):
+Then append to `tests/index_compose.bats` (it must now also
+`load helpers/fixtures` and `load helpers/tier-fixtures`, and
+`source .../util.sh` for the tier helpers — update the file header accordingly):
 
 ```bash
 @test "tier_of attributes a prefixed path to a mounted tier" {
@@ -506,7 +558,8 @@ $path"
 }
 ```
 
-Note `${line//[[:space:]]/}` is bash-only (not POSIX sh) — the file is `#!/usr/bin/env bash` and every caller sources it from bash, so this is fine.
+Note `${line//[[:space:]]/}` is bash-only (not POSIX sh) — the file is
+`#!/usr/bin/env bash` and every caller sources it from bash, so this is fine.
 
 - [x] **Step 9: Run test to verify it passes**
 
@@ -532,7 +585,10 @@ git commit -m "feat: tier attribution and compose validations (D17 3-ii)"
 **Interfaces:**
 - Consumes: everything from Task 1.
 - Produces:
-  - `gitlore_compose MEMPATH` → runs the check, then rewrites the root index and every mounted tier carrier. On check failure: prints the problems, writes nothing, returns 1. On success: prints one summary line per file it actually changed (`composed <path>`), returns 0.
+  - `gitlore_compose MEMPATH` → runs the check, then rewrites the root index and
+    every mounted tier carrier. On check failure: prints the problems, writes
+    nothing, returns 1. On success: prints one summary line per file it actually
+    changed (`composed <path>`), returns 0.
 
 - [x] **Step 1: Write the failing test**
 
@@ -828,7 +884,8 @@ deliverable: "composition actually runs, on both triggers."*
 - Test: `tests/cc_hook_index_compose.bats`
 
 **Interfaces:**
-- Consumes: `gitlore_compose MEMPATH` (Task 2); `gitlore_has_submodule`, `gitlore_memory_path` (existing `util.sh`).
+- Consumes: `gitlore_compose MEMPATH` (Task 2); `gitlore_has_submodule`,
+  `gitlore_memory_path` (existing `util.sh`).
 - Produces: nothing other scripts call.
 
 - [x] **Step 1: Write the failing test**
@@ -938,7 +995,9 @@ Expected: FAIL — the hook file does not exist.
 
 - [x] **Step 3: Write minimal implementation**
 
-Create `scripts/cc-hooks/index-compose.sh` (and `chmod +x` it — a non-executable hook silently no-ops in production while `bash script.sh` in tests still passes):
+Create `scripts/cc-hooks/index-compose.sh` (and `chmod +x` it — a non-executable
+hook silently no-ops in production while `bash script.sh` in tests still
+passes):
 
 ```bash
 #!/usr/bin/env bash
@@ -1005,7 +1064,8 @@ fi
 exit 0
 ```
 
-Register it in `hooks/hooks.json` by appending a third entry to the `PostToolBatch` array:
+Register it in `hooks/hooks.json` by appending a third entry to the
+`PostToolBatch` array:
 
 ```json
       {
@@ -1020,7 +1080,8 @@ Register it in `hooks/hooks.json` by appending a third entry to the `PostToolBat
 
 - [x] **Step 4: Run test to verify it passes**
 
-Run: `chmod +x scripts/cc-hooks/index-compose.sh && bats tests/cc_hook_index_compose.bats`
+Run:
+`chmod +x scripts/cc-hooks/index-compose.sh && bats tests/cc_hook_index_compose.bats`
 Expected: PASS, 8 tests.
 
 - [x] **Step 5: Lint and commit**
@@ -1036,7 +1097,8 @@ git commit -m "feat: PostToolBatch tier composition hook (D17 3-ii)"
 #### Part B — SessionStart wiring and the routing-guidance change
 
 **Files:**
-- Modify: `scripts/cc-hooks/session-start.sh` (tier block ends ~line 211; guidance text ~line 241)
+- Modify: `scripts/cc-hooks/session-start.sh` (tier block ends ~line 211;
+  guidance text ~line 241)
 - Modify: `tests/tier_discovery.bats`
 
 **Interfaces:**
@@ -1082,19 +1144,23 @@ Append to `tests/tier_discovery.bats`:
 
 - [x] **Step 7: Run test to verify it fails**
 
-Run: `bats tests/tier_discovery.bats`
-Expected: FAIL — the root index has no `ddaanet/remote_fact.md` line, and the guidance still says "that tier's MEMORY.md".
+Run: `bats tests/tier_discovery.bats` Expected: FAIL — the root index has no
+`ddaanet/remote_fact.md` line, and the guidance still says "that tier's
+MEMORY.md".
 
 - [x] **Step 8: Write minimal implementation**
 
-In `scripts/cc-hooks/session-start.sh`, source the new library beside the existing ones:
+In `scripts/cc-hooks/session-start.sh`, source the new library beside the
+existing ones:
 
 ```bash
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 ```
 
-Immediately after the tier fast-forward `while … done < <(gitlore_tier_paths "$mempath")` loop (~line 211), before the routing-guidance block, add:
+Immediately after the tier fast-forward
+`while … done < <(gitlore_tier_paths "$mempath")` loop (~line 211), before the
+routing-guidance block, add:
 
 ```bash
 # Compose after the fast-forward, so lines that just propagated in surface in
@@ -1149,17 +1215,21 @@ checkbox. Whoever owns the session runs this task.*
 
 - [x] **Step 1: Confirm both new suites are actually collected**
 
-Run: `make -n test-unit | tr ' ' '\n' | grep -c 'index_compose'`
-Expected: `2` (both `tests/index_compose.bats` and `tests/cc_hook_index_compose.bats`). If it is not 2, the `wildcard` glob did not pick them up — fix that before proceeding. Green means nothing until you know what ran.
+Run: `make -n test-unit | tr ' ' '\n' | grep -c 'index_compose'` Expected: `2`
+(both `tests/index_compose.bats` and `tests/cc_hook_index_compose.bats`). If it
+is not 2, the `wildcard` glob did not pick them up — fix that before proceeding.
+Green means nothing until you know what ran.
 
 - [x] **Step 2: Run the whole gate**
 
-Run: `just precommit`
-Expected: version check, shellcheck, and the full bats suite all pass. The suite total should be the previous 342 plus the ~37 new cases.
+Run: `just precommit` Expected: version check, shellcheck, and the full bats
+suite all pass. The suite total should be the previous 342 plus the ~37 new
+cases.
 
 - [x] **Step 3: Update the design doc**
 
-In `docs/design.md`, extend the D17 status line (~line 679) after the tier-lockstep clause with:
+In `docs/design.md`, extend the D17 status line (~line 679) after the
+tier-lockstep clause with:
 
 ```
 **3-ii composition** — **done 2026-07-21** (`scripts/lib/index-compose.sh`, `scripts/cc-hooks/index-compose.sh` on `PostToolBatch` + a `SessionStart` pass; splice-up of active tiers, mirror-down into every mounted tier, four fail-safe validations, byte-idempotent; ~37 cases in `tests/index_compose.bats` and `tests/cc_hook_index_compose.bats`);
@@ -1173,14 +1243,19 @@ Add a changelog row at the top of the table:
 
 - [x] **Step 4: Dogfood against the real store**
 
-The live store has `memory/ddaanet` mounted and active with a bulletless carrier, so the first compose mirrors down any `ddaanet/`-prefixed root lines and splices nothing up. Run the library by hand against the real store and inspect the diff before committing:
+The live store has `memory/ddaanet` mounted and active with a bulletless
+carrier, so the first compose mirrors down any `ddaanet/`-prefixed root lines
+and splices nothing up. Run the library by hand against the real store and
+inspect the diff before committing:
 
 ```bash
 bash -c 'source scripts/lib/util.sh; source scripts/lib/index-compose.sh; gitlore_compose memory'
 git -C memory diff
 ```
 
-Expected: either no output and no diff (nothing to compose yet — the root index today has no prefixed lines), or a diff that only moves and reprefixes bullets. If any bullet's *text* changed, stop: that is a bug, not a composition.
+Expected: either no output and no diff (nothing to compose yet — the root index
+today has no prefixed lines), or a diff that only moves and reprefixes bullets.
+If any bullet's *text* changed, stop: that is a bug, not a composition.
 
 - [x] **Step 5: Commit**
 
@@ -1193,6 +1268,10 @@ git commit -m "docs: record D17 slice 3-ii composition"
 
 ## Follow-ups, explicitly not in this slice
 
-- **`/gitlore:resolve` does not compose.** An index merged by the resolve continuation composes on the next batch or the next session. Recorded in the spec; no code here.
-- **Slice 3-iii** — `/gitlore:add-tier` (mount + `--create`), which ends by editing the manifest and so triggers the `PostToolBatch` recompose built here.
-- **Happy-path evals** for the finished tier flow, per the standing instruction to write them once nested memory is done.
+- **`/gitlore:resolve` does not compose.** An index merged by the resolve
+  continuation composes on the next batch or the next session. Recorded in the
+  spec; no code here.
+- **Slice 3-iii** — `/gitlore:add-tier` (mount + `--create`), which ends by
+  editing the manifest and so triggers the `PostToolBatch` recompose built here.
+- **Happy-path evals** for the finished tier flow, per the standing instruction
+  to write them once nested memory is done.

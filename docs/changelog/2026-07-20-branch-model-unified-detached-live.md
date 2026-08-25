@@ -1,5 +1,31 @@
 # 2026-07-20 — Branch model unified — memory is detached at `live`, and there is one commit path
 
-A tier's gitdir is shared across a repo's memory worktrees, and a per-parent-branch working branch collides there; it also bought no branch-aligned history, since the commit path already advances `live` immediately, so memory is repo-global the moment it is committed. The accepted cost: merge commits from a detached HEAD reference their source by commit id rather than branch name, which reads worse in `git log`.
+A tier's gitdir is shared across a repo's memory worktrees, and a
+per-parent-branch working branch collides there; it also bought no
+branch-aligned history, since the commit path already advances `live`
+immediately, so memory is repo-global the moment it is committed. The accepted
+cost: merge commits from a detached HEAD reference their source by commit id
+rather than branch name, which reads worse in `git log`.
 
-The per-parent-branch working branch is gone: `session-start.sh` detaches in place (migrating an attached session without touching content), `init-submodule.sh` installs detached, and the parent-branch-named-`live` collision guard is deleted along with the condition that produced it. `gitlore_prepare_branch_vs_live` + `gitlore_prepare_local_vs_remote` collapsed into `gitlore_prepare_merge MEMPATH AUTHORITY` — pin the pending commit, `checkout --detach <authority>`, merge the pending commit in — which preserves D6's first-parent direction *and* removes the concurrent-checkout failure (no branch is ever checked out, so nothing can be "already used by worktree"). `gitlore_yield_merge` factors prepare/record/emit for all four call sites, and `continue-after-branch-merge` + `continue-after-remote-merge` became one `continue-after-merge` that consults the flavor only to decide whether the origin push follows. The remote flavor no longer does `reset --hard origin/live`: the merge carries local `live` forward, so the continuation advances local *and* remote in one line each. New: `refs/gitlore/pending`, pinning the divergent commit for the window between `merge --abort` and re-detaching — a job the retired named branch had been doing implicitly. State-file schema dropped `return_branch` (`agents/memory-merger.md` updated). Tests: fixtures advance `live` with plumbing (`advance_branch_with_file`) since it is never checked out, which shrank the concurrent-advance simulation from ~20 lines to one; 273 unit + 20 integration green.
+The per-parent-branch working branch is gone: `session-start.sh` detaches in
+place (migrating an attached session without touching content),
+`init-submodule.sh` installs detached, and the parent-branch-named-`live`
+collision guard is deleted along with the condition that produced it.
+`gitlore_prepare_branch_vs_live` + `gitlore_prepare_local_vs_remote` collapsed
+into `gitlore_prepare_merge MEMPATH AUTHORITY` — pin the pending commit,
+`checkout --detach <authority>`, merge the pending commit in — which preserves
+D6's first-parent direction *and* removes the concurrent-checkout failure (no
+branch is ever checked out, so nothing can be "already used by worktree").
+`gitlore_yield_merge` factors prepare/record/emit for all four call sites, and
+`continue-after-branch-merge` + `continue-after-remote-merge` became one
+`continue-after-merge` that consults the flavor only to decide whether the
+origin push follows. The remote flavor no longer does
+`reset --hard origin/live`: the merge carries local `live` forward, so the
+continuation advances local *and* remote in one line each. New:
+`refs/gitlore/pending`, pinning the divergent commit for the window between
+`merge --abort` and re-detaching — a job the retired named branch had been doing
+implicitly. State-file schema dropped `return_branch` (`agents/memory-merger.md`
+updated). Tests: fixtures advance `live` with plumbing
+(`advance_branch_with_file`) since it is never checked out, which shrank the
+concurrent-advance simulation from ~20 lines to one; 273 unit + 20 integration
+green.

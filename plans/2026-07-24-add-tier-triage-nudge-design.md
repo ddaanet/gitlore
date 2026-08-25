@@ -121,9 +121,9 @@ moves ride the next FR11 commit.
 every turn that writes memory. Gating triage on the manifest specifically means
 it fires exactly when the active-tier set may have changed. Reorders (rare) also
 trip it; a reorder-triggered sweep is a harmless no-op — the agent reads the
-scopes, finds every local fact already correctly placed, moves nothing. Detecting
-"added" vs "reordered" would need a manifest pre-image (a PreToolUse capture);
-not worth it for a no-op case. Fire on any manifest touch.
+scopes, finds every local fact already correctly placed, moves nothing.
+Detecting "added" vs "reordered" would need a manifest pre-image (a PreToolUse
+capture); not worth it for a no-op case. Fire on any manifest touch.
 
 ### 3. Shared scope-resolution helper
 
@@ -164,13 +164,13 @@ Encode in the bats suite (`tests/`), not hand-run:
 - **Reorder invariant:** assert `add-tier-batch` precedes `index-compose` in
   `hooks/hooks.json` (a positional check, so a future edit can't silently
   reintroduce the two-turn bug).
-- **Trigger gate:** a batch editing only the root index recomposes but emits **no**
-  triage directive; a batch editing `.gitlore-tiers` emits one. (Break the
-  manifest-gate and watch this go red — negative assertion must fail against the
-  change it guards.)
-- **Directive content:** with two active tiers of different scopes, the directive
-  names **both** scopes and contains no hardcoded "project-specific / single
-  user" dichotomy.
+- **Trigger gate:** a batch editing only the root index recomposes but emits
+  **no** triage directive; a batch editing `.gitlore-tiers` emits one. (Break
+  the manifest-gate and watch this go red — negative assertion must fail against
+  the change it guards.)
+- **Directive content:** with two active tiers of different scopes, the
+  directive names **both** scopes and contains no hardcoded "project-specific /
+  single user" dichotomy.
 - **Helper:** `gitlore_active_tier_scopes` returns one line per active tier with
   its frontmatter description, skips dormant/unmounted tiers, and is
   whitespace-safe on a tier path containing a space.

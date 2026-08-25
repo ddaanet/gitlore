@@ -1,19 +1,77 @@
 # 2026-08-20 — `docs/` becomes a crosslinked graph: the living design split into a hub and reference nodes, with a checker holding the links
 
-`docs/design.md` had reached 168.4 KB, 56.8 ktok. It exists to be loaded before any structural change, and at that size it no longer could be — the document had outgrown its own job. Sentence-level trimming does not reach: measured against this doc, cutting narration recovers ~5.6% before it starts removing the argument that stops a settled decision from being re-litigated, which is the argument the doc is for.
+`docs/design.md` had reached 168.4 KB, 56.8 ktok. It exists to be loaded before
+any structural change, and at that size it no longer could be — the document had
+outgrown its own job. Sentence-level trimming does not reach: measured against
+this doc, cutting narration recovers ~5.6% before it starts removing the
+argument that stops a settled decision from being re-litigated, which is the
+argument the doc is for.
 
-So the fix was measurement, not wording. Per-section and per-decision byte totals distinguish two shapes that take different cuts. **One entry dominating** — the tiered-memory cluster was 28% of the whole document on its own, a decision that had become a subsystem rather than a call. Its D26–D44 moved to `docs/references/tiered-memory.md` behind D17's motivation paragraph plus a pointer. **A flat distribution** — the commoner shape, and the one that defeats a search for a dominant subsystem: a section is large because it enumerates many small things, none over ~10%. There the boundary is *need-time* — what a reader needs while building or debugging one component, against what they need to understand the system — and it cuts across the doc's own headings rather than along them. That cut took the install and launch mechanism out of Architecture, then 25 decisions whose largest was 9% into four clusters, then Architecture's own bulk: the install command's steps, `SessionStart`, the git hooks' orderings, both entry-point contracts, and the two merge skills' step lists. Architecture went from 39.6 KB to 19.6 KB, the document from 168.4 KB to 44.0 KB — 56.8 ktok to 15.2 ktok, a 73% cut across four passes.
+So the fix was measurement, not wording. Per-section and per-decision byte
+totals distinguish two shapes that take different cuts. **One entry dominating**
+— the tiered-memory cluster was 28% of the whole document on its own, a decision
+that had become a subsystem rather than a call. Its D26–D44 moved to
+`docs/references/tiered-memory.md` behind D17's motivation paragraph plus a
+pointer. **A flat distribution** — the commoner shape, and the one that defeats
+a search for a dominant subsystem: a section is large because it enumerates many
+small things, none over ~10%. There the boundary is *need-time* — what a reader
+needs while building or debugging one component, against what they need to
+understand the system — and it cuts across the doc's own headings rather than
+along them. That cut took the install and launch mechanism out of Architecture,
+then 25 decisions whose largest was 9% into four clusters, then Architecture's
+own bulk: the install command's steps, `SessionStart`, the git hooks' orderings,
+both entry-point contracts, and the two merge skills' step lists. Architecture
+went from 39.6 KB to 19.6 KB, the document from 168.4 KB to 44.0 KB — 56.8 ktok
+to 15.2 ktok, a 73% cut across four passes.
 
-Five nodes carry it: `installation.md`, `commit-gate.md`, `merge-and-resolve.md`, `tiered-memory.md`, `cc-platform.md`. Each holds a mechanism next to the decisions arguing for it rather than being a decisions-only file, because a reader who opens one to change `pre-commit` wants both halves and nothing else.
+Five nodes carry it: `installation.md`, `commit-gate.md`,
+`merge-and-resolve.md`, `tiered-memory.md`, `cc-platform.md`. Each holds a
+mechanism next to the decisions arguing for it rather than being a
+decisions-only file, because a reader who opens one to change `pre-commit` wants
+both halves and nothing else.
 
-**Splitting raises total bytes, and only pays because a reader skips most pointers.** Measured across the four passes, the design graph went from 58.5 ktok to 64.0 ktok — +9.4% — while the entry point fell 73%. The overhead is the pointers, the conclusion stubs and each node's own framing, and it runs about 1,650 tokens per pass, flat, regardless of how much content moved.
+**Splitting raises total bytes, and only pays because a reader skips most
+pointers.** Measured across the four passes, the design graph went from 58.5
+ktok to 64.0 ktok — +9.4% — while the entry point fell 73%. The overhead is the
+pointers, the conclusion stubs and each node's own framing, and it runs about
+1,650 tokens per pass, flat, regardless of how much content moved.
 
-What varies is the return, and it tracks how self-contained the moved material is rather than how far along the split is. The tiered-memory cluster moved whole and bought 15,226 tokens off the hub for 498 spent — 30:1. The install mechanism, which had to be re-stitched with pointers from several places, bought 3,461 for 1,644 — 2:1, the worst of the four, on the second pass rather than the last. The decision clusters returned 9:1 and the Architecture pass 4:1. A pass whose ratio approaches 1:1 is one where the content was never separable, not a signal that the document has run out of room.
+What varies is the return, and it tracks how self-contained the moved material
+is rather than how far along the split is. The tiered-memory cluster moved whole
+and bought 15,226 tokens off the hub for 498 spent — 30:1. The install
+mechanism, which had to be re-stitched with pointers from several places, bought
+3,461 for 1,644 — 2:1, the worst of the four, on the second pass rather than the
+last. The decision clusters returned 9:1 and the Architecture pass 4:1. A pass
+whose ratio approaches 1:1 is one where the content was never separable, not a
+signal that the document has run out of room.
 
-That trade sets the constraint on how the cut is made: every argument that leaves has to leave a one-line statement of its conclusion behind, since a reader who cannot see that a decision was made re-litigates it, and that failure is silent. Numbered sub-decisions inside a moved cluster still resolve as bare citations (`D26`, `D30`) elsewhere in the hub; a reader who does not know where one lives finds it one hop away.
+That trade sets the constraint on how the cut is made: every argument that
+leaves has to leave a one-line statement of its conclusion behind, since a
+reader who cannot see that a decision was made re-litigates it, and that failure
+is silent. Numbered sub-decisions inside a moved cluster still resolve as bare
+citations (`D26`, `D30`) elsewhere in the hub; a reader who does not know where
+one lives finds it one hop away.
 
-The direction this settles is that `docs/` is a graph of topic files rather than one document that gets pruned. Designs complexify, and context management forces the split sooner or later; the four passes are the first instalment rather than a finished cleanup.
+The direction this settles is that `docs/` is a graph of topic files rather than
+one document that gets pruned. Designs complexify, and context management forces
+the split sooner or later; the four passes are the first instalment rather than
+a finished cleanup.
 
-Past a few nodes the crosslinking is load-bearing and nothing enforced it, so `scripts/check-docs-links.py` now does — seven blocking checks over the graph: every relative pointer resolves, every argued decision has a conclusion line ahead of it, every hub bullet has an argument to point at, no number is argued twice or concluded twice, every citation resolves, and each node's heading enumeration matches the bodies it actually holds. It runs uncached ahead of the `precommit` sentinel, for the same reason the memory-hygiene checker does: `docs/` is deliberately outside `precommit_inputs`, so a cached pass would skip the graph check on precisely the commit that rewires the graph. It found a broken pointer on its first run — `merge-and-resolve.md` reaching a changelog entry without climbing out of `references/` first.
+Past a few nodes the crosslinking is load-bearing and nothing enforced it, so
+`scripts/check-docs-links.py` now does — seven blocking checks over the graph:
+every relative pointer resolves, every argued decision has a conclusion line
+ahead of it, every hub bullet has an argument to point at, no number is argued
+twice or concluded twice, every citation resolves, and each node's heading
+enumeration matches the bodies it actually holds. It runs uncached ahead of the
+`precommit` sentinel, for the same reason the memory-hygiene checker does:
+`docs/` is deliberately outside `precommit_inputs`, so a cached pass would skip
+the graph check on precisely the commit that rewires the graph. It found a
+broken pointer on its first run — `merge-and-resolve.md` reaching a changelog
+entry without climbing out of `references/` first.
 
-One rule the checker had to learn rather than impose. A cluster that has become a subsystem takes one hub entry, not one per sub-decision, so D26–D44 have no bullets in `design.md`; they conclude in `tiered-memory.md`'s own opening summary instead. A conclusion therefore counts wherever it is reachable before the argument — in the hub, or in the summary of the node doing the arguing — and only the hub's own bullets are required to point at an argument elsewhere.
+One rule the checker had to learn rather than impose. A cluster that has become
+a subsystem takes one hub entry, not one per sub-decision, so D26–D44 have no
+bullets in `design.md`; they conclude in `tiered-memory.md`'s own opening
+summary instead. A conclusion therefore counts wherever it is reachable before
+the argument — in the hub, or in the summary of the node doing the arguing — and
+only the hub's own bullets are required to point at an argument elsewhere.

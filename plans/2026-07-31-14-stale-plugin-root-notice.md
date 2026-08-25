@@ -2,9 +2,9 @@
 
 ## What the probe settled
 
-Two `-p` runs of a throwaway `--plugin-dir` plugin whose `SessionStart` hook logs
-its root, the payload's `source`, and the session id; `hooks.json` was rewritten
-between them to point at a *different* script:
+Two `-p` runs of a throwaway `--plugin-dir` plugin whose `SessionStart` hook
+logs its root, the payload's `source`, and the session id; `hooks.json` was
+rewritten between them to point at a *different* script:
 
 | | run 1 — `claude -p` | run 2 — `claude -c -p` |
 |---|---|---|
@@ -14,10 +14,10 @@ between them to point at a *different* script:
 
 Hook *event registration* is per process, not per conversation. The session
 transcript records no plugin path or version anywhere (`grep` for the plugin
-root: no hits), so a resumed process has no stale root to restore — it re-resolves
-`CLAUDE_PLUGIN_ROOT` from `~/.claude/plugins/installed_plugins.json` at startup,
-and gitlore's `SessionStart` then re-pins the five `gitlore.*` keys, re-emits the
-wrappers and re-wires the memory gate exactly as a cold start does.
+root: no hits), so a resumed process has no stale root to restore — it
+re-resolves `CLAUDE_PLUGIN_ROOT` from `~/.claude/plugins/installed_plugins.json`
+at startup, and gitlore's `SessionStart` then re-pins the five `gitlore.*` keys,
+re-emits the wrappers and re-wires the memory gate exactly as a cold start does.
 
 **Exit and relaunch with `claude -c` is the entire remedy, and it keeps the
 conversation.** Nothing inside a live session can substitute for it.
@@ -47,9 +47,9 @@ the upgrade and name the remedy while the session is still running.
 
 ## The detector
 
-New `PostToolBatch` hook, `scripts/cc-hooks/plugin-upgrade-batch.sh`. It compares
-the root this session froze at against what the install record says is installed
-here, and fires once per session.
+New `PostToolBatch` hook, `scripts/cc-hooks/plugin-upgrade-batch.sh`. It
+compares the root this session froze at against what the install record says is
+installed here, and fires once per session.
 
 ```
 record        = ${GITLORE_PLUGIN_RECORD:-$HOME/.claude/plugins/installed_plugins.json}
@@ -62,8 +62,8 @@ without a second knob.
 Guards, in order, each an `exit 0`:
 
 1. `CLAUDE_PLUGIN_ROOT` unset.
-2. `gitlore_cd_project_root` / `gitlore_has_submodule` fail — the keys only exist
-   in a gitlore repo.
+2. `gitlore_cd_project_root` / `gitlore_has_submodule` fail — the keys only
+   exist in a gitlore repo.
 3. `$CLAUDE_PLUGIN_ROOT` is not under `cache_prefix`. A `--plugin-dir` checkout
    is never stale, and without this guard development sessions — including this
    repo's own, whose `gitlore.hooksDir` is `/Users/david/code/gitlore/scripts/
@@ -71,8 +71,8 @@ Guards, in order, each an `exit 0`:
 4. `record` missing or unparseable.
 5. This session's marker already exists.
 
-Then, owner-agnostic (no `gitlore@ddaanet` literal — the parent dir of the frozen
-root *is* the plugin's cache family):
+Then, owner-agnostic (no `gitlore@ddaanet` literal — the parent dir of the
+frozen root *is* the plugin's cache family):
 
 ```sh
 parent=$(dirname "$CLAUDE_PLUGIN_ROOT")     # …/cache/<owner>/gitlore
@@ -84,10 +84,10 @@ jq -r --arg proj "$PWD" --arg parent "$parent/" '
 ```
 
 Fire only when that set is non-empty and contains no entry whose `installPath`
-equals the frozen root. A repo pinned to an older project-scoped version than the
-user-scoped one is therefore silent — the frozen root matches an entry, which is
-the point. Name the project-scoped entry when there is one, else the user-scoped
-one; the remedy does not depend on which.
+equals the frozen root. A repo pinned to an older project-scoped version than
+the user-scoped one is therefore silent — the frozen root matches an entry,
+which is the point. Name the project-scoped entry when there is one, else the
+user-scoped one; the remedy does not depend on which.
 
 No `grep -F` short-circuit before the `jq`: the frozen root can appear in the
 record under a *different* `projectPath`, so a bare match is a false negative.
@@ -95,8 +95,9 @@ The `jq` costs less than the hook's own process spawn.
 
 Marker: `gitlore_upgrade_nudge_file "$mempath" "$session"` in the memory store's
 gitdir, mirroring `gitlore_index_budget_nudge_file`
-(`scripts/lib/index-sync.sh:147-165`) — same naming, same 7-day sweep, cleared by
-`recall-reset.sh` at `SessionStart` and `PreCompact`, so a compaction re-arms it.
+(`scripts/lib/index-sync.sh:147-165`) — same naming, same 7-day sweep, cleared
+by `recall-reset.sh` at `SessionStart` and `PreCompact`, so a compaction re-arms
+it.
 
 Wording, both channels (D14 — `systemMessage` is user-only, so the agent needs
 its own line):
@@ -110,8 +111,8 @@ its own line):
 > **additionalContext** — gitlore: the plugin was upgraded to `<new>` since this
 > session started; this session still runs `<old>` and its git-config keys point
 > into `<old>`. Nothing in this session can adopt it. Do not attempt a repair
-> with `/plugin`, `/reload-plugins`, or by rewriting `gitlore.*` git config — none
-> of them re-fire `SessionStart`. Tell the user to exit and relaunch with
+> with `/plugin`, `/reload-plugins`, or by rewriting `gitlore.*` git config —
+> none of them re-fire `SessionStart`. Tell the user to exit and relaunch with
 > `claude -c`.
 
 The prohibition is the load-bearing half of the agent line: the observed session
@@ -128,8 +129,9 @@ ran two full cycles of exactly those remedies.
    is cleared; silent outside a gitlore repo. Plus: the hook never fails a batch
    (malformed record → exit 0, no output).
 2. **Green.** `gitlore_upgrade_nudge_file` + its reset in
-   `scripts/lib/index-sync.sh`, the reset call in `scripts/cc-hooks/recall-reset.sh`,
-   and `scripts/cc-hooks/plugin-upgrade-batch.sh`.
+   `scripts/lib/index-sync.sh`, the reset call in
+   `scripts/cc-hooks/recall-reset.sh`, and
+   `scripts/cc-hooks/plugin-upgrade-batch.sh`.
 3. **Invocation path.** Register the hook in `hooks/hooks.json` under
    `PostToolBatch`; assert registration *and* `[ -x ]` in
    `tests/plugin_distribution.bats`, alongside the existing
@@ -143,12 +145,13 @@ ran two full cycles of exactly those remedies.
    window to name `claude -c` as the refresh. `docs/changelog.md` gets the dated
    entry.
 5. **Memory.** Update `ddaanet/reference_stale_plugin_code`: `claude -c` is a
-   full process restart — `SessionStart` fires with `source=resume`, `hooks.json`
-   is re-read, plugin roots are re-resolved from `installed_plugins.json`, and the
-   conversation survives — so the standing "start a new session" advice becomes
-   "exit and `claude -c`". Add the per-scope pinning fact. Retarget its index
-   line's trailing `— restart` in `memory/MEMORY.md` without lengthening it (the
-   index is at ~23.3KB against the 24.4KB loader cutoff).
+   full process restart — `SessionStart` fires with `source=resume`,
+   `hooks.json` is re-read, plugin roots are re-resolved from
+   `installed_plugins.json`, and the conversation survives — so the standing
+   "start a new session" advice becomes "exit and `claude -c`". Add the
+   per-scope pinning fact. Retarget its index line's trailing `— restart` in
+   `memory/MEMORY.md` without lengthening it (the index is at ~23.3KB against
+   the 24.4KB loader cutoff).
 6. **handoff.** Move `brief-stale-config-after-mid-session-upgrade.md` into
    `~/code/handoff/`, with the probe result and replacement wording for
    `handoff-checkpoint`'s three-way diagnosis (not installed here / key unset /

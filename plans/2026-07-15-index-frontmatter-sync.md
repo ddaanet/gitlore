@@ -1,32 +1,92 @@
 # Authoring-Time One-Way Index→Frontmatter Sync — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** When the agent edits the root `MEMORY.md` index one-liner for a memory file, automatically mirror the edited hook text into that file's frontmatter `description` — one-way, index→frontmatter only.
+**Goal:** When the agent edits the root `MEMORY.md` index one-liner for a memory
+file, automatically mirror the edited hook text into that file's frontmatter
+`description` — one-way, index→frontmatter only.
 
-**Architecture:** *(Superseded 2026-07-15 after execution: the post half moved to `PostToolBatch` so a turn with several index edits syncs and reports once, and it now reports the replacement on `systemMessage`/`additionalContext`. See D17 in `docs/design.md` for the current wiring; the rest of this plan stands as executed. **Superseded again 2026-07-16:** the SPOT question is settled and the added-line semantics are corrected — see "D17 SPOT settled + reconcile spec" below; the post-hook's added-line branch must change from overwrite to fill-if-empty.)* A `PreToolUse(Write|Edit)` hook stashes the pre-edit `MEMORY.md`; a `PostToolUse(Write|Edit)` hook diffs the post-edit `MEMORY.md` against the stash and, for **only the index lines whose hook actually changed**, rewrites the target file's frontmatter `description`. One-way because the index is canonical (D17): the hook never writes the index, and a frontmatter-only edit never triggers propagation. Diffing pre-vs-post (not a blanket sweep) is what protects fresh frontmatter sitting under an unrelated *stale* index line.
+**Architecture:** *(Superseded 2026-07-15 after execution: the post half moved
+to `PostToolBatch` so a turn with several index edits syncs and reports once,
+and it now reports the replacement on `systemMessage`/`additionalContext`. See
+D17 in `docs/design.md` for the current wiring; the rest of this plan stands as
+executed. **Superseded again 2026-07-16:** the SPOT question is settled and the
+added-line semantics are corrected — see "D17 SPOT settled + reconcile spec"
+below; the post-hook's added-line branch must change from overwrite to
+fill-if-empty.)* A `PreToolUse(Write|Edit)` hook stashes the pre-edit
+`MEMORY.md`; a `PostToolUse(Write|Edit)` hook diffs the post-edit `MEMORY.md`
+against the stash and, for **only the index lines whose hook actually changed**,
+rewrites the target file's frontmatter `description`. One-way because the index
+is canonical (D17): the hook never writes the index, and a frontmatter-only edit
+never triggers propagation. Diffing pre-vs-post (not a blanket sweep) is what
+protects fresh frontmatter sitting under an unrelated *stale* index line.
 
-**Tech Stack:** POSIX-ish bash (must run on macOS bash 3.2 and Linux), `jq` (already a hard dependency), `awk` (portable one-true-awk/BSD + gawk), bats tests.
+**Tech Stack:** POSIX-ish bash (must run on macOS bash 3.2 and Linux), `jq`
+(already a hard dependency), `awk` (portable one-true-awk/BSD + gawk), bats
+tests.
 
 ## Global Constraints
 
-- **Portability:** scripts run on macOS (bash 3.2, BSD awk/sed, no GNU `realpath`) and Linux. No bash associative arrays. No `sed` `\t` (BSD sed emits literal `t`). No GNU-only `awk match(s,re,arr)`. Same-file identity via the bash builtin `-ef` test, never `realpath`.
-- **YAML safety:** a frontmatter `description` value is emitted as a JSON-quoted scalar via `jq -Rn --arg` (a JSON string is a valid YAML flow scalar), so hooks containing `:`, `"`, backticks, `[[...]]`, or em-dashes never corrupt the YAML.
-- **Never dirty the tracked tree from a hook:** the pre-image stash lives inside the memory submodule's **gitdir** (`git -C <mempath> rev-parse --git-path gitlore-index-preimage`), mirroring `gitlore_commit_msg_file`, so it is untracked and cannot trip the FR11 commit gate. In the gitlore layout the submodule gitdir is under the parent's `.git/modules/<name>/`, so `--git-path` returns an **absolute** path whose parent dir already exists — used verbatim, never prefixed with `<mempath>`, never `mkdir`'d.
-- **Non-blocking, but never silent:** every hook script `exit 0` on every path (success, no-op, nothing-to-do, *and genuine failure*) and must never `exit 2`. But `exit 0` is **not** licence to swallow errors: a real failure (stash `cp` fails; a frontmatter write fails) must surface to the user on `systemMessage` (the D14 channel — `docs/design.md:581`, verified 2026-06-10: the only reliably user-visible hook channel; stderr reaches the user only on `exit 2` / `--verbose`). Exit 0 is *required* for visibility, not merely tolerated: **stdout JSON is parsed only on exit 0**, so a non-zero exit discards the `systemMessage` and makes the error less visible, not more. Mirror `scripts/cc-hooks/worktree-drift.sh` (a PostToolUse hook already emitting `systemMessage` via `jq -n --arg`). Note the asymmetry driving the never-`exit 2` rule: at **PreToolUse** `exit 2` blocks the tool outright; at **PostToolUse** nothing can block (the tool already ran — "PostToolUse hooks can't undo actions"), so there the exit code buys nothing and only the channel matters. `|| true` and bare `|| exit 0` on a fallible command are **rejected**: errors must never pass silently.
-- **Scope = single tier (project `MEMORY.md`).** Only `<mempath>/MEMORY.md` is handled. Tier carriers (`memory/<tier>/MEMORY.md`) and net-new-line seeding are the structural-recompose slice (later), out of scope here.
-- **Tool scope:** matcher `Write|Edit` only. Edits made through other tools simply don't sync (low-harm); noted, not handled.
-- Reuse existing lib helpers: `gitlore_has_submodule`, `gitlore_memory_path` from `scripts/lib/util.sh`. New helpers live in a new `scripts/lib/index-sync.sh`.
+- **Portability:** scripts run on macOS (bash 3.2, BSD awk/sed, no GNU
+  `realpath`) and Linux. No bash associative arrays. No `sed` `\t` (BSD sed
+  emits literal `t`). No GNU-only `awk match(s,re,arr)`. Same-file identity via
+  the bash builtin `-ef` test, never `realpath`.
+- **YAML safety:** a frontmatter `description` value is emitted as a JSON-quoted
+  scalar via `jq -Rn --arg` (a JSON string is a valid YAML flow scalar), so
+  hooks containing `:`, `"`, backticks, `[[...]]`, or em-dashes never corrupt
+  the YAML.
+- **Never dirty the tracked tree from a hook:** the pre-image stash lives inside
+  the memory submodule's **gitdir**
+  (`git -C <mempath> rev-parse --git-path gitlore-index-preimage`), mirroring
+  `gitlore_commit_msg_file`, so it is untracked and cannot trip the FR11 commit
+  gate. In the gitlore layout the submodule gitdir is under the parent's
+  `.git/modules/<name>/`, so `--git-path` returns an **absolute** path whose
+  parent dir already exists — used verbatim, never prefixed with `<mempath>`,
+  never `mkdir`'d.
+- **Non-blocking, but never silent:** every hook script `exit 0` on every path
+  (success, no-op, nothing-to-do, *and genuine failure*) and must never
+  `exit 2`. But `exit 0` is **not** licence to swallow errors: a real failure
+  (stash `cp` fails; a frontmatter write fails) must surface to the user on
+  `systemMessage` (the D14 channel — `docs/design.md:581`, verified 2026-06-10:
+  the only reliably user-visible hook channel; stderr reaches the user only on
+  `exit 2` / `--verbose`). Exit 0 is *required* for visibility, not merely
+  tolerated: **stdout JSON is parsed only on exit 0**, so a non-zero exit
+  discards the `systemMessage` and makes the error less visible, not more.
+  Mirror `scripts/cc-hooks/worktree-drift.sh` (a PostToolUse hook already
+  emitting `systemMessage` via `jq -n --arg`). Note the asymmetry driving the
+  never-`exit 2` rule: at **PreToolUse** `exit 2` blocks the tool outright; at
+  **PostToolUse** nothing can block (the tool already ran — "PostToolUse hooks
+  can't undo actions"), so there the exit code buys nothing and only the channel
+  matters. `|| true` and bare `|| exit 0` on a fallible command are
+  **rejected**: errors must never pass silently.
+- **Scope = single tier (project `MEMORY.md`).** Only `<mempath>/MEMORY.md` is
+  handled. Tier carriers (`memory/<tier>/MEMORY.md`) and net-new-line seeding
+  are the structural-recompose slice (later), out of scope here.
+- **Tool scope:** matcher `Write|Edit` only. Edits made through other tools
+  simply don't sync (low-harm); noted, not handled.
+- Reuse existing lib helpers: `gitlore_has_submodule`, `gitlore_memory_path`
+  from `scripts/lib/util.sh`. New helpers live in a new
+  `scripts/lib/index-sync.sh`.
 
 ---
 
 ## File Structure
 
-- `scripts/lib/index-sync.sh` — **new.** Pure, sourceable helpers: parse index lines → `path<TAB>hook`, rewrite a file's frontmatter `description`, compute the stash path. No I/O side effects beyond the one explicit file write in the setter. Independently unit-testable.
-- `scripts/cc-hooks/index-sync-pre.sh` — **new.** PreToolUse entry: stash `MEMORY.md`.
-- `scripts/cc-hooks/index-sync-post.sh` — **new.** PostToolUse entry: diff + propagate.
-- `hooks/hooks.json` — **modify.** Add a `PreToolUse` array (matcher `Write|Edit`) and a third `PostToolUse` entry (matcher `Write|Edit`).
-- `tests/index_sync.bats` — **new.** Grows across tasks: lib units, pre, post, end-to-end.
+- `scripts/lib/index-sync.sh` — **new.** Pure, sourceable helpers: parse index
+  lines → `path<TAB>hook`, rewrite a file's frontmatter `description`, compute
+  the stash path. No I/O side effects beyond the one explicit file write in the
+  setter. Independently unit-testable.
+- `scripts/cc-hooks/index-sync-pre.sh` — **new.** PreToolUse entry: stash
+  `MEMORY.md`.
+- `scripts/cc-hooks/index-sync-post.sh` — **new.** PostToolUse entry: diff +
+  propagate.
+- `hooks/hooks.json` — **modify.** Add a `PreToolUse` array (matcher
+  `Write|Edit`) and a third `PostToolUse` entry (matcher `Write|Edit`).
+- `tests/index_sync.bats` — **new.** Grows across tasks: lib units, pre, post,
+  end-to-end.
 - `Makefile` — **modify.** Add `tests/index_sync.bats` to `test-unit`.
 
 ---
@@ -40,9 +100,14 @@
 
 **Interfaces:**
 - Produces:
-  - `gitlore_index_pairs <memory_md_path>` → stdout, one `path<TAB>hook` line per index bullet matching `- [title](path) — hook`. Lines without a `) — ` separator are skipped.
-  - `gitlore_set_frontmatter_description <file> <newdesc>` → rewrites the first `description:` line inside the file's leading frontmatter block (between the 1st and 2nd `---`) to `description: "<json-escaped newdesc>"`. In place.
-  - `gitlore_index_preimage_file <mempath>` → prints the abs/relative stash path inside the submodule gitdir.
+  - `gitlore_index_pairs <memory_md_path>` → stdout, one `path<TAB>hook` line
+    per index bullet matching `- [title](path) — hook`. Lines without a `) — `
+    separator are skipped.
+  - `gitlore_set_frontmatter_description <file> <newdesc>` → rewrites the first
+    `description:` line inside the file's leading frontmatter block (between the
+    1st and 2nd `---`) to `description: "<json-escaped newdesc>"`. In place.
+  - `gitlore_index_preimage_file <mempath>` → prints the abs/relative stash path
+    inside the submodule gitdir.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -170,7 +235,8 @@ gitlore_index_preimage_file() {
 
 - [ ] **Step 4: Add the test file to the Makefile**
 
-In `Makefile:11`, append ` tests/index_sync.bats` to the end of the `test-unit` bats line.
+In `Makefile:11`, append ` tests/index_sync.bats` to the end of the `test-unit`
+bats line.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
@@ -198,8 +264,11 @@ git commit -m "feat: index-sync lib helpers (parse pairs, set frontmatter descri
 - Modify/Test: `tests/index_sync.bats` (append)
 
 **Interfaces:**
-- Consumes: `gitlore_has_submodule`, `gitlore_memory_path` (util.sh); `gitlore_index_preimage_file` (index-sync.sh).
-- Produces: on a `Write|Edit` whose `file_path` **is** `<mempath>/MEMORY.md` (bash `-ef` identity), copies the current on-disk `MEMORY.md` to the stash path. No output. Exit 0 always.
+- Consumes: `gitlore_has_submodule`, `gitlore_memory_path` (util.sh);
+  `gitlore_index_preimage_file` (index-sync.sh).
+- Produces: on a `Write|Edit` whose `file_path` **is** `<mempath>/MEMORY.md`
+  (bash `-ef` identity), copies the current on-disk `MEMORY.md` to the stash
+  path. No output. Exit 0 always.
 
 - [ ] **Step 1: Write the failing tests** (append to `tests/index_sync.bats`)
 
@@ -232,7 +301,8 @@ pre_stdin() { printf '%s' "$1" | bash "$PRE"; }
 }
 ```
 
-(`--git-path` returns an absolute path under `.git/modules/gitlore-memory/`; the hook resolves it the same way, so producer and checker agree.)
+(`--git-path` returns an absolute path under `.git/modules/gitlore-memory/`; the
+hook resolves it the same way, so producer and checker agree.)
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -297,8 +367,12 @@ git commit -m "feat: PreToolUse hook stashes pre-edit MEMORY.md for index sync"
 - Modify/Test: `tests/index_sync.bats` (append)
 
 **Interfaces:**
-- Consumes: util.sh helpers; `gitlore_index_pairs`, `gitlore_set_frontmatter_description`, `gitlore_index_preimage_file`.
-- Produces: on a `Write|Edit` whose `file_path` is `<mempath>/MEMORY.md`, for each index path whose hook **differs from the stash**, rewrites `<mempath>/<path>`'s frontmatter `description` to the new hook. Consumes (removes) the stash. Unchanged lines are left untouched. Exit 0 always.
+- Consumes: util.sh helpers; `gitlore_index_pairs`,
+  `gitlore_set_frontmatter_description`, `gitlore_index_preimage_file`.
+- Produces: on a `Write|Edit` whose `file_path` is `<mempath>/MEMORY.md`, for
+  each index path whose hook **differs from the stash**, rewrites
+  `<mempath>/<path>`'s frontmatter `description` to the new hook. Consumes
+  (removes) the stash. Unchanged lines are left untouched. Exit 0 always.
 
 - [ ] **Step 1: Write the failing tests** (append)
 
@@ -430,7 +504,9 @@ git commit -m "feat: PostToolUse hook propagates changed index hooks to frontmat
 
 **Interfaces:**
 - Consumes: both hook scripts from Tasks 2–3.
-- Produces: CC fires `index-sync-pre.sh` on every `Write|Edit` (PreToolUse) and `index-sync-post.sh` on every `Write|Edit` (PostToolUse), alongside the existing Bash/worktree PostToolUse entries.
+- Produces: CC fires `index-sync-pre.sh` on every `Write|Edit` (PreToolUse) and
+  `index-sync-post.sh` on every `Write|Edit` (PostToolUse), alongside the
+  existing Bash/worktree PostToolUse entries.
 
 - [ ] **Step 1: Write the failing end-to-end test** (append)
 
@@ -461,8 +537,8 @@ git commit -m "feat: PostToolUse hook propagates changed index hooks to frontmat
 
 - [ ] **Step 2: Run to verify the hooks.json test fails**
 
-Run: `bats tests/index_sync.bats -f "e2e:"`
-Expected: the `hooks.json registers` test FAILS (matcher not present yet); the pre-then-post test PASSES already.
+Run: `bats tests/index_sync.bats -f "e2e:"` Expected: the `hooks.json registers`
+test FAILS (matcher not present yet); the pre-then-post test PASSES already.
 
 - [ ] **Step 3: Edit `hooks/hooks.json`**
 
@@ -525,8 +601,9 @@ Expected: PASS (all tests — 6 lib + 2 pre + 3 post + 2 e2e = 13).
 
 - [ ] **Step 5: Full suite + lint (no regressions)**
 
-Run: `make lint && make test-unit`
-Expected: exit 0. Confirm `plugin_distribution.bats` (matcher-scoped `select`) and `integration_happy_path.bats` still pass — the new entries are additive.
+Run: `make lint && make test-unit` Expected: exit 0. Confirm
+`plugin_distribution.bats` (matcher-scoped `select`) and
+`integration_happy_path.bats` still pass — the new entries are additive.
 
 - [ ] **Step 6: Commit**
 
@@ -539,7 +616,11 @@ git commit -m "feat: wire PreToolUse/PostToolUse Write|Edit index-sync hooks"
 
 ## Dogfood (after Task 4)
 
-The sync is now live in this repo. Before the reconcile slice, sanity-check by editing one real `memory/MEMORY.md` hook in a session and confirming the target file's frontmatter follows. This is the D17 sequence's step-1 exit criterion; the one-time **reconcile** (fixing pre-existing *stale-index* drift the one-way sync can't heal) is the next plan, dogfooded here first.
+The sync is now live in this repo. Before the reconcile slice, sanity-check by
+editing one real `memory/MEMORY.md` hook in a session and confirming the target
+file's frontmatter follows. This is the D17 sequence's step-1 exit criterion;
+the one-time **reconcile** (fixing pre-existing *stale-index* drift the one-way
+sync can't heal) is the next plan, dogfooded here first.
 
 ## D17 SPOT settled + reconcile spec (2026-07-16)
 
@@ -573,8 +654,8 @@ hook-authors-index-via-`additionalContext` reframe (a new line is not reliably
 end-appended).
 
 **Required correction to the live post-hook (`scripts/lib/index-sync.sh`).** The
-post loop already keys by destination, but its added-line branch OVERWRITES: when
-a destination is absent from the pre-image, `prehook` is empty, the
+post loop already keys by destination, but its added-line branch OVERWRITES:
+when a destination is absent from the pre-image, `prehook` is empty, the
 `[ "$hook" = "$prehook" ]` test is false, and it calls
 `gitlore_set_frontmatter_description` unconditionally — clobbering an authored
 description (reproduced twice live). Fix: split the branch — if the destination
@@ -584,22 +665,47 @@ skip. The CHANGED-hook path is unchanged. TDD: add a failing
 `post: an ADDED index line fills only an EMPTY description, never clobbers` test
 first. MUST land before reconcile runs the rule at scale.
 
-**Reconcile slice (its own plan, after the correction).** One-time, per-project +
-once-per-shared-tier, applies the settled rule as a sweep over the ~40 files whose
-index line and frontmatter already drifted. The one-way live sync only heals
-going forward; reconcile is the semantic catch-up. On a genuine divergence the
-tie-break is index-canonical; a missing description is filled from the hook.
-Dogfood on this repo first.
+**Reconcile slice (its own plan, after the correction).** One-time,
+per-project + once-per-shared-tier, applies the settled rule as a sweep over the
+~40 files whose index line and frontmatter already drifted. The one-way live
+sync only heals going forward; reconcile is the semantic catch-up. On a genuine
+divergence the tie-break is index-canonical; a missing description is filled
+from the hook. Dogfood on this repo first.
 
 ## Out of scope (later slices)
 
-- Tier carriers `memory/<tier>/MEMORY.md` and net-new-line frontmatter seeding → structural recompose slice.
-- The semantic **reconcile** sweep (`/gitlore:reconcile`) → its own plan; must run *after* this sync is deployed.
-- Edits via tools other than `Write|Edit` (e.g. MultiEdit) — currently unsynced, low-harm.
+- Tier carriers `memory/<tier>/MEMORY.md` and net-new-line frontmatter seeding →
+  structural recompose slice.
+- The semantic **reconcile** sweep (`/gitlore:reconcile`) → its own plan; must
+  run *after* this sync is deployed.
+- Edits via tools other than `Write|Edit` (e.g. MultiEdit) — currently unsynced,
+  low-harm.
 
 ## Self-Review
 
-- **Spec coverage:** one-way index→frontmatter (Tasks 1–4 ✓); pre-image diff scoping to changed lines only, protecting fresh frontmatter under stale index lines (Task 3 test #2 ✓); index-canonical / hook never writes index (no code path writes MEMORY.md ✓); YAML-safe frontmatter write (Task 1 test #5 ✓); global plugin-hook deployment (Task 4 ✓). Reconcile + tiers explicitly deferred ✓.
+- **Spec coverage:** one-way index→frontmatter (Tasks 1–4 ✓); pre-image diff
+  scoping to changed lines only, protecting fresh frontmatter under stale index
+  lines (Task 3 test #2 ✓); index-canonical / hook never writes index (no code
+  path writes MEMORY.md ✓); YAML-safe frontmatter write (Task 1 test #5 ✓);
+  global plugin-hook deployment (Task 4 ✓). Reconcile + tiers explicitly
+  deferred ✓.
 - **Placeholder scan:** none — every step carries real code/commands.
-- **Type consistency:** `gitlore_index_pairs`, `gitlore_set_frontmatter_description`, `gitlore_index_preimage_file` used with identical names/arity in Tasks 2–3 as defined in Task 1 ✓. Stash path is the helper's absolute output, used verbatim (no prefix, no fallback) in both pre and post ✓.
-- **Shell-gotchas audit:** absolute `--git-path` verified empirically (no dishonest `2>/dev/null` fallback); awk `"\t"` not `sed \t`; `-ef` not `realpath`; no bash-4 assoc arrays; `printf` for data; hooks never block **and never fail silently** — every fallible command (the stash `cp`; each `gitlore_set_frontmatter_description`) has its status checked explicitly and reports on `systemMessage` + `exit 0`, never `|| true` / bare `|| exit 0` (corrected 2026-07-15: the original `cp … || exit 0` was a dishonest error path, and an unguarded setter call let `set -e` abort the post-hook mid-loop — skipping both the stash `rm` and the final `exit 0`, reproduced via `chmod 555`); the stash `rm` is unconditional so a stale pre-image can never be diffed against a later index; `set -e` command-subs guarded by prior `gitlore_has_submodule`. `awk -v p="$path"` carries only slug paths (no backslashes); the fallible hook text goes through `jq --arg` + `ENVIRON`, never `-v`.
+- **Type consistency:** `gitlore_index_pairs`,
+  `gitlore_set_frontmatter_description`, `gitlore_index_preimage_file` used with
+  identical names/arity in Tasks 2–3 as defined in Task 1 ✓. Stash path is the
+  helper's absolute output, used verbatim (no prefix, no fallback) in both pre
+  and post ✓.
+- **Shell-gotchas audit:** absolute `--git-path` verified empirically (no
+  dishonest `2>/dev/null` fallback); awk `"\t"` not `sed \t`; `-ef` not
+  `realpath`; no bash-4 assoc arrays; `printf` for data; hooks never block
+  **and never fail silently** — every fallible command (the stash `cp`; each
+  `gitlore_set_frontmatter_description`) has its status checked explicitly and
+  reports on `systemMessage` + `exit 0`, never `|| true` / bare `|| exit 0`
+  (corrected 2026-07-15: the original `cp … || exit 0` was a dishonest error
+  path, and an unguarded setter call let `set -e` abort the post-hook mid-loop —
+  skipping both the stash `rm` and the final `exit 0`, reproduced via
+  `chmod 555`); the stash `rm` is unconditional so a stale pre-image can never
+  be diffed against a later index; `set -e` command-subs guarded by prior
+  `gitlore_has_submodule`. `awk -v p="$path"` carries only slug paths (no
+  backslashes); the fallible hook text goes through `jq --arg` + `ENVIRON`,
+  never `-v`.

@@ -1,26 +1,39 @@
 # gitlore Plan 01 — Local Memory Pipeline
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A user can install gitlore in a parent repo and get a working local memory submodule with agent-driven commits. No remote, no resolve, no Claude-Code-initiated worktrees yet.
+**Goal:** A user can install gitlore in a parent repo and get a working local
+memory submodule with agent-driven commits. No remote, no resolve, no
+Claude-Code-initiated worktrees yet.
 
-**Architecture:** A Claude Code plugin (manifest + commands + hooks + shell library). Detection and branching logic lives in `bash` scripts. The plugin scaffolds a git submodule named `gitlore-memory`, wires git hooks (pre-commit/pre-push) into the parent repo via the user's hook manager, and uses Claude Code hooks (`SessionStart`, `PostToolUse`) to keep state coherent.
+**Architecture:** A Claude Code plugin (manifest + commands + hooks + shell
+library). Detection and branching logic lives in `bash` scripts. The plugin
+scaffolds a git submodule named `gitlore-memory`, wires git hooks
+(pre-commit/pre-push) into the parent repo via the user's hook manager, and uses
+Claude Code hooks (`SessionStart`, `PostToolUse`) to keep state coherent.
 
 **Tech stack:**
 - `bash` (target 3.2+ for macOS compat; no GNU-isms unless gated)
 - `bats-core` for shell tests
 - `jq` for JSON manipulation (settings files, hook stdin)
-- `yq` for YAML edits (lefthook, overcommit config) — opportunistic, with sed fallback
+- `yq` for YAML edits (lefthook, overcommit config) — opportunistic, with sed
+  fallback
 - POSIX `git` only
 
 **Scope of this plan:**
 - Plugin scaffolding (`plugin.json`, dir layout, settings glue).
 - Shared shell utilities for path/branch/state discovery.
-- Hook manager detection + wiring for lefthook / husky / overcommit / direct / manual.
+- Hook manager detection + wiring for lefthook / husky / overcommit / direct /
+  manual.
 - `.git/gitlore-pre-*` wrappers.
-- `SessionStart` hook (guards, settings, hooksDir, wrappers, branch model, ff merge, sentinel replay).
+- `SessionStart` hook (guards, settings, hooksDir, wrappers, branch model, ff
+  merge, sentinel replay).
 - `PostToolUse` hook (commit-message preparation trigger).
-- `pre-commit` git hook (commit memory using approved msg file, ff push to `live`, fail-loud on divergence).
+- `pre-commit` git hook (commit memory using approved msg file, ff push to
+  `live`, fail-loud on divergence).
 - `/gitlore:install` skill — local-only flow (no remote).
 - bats integration tests covering install + happy-path commit.
 
@@ -30,7 +43,9 @@
 - `WorktreeCreate` / `WorktreeRemove` hooks → Plan 04.
 - Clone-from-remote smoke test, polish, expanded docs → Plan 05.
 
-**Reference:** `docs/design.md` is the authoritative spec. Where this plan and the design disagree, the design wins; flag the divergence in a PR comment before deviating.
+**Reference:** `docs/design.md` is the authoritative spec. Where this plan and
+the design disagree, the design wins; flag the divergence in a PR comment before
+deviating.
 
 ---
 
@@ -71,20 +86,28 @@ docs/plugin-readme.md                       # user-facing readme (concise)
 .editorconfig
 ```
 
-Files not yet created appear as "Create:" in the task entries below; modifications appear as "Modify:".
+Files not yet created appear as "Create:" in the task entries below;
+modifications appear as "Modify:".
 
 ---
 
 ## Conventions for every task
 
 - Tests live under `tests/`, run via `bats tests/<file>.bats`.
-- All bats files source `tests/helpers/setup.bash`, which sources every `scripts/lib/*.sh`.
+- All bats files source `tests/helpers/setup.bash`, which sources every
+  `scripts/lib/*.sh`.
 - Shell scripts begin with `#!/usr/bin/env bash` and `set -euo pipefail`.
-- Library functions are namespaced `gitlore_<verb>_<noun>` (e.g. `gitlore_memory_path`).
-- Library functions print results to stdout, errors to stderr, return non-zero on failure.
-- Hook scripts exit with `0` (silent no-op), `1` (loud failure with actionable message), never higher.
-- All wiring carries a `# gitlore: managed` marker (or YAML key equivalent) for idempotency.
-- Commit prefix per project convention: gitmoji (`✨ feat:`, `🐛 fix:`, `🚧 wip:`, `🧪 test:`, `📝 docs:`, `🔧 chore:`, `♻️ refactor:`). Recent commits in this repo use the bare emoji form (`🔧 …`), keep that style.
+- Library functions are namespaced `gitlore_<verb>_<noun>` (e.g.
+  `gitlore_memory_path`).
+- Library functions print results to stdout, errors to stderr, return non-zero
+  on failure.
+- Hook scripts exit with `0` (silent no-op), `1` (loud failure with actionable
+  message), never higher.
+- All wiring carries a `# gitlore: managed` marker (or YAML key equivalent) for
+  idempotency.
+- Commit prefix per project convention: gitmoji (`✨ feat:`, `🐛 fix:`,
+  `🚧 wip:`, `🧪 test:`, `📝 docs:`, `🔧 chore:`, `♻️ refactor:`). Recent
+  commits in this repo use the bare emoji form (`🔧 …`), keep that style.
 
 ---
 
@@ -93,7 +116,8 @@ Files not yet created appear as "Create:" in the task entries below; modificatio
 **Files:**
 - Create: `plugin.json`
 - Create: `hooks.json`
-- Create: `commands/gitlore/install.md` (stub placeholder; full content in Task 13)
+- Create: `commands/gitlore/install.md` (stub placeholder; full content in Task
+  13)
 - Create: `skills/install/SKILL.md` (stub)
 - Create: `.editorconfig`
 - Create: `docs/plugin-readme.md` (one-paragraph stub; expanded in Plan 05)
@@ -112,7 +136,10 @@ Files not yet created appear as "Create:" in the task entries below; modificatio
 }
 ```
 
-> Verify field names against current Claude Code plugin manifest schema before merging. If `commands`/`skills`/`hooks` arrays are auto-discovered from directories in the installed CC version, drop the explicit lists. The `plugin-dev:plugin-structure` skill is the authoritative reference.
+> Verify field names against current Claude Code plugin manifest schema before
+> merging. If `commands`/`skills`/`hooks` arrays are auto-discovered from
+> directories in the installed CC version, drop the explicit lists. The
+> `plugin-dev:plugin-structure` skill is the authoritative reference.
 
 - [x] **Step 2: Author `hooks.json`.**
 
@@ -144,7 +171,8 @@ Files not yet created appear as "Create:" in the task entries below; modificatio
 }
 ```
 
-> Verify against `plugin-dev:hook-development` for current field names. Adjust if CC uses a different matcher shape.
+> Verify against `plugin-dev:hook-development` for current field names. Adjust
+> if CC uses a different matcher shape.
 
 - [x] **Step 3: Stub the install command/skill files.**
 
@@ -199,10 +227,12 @@ See `docs/design.md` for the full design. User-facing docs land in Plan 05.
 
 - [x] **Step 6: Verify the plugin loads.**
 
-Run: `ls plugin.json hooks.json commands/gitlore/install.md skills/install/SKILL.md`
+Run:
+`ls plugin.json hooks.json commands/gitlore/install.md skills/install/SKILL.md`
 Expected: all four paths print.
 
-Optional: `cd /tmp && claude --plugin /Users/david/code/gitlore --help` — if your CC build supports `--plugin`, expect no parse error. Skip if not.
+Optional: `cd /tmp && claude --plugin /Users/david/code/gitlore --help` — if
+your CC build supports `--plugin`, expect no parse error. Skip if not.
 
 - [x] **Step 7: Commit.**
 
@@ -219,7 +249,8 @@ git commit -m "✨ scaffold gitlore plugin manifest and directory layout"
 - Create: `tests/helpers/setup.bash`
 - Create: `tests/helpers/fixtures.bash`
 - Create: `tests/smoke.bats`
-- Modify: top-level dev docs to mention `bats tests/` (in `docs/plugin-readme.md`).
+- Modify: top-level dev docs to mention `bats tests/` (in
+  `docs/plugin-readme.md`).
 
 - [x] **Step 1: Install bats locally if not present.**
 
@@ -472,7 +503,9 @@ gitlore_commit_msg_freshness() {
 }
 ```
 
-> `stat`/`find` flags differ between BSD and GNU. The above tries BSD form first, GNU second. If macOS `find` lacks `-printf`, swap to a portable loop. Add a follow-up sub-task if portability fails on CI.
+> `stat`/`find` flags differ between BSD and GNU. The above tries BSD form
+> first, GNU second. If macOS `find` lacks `-printf`, swap to a portable loop.
+> Add a follow-up sub-task if portability fails on CI.
 
 - [x] **Step 4: Run tests to verify they pass.**
 
@@ -492,7 +525,8 @@ git commit -m "✨ feat: shared shell utilities for memory path/state discovery"
 
 **Files:**
 - Create: `scripts/lib/log.sh`
-- Modify: `tests/helpers/setup.bash` — picks up the new lib automatically (already globs `scripts/lib/*.sh`).
+- Modify: `tests/helpers/setup.bash` — picks up the new lib automatically
+  (already globs `scripts/lib/*.sh`).
 - Create: `tests/lib_log.bats`
 
 - [x] **Step 1: Write failing tests.**
@@ -685,9 +719,12 @@ git commit -m "✨ feat: hook manager detection script"
 - Create: `scripts/hook-manager/wire-lefthook.sh`
 - Create: `tests/hook_manager_wire.bats` (extended in later wiring tasks)
 
-Idempotency strategy: each wiring adds a `# gitlore: managed` marker comment. Re-runs detect the marker and no-op.
+Idempotency strategy: each wiring adds a `# gitlore: managed` marker comment.
+Re-runs detect the marker and no-op.
 
-The lefthook wiring appends entries under `pre-commit` and `pre-push` referencing the wrappers at `.git/gitlore-pre-commit` / `.git/gitlore-pre-push`. Use `yq` if available, otherwise a guarded append-block keyed by the marker.
+The lefthook wiring appends entries under `pre-commit` and `pre-push`
+referencing the wrappers at `.git/gitlore-pre-commit` / `.git/gitlore-pre-push`.
+Use `yq` if available, otherwise a guarded append-block keyed by the marker.
 
 - [x] **Step 1: Write failing tests.**
 
@@ -770,7 +807,10 @@ mkdir -p .claude
 printf 'lefthook install\n' > .claude/gitlore-hook-setup
 ```
 
-> The naive append-block above merges by relying on lefthook's tolerance for multiple top-level `pre-commit:` keys. **Verify** with the lefthook docs / a sample run. If lefthook errors on duplicate top-level keys, switch to a `yq`-based merge:
+> The naive append-block above merges by relying on lefthook's tolerance for
+> multiple top-level `pre-commit:` keys. **Verify** with the lefthook docs / a
+> sample run. If lefthook errors on duplicate top-level keys, switch to a
+> `yq`-based merge:
 >
 > ```bash
 > yq -i '.pre-commit.commands.gitlore.run = ".git/gitlore-pre-commit"' "$CONFIG"
@@ -980,7 +1020,8 @@ mkdir -p .claude
 printf 'overcommit --install\n' > .claude/gitlore-hook-setup
 ```
 
-> Same warning as lefthook: verify overcommit accepts duplicate top-level keys. If not, switch to `yq` or a Ruby helper.
+> Same warning as lefthook: verify overcommit accepts duplicate top-level keys.
+> If not, switch to `yq` or a Ruby helper.
 
 - [x] **Step 4: Implement wire-direct.**
 
@@ -1057,7 +1098,9 @@ git commit -m "✨ feat: overcommit, direct, and manual hook wiring"
 - Create: `scripts/emit-wrappers.sh`
 - Create: `tests/emit_wrappers.bats`
 
-The wrappers are flat files written to `.git/`. Each delegates to `$(git config gitlore.hooksDir)/<hook>`. If `gitlore.hooksDir` is unset, exit 0 with a stderr hint.
+The wrappers are flat files written to `.git/`. Each delegates to
+`$(git config gitlore.hooksDir)/<hook>`. If `gitlore.hooksDir` is unset, exit 0
+with a stderr hint.
 
 - [x] **Step 1: Write failing tests.**
 
@@ -1160,10 +1203,13 @@ git commit -m "✨ feat: emit .git/gitlore-pre-* wrappers"
 - Create: `scripts/cc-hooks/session-start.sh`
 - Create: `tests/cc_hook_session_start.bats`
 
-CC SessionStart hook receives JSON on stdin (per CC hook docs). For Plan 01 we only need to know it ran in the parent repo's root — we'll `cd "$CLAUDE_PROJECT_DIR"` if exported, else use cwd.
+CC SessionStart hook receives JSON on stdin (per CC hook docs). For Plan 01 we
+only need to know it ran in the parent repo's root — we'll
+`cd "$CLAUDE_PROJECT_DIR"` if exported, else use cwd.
 
 Guards (in order):
-1. If `.claude/settings.json` does not exist or `gitlore.enabled` is not `true` → exit 0.
+1. If `.claude/settings.json` does not exist or `gitlore.enabled` is not `true`
+   → exit 0.
 2. If `.gitmodules` has no `gitlore-memory` entry → exit 0.
 
 Effects when both guards pass:
@@ -1171,7 +1217,9 @@ Effects when both guards pass:
 - `git config gitlore.hooksDir "$CLAUDE_PLUGIN_ROOT/scripts/git-hooks"`.
 - Run `scripts/emit-wrappers.sh`.
 
-> Branch model side effects (submodule init, ff merge, reserved-name check) come in Task 11. Sentinel replay comes in Task 12. Splitting keeps each task within the 2–5 min/step rule.
+> Branch model side effects (submodule init, ff merge, reserved-name check) come
+> in Task 11. Sentinel replay comes in Task 12. Splitting keeps each task within
+> the 2–5 min/step rule.
 
 - [x] **Step 1: Write failing tests.**
 
@@ -1256,7 +1304,8 @@ git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 ```
 
-Also drop a placeholder so `scripts/git-hooks/pre-commit` exists (real impl arrives in Task 17). For now create an empty executable stub:
+Also drop a placeholder so `scripts/git-hooks/pre-commit` exists (real impl
+arrives in Task 17). For now create an empty executable stub:
 
 ```bash
 mkdir -p scripts/git-hooks
@@ -1292,12 +1341,16 @@ Behavior to add:
 - If memory submodule not initialized → `git submodule update --init`.
 - Determine target branch:
   - Parent branch is `live` → **reject**, exit 1 with branched message.
-  - Parent on `DETACHED` → memory must also be on `DETACHED` (mirroring `live` tip).
+  - Parent on `DETACHED` → memory must also be on `DETACHED` (mirroring `live`
+    tip).
   - Otherwise → use parent branch name.
 - If target branch doesn't exist on the memory side → create from `live`.
 - Switch memory worktree to target branch.
-- If memory worktree is clean → `git merge --ff-only live`. If ff fails → exit 1 with branched message pointing at `/gitlore:resolve` (placeholder for Plan 03).
-- If memory worktree is dirty → emit `systemWarning` (just stderr in Plan 01), skip ff.
+- If memory worktree is clean → `git merge --ff-only live`. If ff fails → exit 1
+  with branched message pointing at `/gitlore:resolve` (placeholder for Plan
+  03).
+- If memory worktree is dirty → emit `systemWarning` (just stderr in Plan 01),
+  skip ff.
 
 - [x] **Step 1: Append failing tests.**
 
@@ -1431,7 +1484,8 @@ Behavior: after wrappers are emitted, read `.claude/gitlore-hook-setup`:
 - Empty/missing → warn (one-time) and continue.
 - `direct` → run `scripts/hook-manager/wire-direct.sh`.
 - `manual` → emit `systemWarning` reminding the user to wire manually.
-- Anything else → execute as a shell command in repo root (e.g. `lefthook install`).
+- Anything else → execute as a shell command in repo root (e.g.
+  `lefthook install`).
 
 - [x] **Step 1: Append failing tests.**
 
@@ -1514,24 +1568,33 @@ git commit -m "✨ feat: SessionStart replays hook-setup sentinel"
 - Create: `scripts/install/write-settings.sh`
 - Create: `tests/install_run.bats`
 
-Scope for Plan 01: **local-only install.** No remote creation, no D8 confirmation, no install-time disclosure. Those land in Plan 02.
+Scope for Plan 01: **local-only install.** No remote creation, no D8
+confirmation, no install-time disclosure. Those land in Plan 02.
 
 Install flow (local-only):
 1. Verify in a parent git repo.
-2. Prompt (via the command's frontmatter / agent) for memory path (default `memory`) and `precommitCommand`.
+2. Prompt (via the command's frontmatter / agent) for memory path (default
+   `memory`) and `precommitCommand`.
 3. If memory path exists with content, refuse.
 4. Run `init-submodule.sh "$path" "$precommit_cmd"`:
-   - `git submodule add ./<local-bare-or-empty>.git <path>` (no remote yet — register submodule with a local placeholder URL that can be re-pointed in Plan 02).
-   - Seed: copy auto-memory from `~/.claude/projects/<hash>/memory` if present, else write `MEMORY.md` scaffold.
+   - `git submodule add ./<local-bare-or-empty>.git <path>` (no remote yet —
+     register submodule with a local placeholder URL that can be re-pointed in
+     Plan 02).
+   - Seed: copy auto-memory from `~/.claude/projects/<hash>/memory` if present,
+     else write `MEMORY.md` scaffold.
    - `git -C <path> add -A && git -C <path> commit -m "Initial memory"`.
-   - Create `live` at HEAD; create worktree branch (from parent branch name or detached HEAD).
+   - Create `live` at HEAD; create worktree branch (from parent branch name or
+     detached HEAD).
 5. Run `write-settings.sh`:
-   - `.claude/settings.json` ← `gitlore.enabled: true` and `gitlore.precommitCommand: <cmd>`.
+   - `.claude/settings.json` ← `gitlore.enabled: true` and
+     `gitlore.precommitCommand: <cmd>`.
    - `.claude/settings.local.json` ← `autoMemoryDirectory: <abs>`.
    - `git config gitlore.hooksDir "$CLAUDE_PLUGIN_ROOT/scripts/git-hooks"`.
 6. Run `scripts/emit-wrappers.sh`.
 7. Run `scripts/hook-manager/detect.sh` and dispatch to the matching wiring.
-8. Leave staged tracked changes (`.gitmodules`, the memory submodule pointer, `.claude/settings.json`, `.claude/gitlore-hook-setup`) for the user to commit.
+8. Leave staged tracked changes (`.gitmodules`, the memory submodule pointer,
+   `.claude/settings.json`, `.claude/gitlore-hook-setup`) for the user to
+   commit.
 
 Idempotency:
 - Existing submodule registered → skip submodule add; verify branches.
@@ -1542,7 +1605,7 @@ Idempotency:
 
 `commands/gitlore/install.md`:
 
-```markdown
+````markdown
 ---
 description: Install gitlore in this repository
 argument-hint: "[memory-path] [precommit-command]"
@@ -1577,7 +1640,7 @@ You are installing gitlore in the user's current repository.
    - and that they should commit the staged changes (`.gitmodules`, memory pointer, `.claude/settings.json`, `.claude/gitlore-hook-setup`) when they're ready.
 
 Note: this is the local-only flow. Remote setup is a separate command (added in a later plan).
-```
+````
 
 - [x] **Step 2: Write the skill file.**
 
@@ -1702,7 +1765,11 @@ echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, 
 
 - [x] **Step 6: Implement `scripts/install/init-submodule.sh`.**
 
-Strategy: avoid `git submodule add` (which requires a cloneable URL with a HEAD). Instead, init a plain repo at `<mempath>`, seed and commit, then use `git submodule absorbgitdirs` to relocate its `.git/` into the parent's `.git/modules/gitlore-memory`. Write `.gitmodules` by hand with a placeholder URL; Plan 02 rewrites it to point at a real remote.
+Strategy: avoid `git submodule add` (which requires a cloneable URL with a
+HEAD). Instead, init a plain repo at `<mempath>`, seed and commit, then use
+`git submodule absorbgitdirs` to relocate its `.git/` into the parent's
+`.git/modules/gitlore-memory`. Write `.gitmodules` by hand with a placeholder
+URL; Plan 02 rewrites it to point at a real remote.
 
 ```bash
 #!/usr/bin/env bash
@@ -1787,8 +1854,13 @@ fi
 > Notes:
 >
 > - `git submodule absorbgitdirs` requires Git ≥ 2.13. Document in the readme.
-> - The placeholder URL means `git submodule update --init` will fail in a fresh clone until Plan 02 wires a real URL. That's expected; clone scenarios are exercised in Plan 05.
-> - The auto-memory hash derivation here is a placeholder — Claude Code uses a specific hashing scheme for its project memory paths. Verify before relying on auto-migration. If wrong, the install still works; it just skips migration and writes the scaffold instead.
+> - The placeholder URL means `git submodule update --init` will fail in a fresh
+>   clone until Plan 02 wires a real URL. That's expected; clone scenarios are
+>   exercised in Plan 05.
+> - The auto-memory hash derivation here is a placeholder — Claude Code uses a
+>   specific hashing scheme for its project memory paths. Verify before relying
+>   on auto-migration. If wrong, the install still works; it just skips
+>   migration and writes the scaffold instead.
 
 - [x] **Step 7: Implement `scripts/install/write-settings.sh`.**
 
@@ -1855,7 +1927,10 @@ git commit -m "✨ feat: /gitlore:install local-only orchestration"
 - Create: `scripts/cc-hooks/post-tool-use.sh`
 - Create: `tests/cc_hook_post_tool_use.bats`
 
-Input: CC PostToolUse hooks receive JSON on stdin including `tool_name`, `tool_input.command`, `tool_response.exit_code`. We only act on `Bash` tools (already matcher-gated in `hooks.json`) and a command prefix match against `gitlore.precommitCommand`.
+Input: CC PostToolUse hooks receive JSON on stdin including `tool_name`,
+`tool_input.command`, `tool_response.exit_code`. We only act on `Bash` tools
+(already matcher-gated in `hooks.json`) and a command prefix match against
+`gitlore.precommitCommand`.
 
 Trigger conditions (ALL):
 1. `tool_response.exit_code == 0`.
@@ -1864,7 +1939,8 @@ Trigger conditions (ALL):
 4. Memory submodule worktree is dirty.
 5. Commit message file is absent or stale.
 
-Output: emit `additionalContext` JSON instructing Claude to summarize, confirm with the user, then write the commit message file.
+Output: emit `additionalContext` JSON instructing Claude to summarize, confirm
+with the user, then write the commit message file.
 
 - [x] **Step 1: Write failing tests.**
 
@@ -1996,9 +2072,13 @@ Logic (matches design §pre-commit):
 1. Fail-silent no-op if `gitlore-memory` not registered → `exit 0`.
 2. Resolve `mempath`, target branch (from memory HEAD).
 3. If memory clean **and** memory HEAD == `live` → `exit 0`.
-4. If memory dirty **and** commit-msg absent or stale → `exit 1` with branched message (Claude-targeted vs user-targeted).
-5. If memory dirty **and** commit-msg fresh → commit using `-F`, delete msg file.
-6. If branch ahead of `live` → `git push . <branch>:live` (ff). On failure → `exit 1` with branched message pointing at `/gitlore:resolve` (placeholder for Plan 03).
+4. If memory dirty **and** commit-msg absent or stale → `exit 1` with branched
+   message (Claude-targeted vs user-targeted).
+5. If memory dirty **and** commit-msg fresh → commit using `-F`, delete msg
+   file.
+6. If branch ahead of `live` → `git push . <branch>:live` (ff). On failure →
+   `exit 1` with branched message pointing at `/gitlore:resolve` (placeholder
+   for Plan 03).
 
 - [x] **Step 1: Write failing tests.**
 
@@ -2147,7 +2227,8 @@ git commit -m "✨ feat: pre-commit hook commits memory and ff-pushes to live"
 **Files:**
 - Create: `tests/integration_happy_path.bats`
 
-Sim­ulates the full local happy path end-to-end. Doesn't invoke real Claude — it manually performs the steps Claude would, exercising the scripts in sequence.
+Sim­ulates the full local happy path end-to-end. Doesn't invoke real Claude — it
+manually performs the steps Claude would, exercising the scripts in sequence.
 
 - [x] **Step 1: Write the integration test.**
 
@@ -2276,21 +2357,46 @@ git commit -m "📝 docs: expand readme and add Makefile"
 ## Done criteria for Plan 01
 
 - [x] All bats tests pass: `make test`.
-- [x] In a scratch repo: `/gitlore:install` succeeds, scaffolds `memory/`, writes `.claude/settings.json` + `.claude/gitlore-hook-setup`, wires the user's hook manager, and creates `live` + parent-branch-name branch inside the memory submodule.
-- [x] After `git commit` in the parent repo with dirty memory and a fresh commit-msg file, memory advances and `live` fast-forwards to the new commit.
-- [x] After `git commit` with dirty memory but no fresh msg file, the pre-commit hook fails loudly with the Claude-targeted message (when `$CLAUDECODE` set) or the user-targeted message (when unset).
-- [x] Restarting Claude Code in the same repo re-emits wrappers, re-applies sentinel wiring, and the system continues to work.
-- [x] In a repo without a `gitlore-memory` submodule, all hooks no-op silently (FR 12: coexistence).
+- [x] In a scratch repo: `/gitlore:install` succeeds, scaffolds `memory/`,
+      writes `.claude/settings.json` + `.claude/gitlore-hook-setup`, wires the
+      user's hook manager, and creates `live` + parent-branch-name branch inside
+      the memory submodule.
+- [x] After `git commit` in the parent repo with dirty memory and a fresh
+      commit-msg file, memory advances and `live` fast-forwards to the new
+      commit.
+- [x] After `git commit` with dirty memory but no fresh msg file, the pre-commit
+      hook fails loudly with the Claude-targeted message (when `$CLAUDECODE`
+      set) or the user-targeted message (when unset).
+- [x] Restarting Claude Code in the same repo re-emits wrappers, re-applies
+      sentinel wiring, and the system continues to work.
+- [x] In a repo without a `gitlore-memory` submodule, all hooks no-op silently
+      (FR 12: coexistence).
 
 ---
 
 ## Known caveats and verifications deferred to execution
 
-These are spots where the design or external tools may force changes during implementation; flag them in PRs rather than guessing:
+These are spots where the design or external tools may force changes during
+implementation; flag them in PRs rather than guessing:
 
-1. **CC plugin manifest schema.** `plugin.json` field names and the `hooks.json` shape must match the current CC version. Verify with `plugin-dev:plugin-structure` and `plugin-dev:hook-development` skills at execution time.
-2. **CC hook input JSON shape** for `SessionStart` and `PostToolUse`. The tests above mock minimal payloads; verify the keys the scripts read against current CC documentation.
-3. **`stat`/`find` portability** in `gitlore_commit_msg_freshness`. The current implementation tries BSD first, GNU second; if tests fail on either OS, normalize via a small `gitlore_mtime` helper.
-4. **Lefthook / Overcommit duplicate top-level keys.** The naive append wiring may break on a strict YAML parser. Switch to `yq` if so (already noted in Tasks 6 and 8).
-5. **Auto-memory path hash** used by `init-submodule.sh` to migrate existing `~/.claude/projects/<hash>/memory/` content. The placeholder uses `shasum` of the repo abs path; the real CC scheme may differ. If wrong, install simply skips migration — non-fatal.
-6. **`gitlore.hooksDir` resolution** in `pre-commit` when CC is not running. The hook reads `git config gitlore.hooksDir`; if unset the wrapper short-circuits before this script runs. Confirm by manually unsetting the config in a scratch repo.
+1. **CC plugin manifest schema.** `plugin.json` field names and the `hooks.json`
+   shape must match the current CC version. Verify with
+   `plugin-dev:plugin-structure` and `plugin-dev:hook-development` skills at
+   execution time.
+2. **CC hook input JSON shape** for `SessionStart` and `PostToolUse`. The tests
+   above mock minimal payloads; verify the keys the scripts read against current
+   CC documentation.
+3. **`stat`/`find` portability** in `gitlore_commit_msg_freshness`. The current
+   implementation tries BSD first, GNU second; if tests fail on either OS,
+   normalize via a small `gitlore_mtime` helper.
+4. **Lefthook / Overcommit duplicate top-level keys.** The naive append wiring
+   may break on a strict YAML parser. Switch to `yq` if so (already noted in
+   Tasks 6 and 8).
+5. **Auto-memory path hash** used by `init-submodule.sh` to migrate existing
+   `~/.claude/projects/<hash>/memory/` content. The placeholder uses `shasum` of
+   the repo abs path; the real CC scheme may differ. If wrong, install simply
+   skips migration — non-fatal.
+6. **`gitlore.hooksDir` resolution** in `pre-commit` when CC is not running. The
+   hook reads `git config gitlore.hooksDir`; if unset the wrapper short-circuits
+   before this script runs. Confirm by manually unsetting the config in a
+   scratch repo.

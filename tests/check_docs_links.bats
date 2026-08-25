@@ -108,6 +108,19 @@ plant_ref() {
   [ "$status" -eq 0 ]
 }
 
+@test "unstubbed decision: a wrapped summary bullet still concludes what its continuation lines name" {
+  # `format-docs` hard-wraps a cluster summary, so a sub-decision's `**D10**`
+  # can sit on an indented continuation line rather than the `- ` line itself.
+  plant_ref "tiered-memory.md" '# Tiered memory — decisions D9, D10' '' \
+    '- Composition — **D9** tiered memory, argued at length here ·' \
+    '  **D10** the tier manifest' '' \
+    '**D9 — Tiered memory**' '' 'The argument.' '' \
+    '**D10 — The tier manifest**' '' 'The argument.'
+  plant_hub 'See [tiers](references/tiered-memory.md).' '' '- **D9** — tiered memory'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+}
+
 @test "unstubbed decision: a summary in some other node does not conclude it" {
   plant_ref "tiered-memory.md" '# Tiered memory — decisions D9, D10' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \

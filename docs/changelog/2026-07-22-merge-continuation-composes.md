@@ -1,3 +1,23 @@
 # 2026-07-22 — The merge continuation composes, closing the last uncomposed write path
 
-Composition had two triggers — `SessionStart` and `PostToolBatch` on an index write — and a landed merge is neither: `/gitlore:resolve` synthesizes an index outside any tool edit, so a merged store stayed uncomposed until the next index edit or session happened to fire one. `continue-after-merge` now composes *before* it commits, so the composed bytes are in the merge commit rather than in a later, unrelated one, and it runs the dangling report on the same pass — the third trigger gets the same pair as the other two. Three shapes settled it. The pass is anchored at the memory **root**, kept apart from the `store` the state file names, because composition spans the whole tree while the merge sits in exactly one store; `load_continuation_state` now yields both. It can therefore write a store *other* than the one being committed (the root index when a tier merged, a carrier when memory did) — those writes stay dirty and ride the next FR11 commit, the same float the `SessionStart` recompose already produces. And a **refusal never blocks the merge**: compose is fail-safe, writes nothing, and by this point the merge is synthesized and approved — stranding it half-landed over a duplicate pointer line the agent fixes in one edit is the worse outcome, so it commits uncomposed and says so on stderr. Staging is `git add -A` in the merge store, the same call the merger sub-agent already makes, which is how anything composition wrote joins that commit. 4 cases in `tests/resolve_compose.bats`, each verified red against the un-composed continuation first.
+Composition had two triggers — `SessionStart` and `PostToolBatch` on an index
+write — and a landed merge is neither: `/gitlore:resolve` synthesizes an index
+outside any tool edit, so a merged store stayed uncomposed until the next index
+edit or session happened to fire one. `continue-after-merge` now composes
+*before* it commits, so the composed bytes are in the merge commit rather than
+in a later, unrelated one, and it runs the dangling report on the same pass —
+the third trigger gets the same pair as the other two. Three shapes settled it.
+The pass is anchored at the memory **root**, kept apart from the `store` the
+state file names, because composition spans the whole tree while the merge sits
+in exactly one store; `load_continuation_state` now yields both. It can
+therefore write a store *other* than the one being committed (the root index
+when a tier merged, a carrier when memory did) — those writes stay dirty and
+ride the next FR11 commit, the same float the `SessionStart` recompose already
+produces. And a **refusal never blocks the merge**: compose is fail-safe, writes
+nothing, and by this point the merge is synthesized and approved — stranding it
+half-landed over a duplicate pointer line the agent fixes in one edit is the
+worse outcome, so it commits uncomposed and says so on stderr. Staging is
+`git add -A` in the merge store, the same call the merger sub-agent already
+makes, which is how anything composition wrote joins that commit. 4 cases in
+`tests/resolve_compose.bats`, each verified red against the un-composed
+continuation first.
