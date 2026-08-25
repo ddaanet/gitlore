@@ -3,12 +3,43 @@
 The divergence path end to end: the two skills that walk it, then why it has
 that shape — what `live` is, which side of a merge is authoritative, how work
 splits between the scripts and the agent, and the sub-agent dispatch the
-directive has to authorize for itself. The conclusions stay in `design.md`; this
+directive has to authorize for itself. The conclusions open the node below; this
 file is what you need while running or changing a merge.
+
+- Trunk and direction — **D1** `live` is the memory trunk, independent of the
+  parent's default branch · **D2** superseded by D41's detached model, kept for
+  the record · **D41** detached at `live`: one branch model per store, one
+  commit path · **D6** merge direction: the more-authoritative side is the first
+  parent
+- Doing the merge — **D3** ordinary checkout during resolve, not git plumbing ·
+  **D7** scripts decide, the agent handles language · **D9** a sub-agent
+  synthesizes the merge (requires the experimental flag) · **D13** a
+  lock-contention retry wrapper guards mutating memory git calls · **D24** a
+  directive that names a sub-agent carries its own authorization
 
 ---
 
 ## Mechanism
+
+### What each phase does with `live`
+
+- **Session start.** SessionStart detaches in place, then fast-forwards HEAD
+  onto `live` when the store is clean. Uncommitted changes skip the fast-forward
+  with a user-visible notice — memory is never moved out from under pending
+  work. A store that arrives on a named branch (an install predating this model)
+  is migrated by the same in-place detach.
+- **After commit.** The commit path advances `live` immediately
+  (`push . HEAD:live`, fast-forward only), so `live` holds every commit the
+  moment it exists and memory is repo-global rather than branch-scoped.
+  Divergence blocks and routes to `/gitlore:resolve`.
+- **Two divergence gates, one shape.** A store's pending HEAD against its own
+  local `live` (`pre-commit`), and its local `live` against its own
+  `origin/live` (`pre-push`). Both reduce to "my pending commit vs the
+  authoritative side", which is why one merge machinery serves memory and tiers
+  alike (D6, D41).
+- **Parent branch switches, rebases and force-pushes are independent of
+  memory.** Memory history is its own concern; nothing in the parent's ref
+  layout is mirrored.
 
 ### The `resolve` skill
 
@@ -243,3 +274,27 @@ and every resolution re-detaches at the new `live`.
 The model is the reason D1, D2, D3 and D6 read as they do, and the reason the
 tier decisions that build on it (D42, D43) can assume one shape of store rather
 than two.
+
+## Rejected alternatives
+
+**`live` as a working branch, in any store or worktree.** `live` is the trunk
+every store fast-forwards onto and no store ever checks out as a branch. Working
+on it directly would make concurrent sessions compete for one ref and would
+re-introduce the one-checkout-per-branch collision the detached model exists to
+avoid.
+
+**`git commit-tree` + `git update-ref` for the resolve merge.** Low-level
+plumbing to avoid checking a branch out. Unnecessary — the merge prepares with
+`checkout --detach <authority>`, which is ordinary porcelain, easier to reason
+about, and cannot collide with another worktree because nothing is ever checked
+out as a branch (D3, D41).
+
+**A temporary worktree for resolve.** Indirection with no payoff; the store's
+own worktree is where the merge belongs.
+
+**`claude --print` for conflict resolution.** No session context, no way to ask
+the user, no memory of what produced the changes.
+
+**Single-agent resolve with a post-hoc context refresh.** The parent's in-memory
+picture of the files is pre-merge and stale the moment git rewrites them on
+disk. A sub-agent reads the post-merge state fresh (D9).

@@ -2,17 +2,18 @@
 """Hygiene gate over the `docs/` graph: pointers resolve, decisions are stubbed.
 
 `docs/design.md` is the hub. Each decision's argument lives in a node under
-`docs/references/`, and the hub carries a one-line statement of its conclusion
-plus a pointer to the node. That shape is only safe while the crosslinking
-holds: a reader who cannot see that a decision was made re-litigates it, and a
-pointer that stops resolving strands the argument — both silently.
+`docs/references/`, reachable from the hub, and a one-line statement of its
+conclusion sits ahead of that argument. That shape is only safe while the
+crosslinking holds: a reader who cannot see that a decision was made
+re-litigates it, and a pointer that stops resolving strands the argument — both
+silently.
 
 A cluster that has become a subsystem takes one hub entry rather than one per
 sub-decision, and its node opens with its own summary of them. So a conclusion
 counts wherever it is reachable before the argument: in the hub, or in the
 summary of the node doing the arguing.
 
-Six checks. Five are blocking, because each has a single legitimate reading:
+Eight checks. Seven are blocking, because each has a single legitimate reading:
 
 - `broken-link`         a relative pointer whose target is not on disk
 - `unstubbed-decision`  an argument with no conclusion line anywhere ahead of it
@@ -21,6 +22,11 @@ Six checks. Five are blocking, because each has a single legitimate reading:
 - `duplicate-conclusion` one number concluded twice in the hub
 - `undefined-decision`  a `D<n>` citation with no decision behind it
 - `enumeration-drift`   a node's heading and its bodies disagree
+- `oversized-file`      a file past the line cap a node has to read in one go
+
+The line cap is 400. Tokens are not gated: counting them calls the API, and the
+80-column hard wrap `format-docs` applies bounds a line at roughly 23 tokens,
+so 400 lines is under 10k tokens and the line count is the binding limit.
 
 `orphan-reference` warns rather than blocks: a node reachable only from a
 memory file or a plan is unusual, not wrong.
@@ -43,6 +49,8 @@ import subprocess
 import sys
 
 HUB = os.path.join("docs", "design.md")
+
+MAX_LINES = 400
 
 NODE_DIR = os.path.join("docs", "references")
 
@@ -130,6 +138,7 @@ def main() -> int:
     findings = []
     for path in docs:
         findings += check_links(path, root)
+        findings += check_size(path, root)
 
     conclusions, stubs, findings_hub = collect_conclusions(hub, root)
     findings += findings_hub
@@ -220,6 +229,20 @@ def check_links(path: str, root: str) -> list[tuple]:
             if not os.path.exists(os.path.join(base, target)):
                 findings.append(("BLOCK", "broken-link", rel, lineno, target))
     return findings
+
+
+def check_size(path: str, root: str) -> list[tuple]:
+    """A file long enough that reading it costs a node's whole budget. Split it
+    along a need-time seam rather than raising the cap: the graph is only
+    cheaper than one document while each node is readable on its own."""
+    text = read_text(path)
+    if text is None:
+        return []
+    count = len(text.splitlines())
+    if count <= MAX_LINES:
+        return []
+    return [("BLOCK", "oversized-file", os.path.relpath(path, root), count,
+             f"{count} lines, over the {MAX_LINES}-line cap")]
 
 
 def collect_conclusions(hub: str, root: str) -> tuple[set[int], set[int], list[tuple]]:
@@ -415,6 +438,7 @@ BLOCKING_CHECKS = (
     "duplicate-conclusion",
     "undefined-decision",
     "enumeration-drift",
+    "oversized-file",
 )
 WARNING_CHECKS = ("orphan-reference",)
 
