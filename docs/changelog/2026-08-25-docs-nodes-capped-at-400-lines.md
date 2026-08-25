@@ -9,12 +9,10 @@ binding limit and the token budget follows from it. Trimming narration recovers
 about 5% — measured on the previous split — so the lever is another cut along a
 need-time seam, with concision second.
 
-The seams chosen, one per file. `docs/references/evals-best-practices.md`
-splits by its own section numbers into
-`docs/references/evals-llm-as-judge.md` (§5),
-`docs/references/evals-agents.md` (§6) and `evals-operations.md` (§7 and the
-§10 cookbook); the numbers are unchanged across all four, so a citation by `§`
-still resolves. `tiered-memory.md` splits
+The seams chosen, one per file. `evals-best-practices.md` splits by its own
+section numbers into `evals-llm-as-judge.md` (§5), `evals-agents.md` (§6) and
+`evals-operations.md` (§7 and the §10 cookbook); the numbers are unchanged
+across all four, so a citation by `§` still resolves. `tiered-memory.md` splits
 along the four clusters its own summary already named, into
 `index-composition.md` (D29–D31, D34–D37), `index-authoring-sync.md` (D38–D40)
 and `tier-stores.md` (D42–D44), keeping D17 and the cluster summary as the
@@ -41,7 +39,14 @@ needs the same treatment rather than a raised cap.
 `scripts/check-docs-links.py` gains a blocking `oversized-file` check so the cap
 is a gate rather than a note, with two bats cases pinning the boundary — 401
 lines blocks, 400 passes. Tokens stay ungated: counting them calls the API,
-and the wrap already bounds them.
+and the wrap already bounds them. Two more checker changes follow the split.
+The orphan scan resolves the bare-basename links nodes use among themselves,
+so a node reachable only from a sibling no longer warns. And the hub's
+delegation sentence — `(D29–D31, D34–D37) in [name](references/x.md)` — is
+now the contract: a node's own summary concludes a decision only when the hub
+delegates that number to that node, and a delegation the node does not honour
+is blocking `delegation-drift`. A node summarizing itself unasked was how D41
+once lost its hub bullet without any check noticing.
 
 Before and after, in lines: `design.md` 810 → 393, `tiered-memory.md` 718 → 187,
 `evals-best-practices.md` 930 → 281, `installation.md` 645 → 262,

@@ -906,9 +906,13 @@ mock returns the URL for `repo view`, so visibility resolves to private and
 - [x] **Step 3: Teach the mock the visibility query**
 
 In `tests/helpers/gh-mock.bash`, after the existing `repo view ... sshUrl` block
-(the
-`if [ -z "$stdout_val" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && [ -n "${GH_MOCK_REMOTE_URL:-}" ]`
-block), add:
+(the block guarded by
+
+```bash
+if [ -z "$stdout_val" ] && [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && [ -n "${GH_MOCK_REMOTE_URL:-}" ]
+```
+
+), add:
 
 ```bash
 # `gh repo view <url> --json visibility -q .visibility` → configured visibility.
@@ -1000,7 +1004,11 @@ Step 5).
 - [x] **Step 3: Run the full install integration suite**
 
 Run:
-`bats tests/install_run.bats tests/install_remote.bats tests/integration_happy_path.bats tests/integration_clone_restore.bats`
+
+```sh
+bats tests/install_run.bats tests/install_remote.bats tests/integration_happy_path.bats tests/integration_clone_restore.bats
+```
+
 Expected: all PASS.
 
 - [x] **Step 4: Commit**
@@ -1025,7 +1033,11 @@ tests and removes/rewrites 2).
 - [x] **Step 2: shellcheck the changed scripts**
 
 Run:
-`shellcheck scripts/install/run.sh scripts/install/create-remote.sh scripts/install/write-settings.sh scripts/install/emit-launcher.sh scripts/install/preflight.sh scripts/emit-wrappers.sh scripts/lib/util.sh`
+
+```sh
+shellcheck scripts/install/run.sh scripts/install/create-remote.sh scripts/install/write-settings.sh scripts/install/emit-launcher.sh scripts/install/preflight.sh scripts/emit-wrappers.sh scripts/lib/util.sh
+```
+
 Expected: no new warnings (pre-existing disables already annotated). Fix any
 introduced.
 

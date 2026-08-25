@@ -2,9 +2,9 @@
 
 The literal setup detail `design.md`'s Architecture points at — the install
 command's own steps, per-hook-manager wiring syntax, and memory remote creation
-— followed by the decisions that argue for that shape (D8, D25). Motivation and
-hub keeps the index entry; this file is what you need while installing or
-debugging an install, or while proposing a change to how any of it is wired.
+— followed by the decisions that argue for that shape (D8, D25). Motivation
+stays in `design.md`; this file is what you need while installing or debugging
+an install, or while proposing a change to how any of it is wired.
 The launcher shim and its two placements are in
 [memory-redirect.md](memory-redirect.md); the hook wrapper files and what every
 `SessionStart` does are in [session.md](session.md).
@@ -119,8 +119,12 @@ script via `sh`, so the substitution expands.
 `PreCommit` and `PrePush` in `.overcommit.yml`. Overcommit's `command:` is an
 array exec'd **directly, with no shell**, so the wrapper has to be reached
 through an explicit one:
-`command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']`
-— the trailing `'gitlore'` sets `$0`, and overcommit appends the applicable
+
+```yaml
+command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']
+```
+
+The trailing `'gitlore'` sets `$0`, and overcommit appends the applicable
 files as `$@`.
 
 *None, i.e. direct* (sentinel `direct`, a keyword SessionStart interprets rather

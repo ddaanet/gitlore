@@ -245,11 +245,12 @@ The disqualifiers matter more than the table:
   keyed on the global setting, so `dangerouslyDisableSandbox` does not exempt
   it;
 - **`git -C`, `-c`, `--git-dir`, `--work-tree`** — `A4p` scans leading git
-  global options and returns false outright on any member of
-  `Omv = {-c, -C, --exec-path, --config-env, --git-dir, --work-tree, --bare, --attr-source, --help, -h, --shallow-file}`.
-  Options outside that set (`--no-pager`) pass. The table key is built as
-  `git <sub> <sub2>` with a fallback to `git <sub>`, which is how
-  `git config --get` and `git stash list` resolve.
+  global options and returns false outright on any member of `Omv` — `-c`, `-C`,
+  `--exec-path`, `--config-env`, `--git-dir`, `--work-tree`, `--bare`,
+  `--attr-source`, `--help`, `-h`, `--shallow-file`. Options outside that set
+  (`--no-pager`) pass. The table key is built as `git <sub> <sub2>` with a
+  fallback to `git <sub>`, which is how `git config --get` and `git stash list`
+  resolve.
 
 So the only cheap shape is a bare `git <subcommand>` from the original cwd, with
 no `cd`, no `-C`, no subshell and no `$VAR`. Every mechanism for reaching a

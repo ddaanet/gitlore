@@ -71,8 +71,9 @@ strip-code-then-scan pass is a line-state machine; the repo already probes for
 **Two severities, decided on measured precision.** A check blocks only where the
 pattern has no legitimate reading. Measured over the 101 facts:
 
-| Blocking | first-person, direct-naming, pre-rename, broken-reference, name-drift, frontmatter |
-| Warning | deictics, dangling wikilinks |
+- Blocking: first-person, direct-naming, pre-rename, broken-reference,
+  name-drift, frontmatter.
+- Warning: deictics, dangling wikilinks.
 
 `here` and `now` are anaphoric far more often than deictic ("a mismatch here",
 "a now-trivial script", "state what is true now"), and a dangling `[[link]]` is

@@ -96,8 +96,12 @@ has no `gitlore-memory` entry, no-op.
 
 **Worktree creation — handled by `SessionStart`, not a `WorktreeCreate` hook.**
 Memory-worktree setup for a new worktree happens lazily at the next
-`SessionStart` in that worktree
-(`git -C <main-repo>/.git/modules/gitlore-memory worktree add --detach <worktree-path>/<memory-rel-path> live`).
+`SessionStart` in that worktree:
+
+```sh
+git -C <main-repo>/.git/modules/gitlore-memory worktree add --detach <worktree-path>/<memory-rel-path> live
+```
+
 This is uniform across every way a worktree comes into being:
 
 - **`claude --worktree <name>`** — starts a *new session* in the new worktree,
