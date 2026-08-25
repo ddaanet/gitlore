@@ -9,11 +9,12 @@ re-litigates it, and a pointer that stops resolving strands the argument — bot
 silently.
 
 A cluster that has become a subsystem takes one hub entry rather than one per
-sub-decision, and its node opens with its own summary of them. So a conclusion
-counts wherever it is reachable before the argument: in the hub, or in the
-summary of the node doing the arguing.
+sub-decision, and its node opens with its own summary of them. The hub says so
+in prose — `(D29–D31, D34–D37) in [name](references/x.md)` — and only that
+delegation lets the node's summary stand in for a hub bullet: a node summarizing
+itself unasked is how a hub bullet goes missing unnoticed.
 
-Eight checks. Seven are blocking, because each has a single legitimate reading:
+Nine checks. Eight are blocking, because each has a single legitimate reading:
 
 - `broken-link`         a relative pointer whose target is not on disk
 - `unstubbed-decision`  an argument with no conclusion line anywhere ahead of it
@@ -22,6 +23,7 @@ Eight checks. Seven are blocking, because each has a single legitimate reading:
 - `duplicate-conclusion` one number concluded twice in the hub
 - `undefined-decision`  a `D<n>` citation with no decision behind it
 - `enumeration-drift`   a node's heading and its bodies disagree
+- `delegation-drift`    the hub delegates a number to a node that does not conclude it
 - `oversized-file`      a file past the line cap a node has to read in one go
 
 The line cap is 400. Tokens are not gated: counting them calls the API, and the
@@ -105,6 +107,11 @@ ENUM_HEADING = re.compile(r"^#{1,6} .*\bdecisions?\b", re.I)
 # hyphen all spell it in prose here.
 ENUM_RANGE = re.compile(r"\bD(\d+)\s*[–—-]\s*D?(\d+)\b")
 
+# The hub handing a cluster's sub-decisions to the node whose summary concludes
+# them: `(D26–D28, D32, D33) in [name](references/x.md)`. Matched on a joined
+# paragraph, since `format-docs` wraps the enumeration across lines.
+DELEGATION = re.compile(r"\(([^()]*\bD\d+[^()]*)\)\s+in\s+\[[^\]]*\]\(([^)\s]+)\)")
+
 SUPPRESS = "<!-- hygiene-ok"
 
 FENCE = re.compile(r"^\s*(```|~~~)")
@@ -143,11 +150,14 @@ def main() -> int:
     conclusions, stubs, findings_hub = collect_conclusions(hub, root)
     findings += findings_hub
 
+    delegated, findings_delegated = collect_delegations(hub, root, conclusions)
+    findings += findings_delegated
+
     bodies, findings_bodies = collect_bodies(nodes, root)
     findings += findings_bodies
 
     summaries = collect_summaries(nodes, root)
-    findings += check_coverage(conclusions, stubs, bodies, summaries)
+    findings += check_coverage(conclusions, stubs, bodies, summaries, delegated)
     findings += check_citations([hub] + nodes, root, conclusions, bodies)
     for path in nodes:
         findings += check_enumeration(path, root, bodies)
@@ -217,18 +227,25 @@ def check_links(path: str, root: str) -> list[tuple]:
     base = os.path.dirname(path)
     findings = []
     for lineno, line in enumerate(prose_lines(path), 1):
-        for target in LINK.findall(line):
-            if target.startswith("<") and target.endswith(">"):
-                target = target[1:-1]
-            if not target or target.startswith(NOT_A_PATH):
-                continue
-            # A fragment addresses a place inside the target, not another file.
-            target = target.split("#", 1)[0]
-            if not target:
-                continue
+        for target in link_targets(line):
             if not os.path.exists(os.path.join(base, target)):
                 findings.append(("BLOCK", "broken-link", rel, lineno, target))
     return findings
+
+
+def link_targets(line: str) -> list[str]:
+    """The relative file paths a prose line links to."""
+    targets = []
+    for target in LINK.findall(line):
+        if target.startswith("<") and target.endswith(">"):
+            target = target[1:-1]
+        if not target or target.startswith(NOT_A_PATH):
+            continue
+        # A fragment addresses a place inside the target, not another file.
+        target = target.split("#", 1)[0]
+        if target:
+            targets.append(target)
+    return targets
 
 
 def check_size(path: str, root: str) -> list[tuple]:
@@ -268,6 +285,57 @@ def collect_conclusions(hub: str, root: str) -> tuple[set[int], set[int], list[t
         if STUB_LINE.match(line):
             stubs.add(number)
     return set(seen), stubs, findings
+
+
+def collect_delegations(
+    hub: str, root: str, conclusions: set[int]
+) -> tuple[dict[int, str], list[tuple]]:
+    """Map each decision number the hub delegates to the node it names. A
+    number the hub also concludes itself is concluded twice."""
+    rel = os.path.relpath(hub, root)
+    base = os.path.dirname(hub)
+    delegated: dict[int, str] = {}
+    findings = []
+    for lineno, paragraph in paragraphs(prose_lines(hub)):
+        for enum, target in DELEGATION.findall(paragraph):
+            node = os.path.relpath(os.path.normpath(os.path.join(base, target)), root)
+            for number in enumerated(enum):
+                if number in conclusions:
+                    findings.append(
+                        ("BLOCK", "duplicate-conclusion", rel, lineno,
+                         f"D{number} delegated to {node} and concluded here")
+                    )
+                    continue
+                delegated[number] = node
+    return delegated, findings
+
+
+def paragraphs(lines: list[str]) -> list[tuple[int, str]]:
+    """Runs of non-blank lines joined with a space, each with the number of
+    its first line."""
+    out: list[tuple[int, str]] = []
+    start = 0
+    run: list[str] = []
+    for lineno, line in enumerate(lines, 1):
+        if line.strip():
+            if not run:
+                start = lineno
+            run.append(line.strip())
+        elif run:
+            out.append((start, " ".join(run)))
+            run = []
+    if run:
+        out.append((start, " ".join(run)))
+    return out
+
+
+def enumerated(text: str) -> set[int]:
+    """Every number a `D9, D12–D14` enumeration names."""
+    numbers: set[int] = set()
+    for lo, hi in ENUM_RANGE.findall(text):
+        numbers |= set(range(int(lo), int(hi) + 1))
+    numbers |= {int(n) for n in CITATION.findall(ENUM_RANGE.sub(" ", text))}
+    return numbers
 
 
 def collect_bodies(nodes: list[str], root: str) -> tuple[dict[int, str], list[tuple]]:
@@ -324,21 +392,36 @@ def check_coverage(
     stubs: set[int],
     bodies: dict[int, str],
     summaries: dict[int, set[str]],
+    delegated: dict[int, str],
 ) -> list[tuple]:
-    """Both directions of the hub/node contract."""
+    """Both directions of the hub/node contract, and the delegations that
+    stand in for hub bullets."""
     findings = []
     for number in sorted(set(bodies) - conclusions):
-        if bodies[number] in summaries.get(number, set()):
+        owner = bodies[number]
+        if delegated.get(number) == owner and owner in summaries.get(number, set()):
             continue
         findings.append(
-            ("BLOCK", "unstubbed-decision", bodies[number], 1,
-             f"D{number} argued here, concluded neither in {HUB} nor in this node's summary")
+            ("BLOCK", "unstubbed-decision", owner, 1,
+             f"D{number} argued here, concluded neither in {HUB} nor by a delegated summary")
         )
     for number in sorted(stubs - set(bodies)):
         findings.append(
             ("BLOCK", "stub-without-body", HUB, 1,
              f"D{number} concluded here, argued in no node")
         )
+    for number in sorted(delegated):
+        node = delegated[number]
+        if bodies.get(number) != node:
+            findings.append(
+                ("BLOCK", "delegation-drift", HUB, 1,
+                 f"D{number} delegated to {node}, argued in {bodies.get(number, 'no node')}")
+            )
+        elif node not in summaries.get(number, set()):
+            findings.append(
+                ("BLOCK", "delegation-drift", node, 1,
+                 f"D{number} delegated here, missing from this node's summary")
+            )
     return findings
 
 
@@ -370,11 +453,7 @@ def check_enumeration(path: str, root: str, bodies: dict[int, str]) -> list[tupl
         if not ENUM_HEADING.match(line):
             continue
         heading_line = lineno
-        rest = line
-        for lo, hi in ENUM_RANGE.findall(rest):
-            claimed |= set(range(int(lo), int(hi) + 1))
-        rest = ENUM_RANGE.sub(" ", rest)
-        claimed |= {int(n) for n in CITATION.findall(rest)}
+        claimed |= enumerated(line)
     if not heading_line:
         return []
     present = {n for n, owner in bodies.items() if owner == rel}
@@ -395,17 +474,33 @@ def check_enumeration(path: str, root: str, bodies: dict[int, str]) -> list[tupl
 def check_orphans(nodes: list[str], root: str) -> list[tuple]:
     """A node nothing cites. The scan is repo-wide rather than docs-only: a
     node whose only reader is a memory fact is reachable, just not from the
-    graph."""
+    graph. Nodes link each other by bare basename (`[b](b.md)`), which the
+    repo-wide substring scan cannot see, so sibling links are resolved as
+    paths instead."""
     findings = []
     for path in nodes:
         needle = f"references/{os.path.basename(path)}"
         if cited_anywhere(needle, root, exclude=path):
+            continue
+        if linked_from_sibling(path, nodes):
             continue
         findings.append(
             ("WARN", "orphan-reference", os.path.relpath(path, root), 1,
              "no file points at it")
         )
     return findings
+
+
+def linked_from_sibling(path: str, nodes: list[str]) -> bool:
+    for sibling in nodes:
+        if sibling == path:
+            continue
+        base = os.path.dirname(sibling)
+        for line in prose_lines(sibling):
+            for target in link_targets(line):
+                if os.path.normpath(os.path.join(base, target)) == path:
+                    return True
+    return False
 
 
 def cited_anywhere(needle: str, root: str, exclude: str) -> bool:
@@ -438,6 +533,7 @@ BLOCKING_CHECKS = (
     "duplicate-conclusion",
     "undefined-decision",
     "enumeration-drift",
+    "delegation-drift",
     "oversized-file",
 )
 WARNING_CHECKS = ("orphan-reference",)

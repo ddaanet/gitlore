@@ -98,14 +98,29 @@ plant_ref() {
   [ "$status" -eq 0 ]
 }
 
-@test "unstubbed decision: a cluster sub-decision is concluded in its own node" {
+@test "unstubbed decision: a cluster sub-decision the hub delegates is concluded in its own node" {
+  plant_ref "tiered-memory.md" '# Tiered memory — decisions D9, D10' '' \
+    '- Composition — **D10** the tier manifest' '' \
+    '**D9 — Tiered memory**' '' 'The argument.' '' \
+    '**D10 — The tier manifest**' '' 'The argument.'
+  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+    '- **D9** — tiered memory'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+}
+
+@test "unstubbed decision: a self-summary the hub never delegated does not conclude it" {
+  # A node summarizing itself is how a hub bullet goes missing unnoticed: only
+  # a delegation line in the hub licenses the node's summary to stand in.
   plant_ref "tiered-memory.md" '# Tiered memory — decisions D9, D10' '' \
     '- Composition — **D10** the tier manifest' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
   plant_hub 'See [tiers](references/tiered-memory.md).' '' '- **D9** — tiered memory'
   run "$CHECKER"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unstubbed-decision"* ]]
+  [[ "$output" == *"D10"* ]]
 }
 
 @test "unstubbed decision: a wrapped summary bullet still concludes what its continuation lines name" {
@@ -116,9 +131,77 @@ plant_ref() {
     '  **D10** the tier manifest' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
-  plant_hub 'See [tiers](references/tiered-memory.md).' '' '- **D9** — tiered memory'
+  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+    '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 0 ]
+}
+
+@test "delegation: a wrapped delegation line covers the numbers on its continuation" {
+  # `(D10,` on one line and `D11) in [..](..)` on the next, as format-docs
+  # leaves it.
+  plant_ref "tiered-memory.md" '# Tiered memory — decisions D9–D11' '' \
+    '- Composition — **D10** the manifest · **D11** the ordering' '' \
+    '**D9 — Tiered memory**' '' 'The argument.' '' \
+    '**D10 — The tier manifest**' '' 'The argument.' '' \
+    '**D11 — The ordering**' '' 'The argument.'
+  plant_hub 'The sub-decisions conclude in each node: composition (D10,' \
+    'D11) in [tiers](references/tiered-memory.md).' '' \
+    '- **D9** — tiered memory'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+}
+
+@test "delegation: a range covers every number between" {
+  plant_ref "tiered-memory.md" '# Tiered memory — decisions D9–D11' '' \
+    '- Composition — **D10** the manifest · **D11** the ordering' '' \
+    '**D9 — Tiered memory**' '' 'The argument.' '' \
+    '**D10 — The tier manifest**' '' 'The argument.' '' \
+    '**D11 — The ordering**' '' 'The argument.'
+  plant_hub 'Sub-decisions (D10–D11) in [tiers](references/tiered-memory.md).' '' \
+    '- **D9** — tiered memory'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+}
+
+@test "delegation drift: a delegated number the node does not summarize blocks" {
+  plant_ref "tiered-memory.md" '# Tiered memory — decisions D9, D10' '' \
+    '**D9 — Tiered memory**' '' 'The argument.' '' \
+    '**D10 — The tier manifest**' '' 'The argument.'
+  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+    '- **D9** — tiered memory'
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"delegation-drift"* ]]
+  [[ "$output" == *"D10"* ]]
+}
+
+@test "delegation drift: a delegation to a node that argues it elsewhere blocks" {
+  plant_ref "tiered-memory.md" '# Tiered memory — decisions D9' '' \
+    '- Composition — **D10** the tier manifest' '' \
+    '**D9 — Tiered memory**' '' 'The argument.'
+  plant_ref "elsewhere.md" '# Elsewhere — decisions D10' '' \
+    '- **D10** the tier manifest' '' \
+    '**D10 — The tier manifest**' '' 'The argument.'
+  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md)' \
+    'and [e](references/elsewhere.md).' '' '- **D9** — tiered memory'
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"delegation-drift"* ]]
+  [[ "$output" == *"D10"* ]]
+}
+
+@test "duplicate conclusion: a number both delegated and given a hub bullet blocks" {
+  plant_ref "tiered-memory.md" '# Tiered memory — decisions D9, D10' '' \
+    '- Composition — **D10** the tier manifest' '' \
+    '**D9 — Tiered memory**' '' 'The argument.' '' \
+    '**D10 — The tier manifest**' '' 'The argument.'
+  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+    '- **D9** — tiered memory' '- **D10** — the tier manifest'
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"duplicate-conclusion"* ]]
+  [[ "$output" == *"D10"* ]]
 }
 
 @test "unstubbed decision: a summary in some other node does not conclude it" {
@@ -243,6 +326,29 @@ plant_ref() {
   [[ "$output" != *"orphan-reference"* ]]
 }
 
+@test "orphan: a sibling-relative link from another node counts as reachable" {
+  # Nodes link each other as `[b](b.md)`, with no `references/` in the target.
+  plant_ref "a.md" '# A' '' 'A body.'
+  plant_ref "b.md" '# B' '' 'Argued in [a](a.md).'
+  plant_hub 'See [b](references/b.md).'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"orphan-reference"* ]]
+}
+
+@test "orphan: a bare basename from outside the node directory does not reach it" {
+  # `[a](a.md)` in a plan resolves next to the plan, not to the node.
+  plant_ref "a.md" '# A' '' 'A body.'
+  plant_ref "b.md" '# B' '' 'Unrelated.'
+  plant_hub 'See [b](references/b.md).'
+  mkdir -p plans
+  printf 'See [a](a.md).\n' > plans/p.md
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"orphan-reference"* ]]
+  [[ "$output" == *"references/a.md"* ]]
+}
+
 # --- scope, suppression, reporting -----------------------------------------
 
 @test "suppression: a hygiene-ok marker clears the line it sits on" {
@@ -293,6 +399,7 @@ plant_ref() {
   [[ "$output" == *"duplicate-decision"* ]]
   [[ "$output" == *"undefined-decision"* ]]
   [[ "$output" == *"enumeration-drift"* ]]
+  [[ "$output" == *"delegation-drift"* ]]
   [[ "$output" == *"oversized-file"* ]]
   [[ "$output" == *"1 decision"* ]]
 }

@@ -1,8 +1,12 @@
 # 2026-08-12 — A push classifies a refusal by ancestry, not by git's wording, and a failed diagnosis stops moving HEAD
 
-`bash "$(git config gitlore.pushCommand)"` died in the `micro` repo with
-`Already up to date.` followed by
-`gitlore: could not prepare the memory merge against 'origin/live'. Inspect the memory worktree at memory/ddaanet.`
+`bash "$(git config gitlore.pushCommand)"` died in the `micro` repo with:
+
+```text
+Already up to date.
+gitlore: could not prepare the memory merge against 'origin/live'. Inspect the memory worktree at memory/ddaanet.
+```
+
 The named worktree was clean, the skill's own routing sends a non-zero exit
 without `memory merge prepared` to "surface it verbatim and stop", and nothing
 in either line said what was wrong. The tier had nothing to publish at all: it

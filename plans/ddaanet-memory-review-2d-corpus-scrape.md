@@ -198,8 +198,8 @@ let {data: d} = await i.call({command: a}, c);                 // ordinary tool 
 `i` is the Bash tool. The input is a bare `{command}` —
 **no `dangerouslyDisableSandbox` field** — and the tool's own `call` computes
 the sandbox decision from its input, the same convention visible in the
-PowerShell tool (`let i = Wsi(e)`, where
-`Wsi(e) = TV({command: e.command, dangerouslyDisableSandbox: e.dangerouslyDisableSandbox, shellType:"powershell"})`)
+PowerShell tool (`let i = Wsi(e)`, where `Wsi` builds the same table key
+from `command`, `dangerouslyDisableSandbox` and `shellType: "powershell"`)
 and in the Monitor tool
 (`rDe(e, signal, "bash", {shouldUseSandbox: TV({command: e}), …})`).
 
