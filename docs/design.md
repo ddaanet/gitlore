@@ -9,7 +9,9 @@ This is the living design: what the system does, how it is built, and why it is
 built that way. It is kept in the present tense — how it got here is in
 [changelog.md](changelog.md). `docs/references/` is a graph of nodes, one per
 mechanism, each holding the detail behind a section here and the decisions and
-rejected alternatives arguing for it. Plans and specs live in `plans/`.
+rejected alternatives arguing for it. The sections here summarize; read the
+node before making a claim about the mechanism it argues. Plans and specs live
+in `plans/`.
 
 **Created:** 2026-04-11
 

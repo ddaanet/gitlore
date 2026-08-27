@@ -6,6 +6,21 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-27 — A prepared merge met by a later gate is continued, never aborted](changelog/2026-08-27-a-prepared-merge-is-always-continued.md)
+  — a stale `MERGE_HEAD` used to mean `merge --abort` and prepare again, which
+  discarded whatever the merger sub-agent had already synthesized and staged;
+  the directive is now the ordinary `continue-after-merge`, and a merge whose
+  authority moved meanwhile is re-prepared by the continuation's own refused
+  push
+- [2026-08-26 — The down projection refuses a tier that was moved off its pin](changelog/2026-08-26-compose-refuses-a-tier-off-its-pin.md)
+  — a hand-run `reset --hard` in a tier left the carrier ahead with nothing
+  adopted up, and the next recompose wrote root's older text over approved
+  upstream facts and called it success; the pin is now checked against the
+  memory store's index, and staging the gitlink is the fix
+- [2026-08-26 — A merge state file whose MERGE_HEAD a checkout cleared is classified and repaired, not declared unrecoverable](changelog/2026-08-26-stale-merge-state-repairs-itself.md)
+  — the state every gate called manual-intervention now sorts into landed,
+  staged, or dead, and only a state file naming no pending commit stays a dead
+  end
 - [2026-08-25 — Every `docs/` file is capped at 400 lines, and the checker enforces it](changelog/2026-08-25-docs-nodes-capped-at-400-lines.md)
   — five files still ran 475–930 lines after the graph split; each cut along a
   need-time seam into 19 reference nodes, the hub's decision conclusions moved

@@ -226,6 +226,17 @@ if git -C "$tierpath" show-ref --verify --quiet refs/heads/live; then
   if ! co_err=$(git -C "$tierpath" checkout -q --detach live 2>&1); then
     warnings="$warnings
   - could not detach the tier at 'live'. git said: $co_err"
+  # Stage the gitlink that detach just moved. `submodule add` recorded the
+  # remote's DEFAULT branch and `submodule update` pins from the memory store's
+  # INDEX (D43), so an unstaged move is walked back to that branch at the next
+  # SessionStart while the root index composed from the live carrier survives to
+  # describe facts the tier no longer holds. The mount advances a tier, so it
+  # owes the same hand-off every other advancing path performs — and until it
+  # does, the composition that follows this mount refuses the tier as moved off
+  # its pin.
+  elif ! stage_err=$(git -C "$mempath" add -- "$name" 2>&1); then
+    warnings="$warnings
+  - the tier is detached at 'live' but its pointer could not be staged in the memory store, so the next session will reset it to the remote's default branch. Run: git -C \"$mempath\" add -- \"$name\". git said: $stage_err"
   fi
 else
   warnings="$warnings

@@ -23,7 +23,7 @@ source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 
 # Load shared continuation state: require an installed submodule and exactly one
-# prepared merge, then set mempath/statefile/flavor/pending for the caller.
+# prepared merge, then set mempath/statefile/flavor/publish for the caller.
 #
 # The store is FOUND, not derived. Memory and every tier share one merge policy
 # and one state-file name resolved inside their own gitdirs, so a continuation
@@ -31,8 +31,6 @@ source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 # merge sat in a tier. The search walks the same store list the gates do, and
 # `mempath` comes from the state file's own `store` field — absolute, so it does
 # not depend on where the continuation was invoked from.
-# Args: $1 = "abort" to use the abort-flavored missing-state message; any other
-# value (or none) uses the default "no merge state file" message.
 load_continuation_state() {
   gitlore_has_submodule || { echo "gitlore: not installed" >&2; exit 1; }
   local found
@@ -41,11 +39,7 @@ load_continuation_state() {
   memroot=$(gitlore_memory_path)
   found=$(gitlore_stores_with_merge_state "$memroot")
   if [ -z "$found" ]; then
-    if [ "${1:-}" = "abort" ]; then
-      echo "gitlore: no merge state file to abort" >&2
-    else
-      echo "gitlore: no merge state file in memory or any tier" >&2
-    fi
+    echo "gitlore: no merge state file in memory or any tier" >&2
     exit 1
   fi
   # A gate yields on the first divergence and stops, so two prepared merges mean
@@ -64,7 +58,6 @@ load_continuation_state() {
     exit 1
   fi
   flavor=$(jq -r .flavor "$statefile")
-  pending=$(jq -r .source_ref "$statefile")
   # `// ""` covers a state file written before the field existed, and jq's own
   # `null` for a key present but empty: both mean "publish", the gate default.
   publish=$(jq -r '.publish // ""' "$statefile")
@@ -231,25 +224,7 @@ if [ $# -ge 1 ]; then
       fi
       exit 0
       ;;
-    abort-then-retry)
-      load_continuation_state abort
-      # Test for a merge in progress rather than suppressing "no merge to abort":
-      # that message is the one expected failure, and gating on MERGE_HEAD removes
-      # it, so a genuine abort failure is no longer swallowed.
-      if git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
-        gitlore_git -C "$mempath" merge --abort || true
-      fi
-      # Return to the pending commit — the divergent side the merge was landing.
-      # Aborting leaves HEAD at the authority, where the divergence is invisible;
-      # re-detaching there is what makes the re-entry below detect it again.
-      gitlore_git -C "$mempath" checkout -q --detach "$pending" || true
-      gitlore_clear_merge_state "$mempath"
-      gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
-      # Re-enter the default mode to detect the original divergence freshly.
-      exec bash "$0"
-      ;;
     *)
-      # Other subcommands added in later tasks.
       echo "gitlore: unknown resolve subcommand: $subcmd" >&2
       exit 2
       ;;

@@ -33,8 +33,10 @@ session-less linked worktree) — never block a parent git operation over memory
    the env unset (replay state is per-worktree), announced rather than skipped
    silently. `MERGE_HEAD` is excluded: a merge commit is authored now and must
    pin current memory.
-2. **Refuse to proceed over a stale merge state** (abort-then-retry, or manual
-   intervention when `MERGE_HEAD` is already gone).
+2. **Guard on a stale merge state** — hand the prepared merge back to the
+   sub-agent while `MERGE_HEAD` is there, and when a checkout has cleared it,
+   classify what survives and repair, which may mean carrying straight on
+   ([merge-and-resolve.md](merge-and-resolve.md)).
 3. **Sync every dirty tier** and advance each tier's local `live`, so the
    gitlink the memory commit is about to record has already moved (D42).
 4. **Sync memory** through the shared `gitlore_sync_memory_to_live`: the FR11

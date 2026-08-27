@@ -65,8 +65,9 @@ by hand, stays a deliberate manual edit.
 
 **D31 — Compose triggers and validation**
 
-Composition runs at three points. At `SessionStart`, after the tier
-fast-forward, to surface propagated lines. Mid-session on
+Composition runs at three points. At `SessionStart`, after the tier pin, so the
+lines each pinned carrier holds surface in the always-loaded root. Mid-session
+on
 **`PostToolBatch` when the root index or `memory/.gitlore-tiers` is written**,
 so the agent can edit the manifest, see the regenerated index, and adjust
 ordering within one session. And in the
@@ -92,8 +93,19 @@ a successful mount.
 The recompose **validates and is fail-safe**: it refuses — reporting on
 `systemMessage` (user) + `additionalContext` (agent) without clobbering the
 existing index — if the result would carry a **duplicate** pointer line, if a
-line **welds two pointer bullets** onto one physical line, or if the manifest
-**lists a tier that is not present**. A mounted tier *absent* from the manifest
+line **welds two pointer bullets** onto one physical line, if the manifest
+**lists a tier that is not present**, or if an **active tier is checked out off
+the gitlink** the memory store's index records for it. That last rule guards the
+down projection alone (D36), so it lives outside the shared check and only the
+in-session pass runs it: the merge continuation's adoption is up-only and runs
+while the tier is legitimately ahead of the pin, before that path stages the
+moved gitlink. The pin is read from the memory store's **index** rather than its
+`HEAD`, because the index is what `submodule update` checks a tier out at and
+what every advancing path stages the move into (D43) — a landed merge is not a
+defect for as long as the memory commit recording it is pending. A tier that is
+mid-merge gets the remedy its own state needs, `/gitlore:resolve`, rather than
+the return-to-the-pin checkout, which would unlink `MERGE_HEAD` and destroy the
+prepared merge. A mounted tier *absent* from the manifest
 is not an error, only inactive; the asymmetry is deliberate —
 listed-but-absent = broken, present-but-unlisted = dormant. In the continuation
 a refusal is reported but never blocks: the merge is synthesized and approved by
@@ -205,7 +217,11 @@ requirement when a pointer arrives from upstream in a merge.
 The root's tier block and the carrier are two projections of the same facts, and
 under a pinned tier only one of them can move between passes: the agent edits
 the root, and the carrier changes only when a merge lands a new commit. So
-composition needs no base and no merge of its own. It runs two projections
+composition needs no base and no merge of its own. The pin is a
+**precondition, not an assumption** — a tier moved outside `/gitlore:merge` has
+a carrier nothing adopted up, and projecting root's older text down over it
+destroys approved upstream facts while reporting a successful compose, so the
+down pass refuses onto a tier that is off its pin (D31). It runs two projections
 instead:
 
 - **Down**, in-session, on `PostToolBatch` and at `SessionStart`: root's lines

@@ -74,8 +74,10 @@ gitlore_detect_stale_merge_state() {
 # never operate on top of a half-finished merge. On a clean state, return 0
 # silently. Otherwise emit the appropriate directive/message on stderr and
 # return 1, so callers can `|| return 1` / `|| exit 1`.
-#   stale-with-merge-head → emit the abort-then-retry merge directive
-#   stale-no-merge-head    → emit a fatal manual-intervention message
+#   stale-with-merge-head → emit the merge directive again, so the prepared
+#                            merge is continued
+#   stale-no-merge-head    → classify and repair (gitlore_recover_stale_no_merge_head),
+#                            which returns 0 when the caller may carry on
 # Args: $1 = memory worktree path.
 gitlore_guard_stale_merge_state() {
   local mempath="$1"
@@ -83,15 +85,20 @@ gitlore_guard_stale_merge_state() {
   state_status=$(gitlore_detect_stale_merge_state "$mempath")
   case "$state_status" in
     stale-with-merge-head)
+      # A prepared merge is always continued. The store sits exactly where
+      # gitlore_prepare_merge leaves one, so the sub-agent can pick it up
+      # unchanged — and by the time a gate meets it again the merger may already
+      # have synthesized and staged an answer, which discarding the merge would
+      # throw away. A merge whose authority moved meanwhile lands against the
+      # old one and is re-prepared by the continuation's own refused push, which
+      # costs one cycle; re-preparing every stale merge costs a synthesis.
       statefile=$(gitlore_merge_state_file "$mempath")
       flavor=$(jq -r .flavor "$statefile")
-      gitlore_emit_merge_directive "$statefile" "$flavor" "abort-then-retry"
+      gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
       return 1
       ;;
     stale-no-merge-head)
-      statefile=$(gitlore_merge_state_file "$mempath")
-      echo "gitlore: merge state file present without MERGE_HEAD — manual intervention required. Inspect $statefile and the memory worktree." >&2
-      return 1
+      gitlore_recover_stale_no_merge_head "$mempath" || return 1
       ;;
     orphaned-merge-head)
       local mh
@@ -101,6 +108,229 @@ gitlore_guard_stale_merge_state() {
       ;;
   esac
   return 0
+}
+
+# Repair — rather than report — a merge state file whose MERGE_HEAD is gone.
+# Two things produce it, and they leave different remains. A plain
+# `git merge --abort`, run in the store by a user or an agent asked to undo the
+# merge, drops the pointers AND resets the index: nothing of the merge survives
+# but gitlore's own files. `git checkout` — including the no-op re-checkout that
+# `submodule update` runs — calls remove_branch_state(), which unlinks
+# MERGE_HEAD and MERGE_MSG silently and on success, while leaving the staged
+# result in the index; a clean auto-merge stages no unmerged entries, so
+# checkout has nothing to refuse over. Either way the state file outlives the
+# very pointer the guard discriminates on.
+#
+# Every question below is mechanical (D7), so the state has an outcome instead
+# of a dead end (FR13). They are asked in the order in which each answer decides
+# the next:
+#
+#   1. Did a merge land? A merge commit taking the pinned pending commit as a
+#      parent other than its first IS that merge, wherever HEAD sits now.
+#   2. Is a merge result still staged? The index survives the checkout that took
+#      the pointers, and what it holds may be a synthesis already approved.
+#   3. Neither: the merge is dead, and every artifact a preparation wrote is
+#      recomputed by the next one.
+#
+# Returns 0 when the store is fit for the caller's gate to carry on — which
+# re-prepares the merge if the divergence is still there — and 1 after emitting
+# when the merge needs its sub-agent again, or cannot be classified.
+# Args: $1 = store worktree path.
+gitlore_recover_stale_no_merge_head() {
+  local store="$1"
+  local statefile abs head pending landed msg err
+  statefile=$(gitlore_merge_state_file "$store")
+  # `--show-toplevel` rather than a subshell `cd`: every path below is printed
+  # for a human to paste, and CDPATH glues a directory listing onto the front of
+  # a `$(cd … && pwd)` capture.
+  abs=$(git -C "$store" rev-parse --show-toplevel) || abs="$store"
+  head=$(git -C "$store" rev-parse HEAD)
+
+  pending=$(gitlore_pending_commit "$store" "$statefile")
+  if [ -z "$pending" ]; then
+    msg="gitlore: $abs holds a merge state file with no MERGE_HEAD, and neither $GITLORE_PENDING_REF nor the file's own source_ref names a commit still in the store — nothing can say whether that merge landed, so manual intervention required. Read $statefile, then find the merge with:
+gitlore:   git -C \"$abs\" log --oneline --graph --all --reflog -n 20
+gitlore: delete $statefile once you have landed or abandoned it; the next commit or push prepares the merge again."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 1
+  fi
+
+  if ! landed=$(gitlore_landed_merge_commit "$store" "$pending"); then
+    msg="gitlore: $abs holds a merge state file with no MERGE_HEAD, and its history could not be scanned for the merge (git's own error is above), so manual intervention required. Repair the store, then re-run the operation."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 1
+  fi
+  if [ -n "$landed" ]; then
+    gitlore_recover_landed_merge "$store" "$abs" "$head" "$landed" || return 1
+    return 0
+  fi
+
+  # Nothing landed. An index that differs from HEAD holds the merge result the
+  # checkout could not take with it, which may be a synthesis the user already
+  # approved — restored, never discarded. Emits either way; the caller yields.
+  if ! git -C "$store" diff-index --quiet --cached HEAD --; then
+    gitlore_restore_staged_merge "$store" "$abs" "$head" "$pending" "$statefile"
+    return 1
+  fi
+
+  # Nothing landed and nothing staged: the merge is dead. HEAD goes back onto
+  # the pending commit BEFORE the pin is dropped — after a preparation the pin
+  # is the only reference to the divergent side, so clearing it while HEAD sits
+  # on the authority would orphan the very commit the merge existed to land, and
+  # the gate that follows would find a store with nothing to merge.
+  if ! err=$(gitlore_git -C "$store" checkout -q --detach "$pending" 2>&1); then
+    msg="gitlore: the prepared merge in $abs is dead (no MERGE_HEAD, nothing staged, nothing landed), but HEAD could not be put back on its pending commit $pending, so the merge state was left alone. git said:
+$err
+gitlore: clear the working tree, then re-run the operation."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 1
+  fi
+  gitlore_drop_merge_preparation "$store"
+  msg="gitlore: the prepared merge in $abs was cleared out from under gitlore — a 'git merge --abort' or a checkout in the store — leaving no MERGE_HEAD, nothing staged and nothing landed. Its leftover state is discarded and HEAD is back on the pending commit $(git -C "$store" rev-parse --short "$pending"); the merge is prepared again if the divergence is still there."
+  gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+  return 0
+}
+
+# The merge landed and a later checkout or reset moved HEAD off it. Restore HEAD onto the
+# merge commit where that can lose nothing, and name the exact commands
+# otherwise. Returns 0 when the store is fit to carry on, 1 after emitting when
+# it is not.
+# Args: $1 = store, $2 = abs store path, $3 = HEAD sha, $4 = landed merge sha.
+gitlore_recover_landed_merge() {
+  local store="$1" abs="$2" head="$3" landed="$4"
+  local msg err
+  if git -C "$store" merge-base --is-ancestor "$landed" "$head"; then
+    # HEAD already carries the merge; only the bookkeeping outlived it. This is
+    # also where a by-hand recovery lands after putting HEAD back, which is why
+    # the report below has to name no cleanup of its own.
+    gitlore_drop_merge_preparation "$store"
+    msg="gitlore: the merge in $abs already landed as $landed and HEAD carries it, so only its leftover merge state was cleared."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 0
+  fi
+  # Moving HEAD is safe only when the merge contains everything HEAD has and the
+  # tree holds nothing uncommitted: the checkout can then lose nothing, which is
+  # what makes automating it a repair rather than a guess.
+  if [ "$(gitlore_memory_dirty "$store")" = "1" ] \
+     || ! git -C "$store" merge-base --is-ancestor "$head" "$landed"; then
+    msg="gitlore: the merge in $abs landed as $landed, and a later checkout or reset moved HEAD off it onto $head. Nothing was changed here — the store has uncommitted work, or holds commits that merge does not. Read what is there, then put HEAD back:
+gitlore:   git -C \"$abs\" status --short
+gitlore:   git -C \"$abs\" log --oneline --left-right $landed...$head
+gitlore:   git -C \"$abs\" checkout --detach $landed
+gitlore: then re-run the git operation: with HEAD on the merge, the leftover merge state is cleared for you and the operation carries on."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 1
+  fi
+  if ! err=$(gitlore_git -C "$store" checkout -q --detach "$landed" 2>&1); then
+    msg="gitlore: the merge in $abs landed as $landed, a later checkout or reset moved HEAD off it, and HEAD could not be put back. git said:
+$err
+gitlore: restore it with: git -C \"$abs\" checkout --detach $landed, then re-run the operation."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 1
+  fi
+  gitlore_drop_merge_preparation "$store"
+  msg="gitlore: the merge in $abs landed as $landed before a checkout or reset moved HEAD off it; HEAD is restored to it and the leftover merge state cleared, so none of that merge is lost."
+  gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+  return 0
+}
+
+# A merge result is staged and its pointers are gone. Restore MERGE_HEAD and
+# MERGE_MSG so the store sits exactly where gitlore_prepare_merge leaves one,
+# then emit the merge directive: the staged tree may be a synthesis the user
+# already approved, and discarding the merge would throw it away along with the
+# worktree it was written into. Restoring is refused when HEAD is not the
+# authority the state file names — that commit is what the merge was built on,
+# and re-attaching a second parent to some other HEAD invents a merge nobody
+# prepared. Emits in every case; the caller yields either way.
+# Args: $1 = store, $2 = abs store path, $3 = HEAD sha, $4 = pending sha,
+#       $5 = state file path.
+gitlore_restore_staged_merge() {
+  local store="$1" abs="$2" head="$3" pending="$4" statefile="$5"
+  local target authority flavor gitdir msg
+  target=$(jq -r '.target_ref // ""' "$statefile")
+  authority=""
+  if [ -n "$target" ]; then
+    # `-q --verify` is silent on the expected miss: an authority ref a later
+    # fetch or prune removed.
+    authority=$(git -C "$store" rev-parse -q --verify "$target^{commit}") || authority=""
+  fi
+  if [ -z "$authority" ] || [ "$head" != "$authority" ]; then
+    msg="gitlore: $abs holds a staged merge whose MERGE_HEAD a checkout cleared, but HEAD is at $head while the authority it was built on ('$target') is at ${authority:-no commit this store can resolve}. Restoring the merge onto this HEAD would record a merge nobody prepared, so nothing was changed. Read the staged tree with:
+gitlore:   git -C \"$abs\" diff --cached
+gitlore: then either commit it deliberately or reset the store to a commit you trust, and re-run the operation."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 0
+  fi
+  gitdir=$(git -C "$store" rev-parse --absolute-git-dir)
+  # git's own wording for `merge <sha>` on a detached HEAD, so what the
+  # continuation commits reads as the merge it is.
+  if ! { printf '%s\n' "$pending" > "$gitdir/MERGE_HEAD" \
+         && printf "Merge commit '%s' into HEAD\n" "$pending" > "$gitdir/MERGE_MSG"; }; then
+    rm -f "$gitdir/MERGE_HEAD" "$gitdir/MERGE_MSG"
+    msg="gitlore: $abs holds a staged merge whose MERGE_HEAD a checkout cleared, and the pointers could not be written back into $gitdir. Restore them by hand, then re-run the operation:
+gitlore:   printf '%s\\n' $pending > \"$gitdir/MERGE_HEAD\"
+gitlore:   printf \"Merge commit '%s' into HEAD\\n\" $pending > \"$gitdir/MERGE_MSG\""
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 0
+  fi
+  flavor=$(jq -r .flavor "$statefile")
+  msg="gitlore: a checkout had cleared MERGE_HEAD in $abs but left the merge staged, so the merge pointers are restored and the staged result is intact."
+  gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+  gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
+}
+
+# Print the pending (divergent) commit a prepared merge was landing, or nothing.
+# The pin is authoritative — gitlore_prepare_merge writes it before HEAD moves —
+# and the state file's `source_ref` records the same sha a moment later, so
+# either answers on its own. Both are verified to still name a commit: a state
+# file written by hand, or one whose pin was deleted and whose commit was then
+# pruned, names something no classification can be built on.
+# Args: $1 = store, $2 = state file path.
+gitlore_pending_commit() {
+  local store="$1" statefile="$2" sha
+  if sha=$(git -C "$store" rev-parse -q --verify "$GITLORE_PENDING_REF^{commit}"); then
+    printf '%s\n' "$sha"
+    return 0
+  fi
+  sha=$(jq -r '.source_ref // ""' "$statefile") || return 0
+  [ -n "$sha" ] || return 0
+  git -C "$store" rev-parse -q --verify "$sha^{commit}" || return 0
+}
+
+# Print the sha of a merge commit that took $2 as a parent other than its first,
+# or nothing. Returns 1 if the history could not be scanned at all.
+#
+# Every ref AND every reflog: a merge that landed and was then checked out away
+# from is reachable from no ref, while HEAD's reflog still names it — and since
+# the reflogs are among `git fsck`'s roots, "is there an unreachable commit" is
+# silent on exactly the case this exists to catch.
+#
+# The scan is captured before it is parsed rather than piped into awk: under
+# `pipefail` an awk that stops at the first match leaves rev-list writing into a
+# closed pipe, which turns a found merge into a failed scan. `rev-list --parents`
+# emits fixed-width hex and nothing else, so splitting it on whitespace carries
+# none of the usual hazard. Args: $1 = store, $2 = pending commit.
+gitlore_landed_merge_commit() {
+  local store="$1" pending="$2" scan
+  scan=$(git -C "$store" rev-list --all --reflog --merges --parents) || return 1
+  printf '%s\n' "$scan" \
+    | awk -v p="$pending" '!found { for (i = 3; i <= NF; i++) if ($i == p) { print $1; found = 1 } }'
+}
+
+# Drop everything a preparation wrote: the state file and its briefing artifacts
+# (gitlore_clear_merge_state owns that list, so it cannot drift from
+# gitlore_write_merge_state), then the pending pin. Deleted rather than moved
+# aside — each one is recomputed from the two sides by the next preparation, so
+# a copy would only be a stale duplicate of a file about to be rewritten.
+# Args: $1 = store worktree path.
+gitlore_drop_merge_preparation() {
+  local store="$1"
+  gitlore_clear_merge_state "$store"
+  # Guarded rather than unconditional: a state file written before the pin
+  # existed, or one left by an interrupted preparation, has no ref to delete.
+  if git -C "$store" rev-parse -q --verify "$GITLORE_PENDING_REF" >/dev/null; then
+    gitlore_git -C "$store" update-ref -d "$GITLORE_PENDING_REF"
+  fi
 }
 
 # Write a JSON merge-state file. All args required.

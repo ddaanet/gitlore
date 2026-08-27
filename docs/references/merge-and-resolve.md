@@ -90,10 +90,58 @@ The division of labour is D7's: the script decides, the agent writes prose.
    waiting), then retries the original commit and tells the user which store was
    merged — a tier is shared with other repositories, the project store is not.
 
-A crashed merge leaves the state file behind. Every gate guards on it: with
-`MERGE_HEAD` present the directive says abort-then-retry; without it, the merge
-is dead and the message says manual intervention is required rather than
-operating on top of it.
+A crashed merge leaves the state file behind, and every gate guards on it. With
+`MERGE_HEAD` present the store sits exactly where `gitlore_prepare_merge` leaves
+one, so the directive is the ordinary `continue-after-merge` and the merge is
+handed back to the sub-agent: **a prepared merge is always continued, never
+discarded.** By the time a gate meets it again the sub-agent may already have
+synthesized and staged an answer, and nothing in the store tells that apart from
+a merge no one has touched.
+
+The accepted trade is a merge whose authority moved while it waited — someone
+pushed to `origin/live` meanwhile. It lands against the authority it was built
+on, and the continuation's own fast-forward (`push . HEAD:live`, then
+`push origin live` for a `head-vs-remote` merge) is then refused as a
+non-fast-forward, which re-prepares the merge against the current authority and
+yields again. One extra cycle, against re-synthesizing every merge that outlives
+its session — and re-preparing on sight never avoided it either, since that too
+merely fixed the authority as of whenever the gate happened to run.
+
+Without `MERGE_HEAD`, the guard
+classifies from the pinned pending commit and the state file's own fields, and
+repairs. Two things produce that state, and they leave different remains: a
+plain `git merge --abort` run in the store drops the pointers *and* resets the
+index, so nothing of the merge survives but gitlore's own files, while
+`git checkout` — including the no-op re-checkout `submodule update` runs — calls
+`remove_branch_state()`, which unlinks `MERGE_HEAD` and `MERGE_MSG` silently
+while leaving the staged result behind (a cleanly auto-merged index has no
+unmerged entry for checkout to refuse over).
+
+- **A merge landed.** A merge commit taking the pinned pending commit as a
+  parent other than its first *is* that merge, wherever HEAD sits now. Searched
+  across refs **and** reflogs: a landed merge HEAD was moved off is reachable
+  from no ref, and `git fsck` counts the reflogs among its roots, so
+  "is there an unreachable commit" is silent on exactly this case. HEAD returns
+  to the merge when doing so can lose nothing — the merge already contains HEAD
+  and the tree is clean — and the commands to do it by hand are printed
+  otherwise.
+- **A merge result is staged.** The index survives the checkout that took the
+  pointers, and what it holds may be a synthesis the user has already approved,
+  so `MERGE_HEAD` and `MERGE_MSG` are written back and the directive asks for
+  the sub-agent again — the same continuation the `MERGE_HEAD`-present case
+  gets, and for the same reason: discarding the merge would take the staged tree
+  with the worktree it was written into. Refused when HEAD is not the authority
+  the state file names, since that commit is what the merge was built on.
+- **Neither.** The merge is dead — the `merge --abort` shape. HEAD goes back
+  onto the pending commit *before* the pin is dropped, since after a preparation
+  that pin is the only reference to the divergent side; every artifact a
+  preparation wrote is deleted, and the gate carries on, preparing the merge
+  again if the divergence is still there.
+
+The artifacts are deleted rather than moved aside because the next preparation
+recomputes each of them from the two sides. One dead end remains: a state file
+that names no pending commit, with the pin gone too, leaves nothing that can say
+whether the merge landed, and the message says so.
 
 ### The `merge` skill
 
@@ -251,8 +299,9 @@ separates the two approvals it carries: the dispatch needs none, the merge the
 sub-agent proposes still does, and the continuation line says so. The name is
 emitted plugin-qualified (`gitlore:memory-merger`) because a bare one fails
 discovery. `gitlore_emit_merge_directive` is the single emitter, so the shape
-reaches both continuations — `continue-after-merge` and the stale-state
-`abort-then-retry` — and any directive added later that names a sub-agent.
+reaches every yield that asks for the sub-agent — a fresh preparation, a stale
+state file with its `MERGE_HEAD` intact, a staged merge whose pointers were
+restored — and any directive added later that names a sub-agent.
 
 **Rejected: putting the qualification anywhere but the directive.** Amending the
 harness rule in the consumer's own configuration ("…unless a hook directive

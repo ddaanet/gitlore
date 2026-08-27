@@ -160,6 +160,9 @@ EOF
 #      prefix has no carrier to survive in, so dropping it would be data loss;
 #   4. no non-blank non-bullet line inside an index's bullet region — the
 #      layout rule would relocate it and lose its position.
+# Rule 6 (the welded line) is checked per index below; rule 7 (an active tier
+# off its pin) is the down pass's alone and lives in gitlore_compose_check_pins,
+# which this function does not call.
 gitlore_compose_check() {
   local mempath="$1" mounted active problems="" tier file found
   mounted=$(gitlore_tier_paths "$mempath")
@@ -275,6 +278,73 @@ $path"
   return 0
 }
 
+# Rule 7 — every ACTIVE tier sits at the commit the memory store records for it.
+# Print one problem per moved tier and return 1; print nothing and return 0
+# otherwise. Depends on gitlore_active_tiers and gitlore_merge_state_file
+# (util.sh); callers already source it.
+#
+# The down projection is safe only because a pinned tier cannot have moved on
+# its own, which is what leaves one projection to move between passes (D36). A
+# tier advanced outside /gitlore:merge breaks that: nothing adopted the carrier's
+# newer text up into the root, so the next pass writes root's OLDER text over it
+# and reports a successful compose. That is a silent overwrite of approved
+# upstream facts, so this refuses rather than reports.
+#
+# It lives OUTSIDE gitlore_compose_check, and only gitlore_compose calls it,
+# because the rule belongs to the down pass alone. gitlore_compose_up adopts a
+# carrier at the end of a landed merge, where the tier is legitimately ahead of
+# the pin and the staging that restores it comes after the adoption — a
+# parameter on the shared check would leave the merge path one argument away
+# from refusing the very state it exists to land, where a function the up path
+# never calls makes the scope structural.
+#
+# The pin is read from the memory store's INDEX (`:$tier`), not from
+# `HEAD:$tier`: `submodule update` checks a tier out at the sha the index holds,
+# and every path that advances a tier stages the moved gitlink there as its last
+# act (D43). Reading HEAD would call a landed merge a defect for as long as the
+# memory commit recording it is pending.
+gitlore_compose_check_pins() {
+  local mempath="$1" active tier tierpath pinned head abs problems=""
+  active=$(gitlore_active_tiers "$mempath")
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # `git -C` into an unmaterialized submodule walks up to the enclosing repo,
+    # which would answer for memory's own HEAD under the tier's name.
+    [ -e "$tierpath/.git" ] || continue
+    # `-q --verify` is silent on the expected miss: no gitlink for this tier in
+    # the index at all — mid-mount, or removed — which this rule has no opinion
+    # about. Same for a store with no HEAD yet.
+    pinned=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
+    head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
+    [ "$head" = "$pinned" ] && continue
+    # Mid-merge takes a different remedy: the return-to-the-pin checkout below
+    # unlinks MERGE_HEAD and destroys the prepared merge. The predicate is
+    # gitlore_detect_stale_merge_state's own "not clean" — state file or
+    # MERGE_HEAD — spelled out rather than called, because that function lives in
+    # resolve.sh and resolve.sh sources this file.
+    if [ -f "$(gitlore_merge_state_file "$tierpath")" ] \
+       || git -C "$tierpath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+      problems="${problems}tier '$tier' is mid-merge and sits off the commit the memory store records for it; run /gitlore:resolve to land the merge before the indexes can be composed
+"
+      continue
+    fi
+    # Absolute, so the printed command runs from anywhere; quoted, so a tier path
+    # containing whitespace survives being pasted into a shell.
+    abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
+    # Truncated by parameter expansion rather than `rev-parse --short`: the
+    # pinned commit need not exist in either store's object database.
+    problems="${problems}tier '$tier' is checked out at ${head:0:12} but the memory store records ${pinned:0:12}: it was moved outside /gitlore:merge, and projecting the root index onto it would overwrite what it holds. Return it to the pin with \`git -C \"$abs\" checkout --detach $pinned\`, then run /gitlore:merge to take upstream properly.
+"
+  done <<EOF
+$active
+EOF
+
+  [ -z "$problems" ] && return 0
+  printf '%s' "$problems" | grep -v '^$'
+  return 1
+}
+
 # Echo at most GITLORE_DANGLING_CAP non-empty lines of stdin; when more remain,
 # append a "… and N more" summary in their place. One whole tier going stale at
 # once (another consumer merging or renaming a cluster of facts in a shared tier)
@@ -346,9 +416,12 @@ EOF
 # root index becomes a line the tier can travel with.
 #
 # A tier is pinned at its gitlink, so the carrier cannot have moved on its own
-# since the memory commit that recorded both surfaces. What is left to decide is
-# a carrier path root does not carry, and "root lacks it" alone is ambiguous —
-# root may have deleted it, or may never have had it. Root at HEAD answers:
+# since the memory commit that recorded both surfaces — and when one has,
+# gitlore_compose_check_pins refuses the whole pass, because root's older text
+# would otherwise land on a carrier nothing had adopted up. What is left to
+# decide is a carrier path root does not carry, and "root lacks it" alone is
+# ambiguous — root may have deleted it, or may never have had it. Root at HEAD
+# answers:
 #
 #   present there → root deleted the line → drop it from the carrier;
 #   absent there  → nobody authored it in root → keep it (a line written straight
@@ -711,9 +784,13 @@ gitlore_compose() {
   local active tier changed="" out
   [ -f "$root" ] || return 0
 
-  if ! gitlore_compose_check "$mempath"; then
-    return 1
-  fi
+  # Both checks run before either verdict is read, so one refusal carries the
+  # whole list. Rule 7 is here rather than in gitlore_compose_check because it
+  # guards the down projection specifically (see gitlore_compose_check_pins).
+  local refused=0
+  gitlore_compose_check "$mempath" || refused=1
+  gitlore_compose_check_pins "$mempath" || refused=1
+  [ "$refused" -eq 0 ] || return 1
 
   active=$(gitlore_active_tiers "$mempath")
 

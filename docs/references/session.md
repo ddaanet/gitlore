@@ -83,11 +83,15 @@ has no `gitlore-memory` entry, no-op.
 6. **Detach at `live` and fast-forward**, or skip the fast-forward with a notice
    when memory is dirty. A fast-forward that fails is divergence: report it and
    route to `/gitlore:resolve`.
-7. **Propagate the tiers.** For each mounted tier: initialize, fetch its remote
-   `live` fast-forward-only, and re-detach at `live`. A diverged, unfetchable or
-   mid-merge tier is reported by name and left untouched — never silently
-   skipped, because a tier that stops propagating looks exactly like one with
-   nothing to say.
+7. **Pin the tiers.** A tier holding an unfinished merge is left as it is and
+   named, because the checkout below would clear its `MERGE_HEAD`. Every other
+   mounted tier is initialized and checked out at the gitlink the memory
+   store's index records, detached in place if it arrived on a branch, and its
+   remote `live` is fetched read-only to name what is waiting — upstream facts,
+   or a divergence — without moving anything: a tier advances only through
+   `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported
+   by name, never silently skipped, because a tier that stops talking to its
+   remote looks exactly like one with nothing to say.
 8. **Compose the indexes**, then run the dangling-pointer report (D34). A
    refusal writes nothing and says why; a partial write says which indexes are
    composed.
