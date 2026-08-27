@@ -5,7 +5,10 @@ load helpers/setup
 EMIT="$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
 setup()    { setup_tmp_repo; }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  teardown_tmp_repo
+}
 
 @test "emit-wrappers writes both wrapper files and makes them executable" {
   run bash "$EMIT"
@@ -66,11 +69,10 @@ EOF
 @test "emit-wrappers in a linked worktree writes to the shared common dir, not the gitlink file" {
   echo seed > f && git add f && git commit -q -m seed
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   ( cd "$WT" && bash "$EMIT" )
   # The wrapper must land in the shared common dir (= the main worktree's .git),
   # NOT next to the gitlink file (which would fail to write).
   [ -x "$TMP_REPO/.git/gitlore-pre-commit" ]
   [ -x "$TMP_REPO/.git/gitlore-pre-push" ]
-  rm -rf "$WT"
 }

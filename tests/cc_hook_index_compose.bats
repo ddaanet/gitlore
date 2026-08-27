@@ -59,7 +59,7 @@ seed_root_fact() {
   run feed
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  run ! grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  run -1 grep -qF 'ddaanet/shared.md' memory/MEMORY.md
 }
 
 @test "no-op for a batch that left no baseline behind" {
@@ -82,7 +82,7 @@ seed_root_fact() {
   run feed
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  run ! grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  run -1 grep -qF 'ddaanet/shared.md' memory/MEMORY.md
 }
 
 @test "an index-touching batch composes and reports on both channels" {
@@ -101,8 +101,7 @@ seed_root_fact() {
 @test "a Bash-applied index edit composes, though it named no file" {
   seed_tier_bullet ddaanet shared.md "a portable fact"
   pre Bash
-  sed -i'' -e '$a\
-- [P](p.md) — a project fact' memory/MEMORY.md
+  printf '%s\n' '- [P](p.md) — a project fact' >> memory/MEMORY.md
   printf -- '---\nname: p\ndescription: ""\n---\n\nbody\n' > memory/p.md
   run feed
   [ "$status" -eq 0 ]

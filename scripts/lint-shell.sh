@@ -10,8 +10,11 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
+# No `\b`: BSD grep's ERE has no word boundary (it spells one `[[:<:]]`), so
+# the GNU form would silently discover nothing on macOS. The name is delimited
+# by a `/` or blank before and a blank or end-of-line after.
 is_shell_shebang() {
-  head -1 "$1" | grep -qE '^#!.*\b(ba)?sh\b'
+  head -1 "$1" | grep -qE '^#!.*(/|[[:blank:]])(ba)?sh([[:blank:]]|$)'
 }
 
 files=()

@@ -52,7 +52,7 @@ approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
   run bash "$PRE_COMMIT"
   [ "$status" -eq 0 ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
-  git -C memory/ddaanet show HEAD:MEMORY.md | grep -q 'org fact'
+  [[ "$(git -C memory/ddaanet show HEAD:MEMORY.md)" == *'org fact'* ]]
 }
 
 @test "the tier commit advances the tier's local live" {
@@ -140,7 +140,7 @@ approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
 
   run bash "$PRE_COMMIT"
   [ "$status" -eq 0 ]
-  git -C memory show HEAD:notes.md | grep -q dirty
+  [[ "$(git -C memory show HEAD:notes.md)" == *dirty* ]]
 }
 
 # --- push lockstep ---
@@ -158,7 +158,7 @@ approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
   local_sha=$(git -C memory/ddaanet rev-parse live)
   remote_sha=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
   [ "$local_sha" = "$remote_sha" ]
-  git --git-dir="$TMP_REPO/.bare-ddaanet.git" show live:MEMORY.md | grep -q 'org fact'
+  [[ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" show live:MEMORY.md)" == *'org fact'* ]]
 }
 
 # Resolution itself is tier_divergence.bats' subject; what this pins is that the

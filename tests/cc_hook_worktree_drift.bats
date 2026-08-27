@@ -9,6 +9,7 @@ DRIFT="$PLUGIN_ROOT/scripts/cc-hooks/worktree-drift.sh"
 setup()    { setup_tmp_repo; export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"; }
 teardown() {
   [ -n "${WT:-}" ] && rm -rf "$WT"
+  [ -n "${OTHER:-}" ] && rm -rf "$OTHER"
   teardown_tmp_repo
 }
 
@@ -19,7 +20,7 @@ enable_gitlore() {
 
 add_linked_worktree() {
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat-x "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat-x "$WT" >/dev/null
 }
 
 @test "EnterWorktree into a linked worktree of a gitlore repo warns of memory drift (D15)" {
@@ -81,13 +82,12 @@ add_linked_worktree() {
   # somebody else's checkout is not drift, and warning about it would be wrong.
   make_parent_with_memory
   enable_gitlore
-  other="$TMP_REPO-other"
-  git init -q -b main "$other"
-  payload=$(jq -nc --arg cwd "$other" '{tool_name:"EnterWorktree", cwd:$cwd}')
+  OTHER="$TMP_REPO-other"
+  git init -q -b main "$OTHER"
+  payload=$(jq -nc --arg cwd "$OTHER" '{tool_name:"EnterWorktree", cwd:$cwd}')
   CLAUDE_PROJECT_DIR="$TMP_REPO" run bash "$DRIFT" <<<"$payload"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  rm -rf "$other"
 }
 
 # Over-determined on purpose. Deleting the `-n "$cwd" && -n "$launch"` bail

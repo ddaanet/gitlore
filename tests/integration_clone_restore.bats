@@ -37,7 +37,10 @@ setup() {
   git commit -q -m "Install gitlore"
 }
 
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${CLONE:-}" ] && rm -rf "$CLONE"
+  teardown_tmp_repo
+}
 
 @test "fresh clone + SessionStart restores memory working tree without re-install" {
   ORIGIN="$TMP_REPO"
@@ -67,5 +70,4 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
   [ "$(git -C "$CLONE/memory" rev-parse HEAD)" = "$(git -C "$CLONE/memory" rev-parse live)" ]
 
-  rm -rf "$CLONE"
 }

@@ -36,6 +36,7 @@ teardown() { teardown_tmp_repo; }
 
 @test "prints a fish set -gx PATH instruction" {
   run --separate-stderr env SHELL=/usr/bin/fish bash "$GLOBAL"
+  [ "$status" -eq 0 ]
   [[ "$stderr" == *"set -gx PATH $GITLORE_HOME/bin \$PATH"* ]]
 }
 

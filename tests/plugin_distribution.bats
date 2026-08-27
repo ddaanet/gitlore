@@ -37,9 +37,9 @@ load helpers/setup
   # Extract the YAML frontmatter (between the first two --- fences).
   fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$agent")"
   # Required: a kebab-case name matching the dispatch id `gitlore:memory-merger`.
-  echo "$fm" | grep -qE '^name:[[:space:]]*memory-merger[[:space:]]*$'
+  grep -qE '^name:[[:space:]]*memory-merger[[:space:]]*$' <<<"$fm"
   # Must restrict tools via `tools:` ...
-  echo "$fm" | grep -qE '^tools:[[:space:]]*'
+  grep -qE '^tools:[[:space:]]*' <<<"$fm"
   # ... and must NOT use the agent-invalid `allowed-tools:` key.
   run grep -qE '^allowed-tools:' <<<"$fm"
   [ "$status" -ne 0 ]
@@ -79,10 +79,10 @@ load helpers/setup
   [ ! -e "$PLUGIN_ROOT/commands/resolve.md" ]
   fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
   # CC does not fall back to the filename for a skill's dispatch id.
-  echo "$fm" | grep -qE '^name:[[:space:]]*resolve[[:space:]]*$'
+  grep -qE '^name:[[:space:]]*resolve[[:space:]]*$' <<<"$fm"
   # The description carries the hook's own stderr marker, which is what the
   # agent matches on when a gate yields mid-task.
-  echo "$fm" | grep -qF 'gitlore: memory merge prepared'
+  grep -qF 'gitlore: memory merge prepared' <<<"$fm"
 }
 
 # D20: push is a skill, not a command, for the same reason resolve is -- it is
@@ -96,7 +96,7 @@ load helpers/setup
   [ ! -e "$PLUGIN_ROOT/commands/push.md" ]
   fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
   # CC does not fall back to the filename for a skill's dispatch id.
-  echo "$fm" | grep -qE '^name:[[:space:]]*push[[:space:]]*$'
+  grep -qE '^name:[[:space:]]*push[[:space:]]*$' <<<"$fm"
   # The script the skill shells out to must ship executable -- a 100644 here
   # makes the skill's one Bash call fail for every installed user.
   [ -x "$PLUGIN_ROOT/scripts/push-memory.sh" ]
@@ -113,7 +113,7 @@ load helpers/setup
   [ -f "$skill" ]
   [ ! -e "$PLUGIN_ROOT/commands/merge.md" ]
   fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
-  echo "$fm" | grep -qE '^name:[[:space:]]*merge[[:space:]]*$'
+  grep -qE '^name:[[:space:]]*merge[[:space:]]*$' <<<"$fm"
   [ -x "$PLUGIN_ROOT/scripts/merge-memory.sh" ]
   grep -qF 'git config gitlore.mergeCommand' "$skill"
 }
@@ -183,4 +183,11 @@ load helpers/setup
   [ -n "$add_tier_line" ]
   [ -n "$compose_line" ]
   [ "$add_tier_line" -lt "$compose_line" ]
+}
+
+# The committed dogfood shim is a byte copy of launcher-shim (emit-launcher.sh
+# `cp`s it), and both headers say so. emit_launcher.bats only diffs a FRESH
+# emission; this pins the copy this repo actually ships.
+@test "distribution: the committed .gitlore/bin/claude is the current launcher-shim" {
+  cmp "$PLUGIN_ROOT/.gitlore/bin/claude" "$PLUGIN_ROOT/scripts/install/launcher-shim"
 }

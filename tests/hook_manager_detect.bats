@@ -11,18 +11,21 @@ teardown() { teardown_tmp_repo; }
 @test "detects lefthook via lefthook.yml" {
   : > lefthook.yml
   run bash "$DETECT"
+  [ "$status" -eq 0 ]
   [ "$output" = "lefthook" ]
 }
 
 @test "detects husky via .husky directory" {
   mkdir .husky
   run bash "$DETECT"
+  [ "$status" -eq 0 ]
   [ "$output" = "husky" ]
 }
 
 @test "detects overcommit via .overcommit.yml" {
   : > .overcommit.yml
   run bash "$DETECT"
+  [ "$status" -eq 0 ]
   [ "$output" = "overcommit" ]
 }
 
@@ -30,11 +33,13 @@ teardown() { teardown_tmp_repo; }
   printf '#!/bin/sh\n' > .git/hooks/pre-commit
   chmod +x .git/hooks/pre-commit
   run bash "$DETECT"
+  [ "$status" -eq 0 ]
   [ "$output" = "direct" ]
 }
 
 @test "defaults to direct when no hook manager is detected" {
   run bash "$DETECT"
+  [ "$status" -eq 0 ]
   [ "$output" = "direct" ]
 }
 
@@ -42,6 +47,7 @@ teardown() { teardown_tmp_repo; }
   : > lefthook.yml
   mkdir .husky
   run bash "$DETECT"
+  [ "$status" -eq 0 ]
   [[ "$output" == multi:* ]]
   [[ "$output" == *lefthook* ]]
   [[ "$output" == *husky* ]]

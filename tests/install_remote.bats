@@ -22,7 +22,7 @@ teardown() { teardown_tmp_repo; }
 
 @test "install configures memory submodule remote via gh repo create" {
   bash "$RUN_INSTALL" memory "echo precommit"
-  url=$(git -C memory config --get remote.origin.url 2>/dev/null || true)
+  url=$(git -C memory config --get remote.origin.url || true)
   [ -n "$url" ]
 }
 
@@ -73,8 +73,8 @@ teardown() { teardown_tmp_repo; }
   local no_gh_bin="$TMP_REPO/.no-gh-bin"
   mkdir -p "$no_gh_bin"
   for tool in bash sh git jq mktemp mv dirname basename find grep sed awk sort cat cp rm mkdir touch chmod tail stat; do
-    bin=$(command -v "$tool" 2>/dev/null || true)
-    [ -n "$bin" ] && ln -sf "$bin" "$no_gh_bin/$tool"
+    bin=$(command -v "$tool") || { echo "no $tool on PATH to build the gh-less PATH from" >&2; return 1; }
+    ln -sf "$bin" "$no_gh_bin/$tool"
   done
   GITLORE_HOME="$TMP_REPO/.test-home" PATH="$no_gh_bin" run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
   [ "$status" -eq 0 ]

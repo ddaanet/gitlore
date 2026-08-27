@@ -9,7 +9,9 @@ set -euo pipefail
 #
 # Usage: run-bats.sh <bats-args...>   (same args you'd pass to `bats` directly)
 
-log="$(mktemp "${TMPDIR:-/tmp}/gitlore-bats-XXXXXX.log")"
+# Xs last: BSD mktemp randomises only a trailing run of them, and uses a
+# template like `name-XXXXXX.log` literally — the second run then dies on EEXIST.
+log="$(mktemp "${TMPDIR:-/tmp}/gitlore-bats.XXXXXX")"
 
 set +e
 bats "$@" >"$log" 2>&1

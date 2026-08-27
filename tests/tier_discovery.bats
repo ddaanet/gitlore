@@ -11,7 +11,10 @@ load helpers/tier-fixtures
 SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 
 setup()    { setup_tmp_repo; export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"; }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  teardown_tmp_repo
+}
 
 # --- Characterization: how git actually mounts a submodule inside a submodule ---
 
@@ -48,27 +51,27 @@ teardown() { teardown_tmp_repo; }
   push_tier_fact ddaanet >/dev/null
   run git -C memory/ddaanet fetch origin "live:live"
   [ "$status" -ne 0 ]
-  echo "$output" | grep -q 'non-fast-forward'
+  [[ "$output" == *non-fast-forward* ]]
 }
 
 @test "a D11 linked memory worktree gets its own independent tier clone" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   memsha="$(git -C memory rev-parse HEAD)"
-  wt="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-wt.XXXXXX")"
-  rm -rf "$wt"
-  git -C .git/modules/gitlore-memory worktree add --detach "$wt" "$memsha" >/dev/null 2>&1
-  git -C "$wt" -c protocol.file.allow=always submodule update --init -- ddaanet >/dev/null 2>&1
-  [ -e "$wt/ddaanet/.git" ]
+  WT="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-wt.XXXXXX")"
+  rm -rf "$WT"
+  git -C .git/modules/gitlore-memory worktree add --detach "$WT" "$memsha" >/dev/null
+  git -C "$WT" -c protocol.file.allow=always submodule update --init -- ddaanet >/dev/null
+  [ -e "$WT/ddaanet/.git" ]
   # Separate gitdir from the primary checkout's tier — not a shared store.
   primary="$(git -C memory/ddaanet rev-parse --absolute-git-dir)"
-  linked="$(git -C "$wt/ddaanet" rev-parse --absolute-git-dir)"
+  linked="$(git -C "$WT/ddaanet" rev-parse --absolute-git-dir)"
   [ "$primary" != "$linked" ]
   case "$linked" in
     */modules/gitlore-memory/worktrees/*/modules/ddaanet) ;;
     *) echo "unexpected linked tier gitdir: $linked"; return 1 ;;
   esac
-  rm -rf "$wt"
+  rm -rf "$WT"
   git -C .git/modules/gitlore-memory worktree prune
 }
 
@@ -207,7 +210,7 @@ teardown() { teardown_tmp_repo; }
 @test "SessionStart materializes a tier that was never checked out (propagation)" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
-  git -C memory submodule deinit -f -- ddaanet >/dev/null 2>&1
+  git -C memory submodule deinit -f -- ddaanet >/dev/null
   [ ! -e memory/ddaanet/.git ]
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json

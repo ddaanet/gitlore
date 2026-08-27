@@ -42,15 +42,16 @@ make_parent_with_memory() {
     || { echo "make_parent_with_memory: template copy broke the memory submodule's HEAD" >&2; return 1; }
 }
 
-# In-place literal path substitution in $3 (not a general regex tool — old
-# and new are both plain filesystem paths). Escapes sed's regex/replacement
-# metacharacters so a path segment like a dot or an ampersand can't corrupt
-# the match.
+# Literal path substitution in $3 (not a general regex tool — old and new are
+# both plain filesystem paths). Escapes sed's regex/replacement metacharacters
+# so a path segment like a dot or an ampersand can't corrupt the match.
+# Temp file + mv rather than `sed -i`: BSD sed takes the backup extension as a
+# separate argument and GNU sed attached, so no -i spelling runs on both.
 _gitlore_sed_replace_path() {
   local old="$1" new="$2" file="$3" old_esc new_esc
   old_esc="$(printf '%s' "$old" | sed -e 's/[.[\*^$\/&]/\\&/g')"
   new_esc="$(printf '%s' "$new" | sed -e 's/[\/&]/\\&/g')"
-  sed -i "s/${old_esc}/${new_esc}/g" "$file"
+  sed "s/${old_esc}/${new_esc}/g" "$file" > "$file.tmp" && mv -f "$file.tmp" "$file"
 }
 
 _gitlore_fixture_cache_dir() {

@@ -20,7 +20,10 @@ setup() {
   MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
   export MEMORY_REMOTE
 }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  teardown_tmp_repo
+}
 
 # Give the repo a memory store wired to a bare remote, already published, then
 # add one unpublished memory commit. Mirrors pre_push_hook.bats's setup.
@@ -53,10 +56,9 @@ add_memory_commit() {
   wire_memory_remote
   WT="$TMP_REPO-wt"
   git worktree add -q -b feat "$WT"
-  run bash -c "cd '$WT' && bash '$CMD'"
+  run bash -c 'cd "$1" && bash "$2"' _ "$WT" "$CMD"
   [ "$status" -eq 0 ]
   [[ "$output" == *"not checked out in this worktree"* ]]
-  git worktree remove --force "$WT"
 }
 
 @test "rejects arguments: approval belongs to the commit, not the push" {
@@ -155,7 +157,8 @@ add_memory_commit() {
   wire_memory_remote
   add_memory_commit
   (
-    cd "$(mktemp -d "$TMP_REPO/clone.XXXXXX")" || exit 1
+    clone_dir=$(mktemp -d "$TMP_REPO/clone.XXXXXX") || exit 1
+    cd "$clone_dir" || exit 1
     git clone -q "$MEMORY_REMOTE" .
     git checkout -q live
     printf 'remote-only\n' > REMOTE.md

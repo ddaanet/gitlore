@@ -51,6 +51,9 @@ make it from the node, and for a bug report from the script the node names.
 - `just precommit` is fast and frequent. `just evals` drives the real claude
   CLI and costs time and money — run it explicitly, not as part of a release.
   `just release` depends on `prerelease`, which is just `precommit`.
+- macOS is a target: bash 3.2 and BSD `sed`/`mktemp`/`grep`/`find`/`stat`.
+  `tests/helpers/bsd-stubs.bash` shadows a tool with its BSD-strict contract so
+  a GNU-ism fails on Linux; `tests/bsd_portability.bats` holds the lock-ins.
 - `test-unit`/`test-integration` run bats through `scripts/run-bats.sh`, not
   bare `bats`: it shows only `not ok` blocks plus a pass/fail count and
   stashes the full TAP stream in a logged tmp file. Don't pipe raw `bats`
