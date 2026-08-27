@@ -43,9 +43,11 @@ has no `.git` (registered but not checked out).
    registers the submodule in `.gitmodules` and initializes the empty working
    tree.
 7. Seed memory content inside the submodule worktree:
-   - If existing auto-memory exists at `~/.claude/projects/<hash>/memory/`, copy
-     it in.
-   - Otherwise, scaffold a `MEMORY.md` index file.
+   - If existing auto-memory exists at `~/.claude/projects/<hash>/memory/` and
+     holds anything, copy it in.
+   - Otherwise — no dir, an empty one, or a migration stub — scaffold a
+     `MEMORY.md` index file. A store with no root index composes nothing and
+     cannot be merged into, so the scaffold is never skipped.
 8. `git -C <memory-path> add -A && git -C <memory-path> commit -m "Initial memory"`
    — non-empty initial commit; install is git-atomic.
 9. Create the `live` branch at the initial commit and check the worktree out

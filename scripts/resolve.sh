@@ -133,7 +133,15 @@ compose_merged_indexes() {
   # working-tree change. For a memory merge the two calls are the same repo, and
   # the second is what stages the compose write the first ran too early to see.
   gitlore_git -C "$store" add -A
-  gitlore_git -C "$memroot" add -- MEMORY.md
+  # A store with no root index — seeded from an empty auto-memory dir — has
+  # nothing to stage; gitlore_compose_up tolerated its absence above, and the
+  # merge must not be blocked on it. Say so: nothing composes up into a root
+  # index that does not exist, and that is the store's defect, not the merge's.
+  if [ -f "$memroot/MEMORY.md" ]; then
+    gitlore_git -C "$memroot" add -- MEMORY.md
+  else
+    echo "gitlore: the memory root $memroot_abs has no MEMORY.md, so no tier lines can compose into it. The merge is committed regardless; create the root index (\`# Memory Index\`) and edit it to trigger composition." >&2
+  fi
 }
 
 # Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on

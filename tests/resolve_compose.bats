@@ -155,3 +155,35 @@ diverge_memory_with_index() {
   [[ "$(git -C memory show HEAD:MEMORY.md)" == *"- [Gone](gone.md)"* ]]
   [ ! -e memory/gone.md ]
 }
+
+@test "a tier merge on a store with no root index commits, reports, and stages the gitlink" {
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  # A store the installer seeded from an empty auto-memory dir: no MEMORY.md at
+  # all. Composition tolerates that; the continuation's staging step must too.
+  git -C memory rm -q MEMORY.md
+  GITLORE_MEMORY_COMMIT=1 git -C memory -c user.email=t@t -c user.name=t commit -q -m "No root index"
+  printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  approve "memory: record the org fact"
+  bash "$PRE_COMMIT"
+  push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
+
+  run bash "$PRE_PUSH"
+  [ "$status" -eq 1 ]
+  tier_before=$(git -C memory/ddaanet rev-parse HEAD)
+
+  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [org fact](f.md) — ours\n- [their fact](t.md) — theirs\n' \
+    > memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet add -A
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+[[ "$stderr" == *"no MEMORY.md"* ]]
+
+  # The tier merge landed, and the moved gitlink is staged in the root store.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" != "$tier_before" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  [ ! -f memory/MEMORY.md ]
+}
