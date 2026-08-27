@@ -164,7 +164,12 @@ pct=$(gitlore_index_budget_pct "$index") || pct=""
 nudge_file=$(gitlore_index_budget_nudge_file "$mempath" "$session")
 if [ -n "$pct" ] && [ "$pct" -ge "$GITLORE_INDEX_BUDGET_WARN_PCT" ] && [ ! -f "$nudge_file" ]; then
   budget=1
-  touch "$nudge_file"
+  # An unguarded failure here would abort the whole hook under set -e before
+  # the `jq -n` report below runs — discarding it entirely, including the
+  # unrelated `failed` list naming files whose frontmatter is now stale. If the
+  # marker can't be written, the once-per-episode guarantee can't be kept
+  # either, so don't claim the advisory fired this batch.
+  touch "$nudge_file" || budget=""
 fi
 
 sysmsg=""

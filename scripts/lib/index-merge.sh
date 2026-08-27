@@ -165,11 +165,13 @@ gitlore_index_merge() {
 # and the state file would otherwise send the sub-agent past a real conflict.
 gitlore_conflicted_indexes() {
   local store="$1" name
+  # -c core.quotePath=false: an octal-escaped non-ASCII name would fail the
+  # `[ -f "$store/$name" ]` lookup below and silently drop a real conflict.
   while IFS= read -r name; do
     case "$name" in MEMORY.md|*/MEMORY.md) ;; *) continue ;; esac
     [ -f "$store/$name" ] || continue
     grep -q '^<<<<<<< ' "$store/$name" && printf '%s\n' "$name"
-  done < <(git -C "$store" ls-files | sort -u)
+  done < <(git -c core.quotePath=false -C "$store" ls-files | sort -u)
   # Finding nothing is the normal case, but it leaves the loop's status at the
   # last grep's 1. Callers run this in a `pipefail` pipeline, where that reads as
   # a failed producer.
@@ -184,11 +186,14 @@ gitlore_conflicted_indexes() {
 gitlore_index_paths_in() {
   local store="$1" ref name
   for ref in "$2" "$3" "$4"; do
+    # -c core.quotePath=false: same as gitlore_conflicted_indexes above — an
+    # octal-escaped non-ASCII path here misses on every side, and the entry-wise
+    # re-merge for that index silently never runs.
     while IFS= read -r name; do
       case "$name" in
         MEMORY.md|*/MEMORY.md) printf '%s\n' "$name" ;;
       esac
-    done < <(git -C "$store" ls-tree -r --name-only "$ref")
+    done < <(git -c core.quotePath=false -C "$store" ls-tree -r --name-only "$ref")
   done | sort -u
 }
 

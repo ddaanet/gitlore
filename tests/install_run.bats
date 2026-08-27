@@ -26,6 +26,19 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "memory" ]
 }
 
+@test "install works with a multi-component mempath (.claude/memory is a documented, supported layout)" {
+  # The gitfile's "gitdir:" target is relative to the gitfile's own location, so
+  # it depends on how many path components mempath has — a fixed one-component
+  # "../" breaks for a nested path.
+  run bash "$RUN_INSTALL" .claude/memory "echo precommit"
+  [ "$status" -eq 0 ]
+  [ -f .claude/memory/.git ]
+  [[ "$(cat .claude/memory/.git)" == "gitdir: ../../.git/modules/gitlore-memory" ]]
+  # The gitfile resolves: an ordinary git command in the submodule must not error.
+  git -C .claude/memory rev-parse HEAD
+  [ "$(git -C .claude/memory rev-parse HEAD)" = "$(git -C .claude/memory rev-parse live)" ]
+}
+
 @test "install creates the live trunk and leaves memory detached at it" {
   bash "$RUN_INSTALL" memory "echo precommit"
   run git -C memory branch --list live
@@ -53,6 +66,20 @@ teardown() { teardown_tmp_repo; }
   mkdir memory && touch memory/unrelated.txt
   run bash "$RUN_INSTALL" memory "echo precommit"
   [ "$status" -ne 0 ]
+}
+
+@test "the already-registered check treats mempath as a literal, not a regex" {
+  # `grep -qx "$mempath"` (no -F) reads mempath as a pattern: a `.` matches any
+  # character, so once "memory" is registered, a DIFFERENT, unrelated,
+  # non-empty path like "mem.ry" is misread as "already our submodule" and the
+  # non-empty-path refusal is skipped — the confusing "not checked out here"
+  # error fires instead of the correct one.
+  bash "$RUN_INSTALL" memory "echo precommit"
+  mkdir -p "mem.ry" && echo unrelated > "mem.ry/file.txt"
+  run bash "$RUN_INSTALL" "mem.ry" "echo precommit"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"exists and is not empty"* ]]
+  [[ "$output" != *"not checked out here"* ]]
 }
 
 @test "install resumes cleanly after partial prior run (module store absorbed, .gitmodules missing)" {

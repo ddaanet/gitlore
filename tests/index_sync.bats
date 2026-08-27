@@ -63,10 +63,10 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "1" ]
 }
 
-@test "set_frontmatter_description: no .gitlore.tmp survives when awk itself fails (not the redirect)" {
+@test "set_frontmatter_description: no scratch file survives when awk itself fails (not the redirect)" {
   printf -- '---\ndescription: old\n---\n' > f.md
   # Shadow awk with a stub that always fails, so the redirect (which creates
-  # f.md.gitlore.tmp) succeeds but the command itself does not — distinct
+  # the scratch file) succeeds but the command itself does not — distinct
   # from the chmod-555 case, which fails the redirect before awk ever runs.
   fakebin="$BATS_TEST_TMPDIR/fakebin"
   mkdir -p "$fakebin"
@@ -74,7 +74,9 @@ teardown() { teardown_tmp_repo; }
   chmod +x "$fakebin/awk"
   PATH="$fakebin:$PATH" run gitlore_set_frontmatter_description f.md "new"
   [ "$status" -ne 0 ]                      # failure status preserved
-  [ ! -e f.md.gitlore.tmp ]                # no leftover temp file
+  [ ! -e f.md.gitlore.tmp ]                # no leftover temp file beside the target
+  run find .git -name 'gitlore-frontmatter.tmp.*'
+  [ -z "$output" ]                         # no leftover temp file in the gitdir either
   run grep '^description:' f.md
   [ "$output" = 'description: old' ]       # original file untouched
 }

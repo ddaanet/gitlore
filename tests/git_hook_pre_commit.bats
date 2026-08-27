@@ -58,6 +58,32 @@ teardown() { teardown_tmp_repo; }
   [ ! -f "$msgfile" ]
 }
 
+@test "a failed memory commit is reported, not silently treated as success" {
+  # set -e is transitively off inside gitlore_sync_memory_to_live when it is
+  # called as `f || exit $?` (SC2310) — so an unchecked `add -A`/`commit`
+  # failure used to fall through to `rm -f "$msgfile"` (deleting the approved
+  # summary) and a no-op `push . HEAD:live` that reports success. Force the
+  # `add -A` inside the memory store to fail for real via a stranded index.lock
+  # in its actual gitdir (not the parent's).
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: add notes\n' > "$msgfile"
+
+  mem_gitdir=$(git -C memory rev-parse --git-dir)
+  : > "$mem_gitdir/index.lock"
+
+  CLAUDECODE=1 run --separate-stderr bash "$HOOK"
+  rm -f "$mem_gitdir/index.lock"
+
+  [ "$status" -ne 0 ]
+  # The approved summary must survive a failed commit, not be deleted.
+  [ -f "$msgfile" ]
+  # Memory is still dirty and uncommitted — no phantom success.
+  [ -n "$(git -C memory status --porcelain)" ]
+  [ "$(git -C memory log -1 --pretty=%s)" != "memory: add notes" ]
+}
+
 @test "exits 1 with memory-merger directive when branch diverged from live" {
   make_parent_with_memory
   # `live` advances behind the detached worktree's back (D17 branch model:

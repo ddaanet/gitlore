@@ -355,14 +355,17 @@ gitlore_write_merge_state() {
   # Inside it, a producer that fails after jq already printed `[]` — which
   # `pipefail` propagates through the whole pipeline — appends a second array and
   # hands jq's --argjson two JSON documents.
-  changed=$({ git -C "$mempath" diff --name-only "$base...$target"; \
-              git -C "$mempath" diff --name-only "$base...$source"; } \
+  # -c core.quotePath=false: git octal-escapes any non-ASCII byte (or a `"`/`\`)
+  # in a bare --name-only path, independent of -z, so a tier is a store owned by
+  # another repo — ASCII-only paths are a convention there, not an invariant.
+  changed=$({ git -c core.quotePath=false -C "$mempath" diff --name-only "$base...$target"; \
+              git -c core.quotePath=false -C "$mempath" diff --name-only "$base...$source"; } \
     | sort -u | jq -R . | jq -s .) || changed='[]'
   # Git's unmerged entries, plus any index file the entry-wise re-merge left
   # with markers. The second set is not in the first: an index conflict git
   # never saw is precisely what the entry-wise pass exists to surface, and it
   # resolves the file in the worktree without staging it.
-  conflicted=$({ git -C "$mempath" diff --name-only --diff-filter=U; \
+  conflicted=$({ git -c core.quotePath=false -C "$mempath" diff --name-only --diff-filter=U; \
                  gitlore_conflicted_indexes "$mempath"; } \
     | sort -u | jq -R . | jq -s .) || conflicted='[]'
   [ -n "$changed" ] || changed='[]'
@@ -379,7 +382,7 @@ gitlore_write_merge_state() {
   treef=$(gitlore_merge_artifact_file "$mempath" tree)
   git -C "$mempath" diff "$base" "$target" > "$minef" || : > "$minef"
   git -C "$mempath" diff "$base" "$source" > "$theirsf" || : > "$theirsf"
-  git -C "$mempath" ls-files | sort -u > "$treef" || : > "$treef"
+  git -c core.quotePath=false -C "$mempath" ls-files | sort -u > "$treef" || : > "$treef"
   # `publish` records whether landing this merge should also push the result. It
   # is empty for every gate — a merge prepared because a push was refused exists
   # to let that push succeed — and "no" only when /gitlore:merge asked to
@@ -666,10 +669,16 @@ gitlore_sync_tiers_to_live() {
     # Same precheck memory gets: never commit on top of a half-finished merge.
     gitlore_guard_stale_merge_state "$tierpath" || return 1
     [ "$(gitlore_memory_dirty "$tierpath")" = "1" ] || continue
-    gitlore_git -C "$tierpath" add -A
+    # Checked explicitly: this function is reached from the pre-commit hook's
+    # `gitlore_sync_memory_to_live "$mempath" || exit $?`, which suspends
+    # errexit transitively (SC2310) for everything called from here — an
+    # unchecked failure would fall through to the push below, which is a no-op
+    # success because HEAD never moved.
+    gitlore_git -C "$tierpath" add -A || return 1
     # Blessed commit: the same sentinel that admits a memory commit past the FR11
     # gate, which emit-memory-gate.sh installs in each tier too.
-    GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$tierpath" commit -q -F "$msgfile"
+    GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$tierpath" commit -q -F "$msgfile" \
+      || return 1
     # `live` exists once SessionStart has fetched it; a tier that has never been
     # fetched has no local `live` to advance, and `-q --verify` is silent on that
     # expected miss.
@@ -752,10 +761,15 @@ gitlore_sync_memory_to_live() {
     # pre-commit tier SHA — the same one-behind lag the parent's gitlink staging
     # exists to prevent.
     gitlore_sync_tiers_to_live "$mempath" "$msgfile" || return 1
-    gitlore_git -C "$mempath" add -A
+    # Checked explicitly, for the same reason as the tier loop above: called
+    # via `|| exit $?` at the pre-commit call site, errexit is off here, and an
+    # unchecked failure would delete the approved $msgfile below and let the
+    # no-op push report success.
+    gitlore_git -C "$mempath" add -A || return 1
     # Blessed commit: carry the sentinel so the submodule gate (memory-pre-commit)
     # admits it. A naked commit never sets this and is blocked (FR11/D12).
-    GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile"
+    GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile" \
+      || return 1
     rm -f "$msgfile"
     # The dirty episode is over: clear the once-per-episode nudge marker so the
     # next round of uncommitted memory can be surfaced again (post-tool-use.sh).

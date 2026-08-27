@@ -53,7 +53,7 @@ done
 bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
 
 # Refuse non-empty existing path that isn't already our submodule.
-if [ -e "$mempath" ] && ! git config --file .gitmodules "submodule.gitlore-memory.path" | grep -qx "$mempath"; then
+if [ -e "$mempath" ] && ! git config --file .gitmodules "submodule.gitlore-memory.path" | grep -qxF -- "$mempath"; then
   # Partial prior install: module store absorbed + gitfile in place, but .gitmodules not yet written.
   # init-submodule.sh repairs .gitmodules; fall through rather than refusing.
   _common_dir=$(git rev-parse --git-common-dir)

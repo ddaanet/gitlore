@@ -161,6 +161,11 @@ if [ "$mode" = "create" ]; then
   fi
 
   seed=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-tier-seed.XXXXXX")
+  # Covers every exit from here on, not just the two explicit failure branches
+  # below: `git init`/`add`/`commit`/`branch`/`remote add` are unchecked under
+  # top-level `set -e`, so any of them failing would otherwise abort with $seed
+  # leaked.
+  trap 'rm -rf "$seed"' EXIT
   # `-b main`: the tier remote's default branch MUST stay `main` with `live`
   # alongside. A `live` default gets checked out AS A BRANCH by the mount, and
   # the ff-only `fetch origin live:live` then refuses to update a checked-out
@@ -184,14 +189,13 @@ if [ "$mode" = "create" ]; then
   git -C "$seed" remote add origin "$url"
   # main first so the remote's default branch settles on it, live second.
   if ! push_err=$(git -C "$seed" push -q -u origin main 2>&1); then
-    rm -rf "$seed"
     die "could not push the seeded tier to $url. git said: $push_err"
   fi
   if ! push_err=$(git -C "$seed" push -q origin live 2>&1); then
-    rm -rf "$seed"
     die "pushed main but not live to $url. git said: $push_err"
   fi
   rm -rf "$seed"
+  trap - EXIT
 fi
 
 # ---------------------------------------------------------------- mount branch
@@ -281,7 +285,15 @@ fi
 # bottom (lowest precedence, file order top-to-bottom): the least surprising
 # default, since it never outranks a tier this repo already trusted. Reordering
 # afterward is a plain edit to $mempath/.gitlore-tiers, same as before.
-printf '%s\n' "$name" >> "$mempath/.gitlore-tiers"
+manifest="$mempath/.gitlore-tiers"
+# The manifest is documented as hand-editable (final message below), so a hand
+# edit, an agent Edit, or any writer that leaves the last line bare must not
+# have this append weld onto it — same guard gitlore_compose_write and
+# gitlore_index_merge already carry, separator-only, never normalisation.
+if [ -s "$manifest" ] && [ "$(tail -c 1 "$manifest" | wc -l | tr -d ' ')" = 0 ]; then
+  printf '\n' >> "$manifest"
+fi
+printf '%s\n' "$name" >> "$manifest"
 printf 'gitlore: activated — appended to %s/.gitlore-tiers (lowest precedence; reorder the file by hand to change that).\n' \
   "$mempath"
 exit 0

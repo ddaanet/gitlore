@@ -54,16 +54,22 @@ gitlore_set_frontmatter_description() {
   local file="$1" newdesc="$2" quoted repl tmp status
   quoted=$(jq -Rn --arg d "$newdesc" '$d')   # e.g. "has \"quote\": ..."
   repl="description: $quoted"
-  tmp="$file.gitlore.tmp"
+  # Inside the store's own gitdir, not beside the target — matches
+  # gitlore_weld_repair's (edit-weld.sh) own scratch-file placement. The `else`
+  # below already removes $tmp on a caught failure, but that cannot run at all
+  # if the process is killed mid-write; placing it outside the tracked
+  # worktree bounds that window to "leftover in the gitdir", never "untracked
+  # neighbour the FR11 gate's `git add -A` sweeps up". `--absolute-git-dir`,
+  # not `--git-path`: the latter is relative to the `-C` dir for a plain repo.
+  tmp=$(git -C "$(dirname -- "$file")" rev-parse --absolute-git-dir) \
+    && tmp="$tmp/gitlore-frontmatter.tmp.$$" || return 1
   # Pass repl via ENVIRON so awk does no escape processing on it. Both the
   # awk call and the mv are the condition of this `if`, so either one
   # failing (awk itself, the redirect that creates $tmp, or the mv) is
   # caught here instead of tripping errexit; on failure the (possibly
-  # empty or partially-written) $tmp is removed so it never survives
-  # inside the memory worktree — an untracked leftover there would make
-  # gitlore_memory_dirty report dirty and get swept up by the FR11 memory
-  # gate's `git add -A`. The original failing command's status is
-  # preserved and returned so callers' `if !` guard still fires.
+  # empty or partially-written) $tmp is removed. The original failing
+  # command's status is preserved and returned so callers' `if !` guard
+  # still fires.
   if GITLORE_REPL="$repl" awk '
     BEGIN { dashes = 0; done = 0 }
     /^---[[:space:]]*$/ { dashes++; print; next }

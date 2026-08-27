@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+unset CDPATH   # else `cd "$mempath"` below may search elsewhere and land in
+               # the wrong repository — run.sh/add-tier.sh/resolve.sh all
+               # unset it, but this script is also invoked directly.
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../lib/util.sh"
@@ -26,7 +29,7 @@ register_in_gitmodules() {
 #   not started                                   → both 0
 already_registered=0
 partial_install=0
-if git config --file .gitmodules "submodule.gitlore-memory.path" | grep -qx "$mempath"; then
+if git config --file .gitmodules "submodule.gitlore-memory.path" | grep -qxF -- "$mempath"; then
   already_registered=1
 elif [ -d "$(git rev-parse --git-common-dir)/modules/gitlore-memory" ] && [ -f "$mempath/.git" ]; then
   partial_install=1
@@ -75,7 +78,18 @@ EOF
   mkdir -p .git/modules/gitlore-memory
   cp -a "$mempath/.git/." .git/modules/gitlore-memory/
   rm -rf "$mempath/.git"
-  printf 'gitdir: ../.git/modules/gitlore-memory\n' > "$mempath/.git"
+  # The gitfile's "gitdir:" target is relative to the gitfile itself, so it
+  # depends on how many components $mempath has — "../.git/..." for a
+  # one-component path like "memory", but "../../.git/..." for a documented,
+  # supported multi-component path like ".claude/memory". core.worktree below
+  # does NOT need this: it is relative to the fixed-depth
+  # .git/modules/gitlore-memory/config (the module NAME's path, not $mempath's),
+  # so "../../../$mempath" already resolves correctly at any $mempath depth.
+  slashes="${mempath//[^\/]/}"
+  components=$(( ${#slashes} + 1 ))
+  updir="" ; i=0
+  while [ "$i" -lt "$components" ]; do updir="../$updir"; i=$((i + 1)); done
+  printf 'gitdir: %s.git/modules/gitlore-memory\n' "$updir" > "$mempath/.git"
   git config -f .git/modules/gitlore-memory/config core.worktree "../../../$mempath"
 
   # 5. Register in .gitmodules with a local placeholder URL.
@@ -113,7 +127,10 @@ if git check-ignore -q .gitmodules; then
   if [ -f .gitignore ] && grep -qx '\.gitmodules' .gitignore; then
     # Some repos gitignore .gitmodules to quiet sandbox-induced churn. With a
     # real submodule, .gitmodules must be tracked — drop the ignore line.
-    tmp=$(mktemp) && grep -vx '\.gitmodules' .gitignore > "$tmp" && mv "$tmp" .gitignore
+    # `grep -v` exits 1 when nothing survives the filter (a .gitignore whose
+    # only line is .gitmodules) — a correct, empty result, not a failure; `|| :`
+    # keeps the chain going so $tmp gets moved into place instead of leaking.
+    tmp=$(mktemp) && { grep -vx '\.gitmodules' .gitignore > "$tmp" || :; } && mv "$tmp" .gitignore
   fi
 fi
 gitlore_git add .gitmodules

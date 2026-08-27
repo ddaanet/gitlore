@@ -171,7 +171,10 @@ gitlore_compose_check() {
   # Rule 2 — a listed tier must be mounted.
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
-    if ! printf '%s\n' "$mounted" | grep -qxF -- "$tier"; then
+    # A here-string, not a pipe: under `set -o pipefail` (every caller), `grep
+    # -q` exiting at its first match sends the producer SIGPIPE, and a healthy
+    # store gets misread as refused (index-sync.sh:186-189 fixed the same shape).
+    if ! grep -qxF -- "$tier" <<<"$mounted"; then
       problems="${problems}the tier manifest lists '$tier', which is not mounted in $mempath/.gitmodules
 "
     fi
@@ -266,7 +269,8 @@ gitlore_compose_check_index() {
         printf '%s: line %d welds two pointer bullets onto one line — %s is invisible to every parse and the next compose will drop it; split them\n' \
           "$file" "$n" "$welded"
       fi
-      if printf '%s\n' "$seen" | grep -qxF -- "$path"; then
+      # Here-string, not a pipe — see the same note at gitlore_compose_check above.
+      if grep -qxF -- "$path" <<<"$seen"; then
         printf '%s: duplicate pointer path %s\n' "$file" "$path"
       fi
       seen="$seen
@@ -360,7 +364,11 @@ gitlore_cap_list() {
   input=$(grep . || true)
   [ -n "$input" ] || return 0
   total=$(printf '%s\n' "$input" | wc -l | tr -d ' ')
-  printf '%s\n' "$input" | head -n "$GITLORE_DANGLING_CAP"
+  # awk reads to EOF rather than exiting early like `head -n` would — callers
+  # run under `set -o pipefail`, and an early-exiting consumer here would send
+  # the producer SIGPIPE and lose exactly the "… and N more" summary this
+  # function exists to add (same shape gitlore_index_largest already avoids).
+  printf '%s\n' "$input" | awk -v n="$GITLORE_DANGLING_CAP" 'NR<=n'
   if [ "$total" -gt "$GITLORE_DANGLING_CAP" ]; then
     printf '… and %d more\n' "$((total - GITLORE_DANGLING_CAP))"
   fi
@@ -401,7 +409,8 @@ $path"
       [ -e "$mempath/$tier/$path" ] && continue
       # An active tier's line lives in both indexes and resolves to one file;
       # report the root's copy only, since that is the surface the agent edits.
-      printf '%s\n' "$reported" | grep -qxF -- "$tier/$path" && continue
+      # Here-string, not a pipe — see the same note at gitlore_compose_check above.
+      grep -qxF -- "$tier/$path" <<<"$reported" && continue
       printf '%s: %s names no file in the tier\n' "$file" "$path"
     done < "$file"
   done <<EOF
@@ -635,7 +644,16 @@ gitlore_compose_pick() {
 # trailer. Writes only when the result differs, so an already-canonical index
 # produces no churn; prints "composed <file>" when it did write.
 gitlore_compose_write() {
-  local file="$1" tmp="$1.gitlore-compose.tmp" bullets
+  local file="$1" tmp bullets
+  # Inside the store's own gitdir, not beside the target: the same reason
+  # gitlore_weld_repair (edit-weld.sh) gives for its own scratch file — a kill
+  # between this write and the mv/rm below would otherwise leave an untracked
+  # neighbour inside the tracked worktree for the FR11 gate's `git add -A` to
+  # sweep up. `$$`: this runs per-store, but never assume only one caller.
+  # `--absolute-git-dir`, not `--git-path`: the latter is relative to the `-C`
+  # dir for a plain repo, and the caller's cwd is not that dir.
+  tmp=$(git -C "$(dirname -- "$file")" rev-parse --absolute-git-dir) \
+    && tmp="$tmp/gitlore-compose.tmp.$$" || return 1
   bullets=$(cat)
   gitlore_index_part "$file" preamble > "$tmp" || { rm -f "$tmp"; return 1; }
   # A bulletless index is ALL preamble, emitted verbatim — so one that arrived
