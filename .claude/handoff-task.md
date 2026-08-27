@@ -1,3 +1,3 @@
 ## Current task
 
-The docs-checker follow-up: `check_orphans` in `scripts/check-docs-links.py` matches the literal `references/<basename>.md`, so a node linked only by a sibling-relative link (`[x.md](x.md)`, the form nodes use among themselves) reads as an orphan — the three evals nodes clear the warning today only because the 2026-08-25 changelog entry names them by full path.
+A second shell-gotchas audit, over every shell file NOT changed since v0.5.0 — the first pass, filed at `plans/2026-08-27-shell-gotchas-audit.md`, covered only the changed files and is fully applied. macOS compatibility is a requirement of this pass: bash 3.2, BSD `sed`/`find`/`stat`/`paste`, no `timeout`; audit each file whole, verify each BLOCK/WARN empirically, fix test-first, and file the report under `plans/`.
