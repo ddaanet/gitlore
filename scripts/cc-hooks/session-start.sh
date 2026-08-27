@@ -211,6 +211,24 @@ else
   add_sysmsg "gitlore: memory ready (detached at live); uncommitted changes present, skipped live sync."
 fi
 
+# Root index repair. A store can arrive with no `MEMORY.md` at all: an install
+# seeded from an auto-memory dir that existed but held nothing committed an
+# empty tree, and the working tree has no file to lose. Every path from here on
+# assumes the scaffold exists — composition places tier lines into it, a merge
+# continuation stages it, the byte-budget nudge measures it — and the dangling
+# report below cannot notice, since it reads pointers out of a file that is not
+# there. Write the scaffold back as an ordinary dirty file: it joins the next
+# FR11 commit under review, never a commit of its own, and it runs AFTER the
+# fast-forward so a clean store syncs first rather than being marked dirty by
+# the repair. Never fatal — an unwritable store is reported, not aborted on.
+if [ ! -f "$mempath/MEMORY.md" ]; then
+  if printf '# Memory Index\n\n(populated by Claude over time)\n' > "$mempath/MEMORY.md"; then
+    add_sysmsg "gitlore: the memory store had no root MEMORY.md, so nothing could compose into it or be recalled from it. The '# Memory Index' scaffold was written as an uncommitted file; it lands with the next memory commit."
+  else
+    add_sysmsg "gitlore: the memory store has no root MEMORY.md and the scaffold could not be written to $mempath/MEMORY.md. Create it by hand (first line '# Memory Index') before writing memory."
+  fi
+fi
+
 # Nested tiers (D17 3-i-a): check each tier submodule inside the memory store out
 # at the commit the memory tree records for it. Discovery is by enclosure — every
 # entry in memory/.gitmodules is a tier. Tiers use the detached branch model
