@@ -6,6 +6,11 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-27 — A merge preparation records its state file before it starts](changelog/2026-08-27-merge-state-is-recorded-before-the-merge.md)
+  — a killed push left a real staged merge no gate could see, because the state
+  file was written only after the preparation returned; a marker now goes down
+  first and is completed from the merge itself, and a `MERGE_HEAD` with no state
+  file means a merge gitlore did not prepare
 - [2026-08-27 — SessionStart writes the root index scaffold back into a store that has none](changelog/2026-08-27-session-start-repairs-a-missing-root-index.md)
   — a store seeded from an empty auto-memory dir ran for weeks with a mounted
   tier that could never compose into it, and the stale-index report never
