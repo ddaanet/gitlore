@@ -114,6 +114,34 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.systemMessage | test("direnv allow") | not'
   # The standing commit-protocol orientation (Fix B) is always present.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory submodule")'
+  # A store WITH a root index gets no repair and no repair notice.
+  echo "$output" | jq -e '.systemMessage | test("no root MEMORY.md") | not'
+  [ -z "$(git -C memory status --porcelain)" ]
+}
+
+@test "a store with no root MEMORY.md gets the scaffold as a dirty file, and says so (D14)" {
+  # An install seeded from an auto-memory dir that existed but held nothing
+  # used to commit an empty tree: no root index for a tier to compose into,
+  # nothing for a merge continuation to stage. Every path downstream assumes
+  # the scaffold exists, so SessionStart writes it back — as an uncommitted
+  # file the next FR11 commit reviews, never as a commit of its own.
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  # Live and the detached HEAD both lack the index, so the ff-merge has nothing
+  # to restore it from and the working tree is clean before the hook runs.
+  git -C memory rm -q MEMORY.md
+  GITLORE_MEMORY_COMMIT=1 git -C memory -c user.email=t@t -c user.name=t commit -q -m "no index"
+  git -C memory update-ref refs/heads/live HEAD
+  before=$(git -C memory rev-parse HEAD)
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ "$(head -1 memory/MEMORY.md)" = "# Memory Index" ]
+  # Untracked, not committed: HEAD did not move, and status reports the file.
+  [ "$(git -C memory rev-parse HEAD)" = "$before" ]
+  [ "$(git -C memory status --porcelain -- MEMORY.md)" = "?? MEMORY.md" ]
+  echo "$output" | jq -e '.systemMessage | test("no root MEMORY.md")'
+  echo "$output" | jq -e '.systemMessage | test("detached at live")'
 }
 
 @test "emits standing commit-protocol additionalContext every gitlore session" {

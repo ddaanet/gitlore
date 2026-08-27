@@ -84,7 +84,14 @@ has no `gitlore-memory` entry, no-op.
 6. **Detach at `live` and fast-forward**, or skip the fast-forward with a notice
    when memory is dirty. A fast-forward that fails is divergence: report it and
    route to `/gitlore:resolve`.
-7. **Pin the tiers.** A tier holding an unfinished merge is left as it is and
+7. **Repair a missing root index.** A store with no `MEMORY.md` — an install
+   seeded from an auto-memory dir that existed but held nothing committed an
+   empty tree — gets the `# Memory Index` scaffold written back as an
+   uncommitted file, so it lands in the next FR11 commit under review rather
+   than in a commit of its own, and `systemMessage` says so. Every step below
+   assumes the file exists: composition places tier lines into it, a merge
+   continuation stages it, and the dangling report reads pointers out of it.
+8. **Pin the tiers.** A tier holding an unfinished merge is left as it is and
    named, because the checkout below would clear its `MERGE_HEAD`. Every other
    mounted tier is initialized and checked out at the gitlink the memory
    store's index records, detached in place if it arrived on a branch, and its
@@ -93,10 +100,10 @@ has no `gitlore-memory` entry, no-op.
    `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported
    by name, never silently skipped, because a tier that stops talking to its
    remote looks exactly like one with nothing to say.
-8. **Compose the indexes**, then run the dangling-pointer report (D34). A
+9. **Compose the indexes**, then run the dangling-pointer report (D34). A
    refusal writes nothing and says why; a partial write says which indexes are
    composed.
-9. **Emit the standing orientation** on `additionalContext`: the FR11
+10. **Emit the standing orientation** on `additionalContext`: the FR11
    prohibition (D12) and the active tiers' own routing descriptions (D28).
 
 **Worktree creation — handled by `SessionStart`, not a `WorktreeCreate` hook.**

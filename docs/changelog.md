@@ -6,6 +6,11 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-27 — SessionStart writes the root index scaffold back into a store that has none](changelog/2026-08-27-session-start-repairs-a-missing-root-index.md)
+  — a store seeded from an empty auto-memory dir ran for weeks with a mounted
+  tier that could never compose into it, and the stale-index report never
+  noticed the file it read was absent; the scaffold now lands as a dirty file
+  the next memory commit reviews
 - [2026-08-27 — The hook-manager sentinel is replayed from an allow-list, not handed to a shell](changelog/2026-08-27-sentinel-replay-is-an-allow-list.md)
   — the tracked sentinel's fallback arm was `sh -c` on its first line, so a
   clone's first session start ran whatever the clone carried; the replay now
