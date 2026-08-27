@@ -90,13 +90,30 @@ The division of labour is D7's: the script decides, the agent writes prose.
    waiting), then retries the original commit and tells the user which store was
    merged — a tier is shared with other repositories, the project store is not.
 
-A crashed merge leaves the state file behind, and every gate guards on it. With
-`MERGE_HEAD` present the store sits exactly where `gitlore_prepare_merge` leaves
-one, so the directive is the ordinary `continue-after-merge` and the merge is
-handed back to the sub-agent: **a prepared merge is always continued, never
-discarded.** By the time a gate meets it again the sub-agent may already have
-synthesized and staged an answer, and nothing in the store tells that apart from
-a merge no one has touched.
+A crashed merge leaves the state file behind, and every gate guards on it. The
+file goes down *before* the preparation starts, not after it succeeds:
+`gitlore_yield_merge` writes a marker naming the store, the flavor, both sides
+and the continuation, then prepares the merge, then overwrites the marker with
+the full state file. Every window inside `gitlore_prepare_merge` — a killed
+`push-memory.sh`, a tool timeout — therefore leaves a file the next gate
+classifies, and the marker is dropped again if the preparation refuses outright.
+A marker is told from a full state file by `changed_files`, the first field the
+merger sub-agent reads and the one no marker can carry; wherever a state file is
+about to reach that sub-agent, `gitlore_complete_merge_state` fills a marker in
+from the merge the store already holds.
+
+With `MERGE_HEAD` present the store sits exactly where `gitlore_prepare_merge`
+leaves one, so the directive is the ordinary `continue-after-merge` and the
+merge is handed back to the sub-agent: **a prepared merge is always continued,
+never discarded.** By the time a gate meets it again the sub-agent may already
+have synthesized and staged an answer, and nothing in the store tells that apart
+from a merge no one has touched.
+
+`MERGE_HEAD` with *no* state file is then not gitlore's at all — a `git merge`
+run in the store by hand, or by an agent asked to merge one. It blocks and is
+reported with the store's own status and `merge --abort` commands, never
+touched: nothing there says what the merge was for, and it may hold work in
+progress.
 
 The accepted trade is a merge whose authority moved while it waited — someone
 pushed to `origin/live` meanwhile. It lands against the authority it was built
@@ -109,7 +126,9 @@ merely fixed the authority as of whenever the gate happened to run.
 
 Without `MERGE_HEAD`, the guard
 classifies from the pinned pending commit and the state file's own fields, and
-repairs. Two things produce that state, and they leave different remains: a
+repairs. Three things produce that state, and they leave different remains. A
+preparation interrupted between its checkout and its merge leaves its marker,
+the pin, and HEAD on the authority, with nothing merged. A
 plain `git merge --abort` run in the store drops the pointers *and* resets the
 index, so nothing of the merge survives but gitlore's own files, while
 `git checkout` — including the no-op re-checkout `submodule update` runs — calls
@@ -132,6 +151,9 @@ unmerged entry for checkout to refuse over).
   gets, and for the same reason: discarding the merge would take the staged tree
   with the worktree it was written into. Refused when HEAD is not the authority
   the state file names, since that commit is what the merge was built on.
+- **Neither, and the file is a marker.** The preparation was interrupted before
+  its merge ran. Disposed of exactly like a dead merge below, with the message
+  the store's own remains support rather than an abort nobody performed.
 - **Neither.** The merge is dead — the `merge --abort` shape. HEAD goes back
   onto the pending commit *before* the pin is dropped, since after a preparation
   that pin is the only reference to the divergent side; every artifact a

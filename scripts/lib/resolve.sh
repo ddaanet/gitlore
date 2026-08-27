@@ -93,6 +93,15 @@ gitlore_guard_stale_merge_state() {
       # old one and is re-prepared by the continuation's own refused push, which
       # costs one cycle; re-preparing every stale merge costs a synthesis.
       statefile=$(gitlore_merge_state_file "$mempath")
+      # A preparation interrupted between its merge and its briefing left a
+      # marker; the merge itself is staged in the store, so the briefing is
+      # written now and the merge continues like any other.
+      if ! gitlore_complete_merge_state "$mempath"; then
+        gitlore_say_for_agent_or_user \
+          "gitlore: $mempath holds a prepared merge whose state file could not be completed, so no sub-agent can be briefed on it. Read $statefile, then inspect the store." \
+          "gitlore: $mempath holds a prepared merge whose state file could not be completed, so no sub-agent can be briefed on it. Read $statefile, then inspect the store." >&2
+        return 1
+      fi
       flavor=$(jq -r .flavor "$statefile")
       gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
       return 1
@@ -103,7 +112,15 @@ gitlore_guard_stale_merge_state() {
     orphaned-merge-head)
       local mh
       mh=$(git -C "$mempath" rev-parse -q --verify MERGE_HEAD)
-      echo "gitlore: MERGE_HEAD ($mh) is set in $mempath with no merge state file — manual intervention required. An earlier merge was interrupted before its state was recorded; $mh is the pending commit that needs re-merging." >&2
+      # gitlore records its own preparations before they start, so this is a
+      # merge something else began in the store — a hand-run `git merge`, or an
+      # agent asked to merge by hand. Reported rather than touched: nothing here
+      # says what it was for, and it may hold work in progress.
+      local orph_msg
+      orph_msg="gitlore: $mempath holds a merge gitlore did not prepare (MERGE_HEAD $mh, no merge state file), so nothing was changed. Finish it or undo it in the store, then re-run the operation:
+gitlore:   git -C \"$mempath\" status --short
+gitlore:   git -C \"$mempath\" merge --abort"
+      gitlore_say_for_agent_or_user "$orph_msg" "$orph_msg" >&2
       return 1
       ;;
   esac
@@ -171,6 +188,24 @@ gitlore: delete $statefile once you have landed or abandoned it; the next commit
   if ! git -C "$store" diff-index --quiet --cached HEAD --; then
     gitlore_restore_staged_merge "$store" "$abs" "$head" "$pending" "$statefile"
     return 1
+  fi
+
+  # A marker with nothing landed and nothing staged is a preparation interrupted
+  # before its merge ran — the checkout onto the authority had happened, nothing
+  # else had. Same disposal as a dead merge below, with the message the store's
+  # own history supports.
+  if ! jq -e 'has("changed_files")' "$statefile" >/dev/null 2>&1; then
+    if ! err=$(gitlore_git -C "$store" checkout -q --detach "$pending" 2>&1); then
+      msg="gitlore: a merge preparation in $abs was interrupted before its merge ran, but HEAD could not be put back on its pending commit $pending, so its state was left alone. git said:
+$err
+gitlore: clear the working tree, then re-run the operation."
+      gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+      return 1
+    fi
+    gitlore_drop_merge_preparation "$store"
+    msg="gitlore: a merge preparation in $abs was interrupted before its merge ran, so nothing of it survived; HEAD is back on the pending commit $(git -C "$store" rev-parse --short "$pending") and the merge is prepared again if the divergence is still there."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 0
   fi
 
   # Nothing landed and nothing staged: the merge is dead. HEAD goes back onto
@@ -273,6 +308,14 @@ gitlore:   printf \"Merge commit '%s' into HEAD\\n\" $pending > \"$gitdir/MERGE_
     gitlore_say_for_agent_or_user "$msg" "$msg" >&2
     return 0
   fi
+  # The staged merge may belong to a preparation interrupted before its briefing
+  # was written; with the pointers back, the store holds everything that
+  # briefing is computed from.
+  if ! gitlore_complete_merge_state "$store"; then
+    msg="gitlore: the merge pointers were restored in $abs, but its merge state file could not be completed, so no sub-agent can be briefed on it. Read $statefile, then inspect the store."
+    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    return 0
+  fi
   flavor=$(jq -r .flavor "$statefile")
   msg="gitlore: a checkout had cleared MERGE_HEAD in $abs but left the merge staged, so the merge pointers are restored and the staged result is intact."
   gitlore_say_for_agent_or_user "$msg" "$msg" >&2
@@ -331,6 +374,66 @@ gitlore_drop_merge_preparation() {
   if git -C "$store" rev-parse -q --verify "$GITLORE_PENDING_REF" >/dev/null; then
     gitlore_git -C "$store" update-ref -d "$GITLORE_PENDING_REF"
   fi
+}
+
+# Write the merge-state file a preparation records BEFORE it starts, so no
+# window inside gitlore_prepare_merge can leave a merge no gate can see. It
+# carries what is known before the merge runs — which store, which flavor, which
+# two sides, which continuation — and none of the briefing, which only exists
+# once the merge has staged a tree. gitlore_write_merge_state overwrites it with
+# the full file on success; gitlore_complete_merge_state fills it in afterwards
+# when an interruption fell in between.
+#
+# `changed_files` is the discriminator between the two, because it is the first
+# field the merger sub-agent reads and the one no marker can carry.
+# Args: $1=store path  $2=flavor  $3=source_ref  $4=target_ref  $5=continuation.
+gitlore_write_merge_marker() {
+  local store="$1" flavor="$2" source="$3" target="$4" cont="$5"
+  local statefile store_abs
+  statefile=$(gitlore_merge_state_file "$store")
+  store_abs=$(CDPATH='' cd -- "$store" && pwd)
+  # Same jq-built, temp-file-then-rename shape as the full state file: a path
+  # holding a `"` or a `\` must not produce JSON the first reader cannot parse,
+  # and a half-written file would block every later commit in this store.
+  jq -n \
+    --arg flavor "$flavor" \
+    --arg store "$store_abs" \
+    --arg source "$source" \
+    --arg target "$target" \
+    --arg cont "$cont" \
+    --arg publish "${GITLORE_MERGE_NO_PUBLISH:+no}" \
+    '{flavor: $flavor, store: $store, source_ref: $source, target_ref: $target,
+      continuation: $cont, publish: $publish}' \
+    > "$statefile.tmp" || { rm -f "$statefile.tmp"; return 1; }
+  mv "$statefile.tmp" "$statefile" || { rm -f "$statefile.tmp"; return 1; }
+}
+
+# Fill in a marker left by an interrupted preparation, from the merge the store
+# already holds. A no-op on a complete state file, so it is safe to call
+# wherever one is about to be handed to the merger sub-agent.
+#
+# The base is recomputed rather than recorded, because a marker is written
+# before gitlore_prepare_merge computes one — same merge-base of the same two
+# sides, unless the target ref moved while the preparation was interrupted, in
+# which case the briefing describes the authority the merge was NOT built on.
+# That is the trade the whole path already makes for a merge whose authority
+# moved while it waited: it lands against the side it was built on, and the
+# continuation's own refused push re-prepares it.
+# Args: $1 = store. Returns 1 if the file cannot be completed.
+gitlore_complete_merge_state() {
+  local store="$1" statefile flavor source target cont base
+  statefile=$(gitlore_merge_state_file "$store")
+  [ -f "$statefile" ] || return 1
+  if jq -e 'has("changed_files")' "$statefile" >/dev/null 2>&1; then
+    return 0
+  fi
+  flavor=$(jq -r '.flavor // ""' "$statefile")
+  source=$(jq -r '.source_ref // ""' "$statefile")
+  target=$(jq -r '.target_ref // ""' "$statefile")
+  cont=$(jq -r '.continuation // "continue-after-merge"' "$statefile")
+  [ -n "$source" ] && [ -n "$target" ] || return 1
+  base=$(git -C "$store" merge-base "$source" "$target") || return 1
+  gitlore_write_merge_state "$store" "$flavor" "$base" "$source" "$target" "$cont"
 }
 
 # Write a JSON merge-state file. All args required.
@@ -544,8 +647,23 @@ gitlore_prepare_merge() {
 #       $4 = pending ref (see gitlore_prepare_merge).
 gitlore_yield_merge() {
   local mempath="$1" authority="$2" flavor="$3" pending_ref="$4"
-  local prep base pending statefile
+  local prep base pending statefile pending_sha
+  # The marker goes down BEFORE the preparation, so every window inside it
+  # leaves a state file for the next gate to classify (D7): a merge that staged
+  # is completed and continued, one that never ran is discarded and re-prepared.
+  # Written even though the preparation may refuse outright — it is removed on
+  # that path below, and the alternative is the window this exists to close.
+  pending_sha=$(git -C "$mempath" rev-parse -q --verify "$pending_ref^{commit}") || pending_sha="$pending_ref"
+  if ! gitlore_write_merge_marker "$mempath" "$flavor" "$pending_sha" "$authority" "continue-after-merge"; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: no merge was started in $mempath because its merge state file could not be written, so nothing can record one. Inspect the memory worktree." \
+      "gitlore: no merge was started in $mempath because its merge state file could not be written, so nothing can record one. Inspect the memory worktree." >&2
+    return 1
+  fi
   if ! prep=$(gitlore_prepare_merge "$mempath" "$authority" "$pending_ref"); then
+    # No merge was started, so the marker describes nothing. Dropped with the
+    # pin, which the preparation may have set before it failed.
+    gitlore_drop_merge_preparation "$mempath"
     gitlore_say_for_agent_or_user \
       "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." \
       "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." >&2

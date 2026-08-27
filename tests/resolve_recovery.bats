@@ -108,13 +108,102 @@ teardown() { teardown_tmp_repo; }
   [ "$(git -C memory rev-parse HEAD)" = "$before" ]
 }
 
-@test "recovery: orphaned MERGE_HEAD with no state file is flagged, not reported clean" {
+# --- a preparation interrupted part-way ---
+#
+# gitlore_prepare_merge moves HEAD, then merges. A caller killed anywhere inside
+# it (the tool timeout that killed a push-memory.sh run mid-merge) must leave
+# something every gate can see, so the state file is written BEFORE the
+# preparation starts and completed after it: each window then sorts into the
+# classifier the checkout-cleared cases already run through.
+
+@test "recovery: the state file is written before the preparation starts, and cleared when it fails" {
   make_diverged_head_vs_live memory
-  # Simulate an interrupted gitlore_prepare_merge: it stages a real merge
-  # (MERGE_HEAD set, content staged) but the caller dies before
-  # gitlore_write_merge_state runs — the exact edify incident this guards.
-  run --separate-stderr gitlore_prepare_merge memory live HEAD
-  [ "$status" -eq 0 ]
+  yield_with_failing_prepare() {
+    # Both paths below are recomputed rather than read from the test body:
+    # `run` evaluates this in a context that carries neither the body's
+    # variables nor its exports.
+    # shellcheck disable=SC2317  # the body runs through gitlore_yield_merge
+    gitlore_prepare_merge() {
+      if [ -f "$(gitlore_merge_state_file memory)" ]; then
+        echo present > "$BATS_TEST_TMPDIR/seen"
+      else
+        echo absent > "$BATS_TEST_TMPDIR/seen"
+      fi
+      return 1
+    }
+    gitlore_yield_merge memory live head-vs-live HEAD
+  }
+  run --separate-stderr yield_with_failing_prepare
+  [ "$status" -ne 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/seen")" = "present" ]
+  # A preparation that never happened leaves no state for a later gate to
+  # classify — it would only find a dead merge and say so.
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
+  run gitlore_detect_stale_merge_state memory
+  [ "$output" = "clean" ]
+}
+
+@test "recovery: a preparation interrupted after its merge staged is completed by the next gate, not flagged" {
+  make_diverged_head_vs_live memory
+  pending=$(git -C memory rev-parse HEAD)
+  statefile=$(gitlore_merge_state_file memory)
+  # Killed between `git merge` and the briefing: the state file is still the
+  # marker written before the preparation, with no briefing in it.
+  yield_dying_before_briefing() {
+    # shellcheck disable=SC2317  # the body runs through gitlore_yield_merge
+    gitlore_write_merge_state() { return 1; }
+    gitlore_yield_merge memory live head-vs-live HEAD
+  }
+  run --separate-stderr yield_dying_before_briefing
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse -q --verify MERGE_HEAD)" = "$pending" ]
+  [ -f "$statefile" ]
+  run jq -e 'has("changed_files")' "$statefile"
+  [ "$status" -ne 0 ]
+
+  run --separate-stderr gitlore_guard_stale_merge_state memory
+  [ "$status" -ne 0 ]
+  all="$output$stderr"
+  [[ "$all" == *"continue-after-merge"* ]]
+  [[ "$all" != *"manual intervention"* ]]
+  # The briefing the merger sub-agent reads is now there, and names both sides.
+  [ "$(jq -r '.source_ref' "$statefile")" = "$pending" ]
+  [ "$(jq -r '.target_ref' "$statefile")" = "live" ]
+  jq -e '.changed_files | index("HEAD_SIDE.md") != null and index("LIVE.md") != null' "$statefile"
+  [ -f "$(jq -r '.mine_diff' "$statefile")" ]
+  [ -f "$(jq -r '.theirs_diff' "$statefile")" ]
+  [ -f "$(jq -r '.tree' "$statefile")" ]
+  [ "$(git -C memory rev-parse -q --verify MERGE_HEAD)" = "$pending" ]
+}
+
+@test "recovery: a preparation interrupted before its merge ran is discarded, and the gate re-prepares it" {
+  make_diverged_head_vs_live memory
+  pending=$(git -C memory rev-parse HEAD)
+  live=$(git -C memory rev-parse live)
+  # Killed between the checkout onto the authority and `git merge`: marker
+  # written, pin set, HEAD on the authority, nothing merged.
+  gitlore_write_merge_marker memory head-vs-live "$pending" live continue-after-merge
+  git -C memory update-ref "$GITLORE_PENDING_REF" "$pending"
+  git -C memory checkout -q --detach live
+  run gitlore_detect_stale_merge_state memory
+  [ "$output" = "stale-no-merge-head" ]
+
+  run --separate-stderr bash "$PRE_COMMIT"
+  [ "$status" -ne 0 ]
+  all="$output$stderr"
+  [[ "$all" == *"interrupted before its merge ran"* ]]
+  [[ "$all" == *"memory merge prepared"* ]]
+  # Re-prepared from the pending commit the interruption had left behind.
+  [ "$(git -C memory rev-parse -q --verify MERGE_HEAD)" = "$pending" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$live" ]
+  jq -e 'has("changed_files")' "$(gitlore_merge_state_file memory)"
+}
+
+@test "recovery: MERGE_HEAD with no state file is a merge gitlore did not prepare, and blocks" {
+  make_diverged_head_vs_live memory
+  # A merge started by hand in the store. gitlore's own preparations record
+  # their state file first, so no interruption of one leaves this shape.
+  git -C memory merge --no-commit --no-ff live >/dev/null 2>&1 || true
   mh=$(git -C memory rev-parse -q --verify MERGE_HEAD)
   [ -n "$mh" ]
   [ ! -f "$(gitlore_merge_state_file memory)" ]
@@ -124,8 +213,10 @@ teardown() { teardown_tmp_repo; }
 
   run --separate-stderr gitlore_guard_stale_merge_state memory
   [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"manual intervention"* ]]
-  [[ "$output$stderr" == *"$mh"* ]]
+  all="$output$stderr"
+  [[ "$all" == *"did not prepare"* ]]
+  [[ "$all" == *"merge --abort"* ]]
+  [[ "$all" == *"$mh"* ]]
 }
 
 # --- a merge whose MERGE_HEAD a checkout cleared ---
