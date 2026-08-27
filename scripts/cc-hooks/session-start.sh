@@ -196,10 +196,12 @@ while IFS= read -r tier; do
   # auto-merge stages no unmerged entries, so even a no-op re-checkout of the
   # commit HEAD is already on succeeds and destroys the merge pointers while
   # leaving the staged result behind. What survives is a state file with no
-  # MERGE_HEAD, which every guard reports as "manual intervention required": a
-  # merge that outlived one session was dead. Skip the whole tier, and say so —
-  # a suppressed pass must not be silent, or the tier looks synced when it is
-  # mid-merge.
+  # MERGE_HEAD, which gitlore_recover_stale_no_merge_head can repair — by
+  # writing the pointers back — but only by reading the index to decide how, and
+  # a session start that provokes the damage every time makes that repair the
+  # normal path rather than the recovery it is. Skip the whole tier, and say
+  # so — a suppressed pass must not be silent, or the tier looks synced when it
+  # is mid-merge.
   # `detect` rather than `guard_stale_merge_state`: the guard's directive tells
   # the agent to abort and retry, which is wrong for a merge that is simply
   # waiting to be landed, and it writes to stderr, which SessionStart does not
@@ -261,7 +263,7 @@ gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset
   fi
 done < <(gitlore_tier_paths "$mempath")
 
-# Compose after the fast-forward, so lines that just propagated in surface in
+# Compose after the tier pin, so the lines each pinned carrier holds surface in
 # the always-loaded root index this session rather than next (D17 3-ii). Never
 # fatal: a store that fails validation is reported and left alone — SessionStart
 # must always finish.

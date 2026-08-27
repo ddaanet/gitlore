@@ -144,6 +144,42 @@ push_memory_fact() {
   [ "$(jq -r .publish "$statefile")" = "no" ]
 }
 
+@test "a merge aborted by hand is disposed of and re-prepared, not refused over" {
+  # The observed producer of a state file without MERGE_HEAD: an agent asked to
+  # revert to the pre-merge state runs a plain `git merge --abort` in the store,
+  # which clears MERGE_HEAD and resets the index while gitlore's state file and
+  # its three briefing artifacts stay put. Both this entry point and resolve.sh
+  # used to refuse over what was left, with no path back.
+  wire_memory_remote
+  (
+    cd memory || exit 1
+    git checkout -q live
+    printf 'local\n' > LOCAL.md
+    git add -A
+    git commit -q -m "local, unpublished"
+    git checkout -q --detach live
+  )
+  push_memory_fact
+  bash "$CMD" || true
+  statefile=$(gitlore_merge_state_file memory)
+  pending=$(jq -r .source_ref "$statefile")
+  [ -n "$pending" ]
+
+  git -C memory merge --abort
+  [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD || true)" ]
+  [ -f "$statefile" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  all="$output$stderr"
+  [[ "$all" == *"nothing landed"* ]]
+  [[ "$all" == *"leftover state is discarded"* ]]
+  [[ "$all" == *"memory merge prepared"* ]]
+  # The same merge, against the same divergent side, still marked reconcile-only.
+  [ "$(jq -r .source_ref "$statefile")" = "$pending" ]
+  [ "$(jq -r .publish "$statefile")" = "no" ]
+}
+
 @test "a push-prepared merge is not marked no-publish" {
   # The flag must not leak into the gates: a merge a refused push prepared
   # exists precisely so that push can go through.

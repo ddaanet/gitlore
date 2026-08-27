@@ -182,10 +182,11 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
 # clean auto-merge stages no unmerged entries — so SessionStart's tier re-detach
 # had nothing to refuse over: `checkout --detach live` succeeded on the commit
 # HEAD was already on and `remove_branch_state()` unlinked MERGE_HEAD/MERGE_MSG.
-# The state file then survived without MERGE_HEAD, which every guard reports as
-# "manual intervention required": any merge that outlived one session was dead.
-# Cleanliness is what makes it bite, so the fixture must merge cleanly — the
-# two sides touch different files.
+# The state file then survives without MERGE_HEAD. The stale-state guard can
+# repair that (tests/resolve_recovery.bats), but the repair reads the index to
+# decide how, so a session start that provokes the damage every time is what
+# turns a recovery path into the normal one. Cleanliness is what makes it bite,
+# so the fixture must merge cleanly — the two sides touch different files.
 @test "SessionStart leaves a tier's prepared merge intact instead of re-detaching over it" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
@@ -217,6 +218,34 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
   # bare path match passes with no guard context emitted at all.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory/ddaanet holds an unfinished merge")'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("Do not check it out, reset it, or commit into it")'
+}
+
+# A mid-merge tier is skipped by the pin loop above and then met again by the
+# compose that follows: the tier's own commit moved it off the gitlink memory
+# records, so rule 7 refuses the pass (D36). Refusing is right — projecting
+# root's index onto a carrier holding a staged merge would dirty the merge — so
+# what has to hold is that the two notices agree about the remedy.
+@test "SessionStart's compose refuses a mid-merge tier with the same remedy the pin loop gave" {
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  advance_branch_with_file memory/ddaanet live other.md body "sideways" live
+  echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  approve "memory: record the org fact"
+  bash "$PRE_COMMIT" || true
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+
+  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has an unfinished merge")'
+  echo "$output" | jq -e '.systemMessage | test("tier composition refused")'
+  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. is mid-merge")'
+  # One remedy on the whole message, not two contradictory ones: the
+  # return-to-the-pin checkout would unlink MERGE_HEAD and lose the merge.
+  echo "$output" | jq -e '.systemMessage | test("checkout --detach") | not'
 }
 
 # --- the continuation follows the merge to its store ---
@@ -278,18 +307,22 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
   grep -qF -- '- [their fact](t.md) — theirs' memory/ddaanet/MEMORY.md
 }
 
-@test "abort-then-retry aborts the tier's merge, not memory's" {
+@test "a tier's prepared merge is continued in the tier, not memory" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   diverge_tier_from_remote ddaanet
   bash "$PRE_PUSH" || true
   [ -f "$(tier_state_file ddaanet)" ]
+  pending=$(git -C memory/ddaanet rev-parse "$GITLORE_PENDING_REF")
 
-  # Re-entry detects the same divergence and prepares it again; what matters is
-  # that the abort ran in the tier and left memory untouched.
-  run bash "$RESOLVE" abort-then-retry
-  [ -z "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD || true)" ] || \
-    [ -f "$(tier_state_file ddaanet)" ]
+  # A later gate meets the prepared merge: it is continued where it was
+  # prepared, and memory has nothing prepared in it at all.
+  run --separate-stderr bash "$PRE_PUSH"
+  [ "$status" -ne 0 ]
+  all="$output$stderr"
+  [[ "$all" == *"continue-after-merge"* ]]
+  [[ "$all" == *"ddaanet"* ]]
+  [ "$(git -C memory/ddaanet rev-parse MERGE_HEAD)" = "$pending" ]
   [ ! -f "$(gitlore_merge_state_file memory)" ]
 }
 

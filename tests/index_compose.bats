@@ -222,6 +222,127 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
 }
 
+# --- rule 7: an active tier must sit at its pin (D36, D43) ---
+#
+# D36 rests on only one of the two projections having moved between passes. A
+# tier moved outside /gitlore:merge breaks that: nothing adopted the carrier's
+# newer text up into the root, so the down pass would write root's OLDER text
+# over it. Observed in the wild after a hand-run `reset --hard origin/live`.
+
+# Advance a mounted tier one commit past the gitlink the memory store's index
+# records for it — the shape a hand-run `git -C memory/<tier> reset --hard
+# origin/live` leaves behind. The carrier gains a line the root has never seen,
+# which is exactly the text a down pass would overwrite.
+move_tier_off_pin() {
+  local tier="${1:-ddaanet}"
+  seed_tier_bullet "$tier" upstream.md "arrived in another repo"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge"
+}
+
+# The store every test in this section starts from: one composed, committed tier
+# line, so the pin is recorded and root and carrier agree before anything moves.
+pinned_store_with_tier() {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  gitlore_compose memory >/dev/null
+  commit_memory_state
+}
+
+@test "compose refuses a moved tier and names the commands that return it" {
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  abs=$(cd memory/ddaanet && pwd)
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tier 'ddaanet' is checked out at ${moved:0:12}"* ]]
+  [[ "$output" == *"the memory store records ${pinned:0:12}"* ]]
+  # Verbatim-runnable: absolute path, full sha.
+  [[ "$output" == *"git -C \"$abs\" checkout --detach $pinned"* ]]
+  # Nothing written. The refusal is the whole point: a down pass here replaces
+  # the carrier's newer text with root's older text and reports success.
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
+}
+
+@test "a moved tier holding MERGE_HEAD is sent to /gitlore:resolve instead" {
+  pinned_store_with_tier
+  move_tier_off_pin ddaanet
+  git -C memory/ddaanet rev-parse HEAD \
+    > "$(git -C memory/ddaanet rev-parse --git-path MERGE_HEAD)"
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tier 'ddaanet' is mid-merge"* ]]
+  [[ "$output" == *"/gitlore:resolve"* ]]
+  # And NOT the return-to-the-pin remedy: that checkout unlinks MERGE_HEAD and
+  # destroys the prepared merge, so the two wordings must not both appear.
+  [[ "$output" != *"checkout --detach"* ]]
+}
+
+@test "a moved tier with a merge state file and no MERGE_HEAD is mid-merge too" {
+  pinned_store_with_tier
+  move_tier_off_pin ddaanet
+  # What a re-checkout leaves behind: remove_branch_state() unlinked MERGE_HEAD
+  # and the state file outlived it (tests/resolve_recovery.bats).
+  printf '{"flavor":"head-vs-remote"}\n' > "$(gitlore_merge_state_file memory/ddaanet)"
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tier 'ddaanet' is mid-merge"* ]]
+  [[ "$output" != *"checkout --detach"* ]]
+}
+
+@test "staging the moved gitlink lets the same store compose again" {
+  pinned_store_with_tier
+  move_tier_off_pin ddaanet
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+
+  # The hand-off every merge path performs as its last act (D43).
+  git -C memory add -- ddaanet
+  seed_root_bullet "ddaanet/local.md" "authored here"
+  printf -- '---\nname: local\ndescription: ""\n---\n\nbody\n' > memory/ddaanet/local.md
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  # It composed rather than merely returning 0: the root-authored line mirrored
+  # down into the carrier, and the carrier's own arrival was not destroyed.
+  grep -qxF -- '- [local](local.md) — authored here' memory/ddaanet/MEMORY.md
+  grep -qxF -- '- [upstream](upstream.md) — arrived in another repo' memory/ddaanet/MEMORY.md
+}
+
+@test "adoption still runs while the tier is ahead of its pin" {
+  # The up pass IS the merge path, and it runs before that path stages the
+  # gitlink — so the rule that refuses the down pass must not reach it.
+  pinned_store_with_tier
+  move_tier_off_pin ddaanet
+
+  run gitlore_compose_up memory ddaanet
+  [ "$status" -eq 0 ]
+  assert_bullets memory/MEMORY.md \
+    '- [shared](ddaanet/shared.md) — a portable fact' \
+    '- [upstream](ddaanet/upstream.md) — arrived in another repo'
+}
+
+@test "a dormant tier moved off its pin does not refuse" {
+  # The down pass never projects onto a dormant tier, so its position is not
+  # this rule's business.
+  pinned_store_with_tier
+  set_tier_manifest
+  move_tier_off_pin ddaanet
+
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+}
+
 @test "splice up: an active tier's carrier bullets appear prefixed in the root" {
   make_parent_with_memory
   make_tier_in_memory ddaanet

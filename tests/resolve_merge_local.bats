@@ -114,19 +114,3 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
 }
 
-@test "head-vs-live: abort-then-retry returns to the pending commit, not the authority" {
-  # abort-then-retry re-enters resolve's default mode, which needs a remote
-  # carrying `live` to get past its early repairs and reach merge detection.
-  git -C memory push -q origin live
-  run --separate-stderr bash "$PRE_COMMIT"
-  [ "$status" -ne 0 ]
-  statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
-  pending=$(jq -r .source_ref "$statefile")
-  # Aborting must land back on the divergent side. Returning to the authority
-  # instead would make the divergence invisible and silently drop the pending
-  # commit — so the re-entry must yield a fresh directive, not report health.
-  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" abort-then-retry
-  [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"flavor=head-vs-live"* ]]
-  [ "$(git -C memory rev-parse refs/gitlore/pending)" = "$pending" ]
-}

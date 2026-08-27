@@ -65,6 +65,26 @@ write_intent() {
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$(git -C memory/ddaanet rev-parse live)" ]
 }
 
+# `submodule add` records the remote's DEFAULT branch, and the detach above then
+# moves the tier onto `live`. `submodule update` pins from the memory store's
+# INDEX (D43), so an unstaged move is walked back to the default branch at the
+# next SessionStart — while the root index composed from the live carrier
+# survives to describe facts the tier no longer holds. The mount advances a tier,
+# so it owes the same staging every other advancing path performs.
+@test "add-tier: mount stages the gitlink its detach moved" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  # `live` ahead of the default branch, so the detach genuinely moves HEAD and
+  # the staged gitlink is not the one `submodule add` recorded.
+  push_tier_fact ddaanet "- [x](x.md) — from live" >/dev/null
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run bash "$ADD_TIER"
+  [ "$status" -eq 0 ]
+
+  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+}
+
 @test "add-tier: mount makes NO commit inside the memory store" {
   make_parent_with_memory
   before=$(git -C memory rev-parse HEAD)

@@ -69,8 +69,12 @@ commit records the root `MEMORY.md` and the tier gitlink together, so root's
 tier block and the carrier index it projects are consistent *by construction*; a
 tier that fast-forwarded on its own leaves root describing one commit and the
 carrier holding another, and nothing downstream repairs that — composition
-places lines, it does not merge them. Taking an upstream commit is therefore a
-merge, through `/gitlore:merge` or `/gitlore:push`.
+places lines, it does not merge them. So composition refuses instead: the down
+projection compares each active tier's `HEAD` against the gitlink the memory
+store's index records and writes nothing when they differ, because projecting
+root's older block onto a carrier nothing adopted up overwrites approved
+upstream text and reports success (D31). Taking an upstream commit is therefore
+a merge, through `/gitlore:merge` or `/gitlore:push`.
 
 **Taking is three cases, not one.** Both commands classify each store by
 ancestry against the fetched `origin/live`. A remote already contained in `HEAD`
@@ -112,7 +116,11 @@ is in the index. Every path that advances a tier therefore stages the pair —
 `MEMORY.md` and the tier — in the memory store as its last act: the
 fast-forward-plus-adoption branch of `gitlore_merge_stores`, and the merge
 continuation, which stages *after* its commit because the merge commit does not
-exist before it. Left in the working tree alone, the move survives exactly until
+exist before it. The **mount** is a third such path and stages the gitlink
+alone: `submodule add` records the remote's default branch and
+`/gitlore:add-tier` then detaches the tier at `live`, so the gitlink moves while
+the root index it feeds is written by the compose that follows and floats as
+ordinary dirt. Left in the working tree alone, the move survives exactly until
 the next `SessionStart`, which walks the tier back to the pre-merge commit while
 the recomposed root index — an ordinary file write, not a gitlink — survives to
 describe facts the carrier no longer holds. Nothing reports it: the command that

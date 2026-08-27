@@ -17,7 +17,6 @@ load helpers/divergence-fixtures
 load helpers/stub-synth
 
 PRE_COMMIT="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
-RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
 
 setup() {
   setup_tmp_repo
@@ -96,16 +95,19 @@ statefile() { git -C memory rev-parse --git-path gitlore-merge-state; }
   [ ! -f "$(artifact tree)" ]
 }
 
-@test "abort-then-retry leaves the re-prepared merge's own briefing, not the old one" {
+@test "a re-prepared merge gets its own briefing, not the dead merge's" {
   make_diverged_head_vs_live memory
   run bash "$PRE_COMMIT"
   [ "$status" -ne 0 ]
   printf 'stale marker\n' >> "$(artifact tree)"
 
-  # The abort re-enters the default mode, which finds the same divergence and
-  # prepares a fresh merge — so the assertion is that nothing of the aborted
-  # one survives into it, not that the files are gone.
-  run --separate-stderr bash "$RESOLVE" abort-then-retry
+  # A hand-run abort in the store kills the merge and leaves gitlore's files
+  # behind. The next gate disposes of them and finds the same divergence, so
+  # the assertion is that nothing of the dead merge survives into the fresh
+  # briefing, not that the files are gone.
+  git -C memory merge --abort
+
+  run --separate-stderr bash "$PRE_COMMIT"
   [ -f "$(statefile)" ]
   [ "$(jq -r .tree "$(statefile)")" = "$(artifact tree)" ]
   run ! grep -qF 'stale marker' "$(artifact tree)"
