@@ -1,3 +1,3 @@
 ## Current task
 
-A second shell-gotchas audit, over every shell file NOT changed since v0.5.0 — the first pass, filed at `plans/2026-08-27-shell-gotchas-audit.md`, covered only the changed files and is fully applied. macOS compatibility is a requirement of this pass: bash 3.2, BSD `sed`/`find`/`stat`/`paste`, no `timeout`; audit each file whole, verify each BLOCK/WARN empirically, fix test-first, and file the report under `plans/`.
+The release queue after the second shell-gotchas audit (landed, filed at `plans/2026-08-27-shell-gotchas-audit-2.md`). Next up: SessionStart repair of a store with no root `MEMORY.md` — write the `# Memory Index` scaffold as a dirty file the next FR11 commit reviews, say so on `systemMessage`, record it in `docs/references/session.md` and the changelog. Motivated by `plans/brief-continue-after-merge-needs-root-index.md`'s third decision (the first two landed in `d54fc63`).

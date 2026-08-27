@@ -48,9 +48,14 @@ make it from the node, and for a bug report from the script the node names.
   which `.envrc` puts on `PATH` — with PyYAML, so the wiring suite does not
   depend on the system python. A pin mismatch stops the recipe rather than
   wrapping.
-- `just precommit` is fast and frequent. `just evals` drives the real claude
-  CLI and costs time and money — run it explicitly, not as part of a release.
-  `just release` depends on `prerelease`, which is just `precommit`.
+- `just precommit` is the gate before every commit, but one invocation (lint,
+  the unit suite, the integration suite) outruns the Bash tool's 10-minute cap
+  and is killed before it records its sentinel. From an agent, run `just lint`,
+  `just test-integration` and `just test-unit` as separate calls, sequentially
+  (the box will not take two suites at once), and say that the sentinel was not
+  recorded. `just evals` drives the real claude CLI and costs time and money —
+  run it explicitly, not as part of a release. `just release` depends on
+  `prerelease`, which is just `precommit`.
 - macOS is a target: bash 3.2 and BSD `sed`/`mktemp`/`grep`/`find`/`stat`.
   `tests/helpers/bsd-stubs.bash` shadows a tool with its BSD-strict contract so
   a GNU-ism fails on Linux; `tests/bsd_portability.bats` holds the lock-ins.
