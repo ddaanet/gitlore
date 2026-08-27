@@ -41,3 +41,19 @@ teardown() { teardown_tmp_repo; }
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
   [ "$(git config gitlore.memoryApprovalClauseFile)" = "$PLUGIN_ROOT/reference/memory-approval-clause.txt" ]
 }
+
+@test "merging into an existing settings.json keeps its file mode" {
+  mkdir -p .claude
+  printf '{"a":1}\n' > .claude/settings.json
+  chmod 644 .claude/settings.json
+  bash "$WRITE_SETTINGS" "just precommit"
+  [ "$(find .claude/settings.json -perm 644)" = ".claude/settings.json" ]
+  [ "$(jq -r .a .claude/settings.json)" = "1" ]
+  [ "$(jq -r .gitlore.precommitCommand .claude/settings.json)" = "just precommit" ]
+}
+
+@test "the .gitignore entry is matched literally, not as a regex" {
+  printf 'Xclaude/settings.local.json\n' > .gitignore
+  bash "$WRITE_SETTINGS" "just precommit"
+  grep -qxF '.claude/settings.local.json' .gitignore
+}

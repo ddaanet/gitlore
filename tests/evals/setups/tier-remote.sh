@@ -14,6 +14,7 @@ set -euo pipefail
 
 BARE="$PWD/.tier-remote.git"
 seed=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-eval-tier.XXXXXX")
+trap 'rm -rf "$seed"' EXIT
 
 git init -q -b main "$seed"
 git -C "$seed" config user.email "eval@test.com"
@@ -46,4 +47,3 @@ git -C "$seed" commit -q -m "Seed acme tier index"
 git -C "$seed" branch live
 
 git clone -q --bare "$seed" "$BARE"
-rm -rf "$seed"

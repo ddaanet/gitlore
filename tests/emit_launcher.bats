@@ -26,3 +26,11 @@ teardown() { teardown_tmp_repo; }
   bash "$EMIT"; bash "$EMIT"
   [ "$(grep -cxF 'PATH_add .gitlore/bin' .envrc)" -eq 1 ]
 }
+
+@test "inserting into an existing .envrc keeps its file mode" {
+  printf 'PATH_add node_modules/.bin\n' > .envrc
+  chmod 644 .envrc
+  bash "$EMIT"
+  [ "$(find .envrc -perm 644)" = ".envrc" ]
+  grep -qxF 'PATH_add .gitlore/bin' .envrc
+}

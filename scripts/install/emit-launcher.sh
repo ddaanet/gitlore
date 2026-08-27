@@ -17,9 +17,10 @@ if [ ! -f .envrc ]; then
 elif ! grep -qxF "$line" .envrc; then
   last=$(grep -nE '^[[:space:]]*PATH_add( |$)' .envrc | tail -n1 | cut -d: -f1 || true)
   if [ -n "${last:-}" ]; then
-    tmp=$(mktemp)
-    awk -v n="$last" -v ins="$line" 'NR==n{print; print ins; next} {print}' .envrc > "$tmp"
-    mv "$tmp" .envrc
+    # Through a variable, not `mktemp` + `mv`: the temp file is 0600 and mv
+    # would carry that mode onto the user's .envrc.
+    merged=$(awk -v n="$last" -v ins="$line" 'NR==n{print; print ins; next} {print}' .envrc)
+    printf '%s\n' "$merged" > .envrc
   else
     printf '%s\n' "$line" >> .envrc
   fi

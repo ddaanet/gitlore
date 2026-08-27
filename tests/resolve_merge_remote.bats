@@ -63,7 +63,8 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
   # Simulate another machine pushing to origin during synthesis.
   (
-    cd "$(mktemp -d "$TMP_REPO/concurrent.XXXXXX")"
+    other=$(mktemp -d "$TMP_REPO/concurrent.XXXXXX") || exit 1
+    cd "$other" || exit 1
     git clone -q "$TMP_REPO/.bare-memory.git" .
     git checkout -q live
     echo "concurrent" > CONCURRENT.md

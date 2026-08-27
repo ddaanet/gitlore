@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -21,7 +23,7 @@ teardown() { teardown_tmp_repo; }
 @test "resolve: healthy state still no-ops" {
   run --separate-stderr bash "$RESOLVE"
   [ "$status" -eq 0 ]
-  [[ "$output$stderr" == *"healthy"* ]] || [[ -z "$stderr" ]]
+  [[ "$stderr" == *"healthy"* ]]
 }
 
 @test "resolve: yields head-vs-live directive when the pending commit diverged from live" {

@@ -28,7 +28,11 @@ setup() {
   )
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
 }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  [ -n "${CLONE:-}" ] && rm -rf "$CLONE"
+  teardown_tmp_repo
+}
 
 @test "pre-push pushes memory live to its origin" {
   run bash "$PRE_PUSH"
@@ -47,7 +51,8 @@ teardown() { teardown_tmp_repo; }
 
 @test "pre-push fails with divergence hint when remote diverged" {
   (
-    cd "$(mktemp -d "$TMP_REPO/clone.XXXXXX")"
+    clone_dir=$(mktemp -d "$TMP_REPO/clone.XXXXXX") || exit 1
+    cd "$clone_dir" || exit 1
     git clone -q "$MEMORY_REMOTE" .
     git checkout -q live
     echo remote-only > REMOTE.md
@@ -77,12 +82,11 @@ teardown() { teardown_tmp_repo; }
 
 @test "exits 0 in a session-less linked worktree where the memory worktree is absent" {
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   [ ! -e "$WT/memory/.git" ]
   cd "$WT"
   run bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
-  rm -rf "$WT"
 }
 
 # The skip at the top of the hook is silent by design so a session-less worktree
@@ -98,14 +102,13 @@ teardown() { teardown_tmp_repo; }
   git add memory
   git commit -q -m "Bump memory gitlink"
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   [ ! -e "$WT/memory/.git" ]
   cd "$WT"
   run --separate-stderr bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
   [[ "$output$stderr" == *"not checked out"* ]]
   [[ "$output$stderr" == *"submodule update --init"* ]]
-  rm -rf "$WT"
 }
 
 @test "memory-absent skip stays silent when the gitlink is already published" {
@@ -113,12 +116,11 @@ teardown() { teardown_tmp_repo; }
   git add memory
   git commit -q -m "Bump memory gitlink"
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   cd "$WT"
   run --separate-stderr bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
   [ -z "$output$stderr" ]
-  rm -rf "$WT"
 }
 
 @test "memory-absent skip stays silent when memory was never initialized here" {
@@ -133,5 +135,4 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   [ -z "$output$stderr" ]
   cd "$TMP_REPO"
-  rm -rf "$CLONE"
 }

@@ -29,7 +29,10 @@ load helpers/fixtures
 PRE_PUSH="$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 
 setup() { setup_tmp_repo; }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${OTHER:-}" ] && rm -rf "$OTHER"
+  teardown_tmp_repo
+}
 
 # The discriminator itself, mirrored from the three sites. Kept as one helper so
 # every scenario below asserts the same expression the code evaluates; the
@@ -61,18 +64,16 @@ seed_bare_and_clone() {
 
 # Advance the remote's `live` from a throwaway second clone, behind our back.
 advance_remote_live() {
-  local other
-  other="$(mktemp -d "$TMP_REPO/other.XXXXXX")"
-  git clone -q "$BARE" "$other"
+  OTHER="$(mktemp -d "$TMP_REPO/other.XXXXXX")"
+  git clone -q "$BARE" "$OTHER"
   (
-    cd "$other" || exit 1
+    cd "$OTHER" || exit 1
     git checkout -q live
     echo remote-only > REMOTE.md
     git add REMOTE.md
     git -c user.email=t@t -c user.name=t commit -q -m "remote-only"
     git push -q origin live
   )
-  rm -rf "$other"
 }
 
 @test "a stale-ref push rejection is classified as divergence" {

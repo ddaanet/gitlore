@@ -29,19 +29,22 @@ tools=$(jq -r '.message.content[]? | select(.type == "tool_use")
 
 # 1. The scenario has to have happened at all: the agent ran the probe, and the
 #    error string reached it as a tool result rather than as prose.
-probe_at=$(printf '%s\n' "$tools" | grep -m1 "	Bash	.*$PROBE" | cut -f1) || probe_at=
+# awk, not `grep -m1 | cut`: under pipefail an early-exiting consumer SIGPIPEs
+# the producer once $tools outgrows the pipe buffer, and the `|| var=` fallback
+# would then erase a match that succeeded.
+probe_at=$(printf '%s\n' "$tools" | awk -F'\t' -v p="$PROBE" '$2 == "Bash" && index($3, p) { print $1; exit }')
 [ -n "$probe_at" ] || \
   fail "the agent never ran $PROBE, so the mid-task trigger never surfaced — the scenario did not exercise recall"
 
 # 2. The skill was what fetched it. Without this the scenario grades the model's
 #    common sense: an agent that simply opened the file on the user's say-so
 #    leaves the same answer and the same tool trace minus this one call.
-skill_at=$(printf '%s\n' "$tools" | grep -m1 "	Skill	.*recall" | cut -f1) || skill_at=
+skill_at=$(printf '%s\n' "$tools" | awk -F'\t' '$2 == "Skill" && index($3, "recall") { print $1; exit }')
 [ -n "$skill_at" ] || \
   fail "the recall skill was never invoked — the agent answered without it, so this run grades nothing the skill contributes. Tool calls: $(printf '%s' "$tools" | tr '\n' ';')"
 
 # 3. The body was read.
-read_at=$(printf '%s\n' "$tools" | grep -m1 "	Read	.*/$WANT\$" | cut -f1) || read_at=
+read_at=$(printf '%s\n' "$tools" | awk -F'\t' -v w="/$WANT" '$2 == "Read" && substr($3, length($3) - length(w) + 1) == w { print $1; exit }')
 [ -n "$read_at" ] || \
   fail "the agent never Read $WANT — it answered without recalling the body. Tool calls: $(printf '%s' "$tools" | tr '\n' ';')"
 

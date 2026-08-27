@@ -22,15 +22,20 @@ MSG_FILE="$EVAL_REPO/.claude/gitlore-memory-message"
 
 # 1. The fact landed in the TIER, not in project memory. Anything but MEMORY.md
 #    and the file the fixture seeded is the agent's new fact.
+# Captured first, not `< <(find …)`: a process substitution hides find's exit
+# status, and an unreadable tier would then read as "the agent wrote nothing".
+md_files=$(find "$TIERPATH" -maxdepth 1 -type f -name '*.md') \
+  || fail "could not list $TIERPATH — the fixture did not hold"
 new_file=""
 while IFS= read -r f; do
+  [ -n "$f" ] || continue
   base=$(basename -- "$f")
   case "$base" in
     MEMORY.md|reference_acme_staging_db.md) continue ;;
   esac
   new_file="$base"
   break
-done < <(find "$TIERPATH" -maxdepth 1 -type f -name '*.md')
+done <<<"$md_files"
 
 if [ -z "$new_file" ]; then
   # Name what the agent wrote instead: "the fact went to project memory" and

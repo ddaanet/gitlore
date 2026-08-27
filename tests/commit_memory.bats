@@ -13,7 +13,10 @@ setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  teardown_tmp_repo
+}
 
 @test "exits 0 when gitlore is not configured" {
   run bash "$CMD" -m "noop"
@@ -38,12 +41,11 @@ teardown() { teardown_tmp_repo; }
 @test "exits 0 in a session-less worktree where the memory worktree is absent" {
   make_parent_with_memory
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   [ ! -e "$WT/memory/.git" ]
   cd "$WT"
   run bash "$CMD" -m "noop"
   [ "$status" -eq 0 ]
-  rm -rf "$WT"
 }
 
 @test "refuses dirty memory with no summary, leaving it uncommitted" {
@@ -98,4 +100,11 @@ EOF"
   [ "$status" -eq 1 ]
   [[ "${output}${stderr}" == *"memory merge prepared"* ]]
   [[ "${output}${stderr}" == *"flavor=head-vs-live"* ]]
+}
+
+@test "-m with no summary operand is a usage error, not a silent exit 1" {
+  make_parent_with_memory
+  run --separate-stderr bash "$CMD" -m
+  [ "$status" -eq 2 ]
+  [[ "$stderr" == *usage* ]]
 }

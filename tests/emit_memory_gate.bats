@@ -10,7 +10,10 @@ setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  teardown_tmp_repo
+}
 
 @test "no-op (exit 0) when there is no gitlore-memory submodule" {
   run bash "$EMIT"
@@ -20,10 +23,10 @@ teardown() { teardown_tmp_repo; }
 @test "no-op (exit 0) when the submodule worktree is absent (session-less linked worktree)" {
   make_parent_with_memory
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   [ ! -e "$WT/memory/.git" ]
-  ( cd "$WT" && run bash "$EMIT"; [ "$status" -eq 0 ] || exit 1 )
-  rm -rf "$WT"
+  run bash -c 'cd "$1" && bash "$2"' _ "$WT" "$EMIT"
+  [ "$status" -eq 0 ]
 }
 
 @test "writes an executable pre-commit into the submodule hooks dir" {
@@ -38,7 +41,7 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   bash "$EMIT"
   hookfile="$(git -C memory rev-parse --git-path hooks)/pre-commit"
-  git config --unset gitlore.hooksDir 2>/dev/null || true
+  git config --unset gitlore.hooksDir || true
   run "$hookfile"
   [ "$status" -eq 0 ]
   [[ "$output" == *"gitlore skipped"* ]]

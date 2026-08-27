@@ -10,6 +10,7 @@
 # second, drifting definition of what a mounted tier looks like; if add-tier.sh
 # breaks, this fixture should fail loudly rather than paper over it.
 set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) captures below
 
 SETUPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="${PLUGIN_ROOT:-$(cd "$SETUPS_DIR/../../.." && pwd)}"

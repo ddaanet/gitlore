@@ -23,18 +23,21 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
+usage() { echo "usage: commit-memory.sh [-m <summary> | -F <file> | -F -]" >&2; exit 2; }
 summary=""
 have_summary=0
 while [ $# -gt 0 ]; do
+  # Operand checked up front: `shift 2` past the end returns 1, which under
+  # `set -e` would end the script with no message at all.
   case "$1" in
     -m)
-      summary="${2-}"; have_summary=1; shift 2 ;;
+      [ $# -ge 2 ] || usage
+      summary="$2"; have_summary=1; shift 2 ;;
     -F)
-      if [ "${2-}" = "-" ]; then summary="$(cat)"; else summary="$(cat "${2-}")"; fi
+      [ $# -ge 2 ] || usage
+      if [ "$2" = "-" ]; then summary="$(cat)"; else summary="$(cat "$2")"; fi
       have_summary=1; shift 2 ;;
-    *)
-      echo "usage: commit-memory.sh [-m <summary> | -F <file> | -F -]" >&2
-      exit 2 ;;
+    *) usage ;;
   esac
 done
 

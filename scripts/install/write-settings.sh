@@ -6,13 +6,14 @@ precommit_cmd="$1"
 
 mkdir -p .claude
 
-# settings.json — tracked.
+# settings.json — tracked. Rewritten in place through a variable rather than
+# `mktemp` + `mv`: the temp file is created 0600 and mv would carry that mode
+# onto a file that was 0644.
 if [ -f .claude/settings.json ]; then
-  tmp=$(mktemp)
-  jq --arg pc "$precommit_cmd" \
+  merged=$(jq --arg pc "$precommit_cmd" \
      '.gitlore.enabled = true | .gitlore.precommitCommand = $pc' \
-     .claude/settings.json > "$tmp"
-  mv "$tmp" .claude/settings.json
+     .claude/settings.json)
+  printf '%s\n' "$merged" > .claude/settings.json
 else
   jq -n --arg pc "$precommit_cmd" \
      '{gitlore: {enabled: true, precommitCommand: $pc}}' > .claude/settings.json
@@ -25,7 +26,7 @@ if [ -f .gitignore ]; then
   if [ -n "$(tail -c1 .gitignore)" ]; then
     printf '\n' >> .gitignore
   fi
-  grep -qx '.claude/settings.local.json' .gitignore || \
+  grep -qxF '.claude/settings.local.json' .gitignore || \
     printf '.claude/settings.local.json\n' >> .gitignore
 else
   printf '.claude/settings.local.json\n' > .gitignore

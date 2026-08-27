@@ -9,7 +9,10 @@ setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  [ -n "${WT:-}" ] && rm -rf "$WT"
+  teardown_tmp_repo
+}
 
 # The trigger file is the signal, so the payload carries nothing this hook acts
 # on except `cwd` — read only to spot a trigger written against another root.
@@ -158,7 +161,7 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   make_parent_with_memory
   echo dirty > memory/notes.md
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   mkdir -p "$WT/.claude"
   printf 'memory: record notes\n' > "$WT/.claude/gitlore-memory-message"
   : > "$WT/.claude/gitlore-commit-memory"
@@ -176,25 +179,23 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   # trigger from another working tree is not authority to do that.
   [ -n "$(git -C memory status --porcelain)" ]
   [ -f "$WT/.claude/gitlore-commit-memory" ]
-  rm -rf "$WT"
 }
 
 @test "no trigger anywhere stays silent — the stranded check must not fire on its own" {
   make_parent_with_memory
   echo dirty > memory/notes.md
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
 
   CLAUDE_PROJECT_DIR="$TMP_REPO" run run_batch "$WT"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  rm -rf "$WT"
 }
 
 @test "no-op in a session-less worktree where the memory worktree is absent" {
   make_parent_with_memory
   WT="$TMP_REPO-wt"
-  git worktree add -q -b feat "$WT" >/dev/null 2>&1
+  git worktree add -q -b feat "$WT" >/dev/null
   [ ! -e "$WT/memory/.git" ]
   cd "$WT"
   # A trigger is present, yet the guard must fire first: no memory worktree here.
@@ -203,5 +204,4 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   run run_batch
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  rm -rf "$WT"
 }
