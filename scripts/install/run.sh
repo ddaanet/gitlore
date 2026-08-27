@@ -89,10 +89,13 @@ esac
 # init-submodule.sh did NOT migrate (re-run, or a pre-registered submodule where
 # seeding was skipped). First-install migration is handled in init-submodule.sh,
 # which already leaves the stub. Only act on an existing dir — never create one
-# under the user's real ~/.claude when there was nothing to migrate.
+# under the user's real ~/.claude when there was nothing to migrate. An empty
+# dir still gets the stub — a session launched without the shim would otherwise
+# write there silently — but nothing was migrated, so it is not announced.
 _old_memory=$(gitlore_cc_memory_dir "$toplevel")
 if [ -d "$_old_memory" ]; then
-  if ! gitlore_is_migration_stub "$_old_memory"; then
+  if ! gitlore_is_migration_stub "$_old_memory" \
+     && [ -n "$(find "$_old_memory" -mindepth 1 -print -quit)" ]; then
     echo "gitlore: migrated stale auto-memory at $_old_memory" >&2
   fi
   gitlore_mark_migrated "$_old_memory"

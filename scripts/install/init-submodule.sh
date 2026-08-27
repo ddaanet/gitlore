@@ -37,11 +37,13 @@ if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
   git init -q "$mempath"
 
   # 2. Seed content (auto-memory migration, else scaffold).
-  #    Skip the copy when $src is itself a migration stub left by a prior
-  #    install/run — that is not real memory, so fall through to the scaffold
-  #    rather than seed the submodule with "Do not add memory here".
+  #    Skip the copy when $src holds nothing to migrate: an empty dir, or the
+  #    migration stub a prior install/run left. Copying nothing would seed a
+  #    store with no root index, which every later compose and merge path
+  #    assumes exists; seeding the stub would carry "Do not add memory here".
   src=$(gitlore_cc_memory_dir "$parent_root")
-  if [ -d "$src" ] && ! gitlore_is_migration_stub "$src"; then
+  if [ -d "$src" ] && [ -n "$(find "$src" -mindepth 1 -print -quit)" ] \
+     && ! gitlore_is_migration_stub "$src"; then
     cp -R "$src"/. "$mempath/"
     # Replace the migrated source with a stub recording the move in-tree, so a
     # session later launched without the shim (writing to this default dir) finds

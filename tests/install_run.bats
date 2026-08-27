@@ -184,17 +184,24 @@ teardown() { teardown_tmp_repo; }
   [ ! -d "$fake_home/.claude/projects/$encoded/memory" ]
 }
 
-@test "install succeeds when auto-memory dir exists but is empty" {
+@test "install seeds the scaffold when the auto-memory dir exists but is empty" {
   fake_home="$TMP_REPO/.fake-home"
   encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
-  # Dir exists (e.g. from a prior failed install that called gitlore_mark_migrated
-  # before the git commit ran) but contains no files — cp copies nothing, so
-  # git add -A stages nothing; --allow-empty on the initial commit saves the day.
-  mkdir -p "$fake_home/.claude/projects/$encoded/memory"
+  # Dir exists (e.g. from a prior failed install) but holds nothing. There is
+  # no memory to migrate, so this is the scaffold branch: a store seeded from
+  # an empty dir has no root index, and every later compose and merge path
+  # assumes one — the continuation used to die on `add -- MEMORY.md` there.
+  src="$fake_home/.claude/projects/$encoded/memory"
+  mkdir -p "$src"
   printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
 
   HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
-  git -C memory rev-parse HEAD  # initial commit must exist
+  grep -qx '# Memory Index' memory/MEMORY.md
+  git -C memory cat-file -e HEAD:MEMORY.md
+  # The breadcrumb still lands, so a shimless session finds it rather than
+  # writing into the empty dir; nothing was migrated, so it is not announced.
+  # shellcheck disable=SC2016  # backticks are literal text in the stub
+  grep -q 'migrated in-tree by `/gitlore:install`' "$src/MEMORY.md"
 }
 
 @test "install migration stub is idempotent across re-runs" {
