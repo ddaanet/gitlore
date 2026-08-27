@@ -91,8 +91,12 @@ gitlore_weld_repair() {
   if jq -j '.exp' "$state" > "$scratch" && cat "$scratch" > "$file"; then
     rm -f "$scratch"
     return 0
+  else
+    # $? after a bare `if cond; then ...; fi` with no branch taken is 0, not
+    # the condition's status (POSIX) — capture it here, in the else branch,
+    # while it is still live.
+    status=$?
+    rm -f "$scratch"
+    return "$status"
   fi
-  status=$?
-  rm -f "$scratch"
-  return "$status"
 }

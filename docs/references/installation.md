@@ -77,7 +77,8 @@ creation. A partial install (user aborted mid-flow) is recovered by re-running.
 **Sentinel file:** `.claude/gitlore-hook-setup` — tracked. Contains the hook
 setup command or keyword (`lefthook install`, `npx husky`,
 `overcommit --install`, `direct`, or `manual`). `SessionStart` replays it to
-re-wire hook-manager integration on a clone or a new machine.
+re-wire hook-manager integration on a clone or a new machine — by matching the
+line against that closed list, never by handing it to a shell (D45).
 
 The detection script outputs structured results. Each hook manager has an
 idempotent wiring step (uses marker comment `# gitlore: managed` to detect and
@@ -143,7 +144,11 @@ or a user sets the sentinel themselves.
 
 - `direct` → re-run the direct-wiring installer.
 - `manual` → emit `systemWarning` reminding the user to verify wiring.
-- Any other value → run as a shell command in the repo root.
+- `lefthook install`, `npx husky`, `overcommit --install` → run that literal
+  command in the repo root.
+- Any other value → run nothing; report on `systemMessage` that the sentinel
+  names a command gitlore does not replay, and that the user should run it
+  themselves or set the sentinel to `manual` (D45).
 
 Idempotency: every wiring modification uses a detection marker
 (`# gitlore: managed` or the format-appropriate equivalent). Re-applying is a
@@ -206,7 +211,7 @@ Per NFR5 (double-commit semantics): memory `live` is pushed before parent push
 on every `git push`. Parent remote always points at a submodule SHA reachable on
 the memory remote.
 
-## Decisions — D8, D25
+## Decisions — D8, D25, D45
 
 Why the wiring above has this shape: why creating the memory remote asks first,
 and why direct wiring refuses rather than appends after an existing `exec`.
@@ -250,7 +255,28 @@ before the detected `exec` — the inserted line would itself need to avoid `exe
 the existing hook body's control flow rather than just appending, a rewrite too
 surprising to do unprompted.
 
+**D45 — The sentinel replay is an allow-list, never `sh -c` on the file**
+
+The sentinel is tracked, so it arrives with every clone. Replaying it with
+`sh -c "$line"` made the first `SessionStart` in a freshly cloned repo execute
+whatever line the clone brought in, gated only by `gitlore.enabled` in the
+equally tracked `.claude/settings.json` — an arbitrary-code path that a
+contributor, a compromised upstream, or a careless hand edit could reach, and
+that ran before the user had read anything. The three manager commands the
+wire scripts write are the only lines gitlore ever needs to run, so the replay
+matches against exactly those literals; anything else runs nothing and is
+reported on `systemMessage` with the way forward. The cost is that a new
+manager needs a wire script and an arm here rather than a hand-typed sentinel
+line, which is the right cost: a command gitlore runs on a stranger's clone
+should be one gitlore shipped.
+
 ## Rejected alternatives
+
+**Replaying the sentinel as a shell command.** The `*) sh -c "$cmd"` arm was
+the original design, so a user could wire an unsupported manager by writing
+its install command into the sentinel by hand. That flexibility is what made
+the file an execution vector; `manual` plus a copy-paste snippet covers the
+same need without gitlore running the line.
 
 **A strictly non-empty initial commit at install.** Install passes
 `--allow-empty` as a safety net: the commit normally carries migrated

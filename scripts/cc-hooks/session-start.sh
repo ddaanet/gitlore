@@ -24,7 +24,19 @@ source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 # would otherwise be silently downgraded to "gitlore disabled" — the whole hook
 # then no-ops with no explanation.
 [ -f .claude/settings.json ] || exit 0
-enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json || echo false)
+# The missing-file case is handled by the guard above; a MALFORMED file is a
+# real fault and must not be folded into it. `enabled=$(... || echo false)`
+# used to downgrade a parse error to plain "false" — jq's own message still
+# reached stderr, but SessionStart's stderr is invisible to the user outside
+# --verbose (see the comment on `exec 3>&1 1>&2` below), so nothing the user
+# actually sees said gitlore had gone silent. Report it on the one channel
+# that is: the SessionStart systemMessage, emitted directly to stdout here,
+# before that redirection takes effect.
+if ! enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json 2>&1); then
+  jq -nc --arg e "$enabled" \
+    '{systemMessage:("gitlore: .claude/settings.json could not be parsed, so gitlore is inactive this session: " + $e)}'
+  exit 0
+fi
 [ "$enabled" = "true" ] || exit 0
 
 # Guard 2: gitlore-memory submodule registered
@@ -103,8 +115,24 @@ if [ -f "$SENTINEL" ]; then
     manual)
       echo "gitlore: hook wiring is 'manual'; verify your hooks still invoke \$(git rev-parse --git-common-dir)/gitlore-pre-*." >&2
       ;;
+    # The sentinel is a TRACKED file — a fresh clone brings whatever its first
+    # line says, so an unconstrained `sh -c "$cmd"` here would run any line
+    # that clone carried at the very first session start. Only the three known
+    # hook-manager installers (wire-lefthook.sh/wire-husky.sh/wire-overcommit.sh
+    # are the only writers) are legitimate `*)` content; each runs as the
+    # literal command, never through `sh -c`, so nothing beyond that fixed set
+    # can execute.
+    "lefthook install")
+      lefthook install
+      ;;
+    "npx husky")
+      npx husky
+      ;;
+    "overcommit --install")
+      overcommit --install
+      ;;
     *)
-      sh -c "$cmd"
+      add_sysmsg "gitlore: .claude/gitlore-hook-setup names an unrecognized command ('$cmd') and was not run. gitlore only replays the three known hook-manager installers (lefthook install, npx husky, overcommit --install). Run the command yourself, or set the sentinel's first line to 'manual'."
       ;;
   esac
 fi
@@ -163,10 +191,19 @@ fi
 bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
 
 if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
-  if gitlore_git -C "$mempath" merge --ff-only live >/dev/null 2>&1; then
+  if merge_err=$(gitlore_git -C "$mempath" merge --ff-only live 2>&1); then
     add_sysmsg "gitlore: memory ready (detached at live)."
-  else
+  elif [ "$(gitlore_classify_refusal "$mempath" HEAD live)" = "diverged" ]; then
+    # Only a genuine divergence between HEAD and live is something
+    # /gitlore:resolve can fix — a lock, a corrupt object or an unwritable
+    # worktree all refuse --ff-only too, and sending the user to resolve for
+    # those would be a guess replacing git's own explanation (never do that).
     add_sysmsg "gitlore: memory diverged from live. Run /gitlore:resolve, then start a fresh session."
+    emit_session_json
+    exit 0
+  else
+    add_sysmsg "gitlore: memory could not be fast-forwarded onto live. git said:
+$merge_err"
     emit_session_json
     exit 0
   fi

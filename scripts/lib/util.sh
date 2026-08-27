@@ -92,7 +92,10 @@ gitlore_memory_path() {
 
 # Exit 0 if .gitmodules registers the gitlore-memory submodule, 1 otherwise.
 gitlore_has_submodule() {
-  gitlore_memory_path >/dev/null 2>&1
+  # No stderr redirect: gitlore_memory_path is already silent on the expected
+  # miss (its own comment above), so anything it sends to stderr here is the
+  # genuine fault that comment describes — swallowing it would drop that.
+  gitlore_memory_path >/dev/null
 }
 
 # Ref pinning the pending (divergent) commit while a merge is prepared. Under
@@ -357,7 +360,9 @@ gitlore_git() {
 gitlore_tier_paths() {
   local mempath="$1" rec
   [ -f "$mempath/.gitmodules" ] || return 0
-  while IFS= read -r -d '' rec; do
+  # LC_ALL=C: matches gitlore_commit_msg_freshness's own NUL-delimited `read`,
+  # against the bash 5.0-5.3 multibyte `read -d ''` overshoot (BP#65).
+  while IFS= LC_ALL=C read -r -d '' rec; do
     printf '%s\n' "${rec#*$'\n'}"
   done < <(git config --file "$mempath/.gitmodules" -z --get-regexp '^submodule\..*\.path$')
   return 0

@@ -147,6 +147,18 @@ B
   cmp f want
 }
 
+@test "repair reports failure when the state file cannot be parsed" {
+  # `$?` after an untaken `if` branch is 0, not the condition's status (POSIX) —
+  # a corrupt state file must not read back as a successful repair while the
+  # target is left untouched.
+  printf 'A\nX\nB\n' > f
+  printf 'not json' > state
+  run gitlore_weld_repair state f
+  [ "$status" -ne 0 ]
+  printf 'A\nX\nB\n' > want
+  cmp f want
+}
+
 @test "repair keeps the target's mode and leaves no scratch file behind" {
   # The target may sit in the memory worktree, where an untracked leftover is
   # swept into the FR11 gate's `git add -A`.

@@ -6,6 +6,10 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-27 — The hook-manager sentinel is replayed from an allow-list, not handed to a shell](changelog/2026-08-27-sentinel-replay-is-an-allow-list.md)
+  — the tracked sentinel's fallback arm was `sh -c` on its first line, so a
+  clone's first session start ran whatever the clone carried; the replay now
+  matches the five lines the wire scripts write and reports anything else
 - [2026-08-27 — A prepared merge met by a later gate is continued, never aborted](changelog/2026-08-27-a-prepared-merge-is-always-continued.md)
   — a stale `MERGE_HEAD` used to mean `merge --abort` and prepare again, which
   discarded whatever the merger sub-agent had already synthesized and staged;

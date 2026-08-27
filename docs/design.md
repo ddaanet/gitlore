@@ -237,9 +237,11 @@ is idempotent behind a `# gitlore: managed` marker, and the sentinel stores the
 command so `SessionStart` can replay it. `direct` is the default whenever no
 manager is recognized — every git repo has a hooks dir, so FR8's double-commit
 guarantee is active out of the box — and `manual` prints a snippet and modifies
-nothing. The detection table, each manager's wiring syntax, and why all of them
-reach the wrapper through `$(git rev-parse --git-common-dir)/gitlore-<hook>`
-rather than a literal path (D11) are in
+nothing. The replay matches the sentinel against the three manager commands the
+wire scripts write and runs nothing else (D45). The detection table, each
+manager's wiring syntax, and why all of them reach the wrapper through
+`$(git rev-parse --git-common-dir)/gitlore-<hook>` rather than a literal path
+(D11) are in
 [installation.md](references/installation.md).
 
 ### Workflows
@@ -319,10 +321,12 @@ pre-writes the commit-message file.
 
 - **D8** — remote creation requires explicit user confirmation
 - **D25** — direct wiring refuses rather than appends after an existing `exec`
+- **D45** — the sentinel replay is an allow-list, never `sh -c` on the tracked
+  file
 
 *Rejected:* a strictly non-empty initial commit · `gh repo create` as the only
 remote-creation method · a separate `gitlore.memoryPath` config key · making the
-memory push optional in v1.
+memory push optional in v1 · replaying the sentinel as a shell command.
 
 **Memory redirect** — [memory-redirect.md](references/memory-redirect.md)
 

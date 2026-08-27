@@ -131,6 +131,24 @@ write_intent() {
   [ "$(cat memory/.gitlore-tiers)" = "$(printf 'existing\nddaanet')" ]
 }
 
+@test "add-tier: a second mount does not weld onto an unterminated manifest" {
+  # .gitlore-tiers is documented as hand-editable, so a writer that leaves the
+  # last line bare (a hand edit, an agent Edit) must not have its entry welded
+  # onto the next append — that silently drops both tiers from the manifest.
+  make_parent_with_memory
+  printf 'existing' > memory/.gitlore-tiers   # no trailing newline
+  bare=$(make_tier_remote ddaanet)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run bash "$ADD_TIER"
+  [ "$status" -eq 0 ]
+
+  [ "$(cat memory/.gitlore-tiers)" = "$(printf 'existing\nddaanet')" ]
+  run gitlore_active_tiers memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'existing\nddaanet')" ]
+}
+
 @test "add-tier: mount reports the tier's routing guidance" {
   make_parent_with_memory
   bare=$(make_tier_remote ddaanet)

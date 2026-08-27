@@ -43,17 +43,27 @@ assert_session_start_did_nothing() {
   assert_session_start_did_nothing
 }
 
-@test "a malformed settings.json no-ops but says why" {
+@test "a malformed settings.json no-ops but says why on the user-visible channel" {
   # Why the file-existence guard is separate from the jq read rather than folded
   # into a `2>/dev/null`: absent is the ordinary not-a-gitlore-repo case, but
-  # unparseable is a fault, and swallowing jq's complaint downgrades it to
-  # "gitlore disabled" with no explanation anywhere.
+  # unparseable is a fault. `enabled=$(jq ... || echo false)` used to swallow
+  # jq's complaint into "false", downgrading a real fault to silent
+  # "gitlore disabled" — jq's own parse error still reached stderr, but
+  # SessionStart's stderr is invisible to the user outside --verbose (the
+  # comment above `exec 3>&1 1>&2` below), so nowhere the user actually looks
+  # said anything was wrong.
   make_parent_with_memory
   mkdir -p .claude
   printf 'this is not json\n' > .claude/settings.json
   run --separate-stderr bash "$SESSION_START"
-  assert_session_start_did_nothing
-  [[ "$stderr" == *"parse error"* ]]
+  [ "$status" -eq 0 ]
+  hook_output="$output"   # `run` below would otherwise overwrite it
+  run git config --get gitlore.hooksDir
+  [ "$status" -ne 0 ]
+  [ ! -e .git/gitlore-pre-commit ]
+  [ ! -e .git/gitlore-pre-push ]
+  # The user-visible channel: SessionStart's own JSON systemMessage, not stderr.
+  [[ "$(printf '%s' "$hook_output" | jq -r '.systemMessage')" == *"could not be parsed"* ]]
 }
 
 @test "no-op when .gitmodules has no gitlore-memory entry" {
@@ -199,6 +209,33 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.systemMessage | test("resolve")'
 }
 
+@test "a ff-only merge failure that is NOT divergence reports git's own reason, not a guessed 'diverged'" {
+  # Regression for the blanket `2>&1` this hook used to carry on the ff-only
+  # merge: a lock, a corrupt object, or an unwritable worktree all refuse
+  # --ff-only the same way a genuine divergence does, and sending the user to
+  # /gitlore:resolve for any of them replaces git's own explanation with a
+  # guess. Force a real, non-divergence failure: HEAD is strictly BEHIND live
+  # (an ordinary fast-forward would succeed) but a stranded index.lock in
+  # memory's own gitdir blocks the merge from writing.
+  export GITLORE_GIT_RETRY_SCHEDULE="0 0 0 0 0 0 0"
+  make_parent_with_memory
+  advance_branch_with_file memory live EXTRA.md extra "Advance live"
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+
+  mem_gitdir=$(git -C memory rev-parse --git-dir)
+  : > "$mem_gitdir/index.lock"
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  rm -f "$mem_gitdir/index.lock"
+
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("could not be fast-forwarded")'
+  run bash -c "echo \"\$1\" | jq -e '.systemMessage | test(\"diverged\")'" _ "$output"
+  [ "$status" -ne 0 ]
+  # HEAD never advanced — the merge genuinely did not happen.
+  [ "$(git -C memory rev-parse live)" != "$(git -C memory rev-parse HEAD)" ]
+}
+
 @test "dangling index pointers: one capped systemMessage + a capped additionalContext (D14)" {
   make_parent_with_memory
   # Seven root pointers whose target files do not exist — a dangling report
@@ -242,13 +279,21 @@ assert_session_start_did_nothing() {
   [[ "$stderr$output" == *"manual"* ]]
 }
 
-@test "arbitrary sentinel is executed as a shell command" {
+@test "an unrecognized sentinel is NOT executed as a shell command (W8)" {
+  # `.claude/gitlore-hook-setup` is a TRACKED file — a fresh clone brings
+  # whatever its first line says, and an unconstrained `sh -c "$cmd"` on it
+  # would run any line that clone carried at the very first session start.
+  # Only the three known hook-manager installers are legitimate `*)` content
+  # (wire-lefthook.sh/wire-husky.sh/wire-overcommit.sh are the only writers);
+  # anything else must be reported, never executed.
   make_parent_with_memory
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  printf 'touch SENTINEL_RAN\n' > .claude/gitlore-hook-setup
-  bash "$SESSION_START"
-  [ -f SENTINEL_RAN ]
+  printf 'touch %s/pwned\n' "$TMP_REPO" > .claude/gitlore-hook-setup
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ ! -e "$TMP_REPO/pwned" ]
+  echo "$output" | jq -e '.systemMessage | test("gitlore-hook-setup")'
 }
 
 @test "creates the memory worktree detached at live in a linked (CC-created) worktree" {

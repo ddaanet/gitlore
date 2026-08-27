@@ -73,8 +73,9 @@ has no `gitlore-memory` entry, no-op.
    git common dir, and the FR11 commit gate into the memory store and each tier.
    Idempotent and worktree-agnostic (D11, D12).
 4. **Replay the hook-manager sentinel** to reinstate wiring after a clone or a
-   new machine (`direct` and `manual` are keywords, not commands — see Hook
-   Manager Support above).
+   new machine (`direct` and `manual` are keywords; the three manager commands
+   are matched as literals and nothing else is run, D45 — see Hook Manager
+   Support above).
 5. **Materialize the store.** Initialize the submodule if needed; add a memory
    worktree for a linked parent worktree; create local `live` from `origin/live`
    (or from the checked-out gitlink when there is no remote) after a clone
