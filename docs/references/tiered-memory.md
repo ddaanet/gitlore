@@ -18,10 +18,9 @@ flat merge that would blow the always-loaded index budget. Across N sibling
 repos, `user`, CC-platform `reference` and portable `feedback` facts duplicate
 and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
-gitlore's *composition* of the root index.
-The mechanism is a subsystem rather than a single call, so its decisions are
-recorded individually as **D26–D40 and D42–D44**, across this node and three
-siblings:
+gitlore's *composition* of the root index. The mechanism is a subsystem rather
+than a single call, so its decisions are recorded individually as
+**D26–D40, D42–D44 and D47**, across this node and three siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -35,7 +34,8 @@ siblings:
   input
 - The authoring surface, in
   [index-authoring-sync.md](index-authoring-sync.md) — **D38** the one-way sync
-  · **D39** the routing-key advisories · **D40** pre-existing drift
+  · **D39** the routing-key advisories · **D40** pre-existing drift · **D47**
+  authoring guidance as a skill, curation as a command
 - Stores and merges, in [tier-stores.md](tier-stores.md) — **D42** tier
   lockstep · **D43** tier pinning · **D44** tier merges. All three assume the
   detached-at-`live` branch model, which is D41, in

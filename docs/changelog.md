@@ -6,6 +6,11 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-28 — Authoring guidance and index curation ship as plugin surface, not memories](changelog/2026-08-28-authoring-guidance-and-curation-are-plugin-surface.md)
+  — the two largest lines in the shared tier were rules for writing memories
+  and trimming the index, owned by nothing that fires at those moments; they
+  are now the `memory-writing` skill and the `/gitlore:index-audit` command,
+  with a write-time hook and an index-size trigger both rejected
 - [2026-08-28 — A release push refused by a memory merge is resolved and re-pushed, never amended](changelog/2026-08-28-a-refused-release-push-is-resolved-not-amended.md)
   — a release commit's gitlink is always an ancestor of memory's `live`, so the
   first successful push publishes it and no `commit --amend` + `tag -f` is

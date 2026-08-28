@@ -186,17 +186,23 @@ git and decides (D7).
   ([installation.md](references/installation.md)); and `/gitlore:add-tier`,
   which mounts an existing shared tier or creates a new one by writing an intent
   file a `PostToolBatch` hook acts on, because the agent can do neither half
-  itself (D32, in [tiered-memory.md](references/tiered-memory.md)).
+  itself (D32, in [tiered-memory.md](references/tiered-memory.md)); and
+  `/gitlore:index-audit`, the store-wide curation pass — measure, relocate,
+  retire or merge, then audit the diff for lost routing — a command because a
+  human decides to run it (D47, in
+  [index-authoring-sync.md](references/index-authoring-sync.md)).
 - **Skills** — `resolve`, the semantic merge of a diverged store, split across a
   gate, a fresh-context sub-agent (D9), the parent's approval and a continuation
   script; `push`, which publishes every store with no parent push and no
   approval step, because FR11 gated the content at commit time; `merge`, which
   takes what every remote holds and publishes nothing, and is the only path by
-  which a pinned tier advances (D43); and `recall`, which fetches bodies into
-  context mid-task with no hook, no request file and no state (D18). Each is a
-  skill rather than a command because each has an entry no user types — a hook's
-  stderr, a session start, an ending session, a token in a tool result. Steps in
-  [merge-and-resolve.md](references/merge-and-resolve.md).
+  which a pinned tier advances (D43); `recall`, which fetches bodies into
+  context mid-task with no hook, no request file and no state (D18); and
+  `memory-writing`, whether a learning becomes a fact, what it says, which tier
+  it lands in and whether its line routes (D47). Each is a skill rather than a
+  command because each has an entry no user types — a hook's stderr, a session
+  start, an ending session, a token in a tool result, a write under `memory/`.
+  Steps in [merge-and-resolve.md](references/merge-and-resolve.md).
 - **Claude Code hooks** — `SessionStart` is the self-healing pass and does the
   most work; it is also where a new worktree's memory worktree is created,
   lazily, so worktree support is uniform however the worktree came to be (no
@@ -362,7 +368,7 @@ writes · a `PreToolUse` deny on the first durable write of an episode.
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
 [tiered-memory.md](references/tiered-memory.md), composition (D29–D31,
 D34–D37) in [index-composition.md](references/index-composition.md), the
-authoring-time sync (D38–D40) in
+authoring-time sync and the authoring guidance (D38–D40, D47) in
 [index-authoring-sync.md](references/index-authoring-sync.md), and the tier
 stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md).
 
