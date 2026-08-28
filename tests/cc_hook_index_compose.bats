@@ -196,6 +196,9 @@ seed_root_fact() {
     '.hookSpecificOutput.additionalContext | test($m)'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("memory/ddaanet")'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("org-wide facts for ddaanet")'
+  # The judgement the nudge asks for is the skill's tier test, so the nudge
+  # names the skill rather than restating it.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("gitlore:memory-writing")'
 }
 
 @test "no triage directive when the manifest changes to zero active tiers" {

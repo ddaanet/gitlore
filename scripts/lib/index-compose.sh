@@ -769,7 +769,8 @@ $dangling_capped"
 
 }gitlore: the active-tier set just changed. For each fact in your LOCAL memory (a bare-path \`- [Title](file.md)\` line in $mempath/MEMORY.md), judge which active tier's scope best covers it — using each tier's OWN scope below, not a fixed rule:
 $scope_lines
-Route the best-fit ones up: \`mv\` the file into that tier's directory, and reprefix its root index line to \`<tier>/<file>.md\`. A fact no active tier's scope covers stays local. Do not move a fact already in a tier."
+Route the best-fit ones up: \`mv\` the file into that tier's directory, and reprefix its root index line to \`<tier>/<file>.md\`. A fact no active tier's scope covers stays local. Do not move a fact already in a tier.
+Invoke the \`gitlore:memory-writing\` skill before judging: promotion turns on whether the fact's mechanism depends on this repo or only on this repo being a member of a class, and a promoted fact's \`[[links]]\` to project-local siblings go dead in every other consumer of the tier."
       fi
     fi
   elif [ "$compose_rc" -eq 2 ]; then

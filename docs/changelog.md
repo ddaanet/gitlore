@@ -6,6 +6,11 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-28 — The authoring skill is invoked at the three moments that act on facts already written](changelog/2026-08-28-the-authoring-skill-is-invoked-at-three-moments.md)
+  — a skill description reaches the moment a fact is drafted, not the commit
+  gate, an install that migrated a store, or a tier mount; each of those now
+  carries a directive in text gitlore already emits, and the gate's rides the
+  shared approval clause so the `handoff` consumer gets it too
 - [2026-08-28 — Authoring guidance and index curation ship as plugin surface, not memories](changelog/2026-08-28-authoring-guidance-and-curation-are-plugin-surface.md)
   — the two largest lines in the shared tier were rules for writing memories
   and trimming the index, owned by nothing that fires at those moments; they

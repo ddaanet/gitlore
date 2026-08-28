@@ -185,7 +185,11 @@ teardown() { teardown_tmp_repo; }
   printf 'User is a senior engineer working on distributed systems.\n' > "$fake_home/.claude/projects/$encoded/memory/MEMORY.md"
   printf 'fact\n' > "$fake_home/.claude/projects/$encoded/memory/user_role.md"
 
-  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  run env HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -eq 0 ]
+  # The announcement commands/install.md keys its review step on: without it,
+  # an install that seeded real facts is indistinguishable from a scaffold.
+  [[ "$output" == *"migrated auto-memory from"* ]]
   [ -f memory/MEMORY.md ]
   grep -q "senior engineer" memory/MEMORY.md
   [ -f memory/user_role.md ]
@@ -222,7 +226,11 @@ teardown() { teardown_tmp_repo; }
   mkdir -p "$src"
   printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
 
-  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  run env HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -eq 0 ]
+  # Scaffolded, so there is nothing for the review step to hold against the
+  # skill — and no announcement to trigger it.
+  [[ "$output" != *"migrated auto-memory from"* ]]
   grep -qx '# Memory Index' memory/MEMORY.md
   git -C memory cat-file -e HEAD:MEMORY.md
   # The breadcrumb still lands, so a shimless session finds it rather than

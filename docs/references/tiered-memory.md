@@ -152,7 +152,10 @@ FR11 gate stays the sole committer — the manifest write is the same kind of
 working-tree-only edit. `add-tier-batch.sh` calls `gitlore_compose_and_report`
 directly on a successful mount, folding the recompose and the post-mount triage
 nudge into the one JSON response it emits, then drops the compose stamp so the
-same manifest change is not reported twice in one batch.
+same manifest change is not reported twice in one batch. The nudge names the
+`memory-writing` skill rather than restating its tier test, and fires on any
+manifest change — including a hand edit that never ran the command, which is
+why the trigger lives there and not only in the command body (D48).
 
 **D33 — A tier may carry always-on conventions, and the mount reports the import
 line rather than writing it**
