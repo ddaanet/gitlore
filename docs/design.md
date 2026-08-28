@@ -99,28 +99,16 @@ in `plans/`.
 8. **Graceful degradation.** If memory is in a broken state, guard clauses
    (`.gitmodules` check, memory submodule init check, hooks-installed check)
    keep parent git operations unblocked.
-9. **Two test tiers, split by what each can see.** The bats suites
-   (`tests/*.bats`) own the edge cases and every script's contract, called the
-   way production calls it. The eval harness (`tests/evals/`) owns the
-   **happy paths**, driven through the real agent, because the seam between the
-   agent and the shell is invisible to bats: no assertion can drive "a session
-   starts, the agent edits memory, the user approves, the commit lands," and a
-   prompt has no assertion-level test at all. Scenarios stay in the `pass^k`
-   shape the harness already uses, so an agent-side flake stays distinguishable
-   from a regression. Edge cases do not go in an eval; an eval's value is
-   proving the whole chain fits together.
-10. **The gate is cheap enough to run on every commit.** Not currently met.
-    `just precommit` — `format-docs`, `check-distribution`, then
-    `check-version lint test` — runs 530 s over 620 cases (measured 2026-07-29
-    on the 2-vCPU dev droplet, `--jobs 2`; `check-distribution` adds ~2 s and
-    carries its own sentinel, so a change confined to `agents/`, `commands/` or
-    `skills/` pays only that). `user + sys` came to 566 s against 530 s wall, so
-    the suite is barely parallel and more cores would not divide the number.
-    Making it faster is open work, and cutting per-case work is the lever, not
-    raising `--jobs`. `bats -T` reports per-test timings, so the breakdown that
-    would direct that work comes free on the next full run. The input-hash
-    sentinel caches a green result, so the full cost is paid precisely when a
-    change is in flight.
+9. **Two test tiers, split by what each can see.** The bats suites own the
+   edge cases and every script's contract; the eval harness owns the **happy
+   paths**, driven through the real agent, because the seam between the agent
+   and the shell is invisible to bats. The split and the `pass^k` shape are in
+   [testing.md](references/testing.md).
+10. **The gate is cheap enough to run on every commit.** Not currently met:
+    `just precommit` runs ~530 s and is barely parallel, so cutting per-case
+    work is the lever, not `--jobs`; the input-hash sentinel makes the full
+    cost fall precisely on a change in flight. Measurement in
+    [testing.md](references/testing.md).
 11. **Overrides.** Confirmation gates described here are defaults; project or
     user instructions (`CLAUDE.md` and equivalents) can relax them, so a user
     who wants auto-commit or auto-push can document the override.
@@ -148,10 +136,16 @@ one-branch-per-worktree rule never binds. That last point is load-bearing for
 tiers, whose gitdir is shared across all of a repo's memory worktrees: named
 branches there would collide.
 
+The gitlink a parent commit records is always an ancestor of memory's `live`,
+or `live` itself. A gitlink behind memory's tip is the resting state, recorded
+by the next parent commit, so a push refused by divergence is resolved and
+pushed again, and no parent commit is ever rewritten to re-pin memory (D46).
+
 The session-start detach and fast-forward, the advance after a commit, the two
 divergence gates that reduce to one shape (D6, D41), and why the parent's ref
 layout is no concern of memory's are in
-[merge-and-resolve.md](references/merge-and-resolve.md).
+[merge-and-resolve.md](references/merge-and-resolve.md); the gitlink invariant
+is in [git-hooks-and-entry-points.md](references/git-hooks-and-entry-points.md).
 
 ### Configuration
 
@@ -311,10 +305,11 @@ or push in flight.
 
 - **D16** — a standalone, arg-driven memory-commit entry point
 - **D20** — a push entry point the skill calls directly, with no trigger file
+- **D46** — a parent commit is never rewritten to re-pin memory
 
-*Rejected:* triggering a memory commit through a parent commit · reimplementing
-the sentinel, `push HEAD:live` and merge-state logic in a caller · a caller that
-pre-writes the commit-message file.
+*Rejected:* a tip amend to re-pin memory · triggering a memory commit through
+a parent commit · reimplementing the sentinel, `push HEAD:live` and merge-state
+logic in a caller · a caller that pre-writes the commit-message file.
 
 **Install and the memory remote** — what one-time setup does and refuses.
 [installation.md](references/installation.md)

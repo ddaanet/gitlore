@@ -6,6 +6,11 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-08-28 — A release push refused by a memory merge is resolved and re-pushed, never amended](changelog/2026-08-28-a-refused-release-push-is-resolved-not-amended.md)
+  — a release commit's gitlink is always an ancestor of memory's `live`, so the
+  first successful push publishes it and no `commit --amend` + `tag -f` is
+  needed; the tip-amend contract of the replay stand-down and the ancestor
+  invariant are now stated in the node
 - [2026-08-27 — A merge preparation records its state file before it starts](changelog/2026-08-27-merge-state-is-recorded-before-the-merge.md)
   — a killed push left a real staged merge no gate could see, because the state
   file was written only after the preparation returned; a marker now goes down
