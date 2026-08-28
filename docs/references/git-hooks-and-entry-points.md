@@ -1,4 +1,4 @@
-# Git hooks and entry points — decisions D16, D20
+# Git hooks and entry points — decisions D16, D20, D46
 
 The git hooks that commit and publish memory, and the two callable scripts a
 caller outside gitlore's process reaches through a git-config key. The approval
@@ -8,6 +8,8 @@ in `design.md`.
 - Entry points — **D16** a standalone, arg-driven memory-commit entry point ·
   **D20** a standalone push entry point the skill calls directly, with no
   trigger file
+- The pointer — **D46** a parent commit is never rewritten to re-pin memory; a
+  push refused by divergence is resolved and pushed again
 
 ---
 
@@ -31,8 +33,12 @@ session-less linked worktree) — never block a parent git operation over memory
    would re-pin a historical commit to today's memory. Detected via
    `--git-path rebase-merge|rebase-apply|CHERRY_PICK_HEAD|REVERT_HEAD` before
    the env unset (replay state is per-worktree), announced rather than skipped
-   silently. `MERGE_HEAD` is excluded: a merge commit is authored now and must
-   pin current memory.
+   silently. `MERGE_HEAD` is excluded, and so is a plain `--amend` on the tip:
+   both author a commit now and must pin current memory. An `--amend` at a
+   rebase stop is the sharpest replay of all, and it is caught by the
+   `rebase-merge` marker, not by anything about the amend. This is a contract:
+   a marker added to the list must be a replay of an earlier commit, never a
+   rewrite of the tip.
 2. **Guard on a stale merge state** — hand the prepared merge back to the
    sub-agent while `MERGE_HEAD` is there, and when a checkout has cleared it,
    classify what survives and repair, which may mean carrying straight on
@@ -58,6 +64,29 @@ stops publishing is indistinguishable from one with nothing to say. The
 memory-absent skip stays non-blocking but warns when the gitlink about to be
 published is not reachable on the memory remote, decided locally without a
 fetch. Divergence routes to `/gitlore:resolve`, which diagnoses the flavor.
+
+### The gitlink and `live`
+
+**The gitlink a parent commit records is always an ancestor of memory's
+`live`, or `live` itself.** `pre-commit` makes it `live` itself: step 5 stages
+the commit step 4 just advanced `live` to. Every path that advances memory
+without a parent commit — the `SessionStart` fast-forward, `commit-memory.sh`,
+`/gitlore:merge`, a resolved merge — moves `live` forward and leaves the
+gitlink behind as an ancestor; a `head-vs-remote` merge in particular keeps the
+pending commit reachable as its second parent (D6). A gitlink behind memory's
+HEAD is therefore the resting state — ` M memory` in the parent's porcelain —
+not drift: it floats, the next parent commit records the move, and nothing
+walks memory back to it. `SessionStart` runs `submodule update` on memory only
+when its worktree is absent; the pin-to-the-gitlink discipline (D43) is for
+tiers inside memory, not for memory in the parent.
+
+The invariant is what NFR5 rests on, and it survives any number of merge
+rounds. A push of `live` publishes every ancestor, so `origin/live` contains
+the gitlink the moment that push succeeds, and `pre-push` orders memory before
+the parent, so a parent push that goes through implies its gitlink is public. A
+push refused by divergence is therefore resolved and pushed again, however many
+times `origin/live` moves while a merge is under review; the parent commit —
+tagged or not — is never rewritten to name the merged memory (D46).
 
 ### Memory Commit Entry Point
 
@@ -162,10 +191,12 @@ looks at. That drift is reported with both shas and the remedy for its
 direction, never repaired: which ref was intended is not recoverable from the
 refs. There is no approval step; FR11 gated the content at commit time.
 
-## Decisions — D16, D20
+## Decisions — D16, D20, D46
 
 Why the entry points have this shape: why each is standalone and arg-driven
-rather than a mode of the hook, and why the push skill calls one directly.
+rather than a mode of the hook, and why the push skill calls one directly; and
+why a parent commit whose push was refused is never amended to catch up with
+memory.
 
 **D16 — Standalone memory-commit entry point (arg-driven)**
 
@@ -254,7 +285,39 @@ already made and train the user to approve a prompt carrying no new information
 an accurate report: which stores moved, how far, and — named explicitly rather
 than left to inference — that uncommitted changes did not go with them.
 
+**D46 — A parent commit is never rewritten to re-pin memory; a push refused by
+divergence is resolved and pushed again**
+
+The case that raised it is a release: a toolkit's `release` recipe commits a
+version bump — `pre-commit` pins memory into that commit — tags it, and pushes.
+`pre-push` publishes memory first, and if any store's `origin/live` moved since
+the commit it prepares a merge and refuses, leaving the commit and tag local.
+The window is human-paced — the FR11 approval on the release commit and the
+review of the merge both sit inside it — and it reopens whenever `origin/live`
+moves again while a merge waits for review, so the refusal can repeat.
+
+The considered repair was to `commit --amend` the release commit after the
+merge lands so its gitlink names the merged memory, then `tag -f`; step 1's
+contract that a tip amend is authored-now would have made the hook re-pin the
+gitlink itself. It is refused because the invariant above already gives
+correctness: the recorded commit is the merge's second parent, it is published
+by the first `live` push that succeeds, and NFR5 holds without the tag's tree
+ever naming the merge. What the amend buys is coherence — a tag whose tree names
+the memory as merged, and a clean parent tree immediately after — and it costs
+a scripted rewrite of a tagged commit, a forced move of a tag about to be
+published, and an ordering dependency on step 2's stale-merge guard, which
+refuses the amend until the merge is resolved. The loop that replaces it —
+resolve, push again, until the push lands — is the one the `push` skill already
+runs (D20), and a gitlink behind memory's tip is the same resting state every
+other memory advance leaves.
+
 ## Rejected alternatives
+
+**Amending a tagged parent commit to re-pin memory after a `pre-push` merge.**
+Buys only that the tag's tree names the merged memory; the recorded commit is
+already an ancestor of `live` and public on the first successful push. Costs
+`tag -f` on an unpublished tag, a rewrite of a tagged commit, and a sequencing
+dependency on the stale-merge guard (D46).
 
 **Triggering a memory commit through a parent commit** (pointer bump,
 `--allow-empty`, or unstaging everything else). All of them fight the hook's
