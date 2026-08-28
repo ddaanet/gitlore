@@ -1,7 +1,7 @@
 ---
 description: Install gitlore in this repository
 argument-hint: "[memory-path] [precommit-command]"
-allowed-tools: ["Bash"]
+allowed-tools: ["Bash", "Read", "Edit", "Write", "Skill(gitlore:memory-writing)"]
 ---
 
 # /gitlore:install
@@ -21,3 +21,9 @@ allowed-tools: ["Bash"]
    - Local-only: `"${CLAUDE_PLUGIN_ROOT}/scripts/install/run.sh" "<memory-path>" "<precommit-cmd>" local`
 
    If it exits non-zero with a "command sandbox is blocking install" message, re-run the exact command it prints (same invocation, sandbox disabled). Surface stderr verbatim on non-zero exit and stop. Relay stdout and stderr to the user on success.
+
+4. **Review the migrated facts.** Only when the installer reported `gitlore: migrated auto-memory from <src> into <path>`. That store came from Claude Code's own auto-memory, written under generic memory instructions with no review gate and no index cap; a scaffolded store has nothing to review, so skip this step when the line is absent.
+
+   Invoke the `gitlore:memory-writing` skill and hold every migrated fact against it — whether it should exist at all, whether another artifact owns it, whether the body survives the strip, and whether its index line carries the literal a future session arrives holding — then apply what it finds. The edits sit uncommitted on top of the installer's `Initial memory` commit and reach the user through the FR11 approval gate on their first parent commit, which is the intended path.
+
+   Report what changed. If `wc -c <memory-path>/MEMORY.md` is past ~24,985 bytes the index is over Claude Code's loader cap; say so and name `/gitlore:index-audit`, which owns the store-wide pass.

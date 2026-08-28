@@ -187,8 +187,7 @@ git and decides (D7).
   which mounts an existing shared tier or creates a new one by writing an intent
   file a `PostToolBatch` hook acts on, because the agent can do neither half
   itself (D32, in [tiered-memory.md](references/tiered-memory.md)); and
-  `/gitlore:index-audit`, the store-wide curation pass — measure, relocate,
-  retire or merge, then audit the diff for lost routing — a command because a
+  `/gitlore:index-audit`, the store-wide curation pass, a command because a
   human decides to run it (D47, in
   [index-authoring-sync.md](references/index-authoring-sync.md)).
 - **Skills** — `resolve`, the semantic merge of a diverged store, split across a
@@ -199,10 +198,11 @@ git and decides (D7).
   which a pinned tier advances (D43); `recall`, which fetches bodies into
   context mid-task with no hook, no request file and no state (D18); and
   `memory-writing`, whether a learning becomes a fact, what it says, which tier
-  it lands in and whether its line routes (D47). Each is a skill rather than a
-  command because each has an entry no user types — a hook's stderr, a session
-  start, an ending session, a token in a tool result, a write under `memory/`.
-  Steps in [merge-and-resolve.md](references/merge-and-resolve.md).
+  it lands in, whether its line routes, and where it is invoked (D47, D48). Each
+  is a skill rather than a command because each has an entry no user types — a
+  hook's stderr, a session start, an ending session, a token in a tool result, a
+  write under `memory/`. Steps in
+  [merge-and-resolve.md](references/merge-and-resolve.md).
 - **Claude Code hooks** — `SessionStart` is the self-healing pass and does the
   most work; it is also where a new worktree's memory worktree is created,
   lazily, so worktree support is uniform however the worktree came to be (no
@@ -366,9 +366,9 @@ writes · a `PreToolUse` deny on the first durable write of an episode.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
-[tiered-memory.md](references/tiered-memory.md), composition (D29–D31,
-D34–D37) in [index-composition.md](references/index-composition.md), the
-authoring-time sync and the authoring guidance (D38–D40, D47) in
+[tiered-memory.md](references/tiered-memory.md), composition (D29–D31, D34–D37)
+in [index-composition.md](references/index-composition.md), the authoring-time
+sync and the authoring guidance with its invocation (D38–D40, D47, D48) in
 [index-authoring-sync.md](references/index-authoring-sync.md), and the tier
 stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md).
 

@@ -82,6 +82,28 @@ load helpers/setup
   grep -qF 'memory-writing' "$PLUGIN_ROOT/commands/index-audit.md"
 }
 
+# D48: the description reaches the moment a fact is DRAFTED. The three moments
+# that act on facts already written carry the trigger in text gitlore emits
+# anyway — one per site, so a site losing it is visible here rather than only
+# in an eval.
+@test "distribution: the three post-write moments each invoke memory-writing (D48)" {
+  # The commit gate, via the clause all four D19 call sites append.
+  grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
+  # A store migrated by install, and the announcement the step is conditioned on.
+  grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/commands/install.md"
+  grep -qF 'migrated auto-memory from' "$PLUGIN_ROOT/commands/install.md"
+  grep -qF 'migrated auto-memory from' "$PLUGIN_ROOT/scripts/install/init-submodule.sh"
+  # A tier mount: the nudge is the mechanical surface, the command body the
+  # readable one. Both, since a hand edit of .gitlore-tiers reaches only the
+  # nudge and a reader of the command reaches only the body.
+  grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+  grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/commands/add-tier.md"
+  # Both commands pre-approve the call, so the trigger costs no permission
+  # prompt — allowed-tools grants, it does not restrict.
+  grep -qF 'Skill(gitlore:memory-writing)' "$PLUGIN_ROOT/commands/install.md"
+  grep -qF 'Skill(gitlore:memory-writing)' "$PLUGIN_ROOT/commands/add-tier.md"
+}
+
 # Regression: resolve is a SELF-TRIGGERING skill, not a command (design.md:181 and
 # the 2026-05-26 changelog row have said so since it gained its commit-triggered
 # entry mode; only the file location lagged). A command is invoked deliberately by

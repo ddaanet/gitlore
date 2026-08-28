@@ -65,6 +65,12 @@ has no `.git` (registered but not checked out).
 14. Run hook-manager detection script → apply idempotent wiring, write sentinel
     file.
 15. Leave tracked changes staged for the user to commit.
+16. When step 7 migrated real facts — announced as
+    `gitlore: migrated auto-memory from <src> into <path>`, and not printed by
+    the scaffold branch — the command holds the migrated store against the
+    `memory-writing` skill and applies what it finds (D48). Those edits are
+    memory content, so they stay uncommitted and reach the user through FR11 on
+    the first parent commit.
 
 Idempotency rules for re-runs: existing submodule → verify and skip creation;
 existing settings keys → overwrite only if value differs; migration → detect

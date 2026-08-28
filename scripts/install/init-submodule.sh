@@ -48,6 +48,11 @@ if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
   if [ -d "$src" ] && [ -n "$(find "$src" -mindepth 1 -print -quit)" ] \
      && ! gitlore_is_migration_stub "$src"; then
     cp -R "$src"/. "$mempath/"
+    # Announced so the install command can run the migrated facts past the
+    # authoring discipline: they were written under CC's generic memory
+    # instructions, with no review gate and no index cap. The scaffold branch
+    # below has nothing to review, so only this branch reports.
+    echo "gitlore: migrated auto-memory from $src into $mempath" >&2
     # Replace the migrated source with a stub recording the move in-tree, so a
     # session later launched without the shim (writing to this default dir) finds
     # a breadcrumb rather than silently re-seeding stranded memory.

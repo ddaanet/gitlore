@@ -125,6 +125,21 @@ EOF
   [[ "$output" == *"New, Update, Augment, Reduce, or Remove"* ]]
 }
 
+@test "the approval clause opens with the memory-writing review directive" {
+  run gitlore_memory_approval_clause
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'gitlore:memory-writing'* ]]
+  # Order is the content here: the review runs BEFORE the summary is drafted,
+  # so the directive has to precede the body spec it would otherwise read as a
+  # footnote to. Line numbers, not a substring match, since both blocks exist.
+  local directive_line body_line
+  directive_line=$(printf '%s\n' "$output" | grep -n 'gitlore:memory-writing' | head -1 | cut -d: -f1)
+  body_line=$(printf '%s\n' "$output" | grep -n 'The commit message is a subject line' | head -1 | cut -d: -f1)
+  [ -n "$directive_line" ]
+  [ -n "$body_line" ]
+  [ "$directive_line" -lt "$body_line" ]
+}
+
 @test "gitlore_is_migration_stub true for a dir holding only the migration breadcrumb" {
   local dir="$TMP_REPO/cc-mem"
   mkdir -p "$dir"

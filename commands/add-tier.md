@@ -1,6 +1,6 @@
 ---
 description: Mount a shared gitlore memory tier into this repo, or create a new one. Activate when the user invokes /gitlore:add-tier, or asks to add, mount, join, or create a shared/org/global memory tier.
-allowed-tools: ["Bash", "Read", "Write", "Edit"]
+allowed-tools: ["Bash", "Read", "Write", "Edit", "Skill(gitlore:memory-writing)"]
 ---
 
 # gitlore:add-tier
@@ -90,6 +90,13 @@ when an active tier's scope covers it best: `mv` the file into that tier's
 directory and reprefix its root index line to `<tier>/<file>.md`. Leave a fact
 no active tier covers where it is. Do not re-route a fact already inside a
 tier — that reconcile is a separate, unautomated step.
+
+Invoke the `gitlore:memory-writing` skill before judging any of them. Scope
+turns on whether a fact's mechanism depends on this repo or only on this repo
+being a member of a class, and the asymmetry favours staying local: a tier line
+is loaded by every session in every mounting repo, against a capped index. A
+fact that does go up also loses its `[[links]]` to project-local siblings —
+they resolve nowhere from another consumer, so strip them as part of the move.
 
 ## 4. Report
 
