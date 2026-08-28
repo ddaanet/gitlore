@@ -14,17 +14,23 @@ feature request or bug report).
 
 | # | Bytes | Fact | Verdict | Decided |
 |---|-------|------|---------|---------|
-| 1 | 867 | `memory-writing` | plugin | done — `gitlore:memory-writing` skill, shape in 4c |
-| 2 | 760 | `sandbox-effects` | update (shrink + merge out) | done — (a)-(f) ruled, (a) and (c) as refined |
-| 3 | 691 | `green-is-not-evidence` | update (index line) | done — relink + redrafted line approved |
-| 4 | 590 | `index-compaction-triggers` | plugin | done — skill + `/gitlore:index-audit`, shape in 4c |
+| 1 | 867 | `memory-writing` | plugin | shipped 2026-08-28 — `skills/memory-writing/SKILL.md` (D47); `no-speculative-rules` folded in and retired with it |
+| 2 | 760 | `sandbox-effects` | update (shrink + merge out) | done — (a)-(f) applied 2026-08-28; cross-repo push merged into `classifier-denied-self-config` |
+| 3 | 691 | `green-is-not-evidence` | update (index line) | done — relink + 691 B line applied 2026-08-28 |
+| 4 | 590 | `index-compaction-triggers` | plugin | shipped 2026-08-28 — trigger half in the skill, pass in `commands/index-audit.md` (D47) |
 
 **Actions taken alongside the rulings.** The four `sandbox.excludedCommands`
-entries are written to user scope and verified (2c). The `cwd-safety`
-relaxation and the `unsandbox-git-status` scope hole are each proposed as a
-brief in their own repo — `brief-sandbox-exclusions-relaxation.md` and
-`brief-permission-scope-hole-and-retirement.md` — which ends this session's
-involvement with both.
+entries are written to user scope and verified (2c). `unsandbox-git-status` is
+retired. `cwd-safety` took the brief in part: the `( … )` wrap is replaced by a
+trailing `cd <E>` line (its decision (i)), which restores segmentability and is
+what decision 1 needed; the drift relaxation of 2d's decision 2 was declined
+there — FR5/FR5b still block, and FR5a/FR5c still return `permissionDecision:
+"allow"` with the rewrite, so the pipeline-circumvention finding in 2c stands
+against that hook and is recorded in its design doc as a rejected alternative.
+
+**Index state.** 28,642 B across 106 lines after entries 2 and 3 landed, against
+the 26,219 B the pass opened at: the store grew faster than the pass. The 4c
+arithmetic (1,459 B freed lands under the cap) no longer holds on its own.
 
 ## Parts
 

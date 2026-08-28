@@ -69,6 +69,22 @@ Mounts an existing tier, or creates one. A mounted tier is dormant until it is
 listed in `memory/.gitlore-tiers` — one name per line, file order is precedence.
 Listing it composes its pointer lines into the always-loaded root index.
 
+## Writing and curating memory
+
+Writing a fact under `memory/` triggers the `memory-writing` skill: whether
+the learning deserves a memory at all, what the body says to a reader who was
+not there, which tier it lands in, and whether its index line carries the
+string a future session will arrive holding.
+
+    /gitlore:index-audit
+
+The root index is loaded verbatim into every session and Claude Code truncates
+it past about 24 KB, silently. Run the audit when a session reports that only
+part of `MEMORY.md` was loaded: it measures the index, walks the levers that
+buy real headroom — relocate, retire, merge for routing — and dispatches two
+adversarial auditors against the diff so a trim cannot quietly lose the tokens
+recall depends on.
+
 ## When memory diverges
 
     /gitlore:resolve

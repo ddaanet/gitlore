@@ -55,12 +55,31 @@ load helpers/setup
 @test "distribution: slash commands are flat (no /gitlore:gitlore: double-prefix)" {
   [ -f "$PLUGIN_ROOT/commands/install.md" ]
   [ -f "$PLUGIN_ROOT/commands/add-tier.md" ]
+  [ -f "$PLUGIN_ROOT/commands/index-audit.md" ]
   # `-e`, not `-d`: a plain file named `commands/gitlore` is not a namespace
   # but is still not a command, and the directory test would pass over it.
   [ ! -e "$PLUGIN_ROOT/commands/gitlore" ]
-  for name in install add-tier; do
+  for name in install add-tier index-audit; do
     [ ! -e "$PLUGIN_ROOT/skills/$name/SKILL.md" ]
   done
+}
+
+# D47: memory-writing is a skill because its entry is a write under memory/,
+# which no user types -- only a skill description is matched against context,
+# and only if it names that moment. `memory/` is the token that pins it. Its
+# other half, index-audit, is a command: a human decides when to run the pass.
+@test "distribution: memory-writing is a skill whose description names the write moment (D47)" {
+  skill="$PLUGIN_ROOT/skills/memory-writing/SKILL.md"
+  [ -f "$skill" ]
+  [ ! -e "$PLUGIN_ROOT/commands/memory-writing.md" ]
+  fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
+  grep -qE '^name:[[:space:]]*memory-writing[[:space:]]*$' <<<"$fm"
+  # shellcheck disable=SC2016
+  grep -qF '`memory/`' <<<"$fm"
+  # The store-wide pass is the command, and the skill routes to it by name
+  # rather than carrying the budgets itself.
+  grep -qF '/gitlore:index-audit' "$skill"
+  grep -qF 'memory-writing' "$PLUGIN_ROOT/commands/index-audit.md"
 }
 
 # Regression: resolve is a SELF-TRIGGERING skill, not a command (design.md:181 and
