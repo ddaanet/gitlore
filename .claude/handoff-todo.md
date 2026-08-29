@@ -12,7 +12,6 @@
 
 ## Remaining
 
-- Analyze the fixture-template race in `plans/2026-08-28-brief-fixture-template-copy-race.md` and decide whether to fix the cache, the unchecked `cp -a`, or both.
 - Continue the ddaanet review pass from entry 5 of `plans/ddaanet-memory-review.md` (next-largest index lines).
 - When the pass reaches the hook memories: 2c finding (2) — `updatedInput` alone defers to the full pipeline, `permissionDecision` settles it — has no owner; my human partner leans toward combining the hook-related facts rather than adding a fourth.
 - `docs/design.md` is at exactly the 400-line cap, so the next hub addition needs a split decision rather than another trim.
