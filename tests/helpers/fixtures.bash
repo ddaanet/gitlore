@@ -25,7 +25,8 @@ make_parent_with_memory() {
   old_root="$(cd "$template" && pwd -P)"
   new_root="$(pwd -P)"
 
-  cp -a "$template/." "$TMP_REPO/"
+  cp -a "$template/." "$TMP_REPO/" \
+    || { echo "make_parent_with_memory: failed to copy the fixture template" >&2; return 1; }
 
   # The template's own absolute path is baked into whichever of these ended
   # up storing it (git's relative-vs-absolute submodule URL resolution isn't
@@ -74,8 +75,21 @@ _gitlore_ensure_parent_with_memory_template() {
 
   while [ ! -f "$ready" ]; do
     if mkdir "$lock" 2>/dev/null; then
+      # Re-check under the lock. The winner can publish `$ready` and release
+      # the lock in the window between this loop's check and the `mkdir` above,
+      # and a loser that then rebuilds is destructive: the builder's first act
+      # is `rm -rf "$template"`, which deletes the template out from under every
+      # caller mid-`cp -a`. `$ready` is a sibling path, so it survives that `rm`
+      # and keeps handing the half-built tree to everyone else for the whole
+      # rebuild — a copy that then silently lacks `memory/`.
+      if [ -f "$ready" ]; then
+        rmdir "$lock"
+        break
+      fi
       if _gitlore_build_parent_with_memory "$template" memory; then
         touch "$ready"
+      else
+        echo "make_parent_with_memory: failed to build the fixture template" >&2
       fi
       rmdir "$lock"
       break
