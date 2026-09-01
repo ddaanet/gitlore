@@ -174,3 +174,22 @@ assert_bullets() {
   fi
 }
 
+
+# Put a tier's local `live` ahead of a HEAD left sitting at the commit the
+# memory store records for it — the field state this exists to reproduce.
+#
+# A tier commit advances both refs together, so the two only part when something
+# on the MEMORY side loses the moved gitlink afterwards (a merge preparation
+# checks the memory store out and rewrites its index); the next SessionStart
+# then pins HEAD back while `live` keeps the approved commits. The checkout at
+# the end is that pin, not a shortcut: it is the act that produces the state.
+# Args: $1 = tier name (default "ddaanet"), $2 = the file the fact lands in.
+strand_live_ahead_of_pin() {
+  local tier="${1:-ddaanet}" file="${2:-local.md}" pin
+  pin=$(git -C "memory/$tier" rev-parse HEAD) || return 1
+  seed_tier_bullet "$tier" "$file" "committed here, never recorded" || return 1
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -q -m "tier fact" || return 1
+  git -C "memory/$tier" push -q . HEAD:refs/heads/live || return 1
+  git -C "memory/$tier" checkout -q --detach "$pin" || return 1
+}

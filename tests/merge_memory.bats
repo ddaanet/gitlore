@@ -427,3 +427,43 @@ strand_live_behind_head() {
   [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$mem_remote_before" ]
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$tier_remote_before" ]
 }
+
+@test "adopts a TIER's local 'live' that ran ahead of the commit the memory store records" {
+  # The other half of the stranded-ref pair, and the one a checkout cannot fix:
+  # `live` holds approved tier commits, HEAD sits at the pin, and moving HEAD
+  # onto `live` alone takes the tier off the commit the store records (D43), so
+  # the next composition refuses. Adoption is the only resolution that leaves
+  # both the pin and the root index describing what the carrier holds.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory rev-parse ":ddaanet")
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+
+  strand_live_ahead_of_pin ddaanet
+  live_sha=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$live_sha" != "$pin" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  # HEAD adopted what `live` held...
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
+  # ...the memory store records where the tier now sits...
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$live_sha" ]
+  # ...and the carrier's line reached the always-loaded root index.
+  grep -q 'ddaanet/local.md' memory/MEMORY.md
+  # Which is composition's own test: the pin and the checkout name one commit.
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  # Recorded, not merely staged (D49): an explicit take leaves a clean store, and
+  # a staged pair is the degraded path a dirty root falls back to.
+  [ "$(git -C memory rev-parse "HEAD:ddaanet")" = "$live_sha" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+  # Taking still publishes nothing.
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" != "$live_sha" ]
+}

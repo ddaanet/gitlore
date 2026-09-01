@@ -1,3 +1,7 @@
 ## Current task
 
-The stranded-`live` repair is landed end to end — `gitlore_repair_stranded_live`, its call sites in the take and both push preflights, tests, docs, changelog — and the two briefs it resolved are deleted. Next up is `brief-push-gate-contradicts-tier-pin.md`, the remaining open brief in the repo root. The standing thread behind it is the ddaanet memory review pass, resuming at entry 5 of `plans/ddaanet-memory-review.md`.
+Cutting the release that carries the tier `live`-ahead adoption to installed
+repos, in the order the user named: update the vendored `plugin-dev` subtree,
+run the preflight, publish memory with `/gitlore:push`, then `just release`.
+The subtree update pins a `dist-vX.Y.Z` tag — never `main`, and never the bare
+source tag, whose root tree is the toolkit's own working environment.

@@ -132,9 +132,9 @@ Every gitlore store — the memory submodule and each tier nested inside it — 
 the same model: **`live` is the sole persistent, travelling ref, and the working
 tree is checked out detached at `live`'s commit.** No store ever has a named
 working branch, so nothing tracks the parent repo's branch names, and git's
-one-branch-per-worktree rule never binds. That last point is load-bearing for
-tiers, whose gitdir is shared across all of a repo's memory worktrees: named
-branches there would collide.
+one-branch-per-worktree rule never binds — which it would on the memory store,
+whose worktrees share one gitdir. A tier is the opposite: each memory worktree
+clones it separately, so a named branch would diverge rather than collide.
 
 The gitlink a parent commit records is always an ancestor of memory's `live`,
 or `live` itself. A gitlink behind memory's tip is the resting state, recorded

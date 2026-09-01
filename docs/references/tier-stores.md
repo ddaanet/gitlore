@@ -102,10 +102,35 @@ producer is
 a merge preparation that checked `HEAD` out at `origin/live` and could not
 continue, which leaves the remote contained in `HEAD` and `live` where it was —
 the store then calls itself finished on every later take while every push is
-refused as a non-fast-forward. Only that direction is repaired: a `live` *ahead*
-of `HEAD` is the pin or a publication awaiting its push, and a `HEAD` and `live`
-that have each moved since they last agreed are reported and left untouched,
-because which one was intended is not recoverable from the refs.
+refused as a non-fast-forward. That direction is the one *repaired*.
+
+**The other direction is a take, and a checkout is what breaks it.** A tier's
+`live` ahead of a `HEAD` sitting at the pin holds commits the memory store never
+recorded — a tier commit advances both refs together, so the two part only when
+the memory side loses the moved gitlink afterwards (a merge preparation checks
+the memory store out and rewrites its index), and the next SessionStart pins
+`HEAD` back while `live` keeps what was approved. Nothing reports it: `live` is
+invisible to the take's ancestry test and to SessionStart's, both of which read
+`HEAD`. Neither ref may be moved onto the other — rewinding `live` discards
+approved commits, and moving `HEAD` alone takes the tier off the commit the
+store records, which is precisely the state the down projection refuses. So the
+publish gate's bare "put `HEAD` back on `live`" remedy is the one that breaks
+the store, and a tier is sent to the take instead. `gitlore_adopt_advanced_live`
+runs the same fast-forward-plus-adoption a remote arrival gets, sourced from the
+local ref and moving no ref at all, at the head of every take and from the
+publish preflight; `gitlore_adopt_tier_into_root` is the tail the two share. The
+preflight runs the *whole* take pass rather than adopting the one tier, for the
+reason the behind-tier branch gives: it goes root-first, and a tier's
+bookkeeping commit would otherwise meet an equally-behind root's upstream one as
+a divergence.
+
+The memory root is excluded from that adoption. It has no pin above it —
+SessionStart checks it out at `live` and the parent's gitlink is allowed to lag
+(D46) — so there a `live` ahead of `HEAD` is answered by the checkout the
+session would make anyway, which is what the gate names for the root and only
+the root. A `HEAD` and `live` that have each moved since they last agreed are
+reported and left untouched at every level, because which one was intended is
+not recoverable from the refs.
 
 The tier fetch stays, **read-only**: `fetch origin live` with no refspec moves
 no local branch, and its only job is to let SessionStart *name* a tier whose

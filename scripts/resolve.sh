@@ -308,7 +308,10 @@ fi
 # `commands/resolve.md` re-runs this script until it exits 0, which is what
 # walks the remaining gates and stores.
 check_store_gates() {
-  local store="$1"
+  # `tier` is the store's tier name, empty for the memory root: the head-vs-live
+  # gate's remedy differs by store kind, because a tier is pinned at the gitlink
+  # the memory store records (D43) and the root is not.
+  local store="$1" tier="${2-}"
   gitlore_git -C "$store" fetch -q origin live || true
   if ! push_or_report "$store" . HEAD:live; then
     # git refuses a merely-BEHIND ref with the same wording as a genuinely
@@ -319,7 +322,7 @@ check_store_gates() {
     if [ "$(gitlore_classify_refusal "$store" HEAD live)" = "diverged" ]; then
       gitlore_yield_merge "$store" live head-vs-live HEAD || exit 1
       exit 1
-    elif gitlore_check_head_live_agree "$store" "$store"; then
+    elif gitlore_check_head_live_agree "$store" "$store" "$tier"; then
       gitlore_say_for_agent_or_user \
         "gitlore: pushing HEAD to $store's local 'live' was refused, though HEAD and 'live' agree and neither has diverged." \
         "gitlore: pushing HEAD to $store's local 'live' was refused, though HEAD and 'live' agree and neither has diverged." >&2
@@ -367,7 +370,8 @@ while IFS= read -r store; do
   if [ "$store" = "$mempath" ]; then continue; fi
   [ -n "$(git -C "$store" config --get remote.origin.url || true)" ] || continue
   git -C "$store" rev-parse -q --verify live >/dev/null || continue
-  check_store_gates "$store"
+  # Every store under `$mempath` is a tier; the root was handled above.
+  check_store_gates "$store" "${store##*/}"
 done < <(gitlore_memory_stores "$mempath")
 
 echo "gitlore: state is healthy. Nothing to do." >&2
