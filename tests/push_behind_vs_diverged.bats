@@ -182,10 +182,13 @@ mount_tier_at_live() {
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
 }
 
-@test "a store whose HEAD is ahead of its own live is reported as drift before publishing" {
-  # The direction that publishes LESS than the store holds: `push origin live`
-  # succeeds while the gitlink the parent records — HEAD — never reaches the
-  # remote, which is the lockstep guarantee failing silently.
+@test "a store whose HEAD is ahead of its own live has 'live' advanced, then publishes" {
+  # The direction that would publish LESS than the store holds: `push origin
+  # live` succeeds while the gitlink the parent records — HEAD — never reaches
+  # the remote, which is the lockstep guarantee failing silently. It is also the
+  # one direction that cannot mean anything else, so the preflight advances
+  # `live` rather than sending the user off to run the one git command it would
+  # have named.
   wire_memory_remote
   add_memory_commit LOCAL.md "local-only"
   git -C memory checkout -q --detach HEAD
@@ -193,13 +196,37 @@ mount_tier_at_live() {
   head_before=$(git -C memory rev-parse HEAD)
 
   run --separate-stderr bash "$CMD"
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 0 ]
   msg="$output$stderr"
-  [[ "$msg" == *"is not at its local 'live'"* ]]
-  [[ "$msg" == *"push . HEAD:live"* ]]
+  [[ "$msg" == *"stranded behind HEAD"* ]]
+  [[ "$msg" != *"is not at its local 'live'"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
-  # Nothing of the store reached the remote while its two refs disagree.
-  [ "$(git -C memory rev-parse origin/live)" != "$head_before" ]
+  [ "$(git -C memory rev-parse live)" = "$head_before" ]
+  # The lockstep guarantee, met rather than reported: what the parent's gitlink
+  # records is what the remote now holds.
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$head_before" ]
+}
+
+@test "a store stranded at its remote's commit publishes instead of failing again" {
+  # The 0.5.0 field shape: a merge preparation that could not continue had
+  # checked HEAD out at `origin/live` and left `live` where it was, so every
+  # later push was refused on a ref no diagnosis looked at. Nothing here is this
+  # repo's to publish — the run has to end clean anyway.
+  wire_memory_remote
+  advance_memory_remote
+  git -C memory fetch -q origin live
+  remote_sha=$(git -C memory rev-parse origin/live)
+  git -C memory checkout -q --detach origin/live
+  [ "$(git -C memory rev-parse live)" != "$remote_sha" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  msg="$output$stderr"
+  [[ "$msg" == *"stranded behind HEAD"* ]]
+  [[ "$msg" != *"could not prepare"* ]]
+  [[ "$msg" != *"is not at its local 'live'"* ]]
+  [ "$(git -C memory rev-parse live)" = "$remote_sha" ]
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$remote_sha" ]
 }
 
 # --- tier loop: one behind tier is not a failed push ---

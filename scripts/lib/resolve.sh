@@ -726,6 +726,14 @@ gitlore_classify_refusal() {
 # Reported, never repaired: which ref is the intended one is not recoverable
 # from the refs themselves, and the drift means some earlier step left the store
 # in a state no normal path produces.
+#
+# One direction IS recoverable, and is repaired before this runs rather than
+# here: the publish preflights call gitlore_repair_stranded_live first, so a
+# `live` merely left behind a HEAD containing it is already advanced by the time
+# this reads the refs. Its arm below stays because the other call sites reach
+# this only after their own `push . HEAD:live` was refused — there, `live`
+# behind HEAD means the ref moved under the push, which is a race and not the
+# lag the repair recognizes.
 # Args: $1 = store, $2 = label. Returns 1 after emitting when they disagree.
 gitlore_check_head_live_agree() {
   local store="$1" label="$2" head live abs remedy
@@ -991,7 +999,10 @@ gitlore_push_stores() {
     gitlore_guard_stale_merge_state "$tierpath" || return 1
     # Before anything is published: what goes out is `live`, what the memory
     # commit records is HEAD. A store whose refs disagree publishes something
-    # other than the commit its pointer names.
+    # other than the commit its pointer names. One of the two disagreements is
+    # not a decision — a `live` behind a HEAD containing it is repaired here
+    # rather than reported, and the check then sees two refs that agree.
+    gitlore_repair_stranded_live "$tierpath" "tier '$tier'" || return 1
     gitlore_check_head_live_agree "$tierpath" "tier '$tier'" || return 1
     # `origin/live` has to be current before it can serve as the merge authority.
     # Non-fatal, exactly as memory's is: the push below is what decides.
@@ -1063,8 +1074,10 @@ $tier_err" >&2
     return 0
   fi
 
-  # The same pre-publish invariant the tiers get: `live` is what goes out, HEAD
-  # is what the parent's gitlink records.
+  # The same pre-publish invariant the tiers get, repaired the same way where it
+  # is unambiguous: `live` is what goes out, HEAD is what the parent's gitlink
+  # records.
+  gitlore_repair_stranded_live "$mempath" "memory" || return 1
   gitlore_check_head_live_agree "$mempath" "memory" || return 1
 
   # No redirect: `-q` already silences progress, so anything fetch writes here is a
@@ -1231,6 +1244,12 @@ $fetch_err" >&2
   head=$(git -C "$store" rev-parse HEAD) || return 1
 
   if git -C "$store" merge-base --is-ancestor "$remote" "$head"; then
+    # Nothing to take, which is not the same as nothing to do: this test reads
+    # HEAD, and the ref a push sends is `live`. A store whose `live` was left
+    # behind reaches exactly here and would otherwise be told it is finished.
+    # Repair BEFORE the report, so the reassurance is never the first thing a
+    # store about to fail on its refs is told.
+    gitlore_repair_stranded_live "$store" "$label" || return 1
     printf 'gitlore: %s — already holds everything its remote does.\n' "$label"
     return 0
   fi
@@ -1306,6 +1325,63 @@ $ff_err" >&2
     # unapproved content the canned commit must not sweep up.
     gitlore_commit_tier_bookkeeping "$mempath" "$tier" "$root_dirty_before" "$head"
   fi
+  return 0
+}
+
+# Advance a store's local `live` when it has been left strictly behind a HEAD
+# that already contains it.
+#
+# A store rests DETACHED AT `live` (D17), so `live` behind a HEAD containing it
+# can only mean `live` failed to keep up: every commit in HEAD arrived through a
+# path that advances both, and no path produces a HEAD deliberately ahead. The
+# move is therefore unambiguous where gitlore_check_head_live_agree's general
+# case is not — local, ff-checked, publishing nothing — and it is invisible to a
+# take's ancestry test, which reads HEAD alone. A failed merge preparation that
+# checked HEAD out at `origin/live` and stopped leaves precisely this, and the
+# store then reports itself finished on every subsequent merge while every push
+# is refused.
+#
+# Runs ahead of the report every publish preflight and every take makes, because
+# there is nothing here for a human to decide: a round-trip that can only end in
+# the one command this already ran is a round-trip not worth asking for.
+#
+# Only that direction. `live` AHEAD of HEAD is a pin (D43) or a publication
+# awaiting its push, both someone else's business; a genuine divergence is
+# reported and not touched, since which ref was intended is not recoverable
+# from the refs themselves.
+# Args: $1 = store, $2 = label.
+# Returns 1 after emitting when the two have diverged.
+gitlore_repair_stranded_live() {
+  local store="$1" label="$2" head live push_err
+  # An unborn store has neither ref to reconcile.
+  head=$(git -C "$store" rev-parse -q --verify HEAD) || return 0
+  # No local `live` yet (a tier never fetched) — nothing to strand.
+  live=$(git -C "$store" rev-parse -q --verify live) || return 0
+  [ "$live" != "$head" ] || return 0
+  if ! git -C "$store" merge-base --is-ancestor "$live" "$head"; then
+    # `live` ahead of HEAD: left alone, deliberately. Written as an `if` rather
+    # than a `&&` list because a failing left side of `cmd && return 0` is an
+    # errexit trip, not a fall-through.
+    if git -C "$store" merge-base --is-ancestor "$head" "$live"; then
+      return 0
+    fi
+    gitlore_say_for_agent_or_user \
+      "gitlore: $label's HEAD and its local 'live' have each moved since they last agreed (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so neither was moved. Run /gitlore:resolve to reconcile them." \
+      "gitlore: $label's HEAD and its local 'live' have each moved since they last agreed (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so neither was moved. Run /gitlore:resolve to reconcile them." >&2
+    return 1
+  fi
+  # `push .` is ff-checked, as on the fast-forward path: a race that advanced
+  # `live` underneath us is refused rather than overwritten.
+  if ! push_err=$(gitlore_git -C "$store" push -q . HEAD:refs/heads/live 2>&1); then
+    gitlore_say_for_agent_or_user \
+      "gitlore: could not advance $label's local 'live'. git said:
+$push_err" \
+      "gitlore: could not advance $label's local 'live'. git said:
+$push_err" >&2
+    return 1
+  fi
+  printf 'gitlore: %s — its local '\''live'\'' was stranded behind HEAD; advanced it to %s.\n' \
+    "$label" "$(git -C "$store" rev-parse --short "$head")"
   return 0
 }
 

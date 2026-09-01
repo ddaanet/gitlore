@@ -89,6 +89,24 @@ genuine divergence prepares a merge and yields. A store with uncommitted changes
 is refused rather than checked out over: the working tree may hold this
 session's unapproved facts.
 
+**Nothing to take is not nothing to do.** That first case is decided from
+`HEAD`, while the ref a push sends is `live`, and a store rests detached *at*
+`live` — so a `live` strictly behind a `HEAD` that contains it is a ref that
+failed to keep up rather than a state anything chose, and the take advances it
+with a local ff-checked `push . HEAD:live` rather than leaving it there. The
+publish preflight repairs that direction the same way and in place of the drift
+report it would otherwise make
+([git-hooks-and-entry-points.md](git-hooks-and-entry-points.md)). The move
+itself publishes nothing: every commit in `HEAD` reached it through a gate. The
+producer is
+a merge preparation that checked `HEAD` out at `origin/live` and could not
+continue, which leaves the remote contained in `HEAD` and `live` where it was —
+the store then calls itself finished on every later take while every push is
+refused as a non-fast-forward. Only that direction is repaired: a `live` *ahead*
+of `HEAD` is the pin or a publication awaiting its push, and a `HEAD` and `live`
+that have each moved since they last agreed are reported and left untouched,
+because which one was intended is not recoverable from the refs.
+
 The tier fetch stays, **read-only**: `fetch origin live` with no refspec moves
 no local branch, and its only job is to let SessionStart *name* a tier whose
 remote is ahead or has diverged, by comparing `HEAD` and `FETCH_HEAD` for
