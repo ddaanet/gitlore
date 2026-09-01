@@ -282,8 +282,13 @@ the inference the blanket rule exists to remove.
 
 Memory and every tier are checked out detached at `live`'s commit (design.md's
 Architecture › Branch Model). Detached HEADs coexist on one commit, which is
-what a tier needs: its gitdir is shared across a repo's memory worktrees, where
-named branches would collide. The payoff is **one commit path** — a merge always
+what the memory store needs: its worktrees share one gitdir, and git refuses to
+check the same named branch out in two of them. A tier gets the opposite
+treatment — each memory worktree materializes its own tier clone, with its own
+refs (git 2.47.3; the tier fixtures' characterization notes record the same) —
+so a named branch there would not collide but diverge per worktree, with
+nothing watching either copy. Neither store carries one. The payoff is **one
+commit path** — a merge always
 reduces to "my pending commit vs the authoritative `live`, local then remote",
 and every resolution re-detaches at the new `live`.
 

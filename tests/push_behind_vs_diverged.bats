@@ -262,3 +262,57 @@ mount_tier_at_live() {
   [[ "$msg" != *"could not prepare"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
 }
+
+# --- the tier direction a checkout cannot fix ---
+
+@test "a tier whose local 'live' ran ahead of its pin is adopted by the push, not sent to a checkout" {
+  # The 0.6.0 field shape: the preflight found HEAD at the recorded gitlink with
+  # `live` ahead and prescribed `checkout --detach live`, which moves the tier
+  # off its pin (D43) — the next composition then refuses, so obeying the push
+  # gate put the store into the state the compose gate rejects. Adoption is what
+  # the state actually calls for, and the push does it rather than naming it.
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  publish_memory
+  pin=$(git -C memory rev-parse ":ddaanet")
+
+  strand_live_ahead_of_pin ddaanet
+  live_sha=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  msg="$output$stderr"
+  # The remedy that breaks the store is never named for a tier.
+  [[ "$msg" != *"checkout --detach live"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$live_sha" ]
+  # And what was adopted was published: the tier's remote holds it.
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$live_sha" ]
+}
+
+@test "the head-vs-live gate sends a TIER to the take, not to a checkout that breaks its pin" {
+  # Reached directly: with the preflight adopting first, the tier arm of the
+  # gate fires only where a store's refs moved under an operation already in
+  # flight. What it says there still has to be the remedy that does not strand
+  # the store.
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  git -C memory/ddaanet checkout -q --detach live
+  strand_live_ahead_of_pin ddaanet
+
+  run --separate-stderr gitlore_check_head_live_agree memory/ddaanet "tier 'ddaanet'" ddaanet
+  [ "$status" -eq 1 ]
+  msg="$output$stderr"
+  [[ "$msg" == *"is not at its local 'live'"* ]]
+  [[ "$msg" == *"/gitlore:merge"* ]]
+  [[ "$msg" != *"checkout --detach live"* ]]
+  # And the possessive artifact the field report caught: a label already
+  # carrying quotes must not be given an apostrophe-s on top of them.
+  [[ "$msg" != *"''s"* ]]
+}

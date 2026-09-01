@@ -6,6 +6,13 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-01 — A tier `live` ahead of its pin is adopted, not checked out](changelog/2026-09-01-a-tier-live-ahead-of-its-pin-is-adopted.md)
+  — the publish gate's "put HEAD back on `live`" remedy took a tier off the
+  commit the memory store records and composition then refused; a tier whose
+  `live` ran ahead is now adopted by the take — working tree, root index and
+  recorded pointer together — the gate branches on store kind, and the
+  branch-model rationale that called tier gitdirs shared across memory
+  worktrees is corrected against git 2.47.3
 - [2026-09-01 — A local `live` stranded behind HEAD is advanced, not reported](changelog/2026-09-01-a-stranded-live-is-advanced.md)
   — a failed 0.5.0 merge preparation left HEAD at `origin/live` with the ref a
   push sends still behind, and `/gitlore:merge` read HEAD alone and called the

@@ -734,9 +734,19 @@ gitlore_classify_refusal() {
 # this only after their own `push . HEAD:live` was refused — there, `live`
 # behind HEAD means the ref moved under the push, which is a race and not the
 # lag the repair recognizes.
-# Args: $1 = store, $2 = label. Returns 1 after emitting when they disagree.
+#
+# The remedy differs by STORE KIND, because the authoritative ref does. For the
+# memory root, `live` is what SessionStart checks out and the parent's gitlink is
+# allowed to lag (D46), so a HEAD behind it is put back with a checkout. A tier
+# is pinned at the gitlink the memory store records (D43): the same checkout
+# takes it OFF that pin, and the next composition refuses — the two gates then
+# assert different invariants about one ref and obeying this one breaks the
+# store. A tier goes to the take, which moves HEAD, the root index and the
+# recorded pointer together.
+# Args: $1 = store, $2 = label, $3 = tier name ("" when the store is the memory
+# root). Returns 1 after emitting when they disagree.
 gitlore_check_head_live_agree() {
-  local store="$1" label="$2" head live abs remedy
+  local store="$1" label="$2" tier="${3-}" head live abs remedy
   head=$(git -C "$store" rev-parse -q --verify HEAD) || return 0
   # No local `live` yet (a tier never fetched) — nothing to disagree with.
   live=$(git -C "$store" rev-parse -q --verify live) || return 0
@@ -746,15 +756,21 @@ gitlore_check_head_live_agree() {
   # `$(cd … && pwd)` into a path with a directory listing glued to the front.
   abs=$(git -C "$store" rev-parse --show-toplevel) || abs="$store"
   if git -C "$store" merge-base --is-ancestor "$head" "$live"; then
-    remedy="Put HEAD back on 'live': git -C \"$abs\" checkout --detach live"
+    if [ -n "$tier" ]; then
+      remedy="'live' holds commits the memory store never recorded; run /gitlore:merge to adopt them. Do not check the tier out at 'live' — that moves it off the commit the store records, and composition refuses there."
+    else
+      remedy="Put HEAD back on 'live': git -C \"$abs\" checkout --detach live"
+    fi
   elif git -C "$store" merge-base --is-ancestor "$live" "$head"; then
     remedy="Advance 'live' to HEAD: git -C \"$abs\" push . HEAD:live"
   else
     remedy="HEAD and 'live' have each moved since they last agreed; run /gitlore:resolve to reconcile them."
   fi
+  # `$label — …` rather than `$label's …`: a tier label already carries quotes
+  # around its name, and an apostrophe-s on top of them renders `'ddaanet''s`.
   gitlore_say_for_agent_or_user \
-    "gitlore: $label's HEAD is not at its local 'live' (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so nothing was published. $remedy" \
-    "gitlore: $label's HEAD is not at its local 'live' (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so nothing was published. $remedy" >&2
+    "gitlore: $label — HEAD is not at its local 'live' (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so nothing was published. $remedy" \
+    "gitlore: $label — HEAD is not at its local 'live' (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so nothing was published. $remedy" >&2
   return 1
 }
 
@@ -829,7 +845,7 @@ $push_err" >&2
           # Diverged from its own local `live` — the same gate memory has here,
           # and the same resolution. The merge lands in the tier's gitdir.
           gitlore_yield_merge "$tierpath" live head-vs-live HEAD || return 1
-        elif gitlore_check_head_live_agree "$tierpath" "tier '$tier'"; then
+        elif gitlore_check_head_live_agree "$tierpath" "tier '$tier'" "$tier"; then
           # Refused with the two refs in agreement and no divergence: neither
           # diagnosis applies, so git's own words are all there is to go on.
           gitlore_say_for_agent_or_user \
@@ -1003,7 +1019,19 @@ gitlore_push_stores() {
     # not a decision — a `live` behind a HEAD containing it is repaired here
     # rather than reported, and the check then sees two refs that agree.
     gitlore_repair_stranded_live "$tierpath" "tier '$tier'" || return 1
-    gitlore_check_head_live_agree "$tierpath" "tier '$tier'" || return 1
+    # The other direction is not a repair but a take: a `live` ahead of a HEAD
+    # sitting at the pin holds approved commits the memory store never recorded,
+    # and moving HEAD onto it alone would take the tier off that pin (D43), which
+    # is what the next composition refuses. The whole take pass, not this tier
+    # alone, and for the reason the behind-tier branch below gives: it runs
+    # root-first, and a tier take writes a bookkeeping commit that would meet an
+    # equally-behind root's upstream one as a divergence. No `continue` after it
+    # — unlike a take from the remote, what was adopted here has never been
+    # published, so this tier's push is exactly what has to happen next.
+    if gitlore_live_ahead_of_head "$tierpath"; then
+      gitlore_merge_stores "$mempath" || return 1
+    fi
+    gitlore_check_head_live_agree "$tierpath" "tier '$tier'" "$tier" || return 1
     # `origin/live` has to be current before it can serve as the merge authority.
     # Non-fatal, exactly as memory's is: the push below is what decides.
     git -C "$tierpath" fetch -q origin live || true
@@ -1214,6 +1242,13 @@ gitlore_merge_one_store() {
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
+  # Before any ancestry is read: a tier whose local `live` ran ahead of the pin
+  # holds commits HEAD does not, and every test below reads HEAD. Adopting first
+  # means the classification against the remote sees everything this store
+  # already has, so local commits never present themselves as a fast-forward the
+  # ff-checked `push .` will then refuse.
+  gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
+
   remote_url=$(git -C "$store" config --get remote.origin.url || true)
   if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
     # A tier exists to be shared, so one with no remote is a misconfiguration
@@ -1282,17 +1317,17 @@ $fetch_err" >&2
   local ff_err
   if ! ff_err=$(gitlore_git -C "$store" push -q . "$remote:refs/heads/live" 2>&1); then
     gitlore_say_for_agent_or_user \
-      "gitlore: could not advance $label's local 'live'. git said:
+      "gitlore: $label — its local 'live' could not be advanced. git said:
 $ff_err" \
-      "gitlore: could not advance $label's local 'live'. git said:
+      "gitlore: $label — its local 'live' could not be advanced. git said:
 $ff_err" >&2
     return 1
   fi
   if ! ff_err=$(gitlore_git -C "$store" checkout -q --detach live 2>&1); then
     gitlore_say_for_agent_or_user \
-      "gitlore: $label's 'live' advanced but its working tree could not follow. git said:
+      "gitlore: $label — its 'live' advanced but its working tree could not follow. git said:
 $ff_err" \
-      "gitlore: $label's 'live' advanced but its working tree could not follow. git said:
+      "gitlore: $label — its 'live' advanced but its working tree could not follow. git said:
 $ff_err" >&2
     return 1
   fi
@@ -1300,31 +1335,7 @@ $ff_err" >&2
 
   # Adopt: the carrier that just arrived becomes root's block for this tier. The
   # memory root adopts nothing — its own index is one of the files that moved.
-  if [ -n "$tier" ]; then
-    local composed rc=0
-    composed=$(gitlore_compose_up "$mempath" "$tier") || rc=$?
-    if [ "$rc" -eq 0 ]; then
-      [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /'
-    else
-      printf 'gitlore: the root index could not take %s'\''s lines, so they are not recallable yet. Fix the store, then edit MEMORY.md to retrigger composition:\n' "$label" >&2
-      printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
-    fi
-    # Stage the pair the fast-forward just produced. `submodule update` reads the
-    # gitlink from the superproject's INDEX, so an unstaged one is walked back to
-    # the pre-merge commit by the next SessionStart tier pass — and the composed
-    # root index, being an ordinary working-tree write, survives to describe
-    # facts the tier no longer holds. Staged, the unconditional pin is idempotent
-    # rather than destructive. Staging is best-effort: a failure here must not
-    # turn a landed fast-forward into a failed merge.
-    # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
-    gitlore_git -C "$mempath" add -- MEMORY.md "$tier" \
-      || printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C %s add -- MEMORY.md %s` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$mempath" "$tier" >&2
-    # Then commit the pair, so an explicit take leaves a clean store (D49). The
-    # dirty reading is the one taken BEFORE the fast-forward: everything dirty
-    # now is this take's own work, and anything that was dirty before it is
-    # unapproved content the canned commit must not sweep up.
-    gitlore_commit_tier_bookkeeping "$mempath" "$tier" "$root_dirty_before" "$head"
-  fi
+  gitlore_adopt_tier_into_root "$mempath" "$tier" "$root_dirty_before" "$head"
   return 0
 }
 
@@ -1366,23 +1377,133 @@ gitlore_repair_stranded_live() {
       return 0
     fi
     gitlore_say_for_agent_or_user \
-      "gitlore: $label's HEAD and its local 'live' have each moved since they last agreed (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so neither was moved. Run /gitlore:resolve to reconcile them." \
-      "gitlore: $label's HEAD and its local 'live' have each moved since they last agreed (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so neither was moved. Run /gitlore:resolve to reconcile them." >&2
+      "gitlore: $label — HEAD and its local 'live' have each moved since they last agreed (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so neither was moved. Run /gitlore:resolve to reconcile them." \
+      "gitlore: $label — HEAD and its local 'live' have each moved since they last agreed (HEAD $(git -C "$store" rev-parse --short "$head"), live $(git -C "$store" rev-parse --short "$live")), so neither was moved. Run /gitlore:resolve to reconcile them." >&2
     return 1
   fi
   # `push .` is ff-checked, as on the fast-forward path: a race that advanced
   # `live` underneath us is refused rather than overwritten.
   if ! push_err=$(gitlore_git -C "$store" push -q . HEAD:refs/heads/live 2>&1); then
     gitlore_say_for_agent_or_user \
-      "gitlore: could not advance $label's local 'live'. git said:
+      "gitlore: $label — its local 'live' could not be advanced. git said:
 $push_err" \
-      "gitlore: could not advance $label's local 'live'. git said:
+      "gitlore: $label — its local 'live' could not be advanced. git said:
 $push_err" >&2
     return 1
   fi
   printf 'gitlore: %s — its local '\''live'\'' was stranded behind HEAD; advanced it to %s.\n' \
     "$label" "$(git -C "$store" rev-parse --short "$head")"
   return 0
+}
+
+# True when a store's local `live` holds commits its HEAD does not. Silent on
+# every expected miss — an unborn store, a tier never fetched, refs that agree —
+# so the callers below read as the question they are asking.
+# Args: $1 = store.
+gitlore_live_ahead_of_head() {
+  local store="$1" head live
+  head=$(git -C "$store" rev-parse -q --verify HEAD) || return 1
+  live=$(git -C "$store" rev-parse -q --verify live) || return 1
+  [ "$head" != "$live" ] || return 1
+  git -C "$store" merge-base --is-ancestor "$head" "$live"
+}
+
+# Adopt a TIER's local `live` when it holds commits its HEAD does not: move the
+# working tree onto them, project the carrier up into root's block, and record
+# the pair. The mirror of gitlore_repair_stranded_live, and the direction that
+# one deliberately leaves alone.
+#
+# A tier commit advances HEAD and `live` together, so the two part only when the
+# MEMORY side loses the moved gitlink afterwards — a merge preparation checks the
+# memory store out and rewrites its index, and the next SessionStart pins HEAD
+# back at the older commit (D43) while `live` keeps what was approved. Nothing
+# reports it: `live` is invisible to the take's ancestry test, which reads HEAD,
+# and to SessionStart's, which compares HEAD against the remote.
+#
+# Neither ref may simply be moved onto the other. Rewinding `live` discards
+# approved commits; moving HEAD alone takes the tier off the commit the store
+# records, which is the state gitlore_compose_check_pins refuses — so the publish
+# gate's bare "put HEAD back on 'live'" remedy is the one that breaks the store.
+# What the state calls for is the take: the same fast-forward-plus-adoption a
+# remote arrival gets, sourced from a local ref. `live` already holds the target,
+# so no ref moves here at all.
+#
+# TIERS ONLY. The memory root has no pin above it — SessionStart checks it out at
+# `live` and the parent's gitlink is allowed to lag (D46) — so there a `live`
+# ahead of HEAD is answered by the checkout the gate names, and moving the root
+# store here would take a decision the refs do not carry.
+# Args: $1 = memory worktree, $2 = store worktree, $3 = tier name ("" = root).
+# Returns 1 after emitting when the adoption cannot proceed.
+gitlore_adopt_advanced_live() {
+  local mempath="$1" store="$2" tier="$3" label root_dirty_before head err
+  [ -n "$tier" ] || return 0
+  gitlore_live_ahead_of_head "$store" || return 0
+  label="tier '$tier'"
+
+  # Refused rather than checked out over, exactly as the remote take refuses a
+  # dirty store: the working tree may hold this session's unapproved facts, and
+  # the checkout below would carry them onto a commit nobody approved them
+  # against.
+  if [ "$(gitlore_memory_dirty "$store")" = "1" ]; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $label — its local 'live' holds commits the memory store never recorded, but the tier has uncommitted changes, so nothing was adopted. Commit them (approved summary, then a memory commit) and run /gitlore:merge again." \
+      "gitlore: $label — its local 'live' holds commits the memory store never recorded, but the tier has uncommitted changes, so nothing was adopted. Commit them and merge again." >&2
+    return 1
+  fi
+
+  # Read BEFORE the tree moves, same as the remote take: what matters is whether
+  # the root already held work the canned bookkeeping commit would sweep up.
+  root_dirty_before=$(gitlore_root_dirty_beyond_pair "$mempath" "$tier")
+  head=$(git -C "$store" rev-parse HEAD) || return 1
+  if ! err=$(gitlore_git -C "$store" checkout -q --detach live 2>&1); then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $label — its working tree could not follow its local 'live'. git said:
+$err" \
+      "gitlore: $label — its working tree could not follow its local 'live'. git said:
+$err" >&2
+    return 1
+  fi
+  printf 'gitlore: %s — its local '\''live'\'' held commits the memory store never recorded; adopted them at %s.\n' \
+    "$label" "$(git -C "$store" rev-parse --short HEAD)"
+  gitlore_adopt_tier_into_root "$mempath" "$tier" "$root_dirty_before" "$head"
+  return 0
+}
+
+# Project a tier's newly-adopted carrier up into the root index, stage the pair
+# and record it — the tail every take shares, whether what arrived came from the
+# tier's own remote or from a local `live` that ran ahead of the pin. A no-op for
+# the memory root, which adopts nothing: its own index is one of the files that
+# moved.
+# Args: $1 = memory worktree, $2 = tier name ("" = the memory root), $3 = "1"
+#       when the root store was dirty before the take, $4 = the pre-take commit.
+gitlore_adopt_tier_into_root() {
+  local mempath="$1" tier="$2" root_dirty_before="$3" old_gitlink="$4"
+  local label composed rc=0
+  [ -n "$tier" ] || return 0
+  label="tier '$tier'"
+
+  composed=$(gitlore_compose_up "$mempath" "$tier") || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /'
+  else
+    printf 'gitlore: the root index could not take %s'\''s lines, so they are not recallable yet. Fix the store, then edit MEMORY.md to retrigger composition:\n' "$label" >&2
+    printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+  fi
+  # Stage the pair the take just produced. `submodule update` reads the gitlink
+  # from the superproject's INDEX, so an unstaged one is walked back to the
+  # pre-take commit by the next SessionStart tier pass — and the composed root
+  # index, being an ordinary working-tree write, survives to describe facts the
+  # tier no longer holds. Staged, the unconditional pin is idempotent rather than
+  # destructive. Staging is best-effort: a failure here must not turn a landed
+  # take into a failed merge.
+  # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+  gitlore_git -C "$mempath" add -- MEMORY.md "$tier" \
+    || printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C %s add -- MEMORY.md %s` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$mempath" "$tier" >&2
+  # Then commit the pair, so an explicit take leaves a clean store (D49). The
+  # dirty reading is the one taken BEFORE the tree moved: everything dirty now is
+  # this take's own work, and anything that was dirty before it is unapproved
+  # content the canned commit must not sweep up.
+  gitlore_commit_tier_bookkeeping "$mempath" "$tier" "$root_dirty_before" "$old_gitlink"
 }
 
 # Commit the root index and moved tier gitlink an explicit take just staged,
