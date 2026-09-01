@@ -189,10 +189,28 @@ if [ $# -ge 1 ]; then
       # Compose before committing, so what lands is composed: a merge is the one
       # write path into a memory store that no compose trigger sees.
       compose_merged_indexes "$memroot" "$mempath"
-      # Commit the merge (uses git's MERGE_MSG; the authority is HEAD, so it is
-      # the first parent per D6). Blessed path: carry the sentinel past the
-      # submodule gate (FR11).
-      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q --no-edit
+      # Is the ROOT store carrying unapproved work this merge's bookkeeping
+      # would sweep up? Asked of the paths OUTSIDE the pair: the preparation has
+      # already moved the tier, so the root is dirty by construction here and a
+      # plain dirty reading would refuse every tier merge. Only meaningful for a
+      # tier merge — for a memory merge the store being committed IS the root.
+      if [ -n "$merged_tier" ]; then
+        root_dirty_before=$(gitlore_root_dirty_beyond_pair "$memroot" "$merged_tier")
+      else
+        root_dirty_before=1
+      fi
+      # Commit the merge. The authority is HEAD, so it is the first parent (D6),
+      # and the message is canned rather than git's MERGE_MSG: a merge whose two
+      # sides both passed an approval gate needs no prompt, and the subject that
+      # serves every consumer of a shared store names the repos rather than the
+      # refs (D49). Blessed path: carry the sentinel past the submodule gate.
+      # Via a file, not a pipe: the sentinel has to be in the environment of
+      # `git commit` itself, and `VAR=1 printf … | git commit` exports it to
+      # the wrong end of the pipeline.
+      merge_msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-merge-msg.XXXXXX")
+      gitlore_merge_commit_message "$memroot" "$mempath" > "$merge_msgfile"
+      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$merge_msgfile"
+      rm -f "$merge_msgfile"
       # Stage the gitlink the commit above just moved — after it, because the
       # merge commit does not exist until then and an earlier `add` would pin
       # the pre-merge authority. Not cosmetic: `submodule update` checks a tier
@@ -200,11 +218,18 @@ if [ $# -ge 1 ]; then
       # working tree alone is walked back to the pre-merge commit by the next
       # SessionStart tier pass — silently, while the recomposed root index
       # survives to describe facts the tier no longer carries. Staged, the
-      # unconditional pin is idempotent rather than destructive. It commits
-      # nothing: the pair still rides the next FR11 memory commit.
+      # unconditional pin is idempotent rather than destructive.
       if [ -n "$merged_tier" ]; then
+        # Read the pointer the root still records — the commit the tier sat at
+        # before this merge — for the bookkeeping body, before the `add` moves
+        # it in the index and the commit moves it in HEAD.
+        old_gitlink=$(git -C "$memroot" rev-parse "HEAD:$merged_tier") || old_gitlink=""
         gitlore_git -C "$memroot" add -- "$merged_tier" \
           || echo "gitlore: the merge landed, but $merged_tier's moved pointer could not be staged in the memory store. Stage it before the next session, or the tier will be reset to its pre-merge commit." >&2
+        # And record the pair, so a merge the user asked for leaves a clean
+        # store rather than dirt the next FR11 episode has to explain (D49).
+        [ -z "$old_gitlink" ] \
+          || gitlore_commit_tier_bookkeeping "$memroot" "$merged_tier" "$root_dirty_before" "$old_gitlink"
       fi
       gitlore_clear_merge_state "$mempath"
       gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"

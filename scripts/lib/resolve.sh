@@ -554,9 +554,9 @@ gitlore: dispatch sub-agent gitlore:memory-merger with state file:
 gitlore:   $statefile
 gitlore: that dispatch is a required step of the git operation that triggered
 gitlore: this merge, not an option: the request for that operation is the
-gitlore: request for this dispatch, so make it now without asking first. What
-gitlore: still needs approval is the merge the sub-agent proposes, not the
-gitlore: dispatch itself.
+gitlore: request for this dispatch, so make it now without asking first. Review
+gitlore: the synthesis it returns yourself — both sides of this merge already
+gitlore: passed an approval gate, so do not prompt the user (D49).
 gitlore: on approval of its synthesis, the sub-agent must run:
 gitlore:   cd "$repo" && bash "$root/scripts/resolve.sh" $cont
 EOF
@@ -1004,13 +1004,18 @@ gitlore_push_stores() {
         *"(fetch first)"*|*"(non-fast-forward)"*)
           case "$(gitlore_classify_refusal "$tierpath" live origin/live)" in
             behind)
-              # Nothing of ours to publish, which is `/gitlore:merge`'s business
-              # rather than a failure: the tier commit this memory push records
-              # is already contained in the remote, so the lockstep this loop
-              # exists to guarantee holds. Carry on to the next tier.
-              gitlore_say_for_agent_or_user \
-                "gitlore: tier '$tier' has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." \
-                "gitlore: tier '$tier' has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." >&2
+              # Nothing of ours to publish, and the remote holds facts this repo
+              # does not. A push is attempt → take → attempt again (D49), so the
+              # take happens here rather than being handed back as an errand:
+              # the fast-forward is exactly what /gitlore:merge would do, and the
+              # commits it takes are already on this remote, so the lockstep this
+              # loop guarantees is untouched. A take that cannot fast-forward
+              # yields a prepared merge and returns non-zero, as everywhere else.
+              #
+              # The whole take pass, not this tier alone: it runs root-first, and
+              # a tier take writes a bookkeeping commit that would meet an
+              # equally-behind root's upstream one as a divergence.
+              gitlore_merge_stores "$mempath" || return 1
               continue
               ;;
             diverged)
@@ -1112,12 +1117,12 @@ $push_err" >&2
   # only divergence has a merge to prepare.
   case "$(gitlore_classify_refusal "$mempath" live origin/live)" in
     behind)
-      # Every tier is published and memory has nothing of its own to send. Taking
-      # the remote's facts is `/gitlore:merge`'s job, and reporting this as a
-      # failed push would send the user after a merge that has nothing to merge.
-      gitlore_say_for_agent_or_user \
-        "gitlore: memory has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." \
-        "gitlore: memory has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." >&2
+      # Every tier is published and memory has nothing of its own to send, while
+      # the remote holds facts this clone lacks. Take them here rather than
+      # reporting an errand (D49): the same fast-forward /gitlore:merge performs,
+      # publishing nothing that was not already published. Every tier is already
+      # reconciled by the loop above, so the root is all that is left to take.
+      gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
       return 0
       ;;
     diverged) ;;
@@ -1164,6 +1169,17 @@ gitlore_merge_stores() {
 
   gitlore_guard_stale_merge_state "$mempath" || return 1
 
+  # Root FIRST, the mirror of the publish order (D49). Taking goes top-down
+  # because the root commit arriving from upstream already records the tier
+  # commits it names, all of them on the tier's own remote: taking it costs
+  # nothing and leaves each tier merely behind. Tiers-first inverts that — the
+  # tier take writes a bookkeeping commit of its own, which meets the upstream
+  # root's equivalent commit as a DIVERGENCE and spends a synthesis on two
+  # sides that recorded the same fast-forward. Publishing keeps the opposite
+  # order for the opposite reason: a pointer must never go out ahead of what it
+  # points at.
+  gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
+
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -1173,7 +1189,6 @@ gitlore_merge_stores() {
     gitlore_merge_one_store "$mempath" "$tierpath" "$tier" || return 1
   done < <(gitlore_tier_paths "$mempath")
 
-  gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
   return 0
 }
 
@@ -1182,7 +1197,7 @@ gitlore_merge_stores() {
 # its own MEMORY.md moves with the fast-forward).
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
-  local label remote_url remote head fetch_err
+  local label remote_url remote head fetch_err root_dirty_before
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
@@ -1234,6 +1249,14 @@ $fetch_err" >&2
     return 1
   fi
 
+  # Read before anything moves: what matters is whether the root store already
+  # held work the canned commit would sweep up. Asked of the paths OUTSIDE the
+  # pair — a root whose own take just landed shows the tier lagging its new
+  # gitlink, which is this pass's business rather than someone else's edit. Root
+  # `MEMORY.md` is inside the pair on purpose: the adoption below rewrites it
+  # whatever it held, so composition already owns that file (D31).
+  root_dirty_before=$(gitlore_root_dirty_beyond_pair "$mempath" "$tier")
+
   # Fast-forward: advance the local `live` (created here when the store never had
   # one), then move the working tree onto it. `push .` is ff-checked, so a race
   # that advanced `live` underneath us is refused rather than overwritten.
@@ -1272,12 +1295,152 @@ $ff_err" >&2
     # the pre-merge commit by the next SessionStart tier pass — and the composed
     # root index, being an ordinary working-tree write, survives to describe
     # facts the tier no longer holds. Staged, the unconditional pin is idempotent
-    # rather than destructive. Both still ride the next FR11 memory commit; this
-    # commits nothing. Staging is best-effort: a failure here must not turn a
-    # landed fast-forward into a failed merge.
+    # rather than destructive. Staging is best-effort: a failure here must not
+    # turn a landed fast-forward into a failed merge.
     # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
     gitlore_git -C "$mempath" add -- MEMORY.md "$tier" \
       || printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C %s add -- MEMORY.md %s` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$mempath" "$tier" >&2
+    # Then commit the pair, so an explicit take leaves a clean store (D49). The
+    # dirty reading is the one taken BEFORE the fast-forward: everything dirty
+    # now is this take's own work, and anything that was dirty before it is
+    # unapproved content the canned commit must not sweep up.
+    gitlore_commit_tier_bookkeeping "$mempath" "$tier" "$root_dirty_before" "$head"
   fi
   return 0
+}
+
+# Commit the root index and moved tier gitlink an explicit take just staged,
+# with a canned message, and fast-forward the store's local `live` onto it.
+# Unprompted by design (D49): both parents of the take passed an approval gate
+# already — the local side at its own FR11 commit, the upstream side in the repo
+# that published it — so the bookkeeping introduces no unapproved content.
+#
+# Refuses, leaving the staged pair for the next FR11 episode, when the root
+# store was dirty BEFORE the take: those edits are unapproved, and a canned
+# `commit` would carry whatever else is staged alongside the pair. That path is
+# D43's staged-pair discipline, which stays the degraded case rather than the
+# resting state.
+#
+# Best-effort throughout: a landed fast-forward must not become a failed take
+# because its bookkeeping could not be recorded. Every failure names the pair
+# and leaves it staged.
+# Args: $1 = memory worktree, $2 = tier name, $3 = "1" when the root store was
+#       already dirty before the take, $4 = the tier's pre-take commit.
+gitlore_commit_tier_bookkeeping() {
+  local mempath="$1" tier="$2" dirty_before="$3" old_gitlink="$4"
+  local msgfile err
+
+  if [ "$dirty_before" = "1" ]; then
+    printf 'gitlore: the memory store had uncommitted changes before this take, so the moved %s pointer and the recomposed root index were staged rather than committed. They ride the next memory commit (approved summary).\n' "$tier"
+    return 0
+  fi
+  # Nothing staged: the root already records this exact state — a root commit
+  # taken from upstream carried the gitlink, and the tier loop's fast-forward
+  # then only caught the worktree up. An empty commit would fail, and reporting
+  # that failure would dress a healthy path as a broken one.
+  if git -C "$mempath" diff --cached --quiet; then
+    return 0
+  fi
+
+  msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-tier-msg.XXXXXX") || return 0
+  {
+    printf 'Update MEMORY.md for %s tier merge.\n\n' "$tier"
+    # The subjects the take brought in. A fast-forward creates no commit in the
+    # tier itself, so without this the root commit would be the only record and
+    # would say nothing about what arrived.
+    git -C "$mempath/$tier" log --format='%s' "$old_gitlink..HEAD" 2>/dev/null \
+      | sed 's/^/  /'
+  } > "$msgfile"
+
+  # Bare `commit`, never `-a` or an `add -A`: exactly the pair staged above goes
+  # in. A store clean before the take has nothing else staged to catch.
+  if ! err=$(GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile" 2>&1); then
+    rm -f "$msgfile"
+    printf 'gitlore: %s advanced and its pointer is staged, but the bookkeeping commit failed, so it rides the next memory commit. git said:\n%s\n' "$tier" "$err" >&2
+    return 0
+  fi
+  rm -f "$msgfile"
+
+  # Same invariant every other memory commit restores: `live` holds the commit
+  # the moment it exists. Refused only by a race, which the next gate re-reads.
+  if ! err=$(gitlore_git -C "$mempath" push -q . HEAD:live 2>&1); then
+    printf 'gitlore: the %s bookkeeping commit landed but memory'\''s local '\''live'\'' could not follow it. git said:\n%s\n' "$tier" "$err" >&2
+    return 0
+  fi
+  printf 'gitlore: memory — recorded %s'\''s move in a bookkeeping commit; the store is clean.\n' "$tier"
+  return 0
+}
+
+# Print 1 when the root store holds a change beyond the pair a take is about to
+# commit — its own `MEMORY.md` and the tier gitlink — and 0 otherwise.
+#
+# The plain dirty reading cannot answer this from inside a landed merge: the
+# preparation has already moved the tier, so the root is dirty by construction
+# and every take would refuse. What the guard is actually asking is whether
+# somebody else's unapproved work would ride the canned commit, and that is a
+# question about the OTHER paths. Pathspec exclusions, not a filter over
+# porcelain output: a path with a space or a quote survives them intact.
+# Args: $1 = memory worktree, $2 = tier name.
+gitlore_root_dirty_beyond_pair() {
+  local mempath="$1" tier="$2"
+  if [ -z "$(git -C "$mempath" status --porcelain -- . ":(exclude)MEMORY.md" ":(exclude)$tier")" ]; then
+    printf '0\n'
+  else
+    printf '1\n'
+  fi
+}
+
+# The repository name a store's remote points at, for a merge subject line:
+# the url's last path segment, minus a trailing `.git`. A store with no remote,
+# or one still carrying the placeholder, falls back to its own directory name —
+# the subject is a label, and a merge is worth recording under an imperfect one.
+# Args: $1 = store worktree.
+gitlore_store_repo_name() {
+  local store="$1" url base
+  url=$(git -C "$store" config --get remote.origin.url || true)
+  if [ -z "$url" ] || gitlore_is_placeholder_url "$url"; then
+    base=$(cd "$store" && pwd -P) || return 1
+    printf '%s\n' "${base##*/}"
+    return 0
+  fi
+  # Strip a trailing slash, then take the last segment of either url flavor —
+  # `host:org/repo.git` and `https://host/org/repo` both end at the same `/`,
+  # and an scp-style url with no path separator falls back to the whole tail.
+  url="${url%/}"
+  base="${url##*/}"
+  base="${base##*:}"
+  printf '%s\n' "${base%.git}"
+}
+
+# The name of the repository performing a merge — the parent working tree the
+# memory store is a submodule of. A tier's `live` history is shared across every
+# repo that mounts it, so the subject says which consumer landed the merge.
+# Falls back to the memory store's own directory when no superproject answers.
+# Args: $1 = memory worktree.
+gitlore_consumer_name() {
+  local mempath="$1" parent
+  parent=$(git -C "$mempath" rev-parse --show-superproject-working-tree) || parent=""
+  if [ -z "$parent" ]; then
+    parent=$(cd "$mempath" && pwd -P) || return 1
+  fi
+  printf '%s\n' "${parent##*/}"
+}
+
+# The canned message for a merge commit in $2, on stdout: a subject naming the
+# merged repo and the consumer that merged it, then the subjects the merge
+# brought INTO `live` — the second-parent side. A tier store is read by every
+# repo that mounts it, and each of those already holds the first-parent side;
+# what the merge contributed is the news (D49).
+# Args: $1 = memory worktree (for the consumer name), $2 = the merging store.
+gitlore_merge_commit_message() {
+  local mempath="$1" store="$2" repo consumer
+  repo=$(gitlore_store_repo_name "$store") || repo="memory"
+  consumer=$(gitlore_consumer_name "$mempath") || consumer="unknown"
+  printf 'merge %s from %s\n\n' "$repo" "$consumer"
+  # MERGE_HEAD is the pending (local) side under D6's direction: the authority
+  # is checked out as HEAD and becomes the first parent. `-q --verify` is silent
+  # if it is somehow absent, and the body is then simply empty.
+  local second
+  second=$(git -C "$store" rev-parse -q --verify MERGE_HEAD) || return 0
+  git -C "$store" log --format='%s' "HEAD..$second" | sed 's/^/  /'
 }

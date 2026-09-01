@@ -52,7 +52,9 @@ fast-forward, which is what makes this different from `/gitlore:push`.
 
 ## Report
 
-Say which stores took what. A tier fast-forward leaves the memory store dirty —
-the moved tier pointer and the recomposed root index — and that is expected:
-those ride the next memory commit. Say plainly that nothing was published, and
-that `/gitlore:push` is what puts this repo's own facts on their remotes.
+Say which stores took what. A tier take records its own bookkeeping commit —
+the moved tier pointer and the recomposed root index — and leaves the memory
+store clean; the run says so when it happens, and says when the pair was only
+staged instead because the store held uncommitted work. Say plainly that
+nothing was published, and that `/gitlore:push` is what puts this repo's own
+facts on their remotes.

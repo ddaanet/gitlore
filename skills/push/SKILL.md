@@ -25,9 +25,12 @@ bash "$(git config gitlore.pushCommand)"
 Exit codes:
 
 - `0` — done. Relay the `gitlore:` lines verbatim: which stores moved, how many
-  commits each published, any trailing notice about uncommitted changes, and —
-  on a repo whose memory store is local-only — that memory has no remote of its
-  own and stayed local while its tiers were published.
+  commits each published, which stores were fast-forwarded to take what their
+  remote held (a push is attempt → take → attempt again, so a behind store is
+  reconciled in the run rather than left as a `/gitlore:merge` errand), any
+  trailing notice about uncommitted changes, and — on a repo whose memory store
+  is local-only — that memory has no remote of its own and stayed local while
+  its tiers were published.
 - Non-zero **with `gitlore: memory merge prepared` in the output** — a remote
   diverged. Go to **Diverged** below.
 - Non-zero **without** it — surface the output verbatim and stop. It names the

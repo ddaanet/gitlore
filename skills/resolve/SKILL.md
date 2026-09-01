@@ -34,16 +34,16 @@ gitlore: dispatch sub-agent gitlore:memory-merger with state file:
 gitlore:   <abs-path-to-state-file>
 gitlore: that dispatch is a required step of the git operation that triggered
 gitlore: this merge, not an option: the request for that operation is the
-gitlore: request for this dispatch, so make it now without asking first. What
-gitlore: still needs approval is the merge the sub-agent proposes, not the
-gitlore: dispatch itself.
+gitlore: request for this dispatch, so make it now without asking first. Review
+gitlore: the synthesis it returns yourself — both sides of this merge already
+gitlore: passed an approval gate, so do not prompt the user (D49).
 gitlore: on approval of its synthesis, the sub-agent must run:
 gitlore:   cd "<parent-repo>" && bash "<abs-path-to-resolve.sh>" <continuation-subcommand>
 ```
 
 Extract the state-file path and the full continuation command (the entire `cd ... && bash ... <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
 
-The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip. Approval still governs the merge the sub-agent proposes, below.
+The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip. Your own review still governs the merge the sub-agent proposes, below — but not the user's: both sides of the merge already passed an approval gate, so the whole resolution runs without prompting them (D49).
 
 The store line names which repository diverged: the project memory store, or a tier mounted inside it. One merge policy covers every level, so the flow below is identical either way — but say which store you merged when you summarize, because a tier is shared with other repositories and the project store is not.
 
@@ -61,9 +61,9 @@ Resume via `SendMessage` to the `agentId`:
 - If correct: `"approved"`.
 - If anything is off: `"rejected: <specific reason>"` — the sub-agent re-synthesizes and returns a new summary; loop back to evaluating it.
 
-Escalate to the user only when session context is insufficient to judge. Treat only a clear, un-negated affirmative as approval — a hedge, a question, or any negation is a rejection.
+Do not escalate to the user: a merge is automated from their perspective, because both of its sides already passed an approval gate — the local one at its own commit, the upstream one in the repo that published it (D49). Approve unless you can name a concrete defect; judge against the two side diffs, not against a hunch.
 
-On approval, the sub-agent runs the continuation command.
+On approval, the sub-agent runs the continuation command. The merge commit's message is canned — the continuation writes it; the summary is for your review and your report to the user, not for the commit.
 
 ## Loop
 

@@ -1,9 +1,10 @@
 # Workflows
 
 The step lists for every path a user or the agent walks: the commit and push
-happy paths, a tier write, publishing without a parent push, the two resolve
-entries, clone, and worktree creation. The conclusions and the component map
-stay in `design.md`; this file is the sequence each component runs in.
+happy paths, a tier write, publishing without a parent push, taking without
+publishing, the two resolve entries, clone, and worktree creation. The
+conclusions and the component map stay in `design.md`; this file is the sequence
+each component runs in.
 
 ---
 
@@ -49,10 +50,25 @@ bound for project memory.
 2. The skill runs `push-memory.sh` through the `gitlore.pushCommand` key.
 3. Each tier's `live` goes to its own remote, then memory's — the same order
    `pre-push` uses, from the same shared body.
-4. The skill relays which stores moved and how far, and names any uncommitted
-   memory as unpublished.
-5. On divergence: `/gitlore:resolve` merges the store that diverged, then the
+4. A store whose remote is ahead is taken in the run — fast-forward, adoption,
+   bookkeeping commit — rather than left as a `/gitlore:merge` errand (D49).
+5. The skill relays which stores moved and how far, which were taken, and names
+   any uncommitted memory as unpublished.
+6. On divergence: `/gitlore:resolve` merges the store that diverged, then the
    skill pushes again, until the command exits 0.
+
+**Take without publishing**
+
+1. The user runs `/gitlore:merge`, or a session start named a tier whose
+   remote is ahead.
+2. The skill runs `merge-memory.sh` through the `gitlore.mergeCommand` key.
+3. Memory's own remote is taken first, then each tier's — the mirror of the
+   publish order (D49 in [merge-and-resolve.md](merge-and-resolve.md)).
+4. A tier take commits the moved gitlink and recomposed root index under the
+   canned bookkeeping message, leaving the store clean; a root store holding
+   unapproved work keeps the pair staged instead, and the run says which.
+5. On divergence: `/gitlore:resolve`, with a merge marked not-to-publish; the
+   skill reconciles again until the command exits 0. Nothing is published.
 
 **Resolve (on divergence) — primary path: agent-driven**
 

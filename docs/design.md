@@ -27,10 +27,10 @@ in `plans/`.
    pre-commit command, summarizes pending memory changes in prose, obtains
    explicit user confirmation, writes the approved summary as the commit
    message, then commits — approving the summary approves the commit.
-5. When any divergence is detected (local branch vs. trunk, or local trunk vs.
-   remote), `/gitlore:resolve` performs a semantic merge: a sub-agent with fresh
-   context synthesizes the merged content, and the parent agent approves the
-   summary with the user before the merge is committed.
+5. When any divergence is detected (pending commit vs. trunk, or local trunk
+   vs. remote), `/gitlore:resolve` performs a semantic merge: a sub-agent with
+   fresh context synthesizes the merged content, reviewed by the parent agent —
+   never the user *(D49)* — before the merge lands under a canned message.
 6. One-command install configures the entire system.
 7. After `git clone`, the first `SessionStart` restores working state
    automatically. Running `/gitlore:install` again is not required; the plugin's
@@ -38,16 +38,17 @@ in `plans/`.
 8. Memory is pushed to a dedicated remote repository with double-commit
    semantics — memory `live` is pushed before the parent push on every
    `git push`. It is also publishable on its own, with no parent push and no
-   `git` command typed by hand. *(Mechanism in D20.)*
+   `git` command typed by hand *(D20)*.
 9. Remote creation is provider-agnostic; `gh` CLI is used opportunistically when
    available.
 10. **Install-time disclosure (informational).** Before creating the memory
     remote, the user is shown the proposed name, owner, visibility, and a notice
     that memory may contain session context — orientation, not a hard gate.
-11. **Per-commit review gate.** Every memory commit (including merge commits
-    produced by `/gitlore:resolve`) requires explicit user approval of a prose
-    summary before the commit message file is written and the commit executes.
-    This is the effective control over what reaches the remote.
+11. **Per-commit review gate.** Every memory commit *authoring* content
+    requires explicit user approval of a prose summary before the commit
+    message file is written and the commit executes — the effective control
+    over what reaches the remote. Merge and take-bookkeeping commits are its
+    stated exemption: both sides already passed this gate *(D49)*.
 12. **Coexistence.** Repos without a `gitlore-memory` submodule are unaffected
     when the plugin is present; every hook no-ops silently when it is not
     registered.
@@ -68,8 +69,7 @@ in `plans/`.
 16. **Active recall.** A memory body can be fetched into context on demand,
     mid-task, from a trigger the user's prompt never carried — an error string
     in a tool result, a flag in a file just read. The agent selects from the
-    index it already holds and reads the bodies itself, in one batch.
-    *(D18.)*
+    index it already holds and reads the bodies itself, in one batch *(D18)*.
 
 ---
 
@@ -157,8 +157,7 @@ every `SessionStart`, which is what makes them self-healing (D5). The IPC files
 are transient handshakes between the agent and the hooks, and sit in the parent
 working tree rather than a gitdir because a gitdir write is blocked by the CC
 sandbox and read as self-configuration by the auto-mode classifier. Every file
-and key is in
-[configuration.md](references/configuration.md).
+and key is in [configuration.md](references/configuration.md).
 
 ### Memory Redirect Launcher
 
@@ -191,18 +190,17 @@ git and decides (D7).
   human decides to run it (D47, in
   [index-authoring-sync.md](references/index-authoring-sync.md)).
 - **Skills** — `resolve`, the semantic merge of a diverged store, split across a
-  gate, a fresh-context sub-agent (D9), the parent's approval and a continuation
-  script; `push`, which publishes every store with no parent push and no
-  approval step, because FR11 gated the content at commit time; `merge`, which
-  takes what every remote holds and publishes nothing, and is the only path by
-  which a pinned tier advances (D43); `recall`, which fetches bodies into
-  context mid-task with no hook, no request file and no state (D18); and
-  `memory-writing`, whether a learning becomes a fact, what it says, which tier
-  it lands in, whether its line routes, and where it is invoked (D47, D48). Each
-  is a skill rather than a command because each has an entry no user types — a
-  hook's stderr, a session start, an ending session, a token in a tool result, a
-  write under `memory/`. Steps in
-  [merge-and-resolve.md](references/merge-and-resolve.md).
+  gate, a fresh-context sub-agent (D9), the parent's approval and a
+  continuation script; `push`, which publishes every store with no parent push
+  and no approval step, because FR11 gated the content at commit time;
+  `merge`, which takes what every remote holds and publishes nothing (D43,
+  D49); `recall`, which fetches bodies into context mid-task with no hook, no
+  request file and no state (D18); and `memory-writing`, whether a learning
+  becomes a fact, what it says, which tier it lands in, whether its line
+  routes, and where it is invoked (D47, D48). Each is a skill rather than a
+  command because each has an entry no user types — a hook's stderr, a session
+  start, an ending session, a token in a tool result, a write under `memory/`.
+  Steps in [merge-and-resolve.md](references/merge-and-resolve.md).
 - **Claude Code hooks** — `SessionStart` is the self-healing pass and does the
   most work; it is also where a new worktree's memory worktree is created,
   lazily, so worktree support is uniform however the worktree came to be (no
@@ -249,7 +247,8 @@ manager's wiring syntax, and why all of them reach the wrapper through
 The step lists are in [workflows.md](references/workflows.md): commit (nudge,
 prose summary, approval, `pre-commit`); push (`pre-push`, tiers then memory);
 tier write (rides the commit flow, tier first, under one summary); publish
-without a parent push (`/gitlore:push` over `push-memory.sh`); resolve, primary
+without a parent push (`/gitlore:push` over `push-memory.sh`); take without
+publishing (`/gitlore:merge`, root store first, D49); resolve, primary
 when the agent reads a gate's stderr and resolves inline, fallback when a plain
 terminal sends the user to Claude Code; clone (the first `SessionStart` restores
 settings, `live` and wiring); worktree creation (`SessionStart` adds the memory
@@ -287,6 +286,7 @@ what was weighed, what was rejected, and why — is one hop away.
 - **D13** — a lock-contention retry wrapper guards mutating memory git calls
 - **D24** — a directive that names a sub-agent carries its own authorization
 - **D41** — detached at `live`: one branch model, one commit path, every store
+- **D49** — canned unprompted merge commits; takes commit their bookkeeping
 
 *Rejected:* `live` as a working branch · `git commit-tree` plus `git update-ref`
 for the resolve merge · a temporary worktree for resolve · `claude --print` for

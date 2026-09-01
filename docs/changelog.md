@@ -6,6 +6,10 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-01 — Merge commits are canned and unprompted, and explicit takes leave a clean store](changelog/2026-09-01-merge-commits-canned-takes-commit-bookkeeping.md)
+  — both parents of every gitlore merge already passed an approval gate, so
+  merges stop prompting and carry canned messages, takes commit their own
+  bookkeeping root-first, and push takes a behind store inline (D49)
 - [2026-08-28 — The authoring skill is invoked at the three moments that act on facts already written](changelog/2026-08-28-the-authoring-skill-is-invoked-at-three-moments.md)
   — a skill description reaches the moment a fact is drafted, not the commit
   gate, an install that migrated a store, or a tier mount; each of those now
