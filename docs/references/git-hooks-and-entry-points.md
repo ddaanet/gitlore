@@ -42,7 +42,7 @@ session-less linked worktree) — never block a parent git operation over memory
 2. **Guard on a stale merge state** — hand the prepared merge back to the
    sub-agent while `MERGE_HEAD` is there, and when a checkout has cleared it,
    classify what survives and repair, which may mean carrying straight on
-   ([merge-and-resolve.md](merge-and-resolve.md)).
+   ([merge-state-recovery.md](merge-state-recovery.md)).
 3. **Sync every dirty tier** and advance each tier's local `live`, so the
    gitlink the memory commit is about to record has already moved (D42).
 4. **Sync memory** through the shared `gitlore_sync_memory_to_live`: the FR11

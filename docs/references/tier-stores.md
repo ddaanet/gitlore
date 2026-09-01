@@ -103,30 +103,35 @@ detached in place (no ref argument, so the commit does not move) — the branch
 model has no working branch, and a commit made on one would advance a ref the
 lockstep never reads.
 
-The recomposition that follows leaves `memory/` **dirty — expected**, and it
-rides the *next* parent commit like any other memory change. No scheduled
-sync-commit and no FR11 churn: the gitlink pin floats, committing naturally with
-the next parent commit rather than on a schedule of its own, which keeps the
-reused submodule model intact.
+The recomposition that follows is **committed by the take itself** (D49, in
+[merge-and-resolve.md](merge-and-resolve.md)): the moved gitlink and the
+recomposed root index land in a canned bookkeeping commit
+(`Update MEMORY.md for <tier> tier merge.`) that advances memory's local
+`live`, so an explicit take leaves the store clean. The parent-level gitlink
+still floats to the next parent commit, as every memory advance leaves it. One
+path degrades: a root store that held unapproved work *before* the take gets
+no canned commit — the pair includes `MEMORY.md`, whose recompose folds in
+whatever unapproved index edits the episode already held — and falls back to
+the staged-pair discipline below.
 
-**Dirty, but the moved gitlink is staged.** `submodule update` checks a tier out
-at the sha the superproject's **index** holds, not the one its HEAD records, so
-the unconditional pin and a floating gitlink are only compatible while the move
-is in the index. Every path that advances a tier therefore stages the pair —
-`MEMORY.md` and the tier — in the memory store as its last act: the
-fast-forward-plus-adoption branch of `gitlore_merge_stores`, and the merge
-continuation, which stages *after* its commit because the merge commit does not
-exist before it. The **mount** is a third such path and stages the gitlink
-alone: `submodule add` records the remote's default branch and
-`/gitlore:add-tier` then detaches the tier at `live`, so the gitlink moves while
-the root index it feeds is written by the compose that follows and floats as
-ordinary dirt. Left in the working tree alone, the move survives exactly until
-the next `SessionStart`, which walks the tier back to the pre-merge commit while
-the recomposed root index — an ordinary file write, not a gitlink — survives to
-describe facts the carrier no longer holds. Nothing reports it: the command that
-landed the merge exited 0, and the session that reverted it calls the tier
-clean. Staging changes nothing about *what* is committed or when; it is what
-makes the pin idempotent instead of destructive.
+**On the degraded path, the moved gitlink is staged.** `submodule update`
+checks a tier out at the sha the superproject's **index** holds, not the one
+its HEAD records, so the pin and a floating gitlink are only compatible while
+the move is in the index. Every advancing path therefore stages the pair —
+`MEMORY.md` and the tier — before its bookkeeping commit, and keeps the staged
+pair when that commit is refused: the fast-forward-plus-adoption branch of
+`gitlore_merge_stores`, and the merge continuation, which stages *after* its
+merge commit because that commit does not exist before it. The **mount** is a
+third such path and stages the gitlink alone: `submodule add` records the
+remote's default branch and `/gitlore:add-tier` then detaches the tier at
+`live`, so the gitlink moves while the root index it feeds is written by the
+compose that follows and floats as ordinary dirt. Left in the working tree
+alone, the move survives exactly until the next `SessionStart`, which walks
+the tier back to the pre-merge commit while the recomposed root index — an
+ordinary file write, not a gitlink — survives to describe facts the carrier no
+longer holds. Nothing reports it: the command that landed the merge exited 0,
+and the session that reverted it calls the tier clean. Staging is what makes
+the pin idempotent instead of destructive.
 
 **D44 — Shared-tier conflicts resolve semantically; memory merges as prose,
 indexes entry-wise**

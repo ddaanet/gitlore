@@ -49,20 +49,28 @@ if [ ! -e "$mempath/.git" ]; then
   exit 0
 fi
 
-# Record where each store's remote sits BEFORE the push, so the report can say
-# what actually moved rather than restating the refs. Tab-separated with the path
-# LAST: a tier path may contain spaces, and only the final field can absorb them.
+# Record where each store's remote AND its local `live` sit BEFORE the push, so
+# the report can say what actually moved rather than restating the refs. The
+# local sha is what separates publishing from taking: a store that was behind is
+# fast-forwarded by this run, which advances `live` onto the remote's tip, and
+# reading `live` afterwards would then credit the take as a publication. Only a
+# tip the store already held before the run is something this run sent.
+# Tab-separated with the path LAST: a tier path may contain spaces, and only the
+# final field can absorb them.
 store_state() {
-  local p="$1" sha
+  local p="$1" sha live
   sha=$(git -C "$p" rev-parse -q --verify refs/remotes/origin/live) || sha="-"
-  printf '%s\t%s\n' "$sha" "$p"
+  live=$(git -C "$p" rev-parse -q --verify live) || live="-"
+  printf '%s\t%s\t%s\n' "$sha" "$live" "$p"
 }
 
 store_paths=()
 store_shas=()
-while IFS=$'\t' read -r sha path; do
+store_lives=()
+while IFS=$'\t' read -r sha live path; do
   [ -n "$path" ] || continue
   store_shas+=("$sha")
+  store_lives+=("$live")
   store_paths+=("$path")
 done < <(
   store_state "$mempath"
@@ -89,15 +97,16 @@ i=0
 while [ "$i" -lt "${#store_paths[@]}" ]; do
   p="${store_paths[$i]}"
   old="${store_shas[$i]}"
+  live_sha="${store_lives[$i]}"
   i=$((i + 1))
   new=$(git -C "$p" rev-parse -q --verify refs/remotes/origin/live) || new="-"
   [ "$old" = "$new" ] && continue
   # origin/live also moves when the push's own fetch takes in what SOMEONE ELSE
   # published — the store is behind, this run sent nothing, and old..new is
-  # their commits. Credit only a tip this store's `live` actually contains.
-  # `-q --verify` is silent on the expected miss: a store with no local `live`
-  # published nothing either way.
-  live_sha=$(git -C "$p" rev-parse -q --verify live) || live_sha=""
+  # their commits. Credit only a tip the store's `live` held BEFORE this run: a
+  # behind store is taken here (D49), which advances `live` onto exactly those
+  # commits, so the reading after the fact cannot tell a take from a push.
+  [ "$live_sha" = "-" ] && live_sha=""
   if [ "$new" != "-" ] && \
      { [ -z "$live_sha" ] || ! git -C "$p" merge-base --is-ancestor "$new" "$live_sha"; }; then
     held=1

@@ -24,6 +24,7 @@ teardown() { teardown_tmp_repo; }
 # Stand-in for the 13-git-subprocess builder: records each call and keeps the
 # real one's first, destructive act, so a spurious rebuild wrecks an existing
 # template here exactly as it would in the suite.
+# shellcheck disable=SC2317  # invoked indirectly, through the function under test
 _gitlore_build_parent_with_memory() {
   rm -rf "$1"
   echo "build" >> "$BUILDS"

@@ -121,18 +121,21 @@ mount_tier_at_live() {
 
 # --- remote flavor: behind, diverged, drift ---
 
-@test "memory behind its remote reports nothing to publish instead of a failed merge" {
+@test "memory behind its remote is taken by fast-forward, not routed into a merge" {
+  # A push is attempt → take → attempt again (D49), so being behind is resolved
+  # here rather than handed back as an errand. What must not happen either way
+  # is a merge preparation against a store with nothing to merge.
   wire_memory_remote
   advance_memory_remote
-  before=$(git -C memory rev-parse HEAD)
+  remote_sha=$(git --git-dir="$MEMORY_REMOTE" rev-parse live)
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
   msg="$output$stderr"
-  [[ "$msg" == *"/gitlore:merge"* ]]
   [[ "$msg" != *"memory merge prepared"* ]]
   [[ "$msg" != *"could not prepare"* ]]
-  [ "$(git -C memory rev-parse HEAD)" = "$before" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse live)" = "$remote_sha" ]
   run ! git -C memory rev-parse -q --verify refs/gitlore/pending
 }
 
@@ -201,20 +204,20 @@ mount_tier_at_live() {
 
 # --- tier loop: one behind tier is not a failed push ---
 
-@test "a tier behind its remote does not fail the push" {
+@test "a tier behind its remote is taken by the push, not left as an errand" {
   git init -q --bare "$MEMORY_REMOTE"
   make_parent_with_memory
   mount_tier_at_live ddaanet
   publish_memory
-  push_tier_fact ddaanet "- [upstream](u.md) — hook"
+  remote_sha=$(push_tier_fact ddaanet "- [upstream](u.md) — hook")
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
   msg="$output$stderr"
   [[ "$msg" == *"ddaanet"* ]]
-  [[ "$msg" == *"/gitlore:merge"* ]]
   [[ "$msg" != *"memory merge prepared"* ]]
   [[ "$msg" != *"could not prepare"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
 }
 
 # --- local flavor: the same misread against a store's own `live` ---

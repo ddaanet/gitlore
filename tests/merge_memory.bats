@@ -255,19 +255,19 @@ push_memory_fact() {
   [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
   # Adopted: the arrived line is in the always-loaded root index, prefixed.
   grep -qF -- '- [upstream](ddaanet/upstream.md) — published by another repo' memory/MEMORY.md
-  # The moved gitlink and the recomposed index are one memory change, left for
-  # the FR11 commit — and the user is told rather than left to find it.
-  [[ "$output" == *"uncommitted changes"* ]]
-  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$gitlink" ]
-  # Uncommitted, but STAGED: `submodule update` pins from the index, so a
-  # gitlink left in the working tree alone is walked back at the next session.
-  [ "$(git -C memory rev-parse :ddaanet)" = "$remote_sha" ]
+  # The moved gitlink and the recomposed index are one memory change, and an
+  # explicit take records it under a canned message rather than leaving the
+  # store dirty for the next FR11 episode to explain (D49).
+  [ -z "$(git -C memory status --porcelain)" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" != "$gitlink" ]
 }
 
 @test "a fast-forwarded tier survives the next SessionStart's unconditional pin" {
-  # The same window the merge continuation has, on the commoner path: the tier
-  # advanced, the memory commit that records it has not happened yet, and the
-  # tier pass re-pins every tier unconditionally and by design.
+  # The window the staged-pair discipline exists for, on the one path that still
+  # reaches it: the root store held unapproved work before the take, so the pair
+  # was staged rather than committed, and the tier pass re-pins every tier
+  # unconditionally and by design.
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -275,6 +275,7 @@ push_memory_fact() {
   commit_memory_state
   gitlink=$(git -C memory rev-parse HEAD:ddaanet)
   remote_sha=$(push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo')
+  printf 'unapproved\n' > memory/pending-fact.md
 
   bash "$CMD"
   # The fixture must give the pin somewhere destructive to go: the tier is off

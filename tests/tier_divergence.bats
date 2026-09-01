@@ -267,8 +267,12 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
   [ "$(git -C memory/ddaanet rev-list --count --merges "$head" -1)" = "1" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$head" ]
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$head" ]
-  # Memory itself was not committed into.
-  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+  # Memory took no merge commit of its own — only the canned bookkeeping commit
+  # recording the moved gitlink and recomposed index (D49), leaving it clean.
+  [ "$(git -C memory rev-parse HEAD)" != "$mem_before" ]
+  [ "$(git -C memory rev-list --count --merges HEAD)" = "0" ]
+  [ "$(git -C memory log -1 --format=%s)" = "Update MEMORY.md for ddaanet tier merge." ]
+  [ -z "$(git -C memory status --porcelain)" ]
   [ ! -f "$(tier_state_file ddaanet)" ]
 }
 
@@ -286,6 +290,9 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
   pinned=$(git -C memory rev-parse HEAD:ddaanet)
   bash "$PRE_PUSH" || true
   git -C memory/ddaanet add -A
+  # Unapproved work in the root store: the one path that still leaves the pair
+  # staged rather than committed (D49), which is the window this test pins.
+  printf 'unapproved\n' > memory/pending-fact.md
   bash "$RESOLVE" continue-after-merge
   merged=$(git -C memory/ddaanet rev-parse HEAD)
   # The fixture has to give the pin something destructive to do: the tier is off

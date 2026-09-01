@@ -104,13 +104,13 @@ diverge_memory_with_index() {
   # The merged carrier reached the root index, prefixed.
   grep -qxF -- '- [org fact](ddaanet/f.md) — ours' memory/MEMORY.md
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
-  # The commit was the TIER's; the root write is dirty memory, not a commit.
-  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
-  [[ "$(git -C memory status --porcelain)" == *"MEMORY.md"* ]]
-  # The moved gitlink is staged beside it. Uncommitted either way, but only a
-  # staged one survives the next SessionStart: `submodule update` pins from the
-  # index, so an unstaged gitlink is checked back out at the pre-merge commit.
-  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  # The tier carries the merge commit; the root carries a bookkeeping commit of
+  # its own for the recomposed index and the moved gitlink, so an explicit
+  # operation leaves a clean store (D49).
+  [ "$(git -C memory rev-parse HEAD)" != "$mem_before" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+  [ "$(git -C memory log -1 --format=%s)" = "Update MEMORY.md for ddaanet tier merge." ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }
 
 @test "a compose refusal is reported but never strands the merge" {

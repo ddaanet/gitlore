@@ -15,7 +15,9 @@ file is what you need while running or changing a merge.
   **D7** scripts decide, the agent handles language · **D9** a sub-agent
   synthesizes the merge (requires the experimental flag) · **D13** a
   lock-contention retry wrapper guards mutating memory git calls · **D24** a
-  directive that names a sub-agent carries its own authorization
+  directive that names a sub-agent carries its own authorization · **D49**
+  merge commits are canned and unprompted, and an explicit take commits its
+  own bookkeeping
 
 ---
 
@@ -79,91 +81,25 @@ The division of labour is D7's: the script decides, the agent writes prose.
    tree (D44), synthesizes holistically whether or not git flagged a conflict,
    runs `git add -A`, and returns a prose summary. `No conflict.` is a valid
    answer.
-3. **The parent approves** the summary — from session context where it can,
-   escalating to the user only when it cannot judge — and resumes the sub-agent
-   via `SendMessage`. A rejection re-synthesizes.
+3. **The parent reviews** the summary against the two side diffs and resumes
+   the sub-agent via `SendMessage`. A rejection re-synthesizes. The user is
+   never prompted: both sides of the merge already passed an approval gate, so
+   the resolution is automated from their perspective (D49).
 4. **The continuation** (`resolve.sh continue-after-merge`) composes the
-   indexes, runs the dangling-pointer report, commits, and pushes when the
-   flavor calls for it. It finds the prepared merge by walking the stores rather
-   than assuming memory, and refuses outright if two are prepared at once.
+   indexes, runs the dangling-pointer report, commits under the canned merge
+   message (D49), commits a tier merge's bookkeeping in the root store, and
+   pushes when the flavor calls for it. It finds the prepared merge by walking
+   the stores rather than assuming memory, and refuses outright if two are
+   prepared at once.
 5. **The skill loops** until `resolve.sh` exits 0 (a second flavor can be
    waiting), then retries the original commit and tells the user which store was
    merged — a tier is shared with other repositories, the project store is not.
 
-A crashed merge leaves the state file behind, and every gate guards on it. The
-file goes down *before* the preparation starts, not after it succeeds:
-`gitlore_yield_merge` writes a marker naming the store, the flavor, both sides
-and the continuation, then prepares the merge, then overwrites the marker with
-the full state file. Every window inside `gitlore_prepare_merge` — a killed
-`push-memory.sh`, a tool timeout — therefore leaves a file the next gate
-classifies, and the marker is dropped again if the preparation refuses outright.
-A marker is told from a full state file by `changed_files`, the first field the
-merger sub-agent reads and the one no marker can carry; wherever a state file is
-about to reach that sub-agent, `gitlore_complete_merge_state` fills a marker in
-from the merge the store already holds.
-
-With `MERGE_HEAD` present the store sits exactly where `gitlore_prepare_merge`
-leaves one, so the directive is the ordinary `continue-after-merge` and the
-merge is handed back to the sub-agent: **a prepared merge is always continued,
-never discarded.** By the time a gate meets it again the sub-agent may already
-have synthesized and staged an answer, and nothing in the store tells that apart
-from a merge no one has touched.
-
-`MERGE_HEAD` with *no* state file is then not gitlore's at all — a `git merge`
-run in the store by hand, or by an agent asked to merge one. It blocks and is
-reported with the store's own status and `merge --abort` commands, never
-touched: nothing there says what the merge was for, and it may hold work in
-progress.
-
-The accepted trade is a merge whose authority moved while it waited — someone
-pushed to `origin/live` meanwhile. It lands against the authority it was built
-on, and the continuation's own fast-forward (`push . HEAD:live`, then
-`push origin live` for a `head-vs-remote` merge) is then refused as a
-non-fast-forward, which re-prepares the merge against the current authority and
-yields again. One extra cycle, against re-synthesizing every merge that outlives
-its session — and re-preparing on sight never avoided it either, since that too
-merely fixed the authority as of whenever the gate happened to run.
-
-Without `MERGE_HEAD`, the guard
-classifies from the pinned pending commit and the state file's own fields, and
-repairs. Three things produce that state, and they leave different remains. A
-preparation interrupted between its checkout and its merge leaves its marker,
-the pin, and HEAD on the authority, with nothing merged. A
-plain `git merge --abort` run in the store drops the pointers *and* resets the
-index, so nothing of the merge survives but gitlore's own files, while
-`git checkout` — including the no-op re-checkout `submodule update` runs — calls
-`remove_branch_state()`, which unlinks `MERGE_HEAD` and `MERGE_MSG` silently
-while leaving the staged result behind (a cleanly auto-merged index has no
-unmerged entry for checkout to refuse over).
-
-- **A merge landed.** A merge commit taking the pinned pending commit as a
-  parent other than its first *is* that merge, wherever HEAD sits now. Searched
-  across refs **and** reflogs: a landed merge HEAD was moved off is reachable
-  from no ref, and `git fsck` counts the reflogs among its roots, so
-  "is there an unreachable commit" is silent on exactly this case. HEAD returns
-  to the merge when doing so can lose nothing — the merge already contains HEAD
-  and the tree is clean — and the commands to do it by hand are printed
-  otherwise.
-- **A merge result is staged.** The index survives the checkout that took the
-  pointers, and what it holds may be a synthesis the user has already approved,
-  so `MERGE_HEAD` and `MERGE_MSG` are written back and the directive asks for
-  the sub-agent again — the same continuation the `MERGE_HEAD`-present case
-  gets, and for the same reason: discarding the merge would take the staged tree
-  with the worktree it was written into. Refused when HEAD is not the authority
-  the state file names, since that commit is what the merge was built on.
-- **Neither, and the file is a marker.** The preparation was interrupted before
-  its merge ran. Disposed of exactly like a dead merge below, with the message
-  the store's own remains support rather than an abort nobody performed.
-- **Neither.** The merge is dead — the `merge --abort` shape. HEAD goes back
-  onto the pending commit *before* the pin is dropped, since after a preparation
-  that pin is the only reference to the divergent side; every artifact a
-  preparation wrote is deleted, and the gate carries on, preparing the merge
-  again if the divergence is still there.
-
-The artifacts are deleted rather than moved aside because the next preparation
-recomputes each of them from the two sides. One dead end remains: a state file
-that names no pending commit, with the pin gone too, leaves nothing that can say
-whether the merge landed, and the message says so.
+A crashed merge leaves a state file behind, and every gate guards on it —
+classifying what survives and repairing, which may mean carrying straight on.
+The state machine (marker vs full state file, `MERGE_HEAD` present, cleared by
+a checkout, landed, staged, dead) is in
+[merge-state-recovery.md](merge-state-recovery.md).
 
 ### The `merge` skill
 
@@ -173,18 +109,27 @@ named an upstream-ahead tier has to be able to reach it from context. The body
 makes one call — `bash "$(git config gitlore.mergeCommand)"` — and reads the
 exit the same way.
 
-It is the only path by which a pinned tier advances (D43): per store, an
-already-contained remote is nothing to do, a strictly-ahead remote is a
-fast-forward followed by the tier adoption, and a diverged one prepares a merge
-marked `publish: "no"`, which stops the continuation after the local `HEAD:live`
-fast-forward. Stores are visited tiers-first, as on the push side, and for the
-same reason memory's own missing remote is reported as nothing to take rather
-than a failure: a tier with no remote is a misconfiguration worth stopping on,
-since it exists to be shared, and the memory root is not. A tier fast-forward
-writes the root index and commits nothing — the moved gitlink and the recomposed
-index are one memory change, and recording them is the FR11 commit's job.
+Per store, an already-contained remote is nothing to do, a strictly-ahead
+remote is a fast-forward followed by the tier adoption, and a diverged one
+prepares a merge marked `publish: "no"`, which stops the continuation after the
+local `HEAD:live` fast-forward. Memory's own missing remote is reported as
+nothing to take rather than a failure: a tier with no remote is a
+misconfiguration worth stopping on, since it exists to be shared, and the
+memory root is not. A tier fast-forward writes the root index and commits the
+pair — the moved gitlink and the recomposed index — under the canned
+bookkeeping message, so an explicit take leaves the store clean (D49).
 
-## Decisions — D1, D2, D3, D6, D7, D9, D13, D24, D41
+Stores are visited **root-first**, the mirror of the publish order. A root
+commit arriving from upstream already records the tier commits it names, all of
+them on the tier's own remote, so taking it first leaves each tier merely
+behind, and the tier loop's own fast-forward catches the worktree up with
+nothing left to record; tiers-first inverts that — the tier take's
+bookkeeping commit meets the upstream root's equivalent commit as a divergence
+and spends a synthesis on two sides that recorded the same fast-forward.
+Publishing keeps the opposite order for the opposite reason: a pointer must
+never go out ahead of what it points at.
+
+## Decisions — D1, D2, D3, D6, D7, D9, D13, D24, D41, D49
 
 **D1 — `live` branch as memory trunk, independent of parent's default branch**
 
@@ -345,6 +290,42 @@ and every resolution re-detaches at the new `live`.
 The model is the reason D1, D2, D3 and D6 read as they do, and the reason the
 tier decisions that build on it (D42, D43) can assume one shape of store rather
 than two.
+
+**D49 — Merge commits are canned and unprompted; an explicit take commits its
+own bookkeeping**
+
+Both parents of every gitlore merge already passed an approval gate: the local
+side at its own FR11 commit, the upstream side in the repo that published it.
+A merge introduces no unapproved content, so prompting the user gates a
+decision already made — a merge is automated from their perspective, and merge
+and bookkeeping commits are FR11's stated exemption. The parent agent still
+reviews the sub-agent's synthesis before the continuation runs; that check is
+the reviewer's, not the user's.
+
+The messages are canned, shaped for each commit's readers. A **merge commit**,
+in whichever store diverged, is `merge <merged-repo> from <consumer>` — repo
+from the store's remote url, consumer from the parent working tree, because a
+shared tier's history is read by every repo that mounts it and the subject
+should say which one landed the merge. Its body lists the subjects of the
+**second-parent (local) side**: what the merge brought *into* `live`. The
+local repo is the only consumer that cares what was new in `live`; everyone
+else already holds the first-parent side, and what the merge contributed is
+the news — git's own `--log` convention under D6's direction. A **tier take's
+bookkeeping commit**, in the memory root, is
+`Update MEMORY.md for <tier> tier merge.` with the taken tier subjects as its
+body, so a fast-forward take — which creates no tier commit — is still
+recorded.
+
+The line between committing and not is **intention**. An explicit operation —
+`/gitlore:merge`, `/gitlore:push`, a resolve continuation servicing an
+explicit commit or push — leaves a clean store, committing the pair and
+advancing `live`; the implicit SessionStart fast-forward commits nothing, as
+before. One guard survives: a root store that held unapproved work before the
+take keeps the staged-pair discipline (D43), because a canned `commit` may
+only ever carry what the take itself staged. And push takes upstream under the
+same decision — attempt → take → attempt again — so only a genuine divergence
+yields to `/gitlore:resolve`, and the report credits only tips the store held
+before the run: a take is not a publication.
 
 ## Rejected alternatives
 

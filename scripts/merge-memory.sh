@@ -55,12 +55,11 @@ gitlore_merge_stores "$mempath"
 # Reached only on success: gitlore_merge_stores returns non-zero on every failure
 # and on a prepared merge, and `set -e` stops us above.
 #
-# A tier fast-forward writes the root index but commits nothing: the moved
-# gitlink and the recomposed index are one memory change, and recording them is
-# the FR11 commit's job, not this command's. Say so rather than leaving the user
-# to discover a dirty store.
+# A take commits its own bookkeeping (D49), so a dirty store here is the
+# degraded path — the root held unapproved work, and the pair was staged
+# instead. Say so rather than leaving the user to discover it.
 if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
-  printf 'gitlore: the memory store now has uncommitted changes — the moved tier pointer and the recomposed root index. They ride the next memory commit (approved summary), and reach the remote on the next /gitlore:push.\n'
+  printf 'gitlore: the memory store has uncommitted changes. Anything this take staged rides the next memory commit (approved summary), and reaches the remote on the next /gitlore:push.\n'
 fi
 
 exit 0
