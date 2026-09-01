@@ -6,6 +6,12 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-01 — A local `live` stranded behind HEAD is advanced, not reported](changelog/2026-09-01-a-stranded-live-is-advanced.md)
+  — a failed 0.5.0 merge preparation left HEAD at `origin/live` with the ref a
+  push sends still behind, and `/gitlore:merge` read HEAD alone and called the
+  store finished; a take and the publish preflight now advance a
+  strictly-behind `live` by a local ff-checked push, ahead of the report either
+  would have made, and a genuine HEAD/`live` divergence is reported once
 - [2026-09-01 — Merge commits are canned and unprompted, and explicit takes leave a clean store](changelog/2026-09-01-merge-commits-canned-takes-commit-bookkeeping.md)
   — both parents of every gitlore merge already passed an approval gate, so
   merges stop prompting and carry canned messages, takes commit their own

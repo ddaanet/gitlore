@@ -48,6 +48,17 @@ push_memory_fact() {
   rm -rf "$work"
 }
 
+# Leave a store in the state a failed merge preparation produces: HEAD checked
+# out at the commit `origin/live` names, and the local `live` — the ref a push
+# sends and the only one a fast-forward advances — left where it was. From that
+# moment the remote is contained in HEAD, so an ancestry test that reads HEAD
+# alone calls the store finished while `live` stays behind.
+strand_live_behind_head() {
+  local store="$1"
+  git -C "$store" fetch -q origin +refs/heads/live:refs/remotes/origin/live
+  git -C "$store" checkout -q --detach origin/live
+}
+
 @test "exits 0 with a note when the repo has no gitlore-memory submodule" {
   run bash "$CMD"
   [ "$status" -eq 0 ]
@@ -92,6 +103,83 @@ push_memory_fact() {
   run bash "$CMD"
   [ "$status" -eq 0 ]
   [[ "$output" == *"already holds everything"* ]]
+}
+
+@test "advances a root store's local 'live' left stranded behind HEAD" {
+  # The remote is contained in HEAD, so there is nothing to take — but `live`,
+  # the ref the next push sends, is behind, and that push is refused again for
+  # a reason neither ref explains. /gitlore:merge is the documented remedy, so
+  # it is the thing that has to move `live`.
+  wire_memory_remote
+  behind=$(git -C memory rev-parse live)
+  push_memory_fact
+  remote_sha=$(git --git-dir="$MEMORY_REMOTE" rev-parse live)
+  strand_live_behind_head memory
+  [ "$(git -C memory rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse live)" = "$behind" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse live)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$remote_sha" ]
+  [[ "$output$stderr" == *"stranded behind HEAD"* ]]
+  # The repair is local: taking still publishes nothing.
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$remote_sha" ]
+}
+
+@test "advances a TIER's local 'live' left stranded behind HEAD" {
+  # The shape the field incident had: the store the failed preparation moved was
+  # a tier, and a tier is the store /gitlore:merge exists to advance.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  # The mount leaves the tier on `main` with no local `live`; the ref has to
+  # exist, and be behind, for it to be strandable.
+  git -C memory/ddaanet branch -f live origin/live
+  behind=$(git -C memory/ddaanet rev-parse live)
+  remote_sha=$(push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo')
+  strand_live_behind_head memory/ddaanet
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$behind" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [[ "$output$stderr" == *"tier 'ddaanet'"* ]]
+  [[ "$output$stderr" == *"stranded behind HEAD"* ]]
+}
+
+@test "reports a store whose HEAD and 'live' have diverged instead of moving either" {
+  # Only a `live` the current HEAD contains is unambiguously stranded. When each
+  # ref holds a commit the other lacks, which one was intended is not
+  # recoverable from the refs, so the repair declines and says so.
+  wire_memory_remote
+  base=$(git -C memory rev-parse HEAD)
+  (
+    cd memory || exit 1
+    git checkout -q live
+    printf 'on-live\n' > ON-LIVE.md
+    git add -A
+    GITLORE_MEMORY_COMMIT=1 git commit -q -m "on live only"
+    git checkout -q --detach "$base"
+    printf 'on-head\n' > ON-HEAD.md
+    git add -A
+    GITLORE_MEMORY_COMMIT=1 git commit -q -m "on HEAD only"
+  )
+  head=$(git -C memory rev-parse HEAD)
+  live=$(git -C memory rev-parse live)
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head" ]
+  [ "$(git -C memory rev-parse live)" = "$live" ]
+  [[ "$output$stderr" == *"have each moved since they last agreed"* ]]
+  # The repair runs before the no-op report, so a store that is about to fail is
+  # never first told it holds everything it needs.
+  [[ "$output$stderr" != *"already holds everything"* ]]
 }
 
 @test "leaves a store whose remote it is ahead of alone" {

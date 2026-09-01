@@ -187,9 +187,15 @@ Every store is checked for HEAD and `live` naming the same commit *before*
 anything is published — the push sends `live` while the enclosing commit's
 gitlink records HEAD, so a store whose refs disagree either publishes something
 other than what its pointer names or is refused on a ref no diagnosis downstream
-looks at. That drift is reported with both shas and the remedy for its
-direction, never repaired: which ref was intended is not recoverable from the
-refs. There is no approval step; FR11 gated the content at commit time.
+looks at. One direction is repaired rather than reported: a `live` strictly
+behind a HEAD that contains it is a ref that failed to keep up — the store rests
+detached *at* `live`, and every commit in HEAD reached it through a gate — so
+the preflight advances it with a local ff-checked `push . HEAD:live`, says which
+store it moved, and publishes. Asking for that one command back would be a
+round-trip with nothing to decide. Any other drift is reported with both shas
+and the remedy for its direction and nothing moves: which ref was intended is
+not recoverable from the refs. There is no approval step; FR11 gated the content
+at commit time.
 
 ## Decisions — D16, D20, D46
 
