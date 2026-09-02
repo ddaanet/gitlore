@@ -1,7 +1,3 @@
 ## Current task
 
-Cutting the release that carries the tier `live`-ahead adoption to installed
-repos, in the order the user named: update the vendored `plugin-dev` subtree,
-run the preflight, publish memory with `/gitlore:push`, then `just release`.
-The subtree update pins a `dist-vX.Y.Z` tag — never `main`, and never the bare
-source tag, whose root tree is the toolkit's own working environment.
+Analysing how memory facts actually reach sessions, over every session transcript under `~/.claude/projects/-Users-david-code-*` (main sessions and `*/subagents/`). The first pass counted `Read` tool calls on `memory/` fact files and classified each as spontaneous (a `Skill(gitlore:recall)` call earlier in the same user turn), manual (the user's prompt names recall or the file), or active (any other model-issued Read), then ranked files by reads: top 7, and the never-read set. It is to be rerun with native recall accounted for — the memory fact `ddaanet/cc-native-memory-recall.md` states its shape and gate — and with the Bash-side reads (`cat`/`sed` of a memory file, ~200 calls) folded in rather than left as a residual.

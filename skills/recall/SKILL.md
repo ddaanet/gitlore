@@ -5,12 +5,6 @@ description: Fetch specific memory bodies into context on demand. Use when a too
 
 # Active recall
 
-Claude Code's own recall runs one classifier pass against the user's *prompt*,
-returns at most five files, and is told not to re-select later in the
-conversation. A fact whose trigger appears **mid-task** — a string in a tool
-result, a flag in a file you just opened — therefore never arrives on its own.
-This skill is how you go get it.
-
 ## 1. Decide from the index you already hold — no tool calls
 
 `memory/MEMORY.md` loaded at session start and is in your context now. **Do not
