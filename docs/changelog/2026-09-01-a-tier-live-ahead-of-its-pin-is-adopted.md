@@ -32,6 +32,19 @@ pins `HEAD` back while `live` keeps what was approved. Nothing reports it:
 `live` is invisible to the take's ancestry test and to SessionStart's, both of
 which read `HEAD`.
 
+What the unreported state does next is measured in the `ddaanet` tier's
+own history. A consumer's carrier stood at a tier tip four commits past the
+block its root index held, with nothing having adopted those commits up. Its
+next edit to one root line ran the down projection, which wrote root's whole
+block over the carrier and committed the result as that one-line change: the
+tier commit also stripped `unbound variable`, `--git-path` and `just --list`
+from three lines it had no reason to touch, reading afterwards as an upstream
+trim. The files' frontmatter stayed intact, since the authoring sync (D38)
+keys on the lines root changed, so the regression travelled as an index whose
+hooks no longer matched their descriptions — and the repo that next merged it
+watched the same sync push the shortened hooks onto its files. Adopting before
+the down pass runs is what closes it.
+
 So the state is an unadopted take, and neither ref may be moved onto the
 other: rewinding `live` discards approved commits, and moving `HEAD` alone
 strands the store. `gitlore_adopt_advanced_live` performs the
