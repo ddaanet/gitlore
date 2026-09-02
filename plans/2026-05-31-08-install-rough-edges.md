@@ -134,8 +134,7 @@ git config gitlore.hooksDir "${plugin_root}/scripts/git-hooks"
 
 - [x] **Step 5: Run test to verify it passes**
 
-Run: `bats tests/install_run.bats -f "self-locates"`
-Expected: PASS.
+Run: `bats tests/install_run.bats -f "self-locates"` Expected: PASS.
 
 - [x] **Step 6: Run the full install suites to check no regression**
 
@@ -178,8 +177,8 @@ Add to `tests/install_run.bats`:
 
 - [x] **Step 2: Run test to verify it fails**
 
-Run: `bats tests/install_run.bats -f "stray blank line"`
-Expected: FAIL — `! grep -qxE ''` fails because a blank line is present.
+Run: `bats tests/install_run.bats -f "stray blank line"` Expected: FAIL —
+`! grep -qxE ''` fails because a blank line is present.
 
 - [x] **Step 3: Fix the append**
 
@@ -212,8 +211,7 @@ fi
 
 - [x] **Step 4: Run test to verify it passes**
 
-Run: `bats tests/install_run.bats -f "stray blank line"`
-Expected: PASS.
+Run: `bats tests/install_run.bats -f "stray blank line"` Expected: PASS.
 
 - [x] **Step 5: Commit**
 
@@ -301,8 +299,7 @@ EOF
 
 - [x] **Step 4: Run test to verify it passes**
 
-Run: `bats tests/emit_wrappers.bats -f "GC'd"`
-Expected: PASS.
+Run: `bats tests/emit_wrappers.bats -f "GC'd"` Expected: PASS.
 
 - [x] **Step 5: Run the whole wrapper suite (idempotency test compares wrapper
       bytes)**
@@ -357,8 +354,8 @@ Add to `tests/lib_util.bats`:
 
 - [x] **Step 2: Run test to verify it fails**
 
-Run: `bats tests/lib_util.bats -f "probe_writable"`
-Expected: FAIL — `gitlore_probe_writable: command not found`.
+Run: `bats tests/lib_util.bats -f "probe_writable"` Expected: FAIL —
+`gitlore_probe_writable: command not found`.
 
 - [x] **Step 3: Implement the probe helper**
 
@@ -380,8 +377,7 @@ gitlore_probe_writable() {
 
 - [x] **Step 4: Run test to verify it passes**
 
-Run: `bats tests/lib_util.bats -f "probe_writable"`
-Expected: PASS.
+Run: `bats tests/lib_util.bats -f "probe_writable"` Expected: PASS.
 
 - [x] **Step 5: Write the failing test for run.sh's loud failure**
 
@@ -438,8 +434,7 @@ done
 
 - [x] **Step 8: Run test to verify it passes**
 
-Run: `bats tests/install_run.bats -f "paste-able"`
-Expected: PASS.
+Run: `bats tests/install_run.bats -f "paste-able"` Expected: PASS.
 
 - [x] **Step 9: Add sandbox guidance to install.md**
 
@@ -525,8 +520,8 @@ Add to `tests/lib_util.bats`:
 
 - [x] **Step 2: Run tests to verify they fail**
 
-Run: `bats tests/lib_util.bats -f "remote_name"`
-Expected: FAIL — `gitlore_memory_remote_name: command not found`.
+Run: `bats tests/lib_util.bats -f "remote_name"` Expected: FAIL —
+`gitlore_memory_remote_name: command not found`.
 
 - [x] **Step 3: Implement the naming helper**
 
@@ -555,8 +550,7 @@ gitlore_memory_remote_name() {
 
 - [x] **Step 4: Run tests to verify they pass**
 
-Run: `bats tests/lib_util.bats -f "remote_name"`
-Expected: all PASS.
+Run: `bats tests/lib_util.bats -f "remote_name"` Expected: all PASS.
 
 - [x] **Step 5: Write the failing test for visibility**
 
@@ -572,8 +566,8 @@ Add to `tests/lib_util.bats`:
 
 - [x] **Step 6: Run test to verify it fails**
 
-Run: `bats tests/lib_util.bats -f "parent_visibility"`
-Expected: FAIL — `gitlore_parent_visibility: command not found`.
+Run: `bats tests/lib_util.bats -f "parent_visibility"` Expected: FAIL —
+`gitlore_parent_visibility: command not found`.
 
 - [x] **Step 7: Implement the visibility helper**
 
@@ -598,8 +592,7 @@ gitlore_parent_visibility() {
 
 - [x] **Step 8: Run test to verify it passes**
 
-Run: `bats tests/lib_util.bats -f "parent_visibility"`
-Expected: PASS.
+Run: `bats tests/lib_util.bats -f "parent_visibility"` Expected: PASS.
 
 - [x] **Step 9: Commit**
 
@@ -939,8 +932,7 @@ fi
 
 - [x] **Step 4: Run test to verify it passes**
 
-Run: `bats tests/install_remote.bats -f "public remote"`
-Expected: PASS.
+Run: `bats tests/install_remote.bats -f "public remote"` Expected: PASS.
 
 - [x] **Step 5: Run the remote suite to confirm no regression**
 

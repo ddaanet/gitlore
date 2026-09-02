@@ -317,8 +317,8 @@ EOF"
 
 - [x] **Step 2: Run the test to verify it fails**
 
-Run: `bats tests/commit_memory.bats`
-Expected: FAIL — every test errors (`commit-memory.sh` does not exist).
+Run: `bats tests/commit_memory.bats` Expected: FAIL — every test errors
+(`commit-memory.sh` does not exist).
 
 - [x] **Step 3: Implement `scripts/commit-memory.sh`**
 
@@ -387,13 +387,12 @@ exit $?
 
 - [x] **Step 4: Make it executable**
 
-Run: `chmod +x scripts/commit-memory.sh`
-Expected: no output; `test -x scripts/commit-memory.sh` succeeds.
+Run: `chmod +x scripts/commit-memory.sh` Expected: no output;
+`test -x scripts/commit-memory.sh` succeeds.
 
 - [x] **Step 5: Run the test to verify it passes**
 
-Run: `bats tests/commit_memory.bats`
-Expected: PASS — all 8 tests green.
+Run: `bats tests/commit_memory.bats` Expected: PASS — all 8 tests green.
 
 - [x] **Step 6: Lint the new script**
 
@@ -432,8 +431,8 @@ Immediately after the `hooksDir` assertion (line 37) add:
 
 - [x] **Step 2: Run it to verify it fails**
 
-Run: `bats tests/cc_hook_session_start.bats -f "sets hooksDir"`
-Expected: FAIL — `git config gitlore.commitCommand` is empty, assertion fails.
+Run: `bats tests/cc_hook_session_start.bats -f "sets hooksDir"` Expected: FAIL —
+`git config gitlore.commitCommand` is empty, assertion fails.
 
 - [x] **Step 3: Set the key in `session-start.sh`**
 
@@ -449,8 +448,8 @@ bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
 - [x] **Step 4: Run the session-start suite to verify it passes**
 
-Run: `bats tests/cc_hook_session_start.bats`
-Expected: PASS — all tests green, including the new key assertion.
+Run: `bats tests/cc_hook_session_start.bats` Expected: PASS — all tests green,
+including the new key assertion.
 
 - [x] **Step 5: Add the install-seed assertion (failing)**
 
@@ -470,8 +469,8 @@ first.)
 
 - [x] **Step 6: Run it to verify it fails**
 
-Run: `bats tests/install_run.bats`
-Expected: FAIL — the new `commitCommand` assertion fails (key unset by install).
+Run: `bats tests/install_run.bats` Expected: FAIL — the new `commitCommand`
+assertion fails (key unset by install).
 
 - [x] **Step 7: Seed the key in `write-settings.sh`**
 
@@ -486,8 +485,8 @@ git config gitlore.commitCommand "${plugin_root}/scripts/commit-memory.sh"
 
 - [x] **Step 8: Run the install suite to verify it passes**
 
-Run: `bats tests/install_run.bats`
-Expected: PASS — install now seeds `gitlore.commitCommand`.
+Run: `bats tests/install_run.bats` Expected: PASS — install now seeds
+`gitlore.commitCommand`.
 
 - [x] **Step 9: Run the full suite**
 

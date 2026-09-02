@@ -176,8 +176,8 @@ teardown() { teardown_tmp_repo; }
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `bats tests/index_sync.bats`
-Expected: FAIL — `index-sync.sh` does not exist / functions not found.
+Run: `bats tests/index_sync.bats` Expected: FAIL — `index-sync.sh` does not
+exist / functions not found.
 
 - [ ] **Step 3: Write `scripts/lib/index-sync.sh`**
 
@@ -240,13 +240,11 @@ bats line.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `bats tests/index_sync.bats`
-Expected: PASS (6 tests).
+Run: `bats tests/index_sync.bats` Expected: PASS (6 tests).
 
 - [ ] **Step 6: Lint**
 
-Run: `scripts/lint-shell.sh`
-Expected: exit 0 (new lib is clean).
+Run: `scripts/lint-shell.sh` Expected: exit 0 (new lib is clean).
 
 - [ ] **Step 7: Commit**
 
@@ -306,8 +304,8 @@ hook resolves it the same way, so producer and checker agree.)
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `bats tests/index_sync.bats -f "pre:"`
-Expected: FAIL — `index-sync-pre.sh` missing.
+Run: `bats tests/index_sync.bats -f "pre:"` Expected: FAIL — `index-sync-pre.sh`
+missing.
 
 - [ ] **Step 3: Write `scripts/cc-hooks/index-sync-pre.sh`**
 
@@ -343,13 +341,11 @@ exit 0
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `bats tests/index_sync.bats -f "pre:"`
-Expected: PASS (2 tests).
+Run: `bats tests/index_sync.bats -f "pre:"` Expected: PASS (2 tests).
 
 - [ ] **Step 5: Lint**
 
-Run: `scripts/lint-shell.sh`
-Expected: exit 0.
+Run: `scripts/lint-shell.sh` Expected: exit 0.
 
 - [ ] **Step 6: Commit**
 
@@ -430,8 +426,8 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `bats tests/index_sync.bats -f "post:"`
-Expected: FAIL — `index-sync-post.sh` missing.
+Run: `bats tests/index_sync.bats -f "post:"` Expected: FAIL —
+`index-sync-post.sh` missing.
 
 - [ ] **Step 3: Write `scripts/cc-hooks/index-sync-post.sh`**
 
@@ -479,13 +475,11 @@ exit 0
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `bats tests/index_sync.bats -f "post:"`
-Expected: PASS (3 tests).
+Run: `bats tests/index_sync.bats -f "post:"` Expected: PASS (3 tests).
 
 - [ ] **Step 5: Lint**
 
-Run: `scripts/lint-shell.sh`
-Expected: exit 0.
+Run: `scripts/lint-shell.sh` Expected: exit 0.
 
 - [ ] **Step 6: Commit**
 
@@ -596,8 +590,8 @@ Add a top-level `PreToolUse` array and a third entry in `PostToolUse`. Result:
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `bats tests/index_sync.bats`
-Expected: PASS (all tests — 6 lib + 2 pre + 3 post + 2 e2e = 13).
+Run: `bats tests/index_sync.bats` Expected: PASS (all tests — 6 lib + 2 pre + 3
+post + 2 e2e = 13).
 
 - [ ] **Step 5: Full suite + lint (no regressions)**
 
@@ -646,10 +640,10 @@ Keying by destination (not position) makes reordering and grouped mid-list
 insertion no-ops — required, since the eval found ~25% of index insertions land
 mid-list, grouped by type prefix. Fill-if-empty at add-time is a no-op on real
 creations (write-order: the file carries its authored `description:` before the
-index line is added), so "don't clobber a fresh creation" falls out with **no
-file-added check**. A deliberate hook *edit* still overwrites — the intended
-propagation of the canonical side. REJECTED by the eval: bidirectional sync,
-slug-detection (0/136 native descriptions are slug-like), and the
+index line is added), so "don't clobber a fresh creation" falls out with
+**no file-added check**. A deliberate hook *edit* still overwrites — the
+intended propagation of the canonical side. REJECTED by the eval: bidirectional
+sync, slug-detection (0/136 native descriptions are slug-like), and the
 hook-authors-index-via-`additionalContext` reframe (a new line is not reliably
 end-appended).
 

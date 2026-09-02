@@ -11,14 +11,14 @@ Newest first.
   commit the memory store records and composition then refused; a tier whose
   `live` ran ahead is now adopted by the take — working tree, root index and
   recorded pointer together — the gate branches on store kind, and the
-  branch-model rationale that called tier gitdirs shared across memory
-  worktrees is corrected against git 2.47.3
+  branch-model rationale that called tier gitdirs shared across memory worktrees
+  is corrected against git 2.47.3
 - [2026-09-01 — A local `live` stranded behind HEAD is advanced, not reported](changelog/2026-09-01-a-stranded-live-is-advanced.md)
   — a failed 0.5.0 merge preparation left HEAD at `origin/live` with the ref a
   push sends still behind, and `/gitlore:merge` read HEAD alone and called the
-  store finished; a take and the publish preflight now advance a
-  strictly-behind `live` by a local ff-checked push, ahead of the report either
-  would have made, and a genuine HEAD/`live` divergence is reported once
+  store finished; a take and the publish preflight now advance a strictly-behind
+  `live` by a local ff-checked push, ahead of the report either would have made,
+  and a genuine HEAD/`live` divergence is reported once
 - [2026-09-01 — Merge commits are canned and unprompted, and explicit takes leave a clean store](changelog/2026-09-01-merge-commits-canned-takes-commit-bookkeeping.md)
   — both parents of every gitlore merge already passed an approval gate, so
   merges stop prompting and carry canned messages, takes commit their own
@@ -29,10 +29,10 @@ Newest first.
   carries a directive in text gitlore already emits, and the gate's rides the
   shared approval clause so the `handoff` consumer gets it too
 - [2026-08-28 — Authoring guidance and index curation ship as plugin surface, not memories](changelog/2026-08-28-authoring-guidance-and-curation-are-plugin-surface.md)
-  — the two largest lines in the shared tier were rules for writing memories
-  and trimming the index, owned by nothing that fires at those moments; they
-  are now the `memory-writing` skill and the `/gitlore:index-audit` command,
-  with a write-time hook and an index-size trigger both rejected
+  — the two largest lines in the shared tier were rules for writing memories and
+  trimming the index, owned by nothing that fires at those moments; they are now
+  the `memory-writing` skill and the `/gitlore:index-audit` command, with a
+  write-time hook and an index-size trigger both rejected
 - [2026-08-28 — A release push refused by a memory merge is resolved and re-pushed, never amended](changelog/2026-08-28-a-refused-release-push-is-resolved-not-amended.md)
   — a release commit's gitlink is always an ancestor of memory's `live`, so the
   first successful push publishes it and no `commit --amend` + `tag -f` is

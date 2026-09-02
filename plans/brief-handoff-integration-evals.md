@@ -42,11 +42,11 @@ entirely gitlore's — which commit ends up carrying the memory.
 - **handoff lives at `/Users/david/code/handoff`.** Its skills invoke
   `handoff-checkpoint` **by bare name from PATH** — Claude Code puts every
   enabled plugin's `bin/` on PATH. This fixture bypasses plugin installation
-  (copies skills/commands into `.claude/`, resolves hooks into
-  `settings.json`), so PATH will not carry it and the call dies with
-  `command not found`. Solve before anything else: either export
-  `PATH="$HANDOFF_ROOT/bin:$PATH"` from the runner, or install handoff as a
-  real plugin in the fixture. This is the single largest unknown in the task.
+  (copies skills/commands into `.claude/`, resolves hooks into `settings.json`),
+  so PATH will not carry it and the call dies with `command not found`. Solve
+  before anything else: either export `PATH="$HANDOFF_ROOT/bin:$PATH"` from the
+  runner, or install handoff as a real plugin in the fixture. This is the single
+  largest unknown in the task.
 - **`lib/setup.sh` wires exactly one plugin** — it resolves `$PLUGIN_ROOT` from
   gitlore's own `hooks/hooks.json` and copies gitlore's skills and commands. It
   needs to become two-plugin aware. Keep the derived-never-hand-listed rule for
@@ -83,8 +83,8 @@ entirely gitlore's — which commit ends up carrying the memory.
   real decisions are made deep in loaded sessions. Retroactive scraping of real
   session transcripts is the better instrument for that half, and it costs
   nothing.
-- **A payload-capturing stub `handoff-checkpoint` earlier on PATH.**
-  Unnecessary — `transcript.jsonl` already carries the tool_use verbatim.
+- **A payload-capturing stub `handoff-checkpoint` earlier on PATH.** Unnecessary
+  — `transcript.jsonl` already carries the tool_use verbatim.
 - **Having the checkpoint log its judgement fields.** A strict subset of what
   the transcript already holds, not retroactive, and it discards the context the
   judgement was made in.

@@ -352,8 +352,7 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 5: Run the smoke test.**
 
-Run: `bats tests/smoke.bats`
-Expected: 2 passing tests.
+Run: `bats tests/smoke.bats` Expected: 2 passing tests.
 
 - [x] **Step 6: Commit.**
 
@@ -428,8 +427,8 @@ EOF
 
 - [x] **Step 2: Run tests to see them fail.**
 
-Run: `bats tests/lib_util.bats`
-Expected: 5 failures, "gitlore_memory_path: command not found" or similar.
+Run: `bats tests/lib_util.bats` Expected: 5 failures, "gitlore_memory_path:
+command not found" or similar.
 
 - [x] **Step 3: Implement `scripts/lib/util.sh`.**
 
@@ -509,8 +508,7 @@ gitlore_commit_msg_freshness() {
 
 - [x] **Step 4: Run tests to verify they pass.**
 
-Run: `bats tests/lib_util.bats`
-Expected: 5 passing.
+Run: `bats tests/lib_util.bats` Expected: 5 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -552,8 +550,7 @@ load helpers/setup
 
 - [x] **Step 2: Run and confirm failure.**
 
-Run: `bats tests/lib_log.bats`
-Expected: 2 failures.
+Run: `bats tests/lib_log.bats` Expected: 2 failures.
 
 - [x] **Step 3: Implement.**
 
@@ -579,8 +576,7 @@ gitlore_say_for_agent_or_user() {
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/lib_log.bats`
-Expected: 2 passing.
+Run: `bats tests/lib_log.bats` Expected: 2 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -662,8 +658,7 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run and confirm failures.**
 
-Run: `bats tests/hook_manager_detect.bats`
-Expected: 6 failures.
+Run: `bats tests/hook_manager_detect.bats` Expected: 6 failures.
 
 - [x] **Step 3: Implement.**
 
@@ -701,8 +696,7 @@ esac
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/hook_manager_detect.bats`
-Expected: 6 passing.
+Run: `bats tests/hook_manager_detect.bats` Expected: 6 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -771,8 +765,7 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run and confirm failures.**
 
-Run: `bats tests/hook_manager_wire.bats`
-Expected: 3 failures.
+Run: `bats tests/hook_manager_wire.bats` Expected: 3 failures.
 
 - [x] **Step 3: Implement.**
 
@@ -821,8 +814,7 @@ printf 'lefthook install\n' > .claude/gitlore-hook-setup
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/hook_manager_wire.bats`
-Expected: 3 passing.
+Run: `bats tests/hook_manager_wire.bats` Expected: 3 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -913,8 +905,7 @@ printf 'npx husky\n' > .claude/gitlore-hook-setup
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/hook_manager_wire.bats`
-Expected: all (7) passing.
+Run: `bats tests/hook_manager_wire.bats` Expected: all (7) passing.
 
 - [x] **Step 5: Commit.**
 
@@ -987,8 +978,7 @@ EOF
 
 - [x] **Step 2: Run; confirm failures.**
 
-Run: `bats tests/hook_manager_wire.bats`
-Expected: 4 new failures.
+Run: `bats tests/hook_manager_wire.bats` Expected: 4 new failures.
 
 - [x] **Step 3: Implement wire-overcommit.**
 
@@ -1080,8 +1070,7 @@ EOF
 
 - [x] **Step 6: Verify all four passing.**
 
-Run: `bats tests/hook_manager_wire.bats`
-Expected: 11 passing.
+Run: `bats tests/hook_manager_wire.bats` Expected: 11 passing.
 
 - [x] **Step 7: Commit.**
 
@@ -1185,8 +1174,7 @@ write_wrapper pre-push
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/emit_wrappers.bats`
-Expected: 4 passing.
+Run: `bats tests/emit_wrappers.bats` Expected: 4 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -1319,8 +1307,7 @@ cp scripts/git-hooks/pre-commit scripts/git-hooks/pre-push
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/cc_hook_session_start.bats`
-Expected: 3 passing.
+Run: `bats tests/cc_hook_session_start.bats` Expected: 3 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -1462,8 +1449,8 @@ fi
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/cc_hook_session_start.bats`
-Expected: 7 passing (3 from Task 10 + 4 new).
+Run: `bats tests/cc_hook_session_start.bats` Expected: 7 passing (3 from Task
+10 + 4 new).
 
 - [x] **Step 5: Commit.**
 
@@ -1546,8 +1533,7 @@ fi
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/cc_hook_session_start.bats`
-Expected: 10 passing.
+Run: `bats tests/cc_hook_session_start.bats` Expected: 10 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -1909,8 +1895,7 @@ git config gitlore.hooksDir "${CLAUDE_PLUGIN_ROOT}/scripts/git-hooks"
 
 - [x] **Step 8: Verify.**
 
-Run: `bats tests/install_run.bats`
-Expected: 6 passing.
+Run: `bats tests/install_run.bats` Expected: 6 passing.
 
 - [x] **Step 9: Commit.**
 
@@ -2050,8 +2035,7 @@ EOF
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/cc_hook_post_tool_use.bats`
-Expected: 5 passing.
+Run: `bats tests/cc_hook_post_tool_use.bats` Expected: 5 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -2210,8 +2194,7 @@ exit 0
 
 - [x] **Step 4: Verify.**
 
-Run: `bats tests/git_hook_pre_commit.bats`
-Expected: 5 passing.
+Run: `bats tests/git_hook_pre_commit.bats` Expected: 5 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -2278,8 +2261,7 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run.**
 
-Run: `bats tests/integration_happy_path.bats`
-Expected: 1 passing.
+Run: `bats tests/integration_happy_path.bats` Expected: 1 passing.
 
 - [x] **Step 3: Commit.**
 
@@ -2342,8 +2324,7 @@ test-integration:
 
 - [x] **Step 3: Run the full suite.**
 
-Run: `make test`
-Expected: all tests pass.
+Run: `make test` Expected: all tests pass.
 
 - [x] **Step 4: Commit.**
 

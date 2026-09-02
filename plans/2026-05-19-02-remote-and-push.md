@@ -505,8 +505,7 @@ exit 0
 
 - [x] **Step 4: Run happy-path; confirm green.**
 
-Run: `bats tests/pre_push_hook.bats`
-Expected: 1 passing.
+Run: `bats tests/pre_push_hook.bats` Expected: 1 passing.
 
 - [x] **Step 5: Append failure-case tests.**
 
@@ -851,13 +850,12 @@ Final ordering inside `run.sh`:
 
 - [x] **Step 7: Run happy-path tests; confirm green.**
 
-Run: `bats tests/install_remote.bats`
-Expected: 3 passing.
+Run: `bats tests/install_remote.bats` Expected: 3 passing.
 
 - [x] **Step 8: Verify Plan 01's install tests still pass.**
 
-Run: `bats tests/install_run.bats`
-Expected: all of Plan 01's install tests still pass.
+Run: `bats tests/install_run.bats` Expected: all of Plan 01's install tests
+still pass.
 
 If any fail because they didn't set up the gh mock, modify
 `tests/install_run.bats` to `load helpers/gh-mock` and call `install_gh_mock` +
@@ -905,8 +903,7 @@ Append to `tests/install_remote.bats`:
 
 - [x] **Step 10: Run; confirm all green.**
 
-Run: `bats tests/install_remote.bats`
-Expected: 7 passing.
+Run: `bats tests/install_remote.bats` Expected: 7 passing.
 
 - [x] **Step 11: Commit.**
 
@@ -1076,8 +1073,7 @@ exit 0
 
 - [x] **Step 3: Run; confirm green.**
 
-Run: `bats tests/resolve.bats`
-Expected: 5 passing.
+Run: `bats tests/resolve.bats` Expected: 5 passing.
 
 - [x] **Step 4: Write the CC command file.**
 

@@ -75,11 +75,11 @@ The pass refuses as a whole, leaves every index untouched, and reports on
 
 1. the composed result would carry a **duplicate** pointer path;
 2. the manifest **lists a tier that is not mounted** (stale or mistyped entry);
-3. a root bullet's path has a `/` whose first component names **no mounted
-   tier** — an unattributable prefix. Unlike a mounted-but-inactive tier (whose
-   block is dropped because the lines survive in its carrier), this line has no
-   carrier to survive in, so dropping it would be data loss. It is a leftover
-   from a removed tier and needs a human;
+3. a root bullet's path has a `/` whose first component names
+   **no mounted tier** — an unattributable prefix. Unlike a mounted-but-inactive
+   tier (whose block is dropped because the lines survive in its carrier), this
+   line has no carrier to survive in, so dropping it would be data loss. It is a
+   leftover from a removed tier and needs a human;
 4. a non-blank **non-bullet line sits between** the first and last bullet of an
    index it would rewrite — the layout rule would relocate it and lose its
    position.

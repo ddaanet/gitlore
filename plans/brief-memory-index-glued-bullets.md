@@ -32,9 +32,9 @@ where it is far less visible.
 (`scripts/lib/index-compose.sh:213`) tests duplicate pointer paths and
 interleaved non-bullet lines. A glued line passes both: `gitlore_bullet_path`
 matches the first `](…)`, so the line parses as a valid bullet for path 1 and
-path 2 simply *disappears* from every parse of the index. That is the
-data-loss path — with path 2 absent from `ours.paths`, the next compose reads
-it as a root-side delete and drops it from the carrier.
+path 2 simply *disappears* from every parse of the index. That is the data-loss
+path — with path 2 absent from `ours.paths`, the next compose reads it as a
+root-side delete and drops it from the carrier.
 
 **Origin not established** — *settled by the 2026-08-04 follow-up below: the
 editing agent's own `Edit` call, reproduced on a fixture.* Ruled out:
@@ -52,10 +52,10 @@ already-glued line splices new content mid-line and glues again.
 
 ### Requests
 
-1. **Add a glued-bullet rule** to `gitlore_compose_check_index`: a line
-   carrying a second `- [` after its first `](…) — `. It is the sibling of the
-   two rules already there, and it is what makes the silent path-2 drop
-   impossible rather than merely unlikely.
+1. **Add a glued-bullet rule** to `gitlore_compose_check_index`: a line carrying
+   a second `- [` after its first `](…) — `. It is the sibling of the two rules
+   already there, and it is what makes the silent path-2 drop impossible rather
+   than merely unlikely.
 2. **Consider refusing to propagate** a hook containing `](` in
    `index-sync-post.sh`. A description that embeds a markdown link to a memory
    path is almost certainly a glue artifact, and the sync is where it escapes
@@ -73,20 +73,20 @@ already-glued line splices new content mid-line and glues again.
 - Investigation was read-only against `/Users/david/code/gitlore`; the
   reproduction ran against a copy of the memory store under `$TMPDIR`.
 - The reporting repo is `handoff`, whose only coupling to gitlore is the
-  `gitlore.memoryApprovalClauseFile` config key and the two `.claude/`
-  IPC filenames — nothing here depends on gitlore internals.
+  `gitlore.memoryApprovalClauseFile` config key and the two `.claude/` IPC
+  filenames — nothing here depends on gitlore internals.
 
 ## Follow-up: origin established
 
-2026-08-04 — second occurrence, reported from `/Users/david/code/micro`
-(gitlore 0.4.5 installed cache). Same signature, independent incident.
+2026-08-04 — second occurrence, reported from `/Users/david/code/micro` (gitlore
+0.4.5 installed cache). Same signature, independent incident.
 
 ### The origin is a Claude Code `Edit` defect
 
-Deleting an index bullet by passing `old_string` as a **leading newline plus
-the bullet text** with an **empty `new_string`** consumes the separator on
-*both* sides of the match, welding the surrounding bullets into one line.
-Reproduced directly on a `A\nX\nB\n` fixture:
+Deleting an index bullet by passing `old_string` as a
+**leading newline plus the bullet text** with an **empty `new_string`** consumes
+the separator on *both* sides of the match, welding the surrounding bullets into
+one line. Reproduced directly on a `A\nX\nB\n` fixture:
 
 | `old_string` | `new_string` | result | |
 | --- | --- | --- | --- |
@@ -133,14 +133,14 @@ hook has no legitimate use for a bare markdown hyperlink — the entry already
 links its own file — so the pattern is safe by policy rather than by parsing.
 Residual, accepted: a hook that backticks an index-format example would be split
 spuriously. That is visible and repairable, and no such hook exists today —
-checked across both live indexes, 102 entries, zero lines carrying a second
-`](` or a second `- [` after the separator.
+checked across both live indexes, 102 entries, zero lines carrying a second `](`
+or a second `- [` after the separator.
 
-Rejected on the way there: a backreference form such as
-`` [^`]+|(`+).+\1 `` for the middle segment. awk has no backreferences at all,
-POSIX leaves them undefined in EREs, and the balanced-span version needs a lazy
-quantifier that is PCRE-only — so it would force the check out of the awk idiom
-the rest of the index parsing uses, to buy a guarantee the policy already gives.
+Rejected on the way there: a backreference form such as `` [^`]+|(`+).+\1 `` for
+the middle segment. awk has no backreferences at all, POSIX leaves them
+undefined in EREs, and the balanced-span version needs a lazy quantifier that is
+PCRE-only — so it would force the check out of the awk idiom the rest of the
+index parsing uses, to buy a guarantee the policy already gives.
 
 **Request 2 (refuse to propagate a hook containing `](`) — confirmed by this
 incident.** The sync wrote the two-bullet blob into

@@ -1,7 +1,7 @@
 # Operationalizing evals
 
-Sections 7 and 10 of the [evaluation best-practices
-reference](evals-best-practices.md).
+Sections 7 and 10 of the
+[evaluation best-practices reference](evals-best-practices.md).
 
 ---
 

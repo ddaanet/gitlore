@@ -59,8 +59,8 @@ bound for project memory.
 
 **Take without publishing**
 
-1. The user runs `/gitlore:merge`, or a session start named a tier whose
-   remote is ahead.
+1. The user runs `/gitlore:merge`, or a session start named a tier whose remote
+   is ahead.
 2. The skill runs `merge-memory.sh` through the `gitlore.mergeCommand` key.
 3. Memory's own remote is taken first, then each tier's — the mirror of the
    publish order (D49 in [merge-and-resolve.md](merge-and-resolve.md)).
@@ -75,8 +75,7 @@ bound for project memory.
 Most divergence is detected while the agent is attempting commit or push. The
 agent sees the hook's exit-1 stderr (addressed to it via the `$CLAUDECODE`
 branch) and invokes `/gitlore:resolve` inline without user intervention; the
-skill's five steps are in
-[merge-and-resolve.md](merge-and-resolve.md). It ends
+skill's five steps are in [merge-and-resolve.md](merge-and-resolve.md). It ends
 by advancing `live` — and, for a remote-flavored merge, `origin/live` — leaving
 HEAD detached at the new `live`, refreshing the parent's context with the
 incoming diff (or directing the user to `/clear` when resolve ran at session

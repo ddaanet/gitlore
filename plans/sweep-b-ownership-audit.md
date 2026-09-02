@@ -1,8 +1,8 @@
 # Sweep B — ownership audit of the ddaanet tier
 
-Classification only. Nothing was edited, and no retirement was executed.
-Scope: the 100 fact files in `memory/ddaanet/` (`MEMORY.md` and
-`shared-claude.md` excluded). The plan said 99; the tier has grown by one.
+Classification only. Nothing was edited, and no retirement was executed. Scope:
+the 100 fact files in `memory/ddaanet/` (`MEMORY.md` and `shared-claude.md`
+excluded). The plan said 99; the tier has grown by one.
 
 ## The finding that decides most rows
 
@@ -103,9 +103,9 @@ disqualifies.
 `jsonl-reader-type-guard`, `jsonl-sidechain-segregation`,
 `jsonl-slash-command-shape`, `named-dispatch-drops-frontmatter-hooks`,
 `plugin-recurse-clone`, `posttooluse-print-mode`, `sandbox-effects`,
-`skill-bundled-scripts`,
-`session-jsonl-schema`, `session-title-customtitle`, `sessionstart-resume-cwd`,
-`stale-plugin-code`, `submodule-url-arrives-rewritten`, `tmux-test-isolation`,
+`skill-bundled-scripts`, `session-jsonl-schema`, `session-title-customtitle`,
+`sessionstart-resume-cwd`, `stale-plugin-code`,
+`submodule-url-arrives-rewritten`, `tmux-test-isolation`,
 `todo-tool-flag-gated`, `token-counting`, `transcripts-are-ground-truth`,
 `verify-restart-before-structural-diagnosis`.
 
@@ -136,13 +136,13 @@ keep-no-owner. Its own body says the passes it contradicts were
 | `genuine-red-not-missing-sut` | `test-driven-development/SKILL.md:122,128` — "Test fails (not errors)", "Test errors? Fix error, re-run until it fails correctly" | the stub-then-assert technique, "green-at-first is not evidence", the inert-stub batch reading absence as wrongness, one contract per interface line |
 
 **Keep — no owner: judgement facts, checked against `shared-claude.md` and the
-superpowers/plugin-dev skills and found absent.**
-Term sweep (`singleton`, `impossible`, `provisional`, `corpus`, `vestigial`,
-`optional`, `duplication`, `drift direction`, `liveness`, `speculative`,
-`narration`, `em-dash`, `semicolon`, `outside-in`, `end-to-end`, `stub`,
-`line count`, `lines of code`, `full implementation`, `previous version`,
-`contract`) returned **0 hits** in `shared-claude.md`, `writing-plans`,
-`brainstorming`, and — for the last group — anywhere in `writing-skills`.
+superpowers/plugin-dev skills and found absent.** Term sweep (`singleton`,
+`impossible`, `provisional`, `corpus`, `vestigial`, `optional`, `duplication`,
+`drift direction`, `liveness`, `speculative`, `narration`, `em-dash`,
+`semicolon`, `outside-in`, `end-to-end`, `stub`, `line count`, `lines of code`,
+`full implementation`, `previous version`, `contract`) returned **0 hits** in
+`shared-claude.md`, `writing-plans`, `brainstorming`, and — for the last group —
+anywhere in `writing-skills`.
 
 `bash-prolog-common-foundations`, `bundle-memory-with-source`,
 `design-doc-writing`, `directive-states-acts`, `dont-bake-in-guarantees`,
@@ -166,15 +166,15 @@ Term sweep (`singleton`, `impossible`, `provisional`, `corpus`, `vestigial`,
 
 `plan-length-matches-work` and `test-the-invocation-path` are each also stated
 in gitlore's `CLAUDE.md` (lines 14 and 51). Both keep their file: each has a
-real lookup moment — before writing a plan doc, and when building a test
-harness — and the bodies carry incident detail the one-line rule does not.
+real lookup moment — before writing a plan doc, and when building a test harness
+— and the bodies carry incident detail the one-line rule does not.
 
 **Keep — gitlore/ddaanet product facts; the only coverage is project-local.**
 `gitlore-tier-index-budget` (design.md:649 states gitlore's advisory 25600-byte
-budget but never the ~24.4KB CC loader cutoff — `grep -iE "24\.4|24985|loader|
-cutoff"` → 0 hits, and the cutoff is the fact's whole point),
-`gitlore-tier-merge-direction`, `index-compaction-triggers`, `memory-writing`,
-`tier-links-cross-a-boundary`, `tier-routing-plugin-shaped`,
+budget but never the ~24.4KB CC loader cutoff —
+`grep -iE "24\.4|24985|loader| cutoff"` → 0 hits, and the cutoff is the fact's
+whole point), `gitlore-tier-merge-direction`, `index-compaction-triggers`,
+`memory-writing`, `tier-links-cross-a-boundary`, `tier-routing-plugin-shaped`,
 `preflight-excludes-memory-submodule`.
 
 **Keep — other repos' conventions; no owner is readable from here.**
@@ -184,9 +184,9 @@ cutoff"` → 0 hits, and the cutoff is the fact's whole point),
 ## Proposals this audit produced, none executed
 
 - Push the two uncovered halves upstream into `shell-scripting:shell-gotchas`:
-  the `GIT_INDEX_FILE` save/restore around a staging `git add`, and the
-  `160000` gitlink symptom. That would make `git-hook-env-leak` and
+  the `GIT_INDEX_FILE` save/restore around a staging `git add`, and the `160000`
+  gitlink symptom. That would make `git-hook-env-leak` and
   `submodule-escape-to-parent` genuinely retirable later. `shell-scripting` is
   another repo — proposal only.
-- `no-stderr-suppression`'s rung 2 (capture-and-match) is the same shape of
-  gap, in the same skill.
+- `no-stderr-suppression`'s rung 2 (capture-and-match) is the same shape of gap,
+  in the same skill.

@@ -48,17 +48,17 @@
 ACTIVE tier in one edit, `rootbullets` for that tier becomes empty — which is
 exactly the signal the fix uses to mean "never spliced yet, preserve the
 carrier." So a full clear-in-one-shot doesn't propagate: the carrier survives
-intact, and the next splice-up resurrects all of it back into root. This is
-the mirror image of the bug just fixed, but narrower — it only bites clearing
-an entire tier's root block at once, not the realistic partial-dedup case
-(removing a few facts among several), which the fix already handles and
+intact, and the next splice-up resurrects all of it back into root. This is the
+mirror image of the bug just fixed, but narrower — it only bites clearing an
+entire tier's root block at once, not the realistic partial-dedup case (removing
+a few facts among several), which the fix already handles and
 `tests/index_compose.bats` "removing an active tier's root line drops it from
 the carrier in one pass" now covers.
 
 Root cause of why this can't be closed with the same trick: the merge function
-only sees CURRENT root/carrier content on each call — there's no persisted
-"was this tier previously synced" state, so "just activated, never spliced"
-and "was fully established, now emptied" look identical from inside
+only sees CURRENT root/carrier content on each call — there's no persisted "was
+this tier previously synced" state, so "just activated, never spliced" and "was
+fully established, now emptied" look identical from inside
 `gitlore_compose_tier_bullets`.
 
 Options to evaluate, not yet decided:

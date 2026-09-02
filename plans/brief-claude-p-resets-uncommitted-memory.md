@@ -85,9 +85,9 @@ the root before composition became a no-op.
 
 ### Constraints
 
-- The fix must not assume the parent can simply be committed first. The
-  approval gate deliberately holds memory committed-in-store and
-  uncommitted-in-parent; that window is the product, not a mistake.
+- The fix must not assume the parent can simply be committed first. The approval
+  gate deliberately holds memory committed-in-store and uncommitted-in-parent;
+  that window is the product, not a mistake.
 - `claude -p` is a legitimate and currently *recommended* verification tool —
   the `ddaanet` tier's own `subagent-skips-at-import-expansion` fact tells
   agents to verify `@` imports with `claude -p` rather than a subagent,

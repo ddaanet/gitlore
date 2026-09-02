@@ -1,15 +1,12 @@
-## Current task
+Piloting three sandbox-symptom detectors — `.git/index.lock`, phantom
+dotfiles, and sandboxed `claude -p` — to decide whether `sandbox-effects`
+knowledge moves out of always-loaded memory index lines and into hooks that
+fire only when the symptom appears. The plan is
+`plans/brief-sandbox-detector-pilot.md`, which carries the decisions, the
+rejected homes (`craft`, `prohibitions`), and the three pilot layers. Layer 1,
+the corpus replay over `~/.claude/projects`, is the next step and the one whose
+numbers decide whether a plugin gets created at all.
 
-Curating the ddaanet tier by trigger shape *and* body size, routing out the
-facts that outgrew the memory format. Three briefs are dropped, and dropping
-each ends this repo's part in that move: `../craft/brief-craft-seed.md` (5
-skills from 20 doc, plan, test, directive and tooling facts),
-`../shell-gotchas/plans/2026-09-02-absorb-bats-justfile-brief.md` (bats and
-justfile, plus reconciling four overlaps with the shipped shell-gotchas skill,
-one of them inverted), and `../plugin-craft/brief-plugin-craft-seed.md` (4
-skills from 8 hook, skill and loader facts).
-
-What remains here is the gitlore-side work on the tier itself — the merges and
-retirements the design-moment classification proposes, and splitting the
-oversized token-keyed facts whose bodies recall cannot reach — all pending my
-human partner's call.
+A second thread was left mid-flight: a subagent decompiling CC 2.1.258 to
+corroborate statically that no hook is dispatched on the `` !`cmd` ``
+slash-command expansion path, which a live probe already measured.

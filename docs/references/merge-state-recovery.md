@@ -2,10 +2,10 @@
 
 What a gate does when it meets a merge state file it did not just write: the
 marker-before-prepare discipline, and the classification of every shape a
-crashed or externally-disturbed merge can leave. The merge machinery that
-writes these states is in [merge-and-resolve.md](merge-and-resolve.md); this
-node is what you need when a store holds a `gitlore-merge-state` you have to
-reason about.
+crashed or externally-disturbed merge can leave. The merge machinery that writes
+these states is in [merge-and-resolve.md](merge-and-resolve.md); this node is
+what you need when a store holds a `gitlore-merge-state` you have to reason
+about.
 
 ---
 
@@ -23,10 +23,10 @@ from the merge the store already holds.
 
 With `MERGE_HEAD` present the store sits exactly where `gitlore_prepare_merge`
 leaves one, so the directive is the ordinary `continue-after-merge` and the
-merge is handed back to the sub-agent: **a prepared merge is always continued,
-never discarded.** By the time a gate meets it again the sub-agent may already
-have synthesized and staged an answer, and nothing in the store tells that apart
-from a merge no one has touched.
+merge is handed back to the sub-agent:
+**a prepared merge is always continued, never discarded.** By the time a gate
+meets it again the sub-agent may already have synthesized and staged an answer,
+and nothing in the store tells that apart from a merge no one has touched.
 
 `MERGE_HEAD` with *no* state file is then not gitlore's at all — a `git merge`
 run in the store by hand, or by an agent asked to merge one. It blocks and is
@@ -43,26 +43,24 @@ yields again. One extra cycle, against re-synthesizing every merge that outlives
 its session — and re-preparing on sight never avoided it either, since that too
 merely fixed the authority as of whenever the gate happened to run.
 
-Without `MERGE_HEAD`, the guard
-classifies from the pinned pending commit and the state file's own fields, and
-repairs. Three things produce that state, and they leave different remains. A
-preparation interrupted between its checkout and its merge leaves its marker,
-the pin, and HEAD on the authority, with nothing merged. A
-plain `git merge --abort` run in the store drops the pointers *and* resets the
-index, so nothing of the merge survives but gitlore's own files, while
-`git checkout` — including the no-op re-checkout `submodule update` runs — calls
-`remove_branch_state()`, which unlinks `MERGE_HEAD` and `MERGE_MSG` silently
-while leaving the staged result behind (a cleanly auto-merged index has no
-unmerged entry for checkout to refuse over).
+Without `MERGE_HEAD`, the guard classifies from the pinned pending commit and
+the state file's own fields, and repairs. Three things produce that state, and
+they leave different remains. A preparation interrupted between its checkout and
+its merge leaves its marker, the pin, and HEAD on the authority, with nothing
+merged. A plain `git merge --abort` run in the store drops the pointers *and*
+resets the index, so nothing of the merge survives but gitlore's own files,
+while `git checkout` — including the no-op re-checkout `submodule update` runs —
+calls `remove_branch_state()`, which unlinks `MERGE_HEAD` and `MERGE_MSG`
+silently while leaving the staged result behind (a cleanly auto-merged index has
+no unmerged entry for checkout to refuse over).
 
 - **A merge landed.** A merge commit taking the pinned pending commit as a
   parent other than its first *is* that merge, wherever HEAD sits now. Searched
   across refs **and** reflogs: a landed merge HEAD was moved off is reachable
-  from no ref, and `git fsck` counts the reflogs among its roots, so
-  "is there an unreachable commit" is silent on exactly this case. HEAD returns
-  to the merge when doing so can lose nothing — the merge already contains HEAD
-  and the tree is clean — and the commands to do it by hand are printed
-  otherwise.
+  from no ref, and `git fsck` counts the reflogs among its roots, so "is there
+  an unreachable commit" is silent on exactly this case. HEAD returns to the
+  merge when doing so can lose nothing — the merge already contains HEAD and the
+  tree is clean — and the commands to do it by hand are printed otherwise.
 - **A merge result is staged.** The index survives the checkout that took the
   pointers, and what it holds may be a synthesis the user has already approved,
   so `MERGE_HEAD` and `MERGE_MSG` are written back and the directive asks for

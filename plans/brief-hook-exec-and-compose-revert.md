@@ -35,28 +35,28 @@ exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"
 
 `exec` replaces the process, so the gitlore line is unreachable dead code.
 
-Symptom: commits succeed and the project gate runs, so everything looks
-healthy — but `gitlore_sync_memory_to_live` never runs. A parent commit was
-made recording the memory gitlink at its pre-migration SHA, with the entire
-migration left uncommitted in the submodule worktree. No warning at install
-time, and none at commit time.
+Symptom: commits succeed and the project gate runs, so everything looks healthy
+— but `gitlore_sync_memory_to_live` never runs. A parent commit was made
+recording the memory gitlink at its pre-migration SHA, with the entire migration
+left uncommitted in the submodule worktree. No warning at install time, and none
+at commit time.
 
 Masking factor: `pre-push` had no pre-existing content, so it was written
-gitlore-only and worked. Push-path behaviour therefore looked correct while
-the commit path was dead.
+gitlore-only and worked. Push-path behaviour therefore looked correct while the
+commit path was dead.
 
 Relevant: `.gitlore.precommitCommand` in `.claude/settings.json` is NOT run by
-the pre-commit hook. Per `scripts/cc-hooks/post-tool-use.sh` it is only a
-string prefix used to decide whether to emit the dirty-memory nudge. So the
-installer cannot assume it may replace an existing hook body — the project's
-own gate lives there and must survive.
+the pre-commit hook. Per `scripts/cc-hooks/post-tool-use.sh` it is only a string
+prefix used to decide whether to emit the dirty-memory nudge. So the installer
+cannot assume it may replace an existing hook body — the project's own gate
+lives there and must survive.
 
 Local unblock applied (not the proposed fix): drop `exec` from the first line
 and chain, `just precommit || exit 1`.
 
 Suggested upstream behaviour: detect that the existing hook body reaches an
-`exec` (or simply that gitlore's line is not the first executable statement)
-and refuse to install silently — warn, or interpose so both run.
+`exec` (or simply that gitlore's line is not the first executable statement) and
+refuse to install silently — warn, or interpose so both run.
 
 ### Defect 2 — composition reverts an incoming tier merge
 
@@ -81,12 +81,12 @@ upstream:      …FOUR classes (TUI-local/harness-action-queued/plugin-command-o
 ```
 
 The `PostToolBatch` notice states: "Composition moves or drops lines; it never
-changes a line's text." That is false in effect — substituting root's version
-of an existing line is a text change to the carrier.
+changes a line's text." That is false in effect — substituting root's version of
+an existing line is a text change to the carrier.
 
 It escaped history only by luck: the merge had already been committed and
-pushed, so the revert sat uncommitted in the worktree and was caught by
-diffing against `origin/live`.
+pushed, so the revert sat uncommitted in the worktree and was caught by diffing
+against `origin/live`.
 
 Collateral: root index was 25621 bytes, over the 25600 loader budget and
 therefore truncating. Upstream's compaction is what brought it to 24222. The
@@ -100,15 +100,15 @@ tooling prevents, detects, or warns.
 
 Suggested upstream behaviour: after a merge into a tier, treat the merged
 carrier as canonical for lines root already holds and propagate up; or at
-minimum refuse and report when composition would change the text of an
-existing carrier line, rather than doing it silently.
+minimum refuse and report when composition would change the text of an existing
+carrier line, rather than doing it silently.
 
 ### Constraints
 
 - The resolver reported healthy throughout defect 2. Neither defect surfaces
   through any existing gitlore check.
-- Reproduction requires a repo with a pre-existing `pre-commit` (defect 1) and
-  a tier that has advanced upstream since the local clone (defect 2).
+- Reproduction requires a repo with a pre-existing `pre-commit` (defect 1) and a
+  tier that has advanced upstream since the local clone (defect 2).
 
 ### Rejected approaches
 

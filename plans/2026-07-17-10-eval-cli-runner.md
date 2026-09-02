@@ -213,8 +213,8 @@ and swap the Python fake for a shell one:
 
 - [x] **Step 2: Run the tests to verify they fail**
 
-Run: `bats tests/evals/lib/runner.bats`
-Expected: the 8 new tests FAIL — `$RUNNER` does not exist yet.
+Run: `bats tests/evals/lib/runner.bats` Expected: the 8 new tests FAIL —
+`$RUNNER` does not exist yet.
 
 The reworked pre-flight test is the exception: it may pass for the wrong reason
 (`run-evals.sh` still probes `sdk-runner.py`, which is absent from `$fake_lib`,

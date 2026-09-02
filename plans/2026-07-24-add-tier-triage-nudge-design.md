@@ -128,11 +128,12 @@ capture); not worth it for a no-op case. Fire on any manifest touch.
 ### 3. Shared scope-resolution helper
 
 `session-start.sh:242-261` already walks `gitlore_active_tiers`, guards
-`[ -e "$tierpath/.git" ]`, reads `gitlore_get_frontmatter_description
-"$tierpath/MEMORY.md"`, and builds a `- <path>/ — <desc>` list. Factor this into
-a helper in `scripts/lib/` (e.g. `gitlore_active_tier_scopes MEMPATH` → the
-enumerated lines). Have both `session-start.sh` and the triage path call it. One
-definition of "active tiers and their scopes," tested once.
+`[ -e "$tierpath/.git" ]`, reads
+`gitlore_get_frontmatter_description "$tierpath/MEMORY.md"`, and builds a
+`- <path>/ — <desc>` list. Factor this into a helper in `scripts/lib/` (e.g.
+`gitlore_active_tier_scopes MEMPATH` → the enumerated lines). Have both
+`session-start.sh` and the triage path call it. One definition of "active tiers
+and their scopes," tested once.
 
 ### 4. Command doc
 

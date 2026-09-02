@@ -196,8 +196,8 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run test to verify it fails**
 
-Run: `bats tests/index_compose.bats`
-Expected: FAIL — `scripts/lib/index-compose.sh: No such file or directory`.
+Run: `bats tests/index_compose.bats` Expected: FAIL —
+`scripts/lib/index-compose.sh: No such file or directory`.
 
 - [x] **Step 3: Write minimal implementation**
 
@@ -303,8 +303,7 @@ gitlore_index_part() {
 
 - [x] **Step 4: Run test to verify it passes**
 
-Run: `bats tests/index_compose.bats`
-Expected: PASS, 10 tests.
+Run: `bats tests/index_compose.bats` Expected: PASS, 10 tests.
 
 - [x] **Step 5: Lint and commit**
 
@@ -454,8 +453,8 @@ Then append to `tests/index_compose.bats` (it must now also
 
 - [x] **Step 7: Run test to verify it fails**
 
-Run: `bats tests/index_compose.bats`
-Expected: FAIL — `gitlore_tier_of: command not found`.
+Run: `bats tests/index_compose.bats` Expected: FAIL —
+`gitlore_tier_of: command not found`.
 
 - [x] **Step 8: Write minimal implementation**
 
@@ -563,8 +562,7 @@ Note `${line//[[:space:]]/}` is bash-only (not POSIX sh) — the file is
 
 - [x] **Step 9: Run test to verify it passes**
 
-Run: `bats tests/index_compose.bats`
-Expected: PASS, 19 tests.
+Run: `bats tests/index_compose.bats` Expected: PASS, 19 tests.
 
 - [x] **Step 10: Lint and commit**
 
@@ -723,8 +721,8 @@ Append to `tests/index_compose.bats`:
 
 - [x] **Step 2: Run test to verify it fails**
 
-Run: `bats tests/index_compose.bats`
-Expected: FAIL — `gitlore_compose: command not found`.
+Run: `bats tests/index_compose.bats` Expected: FAIL —
+`gitlore_compose: command not found`.
 
 - [x] **Step 3: Write minimal implementation**
 
@@ -857,8 +855,7 @@ Declare `line` and `path` `local` in `gitlore_compose` alongside the others.
 
 - [x] **Step 4: Run test to verify it passes**
 
-Run: `bats tests/index_compose.bats`
-Expected: PASS, 29 tests.
+Run: `bats tests/index_compose.bats` Expected: PASS, 29 tests.
 
 - [x] **Step 5: Lint and commit**
 
@@ -990,8 +987,8 @@ stdin() { printf '%s' "$1" | bash "$HOOK"; }
 
 - [x] **Step 2: Run test to verify it fails**
 
-Run: `bats tests/cc_hook_index_compose.bats`
-Expected: FAIL — the hook file does not exist.
+Run: `bats tests/cc_hook_index_compose.bats` Expected: FAIL — the hook file does
+not exist.
 
 - [x] **Step 3: Write minimal implementation**
 
@@ -1187,8 +1184,7 @@ Write a portable fact into the matching tier's directory (same one-file-per-fact
 
 - [x] **Step 9: Run test to verify it passes**
 
-Run: `bats tests/tier_discovery.bats`
-Expected: PASS, 16 tests.
+Run: `bats tests/tier_discovery.bats` Expected: PASS, 16 tests.
 
 - [x] **Step 10: Lint and commit**
 

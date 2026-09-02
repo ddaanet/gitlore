@@ -39,13 +39,13 @@ argument away from refusing the state it exists to land; a function the up path
 never calls makes the scope structural instead of conditional.
 
 Two wordings, because two states need different remedies. A tier that is
-mid-merge — a state file, or a `MERGE_HEAD` — is sent to `/gitlore:resolve`:
-the return-to-the-pin checkout would unlink `MERGE_HEAD` and destroy the
-prepared merge. Anything else gets the checkout, with the tier's absolute path
-and the pinned sha in full so the printed command runs verbatim. The mid-merge
-predicate is `gitlore_detect_stale_merge_state`'s own "not clean" spelled out
-rather than called, because that function lives in `resolve.sh` and `resolve.sh`
-sources `index-compose.sh`.
+mid-merge — a state file, or a `MERGE_HEAD` — is sent to `/gitlore:resolve`: the
+return-to-the-pin checkout would unlink `MERGE_HEAD` and destroy the prepared
+merge. Anything else gets the checkout, with the tier's absolute path and the
+pinned sha in full so the printed command runs verbatim. The mid-merge predicate
+is `gitlore_detect_stale_merge_state`'s own "not clean" spelled out rather than
+called, because that function lives in `resolve.sh` and `resolve.sh` sources
+`index-compose.sh`.
 
 The rule found a second, latent instance of the same defect on the way in.
 `/gitlore:add-tier` mounts with `submodule add`, which records the remote's
