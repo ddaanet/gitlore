@@ -12,8 +12,19 @@ while writing, removed before saving.
 
 ## 1. Whether it should exist
 
+One question sits over the rest: **what does the next session gain that it
+would not otherwise have had?** The bar is comparative, not absolute — the
+index is capped, so "a future session would benefit" is not the test; it has to
+benefit more than the line it displaces. Questions 2–4 are the three ways
+*otherwise* happens: another artifact already says it, the reader gets there
+unaided, something recomputes it. When none of the three fires and the answer
+is still "not much", that settles it on its own — discard.
+
 Take the questions in order and stop at the first that settles it. The verdicts
-are **discard**, **relocate**, **merge**, or **save as written**.
+are **discard**, **relocate**, **merge**, or **save as written**. A discard
+that leaves a real gap in the tooling files the missing sentence where it
+belongs before dropping the fact: the fact was wrong as a memory, but the gap
+it exposed is real and nothing else records it.
 
 1. **Is there an incident?** No incident, no entry. A rule or anti-pattern for
    a failure nobody has seen dilutes the real entries and costs context on every
@@ -38,6 +49,11 @@ are **discard**, **relocate**, **merge**, or **save as written**.
      tier's always-loaded conventions file. Those load whole every session —
      exactly the scope such a rule wants, and the wrong scope for a fact that
      should be *found* on meeting a symptom.
+   - **A hook or tool that prints the diagnosis when it fires.** Runtime output
+     is an owner too, and the better teacher: it arrives with the offending
+     input named, at the moment of the failure, and costs nothing on every
+     unrelated session. A memory restating what a hook's own stderr already
+     says reaches the reader later and says it worse.
    Grep the owner for the load-bearing terms before accepting a pointer that
    claims coverage.
 3. **Would the reader reach it unaided?** A fact restating common sense, or one
