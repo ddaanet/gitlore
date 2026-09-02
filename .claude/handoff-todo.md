@@ -4,5 +4,6 @@
 
 ## Remaining
 
-- Continue the ddaanet review pass from entry 5 of `plans/ddaanet-memory-review.md` (next-largest index lines).
+- Rerun the recall log analysis with native recall included: count `attachment.type == "relevant_memories"` entries as a fourth class (harness), keep the spontaneous/manual/active split for model Reads, fold Bash `cat`/`sed` reads of memory files into the same per-file counts, and report the 7 most- and least-read facts plus the class totals over time.
+- Continue the ddaanet review pass from the queue in `plans/ddaanet-memory-review.md` (entry 5, `hook-output-channels`).
 - `docs/design.md` sits at exactly the 400-line cap; the next hub addition needs a split decision.

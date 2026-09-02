@@ -51,7 +51,11 @@ CC's native recall runs a per-query classifier against the **user prompt**,
 returns at most five files it is certain about, and is instructed not to
 re-select within a conversation. A fact whose trigger only appears *mid-task* —
 a git rejection string, a `2>/dev/null` in a file just opened, an empty
-`$TMPDIR` — therefore has no path into context. Closing that gap is FR16.
+`$TMPDIR` — therefore has no path into context. Closing that gap is FR16. At
+2.1.258 the native path is additionally gated behind `tengu_moth_copse` or
+`CLAUDE_MEMORY_STORES`, off by default, and delivers as a `relevant_memories`
+attachment rather than a Read (`cc-memory-retrieval.md`); the gap is the same
+either way.
 
 **The whole mechanism is `skills/recall/SKILL.md`.** Three steps: decide from
 the index already in context with **no tool calls**, select at most five

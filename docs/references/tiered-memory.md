@@ -54,7 +54,10 @@ in both `--print` and a real interactive (tmux PTY) session against a scratch
 - Bodies are **not** bulk-loaded. Recall is a **tool-gated `Read`** of a
   selected file (surfaced interactively as "Recalled 1 memory"; an auto-issued,
   empty-thinking Read in the transcript), steered by the root index. Disable
-  file tools → no body, in both modes.
+  file tools → no body, in both modes. That is the 2.1.209 shape; at 2.1.258
+  the harness reads the selected file itself and injects it as a
+  `relevant_memories` attachment, behind a flag that is off by default
+  (`cc-memory-retrieval.md`, last section).
 - A file listed in the root index recalls reliably (100% in probes); an
   unindexed/subdir-only file relies on the agent grepping to discover it (~75%).
 - **Both** the root one-liner **and** the per-file frontmatter `description`
