@@ -92,11 +92,13 @@ them.
   `agent_id`); auto-memory enabled; the GrowthBook flag `tengu_moth_copse` is
   true **or** `CLAUDE_MEMORY_STORES` is set; the query source is not compact,
   extract-memories, auto-dream or prompt-suggestion; the prompt contains
-  whitespace. `~/.claude.json` caches the flag; on this machine it is `false`
-  and the env var unset, so native recall never fires. A transcript corpus with
-  zero `relevant_memories` attachments is the expected reading under that gate,
-  and a Read without a preceding thinking block is a model-issued Read (adaptive
-  thinking skips on trivial prompts), not a harness one.
+  whitespace. `~/.claude.json` caches the flag, `false` on this machine;
+  `CLAUDE_MEMORY_STORES=1` in the `env` block of `~/.claude/settings.json`
+  opens the gate, set on 2026-09-02, and the prefetch fired in the session
+  that was running when it was set, with no restart. Transcripts before that
+  date carry zero `relevant_memories` attachments, and in them a Read without
+  a preceding thinking block is a model-issued Read (adaptive thinking skips
+  on trivial prompts), not a harness one.
 - **Selection.** Once per user prompt, from the prompt alone — a trigger that
   first appears mid-turn in a tool result or an opened file is never matched.
   Two backends: a local index search behind `tengu_mill_orange`, else an API
@@ -111,7 +113,11 @@ them.
   only if it actually applies to what the user asked." The TUI shows "Recalled
   N memories". Surfaced paths are written into the read-file state, so a later
   `Edit` of a recalled file does not need a fresh Read. A per-session budget of
-  61,440 bytes of recalled content stops further recall.
+  61,440 bytes of recalled content stops further recall. First observed
+  delivery at 2.1.258: one attachment of five files, each entry `limit: 63`,
+  on a turn that was a `/ddaa:brief` skill invocation, so the selector matched
+  the skill's injected body rather than the user's words; two of the five
+  files were off-target.
 - **Other harness carriers of a memory body:** `attachment.type: "file"` for an
   `@memory/...` mention and for post-compaction re-attachment of files read
   before the compaction. Neither is recall.
