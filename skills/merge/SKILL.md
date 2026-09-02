@@ -44,7 +44,10 @@ and lands a merge commit.
 1. Invoke the `gitlore:resolve` skill. The directive in the output above carries
    everything it needs — do not re-derive the store path or the state file.
 2. When it finishes, **run the reconcile command again.** It handles one store
-   at a time, and a second may still be behind.
+   at a time, and a second may still be behind. The *same* store returning the
+   *same* prepared block is not a fresh divergence: a synthesized, staged merge
+   is indistinguishable from an untouched one while `MERGE_HEAD` is set, so the
+   merge is unlanded and gets continued again — never discarded.
 3. Repeat until the command exits 0.
 
 The landed merge is **not** published: the continuation stops after the local
