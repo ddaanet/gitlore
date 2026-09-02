@@ -66,7 +66,14 @@ it exposed is real and nothing else records it.
    carry it.
 5. **What moment does it fire at?** State the moment in one clause. The same
    clause as a file already in the store means a section in that file, not a
-   new one (§3).
+   new one (§3). Then check the clause names a *literal*, not an activity: an
+   index line fires when a tool result surfaces a string, so a fact whose
+   moment is "writing a design doc" or "authoring a hook" has nothing to match
+   on and is never read, however well written. That content belongs to the
+   skill owning the activity (Q2), or needs a symptom-shaped hook it does not
+   yet have. The hardest case is a symptom with no string — nothing errors, the
+   change simply appears not to work — which neither route reaches: it needs a
+   checkpoint inside a skill that owns the surrounding moment.
 6. **Which tier?** Mechanism scoped to this repo, or to the class of repo (§5).
 7. **Does the body survive the strip?** Incident out, first person out,
    deictics out, present tense in, an ageing observation version-stamped (§2).
@@ -132,6 +139,15 @@ reference it — restated in four sections it drifts in four directions. Past
 roughly a screen of sections, lead with a symptom → section map. A fact that is
 a *cost of the remedy* files under the remedy, not under the symptom that led
 there.
+
+**Recall delivers the first 4096 bytes of a file and stops**, so a merged file
+has a ceiling and crosses it silently — the index line still points at
+something that looks complete. Measure with `wc -c` before adding a section.
+Past the cap the file becomes a hub plus siblings: the hub keeps the trigger
+and the map, now symptom → file, and each section moves to its own file beside
+it, reachable by path once the hub is read. Splitting for size is not the split
+§3 warns against — that one gives each fragment its own index line and its own
+third of one trigger, while this one keeps a single line pointing at the hub.
 
 ## 5. Which tier
 
