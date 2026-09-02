@@ -28,6 +28,14 @@ there — FR5/FR5b still block, and FR5a/FR5c still return `permissionDecision:
 "allow"` with the rewrite, so the pipeline-circumvention finding in 2c stands
 against that hook and is recorded in its design doc as a rejected alternative.
 
+**Hook memories merged (2026-09-01).** `hook-cannot-inject-tool-calls` is
+folded into `hook-output-channels`, which now leads with a section map and
+carries 2c finding (2) in its `PreToolUse` section: `updatedInput` alone
+reruns the full pipeline, `permissionDecision` settles it, a schema-invalid
+`updatedInput` converts to a deny, and `defer` is print-mode-only. The merged
+index line keeps every literal both lines carried. `hook-input-schema` stays
+separate — stdin side, a different moment — and its link is repointed.
+
 **Index state.** 28,642 B across 106 lines after entries 2 and 3 landed, against
 the 26,219 B the pass opened at: the store grew faster than the pass. The 4c
 arithmetic (1,459 B freed lands under the cap) no longer holds on its own.
