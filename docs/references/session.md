@@ -93,13 +93,13 @@ has no `gitlore-memory` entry, no-op.
    continuation stages it, and the dangling report reads pointers out of it.
 8. **Pin the tiers.** A tier holding an unfinished merge is left as it is and
    named, because the checkout below would clear its `MERGE_HEAD`. Every other
-   mounted tier is initialized and checked out at the gitlink the memory
-   store's index records, detached in place if it arrived on a branch, and its
-   remote `live` is fetched read-only to name what is waiting — upstream facts,
-   or a divergence — without moving anything: a tier advances only through
-   `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported
-   by name, never silently skipped, because a tier that stops talking to its
-   remote looks exactly like one with nothing to say.
+   mounted tier is initialized and checked out at the gitlink the memory store's
+   index records, detached in place if it arrived on a branch, and its remote
+   `live` is fetched read-only to name what is waiting — upstream facts, or a
+   divergence — without moving anything: a tier advances only through
+   `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported by
+   name, never silently skipped, because a tier that stops talking to its remote
+   looks exactly like one with nothing to say.
 9. **Compose the indexes**, then run the dangling-pointer report (D34). A
    refusal writes nothing and says why; a partial write says which indexes are
    composed.

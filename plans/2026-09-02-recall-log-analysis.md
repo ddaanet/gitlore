@@ -20,9 +20,9 @@ A delivery is one memory fact body entering one context.
   shape described in `docs/references/cc-memory-retrieval.md`. Zero in the
   corpus, which is the expected reading: the gate (`tengu_moth_copse` or
   `CLAUDE_MEMORY_STORES`) was off on this machine for the whole span. It was
-  opened on 2026-09-02, after this run, by setting `CLAUDE_MEMORY_STORES=1`
-  in the settings `env` block, and the first attachment landed the same day.
-  A rerun will count the class.
+  opened on 2026-09-02, after this run, by setting `CLAUDE_MEMORY_STORES=1` in
+  the settings `env` block, and the first attachment landed the same day. A
+  rerun will count the class.
 - **spontaneous**: a Read or Bash read after a `Skill(gitlore:recall)` call, or
   a `/gitlore:recall` command, earlier in the same user turn.
 - **manual**: the user's prompt for that turn names recall or the file.
@@ -31,10 +31,10 @@ A delivery is one memory fact body entering one context.
   corpus @-mentions a memory file, so all of these are post-compaction
   re-attachment of a file read before the compaction, not recall.
 
-Bash reads are a command containing `cat`, `sed`, `head`, `tail`, `bat`,
-`less` or `awk` together with a memory path, and are folded into the per-file
-counts. Bash commands that only name a fact (grep, ls, git) are counted
-separately and are not reads.
+Bash reads are a command containing `cat`, `sed`, `head`, `tail`, `bat`, `less`
+or `awk` together with a memory path, and are folded into the per-file counts.
+Bash commands that only name a fact (grep, ls, git) are counted separately and
+are not reads.
 
 ## Class totals
 
@@ -77,10 +77,10 @@ ddaanet review passes, which read facts in bulk by design.
 | ddaanet/green-is-not-evidence.md | 1 | 7 | 27 | 0 | 35 |
 | ddaanet/sandbox-effects.md | 0 | 5 | 27 | 0 | 32 |
 
-`memory-writing.md` and `index-compaction-triggers.md` no longer exist as
-facts; their reads predate the move of authoring guidance into the plugin.
-`shared-claude.md` is already in every context through the CLAUDE.md import,
-so its 60 reads are redundant deliveries.
+`memory-writing.md` and `index-compaction-triggers.md` no longer exist as facts;
+their reads predate the move of authoring guidance into the plugin.
+`shared-claude.md` is already in every context through the CLAUDE.md import, so
+its 60 reads are redundant deliveries.
 
 ## Least-read facts, among current facts read at all
 
@@ -96,8 +96,8 @@ so its 60 reads are redundant deliveries.
 
 ## Never read
 
-20 of the 101 facts in this repo's store (100 ddaanet tier facts and one
-local, which was read) were never read by any session in the corpus:
+20 of the 101 facts in this repo's store (100 ddaanet tier facts and one local,
+which was read) were never read by any session in the corpus:
 
 bang-shell-shared-cwd, bash-prolog-common-foundations, cc-command-namespacing,
 cc-project-dir-encoding, cc-worktree-bash-guard, detect-liveness-not-presence,
@@ -108,17 +108,17 @@ provisional-values-not-provisional-code, session-title-customtitle,
 slice-history-forward-not-by-cherry-pick, slice-uncommitted-tree-via-index,
 tmux-test-isolation, todo-tool-flag-gated.
 
-Never read is not never used: a fact whose index line carries the whole
-routing clause can act from the index alone, and a fact written in the last
-fortnight has had little chance to be needed.
+Never read is not never used: a fact whose index line carries the whole routing
+clause can act from the index alone, and a fact written in the last fortnight
+has had little chance to be needed.
 
 ## Caveats
 
 - The 2.1.209 recall-Read shape (a memory Read as the turn's first tool use,
-  with no thinking text) matches 41 of the active reads, spread from 2.1.215
-  to 2.1.252. Under the gate that shape is a model-issued Read on a trivial
-  prompt, not native recall, so it is left in active rather than counted as
-  harness. It is the upper bound on misclassified harness reads.
+  with no thinking text) matches 41 of the active reads, spread from 2.1.215 to
+  2.1.252. Under the gate that shape is a model-issued Read on a trivial prompt,
+  not native recall, so it is left in active rather than counted as harness. It
+  is the upper bound on misclassified harness reads.
 - "manual" keys on the word "recall" or the fact's name appearing anywhere in
   the prompt, so a prompt about recall itself (this rerun, for one) marks its
   whole turn manual.

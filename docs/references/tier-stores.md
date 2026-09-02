@@ -98,11 +98,10 @@ publish preflight repairs that direction the same way and in place of the drift
 report it would otherwise make
 ([git-hooks-and-entry-points.md](git-hooks-and-entry-points.md)). The move
 itself publishes nothing: every commit in `HEAD` reached it through a gate. The
-producer is
-a merge preparation that checked `HEAD` out at `origin/live` and could not
-continue, which leaves the remote contained in `HEAD` and `live` where it was —
-the store then calls itself finished on every later take while every push is
-refused as a non-fast-forward. That direction is the one *repaired*.
+producer is a merge preparation that checked `HEAD` out at `origin/live` and
+could not continue, which leaves the remote contained in `HEAD` and `live` where
+it was — the store then calls itself finished on every later take while every
+push is refused as a non-fast-forward. That direction is the one *repaired*.
 
 **The other direction is a take, and a checkout is what breaks it.** A tier's
 `live` ahead of a `HEAD` sitting at the pin holds commits the memory store never
@@ -149,32 +148,32 @@ lockstep never reads.
 The recomposition that follows is **committed by the take itself** (D49, in
 [merge-and-resolve.md](merge-and-resolve.md)): the moved gitlink and the
 recomposed root index land in a canned bookkeeping commit
-(`Update MEMORY.md for <tier> tier merge.`) that advances memory's local
-`live`, so an explicit take leaves the store clean. The parent-level gitlink
-still floats to the next parent commit, as every memory advance leaves it. One
-path degrades: a root store that held unapproved work *before* the take gets
-no canned commit — the pair includes `MEMORY.md`, whose recompose folds in
-whatever unapproved index edits the episode already held — and falls back to
-the staged-pair discipline below.
+(`Update MEMORY.md for <tier> tier merge.`) that advances memory's local `live`,
+so an explicit take leaves the store clean. The parent-level gitlink still
+floats to the next parent commit, as every memory advance leaves it. One path
+degrades: a root store that held unapproved work *before* the take gets no
+canned commit — the pair includes `MEMORY.md`, whose recompose folds in whatever
+unapproved index edits the episode already held — and falls back to the
+staged-pair discipline below.
 
-**On the degraded path, the moved gitlink is staged.** `submodule update`
-checks a tier out at the sha the superproject's **index** holds, not the one
-its HEAD records, so the pin and a floating gitlink are only compatible while
-the move is in the index. Every advancing path therefore stages the pair —
-`MEMORY.md` and the tier — before its bookkeeping commit, and keeps the staged
-pair when that commit is refused: the fast-forward-plus-adoption branch of
+**On the degraded path, the moved gitlink is staged.** `submodule update` checks
+a tier out at the sha the superproject's **index** holds, not the one its HEAD
+records, so the pin and a floating gitlink are only compatible while the move is
+in the index. Every advancing path therefore stages the pair — `MEMORY.md` and
+the tier — before its bookkeeping commit, and keeps the staged pair when that
+commit is refused: the fast-forward-plus-adoption branch of
 `gitlore_merge_stores`, and the merge continuation, which stages *after* its
 merge commit because that commit does not exist before it. The **mount** is a
 third such path and stages the gitlink alone: `submodule add` records the
 remote's default branch and `/gitlore:add-tier` then detaches the tier at
 `live`, so the gitlink moves while the root index it feeds is written by the
 compose that follows and floats as ordinary dirt. Left in the working tree
-alone, the move survives exactly until the next `SessionStart`, which walks
-the tier back to the pre-merge commit while the recomposed root index — an
-ordinary file write, not a gitlink — survives to describe facts the carrier no
-longer holds. Nothing reports it: the command that landed the merge exited 0,
-and the session that reverted it calls the tier clean. Staging is what makes
-the pin idempotent instead of destructive.
+alone, the move survives exactly until the next `SessionStart`, which walks the
+tier back to the pre-merge commit while the recomposed root index — an ordinary
+file write, not a gitlink — survives to describe facts the carrier no longer
+holds. Nothing reports it: the command that landed the merge exited 0, and the
+session that reverted it calls the tier clean. Staging is what makes the pin
+idempotent instead of destructive.
 
 **D44 — Shared-tier conflicts resolve semantically; memory merges as prose,
 indexes entry-wise**

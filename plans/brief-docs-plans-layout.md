@@ -3,10 +3,9 @@
 2026-07-29
 
 `claude-plugin-dev` reorganised its documentation on 2026-07-29 and the shape
-should propagate to every plugin repo in this family (handoff, gitmoji,
-onekeys, cwd-safety, shell-gotchas, gitlore). This brief is dropped identically
-into each; the target layout is the same everywhere, only the starting state
-differs.
+should propagate to every plugin repo in this family (handoff, gitmoji, onekeys,
+cwd-safety, shell-gotchas, gitlore). This brief is dropped identically into
+each; the target layout is the same everywhere, only the starting state differs.
 
 ### Decisions
 

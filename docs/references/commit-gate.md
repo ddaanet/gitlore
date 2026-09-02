@@ -24,10 +24,9 @@ and the commit-message file is absent or stale (mtime against the newest memory
 file — a content hash is not worth the complexity; an edit that rewrites
 identical content re-triggers, which is acceptable noise). On trigger it emits
 `additionalContext` asking Claude to review the pending changes against the
-`memory-writing` skill (D48), summarize them,
-present the summary, and write it to the commit-message file **only** after
-explicit user approval. That ordering is FR11's gate: the file must not exist
-until approval exists.
+`memory-writing` skill (D48), summarize them, present the summary, and write it
+to the commit-message file **only** after explicit user approval. That ordering
+is FR11's gate: the file must not exist until approval exists.
 
 The nudge fires once per dirty episode. A `gitlore-nudged` marker in the store's
 gitdir suppresses a repeat while memory is still dirty and unapproved, and
@@ -59,9 +58,9 @@ completes on its own the moment the summary lands.
 
 ## Decisions — D4, D12, D19, D22
 
-Why approval has this shape: how the summary reaches the hook, why the
-submodule holds a gate of its own, the wording that carries the approval, and
-why the hygiene checker stays repo-local.
+Why approval has this shape: how the summary reaches the hook, why the submodule
+holds a gate of its own, the wording that carries the approval, and why the
+hygiene checker stays repo-local.
 
 **D4 — Commit message via file handshake**
 
@@ -165,11 +164,11 @@ the three internal ones did once (2026-07-16, "one prompt fix, three surfaces"),
 and a hand-synced copy in a different repo entirely can only drift further.
 
 **The wording is a self-contained block, appended last.**
-`reference/memory-approval-clause.txt` holds two blocks. The first is the
-review directive: before the summary is drafted, the pending memory changes are
-held against the `memory-writing` skill, and what it finds is fixed first
-(D48). The second is the body spec — subject line, blank
-line, then **one paragraph per changed memory file**, each opening
+`reference/memory-approval-clause.txt` holds two blocks. The first is the review
+directive: before the summary is drafted, the pending memory changes are held
+against the `memory-writing` skill, and what it finds is fixed first (D48). The
+second is the body spec — subject line, blank line, then
+**one paragraph per changed memory file**, each opening
 `**<Kind> <tier>/<slug>:**` with the kind drawn from New, Update, Augment,
 Reduce, or Remove — followed by a literal template of three example paragraphs.
 A `MEMORY.md`, root or tier, is excluded from the listing: an index line moves

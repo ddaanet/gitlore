@@ -10,12 +10,12 @@ this file: `plans/brief-memory-commit-batch-model-channel.patch`.
 ### Decisions
 
 - `memory-commit-batch.sh`'s `emit()` should take the two-argument dual-channel
-  form the sibling batch hooks already use — `{systemMessage, suppressOutput,
-  hookSpecificOutput: {hookEventName: "PostToolBatch", additionalContext}}` —
-  and all four branches should pass an `additionalContext`.
-- The success branch should name the new memory HEAD (`git -C "$mempath" log -1
-  --format='%h %s'`). That is precisely the value the agent was running
-  `git -C memory log --oneline -1` to obtain.
+  form the sibling batch hooks already use —
+  `{systemMessage, suppressOutput, hookSpecificOutput: {hookEventName: "PostToolBatch", additionalContext}}`
+  — and all four branches should pass an `additionalContext`.
+- The success branch should name the new memory HEAD
+  (`git -C "$mempath" log -1 --format='%h %s'`). That is precisely the value the
+  agent was running `git -C memory log --oneline -1` to obtain.
 - The success `additionalContext` should state the outcome is authoritative and
   stand the agent down from confirming it. The stand-down is not speculative —
   it records a defect measured at 62/68.
@@ -44,16 +44,17 @@ assistant message is written as N entries).
 | standalone (trigger file → `PostToolBatch`) | 68 | **62 (91%)** |
 | parent commit (`git commit` via Bash) | 14 | 5 (35%) |
 
-The checks are uniform: `ls` the two IPC files, then `git -C memory log
---oneline` or `git -C memory status`. Cost on the standalone path is 1.97 extra
-assistant messages per landing (134 total; 0:6, 1:26, 2:18, 3:8, 4:4, 5:5, 7:1),
-median 6.4 s each (quartiles 4.7 / 6.4 / 9.6), 539 s in total.
+The checks are uniform: `ls` the two IPC files, then
+`git -C memory log --oneline` or `git -C memory status`. Cost on the standalone
+path is 1.97 extra assistant messages per landing (134 total; 0:6, 1:26, 2:18,
+3:8, 4:4, 5:5, 7:1), median 6.4 s each (quartiles 4.7 / 6.4 / 9.6), 539 s in
+total.
 
 What differs between the two paths is the channel: the parent path returns the
 pre-commit hook's output inside a Bash tool result the model reads. One
 transcript makes the blindness explicit — after the trigger-cleared message had
-already fired, the agent said the hook *"should pick up both files and
-commit/push the submodule momentarily"*.
+already fired, the agent said the hook
+*"should pick up both files and commit/push the submodule momentarily"*.
 
 Two further branches are affected. **deferred** fired **144 times** and the
 agent never learned; the retry is automatic, so a blind agent either does

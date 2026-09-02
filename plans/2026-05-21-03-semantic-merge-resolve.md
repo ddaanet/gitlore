@@ -872,8 +872,7 @@ Also add `source "$PLUGIN_ROOT/scripts/lib/resolve.sh"` after the existing
 
 - [x] **Step 9: Run happy-path; confirm green.**
 
-Run: `bats tests/resolve_merge_branch.bats`
-Expected: 2 passing.
+Run: `bats tests/resolve_merge_branch.bats` Expected: 2 passing.
 
 - [x] **Step 10: Append loop-case test.**
 
@@ -919,8 +918,7 @@ directive.
 
 - [x] **Step 11: Run; confirm all green.**
 
-Run: `bats tests/resolve_merge_branch.bats`
-Expected: 3 passing.
+Run: `bats tests/resolve_merge_branch.bats` Expected: 3 passing.
 
 - [x] **Step 12: Commit.**
 
@@ -994,8 +992,7 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run to confirm red.**
 
-Run: `bats tests/resolve_merge_remote.bats`
-Expected: 2 failures.
+Run: `bats tests/resolve_merge_remote.bats` Expected: 2 failures.
 
 - [x] **Step 3: Modify `scripts/git-hooks/pre-push`.**
 
@@ -1085,8 +1082,7 @@ Add a new case to the subcommand dispatcher from Task 1 step 8:
 
 - [x] **Step 5: Run happy-path; confirm green.**
 
-Run: `bats tests/resolve_merge_remote.bats`
-Expected: 2 passing.
+Run: `bats tests/resolve_merge_remote.bats` Expected: 2 passing.
 
 - [x] **Step 6: Append loop-case test (concurrent remote advance during
       synthesis).**
@@ -1114,8 +1110,7 @@ Expected: 2 passing.
 
 - [x] **Step 7: Run; confirm all green.**
 
-Run: `bats tests/resolve_merge_remote.bats`
-Expected: 3 passing.
+Run: `bats tests/resolve_merge_remote.bats` Expected: 3 passing.
 
 - [x] **Step 8: Commit.**
 
@@ -1272,8 +1267,7 @@ exit 0
 
 - [x] **Step 4: Run; confirm all green.**
 
-Run: `bats tests/resolve_both_flavors.bats`
-Expected: 4 passing.
+Run: `bats tests/resolve_both_flavors.bats` Expected: 4 passing.
 
 - [x] **Step 5: Commit.**
 
@@ -1357,8 +1351,7 @@ teardown() { teardown_tmp_repo; }
 
 - [x] **Step 2: Run to confirm red.**
 
-Run: `bats tests/resolve_recovery.bats`
-Expected: 3 failures.
+Run: `bats tests/resolve_recovery.bats` Expected: 3 failures.
 
 - [x] **Step 3: Add `gitlore_detect_stale_merge_state` to
       `scripts/lib/resolve.sh`.**
@@ -1430,8 +1423,7 @@ fi
 
 - [x] **Step 6: Run; confirm all green.**
 
-Run: `bats tests/resolve_recovery.bats`
-Expected: 3 passing.
+Run: `bats tests/resolve_recovery.bats` Expected: 3 passing.
 
 - [x] **Step 7: Commit.**
 
@@ -1592,8 +1584,8 @@ Append to `tests/install_run.bats`:
 
 - [x] **Step 2: Run to confirm red.**
 
-Run: `bats tests/install_run.bats -f "AGENT_TEAMS"`
-Expected: 1 failure (the "warns" test).
+Run: `bats tests/install_run.bats -f "AGENT_TEAMS"` Expected: 1 failure (the
+"warns" test).
 
 - [x] **Step 3: Add the warning to `scripts/install/preflight.sh`.**
 
@@ -1612,8 +1604,7 @@ fi
 
 - [x] **Step 4: Run; confirm all green.**
 
-Run: `bats tests/install_run.bats`
-Expected: all passing.
+Run: `bats tests/install_run.bats` Expected: all passing.
 
 - [x] **Step 5: Commit.**
 

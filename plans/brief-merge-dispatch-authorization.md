@@ -5,8 +5,8 @@
 ### Incident
 
 A `just release` in the `handoff` repo was blocked at `git push` by gitlore's
-pre-push hook: the shared `ddaanet` memory tier had diverged from
-`origin/live` (24 changed files, 3 conflicted). The hook printed, verbatim:
+pre-push hook: the shared `ddaanet` memory tier had diverged from `origin/live`
+(24 changed files, 3 conflicted). The hook printed, verbatim:
 
 ```
 gitlore: memory merge prepared (flavor=head-vs-remote) in store:
@@ -19,8 +19,8 @@ gitlore:   cd "/Users/david/code/handoff" && bash "…/scripts/resolve.sh" conti
 
 The agent did not dispatch. It reported the blocker, offered dispatching or
 merging inline, and stopped. The user answered "you should dispatch as
-instructed by gitlore" — which was the intent all along. The release stalled
-on a round trip that the hook's own wording could have prevented.
+instructed by gitlore" — which was the intent all along. The release stalled on
+a round trip that the hook's own wording could have prevented.
 
 ### Why the agent refused
 
@@ -34,18 +34,18 @@ Do not call the AgentTool unless the user requested it
 That layer sits above CLAUDE.md, skills and memory. Nothing in a repo can
 qualify it, and the user chooses not to override it even though they could.
 
-The hook's text names the agent and the state file but never says the
-dispatch is *required* or *already authorized*. Read literally, it describes
-an option. Every other blocking gitlore directive the agent has seen (write
-the summary file, write the trigger file) is an act it performs itself, so
-this is the one directive whose execution needs someone else's permission —
-and the text does not grant it.
+The hook's text names the agent and the state file but never says the dispatch
+is *required* or *already authorized*. Read literally, it describes an option.
+Every other blocking gitlore directive the agent has seen (write the summary
+file, write the trigger file) is an act it performs itself, so this is the one
+directive whose execution needs someone else's permission — and the text does
+not grant it.
 
 ### Proposal
 
 Change the hook's wording so the dispatch reads as instructed rather than
-offered. That satisfies the system-prompt rule **as written** — a dispatch
-the user asked for is permitted, and the push they ran is the request — so no
+offered. That satisfies the system-prompt rule **as written** — a dispatch the
+user asked for is permitted, and the push they ran is the request — so no
 exception, no override, and no per-machine configuration is needed.
 
 Something in the shape of:
@@ -55,8 +55,8 @@ gitlore: this merge is part of the push you ran — dispatch it now, no
 gitlore: further confirmation needed. Sub-agent: gitlore:memory-merger
 ```
 
-Apply the same treatment to any other gitlore directive that names a
-sub-agent; this is the class, not the instance.
+Apply the same treatment to any other gitlore directive that names a sub-agent;
+this is the class, not the instance.
 
 ### Constraints
 
@@ -75,11 +75,11 @@ sub-agent; this is the class, not the instance.
   directive instructs it"). The line is Anthropic's system prompt, not user
   config; the user declines to shortcut it, and the change would have to be
   repeated per machine.
-- **Recording it as a memory fact** ("a gitlore dispatch instruction counts as
-  a user request"). Rejected explicitly by the user: memory is the wrong
-  support. A directive owns its own authorization; pushing that into a
-  consumer's memory store means every consumer has to learn it separately, and
-  a reader without the memory hits the same wall.
+- **Recording it as a memory fact** ("a gitlore dispatch instruction counts as a
+  user request"). Rejected explicitly by the user: memory is the wrong support.
+  A directive owns its own authorization; pushing that into a consumer's memory
+  store means every consumer has to learn it separately, and a reader without
+  the memory hits the same wall.
 - **Having the agent infer authorization from context.** That inference is
   exactly what the blanket rule exists to remove.
 - **Dropping the sub-agent and merging inline in the main context.** The

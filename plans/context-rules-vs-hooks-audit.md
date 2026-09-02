@@ -20,9 +20,9 @@ reasoned from the task.
 | `.claude/settings.json` → `plugin-dev/version-guard.sh` | PreToolUse `Write\|Edit`: refuses edits changing `plugin.json`'s `.version`. Manifest only — **not** the vendored subtree. |
 | `hooks/hooks.json` | SessionStart (task frame, nudge-reset), PreCompact, PreToolUse `Write\|Edit\|Bash` (index-sync-pre), PostToolUse Bash + worktree drift, PostToolBatch ×5 (index sync, tier compose, memory commit, plugin upgrade), WorktreeRemove. |
 
-All of it is memory/index/release machinery. **No hook currently guards a single
-behavioural prohibition** — not branching, not `--no-verify`, not cross-repo
-writes, not `AskUserQuestion`.
+All of it is memory/index/release machinery.
+**No hook currently guards a single behavioural prohibition** — not branching,
+not `--no-verify`, not cross-repo writes, not `AskUserQuestion`.
 
 ## Class A — already enforced, prose is redundant
 

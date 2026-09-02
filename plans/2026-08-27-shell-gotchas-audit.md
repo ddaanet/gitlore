@@ -153,19 +153,19 @@ Gotcha: **unterminated last line / concatenation weld** — the repo's own rule
 (`.claude/rules/shell.md`: *"Concatenating file parts has the mirror hazard: an
 unterminated part welds onto the next"*). `gitlore_compose_write`
 (`index-compose.sh:646`) and `gitlore_index_merge` (`index-merge.sh:151`) both
-insert a separator before appending for exactly this reason; the two
-`wire-*.sh` hook appenders lead with `printf '\n# gitlore: managed\n'`, which
-makes them safe by accident. `add-tier.sh` is the one appender with neither
-guard.
+insert a separator before appending for exactly this reason; the two `wire-*.sh`
+hook appenders lead with `printf '\n# gitlore: managed\n'`, which makes them
+safe by accident. `add-tier.sh` is the one appender with neither guard.
 
 Why it bites: the manifest is *documented as hand-editable* — this script's own
 final message says *"reorder the file by hand to change that"* — and a hand
 edit, an agent `Edit`, or any writer that does not terminate leaves the last
 line bare. The next mount then produces one welded entry. Both tiers go dormant
 (neither name is in the manifest any more), and `gitlore_compose_check` rule 2
-refuses the entire store with *"the tier manifest lists 'ddaanetnewtier', which
-is not mounted"* — while `add-tier.sh` has already printed
-*"gitlore: activated"*. A success message after a corrupting write.
+refuses the entire store with
+*"the tier manifest lists 'ddaanetnewtier', which is not mounted"* — while
+`add-tier.sh` has already printed *"gitlore: activated"*. A success message
+after a corrupting write.
 
 Verified:
 
@@ -234,10 +234,9 @@ Sites: `scripts/lib/resolve.sh:358-360` (`changed_files`), `365-367`
 `scripts/lib/index-merge.sh:172` (`gitlore_conflicted_indexes`), `191`
 (`gitlore_index_paths_in`).
 
-Gotcha: **parsing git output without a plumbing-safe format**
-(environments.md, "Parsing git output"). git quotes any path containing a
-non-ASCII byte, a `"` or a `\` — this is on by default and independent of
-`--name-only` vs `-z`.
+Gotcha: **parsing git output without a plumbing-safe format** (environments.md,
+"Parsing git output"). git quotes any path containing a non-ASCII byte, a `"` or
+a `\` — this is on by default and independent of `--name-only` vs `-z`.
 
 Verified:
 
@@ -423,11 +422,11 @@ changing any supported path.
   future bare call under `set -e` would lose the "… and N more" line.
   `awk -v n="$CAP" 'NR<=n'`, as `gitlore_index_largest` already does.
 - **`scripts/lib/util.sh:360` vs `:278`** — `while IFS= read -r -d '' rec` in
-  `gitlore_tier_paths` omits the `LC_ALL=C` that
-  `gitlore_commit_msg_freshness` carries at 278 for the bash 5.0–5.3 multibyte
-  `read -d ''` bug (BP#65). I could not reproduce an overshoot on 5.2.37 —
-  `read -r -d ''` handled invalid UTF-8 (`A\xff\xfeB`) correctly — so this is an
-  inconsistency to close, not a demonstrated defect.
+  `gitlore_tier_paths` omits the `LC_ALL=C` that `gitlore_commit_msg_freshness`
+  carries at 278 for the bash 5.0–5.3 multibyte `read -d ''` bug (BP#65). I
+  could not reproduce an overshoot on 5.2.37 — `read -r -d ''` handled invalid
+  UTF-8 (`A\xff\xfeB`) correctly — so this is an inconsistency to close, not a
+  demonstrated defect.
 - **`scripts/lib/index-compose.sh:638`, `scripts/lib/index-sync.sh:57`** — the
   scratch file (`$1.gitlore-compose.tmp`, `$file.gitlore.tmp`) is created
   *beside the target*, i.e. inside the memory worktree. `edit-weld.sh:336-339`
@@ -463,8 +462,8 @@ changing any supported path.
 `scripts/hook-manager/wire-direct.sh`, `scripts/cc-hooks/edit-weld-pre.sh` and
 `scripts/lib/index-sync.sh` are clean apart from the NITs named above — the
 `read -r -d ''` NUL framing in `edit-weld-pre.sh:23-33`, the `-mtime`/`-delete`
-sweeps, the `wc -l | tr -d ' '` BSD-padding guards and the `mktemp
-"${TMPDIR:-/tmp}/…"` templates are all portable-correct as written.
+sweeps, the `wc -l | tr -d ' '` BSD-padding guards and the
+`mktemp "${TMPDIR:-/tmp}/…"` templates are all portable-correct as written.
 
 Two shapes I suspected and cleared, so they do not get re-raised:
 
@@ -486,12 +485,12 @@ Do not edit in place; these go to `claude-plugin-dev` and arrive via a
 `dist-vX.Y.Z` bump.
 
 - **NIT — `plugin-dev/release.sh`, `check_marketplace_writable`**:
-  `probe=$(mktemp "$marketplace_dir/…XXXXXX" 2>/dev/null) || die "… If this is a
-  Claude Code sandbox restriction: …"`. Provoking the failure is the mechanism,
-  so the redirect is defensible, but mktemp's own words are discarded and the
-  message asserts a sandbox cause — a missing directory or a full disk gets the
-  same sandbox advice. `err=$(mktemp … 2>&1) || die "$marketplace_dir is not
-  writable: $err …"` keeps both.
+  `probe=$(mktemp "$marketplace_dir/…XXXXXX" 2>/dev/null) || die "… If this is a Claude Code sandbox restriction: …"`.
+  Provoking the failure is the mechanism, so the redirect is defensible, but
+  mktemp's own words are discarded and the message asserts a sandbox cause — a
+  missing directory or a full disk gets the same sandbox advice.
+  `err=$(mktemp … 2>&1) || die "$marketplace_dir is not writable: $err …"` keeps
+  both.
 - **NIT — `plugin-dev/release.sh`, `common_preflight`**: the new
   `git diff --quiet HEAD -- . ':(exclude)memory'` hardcodes `memory` as the
   gitlink path. gitlore's own `mempath` is `$1` to `install.sh` and only

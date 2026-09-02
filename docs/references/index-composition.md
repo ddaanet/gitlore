@@ -94,27 +94,27 @@ The recompose **validates and is fail-safe**: it refuses — reporting on
 `systemMessage` (user) + `additionalContext` (agent) without clobbering the
 existing index — if the result would carry a **duplicate** pointer line, if a
 line **welds two pointer bullets** onto one physical line, if the manifest
-**lists a tier that is not present**, or if an **active tier is checked out off
-the gitlink** the memory store's index records for it. That last rule guards the
-down projection alone (D36), so it lives outside the shared check and only the
-in-session pass runs it: the merge continuation's adoption is up-only and runs
-while the tier is legitimately ahead of the pin, before that path stages the
-moved gitlink. The pin is read from the memory store's **index** rather than its
-`HEAD`, because the index is what `submodule update` checks a tier out at and
-what every advancing path stages the move into (D43) — a landed merge is not a
-defect for as long as the memory commit recording it is pending. A tier that is
-mid-merge gets the remedy its own state needs, `/gitlore:resolve`, rather than
-the return-to-the-pin checkout, which would unlink `MERGE_HEAD` and destroy the
-prepared merge. A mounted tier *absent* from the manifest
-is not an error, only inactive; the asymmetry is deliberate —
-listed-but-absent = broken, present-but-unlisted = dormant. In the continuation
-a refusal is reported but never blocks: the merge is synthesized and approved by
-then, and stranding it half-landed over an index problem the agent fixes in one
-edit is the worse outcome, so the merge commits uncomposed and says so.
-Composition spans the whole memory tree, so from the continuation it can also
-write a store *other* than the one being committed — the root index when a tier
-merged, a carrier when memory did. Those writes stay dirty and ride the next
-FR11 commit, the same float the `SessionStart` recompose produces.
+**lists a tier that is not present**, or if an
+**active tier is checked out off the gitlink** the memory store's index records
+for it. That last rule guards the down projection alone (D36), so it lives
+outside the shared check and only the in-session pass runs it: the merge
+continuation's adoption is up-only and runs while the tier is legitimately ahead
+of the pin, before that path stages the moved gitlink. The pin is read from the
+memory store's **index** rather than its `HEAD`, because the index is what
+`submodule update` checks a tier out at and what every advancing path stages the
+move into (D43) — a landed merge is not a defect for as long as the memory
+commit recording it is pending. A tier that is mid-merge gets the remedy its own
+state needs, `/gitlore:resolve`, rather than the return-to-the-pin checkout,
+which would unlink `MERGE_HEAD` and destroy the prepared merge. A mounted tier
+*absent* from the manifest is not an error, only inactive; the asymmetry is
+deliberate — listed-but-absent = broken, present-but-unlisted = dormant. In the
+continuation a refusal is reported but never blocks: the merge is synthesized
+and approved by then, and stranding it half-landed over an index problem the
+agent fixes in one edit is the worse outcome, so the merge commits uncomposed
+and says so. Composition spans the whole memory tree, so from the continuation
+it can also write a store *other* than the one being committed — the root index
+when a tier merged, a carrier when memory did. Those writes stay dirty and ride
+the next FR11 commit, the same float the `SessionStart` recompose produces.
 
 **The `Bash` arm is measured, not assumed**. Watching `Bash` widens the
 `PreToolUse` matcher from calls that name a memory file to every shell call, so

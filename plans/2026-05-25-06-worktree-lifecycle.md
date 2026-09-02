@@ -310,8 +310,7 @@ section, so no readme change is needed.
 
 - [x] **Step 5: Run the tests to verify they pass.**
 
-  Run: `bats tests/cc_hook_worktree_remove.bats`
-  Expected: PASS (all 6 tests).
+  Run: `bats tests/cc_hook_worktree_remove.bats` Expected: PASS (all 6 tests).
 
 - [x] **Step 6: Commit.**
 

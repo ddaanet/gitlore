@@ -83,22 +83,21 @@ either is the red-on-arrival gate this plan warns about.
 **Prose checks read code-stripped text; reference checks read raw.** Fenced
 blocks and inline spans are blanked before the prose and wikilink scans — that
 alone took dangling wikilinks from 13 to 3 (bash `[[ … ]]` tests) and cleared
-the `No agent named 'X' is currently addressable` false positives. The
-reference checks must not strip: a stale memory path's natural habitat *is* a
-code span, which is exactly the form all three `.claude/rules/shell.md` hits
-take.
+the `No agent named 'X' is currently addressable` false positives. The reference
+checks must not strip: a stale memory path's natural habitat *is* a code span,
+which is exactly the form all three `.claude/rules/shell.md` hits take.
 
 **Direct naming is case-sensitive.** `David` in prose is the violation;
-`/Users/david/…` in a path is a filesystem fact. The capital separates them
-with no exception list.
+`/Users/david/…` in a path is a filesystem fact. The capital separates them with
+no exception list.
 
 **The stale-token check anchors on the four `metadata.type` prefixes**
 (`feedback|reference|project|user`) rather than the plan's bare
 `[a-z]+(_[a-z]+){2,}`, which over a repo full of shell matches every ordinary
 identifier. Scope excludes `tests/` (hundreds of `memory/notes.md` fixtures),
 `plans/` and `docs/changelog/` (dated history, correctly citing the old names)
-and `plugin-dev/` (vendored). In the remaining live scope it fires 4 times,
-with no false positives.
+and `plugin-dev/` (vendored). In the remaining live scope it fires 4 times, with
+no false positives.
 
 **Broken-reference runs only inside `memory/`.** Shipped prose uses
 `memory/ddaanet/foo.md` as a placeholder and is right to.
@@ -109,8 +108,8 @@ the vocabulary they forbid.
 ### The warning review, done once
 
 All 42 deictic and 3 dangling-wikilink warnings were read against their lines.
-**One is a real defect; the other 44 are legitimate** — which retires the
-review rather than leaving it standing:
+**One is a real defect; the other 44 are legitimate** — which retires the review
+rather than leaving it standing:
 
 - **16 are the two guide files quoting their own forbidden vocabulary** —
   `design-doc-writing.md` and `memory-writing.md` exist to name `now`, `here`,

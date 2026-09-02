@@ -13,8 +13,8 @@ result behind where the abort does not.
 
 Either way the state file outlives the very pointer every gate discriminated on,
 and each of them — `pre-commit`, `pre-push`, `commit-memory.sh`,
-`push-memory.sh`, `merge-memory.sh` — printed the same sentence: *merge state
-file present without `MERGE_HEAD` — manual intervention required*.
+`push-memory.sh`, `merge-memory.sh` — printed the same sentence:
+*merge state file present without `MERGE_HEAD` — manual intervention required*.
 `/gitlore:resolve` printed it too, so the documented repair skill could not
 repair the one state a user reaches by asking for something perfectly ordinary.
 

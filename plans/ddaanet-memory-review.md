@@ -2,12 +2,12 @@
 
 Working ledger for a pass over the `memory/ddaanet/` facts, ordered by index
 line size, largest first. Each entry records the verdict against the
-`gitlore:memory-writing` rubric and my human partner's decision. An entry
-whose ruling has been applied leaves the ledger; git history holds it.
+`gitlore:memory-writing` rubric and my human partner's decision. An entry whose
+ruling has been applied leaves the ledger; git history holds it.
 
-Index now: 27,363 B across 100 lines (99 ddaanet + 1 project), 100 ddaanet
-fact files, against Claude Code's ~24,985 B loader cap. This pass buys
-routing, not headroom: the structural question is
+Index now: 27,363 B across 100 lines (99 ddaanet + 1 project), 100 ddaanet fact
+files, against Claude Code's ~24,985 B loader cap. This pass buys routing, not
+headroom: the structural question is
 `2026-08-27-memory-index-budget-decision.md`, and both governing texts forbid
 shortening a line to hit a byte target.
 
@@ -42,14 +42,14 @@ grown by addition, not by drift, and are not re-opened.
   relocation at its entry.
 - `green-is-not-evidence` has no skill home: gitlore does not own "about to
   accept a green test", `superpowers:test-driven-development` covers three of
-  its thirteen shapes, and edify spreads test-writing over three components
-  with no one firing at that moment. Whether edify wants a test-evidence
-  component is an edify design question, outside this repo's write scope.
+  its thirteen shapes, and edify spreads test-writing over three components with
+  no one firing at that moment. Whether edify wants a test-evidence component is
+  an edify design question, outside this repo's write scope.
 
 ## Open
 
-- Whether constrained generation (the skill quoted before facts are drafted,
-  as precompact reads it) or unconstrained-then-review (the FR11 gate after
-  the drafts exist, as handoff reads it) produces better facts. `just evals`
-  can settle it; the two arms are split by flow rather than held apart, so a
+- Whether constrained generation (the skill quoted before facts are drafted, as
+  precompact reads it) or unconstrained-then-review (the FR11 gate after the
+  drafts exist, as handoff reads it) produces better facts. `just evals` can
+  settle it; the two arms are split by flow rather than held apart, so a
   comparison has to control for that or run both placements within one flow.

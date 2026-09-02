@@ -19,16 +19,16 @@ not ok 7 a naked 'git -C memory commit' is blocked by the gate
 
 ### What the failure establishes
 
-- The fixture reached its **second** guard, not its first. `git submodule
-  status` succeeded and only `git -C memory rev-parse HEAD` failed
-  (`tests/helpers/fixtures.bash:38-42`). `submodule status` reads the gitlink
-  from the index, so it passes whether or not the working directory exists —
-  the tree that `cp -a "$template/." "$TMP_REPO/"` produced was missing
+- The fixture reached its **second** guard, not its first.
+  `git submodule status` succeeded and only `git -C memory rev-parse HEAD`
+  failed (`tests/helpers/fixtures.bash:38-42`). `submodule status` reads the
+  gitlink from the index, so it passes whether or not the working directory
+  exists — the tree that `cp -a "$template/." "$TMP_REPO/"` produced was missing
   `memory/` while its index entry was intact.
-- The suite runs parallel: `test-integration` passes
-  `--jobs $(nproc)` to `scripts/run-bats.sh` (`justfile:133`). The isolated
-  re-run used neither `--jobs` nor a second file, so it could not have
-  reproduced a cross-file race even if one exists.
+- The suite runs parallel: `test-integration` passes `--jobs $(nproc)` to
+  `scripts/run-bats.sh` (`justfile:133`). The isolated re-run used neither
+  `--jobs` nor a second file, so it could not have reproduced a cross-file race
+  even if one exists.
 - The template is built once per `bats` invocation under `BATS_RUN_TMPDIR`,
   behind an atomic `mkdir` lock plus a `.ready` marker
   (`_gitlore_ensure_parent_with_memory_template`), and every caller copies it
@@ -45,13 +45,13 @@ not ok 7 a naked 'git -C memory commit' is blocked by the gate
   the lock is released and the loop `break`s, so the caller returns 1 with no
   message of its own. That is a different symptom from the one observed (which
   carried a message), but it is a silent failure mode worth closing while here.
-- **Sandbox artifacts.** `cp -a` of a `.git` directory under an agent sandbox
-  is the documented home of phantom dotfiles and transient `Device or resource
-  busy` errors. The run happened inside a Claude Code Bash sandbox; a bare
-  terminal run is a cheap discriminator.
+- **Sandbox artifacts.** `cp -a` of a `.git` directory under an agent sandbox is
+  the documented home of phantom dotfiles and transient
+  `Device or resource busy` errors. The run happened inside a Claude Code Bash
+  sandbox; a bare terminal run is a cheap discriminator.
 - **`cp -a` error handling.** The copy's exit status is not checked. Whatever
-  the root cause, a partial copy currently surfaces as a confusing assertion
-  two lines later rather than as the copy failing.
+  the root cause, a partial copy currently surfaces as a confusing assertion two
+  lines later rather than as the copy failing.
 
 ### Reproduction
 

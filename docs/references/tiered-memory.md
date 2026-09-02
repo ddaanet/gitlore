@@ -1,11 +1,10 @@
 # Tiered memory — decisions D17, D26–D28, D32, D33
 
-The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17
-points at. Motivation, FR15 itself and the Architecture overview live in
-`design.md`; the decision-level detail is here and in three sibling nodes. Most
-of it is needed only when touching this subsystem; the exception is the
-tier-store trio D42–D44, which the commit and merge paths reach from outside
-it.
+The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17 points
+at. Motivation, FR15 itself and the Architecture overview live in `design.md`;
+the decision-level detail is here and in three sibling nodes. Most of it is
+needed only when touching this subsystem; the exception is the tier-store trio
+D42–D44, which the commit and merge paths reach from outside it.
 
 ---
 
@@ -29,15 +28,14 @@ than a single call, so its decisions are recorded individually as
   classifier · **D32** mount and create · **D33** a tier's always-on conventions
 - Composition, in [index-composition.md](index-composition.md) — **D29**
   composition is placement · **D30** the tier manifest · **D31** compose
-  triggers and validation · **D34** presence authority · **D35** the
-  welded-line refusal · **D36** two projections · **D37** order as a merge
-  input
-- The authoring surface, in
-  [index-authoring-sync.md](index-authoring-sync.md) — **D38** the one-way sync
-  · **D39** the routing-key advisories · **D40** pre-existing drift · **D47**
-  authoring guidance as a skill, curation as a command
-- Stores and merges, in [tier-stores.md](tier-stores.md) — **D42** tier
-  lockstep · **D43** tier pinning · **D44** tier merges. All three assume the
+  triggers and validation · **D34** presence authority · **D35** the welded-line
+  refusal · **D36** two projections · **D37** order as a merge input
+- The authoring surface, in [index-authoring-sync.md](index-authoring-sync.md) —
+  **D38** the one-way sync · **D39** the routing-key advisories · **D40**
+  pre-existing drift · **D47** authoring guidance as a skill, curation as a
+  command
+- Stores and merges, in [tier-stores.md](tier-stores.md) — **D42** tier lockstep
+  · **D43** tier pinning · **D44** tier merges. All three assume the
   detached-at-`live` branch model, which is D41, in
   [merge-and-resolve.md](merge-and-resolve.md).
 
@@ -54,10 +52,10 @@ in both `--print` and a real interactive (tmux PTY) session against a scratch
 - Bodies are **not** bulk-loaded. Recall is a **tool-gated `Read`** of a
   selected file (surfaced interactively as "Recalled 1 memory"; an auto-issued,
   empty-thinking Read in the transcript), steered by the root index. Disable
-  file tools → no body, in both modes. That is the 2.1.209 shape; at 2.1.258
-  the harness reads the selected file itself and injects it as a
-  `relevant_memories` attachment, behind a flag that is off by default
-  (`cc-memory-retrieval.md`, last section).
+  file tools → no body, in both modes. That is the 2.1.209 shape; at 2.1.258 the
+  harness reads the selected file itself and injects it as a `relevant_memories`
+  attachment, behind a flag that is off by default (`cc-memory-retrieval.md`,
+  last section).
 - A file listed in the root index recalls reliably (100% in probes); an
   unindexed/subdir-only file relies on the agent grepping to discover it (~75%).
 - **Both** the root one-liner **and** the per-file frontmatter `description`
@@ -83,8 +81,7 @@ agent-curated, always-loaded, and the reliable retrieval lever; the frontmatter
 `description` is a secondary, weaker match-surface.
 **No mechanism derives the index text from frontmatter** — deriving it would
 clobber curated lines and re-inject stale text
-([index-authoring-sync.md](index-authoring-sync.md)'s Rejected
-alternatives).
+([index-authoring-sync.md](index-authoring-sync.md)'s Rejected alternatives).
 
 **D27 — Tiers materialize as nested submodules, discovered by enclosure**
 
@@ -157,8 +154,8 @@ directly on a successful mount, folding the recompose and the post-mount triage
 nudge into the one JSON response it emits, then drops the compose stamp so the
 same manifest change is not reported twice in one batch. The nudge names the
 `memory-writing` skill rather than restating its tier test, and fires on any
-manifest change — including a hand edit that never ran the command, which is
-why the trigger lives there and not only in the command body (D48).
+manifest change — including a hand edit that never ran the command, which is why
+the trigger lives there and not only in the command body (D48).
 
 **D33 — A tier may carry always-on conventions, and the mount reports the import
 line rather than writing it**

@@ -15,9 +15,9 @@ file is what you need while running or changing a merge.
   **D7** scripts decide, the agent handles language · **D9** a sub-agent
   synthesizes the merge (requires the experimental flag) · **D13** a
   lock-contention retry wrapper guards mutating memory git calls · **D24** a
-  directive that names a sub-agent carries its own authorization · **D49**
-  merge commits are canned and unprompted, and an explicit take commits its
-  own bookkeeping
+  directive that names a sub-agent carries its own authorization · **D49** merge
+  commits are canned and unprompted, and an explicit take commits its own
+  bookkeeping
 
 ---
 
@@ -81,10 +81,10 @@ The division of labour is D7's: the script decides, the agent writes prose.
    tree (D44), synthesizes holistically whether or not git flagged a conflict,
    runs `git add -A`, and returns a prose summary. `No conflict.` is a valid
    answer.
-3. **The parent reviews** the summary against the two side diffs and resumes
-   the sub-agent via `SendMessage`. A rejection re-synthesizes. The user is
-   never prompted: both sides of the merge already passed an approval gate, so
-   the resolution is automated from their perspective (D49).
+3. **The parent reviews** the summary against the two side diffs and resumes the
+   sub-agent via `SendMessage`. A rejection re-synthesizes. The user is never
+   prompted: both sides of the merge already passed an approval gate, so the
+   resolution is automated from their perspective (D49).
 4. **The continuation** (`resolve.sh continue-after-merge`) composes the
    indexes, runs the dangling-pointer report, commits under the canned merge
    message (D49), commits a tier merge's bookkeeping in the root store, and
@@ -97,8 +97,8 @@ The division of labour is D7's: the script decides, the agent writes prose.
 
 A crashed merge leaves a state file behind, and every gate guards on it —
 classifying what survives and repairing, which may mean carrying straight on.
-The state machine (marker vs full state file, `MERGE_HEAD` present, cleared by
-a checkout, landed, staged, dead) is in
+The state machine (marker vs full state file, `MERGE_HEAD` present, cleared by a
+checkout, landed, staged, dead) is in
 [merge-state-recovery.md](merge-state-recovery.md).
 
 ### The `merge` skill
@@ -109,25 +109,25 @@ named an upstream-ahead tier has to be able to reach it from context. The body
 makes one call — `bash "$(git config gitlore.mergeCommand)"` — and reads the
 exit the same way.
 
-Per store, an already-contained remote is nothing to do, a strictly-ahead
-remote is a fast-forward followed by the tier adoption, and a diverged one
-prepares a merge marked `publish: "no"`, which stops the continuation after the
-local `HEAD:live` fast-forward. Memory's own missing remote is reported as
-nothing to take rather than a failure: a tier with no remote is a
-misconfiguration worth stopping on, since it exists to be shared, and the
-memory root is not. A tier fast-forward writes the root index and commits the
-pair — the moved gitlink and the recomposed index — under the canned
-bookkeeping message, so an explicit take leaves the store clean (D49).
+Per store, an already-contained remote is nothing to do, a strictly-ahead remote
+is a fast-forward followed by the tier adoption, and a diverged one prepares a
+merge marked `publish: "no"`, which stops the continuation after the local
+`HEAD:live` fast-forward. Memory's own missing remote is reported as nothing to
+take rather than a failure: a tier with no remote is a misconfiguration worth
+stopping on, since it exists to be shared, and the memory root is not. A tier
+fast-forward writes the root index and commits the pair — the moved gitlink and
+the recomposed index — under the canned bookkeeping message, so an explicit take
+leaves the store clean (D49).
 
 Stores are visited **root-first**, the mirror of the publish order. A root
 commit arriving from upstream already records the tier commits it names, all of
 them on the tier's own remote, so taking it first leaves each tier merely
 behind, and the tier loop's own fast-forward catches the worktree up with
-nothing left to record; tiers-first inverts that — the tier take's
-bookkeeping commit meets the upstream root's equivalent commit as a divergence
-and spends a synthesis on two sides that recorded the same fast-forward.
-Publishing keeps the opposite order for the opposite reason: a pointer must
-never go out ahead of what it points at.
+nothing left to record; tiers-first inverts that — the tier take's bookkeeping
+commit meets the upstream root's equivalent commit as a divergence and spends a
+synthesis on two sides that recorded the same fast-forward. Publishing keeps the
+opposite order for the opposite reason: a pointer must never go out ahead of
+what it points at.
 
 ## Decisions — D1, D2, D3, D6, D7, D9, D13, D24, D41, D49
 
@@ -286,11 +286,11 @@ what the memory store needs: its worktrees share one gitdir, and git refuses to
 check the same named branch out in two of them. A tier gets the opposite
 treatment — each memory worktree materializes its own tier clone, with its own
 refs (git 2.47.3; the tier fixtures' characterization notes record the same) —
-so a named branch there would not collide but diverge per worktree, with
-nothing watching either copy. Neither store carries one. The payoff is **one
-commit path** — a merge always
-reduces to "my pending commit vs the authoritative `live`, local then remote",
-and every resolution re-detaches at the new `live`.
+so a named branch there would not collide but diverge per worktree, with nothing
+watching either copy. Neither store carries one. The payoff is
+**one commit path** — a merge always reduces to "my pending commit vs the
+authoritative `live`, local then remote", and every resolution re-detaches at
+the new `live`.
 
 The model is the reason D1, D2, D3 and D6 read as they do, and the reason the
 tier decisions that build on it (D42, D43) can assume one shape of store rather
@@ -300,37 +300,36 @@ than two.
 own bookkeeping**
 
 Both parents of every gitlore merge already passed an approval gate: the local
-side at its own FR11 commit, the upstream side in the repo that published it.
-A merge introduces no unapproved content, so prompting the user gates a
-decision already made — a merge is automated from their perspective, and merge
-and bookkeeping commits are FR11's stated exemption. The parent agent still
-reviews the sub-agent's synthesis before the continuation runs; that check is
-the reviewer's, not the user's.
+side at its own FR11 commit, the upstream side in the repo that published it. A
+merge introduces no unapproved content, so prompting the user gates a decision
+already made — a merge is automated from their perspective, and merge and
+bookkeeping commits are FR11's stated exemption. The parent agent still reviews
+the sub-agent's synthesis before the continuation runs; that check is the
+reviewer's, not the user's.
 
 The messages are canned, shaped for each commit's readers. A **merge commit**,
 in whichever store diverged, is `merge <merged-repo> from <consumer>` — repo
 from the store's remote url, consumer from the parent working tree, because a
 shared tier's history is read by every repo that mounts it and the subject
 should say which one landed the merge. Its body lists the subjects of the
-**second-parent (local) side**: what the merge brought *into* `live`. The
-local repo is the only consumer that cares what was new in `live`; everyone
-else already holds the first-parent side, and what the merge contributed is
-the news — git's own `--log` convention under D6's direction. A **tier take's
-bookkeeping commit**, in the memory root, is
+**second-parent (local) side**: what the merge brought *into* `live`. The local
+repo is the only consumer that cares what was new in `live`; everyone else
+already holds the first-parent side, and what the merge contributed is the news
+— git's own `--log` convention under D6's direction. A
+**tier take's bookkeeping commit**, in the memory root, is
 `Update MEMORY.md for <tier> tier merge.` with the taken tier subjects as its
-body, so a fast-forward take — which creates no tier commit — is still
-recorded.
+body, so a fast-forward take — which creates no tier commit — is still recorded.
 
 The line between committing and not is **intention**. An explicit operation —
-`/gitlore:merge`, `/gitlore:push`, a resolve continuation servicing an
-explicit commit or push — leaves a clean store, committing the pair and
-advancing `live`; the implicit SessionStart fast-forward commits nothing, as
-before. One guard survives: a root store that held unapproved work before the
-take keeps the staged-pair discipline (D43), because a canned `commit` may
-only ever carry what the take itself staged. And push takes upstream under the
-same decision — attempt → take → attempt again — so only a genuine divergence
-yields to `/gitlore:resolve`, and the report credits only tips the store held
-before the run: a take is not a publication.
+`/gitlore:merge`, `/gitlore:push`, a resolve continuation servicing an explicit
+commit or push — leaves a clean store, committing the pair and advancing `live`;
+the implicit SessionStart fast-forward commits nothing, as before. One guard
+survives: a root store that held unapproved work before the take keeps the
+staged-pair discipline (D43), because a canned `commit` may only ever carry what
+the take itself staged. And push takes upstream under the same decision —
+attempt → take → attempt again — so only a genuine divergence yields to
+`/gitlore:resolve`, and the report credits only tips the store held before the
+run: a take is not a publication.
 
 ## Rejected alternatives
 

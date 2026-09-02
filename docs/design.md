@@ -9,9 +9,9 @@ This is the living design: what the system does, how it is built, and why it is
 built that way. It is kept in the present tense — how it got here is in
 [changelog.md](changelog.md). `docs/references/` is a graph of nodes, one per
 mechanism, each holding the detail behind a section here and the decisions and
-rejected alternatives arguing for it. The sections here summarize; read the
-node before making a claim about the mechanism it argues. Plans and specs live
-in `plans/`.
+rejected alternatives arguing for it. The sections here summarize; read the node
+before making a claim about the mechanism it argues. Plans and specs live in
+`plans/`.
 
 **Created:** 2026-04-11
 
@@ -27,10 +27,10 @@ in `plans/`.
    pre-commit command, summarizes pending memory changes in prose, obtains
    explicit user confirmation, writes the approved summary as the commit
    message, then commits — approving the summary approves the commit.
-5. When any divergence is detected (pending commit vs. trunk, or local trunk
-   vs. remote), `/gitlore:resolve` performs a semantic merge: a sub-agent with
-   fresh context synthesizes the merged content, reviewed by the parent agent —
-   never the user *(D49)* — before the merge lands under a canned message.
+5. When any divergence is detected (pending commit vs. trunk, or local trunk vs.
+   remote), `/gitlore:resolve` performs a semantic merge: a sub-agent with fresh
+   context synthesizes the merged content, reviewed by the parent agent — never
+   the user *(D49)* — before the merge lands under a canned message.
 6. One-command install configures the entire system.
 7. After `git clone`, the first `SessionStart` restores working state
    automatically. Running `/gitlore:install` again is not required; the plugin's
@@ -44,11 +44,11 @@ in `plans/`.
 10. **Install-time disclosure (informational).** Before creating the memory
     remote, the user is shown the proposed name, owner, visibility, and a notice
     that memory may contain session context — orientation, not a hard gate.
-11. **Per-commit review gate.** Every memory commit *authoring* content
-    requires explicit user approval of a prose summary before the commit
-    message file is written and the commit executes — the effective control
-    over what reaches the remote. Merge and take-bookkeeping commits are its
-    stated exemption: both sides already passed this gate *(D49)*.
+11. **Per-commit review gate.** Every memory commit *authoring* content requires
+    explicit user approval of a prose summary before the commit message file is
+    written and the commit executes — the effective control over what reaches
+    the remote. Merge and take-bookkeeping commits are its stated exemption:
+    both sides already passed this gate *(D49)*.
 12. **Coexistence.** Repos without a `gitlore-memory` submodule are unaffected
     when the plugin is present; every hook no-ops silently when it is not
     registered.
@@ -88,9 +88,9 @@ in `plans/`.
    (hook manager, remote provider, merge state, divergence flavor) lives in
    shell scripts; the agent handles summarization, synthesis and user
    interaction.
-5. **Double-commit semantics.** Memory is committed and pushed before the
-   parent commit/push, so the parent remote always points to a memory SHA
-   reachable on the memory remote.
+5. **Double-commit semantics.** Memory is committed and pushed before the parent
+   commit/push, so the parent remote always points to a memory SHA reachable on
+   the memory remote.
 6. **No tracked-file churn on plugin updates.** Hook scripts live in the plugin
    cache, not in the repo. Only stable wiring (hook manager config, sentinel
    file, `.claude/settings.json` flag) is committed.
@@ -99,15 +99,15 @@ in `plans/`.
 8. **Graceful degradation.** If memory is in a broken state, guard clauses
    (`.gitmodules` check, memory submodule init check, hooks-installed check)
    keep parent git operations unblocked.
-9. **Two test tiers, split by what each can see.** The bats suites own the
-   edge cases and every script's contract; the eval harness owns the **happy
-   paths**, driven through the real agent, because the seam between the agent
-   and the shell is invisible to bats. The split and the `pass^k` shape are in
+9. **Two test tiers, split by what each can see.** The bats suites own the edge
+   cases and every script's contract; the eval harness owns the **happy paths**,
+   driven through the real agent, because the seam between the agent and the
+   shell is invisible to bats. The split and the `pass^k` shape are in
    [testing.md](references/testing.md).
 10. **The gate is cheap enough to run on every commit.** Not currently met:
     `just precommit` runs ~530 s and is barely parallel, so cutting per-case
-    work is the lever, not `--jobs`; the input-hash sentinel makes the full
-    cost fall precisely on a change in flight. Measurement in
+    work is the lever, not `--jobs`; the input-hash sentinel makes the full cost
+    fall precisely on a change in flight. Measurement in
     [testing.md](references/testing.md).
 11. **Overrides.** Confirmation gates described here are defaults; project or
     user instructions (`CLAUDE.md` and equivalents) can relax them, so a user
@@ -136,10 +136,10 @@ one-branch-per-worktree rule never binds — which it would on the memory store,
 whose worktrees share one gitdir. A tier is the opposite: each memory worktree
 clones it separately, so a named branch would diverge rather than collide.
 
-The gitlink a parent commit records is always an ancestor of memory's `live`,
-or `live` itself. A gitlink behind memory's tip is the resting state, recorded
-by the next parent commit, so a push refused by divergence is resolved and
-pushed again, and no parent commit is ever rewritten to re-pin memory (D46).
+The gitlink a parent commit records is always an ancestor of memory's `live`, or
+`live` itself. A gitlink behind memory's tip is the resting state, recorded by
+the next parent commit, so a push refused by divergence is resolved and pushed
+again, and no parent commit is ever rewritten to re-pin memory (D46).
 
 The session-start detach and fast-forward, the advance after a commit, the two
 divergence gates that reduce to one shape (D6, D41), and why the parent's ref
@@ -190,29 +190,29 @@ git and decides (D7).
   human decides to run it (D47, in
   [index-authoring-sync.md](references/index-authoring-sync.md)).
 - **Skills** — `resolve`, the semantic merge of a diverged store, split across a
-  gate, a fresh-context sub-agent (D9), the parent's approval and a
-  continuation script; `push`, which publishes every store with no parent push
-  and no approval step, because FR11 gated the content at commit time;
-  `merge`, which takes what every remote holds and publishes nothing (D43,
-  D49); `recall`, which fetches bodies into context mid-task with no hook, no
-  request file and no state (D18); and `memory-writing`, whether a learning
-  becomes a fact, what it says, which tier it lands in, whether its line
-  routes, and where it is invoked (D47, D48). Each is a skill rather than a
-  command because each has an entry no user types — a hook's stderr, a session
-  start, an ending session, a token in a tool result, a write under `memory/`.
-  Steps in [merge-and-resolve.md](references/merge-and-resolve.md).
+  gate, a fresh-context sub-agent (D9), the parent's approval and a continuation
+  script; `push`, which publishes every store with no parent push and no
+  approval step, because FR11 gated the content at commit time; `merge`, which
+  takes what every remote holds and publishes nothing (D43, D49); `recall`,
+  which fetches bodies into context mid-task with no hook, no request file and
+  no state (D18); and `memory-writing`, whether a learning becomes a fact, what
+  it says, which tier it lands in, whether its line routes, and where it is
+  invoked (D47, D48). Each is a skill rather than a command because each has an
+  entry no user types — a hook's stderr, a session start, an ending session, a
+  token in a tool result, a write under `memory/`. Steps in
+  [merge-and-resolve.md](references/merge-and-resolve.md).
 - **Claude Code hooks** — `SessionStart` is the self-healing pass and does the
   most work; it is also where a new worktree's memory worktree is created,
   lazily, so worktree support is uniform however the worktree came to be (no
   `WorktreeCreate` hook; `WorktreeRemove` tears it down, advisory only). The
-  rest are single-purpose:
-  `PostToolUse(Bash)` nudges for a commit summary once per dirty episode (the
-  FR11 opening), `PostToolBatch` acts on the two intent files and reports a
-  mid-session plugin upgrade (D21), the `PreToolUse`/`PostToolBatch` index pair
-  keys on what changed rather than on what the call declared (D31), and
-  `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
-  drift (D15); `SessionStart` and `PreCompact` re-arm the once-per-episode
-  notices. [session.md](references/session.md); the nudge in
+  rest are single-purpose: `PostToolUse(Bash)` nudges for a commit summary once
+  per dirty episode (the FR11 opening), `PostToolBatch` acts on the two intent
+  files and reports a mid-session plugin upgrade (D21), the
+  `PreToolUse`/`PostToolBatch` index pair keys on what changed rather than on
+  what the call declared (D31), and `PostToolUse(EnterWorktree|ExitWorktree)`
+  guards against in-process worktree drift (D15); `SessionStart` and
+  `PreCompact` re-arm the once-per-episode notices.
+  [session.md](references/session.md); the nudge in
   [commit-gate.md](references/commit-gate.md), the index pair in
   [index-composition.md](references/index-composition.md).
 - **Git hooks and entry points** — `pre-commit` commits every dirty tier, then
@@ -248,9 +248,9 @@ The step lists are in [workflows.md](references/workflows.md): commit (nudge,
 prose summary, approval, `pre-commit`); push (`pre-push`, tiers then memory);
 tier write (rides the commit flow, tier first, under one summary); publish
 without a parent push (`/gitlore:push` over `push-memory.sh`); take without
-publishing (`/gitlore:merge`, root store first, D49); resolve, primary
-when the agent reads a gate's stderr and resolves inline, fallback when a plain
-terminal sends the user to Claude Code; clone (the first `SessionStart` restores
+publishing (`/gitlore:merge`, root store first, D49); resolve, primary when the
+agent reads a gate's stderr and resolves inline, fallback when a plain terminal
+sends the user to Claude Code; clone (the first `SessionStart` restores
 settings, `live` and wiring); worktree creation (`SessionStart` adds the memory
 worktree, detached).
 
@@ -313,8 +313,8 @@ or push in flight.
 - **D20** — a push entry point the skill calls directly, with no trigger file
 - **D46** — a parent commit is never rewritten to re-pin memory
 
-*Rejected:* a tip amend to re-pin memory · triggering a memory commit through
-a parent commit · reimplementing the sentinel, `push HEAD:live` and merge-state
+*Rejected:* a tip amend to re-pin memory · triggering a memory commit through a
+parent commit · reimplementing the sentinel, `push HEAD:live` and merge-state
 logic in a caller · a caller that pre-writes the commit-message file.
 
 **Install and the memory remote** — what one-time setup does and refuses.
@@ -338,8 +338,8 @@ memory push optional in v1 · replaying the sentinel as a shell command.
 `~/.claude/settings.json` · `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` via `.envrc` ·
 an explicit `gitlore` launch command instead of shadowing `claude`.
 
-**The session and its wrappers** — where the wrappers live and are anchored,
-and what SessionStart says to whom.
+**The session and its wrappers** — where the wrappers live and are anchored, and
+what SessionStart says to whom.
 [session.md](references/session.md)
 
 - **D5** — wrapper scripts live in the git common dir, untracked
@@ -389,8 +389,8 @@ shared-tier indexes · a `merge` driver plus `.gitattributes` ·
 ## Rejected Alternatives
 
 Each is named on the *Rejected* line of its decision group above and argued in
-the `## Rejected alternatives` section that closes that group's node. A
-decision that was later inverted lives in the changelog, not here.
+the `## Rejected alternatives` section that closes that group's node. A decision
+that was later inverted lives in the changelog, not here.
 
 ---
 

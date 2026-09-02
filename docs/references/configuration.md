@@ -2,8 +2,8 @@
 
 Every file and key gitlore relies on, and what each one is for. `design.md`'s
 Architecture states the three-way split; this file is the inventory behind it,
-which is what you need while debugging a session that is not healing itself or
-a hook that is guarding on the wrong thing.
+which is what you need while debugging a session that is not healing itself or a
+hook that is guarding on the wrong thing.
 
 ---
 

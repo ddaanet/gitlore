@@ -34,8 +34,8 @@ upgrade up, and both are unreachable:
   installs are pinned per scope, not globally (`~/code/home` at `0.4.3`,
   `~/code/gitmoji` at `0.3.0`, with `0.4.4` sitting in the same cache), so
   "newest cached" is not "installed here".
-- **Wrappers self-heal from `CLAUDE_PLUGIN_ROOT`.** That variable is exported
-  to CC hooks only. A git hook fires from agent Bash, where it is unset, so the
+- **Wrappers self-heal from `CLAUDE_PLUGIN_ROOT`.** That variable is exported to
+  CC hooks only. A git hook fires from agent Bash, where it is unset, so the
   wrapper has nothing to heal from — and the split-version objection stands.
 
 The third direction — make the failure self-describing — is the whole fix, and
@@ -66,8 +66,8 @@ Guards, in order, each an `exit 0`:
    exist in a gitlore repo.
 3. `$CLAUDE_PLUGIN_ROOT` is not under `cache_prefix`. A `--plugin-dir` checkout
    is never stale, and without this guard development sessions — including this
-   repo's own, whose `gitlore.hooksDir` is `/Users/david/code/gitlore/scripts/
-   git-hooks` — would warn every batch.
+   repo's own, whose `gitlore.hooksDir` is
+   `/Users/david/code/gitlore/scripts/ git-hooks` — would warn every batch.
 4. `record` missing or unparseable.
 5. This session's marker already exists.
 
@@ -124,10 +124,10 @@ ran two full cycles of exactly those remedies.
    test-side globals so every negative is paired with a positive over the same
    fixture: fires when the record names a different `installPath` for this
    project; silent when the frozen root is the recorded one; silent when the
-   frozen root is outside `cache_prefix` *while the record still names a
-   different path*; silent on a second batch, and firing again once the marker
-   is cleared; silent outside a gitlore repo. Plus: the hook never fails a batch
-   (malformed record → exit 0, no output).
+   frozen root is outside `cache_prefix`
+   *while the record still names a different path*; silent on a second batch,
+   and firing again once the marker is cleared; silent outside a gitlore repo.
+   Plus: the hook never fails a batch (malformed record → exit 0, no output).
 2. **Green.** `gitlore_upgrade_nudge_file` + its reset in
    `scripts/lib/index-sync.sh`, the reset call in
    `scripts/cc-hooks/recall-reset.sh`, and

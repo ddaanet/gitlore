@@ -14,8 +14,8 @@ run. The justfile documents the exclusion as a deliberate trade whose cover is
 practice the cover does not exist.
 
 Confirmed live at the v0.4.5 release: `commands/add-tier.md`,
-`skills/merge/SKILL.md` and `skills/push/SKILL.md` all changed since v0.4.4
-with the gate reporting cached.
+`skills/merge/SKILL.md` and `skills/push/SKILL.md` all changed since v0.4.4 with
+the gate reporting cached.
 
 ### Decisions
 
@@ -47,9 +47,9 @@ with the gate reporting cached.
   "declared" is exactly what that suite is watching.
 - Both suites already `load helpers/setup` and reference `$PLUGIN_ROOT`, so the
   moved tests should need no rewriting — verify rather than assume.
-- Whichever way it is wired, `evals_inputs` is currently `precommit_inputs`
-  plus the three directories; that composition needs re-checking so evals does
-  not lose or double-count coverage.
+- Whichever way it is wired, `evals_inputs` is currently `precommit_inputs` plus
+  the three directories; that composition needs re-checking so evals does not
+  lose or double-count coverage.
 
 ### Rejected approaches
 

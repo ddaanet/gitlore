@@ -440,8 +440,8 @@ creation as-is; only the append changed.
 
 - [x] **Step 4: Run the wire suite — husky tests green**
 
-Run: `bats tests/hook_manager_wire.bats`
-Expected: all husky tests PASS (append, create-missing, idempotent, sentinel).
+Run: `bats tests/hook_manager_wire.bats` Expected: all husky tests PASS (append,
+create-missing, idempotent, sentinel).
 
 - [x] **Step 5: Commit**
 
@@ -815,8 +815,7 @@ Append to `tests/pre_push_hook.bats` (it loads `helpers/fixtures` and defines
 
 - [x] **Step 6: Run to confirm failure**
 
-Run: `bats tests/pre_push_hook.bats`
-Expected: the new test FAILS.
+Run: `bats tests/pre_push_hook.bats` Expected: the new test FAILS.
 
 - [x] **Step 7: Add the same guard to pre-push**
 
@@ -838,8 +837,7 @@ fi
 
 - [x] **Step 8: Run the pre-push suite — green**
 
-Run: `bats tests/pre_push_hook.bats`
-Expected: all tests PASS.
+Run: `bats tests/pre_push_hook.bats` Expected: all tests PASS.
 
 - [x] **Step 9: Commit**
 
@@ -998,13 +996,11 @@ valid.)
 
 - [x] **Step 5: Run the new suite — green**
 
-Run: `bats tests/cc_hook_worktree_remove.bats`
-Expected: all four tests PASS.
+Run: `bats tests/cc_hook_worktree_remove.bats` Expected: all four tests PASS.
 
 - [x] **Step 6: Validate hooks.json is still valid JSON**
 
-Run: `jq . hooks/hooks.json >/dev/null && echo OK`
-Expected: `OK`.
+Run: `jq . hooks/hooks.json >/dev/null && echo OK` Expected: `OK`.
 
 - [x] **Step 7: Add the new test file to the Makefile**
 

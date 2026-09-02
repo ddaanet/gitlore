@@ -1,7 +1,6 @@
 # Evals Design — Memory Commit Flow
 
-**Status:** Approved
-**Date:** 2026-05-26
+**Status:** Approved **Date:** 2026-05-26
 
 ---
 

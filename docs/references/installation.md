@@ -4,10 +4,10 @@ The literal setup detail `design.md`'s Architecture points at — the install
 command's own steps, per-hook-manager wiring syntax, and memory remote creation
 — followed by the decisions that argue for that shape (D8, D25). Motivation
 stays in `design.md`; this file is what you need while installing or debugging
-an install, or while proposing a change to how any of it is wired.
-The launcher shim and its two placements are in
-[memory-redirect.md](memory-redirect.md); the hook wrapper files and what every
-`SessionStart` does are in [session.md](session.md).
+an install, or while proposing a change to how any of it is wired. The launcher
+shim and its two placements are in [memory-redirect.md](memory-redirect.md); the
+hook wrapper files and what every `SessionStart` does are in
+[session.md](session.md).
 
 - Install and the remote — **D8** remote creation requires explicit user
   confirmation · **D25** direct wiring refuses rather than appends after an
@@ -133,8 +133,8 @@ through an explicit one:
 command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']
 ```
 
-The trailing `'gitlore'` sets `$0`, and overcommit appends the applicable
-files as `$@`.
+The trailing `'gitlore'` sets `$0`, and overcommit appends the applicable files
+as `$@`.
 
 *None, i.e. direct* (sentinel `direct`, a keyword SessionStart interprets rather
 than runs) — shell stubs at `git rev-parse --git-path hooks/<hook>` that exec
@@ -268,21 +268,21 @@ The sentinel is tracked, so it arrives with every clone. Replaying it with
 whatever line the clone brought in, gated only by `gitlore.enabled` in the
 equally tracked `.claude/settings.json` — an arbitrary-code path that a
 contributor, a compromised upstream, or a careless hand edit could reach, and
-that ran before the user had read anything. The three manager commands the
-wire scripts write are the only lines gitlore ever needs to run, so the replay
+that ran before the user had read anything. The three manager commands the wire
+scripts write are the only lines gitlore ever needs to run, so the replay
 matches against exactly those literals; anything else runs nothing and is
-reported on `systemMessage` with the way forward. The cost is that a new
-manager needs a wire script and an arm here rather than a hand-typed sentinel
-line, which is the right cost: a command gitlore runs on a stranger's clone
-should be one gitlore shipped.
+reported on `systemMessage` with the way forward. The cost is that a new manager
+needs a wire script and an arm here rather than a hand-typed sentinel line,
+which is the right cost: a command gitlore runs on a stranger's clone should be
+one gitlore shipped.
 
 ## Rejected alternatives
 
-**Replaying the sentinel as a shell command.** The `*) sh -c "$cmd"` arm was
-the original design, so a user could wire an unsupported manager by writing
-its install command into the sentinel by hand. That flexibility is what made
-the file an execution vector; `manual` plus a copy-paste snippet covers the
-same need without gitlore running the line.
+**Replaying the sentinel as a shell command.** The `*) sh -c "$cmd"` arm was the
+original design, so a user could wire an unsupported manager by writing its
+install command into the sentinel by hand. That flexibility is what made the
+file an execution vector; `manual` plus a copy-paste snippet covers the same
+need without gitlore running the line.
 
 **A strictly non-empty initial commit at install.** Install passes
 `--allow-empty` as a safety net: the commit normally carries migrated
