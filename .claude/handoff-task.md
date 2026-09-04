@@ -1,12 +1,12 @@
-Piloting three sandbox-symptom detectors — `.git/index.lock`, phantom
-dotfiles, and sandboxed `claude -p` — to decide whether `sandbox-effects`
-knowledge moves out of always-loaded memory index lines and into hooks that
-fire only when the symptom appears. The plan is
-`plans/brief-sandbox-detector-pilot.md`, which carries the decisions, the
-rejected homes (`craft`, `prohibitions`), and the three pilot layers. Layer 1,
-the corpus replay over `~/.claude/projects`, is the next step and the one whose
-numbers decide whether a plugin gets created at all.
+Two threads.
 
-A second thread was left mid-flight: a subagent decompiling CC 2.1.258 to
-corroborate statically that no hook is dispatched on the `` !`cmd` ``
-slash-command expansion path, which a live probe already measured.
+The sandbox-symptom detector pilot has left gitlore for a new `sandbox-lies`
+repo at `/Users/david/code/sandbox-lies`, which is not yet a git repository.
+Its `BRIEF.md` is the mission and carries the five phases; layers 1 and 2 are
+finished — the matchers are measured over the transcript corpus and a 26-case
+fixture suite runs there today — and layer 3, the live discriminator probes,
+is unbuilt. That work happens in that repo, not here.
+
+In gitlore the residual is the ddaanet memory curation that was in flight
+before the pilot: the index budget against the loader cutoff, the
+design-moment tier merges, the oversized-fact splits, and the review pass.
