@@ -1,13 +1,19 @@
 ## Open decisions
 
+- `docs/design.md` sits at exactly its 400-line cap, and outline item B needs a
+  line under §Architecture / Git hooks and entry points. The outline's Design
+  record section now puts the split decision first rather than offering
+  word-replacement: split, or accept a bounded overage on one cohesive doc.
+  This blocks the design-record item of the runbook.
 - The memory index against Claude Code's ~24,985-byte loader cutoff, per
-  `plans/2026-08-27-memory-index-budget-decision.md`. The root index is 25,746
-  bytes and truncating. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees
-  ~4,600 by relocation and merges, and the three dropped briefs a further
-  ~10,400. Decide: run curation first and re-measure, or still do the
-  composition reorder (D29 layout rule, D36 rewrite, `gitlore_order_merge` in
-  `index-composition.md`). `sandbox-effects` holds 988 bytes of the overshoot
-  and retires as sandbox-lies phase 4, which changes the arithmetic.
+  `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports
+  102% of budget and is truncating.
+  `plans/2026-09-02-ddaanet-design-moment-facts.md` frees ~4,600 by relocation
+  and merges, and the three dropped briefs a further ~10,400. Decide: run
+  curation first and re-measure, or still do the composition reorder (D29
+  layout rule, D36 rewrite, `gitlore_order_merge` in `index-composition.md`).
+  `sandbox-effects` holds 988 bytes of the overshoot and retires as
+  sandbox-lies phase 4, which changes the arithmetic.
 - Which gitlore-side tier merges from
   `plans/2026-09-02-ddaanet-design-moment-facts.md` to execute: `plan-writing`
   (7 facts to 1), `guard-design` (3 to 1), folding `test-the-invocation-path`
@@ -33,19 +39,10 @@
   sandbox-lies. It was tracked here, and its finding — no hook dispatches on
   the `` !`cmd` `` path — matters to gitlore independently as a hook-heavy
   plugin.
-- `docs/design.md` sits at exactly the 400-line cap, and outline item B needs a
-  line under §Architecture / Git hooks and entry points. Fit it by replacing
-  words, or take the split decision first.
 
 ## Remaining
 
-- Resume `/proof plans/index-edit-propagation/outline.md` from its orientation
-  checkpoint, then `/runbook`.
-- Probe whether any hook output survives a subagent batch — one `claude -p` run
-  with a trivial subagent edit to `memory/MEMORY.md`, watching for the compose
-  hook's `systemMessage`/`additionalContext` in either transcript. Decides
-  whether the subagent-side compose report needs a marker mitigation; the
-  outline's items B and C do not depend on the answer.
+- `/runbook` on `plans/index-edit-propagation/outline.md`.
 - Triage `inbox/brief-add-tier-index-budget-advisory.md`: `/gitlore:add-tier`
   composes the root index but cannot warn that the result overflows the loader
   cutoff, and the mount is the one operation that adds tens of KB in a single
@@ -53,7 +50,9 @@
 - Split the oversized token-keyed facts so recall reaches them:
   `hook-output-channels` (23% reachable), `bats-shellcheck-gotchas` (40%),
   `stale-plugin-code` (45%). Hub under 4KB carrying the symptom table,
-  siblings beside it.
+  siblings beside it. `subagent-hook-output-confined` was written as its own
+  file rather than a section of `hook-output-channels` for exactly this
+  reason, and is a natural sibling once the hub exists.
 - Extend the memory-writing skill's index-line guidance to both axes: a
   design-moment trigger needs a symptom-shaped hook or a home at a skill
   checkpoint, and a body past 4096 bytes is unreachable beyond that point
