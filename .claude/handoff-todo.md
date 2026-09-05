@@ -1,7 +1,7 @@
 ## Open decisions
 
 - The memory index against Claude Code's ~24,985-byte loader cutoff, per
-  `plans/2026-08-27-memory-index-budget-decision.md`. The root index is 26,171
+  `plans/2026-08-27-memory-index-budget-decision.md`. The root index is 25,746
   bytes and truncating. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees
   ~4,600 by relocation and merges, and the three dropped briefs a further
   ~10,400. Decide: run curation first and re-measure, or still do the
@@ -33,9 +33,19 @@
   sandbox-lies. It was tracked here, and its finding — no hook dispatches on
   the `` !`cmd` `` path — matters to gitlore independently as a hook-heavy
   plugin.
+- `docs/design.md` sits at exactly the 400-line cap, and outline item B needs a
+  line under §Architecture / Git hooks and entry points. Fit it by replacing
+  words, or take the split decision first.
 
 ## Remaining
 
+- Resume `/proof plans/index-edit-propagation/outline.md` from its orientation
+  checkpoint, then `/runbook`.
+- Probe whether any hook output survives a subagent batch — one `claude -p` run
+  with a trivial subagent edit to `memory/MEMORY.md`, watching for the compose
+  hook's `systemMessage`/`additionalContext` in either transcript. Decides
+  whether the subagent-side compose report needs a marker mitigation; the
+  outline's items B and C do not depend on the answer.
 - Triage `inbox/brief-add-tier-index-budget-advisory.md`: `/gitlore:add-tier`
   composes the root index but cannot warn that the result overflows the loader
   cutoff, and the mount is the one operation that adds tens of KB in a single
@@ -53,8 +63,6 @@
   precision.
 - Continue the ddaanet review pass from the queue in
   `plans/ddaanet-memory-review.md` (entry 5, `hook-output-channels`).
-- `docs/design.md` sits at exactly the 400-line cap; the next hub addition
-  needs a split decision.
 - Check the bang-expansion decompile report's verbatim excerpts against the CC
   2.1.258 bundle before trusting its verdict; it now lives at
   `sandbox-lies/plans/2026-09-02-bang-expansion-hook-decompile.md`.

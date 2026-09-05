@@ -715,7 +715,7 @@ gitlore_compose_and_report() {
       n=$(printf '%s\n' "$result" | grep -c '^composed ')
       if [ "$n" -eq 1 ]; then unit="index"; else unit="indexes"; fi
       sysmsg="gitlore: recomposed tier pointers ($n $unit)"
-      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and projected root-authored tier lines down into their carrier — including deletions, so removing a tier fact's line from the root index is enough; its carrier copy goes in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition moves or drops lines; it never changes a line's text.
+      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and projected root-authored tier lines down into their carrier — including deletions, so removing a tier fact's line from the root index is enough; its carrier copy goes in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition places, drops and re-texts carrier lines to match the root index; the root index's own lines are only reordered, never re-texted.
 $result"
     fi
 
