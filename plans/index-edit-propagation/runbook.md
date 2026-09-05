@@ -171,7 +171,16 @@ surface, backfilling descriptions that never matched their index lines.
        to the negative: a bats body runs under errexit, so a negative sitting
        behind a positive runs only in the case where the positive already held.
 
-  3. **An off-pin refusal is reported and the commit proceeds.**
+  3. **The compose return code decides — rc 1 reports and the commit proceeds,
+     rc 2 aborts.** One `case` over `gitlore_compose`'s status, and both arms in
+     one cycle because each is the other's control: an implementation that
+     aborts on every non-zero rc passes the rc-2 case and fails the rc-1 one,
+     and one that never aborts does the reverse. Written as separate cycles,
+     each arm gets authored without the other's constraint in view. Both cases
+     go in `tests/commit_memory.bats`; their inductions are independent and
+     neither shares a fixture with the other.
+
+     **rc 1 — an off-pin refusal is reported and the commit proceeds.**
      `gitlore_compose` returns 1 when `gitlore_compose_check` or
      `gitlore_compose_check_pins` refuses, having written nothing (D31, D36):
      projecting root's older text over an unadopted carrier would destroy
@@ -184,33 +193,33 @@ surface, backfilling descriptions that never matched their index lines.
      is never `git -C memory add`-ed. The tier must not be mid-merge, or
      `gitlore_compose_check_pins` emits its other message instead. Memory is
      otherwise dirty with a fresh approved summary, so the commit is reached.
-     - `an off-pin compose refusal is reported and does not abort the commit` in
-       `tests/commit_memory.bats`, run with `--separate-stderr` — asserts exit
-       0, that `git -C memory rev-parse HEAD` advanced past its pre-run value,
-       and that `$stderr` carries both the header phrase
-       `tier composition refused` and the fragment `is checked out at` from
-       `gitlore_compose_check_pins`' own problem line. Exit-code-only would pass
-       against unchanged code. Two strings rather than one because they fail for
-       different faults: the header proves the rc-1 branch fired, the fragment
-       proves the problem lines were forwarded rather than swallowed. Not the
-       bare token `refused` — a token, not a phrase, on a channel other
-       producers write to.
+     - `an off-pin compose refusal is reported and does not abort the commit`,
+       run with `--separate-stderr` — asserts exit 0, that
+       `git -C memory rev-parse HEAD` advanced past its pre-run value, and that
+       `$stderr` carries both the header phrase `tier composition refused` and
+       the fragment `is checked out at` from `gitlore_compose_check_pins`' own
+       problem line. Exit-code-only would pass against unchanged code. Two
+       strings rather than one because they fail for different faults: the
+       header proves the rc-1 branch fired, the fragment proves the problem
+       lines were forwarded rather than swallowed. Not the bare token `refused`
+       — a token, not a phrase, on a channel other producers write to.
 
-  4. **A write failure aborts the commit.** `gitlore_compose` returns 2 when
-     `gitlore_compose_write` fails partway, leaving the store partly composed; a
-     half-written carrier must not be committed. Reuse the induction proven at
-     `tests/index_compose.bats:921` — `chmod a-w memory/ddaanet`. What that
-     fails is the **`mv`** at `scripts/lib/index-compose.sh:676`, not the temp
-     write: `gitlore_compose_write` puts its temp file in the store's own gitdir
-     via `rev-parse --absolute-git-dir` (`:656`), never beside the target. The
-     comment on the existing case says the opposite and is stale; do not carry
-     it forward. Restore `chmod u+w` immediately after `run`, and guard with
-     `[ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"`, the guard
-     `tests/index_sync.bats:356` carries and the existing compose case lacks.
-     - `a compose write failure aborts the commit` in `tests/commit_memory.bats`
-       — asserts non-zero exit, that `git -C memory rev-parse HEAD` is
-       unchanged, and that the approved `gitlore_commit_msg_file` still exists
-       (the abort must not consume it, or the retry loses the user's approval).
+     **rc 2 — a write failure aborts the commit.** `gitlore_compose` returns 2
+     when `gitlore_compose_write` fails partway, leaving the store partly
+     composed; a half-written carrier must not be committed. Reuse the induction
+     proven at `tests/index_compose.bats:921` — `chmod a-w memory/ddaanet`. What
+     that fails is the **`mv`** at `scripts/lib/index-compose.sh:676`, not the
+     temp write: `gitlore_compose_write` puts its temp file in the store's own
+     gitdir via `rev-parse --absolute-git-dir` (`:656`), never beside the
+     target. The comment on the existing case says the opposite and is stale; do
+     not carry it forward. Restore `chmod u+w` immediately after `run`, and
+     guard with `[ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"`,
+     the guard `tests/index_sync.bats:356` carries and the existing compose case
+     lacks.
+     - `a compose write failure aborts the commit` — asserts non-zero exit, that
+       `git -C memory rev-parse HEAD` is unchanged, and that the approved
+       `gitlore_commit_msg_file` still exists (the abort must not consume it, or
+       the retry loses the user's approval).
 
 ---
 
@@ -424,7 +433,22 @@ surface, backfilling descriptions that never matched their index lines.
      - `relay_drain on an empty store sets both variables empty and returns 0` —
        asserts status 0 and that both variables are the empty string.
 
-  2. **The compose hook relays in addition to reporting, when keyed.**
+  2. **Both PostToolBatch reports relay on the same wiring — write when keyed,
+     fold in when not.** `index-compose.sh` and `index-sync-post.sh` converge on
+     the same shape before they emit: a sysmsg/ctx pair, a non-empty guard over
+     it, and one `jq -n` (`index-compose.sh:55-59`,
+     `index-sync-post.sh:232-240`). The relay is the same insertion at the same
+     point in both, which is why the two hooks are one cycle rather than two —
+     authored separately, one mechanism acquires two shapes, and the constraint
+     that binds both is easy to see only once: the fold must precede the
+     emission guard, or a parent-side run whose only report is a relayed one
+     emits nothing. Both hooks also exit early, upstream of the report path,
+     when nothing they watch changed, so a marker is not necessarily drained by
+     the very next parent-side batch; slice 3 is the backstop for that.
+
+     Four cases, two per hook, each hook keeping its own keyed/unkeyed pair —
+     the keyed case pins that the subagent still gets its own report, the
+     unkeyed one that the parent gets the relayed block and the marker is gone.
      - `a keyed compose run writes a marker and still emits its own json` in
        `tests/cc_hook_index_compose.bats` — pre-hook and compose hook both with
        `agent_id: "a1"` over a root index edit that composes; asserts the run's
@@ -437,8 +461,6 @@ surface, backfilling descriptions that never matched their index lines.
        `systemMessage` carries both its own `recomposed tier pointers` line and
        the relayed block, that the block is attributed to `a1`, and that the
        marker file is gone.
-
-  3. **The same relay carries the index-sync report.**
      - `a keyed index-sync run writes its replacement report to a marker` in
        `tests/index_sync.bats` — pre- and post-hook with `agent_id: "a1"` over
        an index line whose hook changed; asserts the keyed marker contains the
@@ -447,7 +469,7 @@ surface, backfilling descriptions that never matched their index lines.
        post-hook's `systemMessage` carries the relayed block attributed to `a1`
        and the marker is removed.
 
-  4. **SessionStart drains a marker that outlived its session.**
+  3. **SessionStart drains a marker that outlived its session.**
      - `session-start drains a stranded relay marker` in
        `tests/cc_hook_session_start.bats` — that suite owns `session-start.sh`,
        not the compose hook's. Writes a marker under `a1` with
@@ -462,7 +484,7 @@ surface, backfilling descriptions that never matched their index lines.
        sourced from the lib — sourcing it moves both sides together and the
        positive stops pinning the wording.
 
-  5. **A marker that cannot be written does not lose the report.**
+  4. **A marker that cannot be written does not lose the report.**
      - `a failed relay write leaves the subagent's own report intact` in
        `tests/cc_hook_index_compose.bats`, guarded with
        `[ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"` —
