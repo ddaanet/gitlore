@@ -1,12 +1,12 @@
 # How Claude Code stamps memory frontmatter — binary reading
 
-**Binary inspected:** `/Users/david/.local/share/claude/versions/2.1.261`
-(bun single-file executable, bundle self-identifies as `// Version: 2.1.261`).
+**Binary inspected:** `/Users/david/.local/share/claude/versions/2.1.261` (bun
+single-file executable, bundle self-identifies as `// Version: 2.1.261`).
 
-**Method.** The bundle's JS is stored as plain text inside the executable. I made
-an offset-preserving copy with `tr '\0' '\n' < <binary> > bin261.txt` (same byte
-length, so every offset below is a true offset into the shipped binary) and read
-regions out with `dd`. All offsets are decimal byte offsets.
+**Method.** The bundle's JS is stored as plain text inside the executable. I
+made an offset-preserving copy with `tr '\0' '\n' < <binary> > bin261.txt` (same
+byte length, so every offset below is a true offset into the shipped binary) and
+read regions out with `dd`. All offsets are decimal byte offsets.
 
 Two disjoint regions contain the literals of interest: ~91–99 MB is a serialized
 string pool (bytecode constants — not code), ~177–210 MB is the readable JS
@@ -82,10 +82,10 @@ function Ser(e,t){
 ```
 
 So the provenance branch is not a surgical insert — it rewrites the block:
-`node_type: memory` is forced to the front of `metadata`, `name` is slugified
-by `$d`, null-valued metadata entries are dropped, and (via `Nd`) **any
-top-level frontmatter key other than `name`/`description`/`metadata` is folded
-into `metadata`**. Leading blank lines of the body are stripped.
+`node_type: memory` is forced to the front of `metadata`, `name` is slugified by
+`$d`, null-valued metadata entries are dropped, and (via `Nd`) **any top-level
+frontmatter key other than `name`/`description`/`metadata` is folded into
+`metadata`**. Leading blank lines of the body are stripped.
 
 `VFe` at **179409310**, in the frontmatter chunk:
 
@@ -172,8 +172,8 @@ await ke.recheckBeforeWrite();
 try{De=await AQ(ke.ioPath,t,Re,"LF")}catch(je){throw kf(N),je}
 ```
 
-**(iii) The memory-store `write` tool** (`searchHint:"save a document to a
-memory store"`), at 185125637:
+**(iii) The memory-store `write` tool**
+(`searchHint:"save a document to a memory store"`), at 185125637:
 
 ```js
 // @185125540
@@ -185,8 +185,9 @@ async call({store:e,path:t,content:r,if_version:o},{abortController:{signal:d}})
 ```
 
 `h$(e)` is `RVo(Os(),...e.split("/"))` (**185094212**) — the store-relative path
-joined onto the memory root. **Only `kind==="personal"` stores are stamped
-here**; `project`/`team` store writes go to disk as `f`, unstamped.
+joined onto the memory root.
+**Only `kind==="personal"` stores are stamped here**; `project`/`team` store
+writes go to disk as `f`, unstamped.
 
 There is no fourth writer, no file watcher, no save-path hook, and no
 post-tool-use pass. The three tool handlers are the entire surface.
@@ -201,10 +202,10 @@ post-tool-use pass. The three tool handlers are the entire surface.
 
 - `originSessionId` appears at 4 offsets in the whole binary. 95624200 is the
   string pool. 179409073 is inside a passive allow-list of recognised
-  frontmatter keys in the frontmatter chunk (`var R=["name","description",
-  "model","allowed-tools",…,"type","originSessionId","hide-from-slash-command-
-  tool"]`) — a parser key list, not a writer. The remaining two, 182889650 and
-  182889753, are both inside `nY` (the `Dpe(...,"originSessionId")` read and the
+  frontmatter keys in the frontmatter chunk
+  (`var R=["name","description", "model","allowed-tools",…,"type","originSessionId","hide-from-slash-command- tool"]`)
+  — a parser key list, not a writer. The remaining two, 182889650 and 182889753,
+  are both inside `nY` (the `Dpe(...,"originSessionId")` read and the
   `originSessionId:Y()` write).
 - `node_type` appears at 4 offsets. 885477 and 97497788 are non-code data.
   179689114 and 179689178 are both inside `Ser` (`["node_type",Dd]` and the
@@ -247,19 +248,21 @@ untouched.
 *Edit/Write.* `nY` is reached unconditionally on every call, but returns `t`
 unchanged, silently or with only a `warn`-level log, in all of these cases:
 
-1. `!e.endsWith(".md")` — a non-`.md` file under the memory dir is never stamped.
+1. `!e.endsWith(".md")` — a non-`.md` file under the memory dir is never
+   stamped.
 2. `!QO(e)` — path not lexically under the memory root (see §3).
 3. `!KL.test(t)` where `KL=/^---\s*\n([\s\S]*?)---\s*\n?/` (**179410780**) — the
    *new* content must open with a `---` fence at byte 0. Note `KL` is tested on
    raw `t`, before the BOM strip that `Vo` does internally, so a BOM defeats it.
-4. `cQr` returns `null`, logging `not dating … no faithful place for a modified
-   line`, when: the opening and closing fences disagree
-   (`KL` vs `Wve=/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/`); the
-   frontmatter has no `name`, no `description` and empty `metadata`; there is
-   more than one `modified:` line; there is no `modified:` line yet `"modified"
-   in E`; `dQr` finds an inline `metadata: {…}`; or the final faithfulness
-   check (reparsed frontmatter deep-equals the original plus the new `modified`,
-   body byte-identical, tail byte-identical) fails.
+4. `cQr` returns `null`, logging
+   `not dating … no faithful place for a modified line`, when: the opening and
+   closing fences disagree (`KL` vs
+   `Wve=/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/`); the frontmatter
+   has no `name`, no `description` and empty `metadata`; there is more than one
+   `modified:` line; there is no `modified:` line yet `"modified" in E`; `dQr`
+   finds an inline `metadata: {…}`; or the final faithfulness check (reparsed
+   frontmatter deep-equals the original plus the new `modified`, body
+   byte-identical, tail byte-identical) fails.
 5. The path is under team memory (`D2`) *and* has no `modified:` line and no
    block-style `metadata:` — then `dQr` inserts before the closing `---`, which
    is fine, but if the block-style/flow test fails it returns null.
@@ -282,8 +285,8 @@ not touch the frontmatter, because `nY` runs on the whole post-edit document.
 **CONFIRMED as "never rewritten", CONTRADICTED as "names the file's creator".**
 
 The guard is `Dpe(d.frontmatter,"originSessionId")===null` — a read of the
-*existing* content. If the key is present and a non-empty string, `f` is null and
-the provenance branch is skipped entirely; `ber({originSessionId:Y()})` is
+*existing* content. If the key is present and a non-empty string, `f` is null
+and the provenance branch is skipped entirely; `ber({originSessionId:Y()})` is
 unreachable. Nothing anywhere else writes the key (see (a)). So it is never
 overwritten once set. That part holds.
 
@@ -292,9 +295,10 @@ not *absence of the file*. Any Edit or Write through the tool to an existing
 memory `.md` that lacks `originSessionId` will stamp it with the **editing**
 session's id and reserialize the block. A file created by `Bash` (unstamped) and
 later edited by the tool therefore carries the id of the *editor*, not the
-creator. So `originSessionId` names *the first session that wrote the file
-through Edit/Write/the memory tool*, which coincides with the creator only when
-the file was created through those tools.
+creator. So `originSessionId` names
+*the first session that wrote the file through Edit/Write/the memory tool*,
+which coincides with the creator only when the file was created through those
+tools.
 
 `Y()` is defined at **177050985**:
 
@@ -324,8 +328,8 @@ function QO(e){return jl(e).startsWith(Os())}
 the test is a **lexical prefix match with no realpath resolution**: a memory
 directory reached through a symlink, or a path spelled with decomposed Unicode
 (`Os()` is `.normalize("NFC")`, `QO`'s argument is not), will not match and will
-not be stamped. *(Inference from the code: I did not empirically test the
-symlink case.)*
+not be stamped.
+*(Inference from the code: I did not empirically test the symlink case.)*
 
 `Os()` resolves, in order (**179196000–179198000**):
 
@@ -333,13 +337,14 @@ symlink case.)*
 2. `autoMemoryDirectory` from settings, first hit of
    `policySettings, flagSettings, [localSettings, projectSettings], userSettings`
    (`~/` expanded, `..`-escape rejected)
-3. default: `<CLAUDE_CODE_REMOTE_MEMORY_DIR ?? ~/.claude>/projects/<project-slug>/memory/`
+3. default:
+   `<CLAUDE_CODE_REMOTE_MEMORY_DIR ?? ~/.claude>/projects/<project-slug>/memory/`
 
 Always with a trailing separator and NFC-normalized.
 
 **Team memory is inside the memory dir and is treated differently.**
-`_nt="team"` (**177507726**), `j_()` (**179732131**) is `Os()/team/`, and
-`D2` (**179733341**) is:
+`_nt="team"` (**177507726**), `j_()` (**179732131**) is `Os()/team/`, and `D2`
+(**179733341**) is:
 
 ```js
 function D2(e){let t=P2(Ma(e)),r=P2(j_());return t+$n===r||t.startsWith(r)}
@@ -348,8 +353,8 @@ function D2(e){let t=P2(Ma(e)),r=P2(j_());return t+$n===r||t.startsWith(r)}
 with `P2(e)=e.normalize("NFC").toLowerCase()` (**179687507**) — so this one *is*
 case-insensitive. Because `nY` does `D2(e)?null:Iv(...)`, files under
 `<memory>/team/` **never get `originSessionId` or `node_type`**; they only ever
-get the surgical `modified:` rewrite. Team files are still under `Os()`, so
-`QO` is true and the dating branch does run.
+get the surgical `modified:` rewrite. Team files are still under `Os()`, so `QO`
+is true and the dating branch does run.
 
 **Subagents.** Subagent tool calls go through the same `FileEditTool`/
 `FileWriteTool` handlers — there is no separate write path — so they stamp
@@ -405,7 +410,6 @@ function bodies across those four.
   writing a memory file from a subagent and comparing `originSessionId` to the
   parent session's id.
 - Whether the `_simulatedSedEdit` preview path is ever *offered* for paths under
-  the memory dir. It does not matter for the stamping conclusion — `its()`
-  never stamps either way — but it does mean a `sed -i` may write in-process
-  rather than via a subprocess, which changes nothing observable about
-  frontmatter.
+  the memory dir. It does not matter for the stamping conclusion — `its()` never
+  stamps either way — but it does mean a `sed -i` may write in-process rather
+  than via a subprocess, which changes nothing observable about frontmatter.
