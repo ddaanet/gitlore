@@ -1,10 +1,19 @@
 ## Open decisions
 
-- `docs/design.md` sits at exactly its 400-line cap, and outline item B needs a
-  line under §Architecture / Git hooks and entry points. The outline's Design
-  record section now puts the split decision first rather than offering
-  word-replacement: split, or accept a bounded overage on one cohesive doc.
-  This blocks the design-record item of the runbook.
+- The `docs/design.md` line cap, which blocks runbook item 4.2. The file is at
+  exactly 400 lines and `MAX_LINES = 400` (`scripts/check-docs-links.py:55`)
+  blocks every file under `docs/` as `oversized-file`; the design record needs
+  about four more lines. The runbook states a default: give the hub its own cap,
+  `HUB_MAX_LINES = 440`, selected by comparing against the existing `HUB`
+  constant at `:53`, moving the three prose surfaces with it (module docstring
+  `:29-31`, `check_size`'s docstring `:251-253`, and the block message, which
+  interpolates the constant) and adding a case to `tests/check_docs_links.bats`
+  beside the 400-line filler pair at `:371`/`:383`. The alternative is splitting
+  `docs/design.md` — which `check_size`'s own docstring prefers, but which means
+  teaching the checker about a two-file hub, since the hub is where it collects
+  decision conclusions. Compressing four lines out of §Architecture was rejected
+  in the outline. An instruction to split replaces item 4.2's second half and
+  adds a phase.
 - The memory index against Claude Code's ~24,985-byte loader cutoff, per
   `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports
   102% of budget and is truncating.
@@ -42,7 +51,13 @@
 
 ## Remaining
 
-- `/runbook` on `plans/index-edit-propagation/outline.md`.
+- Finish `/proof` on `plans/index-edit-propagation/runbook.md`, then
+  `/orchestrate` it in a fresh session.
+- Fold a one-line fix into Phase 1 execution: the comment at
+  `tests/index_compose.bats:930-931` says the `chmod a-w` induction stops the
+  temp file being created in the carrier's directory. `gitlore_compose_write`
+  puts its temp in the store's gitdir (`scripts/lib/index-compose.sh:656`), so
+  what the chmod actually fails is the `mv` at `:676`.
 - Triage `inbox/brief-add-tier-index-budget-advisory.md`: `/gitlore:add-tier`
   composes the root index but cannot warn that the result overflows the loader
   cutoff, and the mount is the one operation that adds tens of KB in a single
