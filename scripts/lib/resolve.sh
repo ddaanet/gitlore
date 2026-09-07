@@ -898,6 +898,22 @@ gitlore_sync_memory_to_live() {
         "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry." >&2
       return 1
     fi
+    # Every tier gets memory's own stale-merge precheck here, ahead of the first
+    # write into it. The compose below writes carrier files inside the tier
+    # worktrees, and gitlore_sync_tiers_to_live's per-tier guard runs only after
+    # that — so a tier holding a half-finished merge is rewritten by a commit
+    # that guard then refuses, under a message stating nothing was changed. The
+    # guard inside that loop stays: it is that function's own precondition, and
+    # a state this call passes is clean by the time it runs, so the second call
+    # costs a rev-parse and a stat.
+    local tier
+    while IFS= read -r tier; do
+      [ -n "$tier" ] || continue
+      # `git -C` into an unmaterialized submodule walks up to the enclosing
+      # repo, which would answer for memory's own state under the tier's name.
+      [ -e "$mempath/$tier/.git" ] || continue
+      gitlore_guard_stale_merge_state "$mempath/$tier" || return 1
+    done < <(gitlore_tier_paths "$mempath")
     # Compose before the tier commit below: composition writes carrier files
     # inside the tiers, so it must land before gitlore_sync_tiers_to_live moves
     # their gitlinks, or the gitlink pins the pre-compose content — the same
