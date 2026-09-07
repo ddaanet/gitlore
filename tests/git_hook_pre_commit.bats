@@ -253,16 +253,23 @@ teardown() { teardown_tmp_repo; }
 # The shared base for both dirty-scope cases below: the slice-1 divergence —
 # a stale tier carrier under a root index that already says otherwise — fully
 # committed on BOTH sides (the tier's own history, then memory's), with HEAD
-# pushed one commit past live. `seed_tier_bullet` only writes the tier's
-# working tree; without a commit inside memory/<tier> itself, that submodule
-# stays "modified content" forever and `commit_memory_state` alone cannot make
-# the store clean — `git -C memory add -A` records a submodule's moved HEAD,
-# never commits inside it. And a clean store built the obvious way — HEAD left
-# at whatever make_tier_in_memory last fast-forwarded `live` onto — never
-# reaches the dirty=1 guard under test at all: gitlore_sync_memory_to_live
-# returns early when the store is clean AND HEAD equals live. Forcing HEAD one
-# commit ahead of `live` instead makes the function skip the dirty branch and
-# go straight to the HEAD:live fast-forward — the guard under test.
+# one commit past `live`.
+#
+# The tier-side commit is not optional: `seed_tier_bullet` only writes the
+# tier's working tree, and `git -C memory add -A` records a submodule's moved
+# HEAD without ever committing inside it — so without it the submodule stays
+# `m ddaanet` and `commit_memory_state` alone cannot make the store clean.
+#
+# HEAD past `live` is what lets a CLEAN store reach the guard at all:
+# gitlore_sync_memory_to_live returns early when the store is clean AND HEAD
+# equals `live`, so a clean fixture sitting at `live` never enters the function
+# body, and its case would pass with the dirty=1 guard widened, with the
+# compose call absent, and with the whole feature reverted. `commit_memory_state`
+# already leaves HEAD one ahead, so the `branch -f` restates that shape rather
+# than creating it — it is what keeps the fixture right if either helper stops
+# producing it. The two checks at the end are what make the precondition
+# non-negotiable: drifted back to HEAD == live, the negative below passes even
+# against a SUT that composes a clean store, and nothing in it fails.
 committed_stale_carrier_store() {
   make_parent_with_memory
   make_tier_in_memory ddaanet
@@ -271,8 +278,16 @@ committed_stale_carrier_store() {
   git -C memory/ddaanet add -A || return 1
   GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q -m "carrier: stale hook" || return 1
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
-  commit_memory_state
-  git -C memory branch -f live HEAD~1
+  commit_memory_state || return 1
+  git -C memory branch -f live HEAD~1 || return 1
+  [ "$(gitlore_memory_dirty memory)" = "0" ] || {
+    echo "committed_stale_carrier_store: store is dirty; the clean case would not reach the guard" >&2
+    return 1
+  }
+  [ "$(git -C memory rev-parse HEAD)" != "$(git -C memory rev-parse live)" ] || {
+    echo "committed_stale_carrier_store: HEAD is at live; a clean store returns before the guard" >&2
+    return 1
+  }
 }
 
 @test "a clean store is not composed by the commit path" {
