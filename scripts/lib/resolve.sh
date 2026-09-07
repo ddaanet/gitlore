@@ -917,9 +917,37 @@ gitlore_sync_memory_to_live() {
     # Compose before the tier commit below: composition writes carrier files
     # inside the tiers, so it must land before gitlore_sync_tiers_to_live moves
     # their gitlinks, or the gitlink pins the pre-compose content — the same
-    # one-behind lag the tier-first ordering already exists to prevent. Return-
-    # code handling and reporting on refusal/failure are not yet wired here.
-    gitlore_compose "$mempath" >/dev/null || true
+    # one-behind lag the tier-first ordering already exists to prevent.
+    local compose_result compose_rc=0
+    compose_result=$(gitlore_compose "$mempath") || compose_rc=$?
+    case "$compose_rc" in
+      0) ;;
+      1)
+        # A refusal writes nothing (D31, D36): projecting root's older text over
+        # an unadopted carrier would destroy approved upstream facts, so the
+        # commit proceeds with the carrier as it stands and this only reports.
+        gitlore_say_for_agent_or_user \
+          "$(printf '%s\n%s\ngitlore: the commit went ahead with the stale carrier as-is. Fix the store by hand, then edit MEMORY.md or memory/.gitlore-tiers again to retrigger composition.' \
+            "gitlore: tier composition refused — the memory indexes were left untouched:" \
+            "$compose_result")" \
+          "$(printf '%s\n%s\ngitlore: the commit went ahead with the stale carrier as-is. Open this project in Claude Code and ask it to repair the memory store, then retry.' \
+            "gitlore: tier composition refused — the memory indexes were left untouched:" \
+            "$compose_result")" >&2
+        ;;
+      2)
+        # A write failed partway, leaving a half-written carrier — that must not
+        # be committed, so this aborts without touching $msgfile: the approved
+        # summary survives for the retry.
+        gitlore_say_for_agent_or_user \
+          "$(printf '%s\n%s\ngitlore: the commit was aborted so the half-written carrier is not committed. Investigate that path (permissions, disk space, a read-only worktree), then edit MEMORY.md or memory/.gitlore-tiers again to retrigger composition and retry.' \
+            "gitlore: tier composition could not write an index — the memory indexes are only partly composed:" \
+            "$compose_result")" \
+          "$(printf '%s\n%s\ngitlore: the commit was aborted so the half-written carrier is not committed. Open this project in Claude Code and ask it to repair the memory store, then retry.' \
+            "gitlore: tier composition could not write an index — the memory indexes are only partly composed:" \
+            "$compose_result")" >&2
+        return 1
+        ;;
+    esac
     # Tiers first: a tier commit moves its gitlink, and the `add -A` below is what
     # records that move in the memory commit. Reversing the order would pin the
     # pre-commit tier SHA — the same one-behind lag the parent's gitlink staging
