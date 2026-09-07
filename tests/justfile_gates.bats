@@ -89,9 +89,10 @@ all_suites() {
 
 # What `just test` would hand to bats, with bats stubbed out. Filtered to
 # *.bats lines: the recipes also pass `--jobs <n>`, which the stub echoes
-# like any other arg but which isn't a suite.
+# like any other arg but which isn't a suite. Forced, because the runners are
+# gates: a recorded pass would skip discovery and hand back nothing.
 discovered_suites() {
-  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" just test-unit test-integration ) | grep '\.bats$'
+  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" GITLORE_GATE_FORCE=1 just test-unit test-integration ) | grep '\.bats$'
 }
 
 @test "every suite under tests/ is run by one of the test recipes" {
@@ -149,6 +150,90 @@ discovered_suites() {
   run jq -r '.recipes.prerelease.dependencies[].recipe' <<<"$dump"
   [ "$status" -eq 0 ]
   [[ "$output" == *"precommit"* ]]
+}
+
+@test "every gate names its sentinel after its own recipe" {
+  # The sentinel file is keyed by the name `sentinel-guard` is handed, so a
+  # recipe naming another's would report that one's pass as its own. Recipe
+  # names are distinct by construction; the check is that the name matches.
+  run just_here --dump --dump-format json
+  [ "$status" -eq 0 ]
+  run jq -r '
+    .recipes | to_entries[] | .key as $r | .value.body[]?
+    | .[0]
+    | select(type == "string" and startswith("sentinel-guard "))
+    | [$r, .] | @tsv
+  ' <<<"$output"
+  [ "$status" -eq 0 ]
+  tsv_lines="$output"
+  [ -n "$tsv_lines" ]
+
+  recipe_names=()
+  while IFS=$'\t' read -r recipe guard_line || [ -n "$recipe" ]; do
+    read -r _ guard_name _ <<<"$guard_line"
+    [ "$recipe" = "$guard_name" ]
+    recipe_names+=("$recipe")
+  done <<<"$tsv_lines"
+
+  for gate in lint test-unit test-integration check-distribution evals; do
+    found=0
+    for r in "${recipe_names[@]}"; do
+      [ "$r" = "$gate" ] && found=1
+    done
+    [ "$found" -eq 1 ]
+  done
+}
+
+@test "sentinel-guard skips only when the gate's inputs are unchanged, and GITLORE_GATE_FORCE overrides it" {
+  setup_gate_repo
+  run in_gate_repo "sentinel-guard g src; echo ran"
+  [ "$status" -eq 0 ]
+  [ "$output" = ran ]
+
+  gate_record src
+  run in_gate_repo "sentinel-guard g src; echo ran"
+  [ "$status" -eq 0 ]
+  [ "$output" = "g: cached (inputs unchanged)" ]
+
+  run env GITLORE_GATE_FORCE=1 bash -c \
+    "cd '$GATE_REPO' && . '$PROLOG' && sentinel-guard g src; echo ran"
+  [ "$status" -eq 0 ]
+  [ "$output" = ran ]
+}
+
+@test "precommit and the gate recipes reach their runners" {
+  # The invocation-path check: a green suite means nothing if `precommit`
+  # stopped calling the gates, or a gate stopped running its tool before
+  # recording success. `test` reaches the two suites as dependencies, which
+  # just can check; `precommit` reaches `lint test` through a shell line.
+  run just_here --dump --dump-format json
+  [ "$status" -eq 0 ]
+  dump="$output"
+
+  run jq -r '.recipes.precommit.body[] | .[0] | select(type == "string")' <<<"$dump"
+  [ "$status" -eq 0 ]
+  precommit_body="$output"
+  for token in check-version lint test; do
+    [[ "$precommit_body" == *" $token"* ]]
+  done
+
+  run jq -r '.recipes.test.dependencies[].recipe' <<<"$dump"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"test-unit"* ]]
+  [[ "$output" == *"test-integration"* ]]
+
+  for gate in lint test-unit test-integration; do
+    case "$gate" in
+      lint) runner="scripts/lint-shell.sh" ;;
+      *) runner="scripts/run-bats.sh" ;;
+    esac
+    run jq -r --arg r "$gate" '.recipes[$r].body[] | .[0] | select(type == "string")' <<<"$dump"
+    [ "$status" -eq 0 ]
+    body="$output"
+    [[ "$body" == *"$runner"* ]]
+    after_runner="${body#*"$runner"}"
+    [[ "$after_runner" == *"record-sentinel"* ]]
+  done
 }
 
 @test "the Makefile is gone, so nothing can quietly still run make" {

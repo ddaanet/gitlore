@@ -36,6 +36,8 @@ the next session.
 Each gate records a content hash of its declared inputs on success and skips
 when they are unchanged, so `just prerelease` right after a green
 `just precommit` skips outright. `GITLORE_GATE_FORCE=1` runs one anyway.
+`lint`, `test-unit` and `test-integration` are each a gate of their own, as is
+`check-distribution`, so a red integration run does not un-cache a green lint.
 
 The inputs are the `precommit_inputs` and `evals_inputs` variables at the top of
 the `justfile`. `memory/`, `docs/` and `plans/` are in neither, so a memory-only

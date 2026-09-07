@@ -21,13 +21,14 @@ whole chain fits together.
 
 ## The gate's cost (NFR10)
 
-`just precommit` — `format-docs`, `check-distribution`, then
-`check-version lint test` — runs 530 s over 620 cases (measured 2026-07-29 on
-the 2-vCPU dev droplet, `--jobs 2`; `check-distribution` adds ~2 s and carries
-its own sentinel, so a change confined to `agents/`, `commands/` or `skills/`
-pays only that). `user + sys` came to 566 s against 530 s wall, so the suite is
-barely parallel and more cores would not divide the number. Making it faster is
-open work, and cutting per-case work is the lever, not raising `--jobs`.
-`bats -T` reports per-test timings, so the breakdown that would direct that work
-comes free on the next full run. The input-hash sentinel caches a green result,
-so the full cost is paid precisely when a change is in flight.
+`just precommit` — `format-docs`, `check-distribution`, then `check-version`,
+`lint`, `test-unit` and `test-integration`, each of the last three behind its
+own sentinel — runs 530 s over 620 cases (measured 2026-07-29 on the 2-vCPU dev
+droplet, `--jobs 2`; `check-distribution` adds ~2 s and carries its own
+sentinel, so a change confined to `agents/`, `commands/` or `skills/` pays only
+that). `user + sys` came to 566 s against 530 s wall, so the suite is barely
+parallel and more cores would not divide the number. Making it faster is open
+work, and cutting per-case work is the lever, not raising `--jobs`. `bats -T`
+reports per-test timings, so the breakdown that would direct that work comes
+free on the next full run. The input-hash sentinel caches a green result, so the
+full cost is paid precisely when a change is in flight.
