@@ -927,8 +927,10 @@ b" ]
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   seed_root_bullet "ddaanet/shared.md" "a portable fact"
-  # No write permission on the carrier's directory: the temp file cannot be
-  # created there, so gitlore_compose_write fails.
+  # No write permission on the carrier's directory: gitlore_compose_write's temp
+  # file lands in the tier's own gitdir, not here, but the `mv` into this
+  # directory still needs write access to create the destination entry, so
+  # that `mv` is what fails.
   chmod a-w memory/ddaanet
   run gitlore_compose memory
   chmod u+w memory/ddaanet

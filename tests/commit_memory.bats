@@ -155,3 +155,58 @@ EOF"
   [ "$status" -eq 1 ]
   assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — stale hook'
 }
+
+@test "an off-pin compose refusal is reported and does not abort the commit" {
+  # gitlore_compose_check_pins refuses when a tier's worktree HEAD has moved off
+  # the commit the memory store's INDEX records for it (D31, D36): projecting
+  # root's text over an unadopted carrier would destroy approved upstream facts,
+  # so the refusal must not block the commit that is otherwise ready. Reach the
+  # pin mismatch with an empty commit made directly inside the tier worktree and
+  # never staged into memory's own index: check_pins reads `:ddaanet`, and the
+  # compose runs ahead of gitlore_sync_tiers_to_live, so nothing has restaged
+  # that gitlink by the time it looks. The carrier and the root line disagree as
+  # well, so the refusal has real work to withhold rather than being a no-op.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  # Two strings, not one: the header proves the rc-1 branch fired, the fragment
+  # proves gitlore_compose_check_pins' own problem line was forwarded rather
+  # than swallowed by the commit path's `>/dev/null`.
+  [[ "$stderr" == *"tier composition refused"* ]]
+  [[ "$stderr" == *"is checked out at"* ]]
+}
+
+@test "a compose write failure aborts the commit" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
+  # Reuses the induction at tests/index_compose.bats:921: chmod a-w on the
+  # carrier's directory fails the `mv` gitlore_compose_write makes into it (the
+  # temp file itself lands in the tier's own gitdir, never here). A half-written
+  # carrier must not be committed, so the approved summary must survive for the
+  # retry rather than being consumed by an aborted commit.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  chmod a-w memory/ddaanet
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  chmod u+w memory/ddaanet
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ -f "$(gitlore_commit_msg_file memory)" ]
+  # The exit code alone would pass against a silent abort, which is the worse
+  # failure: a refused commit with nothing said about why. Header plus the
+  # forwarded problem line, for the same two-faults reason as the rc-1 case.
+  [[ "$stderr" == *"tier composition could not write an index"* ]]
+  [[ "$stderr" == *"could not write memory/ddaanet/MEMORY.md"* ]]
+}
