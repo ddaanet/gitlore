@@ -192,8 +192,11 @@ surface, backfilling descriptions that never matched their index lines.
      `git -C memory rev-parse -q --verify ":ddaanet"` is what
      `gitlore_compose_check_pins` reads (`scripts/lib/index-compose.sh:323`),
      not `HEAD:ddaanet` — so reach it with a commit inside `memory/ddaanet` that
-     is never `git -C memory add`-ed. The tier must not be mid-merge, or
-     `gitlore_compose_check_pins` emits its other message instead. Memory is
+     is never `git -C memory add`-ed. The tier must not be mid-merge: slice 1's
+     code review added a per-tier `gitlore_guard_stale_merge_state` immediately
+     ahead of the compose, so a mid-merge tier returns 1 from
+     `gitlore_sync_memory_to_live` and never reaches `gitlore_compose` at all —
+     the case would then pin the guard rather than the rc-1 arm. Memory is
      otherwise dirty with a fresh approved summary, so the commit is reached.
      - `an off-pin compose refusal is reported and does not abort the commit`,
        run with `--separate-stderr` — asserts exit 0, that
