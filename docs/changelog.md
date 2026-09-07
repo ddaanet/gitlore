@@ -6,6 +6,12 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-07 — The decisions index leaves the hub](changelog/2026-09-07-the-decisions-index-leaves-the-hub.md)
+  — `docs/design.md` hit the 400-line cap with a decision waiting; the decision
+  groups and their *Rejected* lines move whole into `docs/decisions.md` along
+  the need-time seam at `## Design Decisions`, the checker reads conclusions and
+  delegations from the index, the hub's two install-time sections collapse into
+  one paragraph, and the cap stays uniform
 - [2026-09-01 — A tier `live` ahead of its pin is adopted, not checked out](changelog/2026-09-01-a-tier-live-ahead-of-its-pin-is-adopted.md)
   — the publish gate's "put HEAD back on `live`" remedy took a tier off the
   commit the memory store records and composition then refused; a tier whose

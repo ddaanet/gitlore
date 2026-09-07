@@ -34,10 +34,12 @@ surface, backfilling descriptions that never matched their index lines.
   this change stages into the parent index — but it is the regression boundary
   for the `GIT_INDEX_FILE` handoff the compose call now sits upstream of, so a
   red from it means the placement disturbed the staging order.
-- **`docs/design.md` line cap.** The cap is `MAX_LINES = 400` in
-  `scripts/check-docs-links.py:55`, enforced by `check_size` over every file
-  under `docs/` and blocking as `oversized-file`. Item 4.2 states the decision
-  taken; see its note.
+- **Where a conclusion lands.** The outline concludes the new decision in
+  `docs/design.md`. The decision groups now live in `docs/decisions.md`, split
+  from the hub along the need-time seam at `## Design Decisions` (changelog
+  2026-09-07), and `scripts/check-docs-links.py` reads every conclusion line
+  from that index. Item 4.2 targets it, and the hub's line cap is no longer in
+  play.
 
 ---
 
@@ -211,8 +213,10 @@ surface, backfilling descriptions that never matched their index lines.
      that fails is the **`mv`** at `scripts/lib/index-compose.sh:676`, not the
      temp write: `gitlore_compose_write` puts its temp file in the store's own
      gitdir via `rev-parse --absolute-git-dir` (`:656`), never beside the
-     target. The comment on the existing case says the opposite and is stale; do
-     not carry it forward. Restore `chmod u+w` immediately after `run`, and
+     target. The two-line comment on the existing case (`:930-931`) says the
+     opposite and is stale: rewrite it in this slice's commit to say the chmod
+     fails the `mv` into the carrier's directory, and do not carry the wrong
+     reading into the new case. Restore `chmod u+w` immediately after `run`, and
      guard with `[ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"`,
      the guard `tests/index_sync.bats:356` carries and the existing compose case
      lacks.
@@ -403,7 +407,11 @@ surface, backfilling descriptions that never matched their index lines.
     marker in the memory gitdir and sets `GITLORE_RELAY_SYSMSG` and
     `GITLORE_RELAY_CTX` to the accumulated blocks, each block carrying one
     framing line naming the agent id its filename suffix holds. Both are set to
-    the empty string when no marker exists.
+    the empty string when no marker exists. Enumerate the markers
+    whitespace-safely — a quoted-prefix glob over the gitdir path or
+    `find -print0`, never an `ls` pipeline, since the gitdir path may contain
+    spaces — and fold the blocks in filename order, so a two-marker assertion
+    cannot flake on directory order.
 
   **Red shape.** All three helpers are new, and `tests/index_sync.bats` sources
   `scripts/lib/index-sync.sh` directly in `setup()` (`:12`), so a slice-1 case
@@ -486,17 +494,16 @@ surface, backfilling descriptions that never matched their index lines.
 
   4. **A marker that cannot be written does not lose the report.**
      - `a failed relay write leaves the subagent's own report intact` in
-       `tests/cc_hook_index_compose.bats`, guarded with
-       `[ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"` —
-       `chmod a-w` on the memory gitdir
-       (`git -C memory rev-parse --absolute-git-dir`) so the marker cannot be
-       created, restored immediately after `run`; asserts the hook still exits 0
-       and its own `systemMessage` still carries the compose report. A hook that
-       aborted here would trade a relay failure for a total one. Compose runs
-       before the relay write and only writes into the worktree, so a read-only
-       gitdir does not fail it; if some `git` call inside the hook does fail
-       under the mode change, narrow the induction — make the marker path's
-       parent a regular file — rather than widening it.
+       `tests/cc_hook_index_compose.bats` — induce with
+       `mkdir "$(gitlore_relay_marker_file memory a1)"`, so the write fails with
+       "Is a directory"; no permission bits, so no root guard and nothing to
+       restore. Asserts the hook still exits 0 and its own `systemMessage` still
+       carries the compose report. A hook that aborted here would trade a relay
+       failure for a total one. Not `chmod a-w` on the gitdir:
+       `gitlore_compose_write` puts its temp file in the gitdir
+       (`scripts/lib/index-compose.sh:656`, the fact Item 1.1 slice 3 rests on),
+       so a read-only gitdir fails compose itself with rc 2 before the relay is
+       reached, and the case would assert the wrong failure.
 
 ---
 
@@ -509,16 +516,24 @@ surface, backfilling descriptions that never matched their index lines.
   The node is 340 lines, so the addition stays under the 400-line cap. Take the
   next free `D<n>` — `scripts/check-docs-links.py` blocks a `duplicate-decision`
   and an `undefined-decision`, so the number must be new and must be argued here
-  and concluded once in the hub (Item 4.2). The highest in use across
-  `docs/design.md` and `docs/references/` at plan time is `D49`, so `D50`;
-  re-derive rather than trust that, with
-  `grep -oh 'D[0-9]\+' docs/design.md docs/references/*.md | sort -u -t D -k2 -n | tail -1`.
+  and concluded once in `docs/decisions.md` (Item 4.2). The highest in use
+  across `docs/decisions.md` and `docs/references/` at plan time is `D49`, so
+  `D50`; re-derive rather than trust that, with
+  `grep -oh 'D[0-9]\+' docs/decisions.md docs/references/*.md | sort -u -t D -k2 -n | tail -1`.
 
   **The gate does not run between this item and 4.2.** A decision argued in a
-  node and concluded nowhere in the hub is what
-  `scripts/check-docs-links.py:406` blocks on, so 4.1 alone leaves the tree red
-  by construction. Run `python3 scripts/check-docs-links.py` after 4.2, and land
-  the two in one commit.
+  node and concluded nowhere in the decisions index is what
+  `scripts/check-docs-links.py` blocks on as `unstubbed-decision`, so 4.1 alone
+  leaves the tree red by construction. Run `python3 scripts/check-docs-links.py`
+  after 4.2, and land the two in one commit.
+
+  The node enumerates its decisions twice — the title line
+  (`# Git hooks and entry points — decisions D16, D20, D46`) and the
+  `## Decisions — D16, D20, D46` heading — and `enumeration-drift` re-derives
+  both from the bodies, so append `D50` to both headings, or the run after 4.2
+  blocks. The `**D50 — …**` body goes under `## Decisions`; the rejected
+  alternative goes under `## Rejected alternatives` at the node's close, which
+  is where the index's *Rejected* line points.
 
   The decision states: the commit path composes before it commits, scoped to
   `dirty = 1` only, with a refusal reported and not fatal and a write failure
@@ -534,53 +549,25 @@ surface, backfilling descriptions that never matched their index lines.
   composition needs no judgement, so making the agent run it is overhead the
   harness should absorb (NFR4).
 
-- Item 4.2: `docs/design.md` — conclude the new decision in the hub, and resolve
-  the hub's line budget. Requirements: FR-E. Depends on: Item 4.1. Model: opus
+- Item 4.2: `docs/design.md` and `docs/decisions.md` — conclude the new
+  decision. Requirements: FR-E. Depends on: Item 4.1. Model: opus
 
-  Two edits, both in one item because they are edits to one prose artifact:
+  Two edits, one per file, in one item because they are two surfaces of one
+  prose artifact:
 
-  - §Architecture, the **Git hooks and entry points** bullet (lines 218-228) —
-    one clause added to the existing sentence about `pre-commit`, saying it
-    composes the store before committing so the carrier a tier's remote receives
-    matches the root index.
-  - §Design Decisions, the **Git hooks and entry points** block (lines 308-318)
-    — one `- **D<n>** — …` conclusion stub beside D16/D20/D46, and the rejected
-    alternative appended to the block's existing `*Rejected:*` line.
+  - `docs/design.md` §Architecture, the **Git hooks and entry points** bullet
+    (the fourth bullet of §Components) — one clause added to the existing
+    sentence about `pre-commit`, saying it composes the store before committing
+    so the carrier a tier's remote receives matches the root index.
+  - `docs/decisions.md`, the **Git hooks and entry points** group — one
+    `- **D<n>** — …` conclusion stub beside D16/D20/D46, and the rejected
+    alternative appended to the group's existing `*Rejected:*` line.
 
-  **Line budget.** `docs/design.md` is at exactly 400 lines and
-  `scripts/check-docs-links.py:55` caps every file under `docs/` at 400, so
-  these ~4 lines block the build as `oversized-file`. Resolution taken: give the
-  **hub** its own cap, separate from the node cap, and raise it to 440.
-
-  The rationale is recorded in `check-docs-links.py`'s own module docstring
-  (lines 29-31) beside the existing cap note: the 400-line cap exists because a
-  node has to be readable in one go on a reader's node budget, and that argument
-  does not transfer to the hub, which is read whole as the entry point rather
-  than as one node among many. The hub has already been through four split
-  passes; what remains is the six-section living-doc skeleton, where per-section
-  return on a further cut is near 1:1 — and a 1:1 ratio means the material was
-  never separable, not that the document has run out of room.
-
-  Implementation: a `HUB_MAX_LINES = 440` constant beside `MAX_LINES`
-  (`scripts/check-docs-links.py:55`), read by `check_size` (`:251`), which
-  already receives `root` and can compare `os.path.relpath(path, root)` against
-  the existing `HUB` constant (`:53`). Three prose surfaces move with the
-  constant and none is optional: the module docstring's cap note (`:29-31`);
-  `check_size`'s own docstring, which today reads "Split it along a need-time
-  seam rather than raising the cap" and would otherwise argue against the code
-  beneath it; and the block message, which interpolates `MAX_LINES` into its
-  text and must name whichever cap it applied.
-
-  Tests go in `tests/check_docs_links.bats` beside the existing pair at `:371`
-  and `:383`, and follow their shape — the blocking case asserts
-  `oversized-file`, the offending path and the line count, not merely a non-zero
-  status. Three cases: the hub passes at 440 lines; the hub blocks at 441,
-  naming `design.md` and `441 lines`; a node still blocks at 401.
-
-  **This resolution is the one open decision in the runbook.** The outline put
-  it to my human partner as the split-versus-overage fork and it is stated here
-  as a default so the runbook is executable; an instruction to split
-  `docs/design.md` instead replaces this item's second half and adds a phase.
+  **Line budget.** The conclusion lines live in `docs/decisions.md` (about 130
+  lines) and the hub is under 280, both against the uniform 400-line cap
+  `scripts/check-docs-links.py` applies to every file under `docs/`, so the ~4
+  lines fit without touching the checker. Measure after `just format-docs`, not
+  before.
 
 - Item 4.3:
   `docs/changelog/2026-09-06-the-commit-path-composes-before-it-commits.md` and
@@ -595,22 +582,25 @@ surface, backfilling descriptions that never matched their index lines.
   was written — rename if execution slips past it.
 
   Both surfaces sit under `docs/`, so both are subject to the same
-  `oversized-file` cap Item 4.2 touches. `docs/changelog.md` is at 312 lines, so
-  a summary bullet has room; the entry file is new and starts near zero.
+  `oversized-file` cap Item 4.2 measures against. `docs/changelog.md` is well
+  under the cap, so a summary bullet has room; the entry file is new and starts
+  near zero.
 
 ---
 
 ## Gate
 
-`just precommit` outruns the Bash tool's 10-minute cap and is killed before it
-records its sentinel, so run `just lint`, `just test-integration` and
-`just test-unit` as three sequential calls and say that the sentinel was not
-recorded. `just format-docs` (precommit's first step) hard-wraps `docs/` and
-`plans/`, so run it before measuring `docs/design.md` against the cap in Item
-4.2 — the line count only means anything after the wrap.
+Run `just precommit` with `run_in_background: true`. The 10-minute Bash cap
+bounds only a foreground wait; a background task has no duration cap and runs
+across turns in the main session, so the run completes, records the sentinel,
+and its completion notification carries the verdict
+(`background-run-timeout-probe.md`, this directory, including the observed
+main-session run). Only if the run dies fall back to `just lint`,
+`just test-integration` and `just test-unit` as three sequential calls, and say
+that the sentinel was not recorded.
 
 Phase 4 also needs `python3 scripts/check-docs-links.py`, which is what enforces
 `duplicate-decision`, `unstubbed-decision`, `delegation-drift` and
 `oversized-file` on the edits Items 4.1 and 4.2 make. Run it after Item 4.2,
 never between 4.1 and 4.2: a decision argued in the node with no conclusion yet
-in the hub blocks by design.
+in the decisions index blocks by design.
