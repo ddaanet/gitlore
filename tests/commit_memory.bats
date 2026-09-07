@@ -6,6 +6,7 @@ bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures
 load helpers/divergence-fixtures
+load helpers/tier-fixtures
 
 CMD="$PLUGIN_ROOT/scripts/commit-memory.sh"
 
@@ -107,4 +108,29 @@ EOF"
   run --separate-stderr bash "$CMD" -m
   [ "$status" -eq 2 ]
   [[ "$stderr" == *usage* ]]
+}
+
+@test "commit-memory composes the carrier into the commit it makes" {
+  # A carrier whose bullet text disagrees with the root index line that projects
+  # onto it. Composition re-texts the carrier line from the root's, so the
+  # committed carrier must read "fresh hook"; without a compose on the commit
+  # path the store ships "stale hook" to the tier's remote.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+
+  run bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -eq 0 ]
+
+  # Exact block, not a present/absent pair: "stale hook" is a variant of
+  # "fresh hook", so no single fault could fail a negative on its own.
+  git -C memory/ddaanet show HEAD:MEMORY.md > "$BATS_TEST_TMPDIR/carrier.md"
+  assert_bullets "$BATS_TEST_TMPDIR/carrier.md" \
+    '- [shared](shared.md) — fresh hook'
+
+  # The memory commit records the tier commit that carries the composed carrier,
+  # not the one before it — the tier-first ordering, locked against a reshuffle.
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }

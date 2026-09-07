@@ -898,6 +898,12 @@ gitlore_sync_memory_to_live() {
         "gitlore: memory has uncommitted changes with no approved commit summary. Open this project in Claude Code and ask it to commit memory, then retry." >&2
       return 1
     fi
+    # Compose before the tier commit below: composition writes carrier files
+    # inside the tiers, so it must land before gitlore_sync_tiers_to_live moves
+    # their gitlinks, or the gitlink pins the pre-compose content — the same
+    # one-behind lag the tier-first ordering already exists to prevent. Return-
+    # code handling and reporting on refusal/failure are not yet wired here.
+    gitlore_compose "$mempath" >/dev/null || true
     # Tiers first: a tier commit moves its gitlink, and the `add -A` below is what
     # records that move in the memory commit. Reversing the order would pin the
     # pre-commit tier SHA — the same one-behind lag the parent's gitlink staging
