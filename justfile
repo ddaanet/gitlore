@@ -41,10 +41,13 @@ evals_inputs := precommit_inputs + " agents commands skills"
 # later cannot silently uncover this suite's assertions.
 distribution_inputs := ".gitmodules agents commands hooks scripts skills tests/helpers tests/plugin_distribution.bats"
 
-# Fast, frequent.
+# Fast, frequent. `lint`, `test-unit` and `test-integration` each guard their
+# own sentinel, so a red integration run does not un-cache a green lint;
+# `check-version` stays uncached beside the two doc checks below — cheap, and
+# it reads the version files fresh every time.
 precommit: format-docs check-distribution
     #!{{ bash_prolog }}
-    # Uncached, ahead of the sentinel: the checker's largest input is
+    # Uncached, ahead of the gates: the checker's largest input is
     # `memory/`, a gitlink here, so `git ls-files` yields one path and nothing
     # to `cat` — no input hash can see a fact change, and a cached pass would
     # skip exactly the commit that edits a memory file. 0.4s, nothing to cache.
@@ -53,12 +56,7 @@ precommit: format-docs check-distribution
     # commit moves no hash, and a cached pass would skip the graph check on
     # precisely the commit that rewires the graph.
     scripts/check-docs-links.py
-    if check-sentinel precommit {{ precommit_inputs }}; then
-        echo "precommit: cached (inputs unchanged)"
-        exit 0
-    fi
     just check-version lint test
-    record-sentinel
 
 # The shipped surface: that Claude Code can discover and dispatch what the
 # plugin distributes. Its own gate and sentinel, because it reads the paths
@@ -72,10 +70,7 @@ precommit: format-docs check-distribution
 # shebang body would clobber each other's state.
 check-distribution:
     #!{{ bash_prolog }}
-    if check-sentinel distribution {{ distribution_inputs }}; then
-        echo "check-distribution: cached (inputs unchanged)"
-        exit 0
-    fi
+    sentinel-guard check-distribution {{ distribution_inputs }}
     scripts/run-bats.sh tests/plugin_distribution.bats
     record-sentinel
 
@@ -96,24 +91,36 @@ rumdl := "rumdl"
 # Slow and paid: drives the real claude CLI. Run explicitly, never as a gate.
 evals:
     #!{{ bash_prolog }}
-    if check-sentinel evals {{ evals_inputs }}; then
-        echo "evals: cached (inputs unchanged)"
-        exit 0
-    fi
+    sentinel-guard evals {{ evals_inputs }}
     tests/evals/run-evals.sh
     record-sentinel
 
 # Its own name so it can widen beyond precommit.
 prerelease: precommit
 
+# The three runners below are gates: each guards its own sentinel over
+# `precommit_inputs` and records its own pass, so `precommit` reports them
+# independently and a cached one costs nothing. `GITLORE_GATE_FORCE=1` runs
+# one regardless. Never two guards in one shebang body: `check-sentinel` sets
+# the shell variables `sentinel` and `gate_inputs` that `record-sentinel`
+# reads back, so a second gate in the same script would clobber the first's.
+#
+# All three share `precommit_inputs`: `scripts/lint-shell.sh` discovers every
+# tracked shell file, and both bats halves source `scripts/` and `hooks/`.
+# Narrowing `test-unit` to exclude `tests/integration_*` is a later step.
+
 # shellcheck over every tracked shell file, discovered by extension or shebang.
 lint:
+    #!{{ bash_prolog }}
+    sentinel-guard lint {{ precommit_inputs }}
     scripts/lint-shell.sh
+    record-sentinel
 
 test: test-unit test-integration
 
 test-unit:
     #!{{ bash_prolog }}
+    sentinel-guard test-unit {{ precommit_inputs }}
     # A glob, never a hand list: a list drifted once and orphaned five suites,
     # including the memory gate's.
     shopt -s nullglob
@@ -124,13 +131,16 @@ test-unit:
     done
     [ "${#suites[@]}" -gt 0 ] || { echo "test-unit: no suites matched tests/*.bats" >&2; exit 1; }
     scripts/run-bats.sh --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "${suites[@]}"
+    record-sentinel
 
 test-integration:
     #!{{ bash_prolog }}
+    sentinel-guard test-integration {{ precommit_inputs }}
     shopt -s nullglob
     suites=(tests/integration_*.bats tests/evals/lib/*.bats)
     [ "${#suites[@]}" -gt 0 ] || { echo "test-integration: no suites matched" >&2; exit 1; }
     scripts/run-bats.sh --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "${suites[@]}"
+    record-sentinel
 
 # A gate is a pure function of its declared inputs, so re-running it over an
 # untouched tree only reprints the last verdict — which makes `precommit`
@@ -155,6 +165,17 @@ check-sentinel () {
     recorded=$(cat "$sentinel")
     current=$(gate-inputs-hash) || return 1
     [ "$recorded" = "$current" ]
+}
+
+# Recipe name, then input pathspecs. The recipe name is the gate name: it
+# keys the sentinel file and heads the report. Leaves the recipe when the
+# inputs are unchanged — `exit`, not `return`, because a shebang recipe is one
+# script and the checks follow on the next line.
+sentinel-guard () {
+    if check-sentinel "$@"; then
+        echo "$1: cached (inputs unchanged)"
+        exit 0
+    fi
 }
 
 # Run after the checks, never before. A hash
