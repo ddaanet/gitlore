@@ -926,25 +926,52 @@ gitlore_sync_memory_to_live() {
         # A refusal writes nothing (D31, D36): projecting root's older text over
         # an unadopted carrier would destroy approved upstream facts, so the
         # commit proceeds with the carrier as it stands and this only reports.
+        # The header is gitlore_compose_and_report's own (index-compose.sh:787),
+        # held in one variable so the two arms cannot drift apart.
+        local refusal="gitlore: tier composition refused — the memory indexes were left untouched:
+$compose_result"
         gitlore_say_for_agent_or_user \
-          "$(printf '%s\n%s\ngitlore: the commit went ahead with the stale carrier as-is. Fix the store by hand, then edit MEMORY.md or memory/.gitlore-tiers again to retrigger composition.' \
-            "gitlore: tier composition refused — the memory indexes were left untouched:" \
-            "$compose_result")" \
-          "$(printf '%s\n%s\ngitlore: the commit went ahead with the stale carrier as-is. Open this project in Claude Code and ask it to repair the memory store, then retry.' \
-            "gitlore: tier composition refused — the memory indexes were left untouched:" \
-            "$compose_result")" >&2
+          "$refusal
+gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand — composition runs again at the next memory commit. This commit also stages each tier at the commit its worktree is on now, so a pin figure printed above is the one from before it." \
+          "$refusal
+gitlore: the commit went ahead with the memory indexes as they stand. Open this project in Claude Code and ask it to repair the memory store." >&2
         ;;
       2)
         # A write failed partway, leaving a half-written carrier — that must not
-        # be committed, so this aborts without touching $msgfile: the approved
-        # summary survives for the retry.
+        # be committed, so this aborts before gitlore_sync_tiers_to_live and
+        # before anything consumes $msgfile.
+        local partial="gitlore: tier composition could not write an index — the memory indexes are only partly composed:
+$compose_result"
         gitlore_say_for_agent_or_user \
-          "$(printf '%s\n%s\ngitlore: the commit was aborted so the half-written carrier is not committed. Investigate that path (permissions, disk space, a read-only worktree), then edit MEMORY.md or memory/.gitlore-tiers again to retrigger composition and retry.' \
-            "gitlore: tier composition could not write an index — the memory indexes are only partly composed:" \
-            "$compose_result")" \
-          "$(printf '%s\n%s\ngitlore: the commit was aborted so the half-written carrier is not committed. Open this project in Claude Code and ask it to repair the memory store, then retry.' \
-            "gitlore: tier composition could not write an index — the memory indexes are only partly composed:" \
-            "$compose_result")" >&2
+          "$partial
+gitlore: the commit was aborted so the half-written carrier is not committed. Investigate that path (permissions, disk space, a read-only worktree), then retry the commit — the approved summary is still in place and the commit path composes again." \
+          "$partial
+gitlore: the commit was aborted so the half-written carrier is not committed. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
+        # Keeping the file is not enough to keep the approval: whatever the pass
+        # DID write is now newer than $msgfile, so gitlore_commit_msg_freshness
+        # reads it stale on the retry and the commit is refused for a change
+        # the summary already covers — a carrier is a projection of root index
+        # lines it approved, never new content. Restamping restores the state
+        # this run started from. Reaching here means $fresh was "yes", so the
+        # file exists and this cannot create an empty one.
+        touch "$msgfile"
+        return 1
+        ;;
+      *)
+        # Unreachable from gitlore_compose, which returns 0, 1 or 2 and nothing
+        # else. Kept because a status this call site does not recognise says
+        # nothing about what was written, and silently proceeding on a non-zero
+        # status is the failure the case exists to remove — so an unknown one is
+        # treated as the partial write it might be.
+        local unknown="gitlore: tier composition exited with an unrecognised status ($compose_rc), so what it wrote is unknown:
+$compose_result"
+        gitlore_say_for_agent_or_user \
+          "$unknown
+gitlore: the commit was aborted rather than commit a memory store in an unknown state. Establish what gitlore_compose did, then retry the commit — the approved summary is still in place." \
+          "$unknown
+gitlore: the commit was aborted rather than commit a memory store in an unknown state. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
+        # Same approval-freshness reason as rc 2 above.
+        touch "$msgfile"
         return 1
         ;;
     esac
