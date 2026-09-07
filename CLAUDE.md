@@ -59,9 +59,16 @@ from the script the node names.
   `run_in_background: true` — a background task has no duration cap and runs
   across turns in the main session; the completion notification carries the
   verdict (`plans/index-edit-propagation/background-run-timeout-probe.md`).
+  In a subagent that notification may never arrive, and the run is still fine:
+  read the verdict from the gates instead — `.git/gitlore/gates/{lint,test-unit,test-integration,check-distribution}`,
+  each written on that recipe's pass, valid for the tree when its mtime
+  postdates the last edit to any gated input. Neither `ps` nor stdout settles
+  it: a fresh Bash call cannot see another background task's processes, and
+  `scripts/run-bats.sh` buffers the whole suite into a log file.
   Only if the run dies, fall back to `just lint`, `just test-integration` and
   `just test-unit` as separate sequential calls (the box will not take two
-  suites at once); each records its own sentinel. `just evals`
+  suites at once); each records its own sentinel — a killed run keeps whatever
+  recipes finished, so only the missing ones need re-running. `just evals`
   drives the real claude CLI and costs time and money — run it explicitly, not
   as part of a release. `just release` depends on `prerelease`, which is just
   `precommit`.
