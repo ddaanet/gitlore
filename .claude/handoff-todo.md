@@ -7,10 +7,10 @@
 - `reconstructable-two-categories` is a handoff-design lesson: whether to drop a note in the handoff repo proposing it move to handoff's own store.
 - Whether a one- or two-line phantom-dotfile prohibition (never delete, commit or report one) goes into `memory/ddaanet/shared-claude.md`. No hook fires on the `` !`cmd` `` expansion path, so prose is the only mechanism that covers the `/commit` `## Context` case.
 - Whether `2026-09-02-bang-expansion-hook-decompile.md` belonged in the move to sandbox-lies. Its finding — no hook dispatches on the `` !`cmd` `` path — matters to gitlore independently as a hook-heavy plugin.
+- The recall-size hook fires on `memory/ddaanet/shared-claude.md` demanding it be cut under 2.8KB, but that file is imported whole by `CLAUDE.md` and is never a recall target, and it has been well past 4KB for a long time. Decide whether the hook should exempt the tier conventions file or whether the warning is doing something the exemption would lose.
 
 ## Remaining
 
-- `/orchestrate` `plans/index-edit-propagation/runbook.md`.
 - Narrow `test-unit`'s gate inputs to exclude `tests/integration_*` once the split has run a while; all three gates share `precommit_inputs` for now.
 - Triage `inbox/brief-add-tier-index-budget-advisory.md`: `/gitlore:add-tier` composes the root index but cannot warn that the result overflows the loader cutoff, and the mount is the one operation that adds tens of KB in a single step.
 - Split the oversized token-keyed facts so recall reaches them: `hook-output-channels` (23% reachable), `bats-shellcheck-gotchas` (40%), `stale-plugin-code` (45%), `design-doc-writing` (over 4KB, and being cut into a craft skill — check before splitting). Hub under 4KB carrying the symptom table, siblings beside it. `subagent-hook-output-confined` is a natural sibling of `hook-output-channels` once the hub exists.

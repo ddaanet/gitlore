@@ -134,3 +134,24 @@ EOF"
   # not the one before it — the tier-first ordering, locked against a reshuffle.
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }
+
+@test "a tier holding a merge gitlore did not prepare is not composed into" {
+  # The refusal in gitlore_sync_tiers_to_live says nothing was changed. Compose
+  # runs ahead of it and writes carrier files, so without a matching guard on
+  # the compose side that sentence is false and the projection has already
+  # destroyed the tier's approved text. Rule 7 does not cover this: it is
+  # reached only when HEAD has moved off the pin, and a hand-run `git merge`
+  # leaves HEAD exactly where the memory index records it.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+
+  gd=$(cd memory/ddaanet && cd "$(git rev-parse --git-dir)" && pwd)
+  git -C memory/ddaanet rev-parse HEAD > "$gd/MERGE_HEAD"
+
+  run bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -eq 1 ]
+  assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — stale hook'
+}
