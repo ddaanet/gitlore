@@ -249,3 +249,68 @@ teardown() { teardown_tmp_repo; }
   # not the one before it — the tier-first ordering, locked against a reshuffle.
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }
+
+# The shared base for both dirty-scope cases below: the slice-1 divergence —
+# a stale tier carrier under a root index that already says otherwise — fully
+# committed on BOTH sides (the tier's own history, then memory's), with HEAD
+# pushed one commit past live. `seed_tier_bullet` only writes the tier's
+# working tree; without a commit inside memory/<tier> itself, that submodule
+# stays "modified content" forever and `commit_memory_state` alone cannot make
+# the store clean — `git -C memory add -A` records a submodule's moved HEAD,
+# never commits inside it. And a clean store built the obvious way — HEAD left
+# at whatever make_tier_in_memory last fast-forwarded `live` onto — never
+# reaches the dirty=1 guard under test at all: gitlore_sync_memory_to_live
+# returns early when the store is clean AND HEAD equals live. Forcing HEAD one
+# commit ahead of `live` instead makes the function skip the dirty branch and
+# go straight to the HEAD:live fast-forward — the guard under test.
+committed_stale_carrier_store() {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  git -C memory/ddaanet add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q -m "carrier: stale hook" || return 1
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  commit_memory_state
+  git -C memory branch -f live HEAD~1
+}
+
+@test "a clean store is not composed by the commit path" {
+  committed_stale_carrier_store
+  head_before=$(git -C memory rev-parse HEAD)
+
+  run bash "$HOOK"
+  [ "$status" -eq 0 ]
+  [ "$(gitlore_memory_dirty memory)" = "0" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  # Exact block, not a present/absent pair: "stale hook" is a variant of
+  # "fresh hook", so no single fault could fail a negative on its own. The
+  # discriminating assertion: composing here rewrites the carrier and the
+  # store goes dirty.
+  assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — stale hook'
+}
+
+@test "the same store, made dirty, IS composed" {
+  # The positive that keeps the negative honest, over the same fixture
+  # differing only in the guard's trigger input (dirty=0 vs dirty=1). Its own
+  # test body, never appended to the negative: a bats body runs under
+  # errexit, so a negative sitting behind a positive runs only in the case
+  # where the positive already held.
+  committed_stale_carrier_store
+
+  # One uncommitted local fact makes the store dirty without touching the
+  # tier side at all.
+  printf -- '---\nname: local\ndescription: ""\n---\n\na local fact\n' > memory/local.md
+  seed_root_bullet "local.md" "a local fact"
+  # Written last: gitlore_commit_msg_freshness compares this file's mtime
+  # against the newest file under memory/, and a summary older than the seeds
+  # is stale.
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record a local fact\n' > "$msgfile"
+
+  bash "$HOOK"
+
+  git -C memory/ddaanet show HEAD:MEMORY.md > "$BATS_TEST_TMPDIR/carrier.md"
+  assert_bullets "$BATS_TEST_TMPDIR/carrier.md" \
+    '- [shared](shared.md) — fresh hook'
+}
