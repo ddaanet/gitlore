@@ -6,9 +6,12 @@ gitlore is a Claude Code plugin that makes Claude's auto-memory versioned,
 shared and git-backed. `docs/design.md` is the living design doc and the
 memory of the design — read it before touching anything structural, and
 record decisions there rather than in a memory file. It is a hub: its
-Architecture sections summarize, and the linked `docs/references/` node holds
-the mechanism. Never make a claim about how something behaves from the hub —
-make it from the node, and for a bug report from the script the node names.
+Architecture sections summarize, `docs/decisions.md` holds one conclusion line
+per decision and every rejected alternative by name, and the linked
+`docs/references/` node holds the mechanism and the argument. Read the decisions
+index whole before weighing a new decision. Never make a claim about how
+something behaves from the hub — make it from the node, and for a bug report
+from the script the node names.
 
 ## Working with my human partner
 

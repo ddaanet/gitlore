@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """Hygiene gate over the `docs/` graph: pointers resolve, decisions are stubbed.
 
-`docs/design.md` is the hub. Each decision's argument lives in a node under
-`docs/references/`, reachable from the hub, and a one-line statement of its
-conclusion sits ahead of that argument. That shape is only safe while the
-crosslinking holds: a reader who cannot see that a decision was made
-re-litigates it, and a pointer that stops resolving strands the argument — both
-silently.
+`docs/design.md` is the hub and `docs/decisions.md` its decisions index. Each
+decision's argument lives in a node under `docs/references/`, reachable from the
+hub, and a one-line statement of its conclusion sits in the index, ahead of that
+argument. That shape is only safe while the crosslinking holds: a reader who
+cannot see that a decision was made re-litigates it, and a pointer that stops
+resolving strands the argument — both silently.
 
-A cluster that has become a subsystem takes one hub entry rather than one per
-sub-decision, and its node opens with its own summary of them. The hub says so
+A cluster that has become a subsystem takes one index entry rather than one per
+sub-decision, and its node opens with its own summary of them. The index says so
 in prose — `(D29–D31, D34–D37) in [name](references/x.md)` — and only that
-delegation lets the node's summary stand in for a hub bullet: a node summarizing
-itself unasked is how a hub bullet goes missing unnoticed.
+delegation lets the node's summary stand in for an index bullet: a node
+summarizing itself unasked is how a conclusion goes missing unnoticed.
 
 Nine checks. Eight are blocking, because each has a single legitimate reading:
 
 - `broken-link`         a relative pointer whose target is not on disk
 - `unstubbed-decision`  an argument with no conclusion line anywhere ahead of it
-- `stub-without-body`   a hub bullet whose argument lives nowhere
+- `stub-without-body`   an index bullet whose argument lives nowhere
 - `duplicate-decision`  one number argued in two nodes, or twice in one
-- `duplicate-conclusion` one number concluded twice in the hub
+- `duplicate-conclusion` one number concluded twice in the index
 - `undefined-decision`  a `D<n>` citation with no decision behind it
 - `enumeration-drift`   a node's heading and its bodies disagree
-- `delegation-drift`    the hub delegates a number to a node that does not conclude it
+- `delegation-drift`    the index delegates a number to a node that does not conclude it
 - `oversized-file`      a file past the line cap a node has to read in one go
 
 The line cap is 400. Tokens are not gated: counting them calls the API, and the
@@ -51,6 +51,10 @@ import subprocess
 import sys
 
 HUB = os.path.join("docs", "design.md")
+
+# Every conclusion line and every delegation is read from here, not from the hub:
+# the hub says what the system is, the index says what was decided.
+DECISIONS = os.path.join("docs", "decisions.md")
 
 MAX_LINES = 400
 
@@ -138,6 +142,10 @@ def main() -> int:
     if not os.path.isfile(hub):
         print(f"check-docs-links: no hub at {hub}", file=sys.stderr)
         return 2
+    decisions = os.path.join(root, DECISIONS)
+    if not os.path.isfile(decisions):
+        print(f"check-docs-links: no decisions index at {decisions}", file=sys.stderr)
+        return 2
 
     docs = discover(docs_dir)
     nodes = [p for p in docs if os.path.dirname(p) == os.path.join(root, NODE_DIR)]
@@ -147,10 +155,10 @@ def main() -> int:
         findings += check_links(path, root)
         findings += check_size(path, root)
 
-    conclusions, stubs, findings_hub = collect_conclusions(hub, root)
-    findings += findings_hub
+    conclusions, stubs, findings_index = collect_conclusions(decisions, root)
+    findings += findings_index
 
-    delegated, findings_delegated = collect_delegations(hub, root, conclusions)
+    delegated, findings_delegated = collect_delegations(decisions, root, conclusions)
     findings += findings_delegated
 
     bodies, findings_bodies = collect_bodies(nodes, root)
@@ -158,7 +166,7 @@ def main() -> int:
 
     summaries = collect_summaries(nodes, root)
     findings += check_coverage(conclusions, stubs, bodies, summaries, delegated)
-    findings += check_citations([hub] + nodes, root, conclusions, bodies)
+    findings += check_citations([hub, decisions] + nodes, root, conclusions, bodies)
     for path in nodes:
         findings += check_enumeration(path, root, bodies)
     findings += check_orphans(nodes, root)
@@ -262,15 +270,15 @@ def check_size(path: str, root: str) -> list[tuple]:
              f"{count} lines, over the {MAX_LINES}-line cap")]
 
 
-def collect_conclusions(hub: str, root: str) -> tuple[set[int], set[int], list[tuple]]:
-    """Decision numbers the hub states a conclusion for, either as a bullet
+def collect_conclusions(index: str, root: str) -> tuple[set[int], set[int], list[tuple]]:
+    """Decision numbers the index states a conclusion for, either as a bullet
     pointing at a node or as an argument stated in full. The bullets come back
     separately: only they need an argument to point at."""
-    rel = os.path.relpath(hub, root)
+    rel = os.path.relpath(index, root)
     seen: dict[int, int] = {}
     stubs: set[int] = set()
     findings = []
-    for lineno, line in enumerate(prose_lines(hub), 1):
+    for lineno, line in enumerate(prose_lines(index), 1):
         match = STUB_LINE.match(line) or DEF_LINE.match(line)
         if not match:
             continue
@@ -288,15 +296,15 @@ def collect_conclusions(hub: str, root: str) -> tuple[set[int], set[int], list[t
 
 
 def collect_delegations(
-    hub: str, root: str, conclusions: set[int]
+    index: str, root: str, conclusions: set[int]
 ) -> tuple[dict[int, str], list[tuple]]:
-    """Map each decision number the hub delegates to the node it names. A
-    number the hub also concludes itself is concluded twice."""
-    rel = os.path.relpath(hub, root)
-    base = os.path.dirname(hub)
+    """Map each decision number the index delegates to the node it names. A
+    number the index also concludes itself is concluded twice."""
+    rel = os.path.relpath(index, root)
+    base = os.path.dirname(index)
     delegated: dict[int, str] = {}
     findings = []
-    for lineno, paragraph in paragraphs(prose_lines(hub)):
+    for lineno, paragraph in paragraphs(prose_lines(index)):
         for enum, target in DELEGATION.findall(paragraph):
             node = os.path.relpath(os.path.normpath(os.path.join(base, target)), root)
             for number in enumerated(enum):
@@ -394,8 +402,8 @@ def check_coverage(
     summaries: dict[int, set[str]],
     delegated: dict[int, str],
 ) -> list[tuple]:
-    """Both directions of the hub/node contract, and the delegations that
-    stand in for hub bullets."""
+    """Both directions of the index/node contract, and the delegations that
+    stand in for index bullets."""
     findings = []
     for number in sorted(set(bodies) - conclusions):
         owner = bodies[number]
@@ -403,18 +411,18 @@ def check_coverage(
             continue
         findings.append(
             ("BLOCK", "unstubbed-decision", owner, 1,
-             f"D{number} argued here, concluded neither in {HUB} nor by a delegated summary")
+             f"D{number} argued here, concluded neither in {DECISIONS} nor by a delegated summary")
         )
     for number in sorted(stubs - set(bodies)):
         findings.append(
-            ("BLOCK", "stub-without-body", HUB, 1,
+            ("BLOCK", "stub-without-body", DECISIONS, 1,
              f"D{number} concluded here, argued in no node")
         )
     for number in sorted(delegated):
         node = delegated[number]
         if bodies.get(number) != node:
             findings.append(
-                ("BLOCK", "delegation-drift", HUB, 1,
+                ("BLOCK", "delegation-drift", DECISIONS, 1,
                  f"D{number} delegated to {node}, argued in {bodies.get(number, 'no node')}")
             )
         elif node not in summaries.get(number, set()):

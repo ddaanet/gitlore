@@ -19,16 +19,19 @@ setup() {
   setup_tmp_repo
   CHECKER="$PLUGIN_ROOT/scripts/check-docs-links.py"
   mkdir -p docs/references
+  # The hub itself: the checker requires it, but reads no conclusion from it.
+  printf '# gitlore Design Document\n\nSee [decisions](decisions.md).\n' \
+    > docs/design.md
 }
 teardown() { teardown_tmp_repo; }
 
-# The hub. Args are body lines appended after a fixed preamble.
-plant_hub() {
+# The decisions index. Args are body lines appended after a fixed preamble.
+plant_decisions() {
   {
-    printf '# gitlore Design Document\n\n'
+    printf '# gitlore Design Decisions\n\n'
     printf '## Design Decisions\n\n'
     printf '%s\n' "$@"
-  } > docs/design.md
+  } > docs/decisions.md
 }
 
 # A reference node. $1 = basename under docs/references/, rest are body lines.
@@ -41,7 +44,7 @@ plant_ref() {
 # --- broken links ----------------------------------------------------------
 
 @test "broken link: a pointer to a missing file blocks" {
-  plant_hub 'Arguments in [the gate](references/commit-gate.md).'
+  plant_decisions 'Arguments in [the gate](references/commit-gate.md).'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"broken-link"* ]]
@@ -50,19 +53,19 @@ plant_ref() {
 
 @test "broken link: a pointer that resolves is clean" {
   plant_ref "commit-gate.md" '# The commit gate'
-  plant_hub 'Arguments in [the gate](references/commit-gate.md).'
+  plant_decisions 'Arguments in [the gate](references/commit-gate.md).'
   run "$CHECKER"
   [ "$status" -eq 0 ]
 }
 
 @test "broken link: a target inside a code span is prose, not a pointer" {
-  plant_hub 'A composed line reads `- [A](a.md) — hook` in the root index.'
+  plant_decisions 'A composed line reads `- [A](a.md) — hook` in the root index.'
   run "$CHECKER"
   [ "$status" -eq 0 ]
 }
 
 @test "broken link: an http target is not a path" {
-  plant_hub 'See [the issue](https://github.com/anthropics/claude-code/issues/1).'
+  plant_decisions 'See [the issue](https://github.com/anthropics/claude-code/issues/1).'
   run "$CHECKER"
   [ "$status" -eq 0 ]
 }
@@ -71,7 +74,7 @@ plant_ref() {
   mkdir -p docs/changelog
   printf '# An entry\n\nSee [the design](../design.md) and [gone](gone.md).\n' \
     > docs/changelog/2026-01-01-a.md
-  plant_hub 'Nothing here.'
+  plant_decisions 'Nothing here.'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"gone.md"* ]]
@@ -82,7 +85,7 @@ plant_ref() {
 @test "unstubbed decision: a body with no conclusion line in the hub blocks" {
   plant_ref "commit-gate.md" '# The commit gate — decisions D9' '' \
     '**D9 — A sub-agent synthesizes the merge**' '' 'The argument.'
-  plant_hub 'Arguments in [the gate](references/commit-gate.md).'
+  plant_decisions 'Arguments in [the gate](references/commit-gate.md).'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"unstubbed-decision"* ]]
@@ -92,7 +95,7 @@ plant_ref() {
 @test "unstubbed decision: a body with a hub bullet is clean" {
   plant_ref "commit-gate.md" '# The commit gate — decisions D9' '' \
     '**D9 — A sub-agent synthesizes the merge**' '' 'The argument.'
-  plant_hub 'Arguments in [the gate](references/commit-gate.md).' '' \
+  plant_decisions 'Arguments in [the gate](references/commit-gate.md).' '' \
     '- **D9** — a sub-agent synthesizes the merge'
   run "$CHECKER"
   [ "$status" -eq 0 ]
@@ -103,7 +106,7 @@ plant_ref() {
     '- Composition — **D10** the tier manifest' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
-  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+  plant_decisions 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
     '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 0 ]
@@ -116,7 +119,7 @@ plant_ref() {
     '- Composition — **D10** the tier manifest' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
-  plant_hub 'See [tiers](references/tiered-memory.md).' '' '- **D9** — tiered memory'
+  plant_decisions 'See [tiers](references/tiered-memory.md).' '' '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"unstubbed-decision"* ]]
@@ -131,7 +134,7 @@ plant_ref() {
     '  **D10** the tier manifest' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
-  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+  plant_decisions 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
     '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 0 ]
@@ -145,7 +148,7 @@ plant_ref() {
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.' '' \
     '**D11 — The ordering**' '' 'The argument.'
-  plant_hub 'The sub-decisions conclude in each node: composition (D10,' \
+  plant_decisions 'The sub-decisions conclude in each node: composition (D10,' \
     'D11) in [tiers](references/tiered-memory.md).' '' \
     '- **D9** — tiered memory'
   run "$CHECKER"
@@ -158,7 +161,7 @@ plant_ref() {
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.' '' \
     '**D11 — The ordering**' '' 'The argument.'
-  plant_hub 'Sub-decisions (D10–D11) in [tiers](references/tiered-memory.md).' '' \
+  plant_decisions 'Sub-decisions (D10–D11) in [tiers](references/tiered-memory.md).' '' \
     '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 0 ]
@@ -168,7 +171,7 @@ plant_ref() {
   plant_ref "tiered-memory.md" '# Tiered memory — decisions D9, D10' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
-  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+  plant_decisions 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
     '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 1 ]
@@ -183,7 +186,7 @@ plant_ref() {
   plant_ref "elsewhere.md" '# Elsewhere — decisions D10' '' \
     '- **D10** the tier manifest' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
-  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md)' \
+  plant_decisions 'Sub-decisions (D10) in [tiers](references/tiered-memory.md)' \
     'and [e](references/elsewhere.md).' '' '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 1 ]
@@ -196,7 +199,7 @@ plant_ref() {
     '- Composition — **D10** the tier manifest' '' \
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
-  plant_hub 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
+  plant_decisions 'Sub-decisions (D10) in [tiers](references/tiered-memory.md).' '' \
     '- **D9** — tiered memory' '- **D10** — the tier manifest'
   run "$CHECKER"
   [ "$status" -eq 1 ]
@@ -209,7 +212,7 @@ plant_ref() {
     '**D9 — Tiered memory**' '' 'The argument.' '' \
     '**D10 — The tier manifest**' '' 'The argument.'
   plant_ref "elsewhere.md" '# Elsewhere' '' '- Composition — **D10** the tier manifest'
-  plant_hub 'See [tiers](references/tiered-memory.md) and [e](references/elsewhere.md).' \
+  plant_decisions 'See [tiers](references/tiered-memory.md) and [e](references/elsewhere.md).' \
     '' '- **D9** — tiered memory'
   run "$CHECKER"
   [ "$status" -eq 1 ]
@@ -218,7 +221,7 @@ plant_ref() {
 }
 
 @test "stub without body: a hub bullet whose argument lives nowhere blocks" {
-  plant_hub '- **D9** — a sub-agent synthesizes the merge'
+  plant_decisions '- **D9** — a sub-agent synthesizes the merge'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"stub-without-body"* ]]
@@ -226,7 +229,7 @@ plant_ref() {
 }
 
 @test "stub without body: a decision stated whole in the hub needs no node" {
-  plant_hub '**D9 — A sub-agent synthesizes the merge**' '' \
+  plant_decisions '**D9 — A sub-agent synthesizes the merge**' '' \
     'Stated here in full, with its argument.'
   run "$CHECKER"
   [ "$status" -eq 0 ]
@@ -235,7 +238,7 @@ plant_ref() {
 @test "duplicate decision: one number with a body in two nodes blocks" {
   plant_ref "a.md" '# A — decisions D9' '' '**D9 — First**' '' 'Argument.'
   plant_ref "b.md" '# B — decisions D9' '' '**D9 — Second**' '' 'Argument.'
-  plant_hub 'See [a](references/a.md) and [b](references/b.md).' '' \
+  plant_decisions 'See [a](references/a.md) and [b](references/b.md).' '' \
     '- **D9** — a sub-agent synthesizes the merge'
   run "$CHECKER"
   [ "$status" -eq 1 ]
@@ -244,7 +247,7 @@ plant_ref() {
 
 @test "duplicate conclusion: one number stubbed twice in the hub blocks" {
   plant_ref "a.md" '# A — decisions D9' '' '**D9 — First**' '' 'Argument.'
-  plant_hub 'See [a](references/a.md).' '' \
+  plant_decisions 'See [a](references/a.md).' '' \
     '- **D9** — a sub-agent synthesizes the merge' \
     '- **D9** — and again, from an earlier grouping'
   run "$CHECKER"
@@ -253,7 +256,7 @@ plant_ref() {
 }
 
 @test "undefined decision: a citation with no decision behind it blocks" {
-  plant_hub 'Both reduce to one shape (D77).'
+  plant_decisions 'Both reduce to one shape (D77).'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"undefined-decision"* ]]
@@ -261,7 +264,7 @@ plant_ref() {
 }
 
 @test "undefined decision: a citation inside a code span is not a citation" {
-  plant_hub 'The fixture writes `D77` into the manifest.'
+  plant_decisions 'The fixture writes `D77` into the manifest.'
   run "$CHECKER"
   [ "$status" -eq 0 ]
 }
@@ -270,7 +273,7 @@ plant_ref() {
 
 @test "enumeration drift: a title claiming a decision the node lacks blocks" {
   plant_ref "a.md" '# A — decisions D9, D10' '' '**D9 — First**' '' 'Argument.'
-  plant_hub 'See [a](references/a.md).' '' '- **D9** — first'
+  plant_decisions 'See [a](references/a.md).' '' '- **D9** — first'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"enumeration-drift"* ]]
@@ -280,7 +283,7 @@ plant_ref() {
 @test "enumeration drift: a body the title omits blocks too" {
   plant_ref "a.md" '# A — decisions D9' '' '**D9 — First**' '' 'Argument.' '' \
     '**D10 — Second**' '' 'Argument.'
-  plant_hub 'See [a](references/a.md).' '' '- **D9** — first' '- **D10** — second'
+  plant_decisions 'See [a](references/a.md).' '' '- **D9** — first' '- **D10** — second'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"enumeration-drift"* ]]
@@ -292,7 +295,7 @@ plant_ref() {
     '**D9 — First**' '' 'Argument.' '' \
     '**D10 — Second**' '' 'Argument.' '' \
     '**D11 — Third**' '' 'Argument.'
-  plant_hub 'See [a](references/a.md).' '' \
+  plant_decisions 'See [a](references/a.md).' '' \
     '- **D9** — first' '- **D10** — second' '- **D11** — third'
   run "$CHECKER"
   [ "$status" -eq 0 ]
@@ -300,7 +303,7 @@ plant_ref() {
 
 @test "enumeration: a node with no decisions in its heading is not enumerated" {
   plant_ref "a.md" '# Auto-memory retrieval' '' 'A method and its findings.'
-  plant_hub 'See [a](references/a.md).'
+  plant_decisions 'See [a](references/a.md).'
   run "$CHECKER"
   [ "$status" -eq 0 ]
 }
@@ -309,7 +312,7 @@ plant_ref() {
 
 @test "orphan: a node nothing points at warns without blocking" {
   plant_ref "a.md" '# A' '' 'A body.'
-  plant_hub 'Nothing points at a.'
+  plant_decisions 'Nothing points at a.'
   run "$CHECKER"
   [ "$status" -eq 0 ]
   [[ "$output" == *"orphan-reference"* ]]
@@ -318,7 +321,7 @@ plant_ref() {
 
 @test "orphan: a citation from outside docs counts as reachable" {
   plant_ref "a.md" '# A' '' 'A body.'
-  plant_hub 'Nothing points at a.'
+  plant_decisions 'Nothing points at a.'
   mkdir -p memory/ddaanet
   printf 'Full evidence in `docs/references/a.md`.\n' > memory/ddaanet/f.md
   run "$CHECKER"
@@ -330,7 +333,7 @@ plant_ref() {
   # Nodes link each other as `[b](b.md)`, with no `references/` in the target.
   plant_ref "a.md" '# A' '' 'A body.'
   plant_ref "b.md" '# B' '' 'Argued in [a](a.md).'
-  plant_hub 'See [b](references/b.md).'
+  plant_decisions 'See [b](references/b.md).'
   run "$CHECKER"
   [ "$status" -eq 0 ]
   [[ "$output" != *"orphan-reference"* ]]
@@ -340,7 +343,7 @@ plant_ref() {
   # `[a](a.md)` in a plan resolves next to the plan, not to the node.
   plant_ref "a.md" '# A' '' 'A body.'
   plant_ref "b.md" '# B' '' 'Unrelated.'
-  plant_hub 'See [b](references/b.md).'
+  plant_decisions 'See [b](references/b.md).'
   mkdir -p plans
   printf 'See [a](a.md).\n' > plans/p.md
   run "$CHECKER"
@@ -352,14 +355,14 @@ plant_ref() {
 # --- scope, suppression, reporting -----------------------------------------
 
 @test "suppression: a hygiene-ok marker clears the line it sits on" {
-  plant_hub 'A pointer to [nowhere](references/gone.md). <!-- hygiene-ok -->'
+  plant_decisions 'A pointer to [nowhere](references/gone.md). <!-- hygiene-ok -->'
   run "$CHECKER"
   [ "$status" -eq 0 ]
 }
 
 @test "whitespace: a docs path containing a space is scanned, not split" {
   plant_ref "a b.md" '# A B — decisions D9' '' '**D9 — First**' '' 'Argument.'
-  plant_hub 'See [a b](<references/a b.md>).'
+  plant_decisions 'See [a b](<references/a b.md>).'
   run "$CHECKER"
   [ "$status" -eq 1 ]
   [[ "$output" == *"a b.md"* ]]
@@ -369,7 +372,7 @@ plant_ref() {
 # --- the line cap ----------------------------------------------------------
 
 @test "oversized file: a node one line past the cap blocks" {
-  plant_hub 'See [a](references/a.md).'
+  plant_decisions 'See [a](references/a.md).'
   # 401 lines: the first is the heading, the rest filler the checker ignores.
   { printf '# A\n'; for _ in $(seq 400); do printf 'filler\n'; done; } \
     > docs/references/a.md
@@ -381,7 +384,7 @@ plant_ref() {
 }
 
 @test "oversized file: a node exactly at the cap passes" {
-  plant_hub 'See [a](references/a.md).'
+  plant_decisions 'See [a](references/a.md).'
   { printf '# A\n'; for _ in $(seq 399); do printf 'filler\n'; done; } \
     > docs/references/a.md
   run "$CHECKER"
@@ -390,7 +393,7 @@ plant_ref() {
 
 @test "clean tree: the gate signs off with the checks it ran" {
   plant_ref "a.md" '# A — decisions D9' '' '**D9 — First**' '' 'Argument.'
-  plant_hub 'See [a](references/a.md).' '' '- **D9** — first'
+  plant_decisions 'See [a](references/a.md).' '' '- **D9** — first'
   run "$CHECKER"
   [ "$status" -eq 0 ]
   [[ "$output" == *"broken-link"* ]]
@@ -412,10 +415,35 @@ plant_ref() {
 }
 
 @test "no hub: a missing design.md is an error, not a silent pass" {
+  plant_decisions 'Nothing yet.'
   rm -f docs/design.md
   run "$CHECKER"
   [ "$status" -eq 2 ]
   [[ "$output" == *"design.md"* ]]
+}
+
+@test "no decisions index: a missing decisions.md is an error, not a silent pass" {
+  run "$CHECKER"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"decisions.md"* ]]
+}
+
+@test "conclusions live in the index: a bullet in design.md concludes nothing" {
+  plant_ref "a.md" '# A — decisions D9' '' '**D9 — First**' '' 'Argument.'
+  plant_decisions 'See [a](references/a.md).'
+  printf -- '- **D9** — first\n' >> docs/design.md
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unstubbed-decision"*"references/a.md"* ]]
+  [[ "$output" == *"decisions.md"* ]]
+}
+
+@test "undefined decision: a citation in the hub is checked against the index" {
+  plant_decisions 'Nothing yet.'
+  printf 'The redirect is a shim (D10).\n' >> docs/design.md
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"undefined-decision"*"docs/design.md"*"D10"* ]]
 }
 
 @test "discovery: the checker is executable" {

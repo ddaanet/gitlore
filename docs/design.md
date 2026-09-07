@@ -7,11 +7,12 @@ shared across repos through nested *tier* submodules.
 
 This is the living design: what the system does, how it is built, and why it is
 built that way. It is kept in the present tense — how it got here is in
-[changelog.md](changelog.md). `docs/references/` is a graph of nodes, one per
-mechanism, each holding the detail behind a section here and the decisions and
-rejected alternatives arguing for it. The sections here summarize; read the node
-before making a claim about the mechanism it argues. Plans and specs live in
-`plans/`.
+[changelog.md](changelog.md). [decisions.md](decisions.md) is the decisions
+index: one conclusion line per decision and every rejected alternative by name.
+`docs/references/` is a graph of nodes, one per mechanism, each holding the
+detail behind a section here and the decisions and rejected alternatives arguing
+for it. The sections here summarize; read the node before making a claim about
+the mechanism it argues. Plans and specs live in `plans/`.
 
 **Created:** 2026-04-11
 
@@ -227,19 +228,17 @@ git and decides (D7).
   Orderings, contracts and the placeholder-remote marker are in
   [git-hooks-and-entry-points.md](references/git-hooks-and-entry-points.md).
 
-### Hook Manager Support
+### Install-time surfaces
 
-The wrappers have to run whether the project drives git hooks through Lefthook,
-Husky, Overcommit, or nothing at all. Detection picks one by first match, wiring
-is idempotent behind a `# gitlore: managed` marker, and the sentinel stores the
-command so `SessionStart` can replay it. `direct` is the default whenever no
-manager is recognized — every git repo has a hooks dir, so FR8's double-commit
-guarantee is active out of the box — and `manual` prints a snippet and modifies
-nothing. The replay matches the sentinel against the three manager commands the
-wire scripts write and runs nothing else (D45). The detection table, each
-manager's wiring syntax, and why all of them reach the wrapper through
-`$(git rev-parse --git-common-dir)/gitlore-<hook>` rather than a literal path
-(D11) are in
+Hook-manager wiring and memory-remote creation are install-time concerns, read
+when changing `/gitlore:install` rather than when reasoning about memory itself.
+Wiring detects Lefthook, Husky, Overcommit or nothing, defaults to `direct` so
+FR8 holds out of the box, and reaches the wrapper through the git common dir
+(D11); `SessionStart` replays only the three commands the wire scripts write
+(D45). The remote inherits name, owner and visibility from the parent's
+`origin`, is disclosed before creation (FR10), and a parent with no remote is a
+supported local-only end state. The detection table, each manager's syntax, the
+disclosure text and the per-provider creation methods are in
 [installation.md](references/installation.md).
 
 ### Workflows
@@ -254,143 +253,23 @@ sends the user to Claude Code; clone (the first `SessionStart` restores
 settings, `live` and wiring); worktree creation (`SessionStart` adds the memory
 worktree, detached).
 
-### Remote Repository
-
-The memory submodule is pushed to a dedicated remote of its own. Every default
-is inherited from the parent's `origin` — name (`<parent-remote-name>-memory`),
-owner, and visibility — and each is overridable at creation time. A parent with
-no remote gets no memory remote and memory stays local-only, a supported end
-state rather than a half-finished install. Creation is disclosed before it
-happens (FR10), as orientation rather than a clearance gate — the effective gate
-is the per-commit review (FR11); NFR5 orders the pushes. The rules in full, the
-disclosure text and the per-provider creation methods are in
-[installation.md](references/installation.md).
-
 ---
 
 ## Design Decisions
 
-Grouped by the node that argues them: the conclusion is here, the argument —
-what was weighed, what was rejected, and why — is one hop away.
-
-**Merge and resolve** — the branch model and the divergence path.
-[merge-and-resolve.md](references/merge-and-resolve.md)
-
-- **D1** — `live` is the memory trunk, decoupled from the parent's default
-  branch
-- **D2** — superseded by D41's detached-at-`live` model; kept for the record
-- **D3** — ordinary checkout during resolve, not git plumbing
-- **D6** — merge direction: the more-authoritative side is the first parent
-- **D7** — scripts decide, the agent handles language
-- **D9** — a sub-agent synthesizes the merge (requires the experimental flag)
-- **D13** — a lock-contention retry wrapper guards mutating memory git calls
-- **D24** — a directive that names a sub-agent carries its own authorization
-- **D41** — detached at `live`: one branch model, one commit path, every store
-- **D49** — canned unprompted merge commits; takes commit their bookkeeping
-
-*Rejected:* `live` as a working branch · `git commit-tree` plus `git update-ref`
-for the resolve merge · a temporary worktree for resolve · `claude --print` for
-conflict resolution · single-agent resolve with a post-hoc context refresh.
-
-**The commit gate** — FR11's approval machinery.
-[commit-gate.md](references/commit-gate.md)
-
-- **D4** — commit message by file handshake; its presence is the approval signal
-- **D12** — a submodule-side commit gate backs FR11 as defense in depth
-- **D19** — one canonical approval clause, discovered via a git-config key
-- **D22** — the memory-hygiene checker is a repo-local gate, not shipped surface
-
-*Rejected:* a `Stop` hook to generate the commit message · `PostToolUse` on
-every memory `Write`/`Edit` · an interactive prompt inside the `pre-commit` hook
-· an in-session diff dump for commit review · a `PreToolUse` hook constraining
-the agent's git operations.
-
-**Git hooks and entry points** — satisfying FR11 and FR8 with no parent commit
-or push in flight.
-[git-hooks-and-entry-points.md](references/git-hooks-and-entry-points.md)
-
-- **D16** — a standalone, arg-driven memory-commit entry point
-- **D20** — a push entry point the skill calls directly, with no trigger file
-- **D46** — a parent commit is never rewritten to re-pin memory
-
-*Rejected:* a tip amend to re-pin memory · triggering a memory commit through a
-parent commit · reimplementing the sentinel, `push HEAD:live` and merge-state
-logic in a caller · a caller that pre-writes the commit-message file.
-
-**Install and the memory remote** — what one-time setup does and refuses.
-[installation.md](references/installation.md)
-
-- **D8** — remote creation requires explicit user confirmation
-- **D25** — direct wiring refuses rather than appends after an existing `exec`
-- **D45** — the sentinel replay is an allow-list, never `sh -c` on the tracked
-  file
-
-*Rejected:* a strictly non-empty initial commit · `gh repo create` as the only
-remote-creation method · a separate `gitlore.memoryPath` config key · making the
-memory push optional in v1 · replaying the sentinel as a shell command.
-
-**Memory redirect** — [memory-redirect.md](references/memory-redirect.md)
-
-- **D10** — the redirect is a launch-time `--settings` shim, not a project
-  setting
-
-*Rejected:* `autoMemoryDirectory` in project settings · the same key in global
-`~/.claude/settings.json` · `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` via `.envrc` ·
-an explicit `gitlore` launch command instead of shadowing `claude`.
-
-**The session and its wrappers** — where the wrappers live and are anchored, and
-what SessionStart says to whom.
-[session.md](references/session.md)
-
-- **D5** — wrapper scripts live in the git common dir, untracked
-- **D11** — wrapper paths anchor at the git common dir, so linked worktrees work
-- **D14** — user-facing SessionStart output goes on `systemMessage`
-- **D21** — a mid-session plugin upgrade is a notice, not a self-healing config
-
-*Rejected:* tracked hook scripts in the repo · a literal `.git/gitlore-<hook>`
-wrapper path · a per-worktree wrapper anchor · a `WorktreeCreate` hook · a
-version-less plugin pointer resolved at hook runtime · wrappers self-healing
-from `CLAUDE_PLUGIN_ROOT`.
-
-**Claude Code platform workarounds** — harness behaviours, each carrying the
-empirical work that established it, which is why they stay whole.
-[cc-platform.md](references/cc-platform.md)
-
-- **D15** — an in-process-worktree memory-drift guard
-- **D18** — active recall is a skill the agent runs itself: no hook, no state
-- **D23** — the `Edit` weld defect is contained by a pair that computes the
-  intended result, repairs, and reports its own obsolescence
-
-*Rejected:* hook-side injection of the bodies from a request file the agent
-writes · a `PreToolUse` deny on the first durable write of an episode.
-
-**Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
-the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
-[tiered-memory.md](references/tiered-memory.md), composition (D29–D31, D34–D37)
-in [index-composition.md](references/index-composition.md), the authoring-time
-sync and the authoring guidance with its invocation (D38–D40, D47, D48) in
-[index-authoring-sync.md](references/index-authoring-sync.md), and the tier
-stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md).
-
-- **D17** — FR15: nested tier submodules plus a structurally composed root index
-
-*Rejected:* a flat merge-everything store · a content classifier routing each
-new fact (tiered-memory.md) · propagating the root index down into the carriers
-· recompose owning index-line presence · deleting a memory file when its pointer
-line is removed · a `SessionStart` warning when a tier is mounted without a
-paired guard plugin (index-composition.md) · frontmatter `description` as the
-source of truth for the index one-liner · scoring an index hook against its
-body, tf-idf style (index-authoring-sync.md) · an append-only constraint on
-shared-tier indexes · a `merge` driver plus `.gitattributes` ·
-`**/MEMORY.md merge=union` plus a dedup-by-path pass (tier-stores.md).
+Every conclusion, grouped by the node that argues it, with the rejected
+alternatives named under each group, is in [decisions.md](decisions.md). That
+file is the one to read whole before weighing a new decision; the argument is
+one hop further, in the node.
 
 ---
 
 ## Rejected Alternatives
 
-Each is named on the *Rejected* line of its decision group above and argued in
-the `## Rejected alternatives` section that closes that group's node. A decision
-that was later inverted lives in the changelog, not here.
+Named on the *Rejected* line of each decision group in
+[decisions.md](decisions.md) and argued in the `## Rejected alternatives`
+section that closes the group's node. A decision that was later inverted lives
+in the changelog, not here.
 
 ---
 
