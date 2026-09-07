@@ -6,6 +6,7 @@ bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures
 load helpers/divergence-fixtures
+load helpers/tier-fixtures
 
 HOOK="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
 
@@ -219,4 +220,32 @@ teardown() { teardown_tmp_repo; }
   run bash "$HOOK"
   [ "$status" -eq 0 ]
   rm -rf "$WT"
+}
+
+@test "the parent pre-commit hook composes the carrier before committing" {
+  # Same store as the commit-memory case, driven through the other entry point.
+  # Neither entry point carries commit logic of its own — gitlore_sync_memory_to_live
+  # is the shared body, and the hook's remaining work is staging the parent
+  # gitlink afterwards — so one compose there has to reach both.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  # Written last: gitlore_commit_msg_freshness compares this file's mtime against
+  # the newest file under memory/, and a summary older than the seeds is stale.
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record the shared fact\n' > "$msgfile"
+
+  bash "$HOOK"
+
+  # Exact block, not a present/absent pair: "stale hook" is a variant of
+  # "fresh hook", so no single fault could fail a negative on its own.
+  git -C memory/ddaanet show HEAD:MEMORY.md > "$BATS_TEST_TMPDIR/carrier.md"
+  assert_bullets "$BATS_TEST_TMPDIR/carrier.md" \
+    '- [shared](shared.md) — fresh hook'
+
+  # The memory commit records the tier commit that carries the composed carrier,
+  # not the one before it — the tier-first ordering, locked against a reshuffle.
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }

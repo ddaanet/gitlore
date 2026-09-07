@@ -65,12 +65,12 @@ failure being the new case.
 
 ## The gitlink assertion, verified separately
 
-Each test's second assertion —
-`git -C memory rev-parse HEAD:ddaanet` equals `git -C memory/ddaanet rev-parse HEAD`
-— is unreachable in the red run, because `assert_bullets` fails first and a bats
-test body runs under errexit. It is asserted to be already true today, so it
-would be invisible either way; left unverified it could equally be a latent
-second failure that only surfaces at green.
+Each test's second assertion — `git -C memory rev-parse HEAD:ddaanet` equals
+`git -C memory/ddaanet rev-parse HEAD` — is unreachable in the red run, because
+`assert_bullets` fails first and a bats test body runs under errexit. It is
+asserted to be already true today, so it would be invisible either way; left
+unverified it could equally be a latent second failure that only surfaces at
+green.
 
 Verified with a throwaway `tests/zz_probe_gitlink.bats` holding the same two
 fixtures and only the gitlink assertion, run from the suite's own directory so
@@ -80,9 +80,10 @@ pins nothing on its own and is there to lock the tier-first ordering.
 
 ## Deviation from the dispatch — the `index-compose.sh` source line
 
-The dispatch specified adding `source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"`
-to `setup()` in both files, on the ground that "neither suite sources any lib
-today" and `assert_bullets` needs `gitlore_index_part`.
+The dispatch specified adding
+`source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"` to `setup()` in both files,
+on the ground that "neither suite sources any lib today" and `assert_bullets`
+needs `gitlore_index_part`.
 
 That premise is false. `tests/helpers/setup.bash:30-35` sources **every**
 `scripts/lib/*.sh` at load time, for every suite that does `load helpers/setup`,

@@ -2,8 +2,8 @@
 
 Verdict: the slice is sound. Both tests are red on their assertion against
 unchanged `scripts/`, for the cause the slice is about, and the green they
-demand is reachable. One comment inaccuracy fixed. Nothing else changed,
-nothing committed.
+demand is reachable. One comment inaccuracy fixed. Nothing else changed, nothing
+committed.
 
 ## Mechanical check
 
@@ -24,8 +24,8 @@ with the same want/got pair:
 # - [shared](shared.md) — stale hook
 ```
 
-No PASS, no ERROR. Both reach the assertion, which is only possible if the
-entry point ran to completion. The reproduction matches the RED report exactly,
+No PASS, no ERROR. Both reach the assertion, which is only possible if the entry
+point ran to completion. The reproduction matches the RED report exactly,
 including the pass counts.
 
 `shellcheck -s bash` clean on both files. `git diff --check` clean. Both files
@@ -67,14 +67,14 @@ every expansion, including the two `$(git … rev-parse …)` substitutions insi
 `[ … = … ]`. `assert_bullets` quotes internally. The fixture helpers used are
 pre-existing and unchanged.
 
-**bash 3.2 and BSD.** The new lines use `git -C`, redirection, `printf` and
-`[`. `BATS_TEST_TMPDIR` needs bats 1.4 and both files declare
+**bash 3.2 and BSD.** The new lines use `git -C`, redirection, `printf` and `[`.
+`BATS_TEST_TMPDIR` needs bats 1.4 and both files declare
 `bats_require_minimum_version 1.5.0`; `tests/index_compose.bats` and
-`tests/cc_hook_index_compose.bats` already use it. No GNU-only tool or flag,
-no bash 4 construct.
+`tests/cc_hook_index_compose.bats` already use it. No GNU-only tool or flag, no
+bash 4 construct.
 
-**Helper collisions.** The added `load helpers/tier-fixtures` introduces no
-name clash. Across `setup.bash`, `fixtures.bash`, `divergence-fixtures.bash`,
+**Helper collisions.** The added `load helpers/tier-fixtures` introduces no name
+clash. Across `setup.bash`, `fixtures.bash`, `divergence-fixtures.bash`,
 `tier-fixtures.bash` and `triggers.bash` every function name is defined exactly
 once.
 
