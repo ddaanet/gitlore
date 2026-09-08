@@ -134,9 +134,39 @@ gitlore_relay_marker_file() {
 # delimiter. A body that broke that guarantee would not corrupt the file, but
 # the drain would re-split it there and attribute the tail to the wrong
 # channel — silently, so the guarantee is the whole protection.
+#
+# A marker already on disk for this agent is merged into, not truncated: two
+# hooks can stage to the same key within one PostToolBatch (hooks.json runs
+# more than one hook on that event), and a plain overwrite would make the
+# second hook's write destroy the first's. The two existing channels are read
+# fully into $old_sys/$old_ctx before the marker is opened for output — the
+# read must finish and close first, since the write below reopens that same
+# path and would otherwise truncate out from under it. Each new body is
+# appended after the old one on its own channel, so both survive in write
+# order and the fresh-write case (no marker yet) takes the same path as
+# always, byte for byte.
 gitlore_relay_write() {
-  local mempath="$1" agent_id="$2" sysmsg="$3" ctx="$4" marker
+  local mempath="$1" agent_id="$2" sysmsg="$3" ctx="$4" marker old_sys old_ctx
   marker=$(gitlore_relay_marker_file "$mempath" "$agent_id") || return 1
+  if [ -f "$marker" ]; then
+    # `|| old_…=""`: awk exits non-zero on a marker it cannot read, and both
+    # callers are hooks running under `set -e`, so a marker whose mode has
+    # been mangled would abort the hook before it emits any JSON — losing this
+    # run's own report to save nothing. Degrading to the plain overwrite loses
+    # only what was already staged: the same trade the drain's `-type f` makes
+    # for the non-file shape `[ -f ]` rejects above.
+    old_sys=$(_gitlore_relay_sysblock "$marker") || old_sys=""
+    old_ctx=$(_gitlore_relay_ctxblock "$marker") || old_ctx=""
+    # Joined only when the old body is non-empty, the way index-sync-post.sh
+    # joins its own several blocks. A channel can be empty with the other one
+    # set — the sync hook's `failed` branch reports a sysmsg and no ctx — and
+    # an unguarded join would open that channel's merged body with a blank
+    # line.
+    if [ -n "$old_sys" ]; then sysmsg="$old_sys
+$sysmsg"; fi
+    if [ -n "$old_ctx" ]; then ctx="$old_ctx
+$ctx"; fi
+  fi
   {
     printf -- '--- gitlore-relay-sysmsg ---\n'
     printf '%s\n' "$sysmsg"
@@ -185,8 +215,8 @@ gitlore_relay_drain() {
   while IFS= read -r name; do
     marker="$gitdir/$name"
     agent=${name#gitlore-relay-}
-    sysblock=$(awk '/^--- gitlore-relay-sysmsg ---$/ { f=1; next } /^--- gitlore-relay-ctx ---$/ { f=0 } f' "$marker")
-    ctxblock=$(awk '/^--- gitlore-relay-ctx ---$/ { f=1; next } f' "$marker")
+    sysblock=$(_gitlore_relay_sysblock "$marker")
+    ctxblock=$(_gitlore_relay_ctxblock "$marker")
     GITLORE_RELAY_SYSMSG="${GITLORE_RELAY_SYSMSG}--- gitlore-relay agent $agent ---
 $sysblock
 "
@@ -196,6 +226,31 @@ $ctxblock
     rm -f "$marker"
   done < <(printf '%s' "$names" | LC_ALL=C sort)
   return 0
+}
+
+# Print one channel of a marker: everything between that channel's delimiter
+# line and the next one, or EOF. $1 = a marker that exists and is a regular
+# file — awk exits non-zero on anything it cannot open, and both callers screen
+# for that (`[ -f ]` in the write, `find -type f` in the drain) rather than
+# hand it a path it cannot read.
+#
+# One function per channel rather than the same awk inlined at both call sites:
+# the write's merge has to split an existing marker exactly the way the drain
+# does, the format carries no version marker, and a delimiter edited on one
+# side alone would mis-split silently rather than fail.
+#
+# The two are deliberately not one parameterised program. The ctx reader does
+# not reset on a second sysmsg delimiter, where the sysmsg reader does reset on
+# a second ctx one, and that asymmetry is what keeps a malformed marker
+# visible: a write that appended a whole second delimiter pair instead of
+# merging leaves the pair in the ctx channel verbatim, where a symmetric parser
+# would fold it away and report both channels as if nothing were wrong.
+_gitlore_relay_sysblock() {
+  awk '/^--- gitlore-relay-sysmsg ---$/ { f=1; next } /^--- gitlore-relay-ctx ---$/ { f=0 } f' "$1"
+}
+
+_gitlore_relay_ctxblock() {
+  awk '/^--- gitlore-relay-ctx ---$/ { f=1; next } f' "$1"
 }
 
 # The `-<agent id>` suffix the three helpers above append; empty for an empty or

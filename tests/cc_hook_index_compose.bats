@@ -12,6 +12,7 @@ load helpers/tier-fixtures
 
 HOOK="$PLUGIN_ROOT/scripts/cc-hooks/index-compose.sh"
 PRE="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
+POST="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
 
 setup() {
   setup_tmp_repo
@@ -56,6 +57,21 @@ feed() {
   jq -n --arg a "$agent" \
     '{agent_type:"general-purpose"} + (if $a == "" then {} else {agent_id:$a} end)' \
     | bash "$HOOK"
+}
+
+# Drives index-sync-post.sh the same way feed() drives index-compose.sh: $1 =
+# agent id, optional, same absent-vs-non-empty contract. The hook never
+# inspects tool_calls/session_id (its own pre-hook's stash is what drives it —
+# scripts/cc-hooks/index-sync-post.sh's own header comment), so a minimal
+# PostToolBatch envelope is enough. Item 3.1 slice 2.5's own case is the only
+# one in this file that needs the sync hook, alongside the compose hook,
+# inside the same batch.
+sync_feed() {
+  local agent="${1:-}"
+  jq -n --arg a "$agent" --arg s test-session \
+    '{hook_event_name:"PostToolBatch", session_id:$s, tool_calls:[], tool_results:[],
+      agent_type:"general-purpose"} + (if $a == "" then {} else {agent_id:$a} end)' \
+    | bash "$POST"
 }
 
 # A root index line AND the file it names, so the edit is a real fact rather
@@ -334,6 +350,65 @@ seed_root_fact() {
   run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
   [ "$status" -eq 0 ]
   [[ "$output" == *"tier composition rewrote these indexes"* ]]
+  [ ! -f "$marker" ]
+}
+
+# Item 3.1 slice 2.5. hooks.json registers index-sync-post.sh and
+# index-compose.sh on the SAME PostToolBatch event, in that order, and both now
+# stage to gitlore_relay_marker_file's one path per agent. Adapted from the
+# code review's hand-run transcript (item-3-1-s2-code-review.md §F1): same
+# fixture shape — pre + a root index edit that gives BOTH hooks a real report,
+# then a real keyed run of each in hooks.json's own order, then an unkeyed
+# parent-side run. Differs from that transcript in driving index-sync-post.sh
+# through a real script invocation (sync_feed) rather than a manual `bash`
+# call, and in asserting on the drained PARENT report rather than on the
+# marker's raw bytes — the case the helper-level "relay_write merges a second
+# report" test (tests/index_sync.bats) cannot see, since it never drives a
+# hook.
+@test "both PostToolBatch hooks in one keyed batch reach the parent" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  printf -- '---\nname: a\ndescription: stale desc\n---\nbody\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+
+  abs="$PWD/memory/MEMORY.md"
+  pre "$abs" a1
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+
+  # index-sync-post.sh fires first, keyed a1: a.md's hook text changed, so it
+  # relays "reset frontmatter to match MEMORY.md" to the a1 marker — and still
+  # emits its own copy, since "in addition to, not instead of" is unaffected
+  # by this defect.
+  run sync_feed a1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"reset frontmatter to match MEMORY.md"* ]]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "new hook"' ]
+
+  # index-compose.sh fires second, same batch, same key: it splices ddaanet's
+  # unspliced bullet into the root index and relays "recomposed tier pointers"
+  # to the SAME a1 marker, truncating whatever sync just staged there.
+  run feed a1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recomposed tier pointers"* ]]
+  grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+
+  # The unkeyed, parent-side run that drains the marker. It needs its own
+  # baseline and a real change of its own to reach the drain at all —
+  # composition itself finds nothing new to splice, since ddaanet's bullet is
+  # already in — the same shape "an unkeyed compose run with no report of its
+  # own still emits the relay" (above) uses.
+  pre "$abs"
+  seed_root_fact "q.md" "another project fact"
+  run feed
+  [ "$status" -eq 0 ]
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"reset frontmatter to match MEMORY.md"* ]]
+  [[ "$output" == *"recomposed tier pointers"* ]]
   [ ! -f "$marker" ]
 }
 

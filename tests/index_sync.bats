@@ -968,6 +968,72 @@ batch_payload() {
   [ ! -f "$marker" ]
 }
 
+# Item 3.1 slice 2.5: two PostToolBatch hooks — index-sync-post.sh and
+# index-compose.sh — now stage to this SAME keyed marker within one batch, and
+# gitlore_relay_write's single `>` redirect makes the second call truncate the
+# first's report instead of merging with it. This is the mechanism, isolated
+# from either hook: two writes under the same agent id, one drain.
+@test "relay_write merges a second report into an existing marker" {
+  make_parent_with_memory
+  run gitlore_relay_write memory a1 "S1" "C1"
+  [ "$status" -eq 0 ]
+  marker=$(gitlore_relay_marker_file memory a1)
+  # The single-write path first, byte for byte. Merging per channel was chosen
+  # over keying a second marker precisely because a first write to a fresh
+  # marker stays byte-identical to today's, so every committed slice-1
+  # contract case still describes the helper — and nothing else in the suite
+  # pins those bytes: the slice-1 cases all read the DRAINED channels, which
+  # several different file formats produce. `$(cat …)` drops the file's final
+  # newline, so the literal stops at C1.
+  [ "$(cat "$marker")" = '--- gitlore-relay-sysmsg ---
+S1
+--- gitlore-relay-ctx ---
+C1' ]
+
+  run gitlore_relay_write memory a1 "S2" "C2"
+  [ "$status" -eq 0 ]
+
+  # ONE marker, not two — counted before the drain removes them, and over the
+  # whole `gitlore-relay-*` family rather than the `a1` name alone. An
+  # implementation that side-steps the merge by keying a second file
+  # (`gitlore-relay-a1-2`) leaves the `a1` marker in place and drains both, so
+  # it satisfies every assertion phrased in terms of `$marker`, and every
+  # count of the `--- gitlore-relay agent a1 ---` line too — that literal does
+  # not occur in the `agent a1-2` frame the second file earns. Measured: with
+  # `relay_write` mutated to that shape, both suites pass entire.
+  # `-print0` into `read -r -d ''` rather than a glob, mirroring the drain's
+  # own enumeration: nothing sanitizes the gitdir prefix and it may hold a
+  # space.
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+  markers=0
+  while IFS= read -r -d '' _; do
+    markers=$((markers + 1))
+  done < <(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' -print0)
+  [ "$markers" -eq 1 ]
+
+  rc=0
+  gitlore_relay_drain memory || rc=$?
+  [ "$rc" -eq 0 ]
+
+  # Exact blocks, not substrings: one framing line for a1, both bodies under
+  # it in write order, each on its own channel. A substring pair — `*"S1"*"S2"*`
+  # plus `!= *"C1"*` — states the same thing more weakly and buys a vacuity
+  # problem with it, since under errexit each cross-check runs only when the
+  # one before it held. The expected text is written out here rather than
+  # rebuilt from the marker, so the assertion knows the answer independently
+  # of the code under test. It pins the join too: bodies are line-oriented and
+  # concatenate with a single newline, the same way index-sync-post.sh already
+  # joins its own several sysmsg blocks.
+  [ "$GITLORE_RELAY_SYSMSG" = '--- gitlore-relay agent a1 ---
+S1
+S2
+' ]
+  [ "$GITLORE_RELAY_CTX" = '--- gitlore-relay agent a1 ---
+C1
+C2
+' ]
+}
+
 @test "relay_drain folds two markers in filename order, over a gitdir path holding a space" {
   # Built out of line rather than through make_parent_with_memory: the
   # contract requires the enumeration to survive a space in the gitdir path,
