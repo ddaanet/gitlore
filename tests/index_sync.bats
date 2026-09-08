@@ -188,15 +188,19 @@ post_stdin() { printf '%s' "$1" | bash "$POST"; }
 # TEST_AGENT_ID mirrors TEST_SESSION_ID: unset/empty omits the field entirely
 # (a main-thread batch), non-empty adds it (a subagent batch) — same
 # absent/empty-vs-non-empty contract as the helpers in scripts/lib/index-sync.sh.
+# TEST_AGENT_TYPE is the decoy field: a real main-thread payload from inside an
+# `--agent` session carries `agent_type` but never `agent_id`, so a hook that
+# falls back to `agent_type` must not key on it.
 batch_payload() {
   local f json='[]'
   for f in "$@"; do
     json=$(jq -c --arg f "$f" '. + [{tool_name:"Edit",tool_input:{file_path:$f}}]' <<<"$json")
   done
   jq -n --argjson c "$json" --arg s "${TEST_SESSION_ID:-test-session}" \
-    --arg a "${TEST_AGENT_ID:-}" \
+    --arg a "${TEST_AGENT_ID:-}" --arg t "${TEST_AGENT_TYPE:-}" \
     '{hook_event_name:"PostToolBatch", session_id:$s, tool_calls:$c, tool_results:[]}
-     + (if $a == "" then {} else {agent_id:$a} end)'
+     + (if $a == "" then {} else {agent_id:$a} end)
+     + (if $t == "" then {} else {agent_type:$t} end)'
 }
 
 @test "post: fires ONCE for a batch containing several index edits" {
@@ -639,6 +643,74 @@ batch_payload() {
   [ "$output" = 'description: "hook a v1"' ]   # the first edit is not lost
   run grep '^description:' memory/b.md
   [ "$output" = 'description: "hook b v1"' ]
+}
+
+# The race Item 2.1 exists to close, driven end to end: a parent batch ending
+# between a subagent's pre-hook and its post-hook must not consume the
+# subagent's baseline. Both cases key the pre-hook with agent_id "a1" for
+# real, via $PRE — only the post side is under test. Every payload without an
+# agent_id still carries an agent_type decoy, the shape of a real main-thread
+# `--agent` payload. It bites in the second phase of the first case, where the
+# parent has a baseline of its own to consume: a post-hook falling back to
+# `agent_type` resolves a name nothing ever wrote and strands that baseline.
+@test "a parent post-hook leaves a subagent's pre-image intact" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  sub_pre=$(jq -n --arg f "$abs" \
+    '{tool_name:"Edit",tool_input:{file_path:$f},agent_id:"a1",agent_type:"general-purpose"}')
+  printf '%s' "$sub_pre" | bash "$PRE"
+  # the subagent's Edit lands
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  # The parent batch ends here with no agent_id of its own — it had no
+  # baseline of its own, so there is nothing for it to diff or report.
+  run post_stdin "$(TEST_AGENT_TYPE=general-purpose batch_payload)"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -f "$(gitlore_index_preimage_file memory a1)" ]
+
+  # Positive control, and the only part of this case that pins WHICH name the
+  # parent resolved: with no baseline of its own the parent exits before it
+  # touches any file, so a parent that resolved the wrong name — or a post hook
+  # that never ran at all — is indistinguishable from a correct one above. Give
+  # the parent a baseline it does own, the way the observed race does (a parent
+  # Bash call landing after the subagent's Edit, so the pre-hook stashes the
+  # index as it already stands), and run the parent's post-hook again: it must
+  # consume its own bare pair, stay silent because that baseline matches the
+  # index, and still leave the subagent's keyed one alone.
+  printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"},"agent_type":"general-purpose"}' \
+    | bash "$PRE"
+  [ -f "$(gitlore_index_preimage_file memory)" ]
+  run post_stdin "$(TEST_AGENT_TYPE=general-purpose batch_payload)"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -f "$(gitlore_index_preimage_file memory)" ]
+  [ -f "$(gitlore_index_preimage_file memory a1)" ]
+}
+
+@test "the subagent's own post-hook then consumes its keyed pre-image" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  sub_pre=$(jq -n --arg f "$abs" \
+    '{tool_name:"Edit",tool_input:{file_path:$f},agent_id:"a1",agent_type:"general-purpose"}')
+  printf '%s' "$sub_pre" | bash "$PRE"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  # The parent's own post hook fires first and, as the case above shows,
+  # leaves the keyed baseline untouched.
+  run post_stdin "$(TEST_AGENT_TYPE=general-purpose batch_payload)"
+  [ "$status" -eq 0 ]
+  # The continuation: the subagent's own post hook, keyed the same as its pre
+  # hook, finds its baseline and completes the propagation.
+  run post_stdin "$(TEST_AGENT_ID=a1 TEST_AGENT_TYPE=general-purpose batch_payload "$abs")"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "new hook"' ]
+  [ ! -f "$(gitlore_index_preimage_file memory a1)" ]
 }
 
 @test "e2e: both index-sync hook scripts are executable" {

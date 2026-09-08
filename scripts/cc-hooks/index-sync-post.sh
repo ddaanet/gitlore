@@ -20,6 +20,7 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # whether that call moved anything.
 payload=$(cat)
 session=$(jq -r '.session_id // ""' <<<"$payload")
+agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
@@ -27,7 +28,11 @@ mempath=$(gitlore_memory_path)
 index="$mempath/MEMORY.md"
 [ -e "$index" ] || exit 0
 
-stashfile=$(gitlore_index_preimage_file "$mempath")   # absolute
+# Keyed by agent_id (empty on the main thread, so its name is unchanged): the
+# pre-hook stashed under the same key, and this run must consume only the
+# baseline its own batch — parent or that one subagent — owns. Never
+# agent_type; see index-sync-pre.sh for why.
+stashfile=$(gitlore_index_preimage_file "$mempath" "$agent_id")   # absolute
 
 [ -f "$stashfile" ] || exit 0   # no baseline → no watched call, nothing to diff
 
