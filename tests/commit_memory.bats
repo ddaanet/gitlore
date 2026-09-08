@@ -210,3 +210,96 @@ EOF"
   [[ "$stderr" == *"tier composition could not write an index"* ]]
   [[ "$stderr" == *"could not write memory/ddaanet/MEMORY.md"* ]]
 }
+
+@test "an unrecognised compose status aborts and keeps the approval" {
+  # gitlore_compose returns only 0, 1 or 2 (index-compose.sh:800-853), so the
+  # `*)` arm is unreachable through the real function. Drive it directly with a
+  # stub that redefines gitlore_compose after sourcing the real libs, in the
+  # order gitlore_sync_memory_to_live's own header names (util, log, resolve).
+  make_parent_with_memory
+  printf -- '---\nname: local\ndescription: ""\n---\n\na local fact\n' > memory/local.md
+  seed_root_bullet "local.md" "a local fact"
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record a local fact\n' > "$msgfile"
+  # gitlore_commit_msg_freshness compares whole-second mtimes with `>=`, so a
+  # restamp landing in the same second as the summary would still read fresh
+  # and this test's freshness assertion would go vacuous.
+  sleep 1
+
+  driver="$BATS_TEST_TMPDIR/driver.sh"
+  cat > "$driver" <<DRIVER
+#!/usr/bin/env bash
+set -euo pipefail
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+source "$PLUGIN_ROOT/scripts/lib/log.sh"
+source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
+gitlore_compose() {
+  printf 'stub: could not write memory/MEMORY.md\n'
+  touch memory/MEMORY.md
+  return 7
+}
+gitlore_sync_memory_to_live memory
+DRIVER
+
+  head_before=$(git -C memory rev-parse HEAD)
+  run --separate-stderr bash "$driver"
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  # The whole arm text, not a bare "7": stderr carries tmpdir paths whose
+  # mktemp suffix can contain the digit, so a substring match on it alone would
+  # go vacuous without ever proving the `*)` arm was reached.
+  [[ "$stderr" == *"unrecognised status (7)"* ]]
+  # This is this test's half of the red: the restamp the fix adds is what keeps
+  # the approval usable on the retry.
+  [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
+}
+
+@test "the rc-1 user arm does not tell a user to retry a commit that succeeded" {
+  # Slice 3's off-pin induction verbatim, CLAUDECODE unset (the state a bats
+  # run leaves it in anyway) so this reads the USER arm rather than the agent
+  # one. Characterization: the wording is already correct, so no red exists
+  # here — the two assertions are the same sentence's two endings, so no other
+  # producer on this channel can satisfy or break them by accident.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  # A bats run leaves CLAUDECODE unset, but the invoking shell may not — force
+  # it, the way tests/git_hook_memory_pre_commit.bats:29 does, so this test
+  # reads the user arm regardless of the ambient environment.
+  unset CLAUDECODE
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [[ "$stderr" == *"ask it to repair the memory store."* ]]
+  [[ "$stderr" != *"repair the memory store, then retry"* ]]
+}
+
+@test "the rc-2 user arm tells a user to retry" {
+  # Slice 3's write-failure induction verbatim, CLAUDECODE unset. Own case
+  # rather than an addition to the test above: the inductions are different
+  # fixtures, and a bats body runs under errexit, so a second scenario
+  # appended to the first would only ever run when the first already held.
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  chmod a-w memory/ddaanet
+  # A bats run leaves CLAUDECODE unset, but the invoking shell may not — force
+  # it, the way tests/git_hook_memory_pre_commit.bats:29 does, so this test
+  # reads the user arm regardless of the ambient environment.
+  unset CLAUDECODE
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  chmod u+w memory/ddaanet
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [[ "$stderr" == *"ask it to repair the memory store, then retry."* ]]
+}
