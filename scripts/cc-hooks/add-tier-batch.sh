@@ -17,7 +17,9 @@ set -euo pipefail
 # compose-and-report helper directly and folds its result into the one JSON
 # response a hook may emit.
 #
-# The intent file IS the signal, so the batch payload is unused.
+# The intent file IS the signal; nothing in the batch payload triggers this
+# hook. The payload is read for one field, agent_id, and only to key the
+# compose baseline this hook drops below.
 #
 # One-shot, like the recall request and unlike the commit trigger: an add-tier
 # failure is a bad url or a taken name, not a transient lock, so retrying it on
@@ -36,10 +38,6 @@ source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
 payload=$(cat || true)   # drain stdin; the intent file, not the payload, drives us
-# agent_id, never agent_type: same contract as index-compose.sh and the sync
-# hooks — agent_type also appears on an --agent session's main thread, so a
-# fallback would key this batch's stamp drop under the wrong agent's name.
-agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
 
 emit() {   # $1 = systemMessage, $2 = additionalContext
   jq -n --arg s "$1" --arg c "$2" \
@@ -54,6 +52,18 @@ mempath=$(gitlore_memory_path)
 
 intent=$(gitlore_add_tier_file "$mempath")
 [ -f "$intent" ] || exit 0                # no request this batch → nothing to do
+
+# agent_id, never agent_type — the contract index-compose.sh states at length;
+# agent_type also appears on an --agent session's main thread, so a fallback
+# would drop the wrong agent's compose baseline. Pinned by the main-thread case
+# in tests/cc_hook_add_tier.bats, the only one there that can see the decoy.
+#
+# Read here rather than beside the drain above, and non-fatal: this hook runs on
+# every batch in every repo, all but the rare one carrying an intent exits before
+# this line, and the intent — not the payload — is what asks for a mount, so no
+# shape of the payload may abort one. An unparseable one falls back to the
+# unsuffixed name, dropping the main thread's baseline.
+agent_id=$(jq -r '.agent_id // empty' <<<"$payload") || agent_id=""
 
 rc=0
 out=$(bash "$PLUGIN_ROOT/scripts/add-tier.sh" 2>&1) || rc=$?
