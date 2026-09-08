@@ -600,6 +600,27 @@ surface, backfilling descriptions that never matched their index lines.
      - `pre: a payload with no agent_id stamps the bare path` — same drive
        without the field; asserts both unsuffixed paths exist and no keyed file
        does.
+     - `an agent id outside [A-Za-z0-9-] cannot leave the gitdir` — added at
+       the slice 1 boundary, not in the plan as proofed. Slice 1's code review
+       found the id spliced raw into `rev-parse --git-path`, which normalises
+       nothing, so a `/` or `..` component walks the returned path out of the
+       gitdir to somewhere the consumers `cp` onto and `rm -f`; the fix is
+       `_gitlore_agent_suffix` (`scripts/lib/index-sync.sh`), collapsing
+       everything outside that class to `_` via `LC_ALL=C tr -c`. It landed
+       with the code-review fixes and **no test pins it**, which is how the
+       four remedy sentences of D-2 came to mutate green. Assert that
+       `gitlore_index_preimage_file memory ../../../etc/passwd` stays under
+       `git -C memory rev-parse --git-path .` — equality against the sanitized
+       name, not a `*` glob, for the reason the slice 1 test review gives — and
+       the same for `gitlore_compose_stamp_file`. Also assert `agent-7` passes
+       through byte for byte, so the guard cannot silently widen.
+
+     **Red for that case is obtained by mutation, not by absence.** The guard is
+     already committed, so a test written against the tree as it stands passes.
+     The RED dispatch backs `_gitlore_agent_suffix`'s body out to a plain
+     `printf -- '-%s' "$1"` passthrough to red against, and GREEN restores it —
+     the same shape Item 1.1 slice 4 used, and a decision for the TDD audit to
+     read as one rather than as a process defect.
 
      `tests/index_sync.bats` drives the hooks through `pre_stdin` (`:109`),
      `post_stdin` (`:136`) and `batch_payload` (`:140`); `batch_payload` gains
