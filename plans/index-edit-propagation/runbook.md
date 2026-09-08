@@ -81,9 +81,12 @@ surface, backfilling descriptions that never matched their index lines.
     then the same (`:779`)
 
   `gitlore_say_for_agent_or_user` (`scripts/lib/log.sh:7`) takes an agent text
-  and a user text and picks by `CLAUDECODE`, which a bats run does not set. Both
-  arms carry the phrase above and differ only in the remedy sentence after it,
-  so an assertion on the phrase holds whichever arm fires.
+  and a user text and picks by `CLAUDECODE`, which bats neither sets nor clears:
+  a test inherits whatever the invoking shell holds, and a subagent dispatch has
+  `CLAUDECODE=1` in its ambient environment. Any case that reads one arm
+  specifically has to set or unset it in the test body. Both arms carry the
+  phrase above and differ only in the remedy sentence after it, so an assertion
+  on the phrase holds whichever arm fires.
 
   Test-suite note: `tests/commit_memory.bats` currently loads `helpers/setup`,
   `helpers/fixtures`, `helpers/divergence-fixtures`;
@@ -297,8 +300,9 @@ surface, backfilling descriptions that never matched their index lines.
 
      - `the rc-1 user arm does not tell a user to retry a commit that succeeded`
        in `tests/commit_memory.bats` — slice 3's off-pin induction verbatim,
-       with `CLAUDECODE` unset rather than `CLAUDECODE=1`, which is the state a
-       bats run leaves it in anyway. Assert exit 0, that `$stderr` carries
+       with `CLAUDECODE` explicitly unset rather than `CLAUDECODE=1` — bats
+       inherits the invoking shell's value, so the arm has to be chosen in the
+       test body. Assert exit 0, that `$stderr` carries
        `ask it to repair the memory store.`, and that it does *not* carry
        `repair the memory store, then retry`. The two assertions are the same
        sentence's two endings, so no other producer on that channel can satisfy
