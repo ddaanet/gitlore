@@ -713,6 +713,115 @@ batch_payload() {
   [ ! -f "$(gitlore_index_preimage_file memory a1)" ]
 }
 
+# Item 3.1/D: the same relay mechanism as the compose hook, over the sync
+# hook's own report. The subagent's own report is unaffected by this item —
+# "in addition to, not instead of" — so the systemMessage assertion is already
+# true today; only the marker half is new.
+@test "a keyed index-sync run writes its replacement report to a marker" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  sub_pre=$(jq -n --arg f "$abs" \
+    '{tool_name:"Edit",tool_input:{file_path:$f},agent_id:"a1",agent_type:"general-purpose"}')
+  printf '%s' "$sub_pre" | bash "$PRE"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  run post_stdin "$(TEST_AGENT_ID=a1 TEST_AGENT_TYPE=general-purpose batch_payload "$abs")"
+  [ "$status" -eq 0 ]
+  json="$output"
+  # The report's own text, not the bare presence of a `systemMessage` key: the
+  # key survives a wiring that relayed the report INSTEAD of emitting it and
+  # put something else on the user's channel, and "in addition to, not instead
+  # of" is the whole point of this assertion.
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"reset frontmatter to match MEMORY.md"* ]]
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+  grep -qF 'reset frontmatter to match MEMORY.md' "$marker"
+  grep -qF '• a.md:' "$marker"
+}
+
+# The positive half: a keyed marker staged directly (Item 3.1 slice 1,
+# already committed) is folded into the next unkeyed post-hook run that
+# itself reaches the report path — it must have a baseline and an actual
+# change of its own, since both hooks exit upstream of the report path (and
+# so of the drain) when nothing they watch changed.
+@test "an unkeyed index-sync run folds in the marker" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: OLD\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  gitlore_relay_write memory a1 "keyed relay sysmsg a1" "keyed relay ctx a1"
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+  payload=$(jq -n --arg f "$abs" \
+    '{tool_name:"Edit",tool_input:{file_path:$f},agent_type:"general-purpose"}')
+  printf '%s' "$payload" | bash "$PRE"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  run post_stdin "$(TEST_AGENT_TYPE=general-purpose batch_payload "$abs")"
+  [ "$status" -eq 0 ]
+  json="$output"
+  # Per channel, not over the raw JSON blob: the framing line and the body
+  # both reach additionalContext too, so a substring match on the whole object
+  # passes for a fold that reached only the model's channel and never the
+  # user's.
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"reset frontmatter to match MEMORY.md"* ]]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"keyed relay sysmsg a1"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"keyed relay ctx a1"* ]]
+  [ ! -f "$marker" ]
+}
+
+# The constraint the pair above cannot see, on this hook's own emission guard
+# (index-sync-post.sh:243): a parent-side run whose ONLY report is a relayed
+# one must still emit. A fold placed after that guard passes both cases above
+# — each gives the hook a report of its own — and silently drops the relay
+# here.
+#
+# The index change is real: the pre-image holds `old hook` and the post-batch
+# index `new hook`, so the hook runs past the `cmp -s` bail and through the
+# loop. It has nothing to say about it because a.md already carries that
+# description, so nothing is news. The description goes in UNQUOTED and the
+# sync normalizes it, which is what proves the loop ran rather than the hook
+# exiting upstream of the report path — with an empty own-report there is no
+# other observable.
+@test "an unkeyed index-sync run with no report of its own still emits the relay" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: new hook\n---\n' > memory/a.md
+  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  gitlore_relay_write memory a1 "keyed relay sysmsg a1" "keyed relay ctx a1"
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+  payload=$(jq -n --arg f "$abs" \
+    '{tool_name:"Edit",tool_input:{file_path:$f},agent_type:"general-purpose"}')
+  printf '%s' "$payload" | bash "$PRE"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  run post_stdin "$(TEST_AGENT_TYPE=general-purpose batch_payload "$abs")"
+  [ "$status" -eq 0 ]
+  json="$output"
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "new hook"' ]
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"reset frontmatter to match MEMORY.md"* ]]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"keyed relay sysmsg a1"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"keyed relay ctx a1"* ]]
+  [ ! -f "$marker" ]
+}
+
 @test "e2e: both index-sync hook scripts are executable" {
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh" ]
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh" ]

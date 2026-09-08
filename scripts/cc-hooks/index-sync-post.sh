@@ -240,6 +240,37 @@ if [ -n "$failed" ]; then
   sysmsg="${sysmsg}gitlore: index→frontmatter sync failed for: $failed — check file/directory permissions; the description may now be stale"
 fi
 
+# Keyed: this run's report is confined to its own subagent transcript
+# (measured under CC 2.1.261), so stage it for the next parent-side run to
+# fold in — in addition to, not instead of, the emission below: the subagent
+# is the actor and gets its own copy too. Guarded on the same emptiness the
+# emission guard below applies, and for the same reason: the drain frames
+# every marker it finds, so an empty one reaches the parent as a framing line
+# wrapped around nothing, on a batch the parent would otherwise pass in
+# silence. The ctx half needs no guard of its own — every block above that
+# sets a ctx sets a sysmsg with it.
+#
+# Unkeyed: fold in whatever a subagent staged BEFORE the emission guard
+# below. A fold placed after it is satisfied whenever this run has a report
+# of its own and silently drops the relay on exactly the run it exists for
+# — a parent-side batch whose only report is a relayed one.
+if [ -n "$agent_id" ]; then
+  if [ -n "$sysmsg" ]; then
+    gitlore_relay_write "$mempath" "$agent_id" "$sysmsg" "$ctx"
+  fi
+else
+  gitlore_relay_drain "$mempath"
+  if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
+    if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
+"; fi
+    sysmsg="${sysmsg}${GITLORE_RELAY_SYSMSG}"
+    if [ -n "$ctx" ]; then ctx="$ctx
+
+"; fi
+    ctx="${ctx}${GITLORE_RELAY_CTX}"
+  fi
+fi
+
 if [ -n "$sysmsg" ]; then
   # suppressOutput hides the raw stdout from the transcript; systemMessage is
   # the user's channel, additionalContext the model's.

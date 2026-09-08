@@ -208,6 +208,135 @@ seed_root_fact() {
   [ -f "$bare" ]
 }
 
+# Item 3.1/D: a hook firing inside a subagent has its report confined to that
+# subagent's own transcript, so the compose hook relays it through a marker
+# for the next parent-side (unkeyed) run to fold in. The subagent still gets
+# its own copy on its own channel — "in addition to, not instead of" — so the
+# JSON/systemMessage assertions below are already true today; only the marker
+# half is new.
+@test "a keyed compose run writes a marker and still emits its own json" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  pre "$PWD/memory/MEMORY.md" a1
+  seed_root_fact "p.md" "a project fact"
+  run feed a1
+  [ "$status" -eq 0 ]
+  json="$output"
+  # Through jq rather than a substring match on the raw JSON: the field is
+  # what "its own copy" means, and jq -r fails on malformed output, so the
+  # two halves of "valid JSON carrying the compose report" are one assertion.
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recomposed tier pointers"* ]]
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+  grep -qF 'recomposed tier pointers' "$marker"
+}
+
+# The positive half: with a keyed marker already staged, the next unkeyed
+# (parent-side) compose run folds it into its own report — on the same
+# channel, attributed to the agent that left it — and removes it. Planted
+# directly via gitlore_relay_write (Item 3.1 slice 1, already committed)
+# rather than via a real keyed hook run, so this case is isolated from
+# whether the hook itself writes the marker (the case above).
+@test "an unkeyed compose run folds in the marker and removes it" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  gitlore_relay_write memory a1 "keyed relay sysmsg a1" "keyed relay ctx a1"
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_fact "p.md" "a project fact"
+  run feed
+  [ "$status" -eq 0 ]
+  json="$output"
+  # Per channel, not over the raw JSON blob: the framing line and the body
+  # both reach additionalContext too, so a substring match on the whole
+  # object passes for a fold that reached only the model's channel and never
+  # the user's.
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recomposed tier pointers"* ]]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"keyed relay sysmsg a1"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"keyed relay ctx a1"* ]]
+  [ ! -f "$marker" ]
+}
+
+# The constraint neither case above can see, and the one the slice exists to
+# protect: a parent-side run whose ONLY report is a relayed one must still
+# emit. Both hooks guard emission on their own report being non-empty
+# (index-compose.sh:68, index-sync-post.sh:243), so a fold placed AFTER that
+# guard is correct in every case where the hook has something of its own to
+# say — which is every other case in this slice — and silently drops the
+# relay here.
+#
+# The fixture is "an already-composed store reports nothing" above with a
+# marker added: the first compose settles the store, then a second index edit
+# takes a baseline and moves the index, so the hook runs all the way to the
+# emission point and composition finds nothing left to do. The negative
+# assertion on its own report is what makes the case discriminate — without
+# it a hook that still had something to say would satisfy it too.
+@test "an unkeyed compose run with no report of its own still emits the relay" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_fact "p.md" "a project fact"
+  feed >/dev/null
+  gitlore_relay_write memory a1 "keyed relay sysmsg a1" "keyed relay ctx a1"
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_fact "q.md" "another project fact"
+  run feed
+  [ "$status" -eq 0 ]
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"recomposed tier pointers"* ]]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"keyed relay sysmsg a1"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"keyed relay ctx a1"* ]]
+  [ ! -f "$marker" ]
+}
+
+# The seam the two cases above leave open. The first asserts a marker exists
+# and holds the report text; the second folds a marker this file wrote for
+# itself with gitlore_relay_write. Nothing makes the two halves agree on the
+# on-disk FORMAT: a hook writing the raw body with no
+# `--- gitlore-relay-sysmsg ---` delimiter satisfies both, and
+# gitlore_relay_drain's awk then yields an empty body — the parent gets a
+# framing line wrapped around nothing. So: a marker written by a real keyed
+# run, folded by a real unkeyed one.
+#
+# The keyed run leaves the store composed, so the unkeyed run has nothing of
+# its own to say and every line it emits came out of the marker. That is what
+# lets `recomposed tier pointers` in the parent's report pin the seam without
+# depending on where in the report the relayed block lands.
+@test "an unkeyed compose run folds in a marker a keyed run wrote" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  pre "$PWD/memory/MEMORY.md" a1
+  seed_root_fact "p.md" "a project fact"
+  feed a1 >/dev/null
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_fact "q.md" "another project fact"
+  run feed
+  [ "$status" -eq 0 ]
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gitlore-relay agent a1"* ]]
+  [[ "$output" == *"recomposed tier pointers"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tier composition rewrote these indexes"* ]]
+  [ ! -f "$marker" ]
+}
+
 @test "a validation failure reports on both channels and exits 0" {
   pre "$PWD/memory/.gitlore-tiers"
   set_tier_manifest ghost
