@@ -2,6 +2,11 @@
 # Common bats setup. Source from each .bats file with: `load helpers/setup`.
 set -euo pipefail
 
+# Every entry point under scripts/ opens with this, and the fixtures and suites
+# carry the same `$(cd … && pwd)` pattern: with CDPATH set in the environment,
+# `cd` echoes its resolved target on stdout and the capture takes two lines.
+unset CDPATH
+
 PLUGIN_ROOT="${BATS_TEST_DIRNAME}/.."
 export PLUGIN_ROOT
 
