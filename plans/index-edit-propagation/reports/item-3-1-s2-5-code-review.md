@@ -21,20 +21,20 @@ unreadable-marker hole, in committed code outside this slice.
 
 ## 1. The duplicated split — extracted
 
-Extracted. Two call sites is normally below the threshold, but three things
-put this one over it.
+Extracted. Two call sites is normally below the threshold, but three things put
+this one over it.
 
 - The coupling is silent both ways. The format carries no version marker, so a
   delimiter edited on one side alone does not fail — it mis-splits and
   attributes a body to the wrong channel, which is the exact failure the
-  function's own header comment already calls out as "silently, so the
-  guarantee is the whole protection".
+  function's own header comment already calls out as "silently, so the guarantee
+  is the whole protection".
 - The file has the precedent. `_gitlore_agent_suffix` is extracted for the same
-  reason — three sibling `*_file` helpers that must agree on one string — and
-  is defined after its users, which is where these two go (immediately after
+  reason — three sibling `*_file` helpers that must agree on one string — and is
+  defined after its users, which is where these two go (immediately after
   `gitlore_relay_drain`, the second of their two users).
-- The extraction is where the non-obvious property of the parser can be
-  written down, and it turns out to be load-bearing. See below.
+- The extraction is where the non-obvious property of the parser can be written
+  down, and it turns out to be load-bearing. See below.
 
 Two printing functions, one per channel, rather than one function setting two
 variables: bash 3.2 has no namerefs, so a two-variable helper has to publish
@@ -56,24 +56,24 @@ f
 
 is behaviour-identical on well-formed markers and looks like the obvious
 cleanup. Measured (mutation NG below): it passes both suites entire on its own,
-**and it makes the naive-append shape undetectable** — with the symmetric
-parser plus a `>>` write, both suites pass 101/0, where the asymmetric parser
-reds `tests/index_sync.bats:1031`. The asymmetry is what keeps a marker
-carrying a second delimiter pair visible instead of folding it away. That is
-now stated in the helpers' comment, so the next reader does not "simplify" it.
+**and it makes the naive-append shape undetectable** — with the symmetric parser
+plus a `>>` write, both suites pass 101/0, where the asymmetric parser reds
+`tests/index_sync.bats:1031`. The asymmetry is what keeps a marker carrying a
+second delimiter pair visible instead of folding it away. That is now stated in
+the helpers' comment, so the next reader does not "simplify" it.
 
 ## 2. The empty existing channel — reachable, fixed
 
 Traced rather than assumed, and confirmed by hand-run.
 
 Both hooks guard on a non-empty sysmsg before calling `gitlore_relay_write`
-(`scripts/cc-hooks/index-sync-post.sh:258`, `scripts/cc-hooks/index-compose.sh:83`),
-so the **sysmsg** channel can never be empty on disk and never grows a leading
-newline. The **ctx** channel has no such guard, and one branch sets a sysmsg
-with no ctx: `index-sync-post.sh`'s `failed` block (`:234`) appends only to
-`$sysmsg`, deliberately — the comment above the relay call says "every block
-above that sets a ctx sets a sysmsg with it", which is true in one direction
-only.
+(`scripts/cc-hooks/index-sync-post.sh:258`,
+`scripts/cc-hooks/index-compose.sh:83`), so the **sysmsg** channel can never be
+empty on disk and never grows a leading newline. The **ctx** channel has no such
+guard, and one branch sets a sysmsg with no ctx: `index-sync-post.sh`'s `failed`
+block (`:234`) appends only to `$sysmsg`, deliberately — the comment above the
+relay call says "every block above that sets a ctx sets a sysmsg with it", which
+is true in one direction only.
 
 So the reachable case is: a batch in a subagent where the frontmatter sync
 *fails* (permissions) and nothing else reports, followed by `index-compose.sh`
@@ -85,8 +85,8 @@ in the same `PostToolBatch`. Measured before the fix:
 COMPOSE-CTX
 ```
 
-and the parent's `additionalContext` block became `--- gitlore-relay agent a1
----`, a blank line, then the body.
+and the parent's `additionalContext` block became
+`--- gitlore-relay agent a1 ---`, a blank line, then the body.
 
 It matters little — a stray blank line in the model's channel — but the fix
 removes nothing and matches how `index-sync-post.sh` already joins its own
@@ -138,9 +138,9 @@ way it does not grow without bound.)
 Every row is a full run of both suites against an **in-place** mutated
 `scripts/lib/index-sync.sh`, restored after. The M-rows are against the SUT as
 the GREEN phase submitted it; the N-rows re-measure the same shapes against the
-refactored SUT, so the extraction is not taking the coverage on trust.
-"case 1" is `relay_write merges a second report into an existing marker`;
-"case 2" is `both PostToolBatch hooks in one keyed batch reach the parent`.
+refactored SUT, so the extraction is not taking the coverage on trust. "case 1"
+is `relay_write merges a second report into an existing marker`; "case 2" is
+`both PostToolBatch hooks in one keyed batch reach the parent`.
 
 | id | shape | result |
 |---|---|---|
@@ -159,11 +159,11 @@ refactored SUT, so the extraction is not taking the coverage on trust.
 
 Notes on the rows that carry a claim:
 
-- **MC / NC** confirm the drain mis-parses a naive append exactly as the
-  runbook predicted. The sysmsg channel still reads `S1\nS2` (the sysmsg reader
-  resets at each ctx delimiter), so `:1027` passes; the ctx channel comes back
-  as `C1\n--- gitlore-relay-sysmsg ---\nS2\nC2` and `:1031` reds. The mis-parse
-  is caught by one assertion only.
+- **MC / NC** confirm the drain mis-parses a naive append exactly as the runbook
+  predicted. The sysmsg channel still reads `S1\nS2` (the sysmsg reader resets
+  at each ctx delimiter), so `:1027` passes; the ctx channel comes back as
+  `C1\n--- gitlore-relay-sysmsg ---\nS2\nC2` and `:1031` reds. The mis-parse is
+  caught by one assertion only.
 - **ME / NE** confirm the truncate-before-read claim the GREEN report rests on.
   Against the submitted SUT it reds at `:988`, because the redirect creates the
   file and the merge then reads the *empty* file, drifting the fresh write by a
@@ -175,9 +175,9 @@ Notes on the rows that carry a claim:
 - **MD** shows the `[ -f ]` guard is load-bearing far beyond this slice: `awk`
   on a nonexistent file exits 2, which under the hooks' `set -e` aborts the
   hook, so eleven cases red.
-- **NG / NG+NC** are the refactor hazard described in §1 — the only mutation
-  run here that no assertion catches, and the reason the asymmetry is now
-  documented rather than left to be discovered.
+- **NG / NG+NC** are the refactor hazard described in §1 — the only mutation run
+  here that no assertion catches, and the reason the asymmetry is now documented
+  rather than left to be discovered.
 
 Write order (MA/NA) is pinned by case 1 alone; case 2's substring assertions
 pass against a reversed merge. That is a property of the frozen tests, reported
@@ -192,11 +192,11 @@ Confirmed by hand-run against the fixed SUT, both halves:
   single redirect it always did. `bash: …/gitlore-relay-a1: Is a directory`,
   return 1, the shell survives, and the directory is still empty — nothing
   partial. Slice 1's contract ("returns non-zero without writing", "exactly one
-  create/open of the target", "leaves nothing partial") is intact, and slice
-  4's RED for `relay_write refuses an empty agent id and a squatted marker
-  path` still depends on unchanged behaviour. Not touched.
-- **`awk` failing the function early under `set -e`.** It could, and this is
-  the one real regression the slice introduced. With the marker present but
+  create/open of the target", "leaves nothing partial") is intact, and slice 4's
+  RED for `relay_write refuses an empty agent id and a squatted marker path`
+  still depends on unchanged behaviour. Not touched.
+- **`awk` failing the function early under `set -e`.** It could, and this is the
+  one real regression the slice introduced. With the marker present but
   unreadable (mode 0200), `[ -f ]` is true, `awk` exits 2, and under the
   callers' `set -euo pipefail` the assignment aborts **the whole hook** —
   measured: the shell died at rc 2 with the statement after the write never
@@ -205,22 +205,22 @@ Confirmed by hand-run against the fixed SUT, both halves:
   simply overwritten.
 
   Fixed with `|| old_sys=""` / `|| old_ctx=""` at the two reads, which degrades
-  the merge to the pre-slice overwrite: the staged report is lost, this run's
-  is not. That is the same trade `gitlore_relay_drain`'s `-type f` comment
-  already states for the non-file shape ("trading a lost relay for a lost
-  report"), so the helper now has one consistent policy. `awk`'s own diagnostic
-  still reaches stderr — nothing is suppressed. Re-measured after the fix: rc
-  0, the hook continues, the new report lands.
+  the merge to the pre-slice overwrite: the staged report is lost, this run's is
+  not. That is the same trade `gitlore_relay_drain`'s `-type f` comment already
+  states for the non-file shape ("trading a lost relay for a lost report"), so
+  the helper now has one consistent policy. `awk`'s own diagnostic still reaches
+  stderr — nothing is suppressed. Re-measured after the fix: rc 0, the hook
+  continues, the new report lands.
 
   This is not the failure path slice 4 owns — that one is the *unwritable*
   marker, and it takes `[ -f ]` false. Slice 4's RED is unaffected either way.
 
 ## 6. `set -euo pipefail`, bash 3.2, BSD
 
-- **`set -u`.** `old_sys` / `old_ctx` are `local`-declared unset, and every
-  read of them is inside the `if [ -f "$marker" ]` branch that assigns them
-  first. `x=$(cmd) || x=""` assigns unconditionally — the substitution assigns
-  the (empty) output whatever the exit status — so neither can be read unset.
+- **`set -u`.** `old_sys` / `old_ctx` are `local`-declared unset, and every read
+  of them is inside the `if [ -f "$marker" ]` branch that assigns them first.
+  `x=$(cmd) || x=""` assigns unconditionally — the substitution assigns the
+  (empty) output whatever the exit status — so neither can be read unset.
 - **`set -e`.** Both reads are `x=$(…) || x=""`, so neither can trip errexit.
   The extraction changes nothing here: a function called as a simple command
   propagates errexit exactly as an inline assignment did, and both call sites
@@ -251,8 +251,8 @@ command substitutions. Nothing new can reach the hooks' single JSON object.
   written.
 - "Entry points first, definitions after their users" holds:
   `_gitlore_relay_sysblock` / `_gitlore_relay_ctxblock` sit after
-  `gitlore_relay_drain`, the second of their two users, next to the file's
-  other private helper.
+  `gitlore_relay_drain`, the second of their two users, next to the file's other
+  private helper.
 - No comment cites anything under `plans/` or `memory/`. References are to
   shipped files only (`index-sync-post.sh`, the drain's `-type f`).
 - The GREEN comment's phrase "read with the same split the drain uses" is now
@@ -268,27 +268,26 @@ command substitutions. Nothing new can reach the hooks' single JSON object.
   one-line change (`|| sysblock=""`), but it changes what the drain does with a
   marker it cannot read — it would fold an empty block and `rm -f` the file —
   and that deserves its own case rather than riding in on a refactor.
-- **Case 2 does not discriminate write order** (MA/NA red case 1 only). The
-  test files are frozen; reported, not edited.
-- **§2's non-empty join guard is untested.** No frozen case writes an empty
-  ctx. If a later slice wants it pinned, the fixture is one
+- **Case 2 does not discriminate write order** (MA/NA red case 1 only). The test
+  files are frozen; reported, not edited.
+- **§2's non-empty join guard is untested.** No frozen case writes an empty ctx.
+  If a later slice wants it pinned, the fixture is one
   `gitlore_relay_write mem a1 "S" ""` followed by
-  `gitlore_relay_write mem a1 "S2" "C2"`, asserting the drained ctx block has
-  no leading blank line.
+  `gitlore_relay_write mem a1 "S2" "C2"`, asserting the drained ctx block has no
+  leading blank line.
 
 ## Checks that passed, by name
 
-- `scripts/run-bats.sh tests/index_sync.bats tests/cc_hook_index_compose.bats`
-  — 101 passed, 0 failed (baseline before mutation, and again on the restored
+- `scripts/run-bats.sh tests/index_sync.bats tests/cc_hook_index_compose.bats` —
+  101 passed, 0 failed (baseline before mutation, and again on the restored
   fixed SUT).
-- `scripts/run-bats.sh tests/cc_hook_session_start.bats tests/cc_hook_add_tier.bats
-  tests/index_compose.bats tests/cc_hook_post_tool_use.bats tests/lib_util.bats`
+- `scripts/run-bats.sh tests/cc_hook_session_start.bats tests/cc_hook_add_tier.bats tests/index_compose.bats tests/cc_hook_post_tool_use.bats tests/lib_util.bats`
   — 130 passed, 0 failed.
 - `scripts/run-bats.sh tests/bsd_portability.bats` — 3 passed, 0 failed.
 - `shellcheck -s bash scripts/lib/index-sync.sh` — clean.
 - `scripts/lint-shell.sh` — 137 files clean.
-- Mutations MA, MB, MC, MD, ME, MF against the submitted SUT and NA, NC, NE,
-  NG, NG+NC against the refactored SUT — each a full run of both suites, each
+- Mutations MA, MB, MC, MD, ME, MF against the submitted SUT and NA, NC, NE, NG,
+  NG+NC against the refactored SUT — each a full run of both suites, each
   restored; results in §4.
 - Hand-run probes, all against the SUT in place: three successive writes
   (associativity), the empty-ctx merge before and after the fix, the
