@@ -832,6 +832,65 @@ surface, backfilling descriptions that never matched their index lines.
        post-hook's `systemMessage` carries the relayed block attributed to `a1`
        and the marker is removed.
 
+  2.5. **One agent, one marker, several reports — the write merges instead of
+  truncating.** Added after slice 2's code review. `hooks/hooks.json` registers
+  `index-sync-post.sh` and `index-compose.sh` on the *same* `PostToolBatch`
+  event, and both now stage to `gitlore_relay_marker_file <mempath> <agent_id>`
+  — one path per agent. The write is a single `>` redirect, so in a subagent
+  batch that edits `MEMORY.md` with a tier mounted — the ordinary case — the
+  compose hook truncates the sync hook's staged report and the parent receives
+  only one of them. The frontmatter-sync report, the one telling the actor its
+  authored `description:` was overwritten, is the one lost. The same mechanism
+  loses a report across batches: a subagent editing the index in two successive
+  batches has the first marker truncated by the second, because nothing
+  parent-side runs in between — the parent is blocked inside the `Task` call for
+  the subagent's whole lifetime. Demonstrated by hand-run in
+  `reports/item-3-1-s2-code-review.md` §F1.
+
+     This falsifies FR-D for the common case, so it is fixed here rather than
+     deferred: "reports produced inside a subagent reach the parent session"
+     does not hold if one hook's report evicts another's.
+
+     **`gitlore_relay_write` merges into an existing marker for the same agent**
+     rather than truncating: when the marker exists, parse its two channels,
+     append the new bodies to their own channels, and write the result back. One
+     marker per agent still, one framing line per agent at the parent, with both
+     hooks' text under it.
+
+     Chosen over the two alternatives the code review named, both of which cost
+     more. Keying the marker per source (`<agent_id>-compose`) makes the drain
+     parse a compound suffix to recover the agent id for its framing line, and
+     the suffix is not unambiguously splittable — `_gitlore_agent_suffix` emits
+     `[A-Za-z0-9-]`, so both `-` and, via the `tr -c` fold, `_` can occur inside
+     an agent id. Plain append-without-parse would put a second
+     `--- gitlore-relay-sysmsg ---` pair mid-file, which the drain's `awk` reads
+     as the ctx delimiter arriving twice, mis-splitting the result. Merging per
+     channel changes neither the file format nor the marker's name, so every
+     committed slice-1 contract case still describes the helper: a single write
+     to a fresh marker is byte-identical to today's.
+
+     - `relay_write merges a second report into an existing marker` in
+       `tests/index_sync.bats` — writes `S1`/`C1` under `a1`, writes `S2`/`C2`
+       under `a1` again, drains once; asserts `GITLORE_RELAY_SYSMSG` carries
+       `S1` and `S2` in write order under a **single** framing line for `a1`,
+       that `GITLORE_RELAY_CTX` carries `C1` and `C2` likewise, and that neither
+       channel carries the other's bodies. The single-framing-line assertion is
+       what distinguishes a merge from a second marker; the cross-check is what
+       keeps a merge that concatenates everything into both channels from
+       passing.
+     - `both PostToolBatch hooks in one keyed batch reach the parent` in
+       `tests/cc_hook_index_compose.bats` — a real keyed run of
+       `index-sync-post.sh` followed by a real keyed run of `index-compose.sh`
+       over one batch that moves the index in a store with a tier mounted, then
+       an unkeyed compose run; asserts the parent's `systemMessage` carries
+       **both** the `reset frontmatter to match MEMORY.md` line and the
+       `recomposed tier pointers` line. This is the case that reds against the
+       defect as found; the helper-level case above is what pins the mechanism.
+
+     Slice 4's
+     `relay_write refuses an empty agent id and a squatted marker path` still
+     applies unchanged — a merge still has one create path and one failure mode.
+
   3. **SessionStart drains a marker that outlived its session.**
      - `session-start drains a stranded relay marker` in
        `tests/cc_hook_session_start.bats` — that suite owns `session-start.sh`,
