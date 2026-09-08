@@ -20,7 +20,7 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # only reacts to Write and Edit lets the root index and a carrier drift apart
 # silently. The stamp is this hook's own copy — the sync hook consumes a
 # different file, so neither has to run first.
-cat >/dev/null   # drain the payload; the stamp, not its contents, is the signal
+payload=$(cat)   # the contents are still drained, not acted on; only agent_id below steers us
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
@@ -29,8 +29,13 @@ index="$mempath/MEMORY.md"
 manifest="$mempath/.gitlore-tiers"
 [ -e "$index" ] || exit 0
 
-stamp=$(gitlore_compose_stamp_file "$mempath")
-[ -f "$stamp" ] || exit 0   # no baseline → no watched call this batch
+# agent_id, never agent_type: only the former is subagent-only, and the latter
+# also appears on the main thread of an --agent session — a fallback there
+# would key a parent batch's stamp under its own agent id and strand it. Same
+# contract index-sync-pre.sh/-post.sh already settled.
+agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
+stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
+[ -f "$stamp" ] || exit 0   # no baseline → no watched call this batch, for THIS agent
 
 # Did this batch change the root index or the activation manifest? Tracked
 # separately: the triage nudge below fires on a manifest change specifically

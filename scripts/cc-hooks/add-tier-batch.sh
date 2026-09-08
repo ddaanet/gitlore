@@ -35,7 +35,11 @@ source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 
-cat >/dev/null || true   # drain stdin; the intent file, not the payload, drives us
+payload=$(cat || true)   # drain stdin; the intent file, not the payload, drives us
+# agent_id, never agent_type: same contract as index-compose.sh and the sync
+# hooks — agent_type also appears on an --agent session's main thread, so a
+# fallback would key this batch's stamp drop under the wrong agent's name.
+agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
 
 emit() {   # $1 = systemMessage, $2 = additionalContext
   jq -n --arg s "$1" --arg c "$2" \
@@ -72,7 +76,7 @@ if [ "$rc" -eq 0 ]; then
   # idempotent, not wrong: gitlore_compose writes each index temp+mv, and its
   # output is a deterministic function of the root index and the carriers. So
   # the cost of the assumption failing is one duplicate systemMessage.
-  rm -f "$(gitlore_compose_stamp_file "$mempath")"
+  rm -f "$(gitlore_compose_stamp_file "$mempath" "$agent_id")"
   sysmsg="$out"
   ctx="$out
 
