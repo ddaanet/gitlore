@@ -185,6 +185,11 @@ EOF"
   # than swallowed by the commit path's `>/dev/null`.
   [[ "$stderr" == *"tier composition refused"* ]]
   [[ "$stderr" == *"is checked out at"* ]]
+  # The agent arm's remedy sentence, pinned because it is the fix slice 3's code
+  # review made for its own Major 2: it is what tells an agent that the pin
+  # figure printed above is already stale by the time the commit lands. Nothing
+  # else asserts it, so it would revert silently.
+  [[ "$stderr" == *"This commit also stages each tier at the commit its worktree is on now"* ]]
 }
 
 @test "a compose write failure aborts the commit" {
@@ -212,6 +217,10 @@ EOF"
   # forwarded problem line, for the same two-faults reason as the rc-1 case.
   [[ "$stderr" == *"tier composition could not write an index"* ]]
   [[ "$stderr" == *"could not write memory/ddaanet/MEMORY.md"* ]]
+  # The agent arm's remedy sentence. The header above proves the branch fired
+  # and the problem line proves the forwarding, but neither pins what the agent
+  # is told to do about it, and the two arms differ only here.
+  [[ "$stderr" == *"Investigate that path (permissions, disk space, a read-only worktree)"* ]]
 }
 
 @test "an unrecognised compose status aborts and keeps the approval" {

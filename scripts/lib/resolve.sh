@@ -899,10 +899,11 @@ gitlore_sync_memory_to_live() {
       return 1
     fi
     # Every tier gets memory's own stale-merge precheck here, ahead of the first
-    # write into it. The compose below writes carrier files inside the tier
-    # worktrees, and gitlore_sync_tiers_to_live's per-tier guard runs only after
-    # that — so a tier holding a half-finished merge is rewritten by a commit
-    # that guard then refuses, under a message stating nothing was changed. The
+    # write into it. It runs over every mounted tier rather than the active
+    # subset the compose below touches, because what it orders against is
+    # gitlore_sync_tiers_to_live, which commits inside a mounted-but-unlisted
+    # tier too — otherwise a run commits tier A and then aborts on tier B's
+    # stale merge, under a message stating nothing was changed. The
     # guard inside that loop stays: it is that function's own precondition, and
     # a state this call passes is clean by the time it runs, so the second call
     # costs a rev-parse and a stat.
