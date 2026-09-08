@@ -16,10 +16,10 @@ not inferred.
 Both now call `gitlore_relay_write "$mempath" "$agent_id" …`, which resolves to
 the same path — `gitlore-relay-<agent_id>` — and whose single redirect
 truncates. In a subagent batch that edits `MEMORY.md`, the sync hook writes its
-report, the compose hook overwrites it, and the parent receives only the
-compose report. The frontmatter-sync report — the one that tells the actor its
-authored `description:` was clobbered — is lost exactly on the path the relay
-exists to serve.
+report, the compose hook overwrites it, and the parent receives only the compose
+report. The frontmatter-sync report — the one that tells the actor its authored
+`description:` was clobbered — is lost exactly on the path the relay exists to
+serve.
 
 Hand-run, both hooks driven keyed as `a1` over one batch (`pre` + a root index
 edit adding `p.md`, then `index-sync-post.sh`, then `index-compose.sh`):
@@ -116,21 +116,23 @@ Item 4.1 will back-fill a `D<n>` id into.
 
 ### F4 — Compose's fold used `$'\n'` inside `${…:+…}` (FIXED)
 
-`index-compose.sh` joined with `${GITLORE_COMPOSE_SYSMSG:+$GITLORE_COMPOSE_SYSMSG$'\n'}`.
+`index-compose.sh` joined with
+`${GITLORE_COMPOSE_SYSMSG:+$GITLORE_COMPOSE_SYSMSG$'\n'}`.
 `gitlore_compose_and_report`, which is the function producing the very variables
 being appended to, uses the same `${var:+…}` shape with a **literal** newline
 (`scripts/lib/index-compose.sh:721,731,741,752`), and `index-sync-post.sh`'s new
-block matches its own file's four-times-used `if [ -n "$sysmsg" ]; then …` idiom.
-Whether `$'…'` is processed inside `${…}` under double quotes is a bash-version
-question the repo has no reason to be asking on a macOS/bash-3.2 target; the
-literal newline removes it and makes the join byte-identical to the idiom it
-claims to match. Behaviour on bash 5.2 is unchanged (both suites green before
-and after).
+block matches its own file's four-times-used `if [ -n "$sysmsg" ]; then …`
+idiom. Whether `$'…'` is processed inside `${…}` under double quotes is a
+bash-version question the repo has no reason to be asking on a macOS/bash-3.2
+target; the literal newline removes it and makes the join byte-identical to the
+idiom it claims to match. Behaviour on bash 5.2 is unchanged (both suites green
+before and after).
 
 ### F5 — A failed relay write costs the entire report (REPORTED, NOT FIXED — slice 4)
 
-Confirmed by hand-run, as instructed, with `mkdir "$(gitlore_relay_marker_file
-memory a1)"` and a keyed compose run over an index edit that composes:
+Confirmed by hand-run, as instructed, with
+`mkdir "$(gitlore_relay_marker_file memory a1)"` and a keyed compose run over an
+index edit that composes:
 
 ```
 rc=1
@@ -141,9 +143,9 @@ stderr:
 ```
 
 The hook exits 1 with **empty stdout** — the subagent's own compose report is
-destroyed along with the relay. This is what slice 4's `a failed relay write
-leaves the subagent's own report intact` must red against, and it does. Left
-standing.
+destroyed along with the relay. This is what slice 4's
+`a failed relay write leaves the subagent's own report intact` must red against,
+and it does. Left standing.
 
 Fix 2 changes the *reachability* of this path but not its behaviour: a keyed run
 now only reaches `gitlore_relay_write` when it has a report, which is exactly
@@ -161,11 +163,11 @@ stdout=[{ "systemMessage": "gitlore: recomposed tier pointers (1 index)", … }]
 stderr:
 ```
 
-The runbook anticipates this (`slice 1 has no case that makes a directory
-marker`), but the case as specified cannot red by absence — it will need the
-same mutation-red shape slice 1's `_gitlore_agent_suffix` case used (back the
-`-type f` out, red, restore). Flagging it now so slice 4's RED dispatch is not
-surprised.
+The runbook anticipates this
+(`slice 1 has no case that makes a directory marker`), but the case as specified
+cannot red by absence — it will need the same mutation-red shape slice 1's
+`_gitlore_agent_suffix` case used (back the `-type f` out, red, restore).
+Flagging it now so slice 4's RED dispatch is not surprised.
 
 ### F7 — `gitlore_relay_drain`'s `rm -f` is a new abort path in the unkeyed branch (reported, frozen code)
 
@@ -215,11 +217,11 @@ written and stays; the gap is cosmetic-severity and belongs to this slice, but I
 do not recommend a test for it — pinning a trailing newline would pin wording
 the suite deliberately does not pin elsewhere.
 
-**m5d is caught only incidentally.** The "unkeyed branch must not write" property
-reds on the budget-nudge re-warn case, not on a relay case: the stray marker is
-folded back on the next batch and re-surfaces the once-per-episode warning. It
-is caught, but by a case that is not about the relay, so a future edit to that
-case could open the gap. Belongs to this slice; noted, not closed.
+**m5d is caught only incidentally.** The "unkeyed branch must not write"
+property reds on the budget-nudge re-warn case, not on a relay case: the stray
+marker is folded back on the next batch and re-surfaces the once-per-episode
+warning. It is caught, but by a case that is not about the relay, so a future
+edit to that case could open the gap. Belongs to this slice; noted, not closed.
 
 Two mutations the dispatch asked about were merged into the table rather than
 run twice: "make the keyed branch write the marker but suppress the hook's own
@@ -233,19 +235,20 @@ writes" are m5a–m5d.
    `rev-parse --absolute-git-dir` are both inside command substitutions;
    `gitlore_relay_write`'s only output is the redirect into the marker file, and
    its failure diagnostic goes to stderr (F5's transcript shows it there);
-   `find`, `awk`, `sort` and `rm -f` inside the drain are all either
-   NUL-piped into a `read` loop, captured, or silent. Verified end to end by
-   probe D, whose stdout is one object and whose stderr is empty.
-2. **`set -euo pipefail`.** `GITLORE_COMPOSE_SYSMSG`/`_CTX` are assigned on every
-   path through `gitlore_compose_and_report` (`scripts/lib/index-compose.sh:794,796`),
-   which the hook calls bare at `:66`, so the `set -u` expansions at the keyed
-   branch are safe. `GITLORE_RELAY_SYSMSG`/`_CTX` are assigned in
-   `gitlore_relay_drain`'s first two statements, ahead of every early `return`,
-   and are read only inside the branch that called it — the keyed branch never
-   expands them, which is correct and would be a `set -u` abort if it did. In
-   `index-sync-post.sh`, `sysmsg`/`ctx` are initialised at `:186-187` and
-   `agent_id` at `:23`. The two new abort paths under errexit are F5 (the write,
-   excluded) and F7 (the drain's `rm -f`, frozen code).
+   `find`, `awk`, `sort` and `rm -f` inside the drain are all either NUL-piped
+   into a `read` loop, captured, or silent. Verified end to end by probe D,
+   whose stdout is one object and whose stderr is empty.
+2. **`set -euo pipefail`.** `GITLORE_COMPOSE_SYSMSG`/`_CTX` are assigned on
+   every path through `gitlore_compose_and_report`
+   (`scripts/lib/index-compose.sh:794,796`), which the hook calls bare at `:66`,
+   so the `set -u` expansions at the keyed branch are safe.
+   `GITLORE_RELAY_SYSMSG`/`_CTX` are assigned in `gitlore_relay_drain`'s first
+   two statements, ahead of every early `return`, and are read only inside the
+   branch that called it — the keyed branch never expands them, which is correct
+   and would be a `set -u` abort if it did. In `index-sync-post.sh`,
+   `sysmsg`/`ctx` are initialised at `:186-187` and `agent_id` at `:23`. The two
+   new abort paths under errexit are F5 (the write, excluded) and F7 (the
+   drain's `rm -f`, frozen code).
 3. **Join style.** Fixed in compose (F4); `index-sync-post.sh` already matched
    its own file. A relayed block cannot run into the hook's own last line —
    compose joins with one newline, sync with one newline, and the drain's blocks
@@ -257,11 +260,11 @@ writes" are m5a–m5d.
    encodes it faithfully.
 4. **Nesting and lifecycle.** The keyed branch does not drain, so a nested
    subagent's marker accumulates until a parent-side run — which is the design
-   (`the next parent-side run folds the markers into its own report and removes
-   them`), and m5a/m5c red a keyed branch that drains. Nothing double-folds: the
-   drain `rm -f`s each marker in the same iteration that folds it, and
-   m5b/m5d red an unkeyed branch that also writes. No path writes a marker and
-   then drains its own. Cross-agent clobbering is impossible (distinct ids);
+   (`the next parent-side run folds the markers into its own report and removes them`),
+   and m5a/m5c red a keyed branch that drains. Nothing double-folds: the drain
+   `rm -f`s each marker in the same iteration that folds it, and m5b/m5d red an
+   unkeyed branch that also writes. No path writes a marker and then drains its
+   own. Cross-agent clobbering is impossible (distinct ids);
    **same-agent clobbering across hooks and across batches is F1**.
 5. **Early exits.** The insertion adds no new early exit. It sits below every
    guard in both hooks, so the drain is reached only on a run that has already
@@ -291,11 +294,10 @@ No `just` recipe was run.
   four expected files, tests unchanged at 129 / 109 insertions, no deletions.
 - `scripts/run-bats.sh tests/cc_hook_index_compose.bats tests/index_sync.bats` —
   99 passed, 0 failed (baseline before mutations, and again after the fixes).
-- `scripts/run-bats.sh tests/cc_hook_session_start.bats tests/cc_hook_add_tier.bats
-  tests/index_compose.bats tests/cc_hook_post_tool_use.bats` — 106 passed,
-  0 failed.
-- `shellcheck -s bash scripts/cc-hooks/index-compose.sh
-  scripts/cc-hooks/index-sync-post.sh` — clean.
+- `scripts/run-bats.sh tests/cc_hook_session_start.bats tests/cc_hook_add_tier.bats tests/index_compose.bats tests/cc_hook_post_tool_use.bats`
+  — 106 passed, 0 failed.
+- `shellcheck -s bash scripts/cc-hooks/index-compose.sh scripts/cc-hooks/index-sync-post.sh`
+  — clean.
 - `scripts/lint-shell.sh` — 137 files clean.
 - Mutation round, 18 in-place mutations over both hooks — 16 red, 2 green
   (m7a/m7b), table above.
