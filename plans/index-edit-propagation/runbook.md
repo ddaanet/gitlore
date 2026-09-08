@@ -358,11 +358,12 @@ surface, backfilling descriptions that never matched their index lines.
   memory commit instead of being reported and committed through. Requirements:
   FR-F. Depends on: Item 1.1. Model: opus
 
-  **The execution slot is deliberately open.** This item is not scheduled inside
-  Phase 1's own run; it is written here so the decision is recorded in the plan
-  rather than carried in a report. It must land **before Phase 4**, because Item
-  4.1's decision node describes the commit path's final behaviour and would
-  otherwise argue a rule the code no longer follows.
+  **Scheduled: after Phase 3, before Phase 4.** The slot was left open at plan
+  time and settled at the Phase 2 checkpoint. It must land before Phase 4
+  because Item 4.1's decision node describes the commit path's final behaviour
+  and would otherwise argue a rule the code no longer follows; running it after
+  Phase 3 rather than immediately keeps the relay work, which Item 2.1 just made
+  load-bearing, in one uninterrupted run.
 
   **The defect.** Measured through the `pre-commit` entry point against the code
   Item 1.1 landed, with a tier whose carrier held an approved upstream fact and
@@ -824,6 +825,32 @@ surface, backfilling descriptions that never matched their index lines.
 ---
 
 ## Phase 4: Design record and changelog (type: general)
+
+- Item 4.0: `docs/references/index-authoring-sync.md` — narrow the per-batch
+  baseline invariant to per-agent. Requirements: FR-C. Depends on: Item 2.1,
+  Item 3.1. Model: opus
+
+  Added at the Phase 2 checkpoint, not present in the runbook as proofed. Item
+  2.1's slice 4 code review found this node still asserting the invariant Item
+  2.1 falsified, and no Phase 4 item covered it: Items 4.1-4.3 reach
+  `git-hooks-and-entry-points.md`, `design.md`, `decisions.md` and the
+  changelog, so this is the one place the plugin's shipped documentation still
+  describes the unkeyed behaviour.
+
+  The passage (`:45-57`) says "every baseline is per-batch", and that "the
+  post-hook drops the stash at every batch end, even one where the index went
+  untouched, so a pre-image can never become a *second* batch's baseline". Both
+  halves are now false. Baselines are keyed per (agent, batch): a batch resolves
+  only the name its own agent stashed, so the drop bounds that agent's own
+  stashes and nobody else's. The claim it should make instead is the one
+  `index-sync-pre.sh:54-58` states — a pre-image can never become another
+  agent's baseline, and one stranded by a subagent that died mid-batch is
+  consumed by nothing, because an agent id is not reused.
+
+  Sequenced after Item 3.1, not straight after Item 2.1: the relay adds a marker
+  with the same keyed lifecycle to the same hooks, so the paragraph is written
+  once against the final shape. State current truth in the present tense — this
+  is not a correction of a previous version.
 
 - Item 4.1: `docs/references/git-hooks-and-entry-points.md` — record the
   commit-path composition decision as a new numbered decision with its rejected
