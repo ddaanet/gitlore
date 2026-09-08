@@ -44,9 +44,18 @@ stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
 # First index-touching call of the batch establishes the baselines; later ones in
 # the same batch must not overwrite them, or a batch-end comparison would run
 # against a mid-batch state and miss everything the earlier calls changed. The
-# baselines are keyed per agent, so an existing one here always belongs to the
-# batch in flight of this agent — a parent batch ending mid-subagent no longer
-# consumes the subagent's baseline, since each keys its own file.
+# baselines are keyed per agent, so a parent batch ending mid-subagent consumes
+# and removes its own bare pair only. An existing file here therefore belongs to
+# the batch in flight of this agent — an invariant the consuming hooks hold up
+# jointly, and it stands only while index-sync-post.sh, index-compose.sh and
+# add-tier-batch.sh resolve the SAME keyed name and drop the baseline they
+# consumed at batch end, even when nothing was touched.
+#
+# One residual, bounded rather than swept: a subagent that dies mid-batch leaves
+# its keyed files behind, and the next batch of that same agent id consumes and
+# deletes them. An agent id is not reused, so the leftovers are one pair per dead
+# subagent, not unbounded growth — the same bound index-sync-post.sh already puts
+# on a stale pre-image.
 if [ ! -f "$stamp" ]; then
   gitlore_compose_stamp "$index" "$manifest" > "$stamp" || \
     printf 'gitlore: failed to stamp the pre-edit index state (%s)\n' "$stamp" >&2
