@@ -1,39 +1,29 @@
 ## Open decisions
 
-- **The `precommit` gate has twice returned a verdict spanning two trees.**
-  Both times `lint` recorded a hash two bytes larger than `test-unit` and
-  `test-integration`, and `just lint` afterwards answered
-  `cached (inputs unchanged)`, so the tree as it stood matched `lint` and not
-  the suites. `lint` runs before the suites in `precommit`, and `record-sentinel`
-  runs at each recipe's end, so the tree lost two bytes between lint's end and
-  test-unit's end and regained them after. The second occurrence also showed
-  `test-unit` and `test-integration` recording one second apart, against 54
-  seconds for a real integration run — so at least one of those two did not
-  execute the suite it claims to have passed. Decide whether this is a
-  concurrent session writing into the shared gitdir (`ListAgents` shows seven
-  live interactive peers), a defect in the sentinel machinery, or an artifact of
-  running the gate from a subagent; and whether the run continues before it is
-  settled. Until it is, a `precommit` verdict from a background run is not
-  evidence, and each gate has to be re-run in the foreground and its three
-  shared-input sentinels compared by hand.
+- **The `precommit` gate has three times returned a verdict spanning two
+  trees**, each time with the recipes disagreeing on the input hash they
+  recorded. All three splits came from a gate launched in the background from
+  inside a *subagent*. Since then two full runs launched from the main session
+  have been hand-verified clean — every sentinel matching an independent
+  recomputation of `gate-inputs-hash` over its own declared inputs, and
+  internally coherent timings. That is consistent with a subagent artifact but
+  does not establish it: seven-plus interactive peers share the gitdir and
+  could have been the cause either time. Decide whether to settle it or leave
+  the current practice (orchestrator runs every gate in the main session, and
+  compares all four sentinels against a hand recomputation before committing)
+  standing as the mitigation. Until settled, a gate verdict is not evidence
+  without that hand check.
 
-- **Where Item 1.2 runs.** D-1's pin abort — `gitlore_compose_check_pins` at the
-  `gitlore_sync_memory_to_live` call site, aborting on refusal — is written into
-  the runbook as a tdd item under Phase 1 with its execution slot deliberately
-  open. The standing recommendation is **before Phase 4**, because Item 4.1's
-  decision node has to argue the final behaviour and its originally-planned
-  third reason is the one D-1's evidence falsified. Alternatives: run it now,
-  ahead of the rest of Phase 2, or split it into its own job.
-
-- **Whether `CLAUDE.md` §Testing's gate-sentinel paragraph is rewritten.** It
-  carries two errors, not one. It tells an agent a sentinel is "valid for the
-  tree when its mtime postdates the last edit to any gated input", but the
-  mechanism is a content hash — the sentinel holds `cksum` output over the
-  gate's declared inputs. And it points at `just check-sentinel`, which does not
-  exist: `check-sentinel` is a shell function in the justfile prolog, not a
-  recipe, so the command errors with `Justfile does not contain recipe`. That
-  wrong command was copied into two dispatch prompts before it was caught. Two
-  lines to fix; can ride Phase 4.
+- **Whether `CLAUDE.md` §Testing's gate-sentinel paragraph is rewritten.** Two
+  errors. It says a sentinel is "valid for the tree when its mtime postdates
+  the last edit to any gated input", but the mechanism is a content hash — the
+  sentinel holds `cksum` output over the gate's declared inputs, and mtime
+  ordering is not evidence at all (a sentinel legitimately written by a
+  subagent's own `just lint` appeared out of recipe order during this run). And
+  it points at `just check-sentinel`, which does not exist: `check-sentinel` is
+  a shell function in the justfile prolog, not a recipe, so the command errors
+  with `Justfile does not contain recipe`. That wrong command reached two
+  dispatch prompts before it was caught. Can ride Phase 4.
 
 - The memory index against Claude Code's ~24,985-byte loader cutoff, per
   `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports
@@ -82,22 +72,39 @@
 
 ## Remaining
 
-- Finish Item 2.1 slice 3: re-run `just test-integration` in the foreground,
-  confirm all three `precommit_inputs`-sharing sentinels agree, then have
-  `item-2-1-s3-green` write its report and make the slice commit. Then the
-  slice 3 code review, slice 4, and the Phase 2 checkpoint.
+- Phase 3, Item 3.1 — the subagent report relay, four slices: the keyed
+  `gitlore_relay_marker_file` write/drain contract; both PostToolBatch reports
+  relaying on the same wiring; SessionStart draining a marker that outlived its
+  session; and a failed relay write not losing the subagent's own report.
+
+- Item 1.2 after Phase 3 — the D-1 pin abort, `gitlore_compose_check_pins` at
+  the `gitlore_sync_memory_to_live` call site, aborting on refusal.
+
+- Phase 4, Items 4.0 through 4.3 — 4.0 narrows
+  `docs/references/index-authoring-sync.md`, whose per-batch baseline invariant
+  Item 2.1 falsified; then the decision node, the design/decisions conclusion,
+  and the changelog's two surfaces.
 
 - Write the orchestration fact to memory: every one of three `edify:test-driver`
   GREEN dispatches went idle waiting on a background `just precommit` completion
   notification that a subagent does not reliably receive, each time despite an
   explicit instruction in its prompt not to wait for one. Instructing the agent
-  does not work; the orchestrator arming its own sentinel watcher does. Deferred
-  deliberately — a memory write would have put an FR11 approval round-trip
-  inside a transition that was asked to run.
+  does not work; the orchestrator owning the gate does, and that is now the
+  standing dispatch contract.
 
 - Write the ambient-`CLAUDECODE` fact to memory: a subagent dispatch exports
   `CLAUDECODE=1`, so a bats test that branches on it passes under dispatch and
-  fails for a human or CI. Deferred for the same reason.
+  fails for a human or CI.
+
+- Write the report-cannot-cite-its-own-commit fact: a slice report committed
+  *with* the work cannot carry that commit's sha, because amending the report in
+  changes it. Item 2.1 slice 2's report names `b76a253`, which is not in the
+  log; slice 3's identifies its commit by subject instead.
+
+- Write the citation-boundary fact: shipped plugin source must not cite files
+  under `memory/`, which reach the tree through a submodule gitlink and are not
+  distributed. The only precedent in `scripts/` is `scripts/lib/util.sh:442`
+  citing `docs/design.md`; a slice 4 review fix had to be retargeted for this.
 
 - Record that `find` on this box is `bfs`, which rejects `-newermt '-60 minutes'`
   with `Invalid timestamp` and accepts only ISO 8601-like forms — a relative

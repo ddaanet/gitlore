@@ -108,7 +108,97 @@ gitlore_compose_stamp_file() {
   git -C "$1" rev-parse --git-path "gitlore-compose-stamp$(_gitlore_agent_suffix "${2:-}")"
 }
 
-# The `-<agent id>` suffix the two helpers above append; empty for an empty or
+# Abs/relative path of a subagent's relay marker — the sixth untracked
+# `gitlore-…` file in the memory gitdir, beside `gitlore-nudged`,
+# `gitlore-merge-state`, the `gitlore-merge-<artifact>` briefing files,
+# `gitlore-index-preimage` and `gitlore-compose-stamp`. A hook firing inside a
+# subagent has both its output channels confined to that subagent's own
+# transcript (measured under CC 2.1.261), so the report is staged here for the
+# next parent-side run to fold in and remove. $1 = memory path; $2 = agent id,
+# optional — same absent/empty-vs-non-empty contract as
+# gitlore_index_preimage_file and gitlore_compose_stamp_file.
+gitlore_relay_marker_file() {
+  git -C "$1" rev-parse --git-path "gitlore-relay$(_gitlore_agent_suffix "${2:-}")"
+}
+
+# Write both report bodies to the relay marker keyed by $2, so a later
+# unkeyed (parent-side) run can fold them in. $1 = memory path; $2 = agent id;
+# $3 = systemMessage body; $4 = additionalContext body. Returns 0 after
+# writing both bodies; returns non-zero without writing when the marker
+# cannot be created (e.g. something already occupies that path as a
+# directory) — the redirect below is the single write, so a failed open
+# leaves nothing on disk to clean up. File format: the literal line
+# `--- gitlore-relay-sysmsg ---`, the systemMessage body, the literal line
+# `--- gitlore-relay-ctx ---`, the additionalContext body. Neither body is
+# escaped: the contract guarantees neither contains a line equal to a
+# delimiter. A body that broke that guarantee would not corrupt the file, but
+# the drain would re-split it there and attribute the tail to the wrong
+# channel — silently, so the guarantee is the whole protection.
+gitlore_relay_write() {
+  local mempath="$1" agent_id="$2" sysmsg="$3" ctx="$4" marker
+  marker=$(gitlore_relay_marker_file "$mempath" "$agent_id") || return 1
+  {
+    printf -- '--- gitlore-relay-sysmsg ---\n'
+    printf '%s\n' "$sysmsg"
+    printf -- '--- gitlore-relay-ctx ---\n'
+    printf '%s\n' "$ctx"
+  } > "$marker"
+}
+
+# Fold every keyed relay marker in the memory gitdir into
+# GITLORE_RELAY_SYSMSG and GITLORE_RELAY_CTX — each block framed with the
+# agent id its filename suffix holds, folded in filename order — then remove
+# the markers. $1 = memory path. Always returns 0; both variables are set to
+# the empty string when no marker exists.
+#
+# Only keyed markers (`gitlore-relay-<id>`) are enumerated, never the bare
+# `gitlore-relay` name: nothing writes the unsuffixed marker, because the
+# hooks call gitlore_relay_write only when an agent id is present, and a run
+# with an agent id is exactly a run whose report needs relaying. The residual:
+# a caller that passed an empty id anyway would strand a file this function
+# never folds and never removes, silently — the guard is at the call sites,
+# not here.
+gitlore_relay_drain() {
+  local mempath="$1" gitdir names name marker agent sysblock ctxblock
+  GITLORE_RELAY_SYSMSG=""
+  GITLORE_RELAY_CTX=""
+  gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir) || return 0
+  # `-print0` into `read -r -d ''`, never an `ls` pipeline or an unquoted
+  # glob: nothing sanitizes the gitdir prefix and it may hold a space.
+  # `-type f` because a non-file squatting on a marker name — the shape a
+  # failed relay write leaves behind — must be skipped, not handed to `awk`
+  # and `rm`: both fail on a directory, and under the hooks' `set -e` that
+  # takes down the whole hook, trading a lost relay for a lost report.
+  names=""
+  while IFS= read -r -d '' marker; do
+    names="$names${marker##*/}"$'\n'
+  done < <(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' -print0)
+  [ -n "$names" ] || return 0
+  # Sorted, because find's own directory order is not guaranteed. Basenames
+  # rather than whole paths: a basename is `gitlore-relay-` plus the
+  # `[A-Za-z0-9-]` _gitlore_agent_suffix emits, so a newline-joined list is
+  # unambiguous where one carrying the unsanitized gitdir prefix would not
+  # be — and that prefix, identical across markers, sorts nothing anyway.
+  # `LC_ALL=C` for byte order: other collations ignore `-` at the first
+  # level, which reorders two ids differing only there. (`sort -z` would
+  # sidestep the join, but BSD sort has no `-z`.)
+  while IFS= read -r name; do
+    marker="$gitdir/$name"
+    agent=${name#gitlore-relay-}
+    sysblock=$(awk '/^--- gitlore-relay-sysmsg ---$/ { f=1; next } /^--- gitlore-relay-ctx ---$/ { f=0 } f' "$marker")
+    ctxblock=$(awk '/^--- gitlore-relay-ctx ---$/ { f=1; next } f' "$marker")
+    GITLORE_RELAY_SYSMSG="${GITLORE_RELAY_SYSMSG}--- gitlore-relay agent $agent ---
+$sysblock
+"
+    GITLORE_RELAY_CTX="${GITLORE_RELAY_CTX}--- gitlore-relay agent $agent ---
+$ctxblock
+"
+    rm -f "$marker"
+  done < <(printf '%s' "$names" | LC_ALL=C sort)
+  return 0
+}
+
+# The `-<agent id>` suffix the three helpers above append; empty for an empty or
 # absent id, which is what keeps the main thread on today's names.
 #
 # The id is a raw hook-payload field spliced into a `rev-parse --git-path`

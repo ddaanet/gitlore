@@ -804,6 +804,110 @@ batch_payload() {
   [ "$output" = "$base-agent-7" ]
 }
 
+# --- relay markers (Item 3.1) -------------------------------------------------
+#
+# A hook firing inside a subagent has its report confined to that subagent's
+# own transcript, so the relay stages it in a keyed marker for the next
+# parent-side (unkeyed) run to fold in and remove. Two channels — sysmsg is
+# the user's, ctx is the model's — must not cross-contaminate on drain.
+
+@test "relay_marker_file suffixes the agent id" {
+  make_parent_with_memory
+  base=$(git -C memory rev-parse --git-path gitlore-relay)
+  # Unsuffixed halves first: under errexit an assertion behind a failing one
+  # never runs, and these are the two that hold against an inert stub.
+  # Equality against the `rev-parse --git-path` name rather than a trailing
+  # glob, for the reason the preimage/compose cases above give: it pins the
+  # file inside the memory submodule's gitdir and rejects a `-` appended for
+  # an empty id, a doubled suffix and a partial one.
+  run gitlore_relay_marker_file memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base" ]
+  run gitlore_relay_marker_file memory ""
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base" ]
+  run gitlore_relay_marker_file memory a1
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base-a1" ]
+}
+
+@test "relay_write then relay_drain splits the two channels and removes the marker" {
+  make_parent_with_memory
+  run gitlore_relay_write memory a1 "S1" "C1"
+  [ "$status" -eq 0 ]
+  marker=$(gitlore_relay_marker_file memory a1)
+  [ -f "$marker" ]
+
+  # Not `run`: the drain's whole output is two variables, which a subshell
+  # would discard. `|| rc=$?` keeps errexit from turning a non-zero return
+  # into an aborted test instead of a failed assertion.
+  rc=0
+  gitlore_relay_drain memory || rc=$?
+  [ "$rc" -eq 0 ]
+  [[ "$GITLORE_RELAY_SYSMSG" == *"S1"* ]]
+  [[ "$GITLORE_RELAY_CTX" == *"C1"* ]]
+  # Each block carries one framing line naming its agent, in both channels.
+  [[ "$GITLORE_RELAY_SYSMSG" == *"a1"* ]]
+  [[ "$GITLORE_RELAY_CTX" == *"a1"* ]]
+  # The cross-check: a drain that emitted the marker whole into both
+  # variables — never splitting on the `--- gitlore-relay-ctx ---` line —
+  # passes every assertion above.
+  [[ "$GITLORE_RELAY_SYSMSG" != *"C1"* ]]
+  [[ "$GITLORE_RELAY_CTX" != *"S1"* ]]
+  # A drain that folds without unlinking re-emits the block on every later
+  # parent-side batch.
+  [ ! -f "$marker" ]
+}
+
+@test "relay_drain folds two markers in filename order, over a gitdir path holding a space" {
+  # Built out of line rather than through make_parent_with_memory: the
+  # contract requires the enumeration to survive a space in the gitdir path,
+  # and the cached fixture's path has none, so an `ls` pipeline or an
+  # unquoted glob passes every other case in this section. Two markers at
+  # once because the fold is specified in filename order.
+  root="$TMP_REPO/has space"
+  _gitlore_build_parent_with_memory "$root" memory
+  mem="$root/memory"
+  case "$(gitlore_relay_marker_file "$mem")" in
+    *\ *) : ;;                             # the fixture really is spaced
+    *) echo "fixture gitdir path has no space" >&2; return 1 ;;
+  esac
+
+  run gitlore_relay_write "$mem" a1 "S-one" "C-one"
+  [ "$status" -eq 0 ]
+  run gitlore_relay_write "$mem" a2 "S-two" "C-two"
+  [ "$status" -eq 0 ]
+
+  rc=0
+  gitlore_relay_drain "$mem" || rc=$?
+  [ "$rc" -eq 0 ]
+  # Order, not mere presence: `*"S-one"*"S-two"*` fails on a reversed fold.
+  [[ "$GITLORE_RELAY_SYSMSG" == *"S-one"*"S-two"* ]]
+  [[ "$GITLORE_RELAY_CTX" == *"C-one"*"C-two"* ]]
+  [ ! -f "$(gitlore_relay_marker_file "$mem" a1)" ]
+  [ ! -f "$(gitlore_relay_marker_file "$mem" a2)" ]
+}
+
+@test "relay_drain on an empty store sets both variables empty and returns 0" {
+  make_parent_with_memory
+  # Sentinels, not the birth state: a drain that leaves the variables alone
+  # when it finds nothing would re-emit whatever the previous drain left in
+  # them. The decoy is a real neighbour in the same gitdir, so a `gitlore-*`
+  # glob deletes the compose baseline and fails here rather than in Item 2.1's
+  # cases.
+  GITLORE_RELAY_SYSMSG="STALE-SYS"
+  GITLORE_RELAY_CTX="STALE-CTX"
+  decoy=$(gitlore_compose_stamp_file memory)
+  : > "$decoy"
+
+  rc=0
+  gitlore_relay_drain memory || rc=$?
+  [ "$rc" -eq 0 ]
+  [ -z "$GITLORE_RELAY_SYSMSG" ]
+  [ -z "$GITLORE_RELAY_CTX" ]
+  [ -f "$decoy" ]
+}
+
 # --- routing-key advisories ---------------------------------------------------
 
 # shellcheck disable=SC2016   # literal backticks/$VAR are the fixture text
