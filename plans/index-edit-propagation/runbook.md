@@ -730,6 +730,14 @@ surface, backfilling descriptions that never matched their index lines.
     spaces — and fold the blocks in filename order, so a two-marker assertion
     cannot flake on directory order.
 
+    Only half of that clause is reachable by test, established at slice 1 by
+    mutation: an unquoted glob reds against the spaced-gitdir case, an `ls`
+    pipeline ships green. `ls` prints basenames, and a marker basename is
+    `gitlore-relay-` plus what `_gitlore_agent_suffix` emits — `[A-Za-z0-9-]`,
+    no whitespace by construction — so the space lives in the prefix `ls` never
+    prints. The `ls` half stays as a style rule with no reachable failure. Do
+    not add a test for it; a test that cannot fail is worse than the gap.
+
   **Red shape.** All three helpers are new, and `tests/index_sync.bats` sources
   `scripts/lib/index-sync.sh` directly in `setup()` (`:12`), so a slice-1 case
   written against the finished names would red with `command not found` —
@@ -746,17 +754,47 @@ surface, backfilling descriptions that never matched their index lines.
 
   1. **External contract — write keyed, drain unkeyed.**
      - `relay_marker_file suffixes the agent id` in `tests/index_sync.bats` —
-       asserts `gitlore_relay_marker_file memory a1` ends in `-a1` and
-       `gitlore_relay_marker_file memory` does not.
+       asserts `gitlore_relay_marker_file memory a1` equals the gitdir's
+       `gitlore-relay-a1`, and that both `gitlore_relay_marker_file memory` and
+       `gitlore_relay_marker_file memory ""` equal the unsuffixed name. Equality
+       against an independently computed `rev-parse --git-path`, not a trailing
+       glob and not a baseline taken from the SUT: a glob accepts any path
+       ending in `-a1`, and the empty-string id is the input
+       `_gitlore_agent_suffix` is most likely to get wrong. The two unsuffixed
+       halves run first so the keyed failure does not hide them.
      - `relay_write then relay_drain splits the two channels and removes the marker`
        — writes a sysmsg `S1` and ctx `C1` under `a1`, drains, asserts
        `$GITLORE_RELAY_SYSMSG` contains `S1` and the framing line naming `a1`,
-       `$GITLORE_RELAY_CTX` contains `C1`, **neither** carries the other's body,
-       and `gitlore_relay_marker_file memory a1` no longer exists. The
-       cross-check is what pins the split: a drain that concatenated both bodies
-       into both variables would pass a one-sided assertion.
+       `$GITLORE_RELAY_CTX` contains `C1` **and** its own framing line naming
+       `a1`, **neither** carries the other's body, and
+       `gitlore_relay_marker_file memory a1` no longer exists. The cross-check
+       is what pins the split: a drain that concatenated both bodies into both
+       variables would pass a one-sided assertion. Both channels carry framing,
+       or a drain that framed only the user-facing one passes.
+     - `relay_drain folds two markers in filename order, over a gitdir path holding a space`
+       — builds the parent out of line under a spaced root, guards that the
+       marker path really contains a space, writes markers under `a1` and `a2`,
+       and pins order with a single `*"S-one"*"S-two"*` match rather than two
+       presence checks. Without it an `ls` pipeline, an unquoted glob and a
+       reverse fold all pass the whole item: no other case in slices 1-4 has a
+       spaced path or a second marker.
      - `relay_drain on an empty store sets both variables empty and returns 0` —
-       asserts status 0 and that both variables are the empty string.
+       pre-seeds both variables with sentinels and plants a
+       `gitlore-compose-stamp` decoy in the gitdir, then asserts status 0, that
+       both variables are the empty string, and that the decoy survives. Without
+       the sentinels the case is satisfied by birth state, since bats starts
+       each test with the variables unset; the decoy is what catches a
+       `gitlore-*` enumeration eating Item 2.1's compose baseline. This case
+       cannot red against the inert stub — the stub is specified to do the
+       correct thing on the degenerate input — and that is recorded rather than
+       engineered away.
+
+     Every call to `gitlore_relay_write` / `gitlore_relay_drain` in these cases
+     captures the return status explicitly (`run …` for the write,
+     `rc=0; … || rc=$?` for the drain, which must keep its two variables). A
+     bare call in a bats body runs under errexit and aborts the test instead of
+     failing a named assertion, so both contracts' "returns 0" halves would be
+     pinned by nothing.
 
   2. **Both PostToolBatch reports relay on the same wiring — write when keyed,
      fold in when not.** `index-compose.sh` and `index-sync-post.sh` converge on
@@ -821,6 +859,26 @@ surface, backfilling descriptions that never matched their index lines.
        (`scripts/lib/index-compose.sh:656`, the fact Item 1.1 slice 3 rests on),
        so a read-only gitdir fails compose itself with rc 2 before the relay is
        reached, and the case would assert the wrong failure.
+     - `relay_write refuses an empty agent id and a squatted marker path` in
+       `tests/index_sync.bats` — asserts `gitlore_relay_write` returns non-zero
+       and leaves the gitdir entry-free under both inputs. Added after slice 1:
+       the write's whole failure contract ("returns non-zero", "without
+       writing") was pinned by nothing, and the hook-level case above does not
+       reach it — a write wrongly returning 0 satisfies that case too. The
+       empty-id half is a contract addition, `[ -n "$agent_id" ] || return 1`,
+       landing in this slice's GREEN: the drain enumerates keyed markers only,
+       so an unkeyed write strands a file nothing folds and nothing removes.
+       Deferred to here rather than slice 1 because this is the slice that owns
+       the write's failure paths.
+     - `an unkeyed run survives a non-file squatting on a marker name` in
+       `tests/cc_hook_index_compose.bats` — after the `mkdir` above, fire the
+       compose hook *unkeyed* over an index edit; asserts it still exits 0 and
+       still emits its own report. This is the drain's half of the same fixture,
+       and the regression it pins is real: `awk` and `rm` both fail on a
+       directory, and under the hooks' `set -euo pipefail` that aborts the hook
+       before it writes any JSON, so a failed relay costs the entire report.
+       `gitlore_relay_drain`'s `-type f` is what prevents it, and slice 1 has no
+       case that makes a directory marker.
 
 ---
 
@@ -855,6 +913,18 @@ surface, backfilling descriptions that never matched their index lines.
 - Item 4.1: `docs/references/git-hooks-and-entry-points.md` — record the
   commit-path composition decision as a new numbered decision with its rejected
   alternatives. Requirements: FR-E. Depends on: Item 1.1, Item 1.2. Model: opus
+
+  **Also carries the subagent-confinement evidence.** Item 3.1's slice 1 code
+  review removed a citation of `subagent-hook-output-probe.md` from
+  `scripts/lib/index-sync.sh`: shipped source must not cite `plans/`, which is
+  prospective and gets swept, and it must not cite `memory/` either, which
+  reaches the tree through a submodule gitlink and is not distributed. The
+  measurement that justifies the whole relay — a hook firing inside a subagent
+  has both output channels confined to that subagent, CC 2.1.261 — therefore has
+  no shipped home. Give it one here, under its own `D<n>`, and back-fill that id
+  into the `gitlore_relay_*` comment blocks in `scripts/lib/index-sync.sh`,
+  which currently say only "(measured under CC 2.1.261)". Two ids are in play in
+  this phase, so re-derive both.
 
   The node is 340 lines, so the addition stays under the 400-line cap. Take the
   next free `D<n>` — `scripts/check-docs-links.py` blocks a `duplicate-decision`
