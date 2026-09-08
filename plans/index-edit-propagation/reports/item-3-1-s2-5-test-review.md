@@ -4,9 +4,10 @@ Two defects found and fixed, both in case 1 (`tests/index_sync.bats`), both
 found by mutation rather than by reading:
 
 - The framing-line count — the assertion the runbook names as *the* thing
-  distinguishing a merge from a second marker — **did not discriminate that
-  shape at all**. With `gitlore_relay_write` mutated to key a second marker
-  instead of merging, both suites passed entire: 101 passed, 0 failed.
+  distinguishing a merge from a second marker —
+  **did not discriminate that shape at all**. With `gitlore_relay_write` mutated
+  to key a second marker instead of merging, both suites passed entire: 101
+  passed, 0 failed.
 - **Nothing in the suite pinned the single-write path's bytes**, which is the
   premise the runbook's whole choice of merge-per-channel rests on ("a single
   write to a fresh marker is byte-identical to today's, so every committed
@@ -24,9 +25,10 @@ and GREEN" was false for two of the seven assertions.
 
 ## 1. Mechanical check — confirmed
 
-Baseline, tests as submitted, `scripts/run-bats.sh tests/index_sync.bats
-tests/cc_hook_index_compose.bats`: **99 passed, 2 failed**. Both failures are
-failed assertions, neither is an error and neither test passed:
+Baseline, tests as submitted,
+`scripts/run-bats.sh tests/index_sync.bats tests/cc_hook_index_compose.bats`:
+**99 passed, 2 failed**. Both failures are failed assertions, neither is an
+error and neither test passed:
 
 ```
 not ok 56 relay_write merges a second report into an existing marker
@@ -64,10 +66,10 @@ M3 is the shape the frame count exists to reject, and it survives because the
 counted literal is `--- gitlore-relay agent a1 ---`, which occurs exactly once
 in *both* worlds: the second marker earns the agent id `a1-2`, so the drain
 frames it `--- gitlore-relay agent a1-2 ---`, which does not contain the counted
-string. The `-2` marker is also enumerated by the drain's `gitlore-relay-*`
-find and removed by it, so `[ ! -f "$marker" ]` and the ordering substrings hold
-too. Every assertion in the case is phrased in terms of the `a1` name, and the
-wrong implementation leaves that name intact.
+string. The `-2` marker is also enumerated by the drain's `gitlore-relay-*` find
+and removed by it, so `[ ! -f "$marker" ]` and the ordering substrings hold too.
+Every assertion in the case is phrased in terms of the `a1` name, and the wrong
+implementation leaves that name intact.
 
 Vacuity verdict on the submitted assertions:
 
@@ -132,9 +134,9 @@ outside the dispatch's list and were run to answer whether case 2's `:409` and
 `:412` are vacuous *in general* — under `relay_write` mutations alone neither
 ever reds. Both are non-vacuous, `:412` demonstrably so only once the merge is
 correct (M0+M7), because under the truncating SUT the test dies at `:410` first.
-`:412` is redundant with the committed `an unkeyed compose run folds in the
-marker and removes it`; it is kept as one line of end-to-end regression cover,
-reported here rather than removed.
+`:412` is redundant with the committed
+`an unkeyed compose run folds in the marker and removes it`; it is kept as one
+line of end-to-end regression cover, reported here rather than removed.
 
 ## 3. The frame-count assertion — fixed
 
@@ -196,9 +198,9 @@ rest of both cases, done by mutation rather than by reading:
   `feed()` carry — so a hook keying on `agent_type` instead of `agent_id` still
   fails. Its extra envelope fields (`hook_event_name`, `session_id`,
   `tool_calls`, `tool_results`) match `batch_payload()` in
-  `tests/index_sync.bats` and are read-but-inert
-  (`index-sync-post.sh` takes `.session_id // ""` for the budget nudge file and
-  ignores `.tool_calls`), so they neither weaken nor prop up the case.
+  `tests/index_sync.bats` and are read-but-inert (`index-sync-post.sh` takes
+  `.session_id // ""` for the budget nudge file and ignores `.tool_calls`), so
+  they neither weaken nor prop up the case.
 
 ## 5. Standard hunt — nothing else found
 
@@ -206,9 +208,9 @@ rest of both cases, done by mutation rather than by reading:
   `read -r -d ''`. Every expansion in both cases is quoted; `abs="$PWD/…"` is
   quoted at both use sites. No word-splitting anywhere in the diff.
 - **bash 3.2 / BSD.** No `-i`, no `\b`, no `-P`/`-z`, no GNU-only `find`
-  predicate. `while … done < <(find …)` and `$(cat "$marker")` are portable.
-  The one GNU/BSD divergence in the submitted diff (`grep -o -F --`, plus
-  `wc -l` padding) is gone with the line that carried it.
+  predicate. `while … done < <(find …)` and `$(cat "$marker")` are portable. The
+  one GNU/BSD divergence in the submitted diff (`grep -o -F --`, plus `wc -l`
+  padding) is gone with the line that carried it.
 - **`run` vs bare.** `run` is used where `$status`/`$output` are asserted; the
   drain is deliberately called bare with `|| rc=$?` because its output is two
   variables a subshell would discard — the same idiom the committed slice-1 case
@@ -233,14 +235,15 @@ committed slice-1 contract case still describes the helper: a single write to a
 fresh marker is byte-identical to today's."
 
 **The committed cases cannot detect a violation of that premise.** They are
-sufficient to catch a merge that breaks the single write *observably through the
-drain* — M7 and M8 each red several of them — but every slice-1 relay case reads
-the drained channels or the marker's existence, and none reads the marker's
-bytes. Measured with M9, a merge whose fresh-marker path joins unconditionally
-and so writes one leading newline into each body: **every committed case
-passes.** `relay_write then relay_drain splits the two channels and removes the
-marker` still finds `S1` in the sysmsg channel and `C1` in the ctx channel,
-because the drain's `awk` re-splits a drifted file into the same two channels.
+sufficient to catch a merge that breaks the single write
+*observably through the drain* — M7 and M8 each red several of them — but every
+slice-1 relay case reads the drained channels or the marker's existence, and
+none reads the marker's bytes. Measured with M9, a merge whose fresh-marker path
+joins unconditionally and so writes one leading newline into each body:
+**every committed case passes.**
+`relay_write then relay_drain splits the two channels and removes the marker`
+still finds `S1` in the sysmsg channel and `C1` in the ctx channel, because the
+drain's `awk` re-splits a drifted file into the same two channels.
 
 Since `tests/index_sync.bats` slice-1 cases are frozen and out of this slice's
 scope, the gap is closed from inside case 1 instead: the byte check at `:988`

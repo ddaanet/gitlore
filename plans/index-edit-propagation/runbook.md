@@ -871,13 +871,31 @@ surface, backfilling descriptions that never matched their index lines.
 
      - `relay_write merges a second report into an existing marker` in
        `tests/index_sync.bats` — writes `S1`/`C1` under `a1`, writes `S2`/`C2`
-       under `a1` again, drains once; asserts `GITLORE_RELAY_SYSMSG` carries
-       `S1` and `S2` in write order under a **single** framing line for `a1`,
-       that `GITLORE_RELAY_CTX` carries `C1` and `C2` likewise, and that neither
-       channel carries the other's bodies. The single-framing-line assertion is
-       what distinguishes a merge from a second marker; the cross-check is what
-       keeps a merge that concatenates everything into both channels from
-       passing.
+       under `a1` again, drains once. Four assertions: the marker's bytes after
+       the **first** write, a count of `gitlore-relay-*` files taken before the
+       drain, and the two drained channels as **exact blocks**.
+
+       Not the shape this entry first specified. A framing-line count was named
+       here as the thing distinguishing a merge from a second marker, and
+       measurement showed it distinguishes nothing: an implementation writing a
+       second marker keys it `gitlore-relay-a1-2`, which the drain frames
+       `--- gitlore-relay agent a1-2 ---`, so the counted literal
+       `--- gitlore-relay agent a1 ---` still occurs exactly once. Every
+       assertion in the draft was phrased in terms of the `a1` name and the
+       wrong implementation leaves that name intact, so it passed both suites
+       entire. A file count sees it; nothing phrased in terms of the text does.
+
+       The byte assertion on the first write pins the premise this whole design
+       choice rests on — that a single write to a fresh marker is unchanged, so
+       the committed slice-1 contract cases still describe the helper. Nothing
+       pinned it before: a merge drifting the fresh write by one leading newline
+       per body passed every committed case.
+
+       Exact blocks rather than ordering substrings plus cross-checks: under
+       bats' errexit each assertion in such a chain runs only when its
+       predecessor held, so the group is pinned by whichever fails first and
+       nothing exercises the rest. One equality per channel subsumes all six and
+       cannot go vacuous.
      - `both PostToolBatch hooks in one keyed batch reach the parent` in
        `tests/cc_hook_index_compose.bats` — a real keyed run of
        `index-sync-post.sh` followed by a real keyed run of `index-compose.sh`
@@ -929,6 +947,23 @@ surface, backfilling descriptions that never matched their index lines.
        so an unkeyed write strands a file nothing folds and nothing removes.
        Deferred to here rather than slice 1 because this is the slice that owns
        the write's failure paths.
+     - `relay_write joins a channel only when the old body is non-empty` in
+       `tests/index_sync.bats` — `gitlore_relay_write mem a1 "S" ""` then
+       `gitlore_relay_write mem a1 "S2" "C2"`, asserting the drained ctx block
+       carries no leading blank line. The slice 2.5 review fixed this and could
+       not pin it: no frozen case writes an empty ctx. Reachable in production —
+       `index-sync-post.sh`'s `failed` block sets a sysmsg with no ctx, so a
+       subagent batch whose frontmatter sync fails and whose compose then
+       reports takes exactly this path.
+     - `an unreadable marker costs the relay, not the hook` in
+       `tests/index_sync.bats` — a marker at mode 0200, then a drain; asserts
+       the drain returns 0 and the calling hook still emits its own report.
+       `find -type f` screens non-files, not permissions, so `awk` exits 2 and
+       under the hooks' `set -euo pipefail` takes the whole hook down — the same
+       shape as the write's, which slice 2.5 fixed on its own side with
+       `|| old_sys=""`. Fixing the drain changes what it does with a marker it
+       cannot read (fold an empty block and `rm -f` it), which is why it wants a
+       case rather than a one-line ride-along on a refactor.
      - `an unkeyed run survives a non-file squatting on a marker name` in
        `tests/cc_hook_index_compose.bats` — after the `mkdir` above, fire the
        compose hook *unkeyed* over an index edit; asserts it still exits 0 and
