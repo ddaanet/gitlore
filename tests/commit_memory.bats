@@ -148,7 +148,10 @@ EOF"
   seed_tier_bullet ddaanet shared.md "stale hook"
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
 
-  gd=$(cd memory/ddaanet && cd "$(git rev-parse --git-dir)" && pwd)
+  # `--absolute-git-dir`, not a `$(cd … && pwd)` pair: CDPATH glues a directory
+  # listing onto the front of such a capture — the hazard every entry point
+  # under scripts/ unsets CDPATH for, and which this suite does not.
+  gd=$(git -C memory/ddaanet rev-parse --absolute-git-dir)
   git -C memory/ddaanet rev-parse HEAD > "$gd/MERGE_HEAD"
 
   run bash "$CMD" -m "memory: record the shared fact"
