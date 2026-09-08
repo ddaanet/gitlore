@@ -14,6 +14,7 @@ Local IDs, each tracing to a `docs/design.md` requirement.
 | Requirement | Traces | Phase | Items | Notes |
 |---|---|---|---|---|
 | FR-B — a memory commit never records a carrier stale against the root index | FR15, FR8, FR11, NFR5 | 1 | 1.1 | outline §B; FR11 is what the dirty-only scope keeps intact |
+| FR-F — a memory commit never adopts a tier gitlink moved off the pin the memory store records | FR15, FR8, FR11, NFR5, NFR2 | 1 | 1.2 | outline §B's "a refusal is reported, not fatal", narrowed: the pin half aborts |
 | FR-C — parent and subagent batches never consume each other's index baselines | FR15, FR2 | 2 | 2.1 | outline §C |
 | FR-D — compose and index-sync reports produced inside a subagent reach the parent session | NFR2, NFR4 | 3 | 3.1 | outline §D; depends on FR-C |
 | FR-E — the design record carries the commit-path composition decision | project convention (`CLAUDE.md` §Writing) | 4 | 4.1, 4.2, 4.3 | outline §Design record |
@@ -87,6 +88,18 @@ surface, backfilling descriptions that never matched their index lines.
   specifically has to set or unset it in the test body. Both arms carry the
   phrase above and differ only in the remedy sentence after it, so an assertion
   on the phrase holds whichever arm fires.
+
+  **The rc-1 rule, as amended by Item 1.2.** As executed, this item treats every
+  rc 1 alike — report, and let the commit proceed. That is right for a
+  `gitlore_compose_check` refusal, which withholds a projection and destroys
+  nothing, and wrong for a `gitlore_compose_check_pins` refusal: the commit's
+  own `git -C "$mempath" add -A` adopts the moved gitlink, so the next compose
+  projects root's older text over the carrier with nothing left to refuse on.
+  The rule is therefore
+  **a `gitlore_compose_check` refusal proceeds; a pin refusal aborts**, and Item
+  1.2 implements the second half ahead of `gitlore_compose` and re-homes the two
+  cases below that induce rc 1 off a pin mismatch. The slices below are as
+  executed and are not rewritten here.
 
   Test-suite note: `tests/commit_memory.bats` currently loads `helpers/setup`,
   `helpers/fixtures`, `helpers/divergence-fixtures`;
@@ -210,7 +223,13 @@ surface, backfilling descriptions that never matched their index lines.
        strings rather than one because they fail for different faults: the
        header proves the rc-1 branch fired, the fragment proves the problem
        lines were forwarded rather than swallowed. Not the bare token `refused`
-       — a token, not a phrase, on a channel other producers write to.
+       — a token, not a phrase, on a channel other producers write to. A third
+       string, the agent arm's remedy sentence
+       `This commit also stages each tier at the commit its worktree is on now`:
+       the case runs under `CLAUDECODE=1`, so that arm is the one chosen, and
+       that sentence is the fix this slice's own code review made for its Major
+       2 — the one telling an agent that the pin figure printed above is already
+       stale. Nothing else pins it, so it would revert silently.
 
      **rc 2 — a write failure aborts the commit.** `gitlore_compose` returns 2
      when `gitlore_compose_write` fails partway, leaving the store partly
@@ -229,7 +248,15 @@ surface, backfilling descriptions that never matched their index lines.
      - `a compose write failure aborts the commit` — asserts non-zero exit, that
        `git -C memory rev-parse HEAD` is unchanged, and that the approved
        `gitlore_commit_msg_file` still exists (the abort must not consume it, or
-       the retry loses the user's approval).
+       the retry loses the user's approval). Then three strings on `$stderr`,
+       for the same reason the rc-1 case gives — an exit code alone would pass
+       against a silent abort, which is the worse failure: the header
+       `tier composition could not write an index`, the forwarded problem line
+       `could not write memory/ddaanet/MEMORY.md`, and the agent arm's remedy
+       sentence
+       `Investigate that path (permissions, disk space, a read-only worktree)`,
+       which is the only thing that distinguishes this arm's instruction from
+       the user arm's.
 
   4. **The abort keeps the approval, and the user arm reads right.** Slice 3
      landed rc 1 and rc 2; its code review then found that the rc-2 abort
@@ -317,6 +344,181 @@ surface, backfilling descriptions that never matched their index lines.
        than an addition to the one above: the inductions are different fixtures,
        and a bats body runs under errexit, so a second scenario appended to the
        first would only ever run when the first already held.
+
+  **Residual — the `*)` arm's two remedy sentences stay unasserted.** Slice 4's
+  stub case pins that arm's `unrecognised status (7)` text, and the rc-2 user
+  case pins the `…, then retry.` ending the `*)` user arm happens to share
+  verbatim, but neither `*)` remedy sentence is pinned in its own right, so
+  either could be rewritten without a red. Left that way deliberately:
+  `gitlore_compose` returns only 0, 1 or 2, so the arm is reachable only through
+  a stub, and a second stub case bought solely to pin wording on an unreachable
+  path costs more than the wording is worth.
+
+- Item 1.2: `scripts/lib/resolve.sh` — a tier moved off its pin aborts the
+  memory commit instead of being reported and committed through. Requirements:
+  FR-F. Depends on: Item 1.1. Model: opus
+
+  **The execution slot is deliberately open.** This item is not scheduled inside
+  Phase 1's own run; it is written here so the decision is recorded in the plan
+  rather than carried in a report. It must land **before Phase 4**, because Item
+  4.1's decision node describes the commit path's final behaviour and would
+  otherwise argue a rule the code no longer follows.
+
+  **The defect.** Measured through the `pre-commit` entry point against the code
+  Item 1.1 landed, with a tier whose carrier held an approved upstream fact and
+  a root index line carrying older text. Run 1 refuses with rc 1
+  (`tier composition refused … is checked out at …`), reports, and lets the
+  commit proceed — and the commit's own `git -C "$mempath" add -A` then stages
+  the tier's moved gitlink, which removes the very condition
+  `gitlore_compose_check_pins` refused on. Run 2 — any later memory commit, a
+  SessionStart, or a `PostToolBatch` compose — projects root's older text over
+  the carrier with no refusal at all; `gitlore_sync_tiers_to_live` commits that
+  inside the tier and advances the tier's local `live`, which `pre-push`
+  publishes to the tier's own remote. The approved upstream fact is destroyed,
+  and then shipped, one commit after the warning.
+
+  Not a regression: `add -A` predates this job, and before the commit path
+  composed at all the same sequence ended in the same overwrite at the next
+  SessionStart. What Item 1.1 adds is one more trigger for run 2, and a warning
+  at run 1 that did not exist before.
+
+  **The change.** Call `gitlore_compose_check_pins "$mempath"` at the
+  `gitlore_sync_memory_to_live` call site, after the up-front per-tier
+  stale-merge guard loop and immediately **before**
+  `compose_result=$(gitlore_compose "$mempath")`, capturing its problem lines;
+  on its non-zero return, report and `return 1`. About six lines.
+
+  **At the call site, not inside `gitlore_compose`.** That function collapses
+  `gitlore_compose_check` and `gitlore_compose_check_pins` into one rc 1, so the
+  call site cannot tell a stale pin from a broken index line, and splitting the
+  rc would change a contract its three other callers (`session-start.sh`, the
+  `PostToolBatch` hook, `add-tier-batch.sh`) and slice 4's stub case all depend
+  on. Calling the pin check directly leaves the 0/1/2 contract untouched — the
+  `*)` arm's comment and slice 4's stub stay true — and costs one `rev-parse`
+  per active tier, all reads.
+
+  **No restamp.** `gitlore_compose_check_pins` writes nothing, so when this
+  aborts the tree is no newer than the approved summary and
+  `gitlore_commit_msg_freshness` still reads `yes`. The `touch "$msgfile"` the
+  rc-2 and `*)` arms carry is not wanted here: those arms restamp because
+  something was written, and copying it would be a lie about what ran.
+
+  **The cost to the user is real and accepted.** An off-pin tier blocks every
+  **parent** commit until the tier is returned to its pin or `/gitlore:merge` is
+  run. That is the shape `gitlore_guard_stale_merge_state` already commits to
+  for a comparable condition, and the refusal is self-describing — it carries
+  the verbatim `git -C "<abs>" checkout --detach <pinned>` command from
+  `gitlore_compose_check_pins`' own problem line (NFR2). The trade is silent
+  destruction of approved upstream facts against a blocking, self-describing
+  refusal, and every other D31/D36 decision in this codebase takes the refusal.
+
+  **The two message texts are fixed here, not invented at green time**, so a
+  test can pin a phrase that exists before the test is written. Reporting is
+  `gitlore_say_for_agent_or_user` redirected to stderr, matching every other
+  call in this file, with the header held in one `local` variable interpolated
+  into both arguments so the arms cannot drift apart — the shape Item 1.1's rc-1
+  and rc-2 arms already use. Both arms carry the header and the forwarded
+  problem lines and differ only in the remedy sentence after them:
+
+  - header —
+    `gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than adopt the move:`
+    then `gitlore_compose_check_pins`' problem lines
+  - agent remedy —
+    `gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Return the tier to its pin with the command above, or run /gitlore:merge to take its content properly, then retry the commit — the approved summary is still in place.`
+  - user remedy —
+    `gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry.`
+
+  **Two of Item 1.1's cases induce rc 1 off a pin mismatch**, so both assert the
+  behaviour this item removes and both are re-homed in the slices below:
+  `an off-pin compose refusal is reported and does not abort the commit` and
+  `the rc-1 user arm does not tell a user to retry a commit that succeeded`,
+  both in `tests/commit_memory.bats`. The surviving rc-1 arm is a
+  `gitlore_compose_check` refusal, whose cheapest induction is a manifest
+  listing an unmounted tier — `set_tier_manifest ddaanet phantom` with no
+  `make_tier_in_memory phantom` — giving the problem line
+  `the tier manifest lists 'phantom', which is not mounted in …` (rule 2,
+  `scripts/lib/index-compose.sh:177-180`) and reaching `gitlore_compose` because
+  the pin check passes.
+
+  **Expect fallout outside these two suites** wherever a test commits memory
+  with a tier deliberately ahead of what memory's index records —
+  `tests/tier_divergence.bats` and `tests/tier_lockstep.bats` first. A path that
+  legitimately advances a tier stages the moved gitlink as its last act (D43),
+  so the pin check should pass; verify that from a run rather than assuming it.
+
+  Slices:
+
+  1. **External contract — an off-pin tier aborts the commit and the gitlink is
+     not adopted.** Fixture: Item 1.1 slice 3's off-pin induction verbatim —
+     `make_parent_with_memory`, `make_tier_in_memory ddaanet`,
+     `set_tier_manifest ddaanet`,
+     `seed_tier_bullet ddaanet shared.md "stale hook"`,
+     `seed_root_bullet "ddaanet/shared.md" "fresh hook"`, then
+     `git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"`,
+     never staged into memory's index. Memory is otherwise dirty with a fresh
+     approved summary, so the commit is reached.
+     - `a tier moved off its pin aborts the commit` in
+       `tests/commit_memory.bats`, replacing
+       `an off-pin compose refusal is reported and does not abort the commit` —
+       runs `CLAUDECODE=1 run --separate-stderr bash "$CMD" -m <summary>`;
+       asserts non-zero exit, that `git -C memory rev-parse HEAD` is unchanged
+       from its pre-run value, that `git -C memory rev-parse ":ddaanet"` is
+       unchanged, that `assert_bullets memory/ddaanet/MEMORY.md` still equals
+       `- [shared](shared.md) — stale hook`, that
+       `gitlore_commit_msg_file memory` still exists and
+       `gitlore_commit_msg_freshness memory` reads `yes`, and that `$stderr`
+       carries the header fragment
+       `moved off the commit the memory store records for it`, the forwarded
+       fragment `is checked out at`, and the agent remedy fragment
+       `Return the tier to its pin with the command above`. The unchanged
+       `:ddaanet` and the unchanged carrier are the assertions this item exists
+       for — the exit code alone would pass against an abort that had already
+       staged the move.
+     - `the parent pre-commit hook aborts on an off-pin tier` in
+       `tests/git_hook_pre_commit.bats` — the same fixture through
+       `bash "$HOOK"`; asserts non-zero exit, the unchanged `:ddaanet` gitlink
+       and the unchanged carrier. The second entry point, for the reason Item
+       1.1 slice 1 gives: one shared body, two callers, and what is at stake is
+       what reaches the tier's remote.
+
+     Both must fail against unchanged code on an assertion, not on a missing
+     symbol: `gitlore_compose_check_pins` already exists and already refuses, so
+     the red is the commit having landed with `:ddaanet` moved.
+
+  2. **A `gitlore_compose_check` refusal still proceeds.** The other half of the
+     amended rule, and slice 1's control: an implementation that aborts on every
+     refusal passes slice 1 and fails this, and one that aborts on neither does
+     the reverse. Its own case rather than an addition to slice 1's — the
+     fixtures differ, and a bats body runs under errexit.
+     - `a manifest refusal is reported and does not abort the commit` in
+       `tests/commit_memory.bats` — the same fixture with the tier left **on**
+       its pin and `set_tier_manifest ddaanet phantom`; runs with `CLAUDECODE=1`
+       and `--separate-stderr`; asserts exit 0, that
+       `git -C memory rev-parse HEAD` advanced past its pre-run value, and that
+       `$stderr` carries `tier composition refused`, the fragment
+       `the tier manifest lists 'phantom'`, and the rc-1 agent remedy sentence
+       `This commit also stages each tier at the commit its worktree is on now`.
+
+  3. **The user arms read right.** Item 1.1 slice 4's
+     `the rc-1 user arm does not tell a user to retry a commit that succeeded`
+     is re-induced onto slice 2's manifest refusal, where the commit still
+     succeeds and its contrast still holds; the pin abort gets its own user-arm
+     case, where a retry *is* the right instruction.
+     - `the rc-1 user arm does not tell a user to retry a commit that succeeded`
+       in `tests/commit_memory.bats` — slice 2's fixture, `CLAUDECODE`
+       explicitly unset in the test body (bats inherits the invoking shell's
+       value); asserts exit 0, that `$stderr` carries
+       `ask it to repair the memory store.` and does *not* carry
+       `repair the memory store, then retry`. Unchanged assertions, new
+       induction.
+     - `the pin-abort user arm tells a user to retry` — slice 1's fixture,
+       `CLAUDECODE` unset; asserts non-zero exit, that `$stderr` carries the
+       header fragment `moved off the commit the memory store records for it`
+       and `ask it to repair the memory store, then retry.`, and that it does
+       *not* carry `Return the tier to its pin`, which is the agent arm's. The
+       header fragment is what discriminates: that `…, then retry.` ending is
+       shared verbatim with the rc-2 and `*)` user arms, so on its own it pins
+       nothing.
 
 ---
 
@@ -604,7 +806,7 @@ surface, backfilling descriptions that never matched their index lines.
 
 - Item 4.1: `docs/references/git-hooks-and-entry-points.md` — record the
   commit-path composition decision as a new numbered decision with its rejected
-  alternative. Requirements: FR-E. Depends on: Item 1.1. Model: opus
+  alternatives. Requirements: FR-E. Depends on: Item 1.1, Item 1.2. Model: opus
 
   The node is 340 lines, so the addition stays under the 400-line cap. Take the
   next free `D<n>` — `scripts/check-docs-links.py` blocks a `duplicate-decision`
@@ -629,18 +831,40 @@ surface, backfilling descriptions that never matched their index lines.
   is where the index's *Rejected* line points.
 
   The decision states: the commit path composes before it commits, scoped to
-  `dirty = 1` only, with a refusal reported and not fatal and a write failure
-  aborting. Its argument carries the three reasons Phase 1 encodes — the carrier
-  is what the tier's remote receives, so a stale one *ships*; composing a clean
-  store manufactures a dirty state no approved summary covers, which is what
-  keeps the FR11 boundary intact; and an off-pin refusal is correct to commit
-  through, because projecting root's older text over an unadopted carrier would
-  destroy approved upstream facts.
+  `dirty = 1` only, with a `gitlore_compose_check` refusal reported and not
+  fatal, a pin refusal aborting, and a write failure aborting. Its argument
+  carries the three reasons Phase 1 encodes — the carrier is what the tier's
+  remote receives, so a stale one *ships*; composing a clean store manufactures
+  a dirty state no approved summary covers, which is what keeps the FR11
+  boundary intact; and the two halves of the refusal rule are not
+  interchangeable. A `gitlore_compose_check` refusal withholds a projection and
+  destroys nothing, so committing the carrier as it stands is correct. A
+  `gitlore_compose_check_pins` refusal is the opposite: report and proceed, and
+  the commit's own `git -C "$mempath" add -A` adopts the moved gitlink, removing
+  the very condition the check refused on — so the next compose projects root's
+  older text over the carrier with nothing left to refuse,
+  `gitlore_sync_tiers_to_live` commits that inside the tier, and `pre-push`
+  ships it to the tier's own remote. The approved upstream fact is destroyed one
+  commit after the warning, so the pin case aborts (Item 1.2).
 
-  Its `Rejected:` line takes
+  **A successful compose on the commit path stays silent**, and that is an
+  argued point rather than an omission. On rc 0 the captured result — one line
+  per carrier actually rewritten — is discarded, so a commit that repairs a
+  stale carrier says nothing to anyone. The counter-argument is real: a
+  *non-empty* result on the commit path means the in-session compose was missed,
+  which is the hole this job exists to close, and one `[ -n "$compose_result" ]`
+  branch would say so on stderr. It is left silent because the in-session
+  `PostToolBatch` report is the intended surface for that news, and duplicating
+  it at commit time puts a line on every commit that repairs anything — most of
+  which the session has already seen.
+
+  Its `Rejected:` line takes two entries:
   **a refusal that instructs the agent to run compose** — rejected because
   composition needs no judgement, so making the agent run it is overhead the
-  harness should absorb (NFR4).
+  harness should absorb (NFR4) — and
+  **reporting an off-pin tier and committing through it**, rejected because the
+  commit's own `add -A` adopts the moved gitlink, so the report is followed at
+  the next compose by exactly the silent overwrite it warned about.
 
 - Item 4.2: `docs/design.md` and `docs/decisions.md` — conclude the new
   decision. Requirements: FR-E. Depends on: Item 4.1. Model: opus
@@ -653,8 +877,8 @@ surface, backfilling descriptions that never matched their index lines.
     sentence about `pre-commit`, saying it composes the store before committing
     so the carrier a tier's remote receives matches the root index.
   - `docs/decisions.md`, the **Git hooks and entry points** group — one
-    `- **D<n>** — …` conclusion stub beside D16/D20/D46, and the rejected
-    alternative appended to the group's existing `*Rejected:*` line.
+    `- **D<n>** — …` conclusion stub beside D16/D20/D46, and Item 4.1's two
+    rejected alternatives appended to the group's existing `*Rejected:*` line.
 
   **Line budget.** The conclusion lines live in `docs/decisions.md` (about 130
   lines) and the hub is under 280, both against the uniform 400-line cap
