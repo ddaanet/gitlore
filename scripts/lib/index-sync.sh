@@ -92,9 +92,10 @@ gitlore_set_frontmatter_description() {
 # Abs/relative path of the pre-edit MEMORY.md stash, inside the submodule
 # gitdir (untracked; mirrors gitlore_commit_msg_file). $1 = memory path;
 # $2 = agent id, optional. Absent or empty yields today's unsuffixed name, so
-# the main thread's files do not migrate; non-empty appends `-<agent_id>`.
+# the main thread's files do not migrate; non-empty appends `-<agent_id>` —
+# see _gitlore_agent_suffix for the exact suffix and why it is sanitized.
 gitlore_index_preimage_file() {
-  git -C "$1" rev-parse --git-path "gitlore-index-preimage${2:+-$2}"
+  git -C "$1" rev-parse --git-path "gitlore-index-preimage$(_gitlore_agent_suffix "${2:-}")"
 }
 
 # Abs/relative path of the compose hook's own pre-batch stamp. A second,
@@ -104,7 +105,31 @@ gitlore_index_preimage_file() {
 # optional — same absent/empty-vs-non-empty contract as
 # gitlore_index_preimage_file.
 gitlore_compose_stamp_file() {
-  git -C "$1" rev-parse --git-path "gitlore-compose-stamp${2:+-$2}"
+  git -C "$1" rev-parse --git-path "gitlore-compose-stamp$(_gitlore_agent_suffix "${2:-}")"
+}
+
+# The `-<agent id>` suffix the two helpers above append; empty for an empty or
+# absent id, which is what keeps the main thread on today's names.
+#
+# The id is a raw hook-payload field spliced into a `rev-parse --git-path`
+# argument, and `--git-path` does no normalising — it hands back
+# `<gitdir>/<name>` verbatim. A `/` or a `..` component in the id would
+# therefore walk the result out of the gitdir, to somewhere the consumers `cp`
+# onto it and `rm -f` it. So everything outside `[A-Za-z0-9-]` collapses to
+# `_`, the same guard `_gitlore_nudge_file` below applies to the session id.
+# `tr -c` rather than that one's line-oriented `sed`, so an embedded newline is
+# folded too and the name stays a single line. Not a live exploit — Claude Code
+# mints the id and uses it as a filename itself (`agent-<id>.jsonl`) — but a
+# hook must not write outside the gitdir because an upstream id format changed,
+# and it would fail silently if it did.
+#
+# The mapping is not injective, so two ids differing only outside that class
+# would share a keyed file and race exactly as the unkeyed names do. Real agent
+# ids are `[A-Za-z0-9-]` and pass through byte for byte, so the collision is
+# reachable only from an id shape that does not occur.
+_gitlore_agent_suffix() {
+  [ -n "${1:-}" ] || return 0
+  printf -- '-%s' "$(printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9-' '_')"
 }
 
 # Print the compose trigger's stamp: one `key<TAB>checksum` line per watched
