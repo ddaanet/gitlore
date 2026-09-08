@@ -24,18 +24,19 @@ not ok 4 compose_stamp_file suffixes the agent id
 
 Byte-identical to the RED report, including the two cited line numbers.
 
-1. `preimage_file is unsuffixed with no agent id` — **PASS, for the stated
-   reason.** `gitlore_index_preimage_file` (`scripts/lib/index-sync.sh:94`)
-   reads only `$1` and never mentions `$2`, so both the bare call and the
-   `memory ""` call already return the unsuffixed path. The case is not
-   vacuous: it asserts a value (see the discrimination check below), and both
-   calls are asserted, not just the bare one.
+1. `preimage_file is unsuffixed with no agent id` —
+   **PASS, for the stated reason.** `gitlore_index_preimage_file`
+   (`scripts/lib/index-sync.sh:94`) reads only `$1` and never mentions `$2`, so
+   both the bare call and the `memory ""` call already return the unsuffixed
+   path. The case is not vacuous: it asserts a value (see the discrimination
+   check below), and both calls are asserted, not just the bare one.
 2. `preimage_file suffixes the agent id` — **FAILED on its assertion.**
    `[ "$status" -eq 0 ]` on the preceding line passed, so the function was
    found, ran, and exited 0; the death is on the comparison of a cleanly
    produced value. Not a missing symbol, not a syntax fault, not an ERROR.
-3. `compose_stamp_file is unsuffixed with no agent id` — **PASS, for the stated
-   reason**, same argument applied to `gitlore_compose_stamp_file` (`:102`).
+3. `compose_stamp_file is unsuffixed with no agent id` —
+   **PASS, for the stated reason**, same argument applied to
+   `gitlore_compose_stamp_file` (`:102`).
 4. `compose_stamp_file suffixes the agent id` — **FAILED on its assertion**,
    same shape as case 2.
 
@@ -46,20 +47,21 @@ expected passes are expected passes rather than assertion-free stubs.
 
 ### Major — the assertions did not pin the path to the memory gitdir
 
-The whole point of both helpers is that the file lands *inside the memory
-submodule's gitdir*, via `rev-parse --git-path`. A trailing glob
-(`[[ "$output" == *gitlore-index-preimage ]]`) says nothing about where the
+The whole point of both helpers is that the file lands
+*inside the memory submodule's gitdir*, via `rev-parse --git-path`. A trailing
+glob (`[[ "$output" == *gitlore-index-preimage ]]`) says nothing about where the
 path is rooted: an implementation returning the bare relative name
 `gitlore-index-preimage`, with the `git -C "$1" rev-parse` dropped, satisfies
-all four cases. That is a live wrong-reason-pass channel for GREEN, which
-edits these two functions.
+all four cases. That is a live wrong-reason-pass channel for GREEN, which edits
+these two functions.
 
-**Changed:** each case now binds `base=$(git -C memory rev-parse --git-path
-gitlore-index-preimage)` (resp. `gitlore-compose-stamp`) and asserts
-`[ "$output" = "$base" ]` / `[ "$output" = "$base-agent-7" ]`. The command
-substitution mirrors what the suite's other cases already do to locate the
-stash (`tests/index_sync.bats:119,130,153,…`), so it reuses the established
-idiom rather than inventing a helper.
+**Changed:** each case now binds
+`base=$(git -C memory rev-parse --git-path gitlore-index-preimage)` (resp.
+`gitlore-compose-stamp`) and asserts `[ "$output" = "$base" ]` /
+`[ "$output" = "$base-agent-7" ]`. The command substitution mirrors what the
+suite's other cases already do to locate the stash
+(`tests/index_sync.bats:119,130,153,…`), so it reuses the established idiom
+rather than inventing a helper.
 
 Equality does not over-specify. `git rev-parse --git-path` for a non-special
 name is just `<gitdir>/<name>`, verified directly:
@@ -71,9 +73,9 @@ $ git -C "$d" rev-parse --git-path gitlore-index-preimage-agent-7
 .git/gitlore-index-preimage-agent-7
 ```
 
-so both plausible GREEN spellings — compose the name then call `--git-path`,
-or call `--git-path` then append — produce the same string and both satisfy
-the equality.
+so both plausible GREEN spellings — compose the name then call `--git-path`, or
+call `--git-path` then append — produce the same string and both satisfy the
+equality.
 
 ### Assessed, no defect — the "no trailing hyphen" half
 
@@ -95,8 +97,7 @@ both fail it. Confirmed by mutation below rather than by reading.
 Neither case reads any environment variable; the section contains no
 `CLAUDECODE`, no `CLAUDE_*`, and no conditional at all. Re-ran the four under
 `env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT` (this shell has `CLAUDECODE=1`)
-and got the identical 2-pass/2-fail result, so the outcome is not
-dispatch-only.
+and got the identical 2-pass/2-fail result, so the outcome is not dispatch-only.
 
 ### Assessed, no defect — portability and whitespace
 
@@ -106,16 +107,16 @@ for `tests/helpers/bsd-stubs.bash` to catch. Every expansion of `$output` and
 with no word splitting — a gitdir path containing spaces compares correctly.
 `base=` is a plain assignment from a quoted command substitution, so it is
 whitespace-safe too, and bats runs each `@test` in its own subshell, so the
-unlocalised `base` cannot leak between cases (the suite's existing `stash=`
-and `abs=` assignments follow the same convention). `[[ ]]`/`[ ]` and `${2:+…}`
-are bash 3.2 constructs.
+unlocalised `base` cannot leak between cases (the suite's existing `stash=` and
+`abs=` assignments follow the same convention). `[[ ]]`/`[ ]` and `${2:+…}` are
+bash 3.2 constructs.
 
 ### Assessed, no defect — placement and fixture reuse
 
 All four call `make_parent_with_memory` (`tests/helpers/fixtures.bash:14`), the
 suite's standard parent-plus-submodule fixture, and add no fixture of their own.
-The section sits after the `e2e:` block and before `# --- routing-key
-advisories ---`, which is where that suite already puts a
+The section sits after the `e2e:` block and before
+`# --- routing-key advisories ---`, which is where that suite already puts a
 helper-plus-its-consumers group; slices 2–4 add hook-level cases for the same
 feature, so keeping the block together there is right. No change made.
 
@@ -123,16 +124,16 @@ feature, so keeping the block together there is right. No change made.
 
 Added a comment above the four cases stating the contract (absent/empty yields
 today's name so the main thread's files do not migrate; non-empty appends
-`-<agent_id>`) and why the assertions are equalities. Without it the next
-reader sees four near-identical string comparisons and no statement of what
-they defend.
+`-<agent_id>`) and why the assertions are equalities. Without it the next reader
+sees four near-identical string comparisons and no statement of what they
+defend.
 
 ### Minor — stale quotes in the RED report
 
-The RED report quotes assertion text and line numbers 629/646 that my edit
-moved to 638/657. Appended a four-line forward pointer at the end of that
-report saying the assertions were strengthened and where the current run lives.
-The RED run's own record is left intact.
+The RED report quotes assertion text and line numbers 629/646 that my edit moved
+to 638/657. Appended a four-line forward pointer at the end of that report
+saying the assertions were strengthened and where the current run lives. The RED
+run's own record is left intact.
 
 ## Discrimination check (mutation)
 
@@ -186,19 +187,19 @@ with `$status` already asserted 0, the two unsuffixed ones pass.
   the strengthened comparison lines.
 - The same command under `env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT`:
   identical result, so no ambient-environment dependence.
-- `scripts/run-bats.sh tests/index_sync.bats` — the whole suite: 64 passed,
-  2 failed, the two failures being this slice's expected red. No collateral
-  damage to the 62 pre-existing cases.
+- `scripts/run-bats.sh tests/index_sync.bats` — the whole suite: 64 passed, 2
+  failed, the two failures being this slice's expected red. No collateral damage
+  to the 62 pre-existing cases.
 - `scripts/lint-shell.sh` — `lint-shell: 137 files clean` (the repo's own
   discovery, which lints `.bats`).
 - `shellcheck -s bash tests/index_sync.bats` — exit 0.
 - Mutation harness, 7/7, above.
-- `git status --short -- tests/ plans/ scripts/` — `M tests/index_sync.bats`
-  and the two report files only. Nothing under `scripts/` was touched; no
-  throwaway fixture left in `tests/`.
+- `git status --short -- tests/ plans/ scripts/` — `M tests/index_sync.bats` and
+  the two report files only. Nothing under `scripts/` was touched; no throwaway
+  fixture left in `tests/`.
 - `git rev-parse --git-path` composition probe — `<gitdir>/<name>` for both the
-  plain and the suffixed name, so the equality assertions do not constrain
-  which spelling GREEN chooses.
+  plain and the suffixed name, so the equality assertions do not constrain which
+  spelling GREEN chooses.
 
 ## Out of scope, untouched
 
@@ -206,8 +207,8 @@ with `$status` already asserted 0, the two unsuffixed ones pass.
   work; read only.
 - Slices 2–4's cases and their fixture changes to `batch_payload`, `pre()` and
   `feed()`; `tests/cc_hook_index_compose.bats`; `tests/cc_hook_add_tier.bats`.
-- `docs/`, `memory/`, and everything in `plans/` other than the two report
-  files named above.
+- `docs/`, `memory/`, and everything in `plans/` other than the two report files
+  named above.
 - An agent id carrying a space, a slash or a `..` component is not asserted.
   Slice 1's contract is only "empty/absent → today's name, non-empty → append",
   and the id reaches these helpers from the hook payload rather than from user
