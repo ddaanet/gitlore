@@ -20,7 +20,7 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # only reacts to Write and Edit lets the root index and a carrier drift apart
 # silently. The stamp is this hook's own copy — the sync hook consumes a
 # different file, so neither has to run first.
-payload=$(cat)   # the contents are still drained, not acted on; only agent_id below steers us
+payload=$(cat)   # the stamp is the trigger; the payload is read below for agent_id alone
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
@@ -31,9 +31,17 @@ manifest="$mempath/.gitlore-tiers"
 
 # agent_id, never agent_type: only the former is subagent-only, and the latter
 # also appears on the main thread of an --agent session — a fallback there
-# would key a parent batch's stamp under its own agent id and strand it. Same
-# contract index-sync-pre.sh/-post.sh already settled.
-agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
+# would key a parent batch's stamp under its own agent id and strand it. The
+# contract index-sync-post.sh states at length; pinned here by the agent_type
+# decoy every payload in tests/cc_hook_index_compose.bats carries.
+#
+# Non-fatal deliberately: the stamp is what drives this hook, so an unparseable
+# payload must not be what stops it. A jq aborting under errexit would leave the
+# stamp unconsumed, and index-sync-pre.sh's `if [ ! -f "$stamp" ]` then hands
+# that stale baseline to this agent's next batch, which composes against an
+# ancient index. Falling back to the unsuffixed name costs at most the keying —
+# a main-thread compose — while jq's own diagnostic still reaches stderr.
+agent_id=$(jq -r '.agent_id // empty' <<<"$payload") || agent_id=""
 stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
 [ -f "$stamp" ] || exit 0   # no baseline → no watched call this batch, for THIS agent
 
