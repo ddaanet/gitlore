@@ -228,6 +228,92 @@ surface, backfilling descriptions that never matched their index lines.
        `gitlore_commit_msg_file` still exists (the abort must not consume it, or
        the retry loses the user's approval).
 
+  4. **The abort keeps the approval, and the user arm reads right.** Slice 3
+     landed rc 1 and rc 2; its code review then found that the rc-2 abort
+     preserved the summary *file* but not its freshness, and fixed it in
+     `62258fa` (`reports/item-1-1-s3-code-review.md`, Major 1) with no
+     regression test — the fix was proven by a throwaway probe the reviewer
+     deleted, the shape `CLAUDE.md` §Testing forbids. This slice puts that case,
+     and the two surfaces the same report left unasserted, into the suite.
+
+     **RED backs the fix out.** The `touch "$msgfile"` calls on the rc-2 and
+     `*)` arms are committed, so the first two tests pass against the tree as it
+     stands and there is no red to see. The RED dispatch deletes both `touch`
+     lines in place, proves the two freshness tests fail on their assertions
+     against the resulting SUT, and leaves it that way — tests uncommitted, fix
+     backed out. GREEN restores both lines unchanged, and commits them with the
+     tests. The backed-out state never reaches a commit; the slice commit is
+     what finally carries the fix with a test.
+
+     The third and fourth tests are characterization: the message texts they pin
+     are already correct, so no red exists for them. Their discrimination is
+     established at code review (d) by in-place mutation of the arm each one
+     reads, on slice 2's precedent — the review report records which literal was
+     mutated and that the test redded.
+
+     **Second-granularity mtimes.** `gitlore_commit_msg_freshness`
+     (`scripts/lib/util.sh:275`) compares whole seconds with `>=`, so a carrier
+     written in the same second as the approved summary still reads `yes` and
+     the defect does not appear. Every case below that turns on freshness sleeps
+     1 second after writing the summary, before the run that is meant to stale
+     it, and says why in a comment.
+
+     - `an aborted compose keeps the approved summary usable` in
+       `tests/git_hook_pre_commit.bats` — the case that would have caught Major 1. `[ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"` first.
+       Two tiers, so that one carrier write lands before the failure and makes
+       the tree newer than the msgfile: `make_tier_in_memory alpha`,
+       `make_tier_in_memory beta`, `set_tier_manifest alpha beta`, a
+       `seed_tier_bullet` / `seed_root_bullet` pair per tier leaving root
+       disagreeing with *both* carriers, and an approved summary written to
+       `gitlore_commit_msg_file memory`. `chmod a-w` the directory of whichever
+       tier composes second — establish which that is from a run rather than
+       assuming the manifest order, and record it in a comment; the case is void
+       if the failing tier is the first composed, because then nothing was
+       written and the msgfile was never staled. First `bash "$HOOK"`: assert
+       non-zero, and that the msgfile still exists. Then `chmod u+w`, and a
+       second `bash "$HOOK"` with **no new summary written**: assert exit 0 and
+       that `git -C memory rev-parse HEAD` advanced past its pre-run value. The
+       second run is the assertion that matters — file presence is what slice
+       3's case already asserts, and it held throughout while the defect was
+       live.
+
+     - `an unrecognised compose status aborts and keeps the approval` in
+       `tests/commit_memory.bats` — the `*)` arm, unreachable through
+       `gitlore_compose`, which returns only 0, 1 or 2. Stub it: a driver script
+       under `$BATS_TEST_TMPDIR` that sources `util.sh`, `log.sh` and
+       `resolve.sh` (the order `gitlore_sync_memory_to_live`'s own header
+       names), *then* defines `gitlore_compose`, then calls
+       `gitlore_sync_memory_to_live memory`. The redefinition has to come after
+       the sourcing — `scripts/lib/resolve.sh:11` pulls in `index-compose.sh`,
+       which defines the real one. The stub prints a problem line, restamps a
+       file under the store to stand for the partial write it is reporting
+       (`touch memory/MEMORY.md` — without it nothing under `$mempath` is newer
+       than the summary and the arm's restamp is unobservable), and returns 7.
+       Fixture: memory dirty with a fresh approved summary; no tier needed.
+       Assert non-zero exit, that `git -C memory rev-parse HEAD` is unchanged,
+       that the stub's status `7` appears in the message, and that
+       `gitlore_commit_msg_freshness memory` reads `yes` afterwards. That last
+       one is this test's half of the red.
+
+     - `the rc-1 user arm does not tell a user to retry a commit that succeeded`
+       in `tests/commit_memory.bats` — slice 3's off-pin induction verbatim,
+       with `CLAUDECODE` unset rather than `CLAUDECODE=1`, which is the state a
+       bats run leaves it in anyway. Assert exit 0, that `$stderr` carries
+       `ask it to repair the memory store.`, and that it does *not* carry
+       `repair the memory store, then retry`. The two assertions are the same
+       sentence's two endings, so no other producer on that channel can satisfy
+       or break them by accident; the commit went through, so there is nothing
+       to retry, and that contrast is the register fix the review made.
+
+     - `the rc-2 user arm tells a user to retry` — the same treatment of slice
+       3's `chmod a-w` induction, `CLAUDECODE` unset, carrying the same `id -u`
+       skip and the same `chmod u+w` restore immediately after `run`. Assert
+       non-zero exit and that `$stderr` carries
+       `ask it to repair the memory store, then retry.`. Its own case rather
+       than an addition to the one above: the inductions are different fixtures,
+       and a bats body runs under errexit, so a second scenario appended to the
+       first would only ever run when the first already held.
+
 ---
 
 ## Phase 2: Per-agent index baselines (type: tdd)
