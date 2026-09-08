@@ -91,8 +91,8 @@ Baseline sentinel before this change, confirmed by `cat`:
 .git/gitlore/gates/check-distribution → 3914793056 496231
 ```
 
-The gate was first run from this dispatch with `run_in_background: true` and
-its verdict was **not** trusted: the three `precommit_inputs`-sharing sentinels
+The gate was first run from this dispatch with `run_in_background: true` and its
+verdict was **not** trusted: the three `precommit_inputs`-sharing sentinels
 disagreed afterwards, `test-integration` holding a hash two bytes short of the
 tree (`2975428467 1086122` against `1318920462 1086124`). That is the same
 split-verdict symptom this run has now seen three times and it is still
@@ -105,9 +105,9 @@ $ just test-integration
 bats: 72 passed, 0 failed
 ```
 
-Then the three sentinels and an independent recomputation of
-`gate-inputs-hash` over `precommit_inputs` were compared by hand and all four
-agree on the live tree:
+Then the three sentinels and an independent recomputation of `gate-inputs-hash`
+over `precommit_inputs` were compared by hand and all four agree on the live
+tree:
 
 ```
 lint               2026-09-08 15:12:01  1318920462 1086124
@@ -116,22 +116,22 @@ test-integration   2026-09-08 15:31:38  1318920462 1086124
 recomputed live tree                    1318920462 1086124
 ```
 
-`just precommit`, foreground, on that tree: `check-memory-hygiene` 90 facts /
-0 errors, `check-docs-links` 49 decisions / 0 errors, `check-version` in sync
-(0.7.1), and `lint` / `test-unit` / `test-integration` each `cached (inputs
-unchanged)` — cached against the hash verified above, not against an unknown
-one. Exit 0.
+`just precommit`, foreground, on that tree: `check-memory-hygiene` 90 facts / 0
+errors, `check-docs-links` 49 decisions / 0 errors, `check-version` in sync
+(0.7.1), and `lint` / `test-unit` / `test-integration` each
+`cached (inputs unchanged)` — cached against the hash verified above, not
+against an unknown one. Exit 0.
 
 ## Commit
 
-Subject `Item 2.1/3 — the post-hook consumes the keyed pre-image` (the
-gitmoji hook rewrites the `feat` prefix to `✨` on commit). Identified by
-subject, not by sha: this report is *in* the commit, so any sha written here
-is the sha of a tree that no longer exists once the report is amended in —
-which is how slice 2's report came to name a commit that is not in the log.
+Subject `Item 2.1/3 — the post-hook consumes the keyed pre-image` (the gitmoji
+hook rewrites the `feat` prefix to `✨` on commit). Identified by subject, not
+by sha: this report is *in* the commit, so any sha written here is the sha of a
+tree that no longer exists once the report is amended in — which is how slice
+2's report came to name a commit that is not in the log.
 
-Carries `scripts/cc-hooks/index-sync-post.sh`, `tests/index_sync.bats` and
-this slice's three reports.
+Carries `scripts/cc-hooks/index-sync-post.sh`, `tests/index_sync.bats` and this
+slice's three reports.
 
 ## Consumers not touched
 

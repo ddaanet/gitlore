@@ -30,8 +30,11 @@ index="$mempath/MEMORY.md"
 
 # Keyed by agent_id (empty on the main thread, so its name is unchanged): the
 # pre-hook stashed under the same key, and this run must consume only the
-# baseline its own batch — parent or that one subagent — owns. Never
-# agent_type; see index-sync-pre.sh for why.
+# baseline its own batch — parent or that one subagent — owns. `agent_id` and
+# never `agent_type`: only the first is subagent-only, while the second also
+# appears on the main thread of an `--agent` session, so keying on it would
+# send a parent batch looking for a name only a subagent's pre-hook ever
+# writes. Pinned by the agent_type decoy in tests/index_sync.bats.
 stashfile=$(gitlore_index_preimage_file "$mempath" "$agent_id")   # absolute
 
 [ -f "$stashfile" ] || exit 0   # no baseline → no watched call, nothing to diff
@@ -40,7 +43,10 @@ if cmp -s "$stashfile" "$index"; then
   # The index survived this batch byte-identical, so there is nothing to
   # propagate. Drop the stash regardless: one stranded by an interrupted batch
   # would otherwise become the baseline for a later, unrelated edit and
-  # over-propagate. This bounds a stale pre-image to a single batch.
+  # over-propagate. This bounds a stale pre-image to a single batch of the
+  # agent that owns it — the only agent that ever resolves this name. A keyed
+  # file whose subagent died mid-batch is stranded instead of reused, the
+  # residual index-sync-pre.sh bounds.
   rm -f "$stashfile"
   exit 0
 fi
