@@ -19,8 +19,19 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-# The payload is unused (the intent file is the signal), so any JSON works.
-run_batch() { printf '{"hook_event_name":"PostToolBatch","tool_calls":[]}' | bash "$BATCH"; }
+# The payload is otherwise unused (the intent file is the signal). $1 = agent
+# id, optional — absent/empty omits `agent_id` entirely (a main-thread
+# batch); non-empty adds it, the same absent-vs-non-empty contract
+# scripts/lib/index-sync.sh's own helpers use. Every call also carries
+# `agent_type`, the shape a real `--agent`-session payload has whether or not
+# it carries `agent_id` too — the decoy a hook that falls back to
+# `agent_type` would key on by mistake.
+run_batch() {
+  local agent="${1:-}"
+  jq -n --arg a "$agent" \
+    '{hook_event_name:"PostToolBatch", tool_calls:[], agent_type:"general-purpose"}
+     + (if $a == "" then {} else {agent_id:$a} end)' | bash "$BATCH"
+}
 
 write_intent() {
   mkdir -p .claude
@@ -105,6 +116,57 @@ write_intent() {
   run run_batch
   [ "$status" -eq 0 ]
   grep -q '(ddaanet/x.md)' memory/MEMORY.md
+}
+
+# The compose-baseline drop this hook does after a successful mount
+# (add-tier-batch.sh, the `rm -f "$(gitlore_compose_stamp_file …)"` right
+# after activation) must target the SAME keyed name index-compose.sh itself
+# would consume for this agent — otherwise a subagent's own compose baseline
+# would be left behind (a leak, though a bounded one) while an unrelated
+# main-thread baseline it never owned gets dropped instead. Today the hook
+# reads no agent id at all and always targets the bare name, so this reds on
+# the bare stamp vanishing and the keyed one surviving — backwards from what
+# is asserted.
+@test "add-tier hook: drops the compose baseline for its own agent, leaves the bare one" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  keyed=$(gitlore_compose_stamp_file memory a1)
+  bare_stamp=$(gitlore_compose_stamp_file memory)
+  printf 'index\tstale\n' > "$keyed"
+  printf 'index\tstale\n' > "$bare_stamp"
+
+  run run_batch a1
+  [ "$status" -eq 0 ]
+
+  [ ! -f "$keyed" ]
+  [ -f "$bare_stamp" ]
+}
+
+# The mirror, and the only case in this file that pins WHICH field keys the
+# drop. The case above cannot: its payload carries `agent_id`, so a hook
+# reading `.agent_id // .agent_type` resolves the same "a1" and passes. Here
+# the payload has the decoy and nothing else — the shape a main-thread batch
+# inside an `--agent` session really has — so a fallback drops a name no
+# pre-hook ever wrote and strands the parent's own baseline. Passes against
+# today's unkeyed code, which is the point: it is the guard that the empty id
+# keeps resolving today's bare name.
+@test "add-tier hook: a main-thread batch drops the bare compose baseline, not an agent_type-keyed one" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  bare_stamp=$(gitlore_compose_stamp_file memory)
+  decoy=$(gitlore_compose_stamp_file memory general-purpose)
+  printf 'index\tstale\n' > "$bare_stamp"
+  printf 'index\tstale\n' > "$decoy"
+
+  run run_batch
+  [ "$status" -eq 0 ]
+
+  [ ! -f "$bare_stamp" ]
+  [ -f "$decoy" ]
 }
 
 # --- failure ---------------------------------------------------------------
