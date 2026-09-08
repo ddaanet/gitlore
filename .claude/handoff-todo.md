@@ -1,81 +1,39 @@
 ## Open decisions
 
-- **D-1 — whether a memory commit should adopt an off-pin tier gitlink.**
-  Reproduced end-to-end against committed code through the `pre-commit` entry
-  point: run 1 takes the rc-1 refusal, reports, and the commit's own `add -A`
-  stages the tier's moved gitlink, removing the condition that made it refuse;
-  run 2 projects root's older text over the carrier with no refusal at all, and
-  `gitlore_sync_tiers_to_live` then commits it inside the tier and advances that
-  tier's local `live`, which `pre-push` publishes. So the approved upstream fact
-  is destroyed and then shipped, one commit after the warning. Not a regression
-  — `add -A` predates the job. Options sized in the checkpoint report: (a) call
-  `gitlore_compose_check_pins "$mempath"` at the call site before
-  `gitlore_compose` and abort on its refusal — about six lines, pure reads,
-  leaves the 0/1/2 contract and slice 4's stub test intact, costs the user a
-  blocked parent commit until the pin is fixed; (b) exclude refused tiers from
-  the memory `add -A` — three coupled changes, and it manufactures the
-  live-ahead-of-pin state `strand_live_ahead_of_pin` exists to reproduce as a
-  field defect; (c) record as a known residual. Recommended: (a), narrowed to
-  the pin subset, as a follow-up item rather than inside Phase 1. It needs the
-  runbook's rc-1 rule amended to "a compose_check refusal proceeds; a pin
-  refusal aborts", which is why it is a decision and not a review fix. Note the
-  earlier claim that (b) collides with the `GIT_INDEX_FILE` handoff is wrong:
-  that is the parent repo's index, and Phase 2 does not touch `resolve.sh`.
+- **The `precommit` gate has twice returned a verdict spanning two trees.**
+  Both times `lint` recorded a hash two bytes larger than `test-unit` and
+  `test-integration`, and `just lint` afterwards answered
+  `cached (inputs unchanged)`, so the tree as it stood matched `lint` and not
+  the suites. `lint` runs before the suites in `precommit`, and `record-sentinel`
+  runs at each recipe's end, so the tree lost two bytes between lint's end and
+  test-unit's end and regained them after. The second occurrence also showed
+  `test-unit` and `test-integration` recording one second apart, against 54
+  seconds for a real integration run — so at least one of those two did not
+  execute the suite it claims to have passed. Decide whether this is a
+  concurrent session writing into the shared gitdir (`ListAgents` shows seven
+  live interactive peers), a defect in the sentinel machinery, or an artifact of
+  running the gate from a subagent; and whether the run continues before it is
+  settled. Until it is, a `precommit` verdict from a background run is not
+  evidence, and each gate has to be re-run in the foreground and its three
+  shared-input sentinels compared by hand.
 
-- **D-2 — which of the four unpinned remedy sentences to assert.** Measured by
-  in-place mutation against the committed tree: mutating any one of four whole
-  sentences leaves both suites 33-green — the rc-1 **agent** sentence, the rc-2
-  **agent** sentence, and both arms of `*)`. The rc-1 agent sentence is the fix
-  `item-1-1-s3-code-review.md` made for its own Major 2 (it tells an agent the
-  pin figure printed above is already stale), and it reverts silently. Closing
-  all four is four `[[ "$stderr" == *"…"* ]]` lines in tests that already run
-  with the right `CLAUDECODE` value and `--separate-stderr`, plus one extra case
-  for the `*)` user arm. Not applied because the runbook enumerates each test's
-  assertions by name, so it changes an accepted assertion list. Recommended:
-  take the rc-1 and rc-2 agent sentences; leave the two `*)` ones as a recorded
-  residual while `gitlore_compose` returns only 0, 1 or 2.
+- **Where Item 1.2 runs.** D-1's pin abort — `gitlore_compose_check_pins` at the
+  `gitlore_sync_memory_to_live` call site, aborting on refusal — is written into
+  the runbook as a tdd item under Phase 1 with its execution slot deliberately
+  open. The standing recommendation is **before Phase 4**, because Item 4.1's
+  decision node has to argue the final behaviour and its originally-planned
+  third reason is the one D-1's evidence falsified. Alternatives: run it now,
+  ahead of the rest of Phase 2, or split it into its own job.
 
-- **D-3 — the two tests that depend on ambient `CLAUDECODE`.**
-  `tests/push_memory.bats:114` and `tests/tier_lockstep.bats:215` assert on
-  strings that exist only in the agent arm (`scripts/lib/resolve.sh:1177`,
-  `scripts/git-hooks/memory-pre-commit:16`), and neither sets nor unsets the
-  variable — so they pass inside a subagent dispatch, which exports
-  `CLAUDECODE=1`, and fail for a human or CI. The full unit suite under
-  `env -u CLAUDECODE` goes 782 passed / 2 failed, exactly those two. One line
-  each. Recommended: take it, outside this job.
-
-- **D-4 — whether a successful commit-path compose should say anything.** On
-  rc 0 the captured `$compose_result` (`composed memory/<tier>/MEMORY.md`, one
-  line per file rewritten) is discarded, so a commit that repairs a stale
-  carrier is silent. The counter-argument is that a non-empty result on the
-  commit path means the in-session compose was missed, which is the hole this
-  job exists to close. Cost: one `[ -n "$compose_result" ]` branch.
-  Recommended: leave it, and record the reasoning in Phase 4's decision node.
-
-- **D-5 — whether the suite neutralises `CDPATH`.** Every entry point under
-  `scripts/` opens with `unset CDPATH`; `tests/helpers/setup.bash` does not, and
-  six sites carry the raw `$(cd … && pwd)` pattern
-  (`tests/helpers/fixtures.bash:25`, `tests/tier_divergence.bats:96,339,341,392`,
-  `tests/index_compose.bats:259`, `tests/resolve_recovery.bats:339`). Measured
-  with `CDPATH=.` exported, `tests/helpers/fixtures.bash:25` fails. The
-  in-diff instance is already fixed. Recommended: one line in
-  `tests/helpers/setup.bash`, as its own change outside this job.
-
-- **D-6 — whether to correct the up-front tier guard's comment.** The loop
-  iterates `gitlore_tier_paths` (every tier in `.gitmodules`) while
-  `gitlore_compose` only writes into tiers listed in `.gitlore-tiers`, so the
-  comment's justification is false for a dormant tier. The width is right
-  anyway, because it mirrors `gitlore_sync_tiers_to_live`, which commits inside
-  dormant tiers too. One sentence, stating ordering against the tier commits as
-  the real reason.
-
-- Whether `CLAUDE.md` §Testing's gate-sentinel rule should be rewritten. It
-  tells an agent a sentinel is "valid for the tree when its mtime postdates the
-  last edit to any gated input", but the mechanism is a content hash — the
-  sentinel holds `cksum` output over the gate's declared inputs and `justfile`'s
-  `check-sentinel` compares `gate-inputs-hash`. The heuristic is conservative
-  (it can only read stale when the gate is fresh) but it produced a false alarm
-  in two separate slice-4 dispatches. Two lines to fix; can ride Phase 4.
+- **Whether `CLAUDE.md` §Testing's gate-sentinel paragraph is rewritten.** It
+  carries two errors, not one. It tells an agent a sentinel is "valid for the
+  tree when its mtime postdates the last edit to any gated input", but the
+  mechanism is a content hash — the sentinel holds `cksum` output over the
+  gate's declared inputs. And it points at `just check-sentinel`, which does not
+  exist: `check-sentinel` is a shell function in the justfile prolog, not a
+  recipe, so the command errors with `Justfile does not contain recipe`. That
+  wrong command was copied into two dispatch prompts before it was caught. Two
+  lines to fix; can ride Phase 4.
 
 - The memory index against Claude Code's ~24,985-byte loader cutoff, per
   `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports
@@ -109,8 +67,8 @@
   or report one) goes into `memory/ddaanet/shared-claude.md`. No hook fires on
   the `` !`cmd` `` expansion path, so prose is the only mechanism that covers the
   `/commit` `## Context` case. The orchestrate skill's `verify-step.sh` exits 1
-  on a tree whose only dirt is those phantoms — seen at the end of both Item 1.1
-  and slice 4 — so a mechanical gate already misreads them as uncommitted work.
+  on a tree whose only dirt is those phantoms, so a mechanical gate already
+  misreads them as uncommitted work — seen at every slice boundary in this run.
 
 - Whether `2026-09-02-bang-expansion-hook-decompile.md` belonged in the move to
   sandbox-lies. Its finding — no hook dispatches on the `` !`cmd` `` path —
@@ -124,11 +82,27 @@
 
 ## Remaining
 
+- Finish Item 2.1 slice 3: re-run `just test-integration` in the foreground,
+  confirm all three `precommit_inputs`-sharing sentinels agree, then have
+  `item-2-1-s3-green` write its report and make the slice commit. Then the
+  slice 3 code review, slice 4, and the Phase 2 checkpoint.
+
+- Write the orchestration fact to memory: every one of three `edify:test-driver`
+  GREEN dispatches went idle waiting on a background `just precommit` completion
+  notification that a subagent does not reliably receive, each time despite an
+  explicit instruction in its prompt not to wait for one. Instructing the agent
+  does not work; the orchestrator arming its own sentinel watcher does. Deferred
+  deliberately — a memory write would have put an FR11 approval round-trip
+  inside a transition that was asked to run.
+
 - Write the ambient-`CLAUDECODE` fact to memory: a subagent dispatch exports
   `CLAUDECODE=1`, so a bats test that branches on it passes under dispatch and
-  fails for a human or CI. Deliberately not written this session — a memory file
-  would have put an FR11 approval round-trip inside a transition that was asked
-  to run.
+  fails for a human or CI. Deferred for the same reason.
+
+- Record that `find` on this box is `bfs`, which rejects `-newermt '-60 minutes'`
+  with `Invalid timestamp` and accepts only ISO 8601-like forms — a relative
+  `-newermt` returns nothing and, under `2>/dev/null`, reads as "no files
+  matched" rather than as an error.
 
 - Narrow `test-unit`'s gate inputs to exclude `tests/integration_*` once the
   split has run a while; all three gates share `precommit_inputs` for now, which
@@ -151,8 +125,9 @@
   checkpoint, and a body past 4096 bytes is unreachable beyond that point
   whatever its trigger.
 
-- Rerun `plans/2026-09-02-recall-log-analysis.py` once a week or two of native-recall
-  attachments exist; report the harness class and selector precision.
+- Rerun `plans/2026-09-02-recall-log-analysis.py` once a week or two of
+  native-recall attachments exist; report the harness class and selector
+  precision.
 
 - Continue the ddaanet review pass from the queue in
   `plans/ddaanet-memory-review.md` (entry 5, `hook-output-channels`).
