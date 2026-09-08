@@ -211,7 +211,9 @@ approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
   bash "$EMIT_GATE"
   echo "- [sneaky](s.md) — x" >> memory/ddaanet/MEMORY.md
 
-  run git -C memory/ddaanet commit -aqm "naked"
+  # `approval gate` appears only in the agent arm of memory-pre-commit, so the
+  # arm has to be chosen here rather than inherited from the invoking shell.
+  CLAUDECODE=1 run git -C memory/ddaanet commit -aqm "naked"
   [ "$status" -ne 0 ]
   [[ "$output" == *"approval gate"* ]]
 }

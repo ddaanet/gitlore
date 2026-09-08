@@ -111,7 +111,10 @@ add_memory_commit() {
   wire_memory_remote
   add_memory_commit
   git -C memory remote remove origin
-  run --separate-stderr bash "$CMD"
+  # `/gitlore:resolve` appears only in the agent arm, so the arm has to be
+  # chosen here: bats neither sets nor clears CLAUDECODE, and a test inherits
+  # whatever the invoking shell holds.
+  CLAUDECODE=1 run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
   [[ "$stderr" == *"no remote of its own"* ]]
   [[ "$stderr" == *"/gitlore:resolve"* ]]
