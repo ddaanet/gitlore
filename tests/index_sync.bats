@@ -610,6 +610,53 @@ batch_payload() {
   [ "$output" = "0" ]
 }
 
+# --- per-agent pre-image / compose-stamp paths ---------------------------------
+#
+# An absent or empty agent id yields exactly the name every existing consumer
+# already uses, so the main thread's files do not migrate; a non-empty one
+# appends `-<agent_id>`. Both halves are asserted as an equality against the
+# `rev-parse --git-path` name rather than a trailing glob: equality is what
+# pins the file inside the memory submodule's gitdir, rejects a `-` appended
+# for an empty id, and rejects a doubled or partial suffix.
+
+@test "preimage_file is unsuffixed with no agent id" {
+  make_parent_with_memory
+  base=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  run gitlore_index_preimage_file memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base" ]
+  run gitlore_index_preimage_file memory ""
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base" ]
+}
+
+@test "preimage_file suffixes the agent id" {
+  make_parent_with_memory
+  base=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  run gitlore_index_preimage_file memory agent-7
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base-agent-7" ]
+}
+
+@test "compose_stamp_file is unsuffixed with no agent id" {
+  make_parent_with_memory
+  base=$(git -C memory rev-parse --git-path gitlore-compose-stamp)
+  run gitlore_compose_stamp_file memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base" ]
+  run gitlore_compose_stamp_file memory ""
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base" ]
+}
+
+@test "compose_stamp_file suffixes the agent id" {
+  make_parent_with_memory
+  base=$(git -C memory rev-parse --git-path gitlore-compose-stamp)
+  run gitlore_compose_stamp_file memory agent-7
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base-agent-7" ]
+}
+
 # --- routing-key advisories ---------------------------------------------------
 
 # shellcheck disable=SC2016   # literal backticks/$VAR are the fixture text

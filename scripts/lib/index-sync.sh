@@ -90,17 +90,21 @@ gitlore_set_frontmatter_description() {
 }
 
 # Abs/relative path of the pre-edit MEMORY.md stash, inside the submodule
-# gitdir (untracked; mirrors gitlore_commit_msg_file). $1 = memory path.
+# gitdir (untracked; mirrors gitlore_commit_msg_file). $1 = memory path;
+# $2 = agent id, optional. Absent or empty yields today's unsuffixed name, so
+# the main thread's files do not migrate; non-empty appends `-<agent_id>`.
 gitlore_index_preimage_file() {
-  git -C "$1" rev-parse --git-path gitlore-index-preimage
+  git -C "$1" rev-parse --git-path "gitlore-index-preimage${2:+-$2}"
 }
 
 # Abs/relative path of the compose hook's own pre-batch stamp. A second,
 # independently-owned file rather than a field in the sync's stash: each
 # PostToolBatch hook consumes and deletes its own baseline, so neither depends
-# on running before or after the other. $1 = memory path.
+# on running before or after the other. $1 = memory path; $2 = agent id,
+# optional — same absent/empty-vs-non-empty contract as
+# gitlore_index_preimage_file.
 gitlore_compose_stamp_file() {
-  git -C "$1" rev-parse --git-path gitlore-compose-stamp
+  git -C "$1" rev-parse --git-path "gitlore-compose-stamp${2:+-$2}"
 }
 
 # Print the compose trigger's stamp: one `key<TAB>checksum` line per watched
