@@ -329,3 +329,51 @@ committed_stale_carrier_store() {
   assert_bullets "$BATS_TEST_TMPDIR/carrier.md" \
     '- [shared](shared.md) — fresh hook'
 }
+
+@test "an aborted compose keeps the approved summary usable" {
+  # The case that would have caught slice 3 code review's Major 1: a partial
+  # compose (rc 2) restamps whatever it DID write, so the approved summary
+  # reads stale on the very next run and the retry is refused for a change the
+  # summary already covers.
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
+  make_parent_with_memory
+  make_tier_in_memory alpha
+  make_tier_in_memory beta
+  set_tier_manifest alpha beta
+  seed_tier_bullet alpha shared.md "stale alpha"
+  seed_root_bullet "alpha/shared.md" "fresh alpha"
+  seed_tier_bullet beta shared.md "stale beta"
+  seed_root_bullet "beta/shared.md" "fresh beta"
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record both facts\n' > "$msgfile"
+  # gitlore_commit_msg_freshness compares whole-second mtimes with `>=`, so a
+  # carrier written in the same second as the summary would still read fresh
+  # and the defect this test exists to catch would not appear.
+  sleep 1
+
+  # gitlore_active_tiers walks the manifest in order (alpha, beta), and
+  # gitlore_compose composes in that same order — so beta is the tier that
+  # composes second. Blocking its write lets alpha's write land first (making
+  # the tree newer than the summary) and then fail on beta, which is what
+  # gitlore_compose's rc 2 requires. Blocking alpha instead would fail before
+  # anything was written, and the msgfile would never go stale.
+  chmod a-w memory/beta
+
+  head_before=$(git -C memory rev-parse HEAD)
+  run bash "$HOOK"
+  chmod u+w memory/beta
+  [ "$status" -ne 0 ]
+  [ -f "$msgfile" ]
+  # The comment above states the composition order; these assert it. Left to a
+  # comment, a reordering inside gitlore_compose would void the case silently:
+  # beta failing FIRST writes nothing, the summary never goes stale, and the
+  # second run below passes whether or not the restamp is there.
+  [[ "$output" == *"composed memory/alpha/MEMORY.md"* ]]
+  [[ "$output" == *"could not write memory/beta/MEMORY.md"* ]]
+
+  # No new summary written: this run relies entirely on the restamp restoring
+  # the approval's freshness, which is the fix under test.
+  run bash "$HOOK"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+}
