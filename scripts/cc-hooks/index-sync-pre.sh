@@ -37,14 +37,16 @@ if [ "$tool" != "Bash" ]; then
   [ -n "$target" ] || exit 0
 fi
 
-stash=$(gitlore_index_preimage_file "$mempath")   # absolute; parent dir exists
-stamp=$(gitlore_compose_stamp_file "$mempath")
+agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
+stash=$(gitlore_index_preimage_file "$mempath" "$agent_id")   # absolute; parent dir exists
+stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
 
 # First index-touching call of the batch establishes the baselines; later ones in
 # the same batch must not overwrite them, or a batch-end comparison would run
-# against a mid-batch state and miss everything the earlier calls changed. Each
-# post hook removes its own file at batch end (even when nothing was touched), so
-# an existing one here always belongs to the batch in flight.
+# against a mid-batch state and miss everything the earlier calls changed. The
+# baselines are keyed per agent, so an existing one here always belongs to the
+# batch in flight of this agent — a parent batch ending mid-subagent no longer
+# consumes the subagent's baseline, since each keys its own file.
 if [ ! -f "$stamp" ]; then
   gitlore_compose_stamp "$index" "$manifest" > "$stamp" || \
     printf 'gitlore: failed to stamp the pre-edit index state (%s)\n' "$stamp" >&2

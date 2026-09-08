@@ -131,19 +131,72 @@ pre_stdin() { printf '%s' "$1" | bash "$PRE"; }
   [ ! -f "$stash" ]
 }
 
+# A payload's agent_id keys BOTH the pre-image and the compose stamp onto the
+# same agent, so a parent batch ending mid-subagent-batch cannot consume the
+# subagent's baseline (and the mirror: a subagent batch cannot consume the
+# parent's). Absent/empty keeps today's bare name, so the main thread migrates
+# nothing. The key is `agent_id`, never `agent_type`: only the first is
+# subagent-only, and the second also appears on the main thread of an `--agent`
+# session (memory/ddaanet/hook-input-schema.md), so keying on it would move the
+# main thread's own files. The no-agent_id payload below carries an
+# `agent_type` for exactly that reason — a hook falling back to it stamps a
+# keyed path and reds this case.
+
+@test "pre: a payload carrying agent_id stamps the keyed path, not the bare one" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '- [a](a.md) — before\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  # A real subagent payload carries both fields; only `agent_id` may key the
+  # path, so the two are given different values and the assertions name a1.
+  payload=$(jq -n --arg f "$abs" \
+    '{tool_name:"Edit",tool_input:{file_path:$f},agent_id:"a1",agent_type:"general-purpose"}')
+  run pre_stdin "$payload"
+  [ "$status" -eq 0 ]
+  [ -f "$(gitlore_index_preimage_file memory a1)" ]
+  [ -f "$(gitlore_compose_stamp_file memory a1)" ]
+  [ ! -f "$(gitlore_index_preimage_file memory)" ]
+  [ ! -f "$(gitlore_compose_stamp_file memory)" ]
+}
+
+@test "pre: a payload with no agent_id stamps the bare path" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '- [a](a.md) — before\n' > memory/MEMORY.md
+  abs="$PWD/memory/MEMORY.md"
+  payload=$(jq -n --arg f "$abs" \
+    '{tool_name:"Edit",tool_input:{file_path:$f},agent_type:"general-purpose"}')
+  run pre_stdin "$payload"
+  [ "$status" -eq 0 ]
+  [ -f "$(gitlore_index_preimage_file memory)" ]
+  [ -f "$(gitlore_compose_stamp_file memory)" ]
+  # Each `find` runs only because the `-f` above it held, which is what proves
+  # the directory it searches exists — a `find` on a missing directory prints
+  # nothing and would satisfy `-z` vacuously.
+  [ -z "$(find "$(dirname "$(gitlore_index_preimage_file memory)")" \
+    -maxdepth 1 -name 'gitlore-index-preimage-*')" ]
+  [ -z "$(find "$(dirname "$(gitlore_compose_stamp_file memory)")" \
+    -maxdepth 1 -name 'gitlore-compose-stamp-*')" ]
+}
+
 POST="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
 
 post_stdin() { printf '%s' "$1" | bash "$POST"; }
 
 # PostToolBatch payload: every call of the turn under .tool_calls[], so the
 # sync runs once per batch however many Edits it contains. $1.. = file paths.
+# TEST_AGENT_ID mirrors TEST_SESSION_ID: unset/empty omits the field entirely
+# (a main-thread batch), non-empty adds it (a subagent batch) — same
+# absent/empty-vs-non-empty contract as the helpers in scripts/lib/index-sync.sh.
 batch_payload() {
   local f json='[]'
   for f in "$@"; do
     json=$(jq -c --arg f "$f" '. + [{tool_name:"Edit",tool_input:{file_path:$f}}]' <<<"$json")
   done
   jq -n --argjson c "$json" --arg s "${TEST_SESSION_ID:-test-session}" \
-    '{hook_event_name:"PostToolBatch", session_id:$s, tool_calls:$c, tool_results:[]}'
+    --arg a "${TEST_AGENT_ID:-}" \
+    '{hook_event_name:"PostToolBatch", session_id:$s, tool_calls:$c, tool_results:[]}
+     + (if $a == "" then {} else {agent_id:$a} end)'
 }
 
 @test "post: fires ONCE for a batch containing several index edits" {
@@ -652,6 +705,28 @@ batch_payload() {
 @test "compose_stamp_file suffixes the agent id" {
   make_parent_with_memory
   base=$(git -C memory rev-parse --git-path gitlore-compose-stamp)
+  run gitlore_compose_stamp_file memory agent-7
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base-agent-7" ]
+}
+
+@test "an agent id outside [A-Za-z0-9-] cannot leave the gitdir" {
+  make_parent_with_memory
+  traversal='../../../etc/passwd'
+  sanitized=$(printf '%s' "$traversal" | LC_ALL=C tr -c 'A-Za-z0-9-' '_')
+
+  base=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  run gitlore_index_preimage_file memory "$traversal"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base-$sanitized" ]
+  run gitlore_index_preimage_file memory agent-7
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base-agent-7" ]
+
+  base=$(git -C memory rev-parse --git-path gitlore-compose-stamp)
+  run gitlore_compose_stamp_file memory "$traversal"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$base-$sanitized" ]
   run gitlore_compose_stamp_file memory agent-7
   [ "$status" -eq 0 ]
   [ "$output" = "$base-agent-7" ]
