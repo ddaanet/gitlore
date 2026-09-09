@@ -532,6 +532,33 @@ surface, backfilling descriptions that never matched their index lines.
        distinguishable, which is why the existing mid-merge case, whose tier
        sits on its pin, discriminates nothing here.
 
+     **As executed, this slice carries no implementation.** It is slice 1's
+     control, so both cases are born green and their red exists only against a
+     wrong implementation: replacing `gitlore_compose_check_pins` with
+     `gitlore_compose_check` in the guard for the first, hoisting the guard
+     above the per-tier stale-merge loop for the second. The test review then
+     red each individual assertion under its own mutation, which is the round a
+     code review would otherwise have run — so the slice ran RED and test review
+     only.
+
+     Two findings from that round, both recorded in the test bodies rather than
+     fixed. The mid-merge case's `[ "$status" -ne 0 ]` is defended three deep —
+     the per-tier loop, the pin guard, and `gitlore_sync_tiers_to_live`'s own
+     guard — so it reds only when all three are disabled and discriminates
+     almost nothing; the two `$stderr` assertions carry the case. And the tier
+     is `orphaned-merge-head`, not `stale-no-merge-head`: a `MERGE_HEAD` with no
+     merge-state file beside it, which refuses rather than delegating to
+     `gitlore_recover_stale_no_merge_head`. The arm that fires reports a merge
+     gitlore did not prepare, never `gitlore_emit_merge_directive`.
+
+     **The overlap with
+     `the rc-1 user arm does not tell a user to retry a commit that succeeded`
+     is kept.** Both now run the manifest induction, differing only in
+     `CLAUDECODE`, and their message assertions are disjoint — each is the only
+     thing pinning its own arm. Their `[ "$status" -eq 0 ]` and HEAD-advanced
+     assertions are genuine duplicates, and stay: dropping them from the
+     user-arm case would make its name — a commit that *succeeded* — unasserted.
+
   3. **The user arms read right.** The pin abort gets its own user-arm case,
      where a retry *is* the right instruction. Item 1.1 slice 4's
      `the rc-1 user arm does not tell a user to retry a commit that succeeded`

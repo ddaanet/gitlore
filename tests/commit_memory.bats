@@ -204,6 +204,74 @@ EOF"
   [[ "$stderr" == *"Return the tier to its pin with the command above"* ]]
 }
 
+@test "a manifest refusal is reported and does not abort the commit" {
+  # The other half of Item 1.2's amended rule, and slice 1's control: an
+  # implementation that aborts on every gitlore_compose refusal passes slice 1
+  # and fails this case, and one that aborts on neither does the reverse. The
+  # tier stays ON its pin, so gitlore_compose_check_pins passes and the
+  # manifest's dangling 'phantom' entry reaches gitlore_compose_check's rule 2
+  # instead — the same induction "the rc-1 user arm does not tell a user to
+  # retry a commit that succeeded" uses below, read here under CLAUDECODE=1 for
+  # the agent arm.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet phantom
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [[ "$stderr" == *"tier composition refused"* ]]
+  [[ "$stderr" == *"the tier manifest lists 'phantom'"* ]]
+  # The whole sentence after Item 1.2 slice 1 dropped its trailing clause about
+  # a pin figure printed above — not the first half of a longer one.
+  [[ "$stderr" == *"This commit also stages each tier at the commit its worktree is on now"* ]]
+}
+
+@test "a mid-merge tier is reported as a merge, not as a moved pin" {
+  # A tier that is BOTH off its pin AND mid-merge must be reported by
+  # gitlore_guard_stale_merge_state, not by the pin guard's own message. A
+  # MERGE_HEAD with no merge-state file beside it classifies as
+  # `orphaned-merge-head`, so the arm that fires is the one reporting a merge
+  # gitlore did not prepare — not gitlore_emit_merge_directive, which is the
+  # stale-with-merge-head arm. gitlore_compose_check_pins' own mid-merge line
+  # offers `checkout --detach`, which would unlink MERGE_HEAD and destroy a
+  # prepared merge. Slice 1's off-pin induction (an empty commit made directly inside
+  # the tier worktree, never staged into memory's index) plus a MERGE_HEAD
+  # written into the tier's gitdir, the shape
+  # "a tier holding a merge gitlore did not prepare is not composed into"
+  # above already uses. The existing mid-merge case's tier sits ON its pin, so
+  # it cannot discriminate the pin guard's position against the per-tier
+  # stale-merge loop's — this one can, because only a pin guard hoisted ahead
+  # of that loop would see this tier before the loop reports it.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+
+  # `--absolute-git-dir`, not a `$(cd … && pwd)` pair: CDPATH glues a directory
+  # listing onto the front of such a capture.
+  gd=$(git -C memory/ddaanet rev-parse --absolute-git-dir)
+  git -C memory/ddaanet rev-parse HEAD > "$gd/MERGE_HEAD"
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  # Three separate abort points answer this fixture — the per-tier stale-merge
+  # loop, the pin guard, and gitlore_sync_tiers_to_live's own guard — so the
+  # exit code alone cannot say which one fired, and only removing all three
+  # reds it. The two stderr assertions are what discriminate the ordering.
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"holds a merge gitlore did not prepare"* ]]
+  # Paired with "a tier moved off its pin aborts the commit" above, which
+  # asserts this same phrase positively over the same induction minus the
+  # MERGE_HEAD. That positive is what keeps this negative from going vacuous
+  # if the pin header is ever reworded.
+  [[ "$stderr" != *"moved off the commit the memory store records for it"* ]]
+}
+
 @test "a compose write failure aborts the commit" {
   [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
   # Reuses the induction at tests/index_compose.bats:921: chmod a-w on the
