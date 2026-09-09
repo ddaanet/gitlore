@@ -374,6 +374,39 @@ if [ -n "$tier_guidance" ]; then
 gitlore memory tiers: shared memory stores mounted inside the memory submodule. Write a portable fact into the matching tier's directory (same one-file-per-fact format), and add its index line to the ROOT $mempath/MEMORY.md with the tier prefix — '- [Title](<tier>/<file>.md) — hook'. gitlore mirrors that line down into the tier's own index for you. Facts specific to this project stay in $mempath/ with a bare path.$tier_guidance"
 fi
 
+# Relay backstop: fold in any marker a subagent's PostToolBatch hook staged
+# that no parent-side batch drained before the session ended — this is the
+# last chance before it strands across sessions. Only before the FINAL emit
+# below, never the diverged and ff-failure early exits above: on those a store
+# the user must repair with /gitlore:resolve is not the moment to surface a
+# subagent's report, and the marker survives undrained to the session after
+# the repair, so the relay is delayed rather than lost.
+#
+# `|| true` for the same reason the compose section above takes
+# `|| compose_rc=$?`: SessionStart must always finish. The drain's `find
+# -type f` screens non-files, not permissions, so a marker whose mode has been
+# mangled makes its `awk` exit 2 — and under this file's `set -e` a bare call
+# would take the hook down before emit_session_json, emitting no JSON at all
+# and costing the session its commit-protocol additionalContext and every
+# notice accumulated above, to save one relay. Suspending errexit for the call
+# suspends it for the whole drain, which then frames that marker around an
+# empty body and removes it: the same trade gitlore_relay_write makes on a
+# marker it cannot read, and the reason nothing here inspects the status.
+#
+# Guarded on $GITLORE_RELAY_SYSMSG, deliberately NOT nested inside
+# `[ -n "$sysmsg" ]`: every dirty branch above calls add_sysmsg
+# unconditionally, so $sysmsg is never empty by the time we reach here today —
+# but that is an accident of the branches above, not a contract this fold may
+# lean on. Conditioning on it would be behaviour-identical now and would
+# silently drop the relay the day one of those branches stops reporting.
+gitlore_relay_drain "$mempath" || true
+if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
+  add_sysmsg "$GITLORE_RELAY_SYSMSG"
+  protocol_ctx="$protocol_ctx
+
+$GITLORE_RELAY_CTX"
+fi
+
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus
 # any accumulated user-facing systemMessage (success/dirty/launcher — D14).
 emit_session_json
