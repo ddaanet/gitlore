@@ -81,7 +81,10 @@ gitlore_compose_and_report "$mempath" "$manifest_touched"
 # — a parent-side batch whose only report is a relayed one.
 if [ -n "$agent_id" ]; then
   if [ -n "$GITLORE_COMPOSE_SYSMSG" ]; then
-    gitlore_relay_write "$mempath" "$agent_id" "$GITLORE_COMPOSE_SYSMSG" "$GITLORE_COMPOSE_CTX"
+    # `|| true`: a failed relay write must cost only the relay, never this
+    # subagent's own report — a bare call under this file's `set -e` would
+    # abort before the `jq -n` emission below runs.
+    gitlore_relay_write "$mempath" "$agent_id" "$GITLORE_COMPOSE_SYSMSG" "$GITLORE_COMPOSE_CTX" || true
   fi
 else
   gitlore_relay_drain "$mempath"

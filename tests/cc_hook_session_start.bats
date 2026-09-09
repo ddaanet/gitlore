@@ -398,6 +398,40 @@ assert_session_start_did_nothing() {
   [[ "$ctx" != *"$RELAY_FRAMING"* ]]
 }
 
+# Item 3.1 slice 4, Group A (item-3-1-s3-code-review.md "Concern 1", the
+# SessionStart half of the shared fixture in tests/index_sync.bats). A marker
+# at mode 0200 is found by the drain's `find -type f` but cannot be opened by
+# its `awk`, which exits 2 — and under this file's own `set -euo pipefail`
+# that used to take the whole hook down before slice 3's `|| true` landed.
+# What that fix does NOT restore is the body: the marker is folded as an
+# empty block and removed, so only the drain's own return code is protected.
+# This case pins the residual: the hook must still finish and still carry
+# everything ELSE accumulated above the fold — the standing FR11
+# commit-protocol context most of all, since losing it costs every session
+# after this one, not just this batch's relay.
+@test "an unreadable marker costs the relay, not the hook" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
+  make_parent_with_memory
+  if gitlore_relay_write memory a1 "STRANDED SYSMSG BODY" "STRANDED CTX BODY"; then
+    write_status=0
+  else
+    write_status=$?
+  fi
+  [ "$write_status" -eq 0 ]
+  marker="$(gitlore_relay_marker_file memory a1)"
+  chmod 0200 "$marker"
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  # Restore only if the drain (or the mutation-red run below) left the marker
+  # behind — the fixed drain's own `rm -f` removes it regardless of its mode,
+  # since deletion depends on the containing directory's permissions, not the
+  # target file's.
+  [ -e "$marker" ] && chmod 0600 "$marker"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never commit"; "i")'
+}
+
 # A third case — "a stranded marker is the only thing SessionStart has to
 # say" — is in the runbook item (emit_session_json omits systemMessage
 # entirely when $sysmsg is empty, so a fold placed after that decision, or one

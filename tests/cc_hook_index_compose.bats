@@ -412,6 +412,52 @@ seed_root_fact() {
   [ ! -f "$marker" ]
 }
 
+# Item 3.1 slice 4, Group A (item-3-1-s2-code-review.md F5). `mkdir` on the
+# marker path makes gitlore_relay_write's redirect fail with "Is a directory"
+# — no permission bits involved, so no root guard and nothing to restore.
+# Measured by hand-run today: the hook exits 1 with EMPTY stdout, so the
+# subagent's own compose report dies along with the relay it could not stage.
+# A relay failure must cost only the relay, never the hook's own report.
+@test "a failed relay write leaves the subagent's own report intact" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  squat=$(gitlore_relay_marker_file memory a1)
+  mkdir "$squat"
+  pre "$PWD/memory/MEMORY.md" a1
+  seed_root_fact "p.md" "a project fact"
+  # `--separate-stderr`: the failing redirect inside gitlore_relay_write prints
+  # "Is a directory" on stderr, and a merged capture would put that line ahead
+  # of the JSON — so the jq parse below would fail on a hook that survived and
+  # reported exactly as this case requires.
+  run --separate-stderr feed a1
+  [ "$status" -eq 0 ]
+  run jq -r '.systemMessage' <<<"$output"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recomposed tier pointers"* ]]
+  rmdir "$squat"
+}
+
+# Item 3.1 slice 4, Group B (item-3-1-s2-code-review.md F6). Born green:
+# gitlore_relay_drain's `-type f` (slice 1, already committed) skips a
+# non-file squatting on a marker name, so this cannot red by absence. Proven
+# non-vacuous by the mutation recorded in the slice-4 report — back the
+# `-type f` out in place, watch this case red, restore.
+@test "an unkeyed run survives a non-file squatting on a marker name" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  squat=$(gitlore_relay_marker_file memory a1)
+  mkdir "$squat"
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_fact "p.md" "a project fact"
+  # `--separate-stderr` for the reason the keyed case above gives: this
+  # fixture's whole point is a path that produces diagnostics, and $output has
+  # to mean the hook's own report and nothing else.
+  run --separate-stderr feed
+  [ "$status" -eq 0 ]
+  run jq -r '.systemMessage' <<<"$output"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recomposed tier pointers"* ]]
+  rmdir "$squat"
+}
+
 @test "a validation failure reports on both channels and exits 0" {
   pre "$PWD/memory/.gitlore-tiers"
   set_tier_manifest ghost

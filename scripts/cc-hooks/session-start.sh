@@ -383,15 +383,16 @@ fi
 # the repair, so the relay is delayed rather than lost.
 #
 # `|| true` for the same reason the compose section above takes
-# `|| compose_rc=$?`: SessionStart must always finish. The drain's `find
-# -type f` screens non-files, not permissions, so a marker whose mode has been
-# mangled makes its `awk` exit 2 — and under this file's `set -e` a bare call
-# would take the hook down before emit_session_json, emitting no JSON at all
-# and costing the session its commit-protocol additionalContext and every
-# notice accumulated above, to save one relay. Suspending errexit for the call
-# suspends it for the whole drain, which then frames that marker around an
-# empty body and removes it: the same trade gitlore_relay_write makes on a
-# marker it cannot read, and the reason nothing here inspects the status.
+# `|| compose_rc=$?`: SessionStart must always finish. The drain absorbs a
+# marker it cannot read on its own now — it folds an empty block for it — but
+# its `rm -f` still propagates on a marker whose gitdir has been made
+# unwritable, and under this file's `set -e` a bare call would take the hook
+# down before emit_session_json, emitting no JSON at all and costing the
+# session its commit-protocol additionalContext and every notice accumulated
+# above, to save one relay. Suspending errexit for the call suspends it for
+# the whole drain, which then finishes the fold and returns 0: the same
+# degrade-don't-abort trade gitlore_relay_write makes on a marker it cannot
+# read, and the reason nothing here inspects the status.
 #
 # Guarded on $GITLORE_RELAY_SYSMSG, deliberately NOT nested inside
 # `[ -n "$sysmsg" ]`: every dirty branch above calls add_sysmsg
