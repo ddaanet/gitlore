@@ -486,6 +486,21 @@ surface, backfilling descriptions that never matched their index lines.
      symbol: `gitlore_compose_check_pins` already exists and already refuses, so
      the red is the commit having landed with `:ddaanet` moved.
 
+     **As executed, this slice also carried two things the list above does not
+     name.** First, slice 3's re-induction of
+     `the rc-1 user arm does not tell a user to retry a commit that succeeded`,
+     pulled forward: its fixture is the off-pin induction, so landing the abort
+     reds it, and leaving it to slice 3 would mean two commits with the suite
+     red. Assertions unchanged, induction swapped to slice 2's manifest refusal,
+     exactly as slice 3 specified it. Second, the trailing clause of the rc-1
+     agent remedy — `, so a pin figure printed above is the one from before it`
+     — was dropped, and the arm's comment rewritten to say why. Verified at code
+     review: `gitlore_compose` runs both checks and returns 1 on either, and the
+     pin guard aborts ahead of it, so rc 1 reaches that arm only from
+     `gitlore_compose_check`, whose four problem-line producers emit no commit
+     id. The clause described a state the code cannot produce, and slice 2 was
+     about to pin it.
+
   2. **A `gitlore_compose_check` refusal still proceeds.** The other half of the
      amended rule, and slice 1's control: an implementation that aborts on every
      refusal passes slice 1 and fails this, and one that aborts on neither does
@@ -499,19 +514,29 @@ surface, backfilling descriptions that never matched their index lines.
        `$stderr` carries `tier composition refused`, the fragment
        `the tier manifest lists 'phantom'`, and the rc-1 agent remedy sentence
        `This commit also stages each tier at the commit its worktree is on now`.
+       That fragment is the whole sentence after slice 1 dropped its trailing
+       clause, not the first half of a longer one.
+     - `a mid-merge tier is reported as a merge, not as a moved pin` in
+       `tests/commit_memory.bats` — added from slice 1's code review, which
+       measured that hoisting the pin guard above the per-tier
+       `gitlore_guard_stale_merge_state` loop leaves both suites green, so
+       nothing pins that ordering. The two guards answer the same tier with
+       different remedies, and `gitlore_compose_check_pins`' own mid-merge line
+       is the weaker one: it offers `checkout --detach`, which unlinks
+       `MERGE_HEAD` and destroys the prepared merge. Fixture: slice 1's off-pin
+       induction plus a `MERGE_HEAD` written into the tier's gitdir, the shape
+       the neighbouring stale-merge case already uses. Asserts non-zero exit and
+       that `$stderr` carries the merge directive rather than
+       `moved off the commit the memory store records for it` — the tier being
+       both mid-merge **and** off its pin is what makes the two guards
+       distinguishable, which is why the existing mid-merge case, whose tier
+       sits on its pin, discriminates nothing here.
 
-  3. **The user arms read right.** Item 1.1 slice 4's
+  3. **The user arms read right.** The pin abort gets its own user-arm case,
+     where a retry *is* the right instruction. Item 1.1 slice 4's
      `the rc-1 user arm does not tell a user to retry a commit that succeeded`
-     is re-induced onto slice 2's manifest refusal, where the commit still
-     succeeds and its contrast still holds; the pin abort gets its own user-arm
-     case, where a retry *is* the right instruction.
-     - `the rc-1 user arm does not tell a user to retry a commit that succeeded`
-       in `tests/commit_memory.bats` — slice 2's fixture, `CLAUDECODE`
-       explicitly unset in the test body (bats inherits the invoking shell's
-       value); asserts exit 0, that `$stderr` carries
-       `ask it to repair the memory store.` and does *not* carry
-       `repair the memory store, then retry`. Unchanged assertions, new
-       induction.
+     was to be re-induced onto slice 2's manifest refusal here; slice 1 carried
+     that instead, for the reason recorded there, so this slice is one case.
      - `the pin-abort user arm tells a user to retry` — slice 1's fixture,
        `CLAUDECODE` unset; asserts non-zero exit, that `$stderr` carries the
        header fragment `moved off the commit the memory store records for it`
@@ -520,6 +545,34 @@ surface, backfilling descriptions that never matched their index lines.
        header fragment is what discriminates: that `…, then retry.` ending is
        shared verbatim with the rc-2 and `*)` user arms, so on its own it pins
        nothing.
+
+  **Residual — an interrupted `/gitlore:merge` continuation aborts under a
+  remedy that would undo the repair.** Found at slice 1's code review, left
+  unfixed. `gitlore_guard_stale_merge_state` does not always refuse: on
+  `stale-no-merge-head` it delegates to `gitlore_recover_stale_no_merge_head`,
+  which can repair and return 0 — and neither of its branches stages the moved
+  gitlink in memory's index, which is what the normal continuation does as its
+  last act (D43). So the loop can hand the pin guard a tier that is off its pin
+  *because gitlore just repaired it*: the commit aborts, and the remedy says the
+  tier "was moved outside /gitlore:merge" and offers
+  `checkout --detach <pinned>`, which would move HEAD off a landed, approved
+  merge. Bounded — reachable only from a continuation interrupted between its
+  merge commit and its staging; nothing is destroyed, the merge commit stays
+  reachable, the same sentence offers the correct alternative
+  (`or run /gitlore:merge to take its content properly`), and
+  `gitlore_recover_landed_merge`'s own message prints immediately before the
+  abort. The fix is a design call outside this item — either the recovery path
+  stages the gitlink it moved, or the accepted blocking cost covers this case
+  too.
+
+  **Residual — the pin guard covers active tiers, `add -A` covers mounted
+  ones.** `gitlore_compose_check_pins` iterates `gitlore_active_tiers`, while
+  `gitlore_sync_tiers_to_live` and the `add -A` that follows it reach every
+  mounted tier. A mounted-but-unlisted tier moved off its pin is therefore still
+  adopted silently. Narrower than the case this item fixes — root holds no line
+  for a dormant tier, so no down projection overwrites it, which is what made
+  the active-tier scope the right one for composition — but the adoption itself
+  is unguarded.
 
 ---
 
