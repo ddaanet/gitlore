@@ -256,10 +256,29 @@ fi
 # — a parent-side batch whose only report is a relayed one.
 if [ -n "$agent_id" ]; then
   if [ -n "$sysmsg" ]; then
-    # `|| true`: a failed relay write must cost only the relay, never this
-    # subagent's own report — a bare call under this file's `set -e` would
-    # abort before the `jq -n` emission below runs.
-    gitlore_relay_write "$mempath" "$agent_id" "$sysmsg" "$ctx" || true
+    # `if !`, not `|| true`: a failed relay write must cost only the relay,
+    # never this subagent's own report — both suspend errexit over the call
+    # the same way — but the loss must not also be silent to everyone. On
+    # additionalContext, not systemMessage: a subagent's systemMessage reaches
+    # only that subagent's own transcript, while additionalContext is what the
+    # acting model narrates unprompted — the only path by which the fact can
+    # reach the parent, since the actor has to carry it there itself.
+    # Appended after the write, since the line describes the write's own
+    # failure and must not be staged by it.
+    if ! gitlore_relay_write "$mempath" "$agent_id" "$sysmsg" "$ctx"; then
+      # `$sysmsg` when $ctx is empty rather than the separator alone: the
+      # `failed` block above is the reachable case here and it reports on the
+      # user's channel only, which inside a subagent reaches nobody — so
+      # without this the actor is told a report was lost and never shown the
+      # report it is being asked to repeat. index-compose.sh needs no such
+      # fallback: gitlore_compose_and_report sets both channels or neither.
+      if [ -n "$ctx" ]; then ctx="$ctx
+
+"; else ctx="$sysmsg
+
+"; fi
+      ctx="${ctx}gitlore: the report above could not be staged for the parent session — the relay marker could not be written. A hook's output inside a subagent reaches no one else, so repeat it in your reply or it is lost."
+    fi
   fi
 else
   gitlore_relay_drain "$mempath"
