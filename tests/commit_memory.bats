@@ -159,16 +159,18 @@ EOF"
   assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — stale hook'
 }
 
-@test "an off-pin compose refusal is reported and does not abort the commit" {
+@test "a tier moved off its pin aborts the commit" {
   # gitlore_compose_check_pins refuses when a tier's worktree HEAD has moved off
   # the commit the memory store's INDEX records for it (D31, D36): projecting
-  # root's text over an unadopted carrier would destroy approved upstream facts,
-  # so the refusal must not block the commit that is otherwise ready. Reach the
-  # pin mismatch with an empty commit made directly inside the tier worktree and
-  # never staged into memory's own index: check_pins reads `:ddaanet`, and the
-  # compose runs ahead of gitlore_sync_tiers_to_live, so nothing has restaged
-  # that gitlink by the time it looks. The carrier and the root line disagree as
-  # well, so the refusal has real work to withhold rather than being a no-op.
+  # root's text over an unadopted carrier would destroy approved upstream facts.
+  # Item 1.2 makes that refusal abort the commit outright, rather than letting
+  # the commit's own `add -A` stage the moved gitlink and erase the very
+  # condition the refusal fired on. Reach the pin mismatch with an empty commit
+  # made directly inside the tier worktree and never staged into memory's own
+  # index: check_pins reads `:ddaanet`, and the check runs ahead of
+  # gitlore_sync_tiers_to_live, so nothing has restaged that gitlink by the time
+  # it looks. The carrier and the root line disagree as well, so the refusal has
+  # real work to withhold rather than being a no-op.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -177,19 +179,29 @@ EOF"
   git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
 
   head_before=$(git -C memory rev-parse HEAD)
+  pin_before=$(git -C memory rev-parse ":ddaanet")
   CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
-  [ "$status" -eq 0 ]
-  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
-  # Two strings, not one: the header proves the rc-1 branch fired, the fragment
-  # proves gitlore_compose_check_pins' own problem line was forwarded rather
-  # than swallowed by the commit path's `>/dev/null`.
-  [[ "$stderr" == *"tier composition refused"* ]]
+  [ "$status" -ne 0 ]
+  # The unchanged HEAD and the unchanged pin are the assertions this item
+  # exists for — the exit code alone would pass against an abort that had
+  # already staged the move.
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
+  assert_bullets memory/ddaanet/MEMORY.md "- [shared](shared.md) — stale hook"
+  [ -f "$(gitlore_commit_msg_file memory)" ]
+  # The approval survives the abort: gitlore_compose_check_pins writes nothing,
+  # so the tree is no newer than the summary and the retry is not refused for a
+  # change nobody made. It reads "absent" against unchanged code — the commit
+  # lands and consumes the file — and "no" against an abort placed late enough
+  # for the compose or the tier sync to have written first. What it cannot see
+  # is a `touch "$msgfile"` in the abort arm: reaching here means the freshness
+  # gate above already read yes, so a restamp changes no later answer, and the
+  # runbook's "No restamp" is a rule about not copying a line whose reason does
+  # not apply rather than a behaviour with an observable of its own.
+  [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
+  [[ "$stderr" == *"moved off the commit the memory store records for it"* ]]
   [[ "$stderr" == *"is checked out at"* ]]
-  # The agent arm's remedy sentence, pinned because it is the fix slice 3's code
-  # review made for its own Major 2: it is what tells an agent that the pin
-  # figure printed above is already stale by the time the commit lands. Nothing
-  # else asserts it, so it would revert silently.
-  [[ "$stderr" == *"This commit also stages each tier at the commit its worktree is on now"* ]]
+  [[ "$stderr" == *"Return the tier to its pin with the command above"* ]]
 }
 
 @test "a compose write failure aborts the commit" {
@@ -267,17 +279,20 @@ DRIVER
 }
 
 @test "the rc-1 user arm does not tell a user to retry a commit that succeeded" {
-  # Slice 3's off-pin induction verbatim, CLAUDECODE unset (the state a bats
-  # run leaves it in anyway) so this reads the USER arm rather than the agent
-  # one. Characterization: the wording is already correct, so no red exists
-  # here — the two assertions are the same sentence's two endings, so no other
+  # Item 1.2 makes an off-pin tier abort the commit, so that induction no
+  # longer reaches this rc-1 manifest-refusal arm — re-homed onto a manifest
+  # problem instead: 'phantom' is listed but never mounted, so
+  # gitlore_compose_check refuses (rule 2) while the tier stays ON its pin, and
+  # gitlore_compose_check_pins passes. CLAUDECODE unset (the state a bats run
+  # leaves it in anyway) so this reads the USER arm rather than the agent one.
+  # Characterization: the wording is already correct, so no red exists here —
+  # the two assertions are the same sentence's two endings, so no other
   # producer on this channel can satisfy or break them by accident.
   make_parent_with_memory
   make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
+  set_tier_manifest ddaanet phantom
   seed_tier_bullet ddaanet shared.md "stale hook"
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
-  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
 
   head_before=$(git -C memory rev-parse HEAD)
   # A bats run leaves CLAUDECODE unset, but the invoking shell may not — force

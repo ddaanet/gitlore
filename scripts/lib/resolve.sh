@@ -915,6 +915,25 @@ gitlore_sync_memory_to_live() {
       [ -e "$mempath/$tier/.git" ] || continue
       gitlore_guard_stale_merge_state "$mempath/$tier" || return 1
     done < <(gitlore_tier_paths "$mempath")
+    # A tier off its pin refuses composition itself (D31, D36), but leaving that
+    # refusal to gitlore_compose's own rc-1 arm would let this function's `add -A`
+    # below stage the moved gitlink anyway — adopting the move silently in the
+    # very commit that reported it as a problem. Checked here, ahead of compose,
+    # so an off-pin tier aborts instead. No restamp: this writes nothing, so the
+    # tree is no newer than $msgfile and the approval survives for the retry.
+    # The declaration stays on its own line: folded into `local pin_problems=$(…)`
+    # the status read is `local`'s, always 0, and the refusal is swallowed.
+    local pin_problems
+    if ! pin_problems=$(gitlore_compose_check_pins "$mempath"); then
+      local pin_header="gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than adopt the move:
+$pin_problems"
+      gitlore_say_for_agent_or_user \
+        "$pin_header
+gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Return the tier to its pin with the command above, or run /gitlore:merge to take its content properly, then retry the commit — the approved summary is still in place." \
+        "$pin_header
+gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
+      return 1
+    fi
     # Compose before the tier commit below: composition writes carrier files
     # inside the tiers, so it must land before gitlore_sync_tiers_to_live moves
     # their gitlinks, or the gitlink pins the pre-compose content — the same
@@ -927,13 +946,17 @@ gitlore_sync_memory_to_live() {
         # A refusal writes nothing (D31, D36): projecting root's older text over
         # an unadopted carrier would destroy approved upstream facts, so the
         # commit proceeds with the carrier as it stands and this only reports.
-        # The header is gitlore_compose_and_report's own (index-compose.sh:787),
-        # held in one variable so the two arms cannot drift apart.
+        # The header is gitlore_compose_and_report's own, held in one variable
+        # so the two arms cannot drift apart. The remedy stops at what this
+        # commit does: the pin guard above aborts on any
+        # gitlore_compose_check_pins refusal, so rc 1 reaches here only from
+        # gitlore_compose_check, whose problem lines carry no commit id — there
+        # is no pin figure printed above for a remedy to call stale.
         local refusal="gitlore: tier composition refused — the memory indexes were left untouched:
 $compose_result"
         gitlore_say_for_agent_or_user \
           "$refusal
-gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand — composition runs again at the next memory commit. This commit also stages each tier at the commit its worktree is on now, so a pin figure printed above is the one from before it." \
+gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand — composition runs again at the next memory commit. This commit also stages each tier at the commit its worktree is on now." \
           "$refusal
 gitlore: the commit went ahead with the memory indexes as they stand. Open this project in Claude Code and ask it to repair the memory store." >&2
         ;;

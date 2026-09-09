@@ -222,6 +222,34 @@ teardown() { teardown_tmp_repo; }
   rm -rf "$WT"
 }
 
+@test "the parent pre-commit hook aborts on an off-pin tier" {
+  # The second entry point for the reason Item 1.1 slice 1 gives: one shared
+  # body (gitlore_sync_memory_to_live), two callers, and what is at stake is
+  # what reaches the tier's remote. Same fixture as the commit-memory case.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record the shared fact\n' > "$msgfile"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  pin_before=$(git -C memory rev-parse ":ddaanet")
+  run bash "$HOOK"
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
+  # The carrier, in the worktree rather than at HEAD: the abort means nothing
+  # was committed on either side, and seed_tier_bullet only ever wrote the
+  # worktree, so the tier's HEAD:MEMORY.md would be the pre-seed file and pin
+  # nothing about what composition was stopped from doing. Exact block, not a
+  # grep: "stale hook" is a variant of the "fresh hook" a completed compose
+  # would leave, so no single fault could fail a present/absent pair.
+  assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — stale hook'
+}
+
 @test "the parent pre-commit hook composes the carrier before committing" {
   # Same store as the commit-memory case, driven through the other entry point.
   # Neither entry point carries commit logic of its own — gitlore_sync_memory_to_live
