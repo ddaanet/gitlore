@@ -304,25 +304,59 @@ discovered_suites() {
   # The invocation path, with rumdl stubbed through the `rumdl` variable: what
   # the recipe hands it, and that a `.venv` behind `pyproject.toml` stops with
   # a message rather than wrapping the tree with whatever version is on PATH.
+  # The args go to a file rather than stdout: the recipe filters its own
+  # stdout down to a summary line, so asserting the invocation through that
+  # channel would only prove what survived the filter.
   cat > "$STUB_DIR/rumdl" <<'EOF'
 #!/usr/bin/env bash
 case "$1" in
   --version) echo "rumdl $RUMDL_STUB_VERSION" ;;
-  *) printf '%s\n' "$@" ;;
+  *) printf '%s\n' "$@" > "$RUMDL_STUB_ARGS"; printf 'Issues: none\n' ;;
 esac
 EOF
   chmod +x "$STUB_DIR/rumdl"
   pin=$(sed -n 's/.*"rumdl==\([0-9.]*\)".*/\1/p' "$PLUGIN_ROOT/pyproject.toml")
   [ -n "$pin" ]
 
-  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION='$pin' just rumdl='$STUB_DIR/rumdl' format-docs"
+  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION='$pin' RUMDL_STUB_ARGS='$STUB_DIR/args' just rumdl='$STUB_DIR/rumdl' format-docs"
   [ "$status" -eq 0 ]
-  [ "$output" = $'fmt\n--no-cache\ndocs\nplans' ]
+  [ "$(cat "$STUB_DIR/args")" = $'fmt\n--no-cache\ndocs\nplans' ]
 
-  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION=0.0.1 just rumdl='$STUB_DIR/rumdl' format-docs"
+  rm -f "$STUB_DIR/args"
+  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION=0.0.1 RUMDL_STUB_ARGS='$STUB_DIR/args' just rumdl='$STUB_DIR/rumdl' format-docs"
   [ "$status" -ne 0 ]
   [[ "$output" == *"pins $pin"* ]]
-  [[ "$output" != *"fmt"* ]]
+  [ ! -e "$STUB_DIR/args" ]
+}
+
+@test "format-docs prints only rumdl's summary when it succeeds, all of it when it fails" {
+  # The unwrappable-line residue reprints on every run and blocks nothing, so
+  # a green `precommit` must not carry it; a run that actually failed must
+  # carry every line, since that is the only place the reason appears.
+  cat > "$STUB_DIR/rumdl" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  --version) echo "rumdl $RUMDL_STUB_VERSION" ;;
+  *)
+    printf 'plans/a.md:1:81: [MD013] Line length 98 exceeds 80 characters\n'
+    printf 'plans/b.md:2:81: [MD013] Line length 99 exceeds 80 characters\n'
+    printf 'Issues: Found 2 issues in 2/3 files\n'
+    exit "${RUMDL_STUB_RC:-0}"
+    ;;
+esac
+EOF
+  chmod +x "$STUB_DIR/rumdl"
+  pin=$(sed -n 's/.*"rumdl==\([0-9.]*\)".*/\1/p' "$PLUGIN_ROOT/pyproject.toml")
+
+  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION='$pin' just rumdl='$STUB_DIR/rumdl' format-docs"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Issues: Found 2 issues in 2/3 files" ]
+  [[ "$output" != *"MD013"* ]]
+
+  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION='$pin' RUMDL_STUB_RC=2 just rumdl='$STUB_DIR/rumdl' format-docs"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"plans/a.md:1:81: [MD013]"* ]]
+  [[ "$output" == *"plans/b.md:2:81: [MD013]"* ]]
 }
 
 # --- the gate sentinel itself -------------------------------------------------

@@ -138,7 +138,7 @@ plant_fact() {
 
 @test "deictics: a session-anchored word warns without blocking" {
   plant_fact "ddaanet/a-fact.md" "a-fact" 'The flag is currently unset.'
-  run "$CHECKER"
+  run "$CHECKER" --warnings
   [ "$status" -eq 0 ]
   [[ "$output" == *"WARN"* ]]
   [[ "$output" == *"deictic"* ]]
@@ -146,9 +146,24 @@ plant_fact() {
 
 @test "deictics: 'this session' warns" {
   plant_fact "ddaanet/a-fact.md" "a-fact" 'Measured this session at 2%.'
-  run "$CHECKER"
+  run "$CHECKER" --warnings
   [ "$status" -eq 0 ]
   [[ "$output" == *"deictic"* ]]
+}
+
+@test "a warning is counted but not detailed unless --warnings is passed" {
+  # The count keeps the finding visible; the per-line detail blocks nothing and
+  # reprints unchanged on every run, so it is off by default.
+  plant_fact "ddaanet/a-fact.md" "a-fact" 'The flag is currently unset.'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"deictic"*"1 (warn)"* ]]
+  [[ "$output" != *"WARN"* ]]
+  [[ "$output" != *"a-fact.md:"* ]]
+
+  run "$CHECKER" --warnings
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"a-fact.md:"* ]]
 }
 
 # --- check 4b: pre-rename tokens -------------------------------------------
