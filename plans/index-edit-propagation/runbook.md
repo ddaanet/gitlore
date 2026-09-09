@@ -957,10 +957,22 @@ surface, backfilling descriptions that never matched their index lines.
        reports takes exactly this path.
      - `an unreadable marker costs the relay, not the hook` in
        `tests/index_sync.bats` — a marker at mode 0200, then a drain; asserts
-       the drain returns 0 and the calling hook still emits its own report.
-       `find -type f` screens non-files, not permissions, so `awk` exits 2 and
-       under the hooks' `set -euo pipefail` takes the whole hook down — the same
-       shape as the write's, which slice 2.5 fixed on its own side with
+       the drain returns 0 and the calling hook still emits its own report. Pair
+       it with a SessionStart case in `tests/cc_hook_session_start.bats`
+       asserting the hook exits 0 and its `additionalContext` still carries the
+       commit-protocol text over the same fixture. Slice 3's review measured
+       what an unguarded drain costs there and it is not merely the relay: the
+       `awk` rc 2 propagates under `set -euo pipefail`, the hook exits 2 with
+       empty stdout, and every notice accumulated above the fold goes with it —
+       the launcher warning, the divergence and tier notices, and the standing
+       FR11 commit-protocol context. Slice 3 fixed the caller with
+       `gitlore_relay_drain "$mempath" || true` and could not pin it: no frozen
+       case creates an unreadable marker, and removing the `|| true` leaves both
+       slice-3 cases green. After that fix the body is still lost and only the
+       framing line reaches the user, which is what the `index-sync.sh` side
+       closes. `find -type f` screens non-files, not permissions, so `awk` exits
+       2 and under the hooks' `set -euo pipefail` takes the whole hook down —
+       the same shape as the write's, which slice 2.5 fixed on its own side with
        `|| old_sys=""`. Fixing the drain changes what it does with a marker it
        cannot read (fold an empty block and `rm -f` it), which is why it wants a
        case rather than a one-line ride-along on a refactor.
