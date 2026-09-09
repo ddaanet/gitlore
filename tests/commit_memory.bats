@@ -398,3 +398,38 @@ DRIVER
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [[ "$stderr" == *"ask it to repair the memory store, then retry."* ]]
 }
+
+@test "the pin-abort user arm tells a user to retry" {
+  # The pin abort gets its own user-arm case, where a retry IS the right
+  # instruction — unlike the rc-1 manifest refusal above, this commit never
+  # went through. Slice 1's off-pin fixture verbatim, CLAUDECODE unset so this
+  # reads the USER arm rather than the agent one.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  # A bats run leaves CLAUDECODE unset, but the invoking shell may not — force
+  # it, the way tests/git_hook_memory_pre_commit.bats:29 does, so this test
+  # reads the user arm regardless of the ambient environment.
+  unset CLAUDECODE
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  # The header fragment is what discriminates: the "…, then retry." ending is
+  # shared verbatim with the rc-2 and `*)` user arms, so on its own it pins
+  # nothing about *this* arm.
+  [[ "$stderr" == *"moved off the commit the memory store records for it"* ]]
+  [[ "$stderr" == *"ask it to repair the memory store, then retry."* ]]
+  # Two things keep the negative below from going vacuous, both measured. An
+  # empty or misrouted $stderr reds a positive above it rather than passing
+  # here — dropping the arm's own `>&2` reds the header assertion. And a
+  # wording drift in the agent remedy reds `a tier moved off its pin aborts the
+  # commit`, which asserts `Return the tier to its pin with the command above`
+  # positively over this same fixture, differing only in CLAUDECODE; without
+  # that pairing this line would refute wording no producer still emits.
+  [[ "$stderr" != *"Return the tier to its pin"* ]]
+}

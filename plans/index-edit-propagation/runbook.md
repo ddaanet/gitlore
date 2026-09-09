@@ -573,6 +573,32 @@ surface, backfilling descriptions that never matched their index lines.
        shared verbatim with the rc-2 and `*)` user arms, so on its own it pins
        nothing.
 
+     **As executed, this slice carries no implementation either**, for slice 2's
+     reason: the case is born green and its red exists only against a wrong
+     implementation. It ran RED and test review only, both of which red each
+     assertion under its own mutation.
+
+     The case closes slice 1's code-review mutation 3 — collapsing the two
+     message arms shipped green until now. Worth recording how: the literal
+     collapse reds the test on the *retry-ending* assertion, not on the
+     negative, because it destroys both halves of the user remedy at once and
+     errexit stops the body a line early. Isolating the negative needs the
+     narrower mutation that prepends the agent fragment to an otherwise intact
+     user remedy. Both red the test, so the gap is closed either way, but only
+     the narrow one proves the negative discriminates.
+
+     **The item's message-text contract is pinned at sentence granularity.**
+     Each of the three fixed texts reds some test when that text alone changes:
+     the header and the agent remedy through slice 1's
+     `a tier moved off its pin aborts the commit`, the user remedy through this
+     case. What stays unpinned is sub-sentence — the header's opening and
+     closing clauses, the agent remedy's `/gitlore:merge` alternative, the user
+     remedy's first sentence. Left that way deliberately: each is a fragment of
+     a sentence whose distinguishing phrase is already pinned, and asserting the
+     rest would pin wording without pinning behaviour. The `/gitlore:merge`
+     clause is the one worth naming, since the slice-1 residual above relies on
+     it being present.
+
   **Residual — an interrupted `/gitlore:merge` continuation aborts under a
   remedy that would undo the repair.** Found at slice 1's code review, left
   unfixed. `gitlore_guard_stale_merge_state` does not always refuse: on
