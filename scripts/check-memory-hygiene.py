@@ -120,6 +120,10 @@ CODE_SPAN = re.compile(r"`[^`]*`")
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--root", help="repository root (default: the git toplevel)")
+    ap.add_argument(
+        "--warnings", action="store_true",
+        help="print a line per warning-level finding, not just its count",
+    )
     args = ap.parse_args()
 
     root = args.root or git_toplevel()
@@ -146,7 +150,7 @@ def main() -> int:
     for path in ref_files:
         findings += check_references(path, root, memory_scope=under(path, memory_dir))
 
-    return report(findings, len(facts), len(ref_files))
+    return report(findings, len(facts), len(ref_files), warnings=args.warnings)
 
 
 def git_toplevel() -> str | None:
@@ -366,8 +370,13 @@ BLOCKING_CHECKS = (
 WARNING_CHECKS = ("deictic", "dangling-wikilink")
 
 
-def report(findings: list[tuple], n_facts: int, n_files: int) -> int:
-    for level, check, rel, lineno, detail in sorted(findings, key=lambda f: (f[0], f[2], f[3])):
+def report(findings: list[tuple], n_facts: int, n_files: int, warnings: bool = False) -> int:
+    # Warning-level findings never block, so their detail reprints unchanged on
+    # every run — dozens of lines that bury the blocking ones and the sign-off.
+    # By default only the count in the summary survives; `--warnings` prints
+    # them, which is what someone curating the store wants.
+    shown = [f for f in findings if warnings or f[0] != "WARN"]
+    for level, check, rel, lineno, detail in sorted(shown, key=lambda f: (f[0], f[2], f[3])):
         print(f"{level:<5} {check:<18} {rel}:{lineno}: {detail}")
 
     counts = {c: 0 for c in BLOCKING_CHECKS + WARNING_CHECKS}
@@ -375,7 +384,7 @@ def report(findings: list[tuple], n_facts: int, n_files: int) -> int:
         counts[check] += 1
     blocking = sum(counts[c] for c in BLOCKING_CHECKS)
 
-    if findings:
+    if shown:
         print()
     print(
         f"check-memory-hygiene: {n_facts} fact{'' if n_facts == 1 else 's'}, "

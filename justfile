@@ -83,7 +83,18 @@ format-docs:
     have=$({{ rumdl }} --version) || { echo "format-docs: rumdl not on PATH — run 'uv sync' and let direnv load .envrc" >&2; exit 1; }
     want=$(sed -n 's/.*"rumdl==\([0-9.]*\)".*/\1/p' pyproject.toml)
     [ "$have" = "rumdl $want" ] || { echo "format-docs: $have on PATH, pyproject.toml pins $want — run 'uv sync'" >&2; exit 1; }
-    {{ rumdl }} fmt --no-cache docs plans
+    # rumdl reprints every line it could not rewrap — MD013 residue in
+    # agent-written reports, ~70 lines identical on every run, drowning the
+    # rest of `precommit`. Only its own summary line survives a clean exit; a
+    # real failure (rc 2 — bad path, bad config) still prints in full, so
+    # nothing that would change the outcome is filtered.
+    out=$({{ rumdl }} fmt --no-cache docs plans 2>&1) && rc=0 || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        [ -n "$out" ] && printf '%s\n' "$out" >&2
+        exit "$rc"
+    fi
+    [ -n "$out" ] && printf '%s\n' "$out" | tail -n 1
+    exit 0
 
 # Overridable so a test can stand in a stub: `just rumdl=/path/to/stub format-docs`.
 rumdl := "rumdl"
