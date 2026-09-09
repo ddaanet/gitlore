@@ -436,24 +436,66 @@ seed_root_fact() {
   rmdir "$squat"
 }
 
-# Item 3.1 slice 4, Group B (item-3-1-s2-code-review.md F6). Born green:
-# gitlore_relay_drain's `-type f` (slice 1, already committed) skips a
-# non-file squatting on a marker name, so this cannot red by absence. Proven
-# non-vacuous by the mutation recorded in the slice-4 report — back the
-# `-type f` out in place, watch this case red, restore.
-@test "an unkeyed run survives a non-file squatting on a marker name" {
+# Item 3.1 slice 5 (item-3-1-s4-code-review.md §1). Slice 4 stopped a failed
+# relay write from taking the hook down and in doing so traded a loud failure
+# for a silent one: the parent loses the report and nobody — not the parent,
+# not the user, not the acting subagent — learns it existed. The fix appends
+# a not-staged line to additionalContext specifically: per the subagent-
+# confinement probe, systemMessage never leaves the subagent's own JSONL,
+# while additionalContext is what the acting model narrates unprompted — the
+# only path by which the fact can reach the parent at all, since the actor
+# has to carry it there itself.
+@test "a failed relay write tells the subagent it was not staged" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  squat=$(gitlore_relay_marker_file memory a1)
+  mkdir "$squat"
+  pre "$PWD/memory/MEMORY.md" a1
+  seed_root_fact "p.md" "a project fact"
+  # `--separate-stderr`: the failing redirect inside gitlore_relay_write prints
+  # "Is a directory" on stderr, and a merged capture would put that line ahead
+  # of the JSON — so the jq parses below would fail on a hook that survived
+  # and reported exactly as this case requires.
+  run --separate-stderr feed a1
+  [ "$status" -eq 0 ]
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recomposed tier pointers"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  # jq -r prints the literal string "null" for an absent key — rule that out
+  # before refuting anything on the channel's contents.
+  [ "$output" != "null" ]
+  [[ "$output" == *"could not be staged for the parent session"* ]]
+  rmdir "$squat"
+}
+
+# The companion to the case above, over the SAME squat: an unkeyed run. This
+# is the case that pins what `-type f` in gitlore_relay_drain is actually
+# for — not framing a non-marker into the parent's report and not removing
+# it — rather than for the abort a fix to §6 (below) would stop it causing.
+@test "an unkeyed run leaves a non-marker alone" {
   seed_tier_bullet ddaanet shared.md "a portable fact"
   squat=$(gitlore_relay_marker_file memory a1)
   mkdir "$squat"
   pre "$PWD/memory/MEMORY.md"
   seed_root_fact "p.md" "a project fact"
-  # `--separate-stderr` for the reason the keyed case above gives: this
+  # `--separate-stderr` for the reason the keyed cases above give: this
   # fixture's whole point is a path that produces diagnostics, and $output has
   # to mean the hook's own report and nothing else.
   run --separate-stderr feed
   [ "$status" -eq 0 ]
-  run jq -r '.systemMessage' <<<"$output"
-  [ "$status" -eq 0 ]
+  [ -d "$squat" ]
+  # Over the whole JSON, not one jq-extracted channel: the unkeyed fold puts
+  # the framing line on BOTH systemMessage and additionalContext, so a
+  # refutation scoped to either one alone would miss the other.
+  [[ "$output" != *"gitlore-relay agent a1"* ]]
+  # The paired positive over the same capture, and it is not left to the
+  # sibling case: the refutation above is satisfied by an EMPTY $output too,
+  # and this hook emits nothing at all when its compose report is empty — so
+  # without this line a regression that silenced the report would make the
+  # refutation vacuous rather than red. Placed after it, not before, so a run
+  # that breaks both reports the refutation, which is what this case is for.
   [[ "$output" == *"recomposed tier pointers"* ]]
   rmdir "$squat"
 }

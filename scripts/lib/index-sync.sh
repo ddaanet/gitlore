@@ -145,6 +145,13 @@ gitlore_relay_marker_file() {
 # appended after the old one on its own channel, so both survive in write
 # order and the fresh-write case (no marker yet) takes the same path as
 # always, byte for byte.
+#
+# Reporting a non-zero return is the caller's, because only the caller has a
+# channel: both hooks guard the call with `if !` and append a not-staged line
+# to their own additionalContext — never systemMessage, which inside a
+# subagent reaches nobody — so the loss is at least known to the one agent
+# that can carry it out. gitlore_relay_drain takes no such guard anywhere: it
+# returns 0 on every path.
 gitlore_relay_write() {
   local mempath="$1" agent_id="$2" sysmsg="$3" ctx="$4" marker old_sys old_ctx
   # Refused before anything else: the drain enumerates keyed markers only
@@ -184,10 +191,10 @@ $ctx"; fi
 # GITLORE_RELAY_SYSMSG and GITLORE_RELAY_CTX — each block framed with the
 # agent id its filename suffix holds, folded in filename order — then remove
 # the markers. $1 = memory path. Both variables are set to the empty string
-# when no marker exists. Returns 0 on anything a marker's own content or mode
-# can do to it — one it cannot read is folded as an empty block — but not on
-# an `rm -f` failing because the gitdir itself is unwritable; SessionStart's
-# call takes `|| true` for that residual.
+# when no marker exists. Always returns 0 — on anything a marker's own
+# content or mode can do to it (one it cannot read is folded as an empty
+# block), and on an `rm -f` failing because the gitdir itself is unwritable
+# too, so a caller's own report never dies behind this call.
 #
 # Only keyed markers (`gitlore-relay-<id>`) are enumerated, never the bare
 # `gitlore-relay` name: nothing writes the unsuffixed marker, because the
@@ -203,11 +210,11 @@ gitlore_relay_drain() {
   gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir) || return 0
   # `-print0` into `read -r -d ''`, never an `ls` pipeline or an unquoted
   # glob: nothing sanitizes the gitdir prefix and it may hold a space.
-  # `-type f` because a non-file squatting on a marker name — the shape a
-  # failed relay write leaves behind — must be skipped rather than removed.
-  # The block reads below tolerate a path they cannot open, but `rm -f` still
-  # fails on a directory, and under the hooks' `set -e` that takes down the
-  # whole hook, trading a lost relay for a lost report.
+  # `-type f` because anything else on a marker name is not a marker: framing
+  # it would attribute a block to an agent that staged nothing, and `rm -f`
+  # cannot remove it, so every later run would frame it again. That shape is
+  # what makes a relay write fail in the first place — a directory already
+  # occupying the marker path — not something a failed write leaves behind.
   names=""
   while IFS= read -r -d '' marker; do
     names="$names${marker##*/}"$'\n'
@@ -240,7 +247,11 @@ $sysblock
     GITLORE_RELAY_CTX="${GITLORE_RELAY_CTX}--- gitlore-relay agent $agent ---
 $ctxblock
 "
-    rm -f "$marker"
+    # `|| true`: this is the gitdir itself, not the marker's own mode — the
+    # `-type f` filter and the tolerant reads above only screen the marker's
+    # shape, so a marker this drain can read fine still costs its caller
+    # everything if the directory it lives in refuses the remove.
+    rm -f "$marker" || true
   done < <(printf '%s' "$names" | LC_ALL=C sort)
   return 0
 }

@@ -1212,6 +1212,54 @@ C2
   [ ! -e "$marker" ]
 }
 
+# Item 3.1 slice 5 (item-3-1-s4-code-review.md §6). One layer out from the
+# case above: the drain's own doc line claims "Always returns 0", but that
+# does not hold for its bare `rm -f "$marker"` when the GITDIR ITSELF — not
+# the marker — cannot be written. `-type f` screens the marker's own shape,
+# not the permissions one level up, so a marker this drain can read fine
+# still costs its caller everything once the remove fails. Both real callers
+# run the drain bare under the hooks' own `set -euo pipefail`, so today that
+# takes the whole caller down before it emits anything of its own.
+@test "the drain survives a gitdir it cannot write" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
+  make_parent_with_memory
+  run gitlore_relay_write memory a1 "S" "C"
+  [ "$status" -eq 0 ]
+  marker=$(gitlore_relay_marker_file memory a1)
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+  # r-x, no w: `find` can still enumerate and `awk` can still read the marker
+  # (both need only read+execute on the directory), but the drain's `rm -f`
+  # needs write on the directory it lives in, which this removes.
+  chmod 0500 "$gitdir"
+
+  # Plain `run`, not `run --separate-stderr`: the assertion below is a
+  # substring on the synthetic hook's own line, which no diagnostic supplies,
+  # and `--separate-stderr` stops shellcheck recognising `bash -c` and
+  # linting the script below, trading that for nothing (same reasoning as the
+  # marker-mode case above).
+  run bash -c '
+    set -euo pipefail
+    # shellcheck disable=SC1090
+    . "$1"
+    gitlore_relay_drain "$2"
+    printf "OWN REPORT\n"
+  ' _ "$SRC" "$PWD/memory"
+
+  # Guarded, not unconditional: a fixed drain still fails its own `rm -f` here
+  # (the point of the fixture), so the gitdir survives either way and the
+  # guard is only for defensive symmetry with the marker-mode case above —
+  # but restoring before the assertions is what lets teardown_tmp_repo's
+  # `rm -rf` remove the tree afterwards regardless of which way this goes.
+  # Nothing that can fail may be inserted between the chmod above and this
+  # line: `run` never aborts the body, but an assertion there would leave the
+  # gitdir at 0500, and teardown's `rm -rf` cannot unlink a single entry
+  # inside it — measured, the whole fixture tree survives the run.
+  [ -e "$gitdir" ] && chmod 0700 "$gitdir"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OWN REPORT"* ]]
+}
+
 # --- routing-key advisories ---------------------------------------------------
 
 # shellcheck disable=SC2016   # literal backticks/$VAR are the fixture text
