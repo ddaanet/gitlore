@@ -124,10 +124,10 @@ gitlore_relay_marker_file() {
 # Write both report bodies to the relay marker keyed by $2, so a later
 # unkeyed (parent-side) run can fold them in. $1 = memory path; $2 = agent id;
 # $3 = systemMessage body; $4 = additionalContext body. Returns 0 after
-# writing both bodies; returns non-zero without writing when the marker
-# cannot be created (e.g. something already occupies that path as a
-# directory) — the redirect below is the single write, so a failed open
-# leaves nothing on disk to clean up. File format: the literal line
+# writing both bodies; returns non-zero without writing when the agent id is
+# empty, or when the marker cannot be created (e.g. something already occupies
+# that path as a directory) — the redirect below is the single write, so a
+# failed open leaves nothing on disk to clean up. File format: the literal line
 # `--- gitlore-relay-sysmsg ---`, the systemMessage body, the literal line
 # `--- gitlore-relay-ctx ---`, the additionalContext body. Neither body is
 # escaped: the contract guarantees neither contains a line equal to a
@@ -147,14 +147,19 @@ gitlore_relay_marker_file() {
 # always, byte for byte.
 gitlore_relay_write() {
   local mempath="$1" agent_id="$2" sysmsg="$3" ctx="$4" marker old_sys old_ctx
+  # Refused before anything else: the drain enumerates keyed markers only
+  # (its `-name 'gitlore-relay-*'` glob), so an unkeyed write would land on
+  # the bare, unsuffixed name — a file nothing folds and nothing removes.
+  [ -n "$agent_id" ] || return 1
   marker=$(gitlore_relay_marker_file "$mempath" "$agent_id") || return 1
   if [ -f "$marker" ]; then
     # `|| old_…=""`: awk exits non-zero on a marker it cannot read, and both
     # callers are hooks running under `set -e`, so a marker whose mode has
     # been mangled would abort the hook before it emits any JSON — losing this
     # run's own report to save nothing. Degrading to the plain overwrite loses
-    # only what was already staged: the same trade the drain's `-type f` makes
-    # for the non-file shape `[ -f ]` rejects above.
+    # only what was already staged. The drain makes the same
+    # degrade-don't-abort trade on a marker it cannot read; neither ever costs
+    # the calling hook its own report.
     old_sys=$(_gitlore_relay_sysblock "$marker") || old_sys=""
     old_ctx=$(_gitlore_relay_ctxblock "$marker") || old_ctx=""
     # Joined only when the old body is non-empty, the way index-sync-post.sh
@@ -178,16 +183,19 @@ $ctx"; fi
 # Fold every keyed relay marker in the memory gitdir into
 # GITLORE_RELAY_SYSMSG and GITLORE_RELAY_CTX — each block framed with the
 # agent id its filename suffix holds, folded in filename order — then remove
-# the markers. $1 = memory path. Always returns 0; both variables are set to
-# the empty string when no marker exists.
+# the markers. $1 = memory path. Both variables are set to the empty string
+# when no marker exists. Returns 0 on anything a marker's own content or mode
+# can do to it — one it cannot read is folded as an empty block — but not on
+# an `rm -f` failing because the gitdir itself is unwritable; SessionStart's
+# call takes `|| true` for that residual.
 #
 # Only keyed markers (`gitlore-relay-<id>`) are enumerated, never the bare
 # `gitlore-relay` name: nothing writes the unsuffixed marker, because the
 # hooks call gitlore_relay_write only when an agent id is present, and a run
-# with an agent id is exactly a run whose report needs relaying. The residual:
-# a caller that passed an empty id anyway would strand a file this function
-# never folds and never removes, silently — the guard is at the call sites,
-# not here.
+# with an agent id is exactly a run whose report needs relaying. A caller
+# passing an empty id anyway would strand a file this function never folds and
+# never removes, silently, which is why gitlore_relay_write refuses that id
+# outright rather than leaving the guard to its callers.
 gitlore_relay_drain() {
   local mempath="$1" gitdir names name marker agent sysblock ctxblock
   GITLORE_RELAY_SYSMSG=""
@@ -196,9 +204,10 @@ gitlore_relay_drain() {
   # `-print0` into `read -r -d ''`, never an `ls` pipeline or an unquoted
   # glob: nothing sanitizes the gitdir prefix and it may hold a space.
   # `-type f` because a non-file squatting on a marker name — the shape a
-  # failed relay write leaves behind — must be skipped, not handed to `awk`
-  # and `rm`: both fail on a directory, and under the hooks' `set -e` that
-  # takes down the whole hook, trading a lost relay for a lost report.
+  # failed relay write leaves behind — must be skipped rather than removed.
+  # The block reads below tolerate a path they cannot open, but `rm -f` still
+  # fails on a directory, and under the hooks' `set -e` that takes down the
+  # whole hook, trading a lost relay for a lost report.
   names=""
   while IFS= read -r -d '' marker; do
     names="$names${marker##*/}"$'\n'
@@ -215,8 +224,16 @@ gitlore_relay_drain() {
   while IFS= read -r name; do
     marker="$gitdir/$name"
     agent=${name#gitlore-relay-}
-    sysblock=$(_gitlore_relay_sysblock "$marker")
-    ctxblock=$(_gitlore_relay_ctxblock "$marker")
+    # `|| …=""`: the `-type f` above screens non-files, not permissions, so a
+    # marker whose mode has been mangled still reaches here and its `awk`
+    # exits on the open failure — which under a caller's `set -e` would abort
+    # the hook before it emits any JSON. Folding an empty block instead is the
+    # same trade gitlore_relay_write makes on a marker it cannot read, and the
+    # framing line still tells the reader an agent staged something. The
+    # marker is removed below regardless: a drain that skipped it would strand
+    # the file for every later session to trip over again.
+    sysblock=$(_gitlore_relay_sysblock "$marker") || sysblock=""
+    ctxblock=$(_gitlore_relay_ctxblock "$marker") || ctxblock=""
     GITLORE_RELAY_SYSMSG="${GITLORE_RELAY_SYSMSG}--- gitlore-relay agent $agent ---
 $sysblock
 "
@@ -229,10 +246,10 @@ $ctxblock
 }
 
 # Print one channel of a marker: everything between that channel's delimiter
-# line and the next one, or EOF. $1 = a marker that exists and is a regular
-# file — awk exits non-zero on anything it cannot open, and both callers screen
-# for that (`[ -f ]` in the write, `find -type f` in the drain) rather than
-# hand it a path it cannot read.
+# line and the next one, or EOF. $1 = a marker path. awk exits non-zero on
+# anything it cannot open: both callers screen the non-file shape (`[ -f ]` in
+# the write, `find -type f` in the drain) and tolerate the rest with
+# `|| …=""`, since a marker whose mode has been mangled passes either screen.
 #
 # One function per channel rather than the same awk inlined at both call sites:
 # the write's merge has to split an existing marker exactly the way the drain

@@ -1083,6 +1083,135 @@ C2
   [ -f "$decoy" ]
 }
 
+# Item 3.1 slice 4, Group A. The drain enumerates keyed markers only
+# (gitlore_relay_drain's own `-name 'gitlore-relay-*'` glob), so an unkeyed
+# write strands a file nothing folds and nothing removes. Red today: the guard
+# does not exist, so this write currently succeeds and lands on the bare,
+# unsuffixed `gitlore-relay` name.
+#
+# The runbook names one case over both of the write's failure inputs; it is two
+# bodies here because the squatted-path half below already passes. Behind this
+# one it would never run under bats' errexit, and its first real execution
+# would be at GREEN — the shape that makes a born-green assertion evidence of
+# nothing.
+@test "relay_write refuses an empty agent id" {
+  make_parent_with_memory
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+
+  run gitlore_relay_write memory "" "S" "C"
+  [ "$status" -ne 0 ]
+  bare=$(gitlore_relay_marker_file memory "")
+  [ ! -e "$bare" ]
+
+  # Nothing landed anywhere in the gitdir either — over the whole
+  # `gitlore-relay*` family rather than the single name checked above, so a
+  # write that fell back to some other suffix is caught too.
+  count=0
+  while IFS= read -r -d '' _; do
+    count=$((count + 1))
+  done < <(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay*' -print0)
+  [ "$count" -eq 0 ]
+}
+
+# Item 3.1 slice 4, Group B. Something else already occupies the keyed name as
+# a directory — the shape a failed relay write leaves behind (F5). Born green:
+# the write's redirect fails with "Is a directory" and writes nothing, so this
+# is a regression pin rather than a red. Proven non-vacuous by the mutation
+# recorded in the slice-4 test review — give gitlore_relay_write a trailing
+# `return 0` and this case reds on its status assertion, which is the whole
+# "returns non-zero" half of the contract.
+#
+# The squat directory is left standing: teardown_tmp_repo's `rm -rf` removes
+# the fixture tree whether or not the body ran to the end, and a cleanup line
+# here would not run on a mid-body failure anyway.
+@test "relay_write refuses a squatted marker path" {
+  make_parent_with_memory
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+
+  squat=$(gitlore_relay_marker_file memory a1)
+  mkdir "$squat"
+  run gitlore_relay_write memory a1 "S" "C"
+  [ "$status" -ne 0 ]
+  [ -d "$squat" ]
+  [ ! -f "$squat" ]
+
+  count=0
+  while IFS= read -r -d '' _; do
+    count=$((count + 1))
+  done < <(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay*' -print0)
+  [ "$count" -eq 0 ]
+}
+
+# Item 3.1 slice 4, Group B. The slice 2.5 review fixed this and could not pin
+# it: no frozen case writes an empty ctx. Reachable in production —
+# index-sync-post.sh's `failed` block sets a sysmsg with no ctx, so a subagent
+# batch whose frontmatter sync fails and whose compose then reports takes
+# exactly this path.
+@test "relay_write joins a channel only when the old body is non-empty" {
+  make_parent_with_memory
+  run gitlore_relay_write memory a1 "S" ""
+  [ "$status" -eq 0 ]
+  run gitlore_relay_write memory a1 "S2" "C2"
+  [ "$status" -eq 0 ]
+
+  rc=0
+  gitlore_relay_drain memory || rc=$?
+  [ "$rc" -eq 0 ]
+  # Exact block, not a substring on "C2" alone: an unguarded join opens the
+  # ctx channel with a leading blank line ("" + "\n" + "C2"), which a
+  # substring match would not catch.
+  [ "$GITLORE_RELAY_CTX" = '--- gitlore-relay agent a1 ---
+C2
+' ]
+}
+
+# Item 3.1 slice 4, Group A (item-3-1-s3-code-review.md "Concern 1"). A marker
+# whose mode is 0200 is found by `find -type f` (which screens non-files, not
+# permissions) but cannot be opened by the drain's `awk`, which exits 2. Both
+# real callers run the drain bare under `set -euo pipefail`, so today that
+# takes the WHOLE caller down before it can emit anything of its own — not
+# merely the relay.
+#
+# `run bash -c '...'` rather than `run gitlore_relay_drain memory`: bats'
+# `run` itself suspends errexit for the call, which would mask exactly the
+# defect under test. The synthetic script below reproduces a real hook's own
+# shape — `set -euo pipefail`, the drain called bare, then a line standing in
+# for the hook's own report — so the errexit that kills the caller today is
+# the caller's own, not bats'.
+@test "an unreadable marker costs the relay, not the hook" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
+  make_parent_with_memory
+  run gitlore_relay_write memory a1 "S" "C"
+  [ "$status" -eq 0 ]
+  marker=$(gitlore_relay_marker_file memory a1)
+  chmod 0200 "$marker"
+
+  # Plain `run`, not `run --separate-stderr`: awk's "Permission denied" is on
+  # stderr on every run of this fixture and lands in $output, but the assertion
+  # below is a substring on the synthetic hook's own line, which no diagnostic
+  # supplies. `--separate-stderr` would also stop shellcheck recognising
+  # `bash -c` and linting the script below, trading that for nothing.
+  run bash -c '
+    set -euo pipefail
+    # shellcheck disable=SC1090
+    . "$1"
+    gitlore_relay_drain "$2"
+    printf "OWN REPORT\n"
+  ' _ "$SRC" "$PWD/memory"
+  # Guarded, not unconditional: a fixed drain folds the unreadable marker as an
+  # empty block and removes it, and a bare chmod would then fail on a missing
+  # path — killing the test on its own cleanup instead of on an assertion.
+  [ -e "$marker" ] && chmod 0600 "$marker"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OWN REPORT"* ]]
+  # ...and the marker it could not read is gone. Without this a drain that
+  # skipped unreadable markers instead of folding-and-removing them satisfies
+  # both assertions above while stranding the file, which costs every later
+  # session the same drain — the failure the runbook names for this fix.
+  [ ! -e "$marker" ]
+}
+
 # --- routing-key advisories ---------------------------------------------------
 
 # shellcheck disable=SC2016   # literal backticks/$VAR are the fixture text

@@ -256,7 +256,10 @@ fi
 # — a parent-side batch whose only report is a relayed one.
 if [ -n "$agent_id" ]; then
   if [ -n "$sysmsg" ]; then
-    gitlore_relay_write "$mempath" "$agent_id" "$sysmsg" "$ctx"
+    # `|| true`: a failed relay write must cost only the relay, never this
+    # subagent's own report — a bare call under this file's `set -e` would
+    # abort before the `jq -n` emission below runs.
+    gitlore_relay_write "$mempath" "$agent_id" "$sysmsg" "$ctx" || true
   fi
 else
   gitlore_relay_drain "$mempath"
