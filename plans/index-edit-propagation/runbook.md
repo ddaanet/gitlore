@@ -14,7 +14,7 @@ Local IDs, each tracing to a `docs/design.md` requirement.
 | Requirement | Traces | Phase | Items | Notes |
 |---|---|---|---|---|
 | FR-B — a memory commit never records a carrier stale against the root index | FR15, FR8, FR11, NFR5 | 1 | 1.1 | outline §B; FR11 is what the dirty-only scope keeps intact |
-| FR-F — a memory commit never adopts a tier gitlink moved off the pin the memory store records | FR15, FR8, FR11, NFR5, NFR2 | 1 | 1.2 | outline §B's "a refusal is reported, not fatal", narrowed: the pin half aborts |
+| FR-F — a memory commit never adopts a tier gitlink moved off the pin the memory store records | FR15, FR8, FR11, NFR5, NFR2 | 1 | 1.2, 1.3 | outline §B's "a refusal is reported, not fatal", narrowed: the pin half aborts |
 | FR-C — parent and subagent batches never consume each other's index baselines | FR15, FR2 | 2 | 2.1 | outline §C |
 | FR-D — compose and index-sync reports produced inside a subagent reach the parent session | NFR2, NFR4 | 3 | 3.1 | outline §D; depends on FR-C |
 | FR-E — the design record carries the commit-path composition decision | project convention (`CLAUDE.md` §Writing) | 4 | 4.1, 4.2, 4.3 | outline §Design record |
@@ -626,6 +626,133 @@ surface, backfilling descriptions that never matched their index lines.
   for a dormant tier, so no down projection overwrites it, which is what made
   the active-tier scope the right one for composition — but the adoption itself
   is unguarded.
+
+- Item 1.3: `scripts/lib/resolve.sh` and `scripts/lib/index-compose.sh` — a
+  landed merge is adopted where it is found, and a tier ahead of its pin is
+  refused without a destructive remedy. Requirements: FR-F. Depends on: Item
+  1.2.
+
+  Added at the Phase 4 checkpoint, not present in the runbook as proofed. The
+  first residual above left the interrupted-continuation case as a design call;
+  the call is taken here, and the escape hatch that made it optional does not
+  hold. No gitlore command adopts a tier ahead of its pin. `/gitlore:merge` runs
+  `gitlore_adopt_advanced_live` ahead of every ancestry test, but that fires
+  only when `live` is ahead of HEAD — once `gitlore_recover_landed_merge` has
+  checked HEAD out at the landed merge the two agree, and the remote is by then
+  contained in HEAD, so the take reports nothing to take. `/gitlore:resolve`
+  reconciles HEAD, `live` and `origin/live` and has no notion of the pin, so it
+  reports the state healthy. Adoption exists only as
+  `gitlore_adopt_tier_into_root`, reached as the tail of a take that took
+  something. The residual's "the same sentence offers the correct alternative"
+  is therefore false: the abort's only moving remedy is the one that discards
+  the merge.
+
+  The two slices split by cause and by symptom. Slice 1 removes the cause, so
+  the guard never meets a tier gitlore itself left ahead. Slice 2 fixes what the
+  guard says for a tier advanced some other way, where refusing stays correct.
+
+  1. **`gitlore_recover_landed_merge` stages the gitlink it moved.**
+     `scripts/lib/resolve.sh:234-269`. Both of its rc-0 branches leave the store
+     on a merge commit the memory index does not record, where every other
+     advancing path stages that move as its last act (D43). The superproject is
+     read with `git -C "$store" rev-parse --show-superproject-working-tree`, so
+     no caller threads an argument. That call alone does not decide it: the
+     memory root is itself a submodule of the user's project, so a non-empty
+     result is not evidence the store is a tier. Two clauses, and the second is
+     the one that does the work: the superproject carries a root `MEMORY.md`
+     (`scripts/lib/util.sh:185`, `scripts/lib/index-compose.sh:211`), **and**
+     the store's path relative to it is not the superproject's own
+     `submodule.${GITLORE_SUBMODULE_NAME}.path` — read as
+     `git config --file "$super/.gitmodules" …`, because `gitlore_memory_path`
+     (`scripts/lib/util.sh:83`) reads the *current* directory's `.gitmodules`
+     and the guard runs from an arbitrary cwd. A membership test against
+     `gitlore_tier_paths "$super"` is deliberately absent: a store has a
+     superproject only where that repo registers it, so the test restates what
+     `--show-superproject-working-tree` already settled, and slice 1's test
+     review measured it — removing it moves no case. The `MEMORY.md` clause is
+     unpinned too and kept as defence in depth; the state it excludes, a store
+     enclosed by a non-memory project, is unreachable through
+     `gitlore_guard_stale_merge_state`'s callers, which walk
+     `gitlore_memory_stores` alone. Say so in a comment rather than implying
+     coverage. The memory root must stage nothing: the parent repo's gitlink to
+     `memory` is the pre-commit hook's to move under FR11, and staging it here
+     would put a pointer move into the user's own project index outside any
+     approval gate. Staging is best-effort and its failure reported, not fatal —
+     `gitlore_adopt_tier_into_root` already sets that precedent, and turning a
+     landed recovery into a failed one is the worse trade.
+
+     **The staging is the second half; the up projection is the first.** Staging
+     alone puts the enclosing store's index back in agreement with the tier's
+     HEAD — which is exactly the disagreement `gitlore_compose_check_pins`
+     refuses on — so the next pass composes, and its down projection writes
+     root's older text over a carrier holding the merged-in facts root has never
+     seen. The refusal exists to stop precisely that, so staging alone converts
+     a loud abort into a silent overwrite. Measured at slice 1's code review
+     against the implementation that staged only: exit 0, the carrier's upstream
+     text replaced by root's, and the sole message printed was the recovery's
+     own "none of that merge is lost". `gitlore_adopt_tier_into_root` is the
+     precedent and the only shape in which a tier ahead of its pin may be
+     adopted — `gitlore_compose_up` first, then `add -- MEMORY.md "$tier"`
+     together — and `docs/references/index-composition.md` states the same
+     invariant. A failed up projection therefore stages nothing: leaving the
+     gitlink where it is keeps the pin guard's refusal, which is the right
+     answer for a store whose root index could not take the carrier. No
+     bookkeeping commit, unlike the precedent: this runs inside a gate, and
+     mid-`pre-commit` a commit of its own would be wrong, so the staged pair
+     rides the next approved memory commit as D43's degraded case.
+
+     Home: `tests/resolve_recovery.bats`, beside "a merge that landed before the
+     checkout is restored, not declared dead" (`:292`). Its fixtures drive
+     `memory`; a tier fixture is what these cases need.
+
+     - a landed merge recovered in a tier leaves the memory store's index
+       recording the merge commit, not the pre-merge one
+     - the branch that finds HEAD already carrying the merge stages it too —
+       both rc-0 branches, not just the one that moves HEAD
+     - the same recovery run for the memory root stages nothing in the parent
+       repo, and returns 0. **Born-green**: it holds against unchanged code,
+       which has no staging at all, so it is a regression pin rather than a red
+       and is excluded from the RED contract. Its proof is the test review's
+       mutation — implement the naive form that stages whenever
+       `--show-superproject-working-tree` is non-empty, watch this case red,
+       restore
+     - after the recovery, a memory commit runs to completion instead of
+       aborting on the pin guard — the whole point, asserted end to end
+     - a staging failure is reported on stderr and the recovery still returns 0
+     - the upstream text a landed tier merge brought in survives the commit that
+       adopts it. Added at slice 1's code review, and the case the others were
+       missing: the fixture must have the tier's `live` side
+       **re-text a line both surfaces already hold**, not add one.
+       `gitlore_compose_down` keeps a carrier-only line (`o=0, t=1, b=0`) and
+       rewrites one root also carries, so a fixture whose upstream side adds a
+       line goes green against the destructive implementation and proves nothing
+     - a landed tier merge whose lines the root index cannot take is left
+       unstaged, so the pin guard's refusal survives
+
+  2. **A tier ahead of its pin is refused in its own words.**
+     `gitlore_compose_check_pins` (`scripts/lib/index-compose.sh:310`) has one
+     off-pin message for every cause, and it names `checkout --detach <pinned>`.
+     For a tier whose HEAD *contains* the pinned commit that command discards
+     commits. A third branch goes between the mid-merge test and the existing
+     one, on `merge-base --is-ancestor "$pinned" "$head"`: still a refusal,
+     worded as ahead-of-the-pin, stating that returning it to the pin discards
+     the commits it carries and that no automatic adoption exists. Both remedies
+     are named honestly — inspect and stage the gitlink by hand, or return to
+     the pin knowing what that costs. Branch order is load-bearing: mid-merge
+     first, so a tier that is both keeps `/gitlore:resolve`. Home:
+     `tests/index_compose.bats` (`:265` is the existing off-pin assertion), with
+     the commit-path surface in `tests/commit_memory.bats` (`:202`).
+
+     - a tier whose HEAD contains the pinned commit is refused with the
+       ahead-of-the-pin wording
+     - that refusal does not contain `checkout --detach` as its remedy — the
+       negative, asserted explicitly so the branch cannot collapse into the old
+       message
+     - a tier moved sideways, whose HEAD does not contain the pin, keeps the
+       existing message and its `checkout --detach` remedy
+     - a tier that is both mid-merge and ahead takes the mid-merge branch
+     - the commit path's abort carries the ahead wording through to the user and
+       agent arms
 
 ---
 

@@ -239,6 +239,7 @@ gitlore_recover_landed_merge() {
     # also where a by-hand recovery lands after putting HEAD back, which is why
     # the report below has to name no cleanup of its own.
     gitlore_drop_merge_preparation "$store"
+    gitlore_adopt_recovered_merge "$store" "$abs"
     msg="gitlore: the merge in $abs already landed as $landed and HEAD carries it, so only its leftover merge state was cleared."
     gitlore_say_for_agent_or_user "$msg" "$msg" >&2
     return 0
@@ -264,8 +265,81 @@ gitlore: restore it with: git -C \"$abs\" checkout --detach $landed, then re-run
     return 1
   fi
   gitlore_drop_merge_preparation "$store"
+  gitlore_adopt_recovered_merge "$store" "$abs"
   msg="gitlore: the merge in $abs landed as $landed before a checkout or reset moved HEAD off it; HEAD is restored to it and the leftover merge state cleared, so none of that merge is lost."
   gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+  return 0
+}
+
+# Adopt the merge gitlore_recover_landed_merge just restored: project the tier's
+# carrier UP into the root index, then stage the pair. A tier commit that landed
+# outside /gitlore:merge's continuation skips the tail every advancing path
+# shares (D43's staging-as-last-act), so the recovery owes it.
+#
+# The up projection is not bookkeeping alongside the staging, it is what makes
+# the staging safe. Staging alone puts the enclosing store's index back in
+# agreement with the tier's HEAD — exactly the disagreement
+# gitlore_compose_check_pins refuses on — so the next pass composes, and its
+# down projection writes root's older text over a carrier holding the merged-in
+# facts root has never seen. The refusal exists to stop that, and staging alone
+# turns it into a silent overwrite. gitlore_adopt_tier_into_root is the
+# precedent and the only shape in which a tier ahead of its pin may be adopted:
+# compose up first, then stage MEMORY.md and the tier together.
+#
+# So a failed up projection stages nothing. Leaving the gitlink where it is
+# keeps the pin guard's refusal, which is the right answer for a store whose
+# root index could not take the carrier.
+#
+# Fires only when the recovered store is a tier. `--show-superproject-working-tree`
+# alone does not decide that: the memory root is itself a real submodule of the
+# user's project, so it answers non-empty for the memory root too. Two more
+# clauses narrow it:
+#   1. the superproject carries a root MEMORY.md, the same test every other
+#      memory-store predicate makes — unpinned by any case and kept as defence
+#      in depth: the state it would exclude, a store enclosed by a non-memory
+#      project, is unreachable through gitlore_guard_stale_merge_state's
+#      callers, which walk gitlore_memory_stores alone;
+#   2. the store's path relative to the superproject is NOT the superproject's
+#      own submodule.${GITLORE_SUBMODULE_NAME}.path — this is the clause that
+#      does the work, keeping the memory root's own recovery from writing and
+#      staging in the user's project index outside any approval gate. Read via
+#      `git config --file`, not gitlore_memory_path, which reads the CURRENT
+#      DIRECTORY's .gitmodules while this guard runs from an arbitrary cwd.
+# No membership test against gitlore_tier_paths "$super": a store has a
+# superproject only where that repo registers it, so the test would restate what
+# --show-superproject-working-tree already settled.
+#
+# Best-effort, like gitlore_adopt_tier_into_root's own staging: a failure here
+# must not turn a landed recovery into a failed one. The named pair only, never
+# `add -A` — an over-broad stage would sweep unapproved worktree edits into the
+# enclosing store's index for the next approved commit to carry. And no
+# bookkeeping commit: this runs inside a gate, where a staged pair riding the
+# next approved memory commit is D43's own degraded case rather than a fault.
+# Args: $1 = recovered store worktree, $2 = its abs path (show-toplevel).
+gitlore_adopt_recovered_merge() {
+  local store="$1" abs="$2"
+  local super rel own_path composed rc=0
+  super=$(git -C "$store" rev-parse --show-superproject-working-tree) || super=""
+  [ -n "$super" ] || return 0
+  [ -f "$super/MEMORY.md" ] || return 0
+  rel="${abs#"$super"/}"
+  own_path=$(git config --file "$super/.gitmodules" \
+    "submodule.${GITLORE_SUBMODULE_NAME}.path") || own_path=""
+  [ "$rel" != "$own_path" ] || return 0
+
+  composed=$(gitlore_compose_up "$super" "$rel") || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf 'gitlore: the root index could not take %s'\''s lines, so the merge was left unrecorded rather than composed over — the next gate refuses the tier instead:\n' "$rel" >&2
+    printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+    return 0
+  fi
+  if [ -n "$composed" ]; then
+    printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
+  fi
+  # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+  gitlore_git -C "$super" add -- MEMORY.md "$rel" \
+    || printf 'gitlore: %s could not be staged in %s. Run `git -C %s add -- MEMORY.md %s` before the next session, or the pointer will be reset to its previous commit and the root index will be left describing facts the tier no longer holds.\n' \
+      "$rel" "$super" "$super" "$rel" >&2
   return 0
 }
 
