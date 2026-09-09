@@ -1,9 +1,9 @@
 # Item 3.1 slice 4 — test review (RED phase)
 
 Reviewed: `tests/index_sync.bats`, `tests/cc_hook_index_compose.bats`,
-`tests/cc_hook_session_start.bats` as submitted by
-`reports/item-3-1-s4-red.md`. Every claim below was measured, not read. No SUT
-file is left modified; `git diff -- scripts/` is empty.
+`tests/cc_hook_session_start.bats` as submitted by `reports/item-3-1-s4-red.md`.
+Every claim below was measured, not read. No SUT file is left modified;
+`git diff -- scripts/` is empty.
 
 **Headline: two of the six cases could not have passed at GREEN.** Both fail on
 their own fixture rather than on the behaviour they name, and neither failure is
@@ -11,8 +11,9 @@ visible in the RED run — each sits behind a death point. Both are fixed. A thi
 gap (a drain that skips an unreadable marker instead of removing it satisfies
 every submitted assertion) is closed with one added assertion.
 
-Case count moved from 6 to 7: `relay_write refuses an empty agent id and a
-squatted marker path` is split in two. Rationale in §3.
+Case count moved from 6 to 7:
+`relay_write refuses an empty agent id and a squatted marker path` is split in
+two. Rationale in §3.
 
 ---
 
@@ -110,9 +111,9 @@ and its `additionalContext`, and the removal is a library property.
 
 Every mutation applied **in place** to the working-tree SUT, run over all three
 suites (131 cases after the split), then restored and re-confirmed with
-`git diff --stat -- scripts/`. Baseline against the committed tree: **128
-passed, 3 failed** — the three Group A cases and nothing else, identical on two
-consecutive runs.
+`git diff --stat -- scripts/`. Baseline against the committed tree:
+**128 passed, 3 failed** — the three Group A cases and nothing else, identical
+on two consecutive runs.
 
 ### Mutation table
 
@@ -182,8 +183,8 @@ baseline three. No Group B pin turned out to belong to another case.
 ### Group A cases all failed on an assertion
 
 Confirmed against the final tree, from the full TAP log, not the summary. All
-three carry `` #   `<assertion>' failed `` with no `failed with status N`
-suffix — an assertion failure, never a missing symbol or an ERROR:
+three carry `` #   `<assertion>' failed `` with no `failed with status N` suffix
+— an assertion failure, never a missing symbol or an ERROR:
 
 ```
 not ok 59 relay_write refuses an empty agent id
@@ -241,8 +242,8 @@ an assertion, and teardown covers it (below).
   the default umask. Nothing needs a directory-mode restore.
 - **`teardown_tmp_repo` copes with a 0200 file left mid-body.** `rm -rf` on a
   tree containing `--w-------` succeeds — removal depends on the containing
-  directory's mode, not the target's. Measured directly:
-  `rm -rf` on a fixture tree holding a 0200 file removed it, exit 0.
+  directory's mode, not the target's. Measured directly: `rm -rf` on a fixture
+  tree holding a 0200 file removed it, exit 0.
 - **Every case is self-contained.** `setup_tmp_repo` mints a fresh `mktemp -d`
   per test and `teardown_tmp_repo` `rm -rf`s it, so a body that dies before its
   cleanup line leaks nothing into the next case. Both `chmod 0600` restores are
@@ -259,8 +260,8 @@ an assertion, and teardown covers it (below).
 
 - **Whitespace safety.** Both new sweeps are `find … -print0` into
   `while IFS= read -r -d ''`, running in the current shell via process
-  substitution so the counter survives. Every path variable
-  (`$gitdir`, `$marker`, `$bare`, `$squat`, `$SRC`) is quoted at every use. No
+  substitution so the counter survives. Every path variable (`$gitdir`,
+  `$marker`, `$bare`, `$squat`, `$SRC`) is quoted at every use. No
   word-splitting anywhere in the diff.
 - **Quoting / `run` vs bare calls under errexit.** Every status-bearing call is
   either `run`-wrapped or captures explicitly:
@@ -275,12 +276,13 @@ an assertion, and teardown covers it (below).
   case in that file already pins, and reached only via `jq -r '.systemMessage'`
   rather than over raw stdout — so a match cannot come from `additionalContext`.
   `OWN REPORT` is a literal no diagnostic on either channel supplies.
-- **bash 3.2 / BSD.** Nothing in the diff is GNU-only: `find -maxdepth -type
-  -name -print0`, `chmod`, `mkdir`, `rmdir`, `id -u` are all POSIX/BSD-safe;
-  `read -d`, `[[ … == *glob* ]]`, `<<<`, `$((…))` and `< <(…)` are all bash 3.2.
-  `run --separate-stderr` needs bats ≥ 1.5.0, which both edited files declare.
-  `tests/helpers/bsd-stubs.bash` shadows `sed`, `grep` and `mktemp` only, none
-  of which this diff uses, so no lock-in is owed to `tests/bsd_portability.bats`.
+- **bash 3.2 / BSD.** Nothing in the diff is GNU-only:
+  `find -maxdepth -type -name -print0`, `chmod`, `mkdir`, `rmdir`, `id -u` are
+  all POSIX/BSD-safe; `read -d`, `[[ … == *glob* ]]`, `<<<`, `$((…))` and
+  `< <(…)` are all bash 3.2. `run --separate-stderr` needs bats ≥ 1.5.0, which
+  both edited files declare. `tests/helpers/bsd-stubs.bash` shadows `sed`,
+  `grep` and `mktemp` only, none of which this diff uses, so no lock-in is owed
+  to `tests/bsd_portability.bats`.
 - **Each fixture reaches the path it names.** Not asserted from reading — each
   is proved by a mutation of exactly that path redding exactly that case: the
   compose keyed case reaches `gitlore_relay_write` (D1's probe shows the write's
@@ -319,16 +321,17 @@ while leaving the exit status at 0, and the case reds on that line alone.
 ### 2.2 Case 3's synthetic caller: **faithful, and now improved**
 
 The model is faithful, for four reasons that were checked rather than assumed.
-`bash -c 'script' _ "$SRC" "$PWD/memory"` runs the script with `$0="_"`, `$1` the
-library and `$2` the memory path, so the sourcing and the call are the real
-shapes. `set -euo pipefail` is byte-identical to `scripts/cc-hooks/index-compose.sh:2`
-and `scripts/cc-hooks/session-start.sh:2`, and the drain is invoked as a bare
-simple command in no condition context — exactly `index-compose.sh:87`. Bats'
-own `run` wraps only the outer `bash -c`, so the errexit under test is the inner
-script's, which is the point of the shape: `run gitlore_relay_drain memory`
-would suspend errexit and mask the defect entirely. And `printf "OWN REPORT\n"`
-after the call occupies the position `index-compose.sh`'s `jq -n` emission
-occupies — the thing an aborting drain destroys.
+`bash -c 'script' _ "$SRC" "$PWD/memory"` runs the script with `$0="_"`, `$1`
+the library and `$2` the memory path, so the sourcing and the call are the real
+shapes. `set -euo pipefail` is byte-identical to
+`scripts/cc-hooks/index-compose.sh:2` and `scripts/cc-hooks/session-start.sh:2`,
+and the drain is invoked as a bare simple command in no condition context —
+exactly `index-compose.sh:87`. Bats' own `run` wraps only the outer `bash -c`,
+so the errexit under test is the inner script's, which is the point of the
+shape: `run gitlore_relay_drain memory` would suspend errexit and mask the
+defect entirely. And `printf "OWN REPORT\n"` after the call occupies the
+position `index-compose.sh`'s `jq -n` emission occupies — the thing an aborting
+drain destroys.
 
 The two directions of the fidelity question both check out. A library-side fix
 that makes the real hooks survive makes this case pass: measured, the simulated
@@ -337,8 +340,8 @@ GREEN (`|| sysblock=""`) turns it green along with all 130 others. The converse
 than a flaw: adding `|| true` to `index-compose.sh` alone would leave the
 library still aborting any bare caller, and this case is the one in
 `tests/index_sync.bats` whose job is the library contract the runbook assigns to
-this slice ("asserts the drain returns 0 and the calling hook still emits its own
-report"). The SessionStart case is the caller-side half of the same fixture.
+this slice ("asserts the drain returns 0 and the calling hook still emits its
+own report"). The SessionStart case is the caller-side half of the same fixture.
 
 One change made anyway, and one deliberately not:
 
@@ -349,9 +352,9 @@ One change made anyway, and one deliberately not:
   the synthetic hook's own line, which no diagnostic supplies. The tradeoff is
   concrete: with `--separate-stderr` shellcheck stops recognising `bash -c` and
   stops linting the embedded script, and emits SC2016 on the quoted body —
-  measured, `shellcheck -s bash tests/index_sync.bats` is clean with `run bash -c`
-  and reports SC2016 with `run --separate-stderr bash -c`. The reason is in a
-  comment on the line.
+  measured, `shellcheck -s bash tests/index_sync.bats` is clean with
+  `run bash -c` and reports SC2016 with `run --separate-stderr bash -c`. The
+  reason is in a comment on the line.
 
 ---
 
@@ -371,10 +374,10 @@ One change made anyway, and one deliberately not:
    diff to the defects; noted so it is not read as load-bearing cleanup.
 3. **Neither unreadable-marker case asserts what reaches the user.** After the
    fix the body is unrecoverable by construction and only the framing line
-   arrives; nothing pins that the framing line arrives at all. `[ ! -e "$marker" ]`
-   (D3) covers the stranding, which is the failure with a cost that compounds.
-   Adding a framing-line assertion is a judgement call for GREEN, not a defect
-   here.
+   arrives; nothing pins that the framing line arrives at all.
+   `[ ! -e "$marker" ]` (D3) covers the stranding, which is the failure with a
+   cost that compounds. Adding a framing-line assertion is a judgement call for
+   GREEN, not a defect here.
 
 ---
 
