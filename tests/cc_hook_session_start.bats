@@ -9,6 +9,11 @@ load helpers/divergence-fixtures
 
 SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 
+# The relay drain's framing line, hand-typed here rather than sourced from
+# scripts/lib/index-sync.sh's gitlore_relay_drain: sourcing it would move both
+# sides together and the positive case would stop pinning the actual wording.
+RELAY_FRAMING="--- gitlore-relay agent"
+
 setup()    { setup_tmp_repo; export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"; }
 teardown() {
   [ -n "${WT:-}" ] && rm -rf "$WT"
@@ -342,3 +347,80 @@ assert_session_start_did_nothing() {
   [ "$status" -ne 0 ]
   [ "$(git -C "$WT/memory" rev-parse HEAD)" = "$(git -C "$WT/memory" rev-parse live)" ]
 }
+
+@test "session-start drains a stranded relay marker" {
+  # A subagent's PostToolBatch hook staged a report to its own marker and the
+  # session ended before any parent-side batch drained it.
+  # SessionStart is the backstop: it must fold the marker's two channels into
+  # its own systemMessage / additionalContext and remove the marker.
+  make_parent_with_memory
+  # Bare helper call under bats' own errexit: capture status explicitly rather
+  # than let a write failure abort the test with no named assertion.
+  if gitlore_relay_write memory a1 "STRANDED SYSMSG BODY" "STRANDED CTX BODY"; then
+    write_status=0
+  else
+    write_status=$?
+  fi
+  [ "$write_status" -eq 0 ]
+  marker="$(gitlore_relay_marker_file memory a1)"
+  [ -f "$marker" ]
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  sysmsg="$(printf '%s' "$output" | jq -r '.systemMessage')"
+  ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$sysmsg" == *"STRANDED SYSMSG BODY"* ]]
+  [[ "$sysmsg" == *"$RELAY_FRAMING a1 ---"* ]]
+  [[ "$ctx" == *"STRANDED CTX BODY"* ]]
+  [[ "$ctx" == *"$RELAY_FRAMING a1 ---"* ]]
+  [ ! -f "$marker" ]
+}
+
+@test "session-start with no marker emits no relay framing" {
+  # The negative that keeps the positive above honest, over the same fixture
+  # differing only in whether a marker exists.
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  sysmsg="$(printf '%s' "$output" | jq -r '.systemMessage')"
+  ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  # `jq -r` prints the literal "null" for a key that is not there, so both
+  # refutations below would pass on a JSON that had dropped the channel
+  # entirely — the negative would keep counting as green while watching
+  # nothing. Pin that each channel is present first: the positive above proves
+  # this is an observable the drain path really writes to.
+  [ "$sysmsg" != "null" ]
+  [ "$ctx" != "null" ]
+  [[ "$sysmsg" != *"$RELAY_FRAMING"* ]]
+  [[ "$ctx" != *"$RELAY_FRAMING"* ]]
+}
+
+# A third case — "a stranded marker is the only thing SessionStart has to
+# say" — is in the runbook item (emit_session_json omits systemMessage
+# entirely when $sysmsg is empty, so a fold placed after that decision, or one
+# appending to the wrong variable, would leave the relay unemitted on exactly
+# the session where it is the only news). No fixture reaches emit_session_json
+# with $sysmsg empty: every branch of the `gitlore_memory_dirty` if/elif/else
+# at session-start.sh:193-212 calls add_sysmsg before falling through (or
+# before its own early emit_session_json + exit 0) — "memory ready", "…
+# uncommitted changes…", "diverged", or "could not be fast-forwarded" — and
+# every path that reaches the bottom of the script passed through exactly one
+# of those branches. A guard-failure fixture (no settings.json, disabled,
+# unregistered submodule) exits before mempath is even resolved and emits no
+# JSON at all (assert_session_start_did_nothing), not an empty-systemMessage
+# JSON. So $sysmsg is unconditionally non-empty at every emit_session_json
+# call site this hook has today, and a case asserting the relay alone drives
+# systemMessage would be vacuous by construction — not a red, a tautology.
+# Measured, not read: an instrumented emit_session_json driven by every fixture
+# in this suite and the nine others that run the hook logged 52 emits across
+# all three call sites, none with $sysmsg empty.
+#
+# The case is also not NEEDED for the two bugs it was specified to catch. A
+# fold placed after emit_session_json, and one appending to the wrong variable,
+# each red the positive above on its first assertion. What no case here pins —
+# and what today's code cannot tell apart from correct — is a fold nested
+# inside an `[ -n "$sysmsg" ]` guard: behaviour-identical while all four dirty
+# branches report, and silently dropping the relay the day one stops.
