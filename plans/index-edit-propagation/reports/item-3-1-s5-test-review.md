@@ -57,8 +57,9 @@ Built in place from the runbook's slice 5 entry and `item-3-1-s4-code-review.md`
 regressed. Question 1 item 1 answered: no case in this slice could fail to pass
 at GREEN.
 
-Restored with `git checkout -- scripts/` after every mutation; `git diff --
-scripts/` verified empty before the final runs and again at hand-off.
+Restored with `git checkout -- scripts/` after every mutation;
+`git diff -- scripts/` verified empty before the final runs and again at
+hand-off.
 
 ---
 
@@ -79,10 +80,10 @@ not ok 103 an unkeyed run leaves a non-marker alone
 bats: 109 passed, 1 failed
 ```
 
-It is the **sole** red under that mutation. This is a strictly better result than
-the RED report's step 2, which had to stack two mutations to reach past the abort:
-against the real GREEN tree one token does it, and the death point is the right
-assertion first time.
+It is the **sole** red under that mutation. This is a strictly better result
+than the RED report's step 2, which had to stack two mutations to reach past the
+abort: against the real GREEN tree one token does it, and the death point is the
+right assertion first time.
 
 `[ -d "$squat" ]` is separately live. It needs its own mutation, since a drain
 that merely *enumerates* the squat still cannot remove it with `rm -f`. Under
@@ -90,8 +91,8 @@ M-D — `-type f` dropped **and** `rm -f` widened to `rm -rf` — the case reds 
 line 510 on `[ -d "$squat" ]`, one assertion before the framing check.
 
 So both substantive assertions of the companion discriminate, each against its
-own mutation, against the tree GREEN will actually produce. **The fix must not be
-held back.**
+own mutation, against the tree GREEN will actually produce.
+**The fix must not be held back.**
 
 ---
 
@@ -123,9 +124,10 @@ swallows its caller. It is load-bearing.
 
 ## 4. The slice-4 squat case becomes dead weight — reported, not deleted
 
-Question 1 item 4. `an unkeyed run survives a non-file squatting on a marker
-name` (`tests/cc_hook_index_compose.bats:444`) no longer discriminates anything
-once `rm -f || true` lands. Measured three ways:
+Question 1 item 4.
+`an unkeyed run survives a non-file squatting on a marker name`
+(`tests/cc_hook_index_compose.bats:444`) no longer discriminates anything once
+`rm -f || true` lands. Measured three ways:
 
 | mutation, applied to the simulated GREEN | slice-4 squat case | new companion |
 |---|---|---|
@@ -142,11 +144,12 @@ a claim about behaviour.
 
 Its residual unique content is `[[ "$output" == *"recomposed tier pointers"* ]]`
 — "the hook still emits its own report over a squat fixture". After the fix,
-nothing can break that without also breaking the companion's `[ "$status" -eq 0 ]`,
-and the companion now carries that same assertion itself (§5). **It is redundant.
-Not deleted — that is the orchestrator's call**, and there is a weak argument for
-keeping it: it is the only case that reads the compose report out of the JSON
-with `jq` over this fixture rather than as a raw-JSON substring.
+nothing can break that without also breaking the companion's
+`[ "$status" -eq 0 ]`, and the companion now carries that same assertion itself
+(§5). **It is redundant. Not deleted — that is the orchestrator's call**, and
+there is a weak argument for keeping it: it is the only case that reads the
+compose report out of the JSON with `jq` over this fixture rather than as a
+raw-JSON substring.
 
 ---
 
@@ -155,14 +158,14 @@ with `jq` over this fixture rather than as a raw-JSON substring.
 `tests/cc_hook_index_compose.bats`, `an unkeyed run leaves a non-marker alone`.
 
 As submitted the body was: `[ "$status" -eq 0 ]`, `[ -d "$squat" ]`,
-`[[ "$output" != *"gitlore-relay agent a1"* ]]`. **An empty `$output` satisfies
-all three.** `index-compose.sh` emits its JSON only inside
-`if [ -n "$GITLORE_COMPOSE_SYSMSG" ]` and otherwise writes nothing at all and
-exits 0 — so "the hook produced no report" is a reachable state of this SUT, not
-a hypothetical, and in it the case passes while proving nothing. This is
-`green-is-not-evidence`'s *path staleness*: "Pair each negative with a positive
-over the **same fixture**." The submitted case had no positive of its own; it
-borrowed the sibling case's — the very case §4 shows the slice retires.
+`[[ "$output" != *"gitlore-relay agent a1"* ]]`.
+**An empty `$output` satisfies all three.** `index-compose.sh` emits its JSON
+only inside `if [ -n "$GITLORE_COMPOSE_SYSMSG" ]` and otherwise writes nothing
+at all and exits 0 — so "the hook produced no report" is a reachable state of
+this SUT, not a hypothetical, and in it the case passes while proving nothing.
+This is `green-is-not-evidence`'s *path staleness*: "Pair each negative with a
+positive over the **same fixture**." The submitted case had no positive of its
+own; it borrowed the sibling case's — the very case §4 shows the slice retires.
 
 Measured before the fix: mutation M-E renames the compose report literal
 (`recomposed tier pointers` → `MUTATED tier pointers` in
@@ -188,9 +191,9 @@ refutation, which is what this case is named for. Confirmed both ways: under M-A
 the reported line is the refutation (514), under M-E it is the anchor (521).
 
 Also added: the `--separate-stderr` rationale comment the case was missing (its
-two siblings both carry one), and a note that the refutation is deliberately over
-the whole JSON rather than one jq-extracted channel, since the unkeyed fold puts
-the framing line on **both** `systemMessage` and `additionalContext` and a
+two siblings both carry one), and a note that the refutation is deliberately
+over the whole JSON rather than one jq-extracted channel, since the unkeyed fold
+puts the framing line on **both** `systemMessage` and `additionalContext` and a
 channel-scoped refutation would miss half of it.
 
 ---
@@ -201,28 +204,28 @@ Four checks, all pass.
 
 1. **It is a substring of the wording GREEN will write.** The runbook's slice 5
    entry defers the wording to `item-3-1-s4-code-review.md` §1, which gives it
-   verbatim for both hooks: "gitlore: the report above **could not be staged for
-   the parent session** — the relay marker could not be written. A hook's output
-   inside a subagent reaches no one else, so repeat it in your reply or it is
-   lost." The asserted literal is contained in it exactly, and the simulated
-   GREEN built from that text turns the case green.
+   verbatim for both hooks: "gitlore: the report above
+   **could not be staged for the parent session** — the relay marker could not
+   be written. A hook's output inside a subagent reaches no one else, so repeat
+   it in your reply or it is lost." The asserted literal is contained in it
+   exactly, and the simulated GREEN built from that text turns the case green.
 2. **Distinctive.** `grep -rn "could not be staged"` over the repo returns three
    other producers — `scripts/resolve.sh:228`, `scripts/add-tier.sh:243`,
    `scripts/lib/resolve.sh:1579` — and all three say "pointer could not be
    staged" / "could not be staged in the memory store". None carries "for the
-   parent session", and none of them is reachable from either hook's stdout.
-   The literal cannot be satisfied by another line of either channel.
+   parent session", and none of them is reachable from either hook's stdout. The
+   literal cannot be satisfied by another line of either channel.
 3. **Held test-side.** Written inline in the assertion, not sourced from the lib
    and not derived from any production variable — so a GREEN that changes the
    wording turns this red rather than moving both sides together. This case is
    the *positive* on the literal, so no shared-variable indirection is called
-   for: the runbook's one-variable rule applies to the SessionStart framing
-   pair (slice 3), where a negative also has to move with the wording.
+   for: the runbook's one-variable rule applies to the SessionStart framing pair
+   (slice 3), where a negative also has to move with the wording.
 4. **The right channel is pinned.** The assertion is on the value `jq -r`
-   extracts from `.hookSpecificOutput.additionalContext`, so a GREEN that put the
-   line on `systemMessage` instead — the channel `subagent-hook-output-probe.md`
-   measured as reaching no one — reds this case. That is the slice's whole
-   argument, and it is pinned rather than assumed.
+   extracts from `.hookSpecificOutput.additionalContext`, so a GREEN that put
+   the line on `systemMessage` instead — the channel
+   `subagent-hook-output-probe.md` measured as reaching no one — reds this case.
+   That is the slice's whole argument, and it is pinned rather than assumed.
 
 The `[ "$output" != "null" ]` guard on line 490 is weaker than the runbook's
 framing suggests, since what follows it is a positive match rather than a
@@ -256,9 +259,9 @@ Both are `bats`' assertion form, naming the failing expression. Neither is a
 | 2 · `an unkeyed run leaves a non-marker alone` | none — born green | none; every assertion executes on every run | M-A reds 514, M-D reds 510, M-E reds 521 — one mutation per assertion |
 | 3 · `the drain survives a gitdir it cannot write` | line 1259 | line 1260, `[[ "$output" == *"OWN REPORT"* ]]` | M-C (§3) |
 
-Case 3's guarded `chmod` restore at line 1257 is *before* the death point and did
-execute in the RED run — confirmed by the absence of any surviving fixture tree
-(below). No assertion in any of the three cases is unreachable at GREEN.
+Case 3's guarded `chmod` restore at line 1257 is *before* the death point and
+did execute in the RED run — confirmed by the absence of any surviving fixture
+tree (below). No assertion in any of the three cases is unreachable at GREEN.
 
 **Fixture hygiene.** Case 3 makes the memory store's gitdir mode 0500. Three
 things checked:
@@ -275,27 +278,27 @@ things checked:
   "Permission denied") and the whole fixture tree survives the run. The probe
   edit was reverted and the leaked tree removed. I added a comment recording
   this, so a later edit does not insert an assertion into that window.
-- **Nothing leaks as written.** `find "${TMPDIR:-/tmp}" -maxdepth 1 -name
-  'gitlore-test.*'` is empty after every run in this review — including the two
-  mutation runs that left the squat directory behind, and every run of case 3
-  itself.
+- **Nothing leaks as written.**
+  `find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'gitlore-test.*'` is empty after
+  every run in this review — including the two mutation runs that left the squat
+  directory behind, and every run of case 3 itself.
 
 **The root skip.** `[ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"`
-is character-for-character the neighbouring `an unreadable marker costs the
-relay, not the hook` idiom. It cannot trip errexit when not root: a failing
-command that is a non-final member of an AND-OR list is exempt from `set -e` by
-POSIX, and the `&&`'s right side is what is final here. Verified empirically
-rather than argued — a two-case probe bats file with a false `[ … ] && …` list
-mid-body, plus the `[ -e path ] && chmod` guard shape, both `ok`. This box runs
-as uid 1000, so every run in this review took the non-root branch and executed
-the case.
+is character-for-character the neighbouring
+`an unreadable marker costs the relay, not the hook` idiom. It cannot trip
+errexit when not root: a failing command that is a non-final member of an AND-OR
+list is exempt from `set -e` by POSIX, and the `&&`'s right side is what is
+final here. Verified empirically rather than argued — a two-case probe bats file
+with a false `[ … ] && …` list mid-body, plus the `[ -e path ] && chmod` guard
+shape, both `ok`. This box runs as uid 1000, so every run in this review took
+the non-root branch and executed the case.
 
 **Standard hunt.**
 
 - `run --separate-stderr` where a diagnostic is expected: correct in cases 1 and
-  2 (both fixtures emit bash/awk diagnostics on stderr and both assert on
-  parsed or raw JSON); correct to *omit* in case 3, where the assertion is a
-  positive on a line no diagnostic supplies and `--separate-stderr` would cost
+  2 (both fixtures emit bash/awk diagnostics on stderr and both assert on parsed
+  or raw JSON); correct to *omit* in case 3, where the assertion is a positive
+  on a line no diagnostic supplies and `--separate-stderr` would cost
   shellcheck's linting of the `bash -c` body. Each choice carries its rationale
   in a comment.
 - `null`-guards before refutations: case 1 guards its extracted channel before
@@ -387,6 +390,6 @@ Suites: `tests/index_sync.bats tests/cc_hook_index_compose.bats`.
 - **`./scripts/run-bats.sh tests/index_sync.bats tests/cc_hook_index_compose.bats`,
   run twice after every SUT was restored** — `108 passed, 2 failed` both times,
   the same two cases at the same lines.
-- **`git diff -- scripts/`** — empty. **`git status --porcelain`** — only the two
-  `.bats` files modified plus this report and the RED report; nothing staged,
-  nothing committed.
+- **`git diff -- scripts/`** — empty. **`git status --porcelain`** — only the
+  two `.bats` files modified plus this report and the RED report; nothing
+  staged, nothing committed.

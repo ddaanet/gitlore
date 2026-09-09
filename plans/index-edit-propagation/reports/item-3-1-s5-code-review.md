@@ -2,15 +2,15 @@
 
 Four fixes applied, all to comments except two: `session-start.sh` loses a
 `|| true` that slice 5 made redundant, and `index-sync-post.sh` seeds its
-`additionalContext` from `$sysmsg` when the channel would otherwise be empty,
-so the not-staged line's own "the report above" has an antecedent on the one
-path the runbook names as reachable for that hook.
+`additionalContext` from `$sysmsg` when the channel would otherwise be empty, so
+the not-staged line's own "the report above" has an antecedent on the one path
+the runbook names as reachable for that hook.
 
 Nothing committed; the tree is dirty and unstaged. No `just` recipe run.
 
 The relay surface is sound. Its failure policy is coherent once stated in one
-place, which it now is. Two coverage gaps are reported, not fixed: the tests
-are frozen and both are unpinned by design or by measurement.
+place, which it now is. Two coverage gaps are reported, not fixed: the tests are
+frozen and both are unpinned by design or by measurement.
 
 ---
 
@@ -35,11 +35,11 @@ seven lines below, is precisely the fix for "`rm -f` fails and takes down the
 hook". The comment justifies `-type f` by an abort the same function no longer
 causes — the fourth-slice pattern the brief warned about, one slice on.
 
-**The first sentence is factually wrong about the mechanism, and always was.**
-A non-file is not "the shape a failed relay write leaves behind": the write's
-own contract, twelve lines earlier, says "the redirect below is the single
-write, so a failed open leaves nothing on disk to clean up". The directory is
-what *makes* the write fail, not what it leaves.
+**The first sentence is factually wrong about the mechanism, and always was.** A
+non-file is not "the shape a failed relay write leaves behind": the write's own
+contract, twelve lines earlier, says "the redirect below is the single write, so
+a failed open leaves nothing on disk to clean up". The directory is what *makes*
+the write fail, not what it leaves.
 
 Rewritten to state what `-type f` is now for — which is what the companion case
 `an unkeyed run leaves a non-marker alone` pins, and what M8 below measures:
@@ -56,14 +56,14 @@ Rewritten to state what `-type f` is now for — which is what the companion cas
 depend on errexit, so it cannot go stale the way the removed sentence did.
 
 The `|| true` comment seven lines below is left as written: it explains a
-different thing (the gitdir's mode, not the marker's shape) and does not
-overlap once the sentence above is gone.
+different thing (the gitdir's mode, not the marker's shape) and does not overlap
+once the sentence above is gone.
 
 ### 1b. `session-start.sh`'s `|| true` comment described a residual slice 5 closed
 
 `scripts/cc-hooks/session-start.sh`. Eleven lines asserting that the drain's
-`rm -f` "still propagates on a marker whose gitdir has been made unwritable,
-and under this file's `set -e` a bare call would take the hook down". That is
+`rm -f` "still propagates on a marker whose gitdir has been made unwritable, and
+under this file's `set -e` a bare call would take the hook down". That is
 exactly what this slice fixed.
 
 The `|| true` itself is now the only guard on any of the drain's three call
@@ -81,12 +81,12 @@ the comment replaced by a statement of why no call site guards it:
 
 **Coverage delta of the removal: zero, measured.** Under M7 (the `|| true`
 backed out of the drain, i.e. the defect this slice fixed restored),
-`tests/cc_hook_session_start.bats` is **24 passed, 0 failed** — the suite has
-no fixture that makes the gitdir unwritable, so the token was protecting a case
+`tests/cc_hook_session_start.bats` is **24 passed, 0 failed** — the suite has no
+fixture that makes the gitdir unwritable, so the token was protecting a case
 nothing here exercises. The protection lives entirely at the lib level, in
-`the drain survives a gitdir it cannot write`, which calls the drain **bare
-under `set -euo pipefail`** — the exact shape `session-start.sh` now uses — and
-which M7 does red.
+`the drain survives a gitdir it cannot write`, which calls the drain
+**bare under `set -euo pipefail`** — the exact shape `session-start.sh` now uses
+— and which M7 does red.
 
 I re-enumerated every statement in `gitlore_relay_drain` for errexit exposure
 before removing it: `git rev-parse` takes `|| return 0`; both block reads take
@@ -149,10 +149,11 @@ whose "report above" was on a different channel entirely.
 
 Counted, not eyeballed:
 
-- `index-compose.sh`: **3** `${VAR:+$VAR…}` joins (the two pre-existing relay-fold
-  joins plus the slice-5 one), **0** `if [ -n … ]` joins. The two
+- `index-compose.sh`: **3** `${VAR:+$VAR…}` joins (the two pre-existing
+  relay-fold joins plus the slice-5 one), **0** `if [ -n … ]` joins. The two
   `if [ -n "$GITLORE_COMPOSE…" ]` in that file are *guards*, not joins.
-- `index-sync-post.sh`: **10** `if [ -n … ]; then …=…` joins, **0** `${:+}` joins.
+- `index-sync-post.sh`: **10** `if [ -n … ]; then …=…` joins, **0** `${:+}`
+  joins.
 
 So each addition took its own file's sole idiom. Neither is an inconsistency.
 
@@ -167,8 +168,8 @@ separate them:
 | `' '` (whitespace only) | `' '\n\nLINE` |
 | `'\n'` | `\n\n\nLINE` |
 
-`SAME` on all five. The forms differ only on an **unset** variable, which
-cannot occur: `index-sync-post.sh` initialises `ctx=""` before the branch, and
+`SAME` on all five. The forms differ only on an **unset** variable, which cannot
+occur: `index-sync-post.sh` initialises `ctx=""` before the branch, and
 `gitlore_compose_and_report` assigns `GITLORE_COMPOSE_CTX` unconditionally on
 every one of its exit paths.
 
@@ -180,9 +181,9 @@ every one of its exit paths.
 `tests/cc_hook_index_compose.bats`, with its `# Item 3.1 slice 4, Group B`
 comment. Confirmed:
 
-- **Its fixture and cleanup went with it.** The `mkdir "$squat"` / `rmdir "$squat"`
-  pair lived inside the case body; both replacement cases carry their own copy.
-  No shared fixture was orphaned.
+- **Its fixture and cleanup went with it.** The `mkdir "$squat"` /
+  `rmdir "$squat"` pair lived inside the case body; both replacement cases carry
+  their own copy. No shared fixture was orphaned.
 - **Nothing else in the file moved.** `git diff` on that file is the retired
   block removed plus the two slice-5 additions and nothing between them; the
   sibling `a failed relay write leaves the subagent's own report intact`, which
@@ -212,15 +213,15 @@ measured it dead three ways.
   JSON and passes through unescaped; in the source it sits inside a
   double-quoted shell string, so the shell does not see it either.
 - **Double-appending is unreachable.** In both hooks the append is straight-line
-  code inside `if [ -n "$agent_id" ]` → `if [ -n "$sysmsg" ]` → `if ! write`.
-  No loop, no second call site, no function that could re-enter. A hook cannot
+  code inside `if [ -n "$agent_id" ]` → `if [ -n "$sysmsg" ]` → `if ! write`. No
+  loop, no second call site, no function that could re-enter. A hook cannot
   reach the branch twice within one process, and each PostToolBatch firing is a
   fresh process.
 - **It cannot make an otherwise-empty report emit JSON.** In `index-compose.sh`
-  the relay branch's guard (`[ -n "$GITLORE_COMPOSE_SYSMSG" ]`) is the *same
-  expression* as the emission guard 27 lines below, so the branch is only ever
-  reached on a run that was already going to emit. In `index-sync-post.sh` the
-  guard is `[ -n "$sysmsg" ]` and the emission guard is `[ -n "$sysmsg" ]` —
+  the relay branch's guard (`[ -n "$GITLORE_COMPOSE_SYSMSG" ]`) is the
+  *same expression* as the emission guard 27 lines below, so the branch is only
+  ever reached on a run that was already going to emit. In `index-sync-post.sh`
+  the guard is `[ -n "$sysmsg" ]` and the emission guard is `[ -n "$sysmsg" ]` —
   likewise identical. Neither hook gains an emission it would not have had.
 - **It *can* add a `hookSpecificOutput` key where there was none** — in
   `index-sync-post.sh` only, whose emission omits that key when `$ctx` is empty.
@@ -231,10 +232,10 @@ measured it dead three ways.
 
 In `index-sync-post.sh`, `$ctx` can be empty while `$sysmsg` is not. The
 `failed` block sets `sysmsg` alone — every other block (`replaced`, `weak`,
-`refused`, `budget`) sets both. And the `failed` branch is **the path the
-runbook itself names as this hook's reachable one**: "an unwritable gitdir makes
-the frontmatter sync fail, produces the `failed` report, and then the drain
-kills the hook before it emits it."
+`refused`, `budget`) sets both. And the `failed` branch is
+**the path the runbook itself names as this hook's reachable one**: "an
+unwritable gitdir makes the frontmatter sync fail, produces the `failed` report,
+and then the drain kills the hook before it emits it."
 
 On that path, as handed over, the subagent's `additionalContext` contained
 exactly one line — "gitlore: **the report above** could not be staged … so
@@ -283,8 +284,8 @@ nothing either way (§7, M4/M6 — that hook's half is unpinned by design).
 - **bash 3.2.** `${VAR:+…}`, `[ -n … ]`, multi-line double-quoted assignment —
   all POSIX-era. No `${VAR^^}`, no `[[ =~ ]]`, no associative array, no
   `local -n`. The diff adds **no external command at all**, so BSD `sed`/`grep`/
-  `find`/`mktemp`/`stat` divergence cannot arise and `tests/bsd_portability.bats`
-  is owed no new lock-in.
+  `find`/`mktemp`/`stat` divergence cannot arise and
+  `tests/bsd_portability.bats` is owed no new lock-in.
 - **Whitespace safety.** Every expansion in the diff is double-quoted; nothing
   new is split, globbed or passed unquoted. The drain's `-print0` /
   `read -r -d ''` pair is untouched.
@@ -344,12 +345,12 @@ Both are test-side; `tests/cc_hook_index_compose.bats` and
    that hook's marker path"). My §5b fix lands on this same unpinned branch and
    inherits its status.
 
-Out of scope, noted in passing and **not touched**: `scripts/lib/index-compose.sh`
-carries a comment claiming "every caller invokes this function as an `if`
-condition, which disables errexit for the whole call" — `index-compose.sh:66`
-calls `gitlore_compose_and_report` bare, and `gitlore_compose` itself is called
-as `result=$(…) || compose_rc=$?`. Neither is an `if` condition. Harmless today;
-worth a look whenever that file is next open.
+Out of scope, noted in passing and **not touched**:
+`scripts/lib/index-compose.sh` carries a comment claiming "every caller invokes
+this function as an `if` condition, which disables errexit for the whole call" —
+`index-compose.sh:66` calls `gitlore_compose_and_report` bare, and
+`gitlore_compose` itself is called as `result=$(…) || compose_rc=$?`. Neither is
+an `if` condition. Harmless today; worth a look whenever that file is next open.
 
 ---
 
@@ -357,10 +358,8 @@ worth a look whenever that file is next open.
 
 - **`./scripts/run-bats.sh tests/index_sync.bats tests/cc_hook_index_compose.bats`**
   — **109 passed, 0 failed**, after every fix.
-- **`./scripts/run-bats.sh tests/cc_hook_session_start.bats tests/cc_hook_add_tier.bats
-  tests/index_compose.bats tests/cc_hook_post_tool_use.bats tests/lib_util.bats
-  tests/cc_hook_worktree_remove.bats tests/merge_memory.bats tests/tier_discovery.bats
-  tests/tier_divergence.bats`** — **205 passed, 0 failed**, after every fix.
+- **`./scripts/run-bats.sh tests/cc_hook_session_start.bats tests/cc_hook_add_tier.bats tests/index_compose.bats tests/cc_hook_post_tool_use.bats tests/lib_util.bats tests/cc_hook_worktree_remove.bats tests/merge_memory.bats tests/tier_discovery.bats tests/tier_divergence.bats`**
+  — **205 passed, 0 failed**, after every fix.
 - **`shellcheck -s bash`** on `scripts/lib/index-sync.sh`,
   `scripts/cc-hooks/index-compose.sh`, `scripts/cc-hooks/index-sync-post.sh`,
   `scripts/cc-hooks/session-start.sh` — clean.
@@ -377,12 +376,11 @@ worth a look whenever that file is next open.
 - **Join-idiom equivalence** — five inputs including whitespace-only and
   newline-only, `SAME` on all five; idiom counts per file confirm each addition
   matches its own file's sole convention.
-- **Encoding round-trip** — em-dash and apostrophe exact through
-  `jq -n --arg` → `jq -r`, under the default locale and under `LC_ALL=C LANG=C`.
+- **Encoding round-trip** — em-dash and apostrophe exact through `jq -n --arg` →
+  `jq -r`, under the default locale and under `LC_ALL=C LANG=C`.
 - **Emptiness analysis** — relay-branch guard and emission guard are the same
-  expression in both hooks, so the not-staged line cannot create an emission;
-  it can add a `hookSpecificOutput` key in `index-sync-post.sh`, which is
-  intended.
+  expression in both hooks, so the not-staged line cannot create an emission; it
+  can add a `hookSpecificOutput` key in `index-sync-post.sh`, which is intended.
 - **Deletion audit** — retired case gone with its fixture and cleanup, nothing
   else in the file moved, no helper orphaned, its residual assertion carried by
   the companion.
@@ -390,5 +388,6 @@ worth a look whenever that file is next open.
   before removing `session-start.sh`'s `|| true`; the only unguarded expansion
   is `mempath="$1"`, and all three callers pass an argument.
 - **`git status --porcelain`** — the four SUT files and the two frozen `.bats`
-  files modified, plus the untracked slice reports; **nothing staged, nothing
-  committed**. No `just` recipe run, no background task started or awaited.
+  files modified, plus the untracked slice reports;
+  **nothing staged, nothing committed**. No `just` recipe run, no background
+  task started or awaited.
