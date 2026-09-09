@@ -61,10 +61,10 @@ most consequential either hook produces.
 
 Silent to everyone, and it defeats FR-D on the run where FR-D applies. The
 project rule ("silent-to-everyone must be fixed") is not the only thing pointing
-here: `memory/ddaanet/hook-output-channels` §2 names this exact shape — "`|| true`
-and a bare `|| exit 0` on a fallible command are dishonest error paths — check
-status explicitly, report on `systemMessage`, exit 0" — and names D17's
-index-sync hooks as where it was applied.
+here: `memory/ddaanet/hook-output-channels` §2 names this exact shape —
+"`|| true` and a bare `|| exit 0` on a fallible command are dishonest error
+paths — check status explicitly, report on `systemMessage`, exit 0" — and names
+D17's index-sync hooks as where it was applied.
 
 The escape clause in the project rule does not apply. It exempts "a path whose
 signal would be inferred rather than observed", because inference produces false
@@ -92,8 +92,8 @@ not, in the sense that matters:
   only path by which anything leaves a subagent.
 
 The whole value of the signal is that the actor can carry the fact to the parent
-in its own reply. That needs the model channel. On `systemMessage` the line lands
-in a transcript no one reads.
+in its own reply. That needs the model channel. On `systemMessage` the line
+lands in a transcript no one reads.
 
 ### Proposed change (not applied)
 
@@ -122,12 +122,12 @@ if ! gitlore_relay_write "$mempath" "$agent_id" "$sysmsg" "$ctx"; then
 fi
 ```
 
-Three notes on it. The imperative wording is correct here rather than a violation
-of the no-actionable-phrases rule: that rule governs DENY channels, and this is a
-directive channel whose whole point is that the agent acts
-(`hook-output-channels` §7, "Scope"). Appending *after* the write is deliberate —
-the line describes the staging failure, so it must not itself be staged. And in
-`index-sync-post.sh` the append makes `$ctx` non-empty, which is what gets
+Three notes on it. The imperative wording is correct here rather than a
+violation of the no-actionable-phrases rule: that rule governs DENY channels,
+and this is a directive channel whose whole point is that the agent acts
+(`hook-output-channels` §7, "Scope"). Appending *after* the write is deliberate
+— the line describes the staging failure, so it must not itself be staged. And
+in `index-sync-post.sh` the append makes `$ctx` non-empty, which is what gets
 `additionalContext` emitted at all on the `failed`-branch shape where ctx would
 otherwise be empty — the reachable case identified above.
 
@@ -138,13 +138,14 @@ otherwise be empty — the reachable case identified above.
 **No other caller exists.** `grep -rl gitlore_relay_write` over the whole repo
 excluding `.git/` and `plans/` returns seven files: the four SUT files and the
 three `.bats` files. In `session-start.sh` the only occurrence is inside a
-comment. Nothing in `commands/`, `agents/`, `skills/`, `hooks/`, `scripts/install/`,
-`scripts/hook-manager/`, `plugin-dev/` or `docs/` calls it.
+comment. Nothing in `commands/`, `agents/`, `skills/`, `hooks/`,
+`scripts/install/`, `scripts/hook-manager/`, `plugin-dev/` or `docs/` calls it.
 
 Both production call sites are inside `if [ -n "$agent_id" ]`
-(`scripts/cc-hooks/index-compose.sh:82`, `scripts/cc-hooks/index-sync-post.sh:257`),
-so the guard cannot fire in production at all. Every test call passes a
-non-empty id except the guard's own case in `tests/index_sync.bats`.
+(`scripts/cc-hooks/index-compose.sh:82`,
+`scripts/cc-hooks/index-sync-post.sh:257`), so the guard cannot fire in
+production at all. Every test call passes a non-empty id except the guard's own
+case in `tests/index_sync.bats`.
 
 **Nothing relied on the previous behaviour.** With an empty id the write landed
 on the bare `gitlore-relay` name, which the drain's `-name 'gitlore-relay-*'`
@@ -163,14 +164,15 @@ against `_gitlore_agent_suffix`:
 | `""` | *(empty)* |
 
 `printf -- '-%s'` emits a leading `-` unconditionally, and `tr` maps every byte
-of a non-empty input to some byte, so **a non-empty id always yields a non-empty
-suffix**. The empty suffix is reachable only from the empty/absent id the guard
-already refuses. An all-disallowed id becoming a run of `_` therefore does not
-matter: it is keyed, it stays inside the gitdir (which is the sanitisation's
-whole purpose), the drain folds it and removes it, and the framing line names a
-mangled id. The only residual is the non-injectivity two ids differing solely
-outside `[A-Za-z0-9-]` would hit, which `_gitlore_agent_suffix`'s own comment
-already records as unreachable from real agent ids.
+of a non-empty input to some byte, so
+**a non-empty id always yields a non-empty suffix**. The empty suffix is
+reachable only from the empty/absent id the guard already refuses. An
+all-disallowed id becoming a run of `_` therefore does not matter: it is keyed,
+it stays inside the gitdir (which is the sanitisation's whole purpose), the
+drain folds it and removes it, and the framing line names a mangled id. The only
+residual is the non-injectivity two ids differing solely outside `[A-Za-z0-9-]`
+would hit, which `_gitlore_agent_suffix`'s own comment already records as
+unreachable from real agent ids.
 
 One coherence note, not a defect: `gitlore_relay_marker_file mem ""` still
 returns the unsuffixed name, which nothing can now write and nothing drains.
@@ -184,8 +186,8 @@ use the unsuffixed name for the main thread, and a frozen slice-1 case pins it.
 
 Every mutation applied **in place** to the working-tree SUT, run over all three
 suites, then restored and confirmed with `cmp` against a pre-mutation copy of
-each file (not `git diff --stat`, which cannot distinguish a line swap). Baseline
-against the GREEN tree as submitted: **131 passed, 0 failed**.
+each file (not `git diff --stat`, which cannot distinguish a line swap).
+Baseline against the GREEN tree as submitted: **131 passed, 0 failed**.
 
 | # | mutation | file | result | cases that red |
 |---|---|---|---|---|
@@ -205,15 +207,17 @@ against the GREEN tree as submitted: **131 passed, 0 failed**.
 **M1 is a non-finding, recorded so it is not re-derived.** Nothing discriminates
 the guard's position relative to the marker resolution, and nothing should:
 `gitlore_relay_marker_file` on an empty id is a pure `rev-parse` with no side
-effect. M2 is the position that matters, and it is pinned twice — by the "without
-writing" assertion and, separately, by the squat case, because a trailing
-`[ -n "$agent_id" ] || return 1` returns 0 and masks the redirect's failure.
+effect. M2 is the position that matters, and it is pinned twice — by the
+"without writing" assertion and, separately, by the squat case, because a
+trailing `[ -n "$agent_id" ] || return 1` returns 0 and masks the redirect's
+failure.
 
 **M4 — the unpinned fix, stated plainly.** Removing `|| true` from
 `index-sync-post.sh` reds **nothing**: not one case in the three slice suites,
 and not one in the 8-suite regression set either (181/0 with the mutation
-applied). The fix is right anyway, and the mechanism is not a matter of opinion —
-measured directly on the same library function under the same `set -euo pipefail`:
+applied). The fix is right anyway, and the mechanism is not a matter of opinion
+— measured directly on the same library function under the same
+`set -euo pipefail`:
 
 ```
 --- bare call:      <redirect fails>; rc=1, "AFTER" never printed
@@ -236,26 +240,27 @@ rewrote (§4).
 ## 4 · Check 3 — the five relay functions as one mechanism
 
 Read together, the accumulated comments had four defects. All fixed; every fix
-is a comment, and `diff` over the non-comment lines of all four files against the
-GREEN-phase SUT is empty.
+is a comment, and `diff` over the non-comment lines of all four files against
+the GREEN-phase SUT is empty.
 
 1. **Contradiction (`gitlore_relay_drain` header).** It read "a caller that
    passed an empty id anyway would strand a file … — the guard is at the call
    sites, not here." This slice moved that guard into `gitlore_relay_write`. The
    sentence now names the refusal instead.
-2. **Stale mechanism (the drain's `-type f` comment).** It claimed `awk` and `rm`
-   both take the hook down on a directory. The reads tolerate it now; only the
-   `rm` does. Measured by M7/M7c, and the comment now says exactly that.
+2. **Stale mechanism (the drain's `-type f` comment).** It claimed `awk` and
+   `rm` both take the hook down on a directory. The reads tolerate it now; only
+   the `rm` does. Measured by M7/M7c, and the comment now says exactly that.
 3. **Stale mechanism (`session-start.sh`'s drain comment).** It justified
    `|| true` entirely by the `awk` exit-2 path, which the drain now absorbs by
    itself — so as written it argued for a guard against something that no longer
    happens. Rewritten to name what the guard actually still catches: the `rm -f`
    path (§6). This is the only file in the diff the GREEN phase did not touch;
    the orchestrator will now be committing it.
-4. **Incomplete contract (`gitlore_relay_write` header, `_gitlore_relay_sysblock`
-   header).** The first did not mention the empty-id refusal it now performs; the
-   second said both callers "screen for" an unopenable marker "rather than hand
-   it a path it cannot read", when both now also *tolerate* one. Both updated.
+4. **Incomplete contract (`gitlore_relay_write` header,
+   `_gitlore_relay_sysblock` header).** The first did not mention the empty-id
+   refusal it now performs; the second said both callers "screen for" an
+   unopenable marker "rather than hand it a path it cannot read", when both now
+   also *tolerate* one. Both updated.
 
 Overlap trimmed rather than deleted: the write's `|| old_…=""` comment used to
 compare its trade to the drain's `-type f` — a different mechanism — and now
@@ -271,8 +276,8 @@ paragraph is untouched and still true.
 
 ## 5 · Check 4 — failure-mode parity
 
-Both degrade rather than abort, and the comments now agree with the code in both.
-Measured on a scratch store, not read:
+Both degrade rather than abort, and the comments now agree with the code in
+both. Measured on a scratch store, not read:
 
 | | `gitlore_relay_write` on a mode-0200 marker | `gitlore_relay_drain` on a mode-0200 marker |
 |---|---|---|
@@ -284,10 +289,10 @@ Measured on a scratch store, not read:
 | stdout | untouched | untouched (0 bytes) |
 | stderr | two `awk: … (Permission denied)` lines | two `awk: … (Permission denied)` lines |
 
-Consistent in the property that matters — neither ever costs the calling hook its
-own report — and the difference in *what* is lost falls out of the two operations
-rather than a design divergence. The last row of the table is the input to §1:
-the drain's degrade leaves a trace, the write's leaves none.
+Consistent in the property that matters — neither ever costs the calling hook
+its own report — and the difference in *what* is lost falls out of the two
+operations rather than a design divergence. The last row of the table is the
+input to §1: the drain's degrade leaves a trace, the write's leaves none.
 
 ---
 
@@ -303,8 +308,8 @@ outer rc=1        # the statement after the drain never ran
 ```
 
 This is the same failure class the slice exists to close — a permissions problem
-in the gitdir costing a hook its whole report — one line below the read the slice
-made tolerant. `session-start.sh` is protected by its `|| true`; the two
+in the gitdir costing a hook its whole report — one line below the read the
+slice made tolerant. `session-start.sh` is protected by its `|| true`; the two
 PostToolBatch hooks call the drain bare. It is reachable through
 `index-sync-post.sh` in particular: on an unwritable gitdir that hook's
 frontmatter sync fails, is caught, and produces the `failed` report — and then
@@ -312,22 +317,22 @@ the drain kills the hook before it emits it, so the very report telling the user
 their descriptions are now stale is the one lost.
 
 **Why I did not apply the one-token fix.** `rm -f "$marker" || true` closes it,
-and I measured the cost: that is exactly M7c, which is **green**. Adding it makes
-`-type f` un-pinned by any test in the repository — the frozen case
+and I measured the cost: that is exactly M7c, which is **green**. Adding it
+makes `-type f` un-pinned by any test in the repository — the frozen case
 `an unkeyed run survives a non-file squatting on a marker name` stops
 discriminating it. The project rule for fixing a verified defect on sight is
 conditioned on the fix *removing nothing*, and this one removes a frozen case's
 discrimination, so it is my human partner's call rather than mine.
 
-What I did instead: corrected the drain's own doc line to state the residual, and
-rewrote `session-start.sh`'s comment so the surviving `|| true` is justified by
-the path that still exists rather than the one that no longer does.
+What I did instead: corrected the drain's own doc line to state the residual,
+and rewrote `session-start.sh`'s comment so the surviving `|| true` is justified
+by the path that still exists rather than the one that no longer does.
 
-If the fix is taken, the companion that restores the coverage is one assertion on
-the existing squat fixture — that after an unkeyed run the marker **directory**
-still exists and the report carries no framing line naming it — which pins
-`-type f` by what it is actually for (not framing and not removing a non-marker)
-rather than by an abort it will no longer cause.
+If the fix is taken, the companion that restores the coverage is one assertion
+on the existing squat fixture — that after an unkeyed run the marker
+**directory** still exists and the report carries no framing line naming it —
+which pins `-type f` by what it is actually for (not framing and not removing a
+non-marker) rather than by an abort it will no longer cause.
 
 ---
 
@@ -337,8 +342,8 @@ rather than by an abort it will no longer cause.
 under `set -u`: the assignment happens before the `||`, so `x` is always set —
 never a reference to an unset variable, and the failed substitution assigns the
 empty string. `|| true` on a function call does suspend errexit for the whole
-function body, as the comments claim, and I have it by measurement rather than by
-reading the manual: under M5a the drain's unguarded read fails, yet
+function body, as the comments claim, and I have it by measurement rather than
+by reading the manual: under M5a the drain's unguarded read fails, yet
 `tests/cc_hook_session_start.bats`'s case stays green — only possible because
 errexit was disabled *inside* the drain by `session-start.sh`'s `|| true`, while
 the same mutation reds `tests/index_sync.bats`'s synthetic bare caller. Nothing
@@ -359,27 +364,45 @@ frozen cases parse each hook's stdout with `jq` and pass.
 or slice identifier, or a line number — checked over every added line of
 `git diff -- scripts/`. One offender was in the GREEN submission and is gone:
 `index-sync-post.sh` carried "Unpinned: no case in this file's suite squats the
-marker path", a coverage note rather than mechanism, and one that rots the moment
-a case is added. Its content is in §3 of this report, which is where it belongs.
+marker path", a coverage note rather than mechanism, and one that rots the
+moment a case is added. Its content is in §3 of this report, which is where it
+belongs.
 
 ---
 
 ## 8 · Checks that passed, by name
 
-- `./scripts/run-bats.sh tests/index_sync.bats tests/cc_hook_index_compose.bats tests/cc_hook_session_start.bats` — **131 passed, 0 failed**, against the tree as I leave it.
-- `./scripts/run-bats.sh tests/cc_hook_add_tier.bats tests/index_compose.bats tests/cc_hook_post_tool_use.bats tests/lib_util.bats tests/cc_hook_worktree_remove.bats tests/merge_memory.bats tests/tier_discovery.bats tests/tier_divergence.bats` — **181 passed, 0 failed**.
-- `shellcheck -s bash` over `scripts/lib/index-sync.sh`, `scripts/cc-hooks/index-compose.sh`, `scripts/cc-hooks/index-sync-post.sh`, `scripts/cc-hooks/session-start.sh` — clean.
+- `./scripts/run-bats.sh tests/index_sync.bats tests/cc_hook_index_compose.bats tests/cc_hook_session_start.bats`
+  — **131 passed, 0 failed**, against the tree as I leave it.
+- `./scripts/run-bats.sh tests/cc_hook_add_tier.bats tests/index_compose.bats tests/cc_hook_post_tool_use.bats tests/lib_util.bats tests/cc_hook_worktree_remove.bats tests/merge_memory.bats tests/tier_discovery.bats tests/tier_divergence.bats`
+  — **181 passed, 0 failed**.
+- `shellcheck -s bash` over `scripts/lib/index-sync.sh`,
+  `scripts/cc-hooks/index-compose.sh`, `scripts/cc-hooks/index-sync-post.sh`,
+  `scripts/cc-hooks/session-start.sh` — clean.
 - `./scripts/lint-shell.sh` — **137 files clean**.
-- Ten mutation runs (M1, M2, M3, M4, M4b, M5a, M5b, M6, M7, M7c), each applied in place and restored, each restore verified with `cmp` against a pre-mutation copy.
-- `diff` over the non-comment lines of all four SUT files against the GREEN-phase copies — **empty**: every edit of mine is a comment.
-- `git status --porcelain` — the four SUT files, the three frozen `.bats` files untouched by me, and the plan reports. Nothing staged, nothing committed.
-- Errexit mechanism probe: a bare `gitlore_relay_write` on a failing redirect under `set -euo pipefail` kills the script (rc 1, the following statement never runs); with `|| true` it continues and the script exits 0.
-- Degrade probe: drain over one mode-0200 marker and one directory squat — rc 0, framing line with empty body, marker removed, squat untouched, 0 bytes on stdout.
-- Write-parity probe: second write onto a mode-0200 marker — rc 0, marker overwritten with the new report only.
-- `rm`-abort probe: drain with the gitdir made unwritable — the caller dies at rc 1 (§6).
-- `_gitlore_agent_suffix` over five inputs, confirming a non-empty id always yields a non-empty suffix (§2).
-- Caller sweep: `grep -rl gitlore_relay_write` over the repo excluding `.git/` and `plans/` — seven files, no production caller outside the two guarded hook branches.
+- Ten mutation runs (M1, M2, M3, M4, M4b, M5a, M5b, M6, M7, M7c), each applied
+  in place and restored, each restore verified with `cmp` against a pre-mutation
+  copy.
+- `diff` over the non-comment lines of all four SUT files against the
+  GREEN-phase copies — **empty**: every edit of mine is a comment.
+- `git status --porcelain` — the four SUT files, the three frozen `.bats` files
+  untouched by me, and the plan reports. Nothing staged, nothing committed.
+- Errexit mechanism probe: a bare `gitlore_relay_write` on a failing redirect
+  under `set -euo pipefail` kills the script (rc 1, the following statement
+  never runs); with `|| true` it continues and the script exits 0.
+- Degrade probe: drain over one mode-0200 marker and one directory squat — rc 0,
+  framing line with empty body, marker removed, squat untouched, 0 bytes on
+  stdout.
+- Write-parity probe: second write onto a mode-0200 marker — rc 0, marker
+  overwritten with the new report only.
+- `rm`-abort probe: drain with the gitdir made unwritable — the caller dies at
+  rc 1 (§6).
+- `_gitlore_agent_suffix` over five inputs, confirming a non-empty id always
+  yields a non-empty suffix (§2).
+- Caller sweep: `grep -rl gitlore_relay_write` over the repo excluding `.git/`
+  and `plans/` — seven files, no production caller outside the two guarded hook
+  branches.
 
-**Nothing committed; the tree is dirty and unstaged.** Note for the orchestrator:
-`scripts/cc-hooks/session-start.sh` now appears in the diff (comment only) where
-the GREEN phase left it untouched.
+**Nothing committed; the tree is dirty and unstaged.** Note for the
+orchestrator: `scripts/cc-hooks/session-start.sh` now appears in the diff
+(comment only) where the GREEN phase left it untouched.

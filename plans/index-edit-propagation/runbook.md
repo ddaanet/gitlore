@@ -986,6 +986,75 @@ surface, backfilling descriptions that never matched their index lines.
        `gitlore_relay_drain`'s `-type f` is what prevents it, and slice 1 has no
        case that makes a directory marker.
 
+  5. **A relay that fails says so, on the channel a subagent can actually be
+     heard on.** Added after slice 4's code review. Slice 4 stopped a failed
+     relay write from taking its hook down, and in doing so traded a loud total
+     failure for a silent partial one: the parent loses a report, and nobody —
+     not the parent, not the user, not the acting subagent — learns it existed.
+     That defeats FR-D on precisely the run FR-D is for, and the project's rule
+     is that a silent-to-everyone path must be fixed. The rule's escape clause
+     does not apply: the condition is an exit status the caller already holds,
+     so the signal is observed rather than inferred and cannot false-alarm.
+
+     Reachable, and the report lost is a consequential one.
+     `gitlore_compose_and_report` catches a compose write failure, sets its
+     report to "the memory indexes are only partly composed", and returns 0 — so
+     on an unwritable gitdir `index-compose.sh` reaches the relay write carrying
+     exactly that report, and discards it. `index-sync-post.sh` reaches it the
+     same way through its `failed` branch.
+
+     **`additionalContext`, not `systemMessage`.** The subagent-confinement
+     probe measured that a subagent's `systemMessage` reaches nobody at all — it
+     appears in that subagent's own JSONL and nowhere else, and the model never
+     quoted it — while `additionalContext` arrives as a system-reminder and the
+     model narrated it unprompted. The value of this signal is that the actor
+     can carry the fact into its own reply, which is the only path out of a
+     subagent, so it needs the model's channel. Appended *after* the write,
+     since it describes the staging failure and must not itself be staged.
+     Imperative wording is right here: the no-actionable-phrases rule governs
+     deny channels, and this is a directive channel whose point is that the
+     agent acts.
+
+     Also in this slice, because it is the same failure class one line below the
+     read slice 4 made tolerant:
+     **`gitlore_relay_drain`'s `rm -f` still propagates** on an unwritable
+     gitdir, contra the function's own "Always returns 0", and both
+     PostToolBatch hooks call the drain bare. Reachable through
+     `index-sync-post.sh`, where an unwritable gitdir makes the frontmatter sync
+     fail, produces the `failed` report, and then the drain kills the hook
+     before it emits it.
+
+     The fix is `rm -f "$marker" || true`, and it costs something, which is why
+     it needs a companion rather than a one-token edit: with the reads already
+     tolerant, that token makes `-type f` un-pinned — the frozen case
+     `an unkeyed run survives a non-file squatting on a marker name` stops
+     discriminating it, measured. The companion restores the coverage by pinning
+     `-type f` for what it is actually for rather than for an abort it will no
+     longer cause.
+
+     - `a failed relay write tells the subagent it was not staged` in
+       `tests/cc_hook_index_compose.bats` — over slice 4's directory-squat
+       fixture, a keyed compose run; asserts the hook still exits 0, its own
+       `systemMessage` still carries the compose report, and its
+       `additionalContext` now carries the not-staged line. Extract each channel
+       with `jq -r` and assert the channel is not the literal `null` before
+       refuting anything on it.
+     - `an unkeyed run leaves a non-marker alone` in
+       `tests/cc_hook_index_compose.bats` — the companion. Over the same squat,
+       an unkeyed run; asserts the squat directory still exists afterwards and
+       no framing line names it. This is what `-type f` is for: not framing and
+       not removing something that is not a marker.
+     - `the drain survives a gitdir it cannot write` in `tests/index_sync.bats`
+       — a marker present, the gitdir made unwritable, a caller in the hooks'
+       own `set -euo pipefail` shape; asserts the caller reaches its own report.
+       Skip when running as root, as the neighbouring permission cases do.
+
+     The `index-sync-post.sh` half of the first case stays unpinned, as slice
+     4's `|| true` on that hook already is: nothing in either suite squats that
+     hook's marker path, and both were measured to red nothing when removed. The
+     fix lands in both hooks regardless — the defect is identical and leaving
+     one standing is worse than an unpinned fix.
+
 ---
 
 ## Phase 4: Design record and changelog (type: general)
