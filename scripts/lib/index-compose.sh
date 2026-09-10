@@ -333,6 +333,23 @@ gitlore_compose_check_pins() {
 "
       continue
     fi
+    # A tier whose HEAD is a fast-forward descendant of the pin takes a
+    # different remedy from one moved sideways or diverged: HEAD already
+    # contains the pin, so the return-to-the-pin checkout below would discard
+    # real commits rather than recover lost ones, and /gitlore:merge would
+    # report nothing to take, the remote being contained in HEAD already.
+    # The `rev-parse -q --verify` guard removes the one expected failure of
+    # `merge-base --is-ancestor` here — a pin that is no object in this
+    # database at all, which the truncation comment below records as a normal
+    # state — rather than letting its rc-128 `fatal:` reach the terminal. It
+    # costs no coverage: a pin genuinely ancestral to HEAD is necessarily an
+    # object here already, so what the guard rejects was never ahead.
+    if git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null \
+       && git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
+      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. There is no automatic remedy: inspect and stage the gitlink by hand, or return the tier to the pin, which discards the commits it carries ahead of it.
+"
+      continue
+    fi
     # Absolute, so the printed command runs from anywhere; quoted, so a tier path
     # containing whitespace survives being pasted into a shell.
     abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"

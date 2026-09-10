@@ -240,6 +240,46 @@ move_tier_off_pin() {
   GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge"
 }
 
+# Move a tier's HEAD SIDEWAYS onto UNRELATED history: an orphan branch's first
+# commit shares nothing with anything already in the tier, the pin included, so
+# `merge-base --is-ancestor "$pinned" "$head"` reads false — the predicate Item
+# 1.3 slice 2 keys its ahead/sideways branch on. The extreme end of sideways;
+# move_tier_diverged_off_pin below is the everyday end, and the two are kept
+# apart because a branch keyed on "is there shared history at all" rather than
+# on ancestry tells them apart and gets one of them wrong.
+move_tier_sideways_off_pin() {
+  local tier="${1:-ddaanet}"
+  git -C "memory/$tier" checkout -q --orphan gitlore-sideways-test
+  seed_tier_bullet "$tier" upstream.md "arrived sideways, not forward"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier replaced by unrelated history"
+}
+
+# Move a tier's HEAD onto a SIBLING of the pin: shared history, but the pin is
+# not contained in HEAD — what a hand-run `reset --hard origin/live` leaves
+# after the remote's history was rewritten, and the sideways shape the guard
+# actually meets. `merge-base "$pinned" "$head"` SUCCEEDS here and fails for the
+# orphan, while `merge-base --is-ancestor "$pinned" "$head"` is false for both
+# (measured: git 2.47, rc 1 and silent in both cases) — so only this fixture
+# fails an implementation that reads shared history as containment.
+#
+# pinned_store_with_tier leaves the tier on its root commit, and a root commit
+# has no sibling. So this advances the tier once and re-pins there — the gitlink
+# move every advancing path stages as its last act (D43) — which gives the pin a
+# parent, then commits a second child of that parent.
+move_tier_diverged_off_pin() {
+  local tier="${1:-ddaanet}" base
+  base=$(git -C "memory/$tier" rev-parse HEAD) || return 1
+  seed_tier_bullet "$tier" upstream.md "arrived in another repo"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge" || return 1
+  git -C memory add -- "$tier" || return 1
+  git -C "memory/$tier" checkout -q --detach "$base" || return 1
+  seed_tier_bullet "$tier" rewritten.md "the same history, re-authored"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier rebuilt on rewritten history"
+}
+
 # The store every test in this section starts from: one composed, committed tier
 # line, so the pin is recorded and root and carrier agree before anything moves.
 pinned_store_with_tier() {
@@ -251,14 +291,30 @@ pinned_store_with_tier() {
   commit_memory_state
 }
 
-@test "compose refuses a moved tier and names the commands that return it" {
+@test "compose refuses a tier moved sideways onto unrelated history and names the commands that return it" {
+  # Repointed at Item 1.3 slice 2 onto the SIDEWAYS fixture: this wording and
+  # its checkout --detach remedy are the case that stays unchanged once the
+  # new ahead branch lands, so this test now proves that, not an ahead
+  # fixture whose wording the new branch is about to move elsewhere.
+  #
+  # Born-green: today ahead and sideways get identical wording, so this
+  # cannot be forced red by writing it — its red is owed to the test review's
+  # mutation instead. Implement the new branch WITHOUT the
+  # `merge-base --is-ancestor` test (i.e. unconditionally, for every off-pin
+  # tier); the `checkout --detach` and `!= *"ahead"*` assertions below go red
+  # because every off-pin tier — sideways included — now takes the ahead
+  # wording. Then restore the ancestry test.
   pinned_store_with_tier
   pinned=$(git -C memory rev-parse :ddaanet)
-  move_tier_off_pin ddaanet
+  move_tier_sideways_off_pin ddaanet
   moved=$(git -C memory/ddaanet rev-parse HEAD)
   abs=$(cd memory/ddaanet && pwd)
   cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
   cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
+  # The fixture's shape, asserted rather than assumed: no shared history at all,
+  # so neither ancestry test can hold. Without this the test would keep passing
+  # if the fixture ever drifted into some other shape.
+  run ! git -C memory/ddaanet merge-base "$pinned" "$moved"
 
   run gitlore_compose memory
   [ "$status" -eq 1 ]
@@ -266,15 +322,104 @@ pinned_store_with_tier() {
   [[ "$output" == *"the memory store records ${pinned:0:12}"* ]]
   # Verbatim-runnable: absolute path, full sha.
   [[ "$output" == *"git -C \"$abs\" checkout --detach $pinned"* ]]
+  # And NOT the ahead branch's words: returning THIS tier to its pin is the
+  # right remedy, so a branch that answered "ahead" here would be offering the
+  # wrong one.
+  [[ "$output" != *"ahead"* ]]
   # Nothing written. The refusal is the whole point: a down pass here replaces
   # the carrier's newer text with root's older text and reports success.
   cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
   cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 }
 
-@test "a moved tier holding MERGE_HEAD is sent to /gitlore:resolve instead" {
+@test "compose refuses a tier diverged from its pin with the same return-to-pin remedy" {
+  # The everyday sideways shape, and the one the orphan fixture above cannot
+  # stand in for: HEAD and the pin share an ancestor, so `merge-base` succeeds
+  # and only `merge-base --is-ancestor` separates this from the ahead case. An
+  # implementation that branched on shared history would answer "ahead" here
+  # and offer a remedy that is not the right one, while the orphan test stayed
+  # green.
+  #
+  # Born-green, with the same mutation as the orphan test above.
   pinned_store_with_tier
+  move_tier_diverged_off_pin ddaanet
+  pinned=$(git -C memory rev-parse :ddaanet)
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  abs=$(cd memory/ddaanet && pwd)
+  # The shape, asserted rather than assumed: shared history WITH the pin, and
+  # the pin still not contained in HEAD.
+  git -C memory/ddaanet merge-base "$pinned" "$moved" >/dev/null
+  run ! git -C memory/ddaanet merge-base --is-ancestor "$pinned" "$moved"
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tier 'ddaanet' is checked out at ${moved:0:12}"* ]]
+  [[ "$output" == *"the memory store records ${pinned:0:12}"* ]]
+  [[ "$output" == *"git -C \"$abs\" checkout --detach $pinned"* ]]
+  [[ "$output" != *"ahead"* ]]
+}
+
+@test "a tier ahead of its pin is refused with ahead-of-the-pin wording, not the return-to-pin remedy" {
+  # Slice 2 adds a branch to gitlore_compose_check_pins, keyed on
+  # `merge-base --is-ancestor "$pinned" "$head"`: an AHEAD tier (HEAD is a
+  # descendant of the pin — move_tier_off_pin's fixture) must be refused in
+  # words that do not name `checkout --detach` as the remedy, because that
+  # command would discard the commits the tier already carries.
+  #
+  # The sentence is GREEN's to write; what is pinned here is what it has to
+  # carry. Three positives on the tier's OWN report line, so none of them can be
+  # satisfied by a different line of the report:
+  #   both truncated shas — which commit the tier is on and which one the store
+  #     records. "Inspect and stage the gitlink by hand" is not a runnable
+  #     remedy without them, and the sideways message already prints both.
+  #   "ahead"  — the direction. Loose in the whole output it could belong to a
+  #     sentence saying the opposite; tied to this line it cannot.
+  #   "discard" — what returning to the pin costs. The runbook fixes this verb
+  #     for the branch ("discard the commits it carries"); a synonym would read
+  #     the same to a user, so this is the one residual wording constraint, and
+  #     it is a cheap one for GREEN to meet.
+  # Two negatives carry "no automatic adoption" as behaviour rather than as the
+  # runbook's phrase: neither destructive command nor a take may be offered.
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  # The fixture's shape, asserted rather than assumed: HEAD contains the pin.
+  git -C memory/ddaanet merge-base --is-ancestor "$pinned" "$moved"
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"${moved:0:12}"* ]]
+  [[ "$tierline" == *"${pinned:0:12}"* ]]
+  [[ "$tierline" == *"ahead"* ]]
+  [[ "$tierline" == *"discard"* ]]
+  # `checkout --detach <pinned>` is exactly the command that would destroy the
+  # commits this tier carries, so the branch has not landed until it stops being
+  # offered — asserted explicitly so it cannot pass by the ahead wording simply
+  # never having been written.
+  [[ "$output" != *"checkout --detach"* ]]
+  # And not the sideways message's other half either. `/gitlore:merge` runs
+  # gitlore_adopt_advanced_live ahead of every ancestry test, which fires only
+  # when `live` is ahead of HEAD; for a tier already ahead of its pin the remote
+  # is contained in HEAD and the take reports nothing to take (Item 1.3's own
+  # finding). Offering it here sends the user in a circle, which is what "no
+  # automatic adoption exists" means in behaviour.
+  [[ "$output" != *"/gitlore:merge"* ]]
+}
+
+@test "a moved tier holding MERGE_HEAD is sent to /gitlore:resolve instead" {
+  # This is also Item 1.3 slice 2's branch-ORDER case ("a tier that is both
+  # mid-merge and ahead takes the mid-merge branch"): move_tier_off_pin leaves
+  # the tier ahead of its pin, so once the ahead branch exists this fixture
+  # satisfies both predicates and only the order decides which answers. That
+  # the fixture is ahead is asserted rather than left to the helper's name —
+  # a later repoint of move_tier_off_pin would otherwise turn the ordering pin
+  # vacuous in silence.
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin ddaanet
+  git -C memory/ddaanet merge-base --is-ancestor "$pinned" HEAD
   git -C memory/ddaanet rev-parse HEAD \
     > "$(git -C memory/ddaanet rev-parse --git-path MERGE_HEAD)"
 
@@ -285,11 +430,17 @@ pinned_store_with_tier() {
   # And NOT the return-to-the-pin remedy: that checkout unlinks MERGE_HEAD and
   # destroys the prepared merge, so the two wordings must not both appear.
   [[ "$output" != *"checkout --detach"* ]]
+  # Nor the ahead branch's, which would mean it ran first.
+  [[ "$output" != *"ahead"* ]]
 }
 
 @test "a moved tier with a merge state file and no MERGE_HEAD is mid-merge too" {
+  # The second half of the branch-order pin above, over the other mid-merge
+  # predicate.
   pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin ddaanet
+  git -C memory/ddaanet merge-base --is-ancestor "$pinned" HEAD
   # What a re-checkout leaves behind: remove_branch_state() unlinked MERGE_HEAD
   # and the state file outlived it (tests/resolve_recovery.bats).
   printf '{"flavor":"head-vs-remote"}\n' > "$(gitlore_merge_state_file memory/ddaanet)"
@@ -298,6 +449,7 @@ pinned_store_with_tier() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"tier 'ddaanet' is mid-merge"* ]]
   [[ "$output" != *"checkout --detach"* ]]
+  [[ "$output" != *"ahead"* ]]
 }
 
 @test "staging the moved gitlink lets the same store compose again" {

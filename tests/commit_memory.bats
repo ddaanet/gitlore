@@ -159,24 +159,40 @@ EOF"
   assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — stale hook'
 }
 
-@test "a tier moved off its pin aborts the commit" {
+@test "a tier moved sideways off its pin aborts the commit" {
   # gitlore_compose_check_pins refuses when a tier's worktree HEAD has moved off
   # the commit the memory store's INDEX records for it (D31, D36): projecting
   # root's text over an unadopted carrier would destroy approved upstream facts.
   # Item 1.2 makes that refusal abort the commit outright, rather than letting
   # the commit's own `add -A` stage the moved gitlink and erase the very
-  # condition the refusal fired on. Reach the pin mismatch with an empty commit
-  # made directly inside the tier worktree and never staged into memory's own
-  # index: check_pins reads `:ddaanet`, and the check runs ahead of
-  # gitlore_sync_tiers_to_live, so nothing has restaged that gitlink by the time
-  # it looks. The carrier and the root line disagree as well, so the refusal has
-  # real work to withhold rather than being a no-op.
+  # condition the refusal fired on. The carrier and the root line disagree as
+  # well, so the refusal has real work to withhold rather than being a no-op.
+  #
+  # Repointed at Item 1.3 slice 2 onto a SIDEWAYS move: an orphan commit shares
+  # no history with the pin in either direction (neither ancestor nor
+  # descendant), unlike a fast-forward `commit --allow-empty` (which stays a
+  # descendant, i.e. ahead) — the sideways case is the one whose wording and
+  # `checkout --detach` remedy stay unchanged, which is what this test's
+  # assertions below actually pin. The ahead case gets its own test next,
+  # "the pin-abort's ahead wording reaches both the agent arm and the user
+  # arm".
+  #
+  # Born-green: today ahead and sideways abort identically, so this cannot go
+  # red by writing it — its red is owed to the test review's mutation:
+  # implement slice 2's branch WITHOUT the `merge-base --is-ancestor` test
+  # (unconditionally, for every off-pin tier), watch "is checked out at" go
+  # red here because every off-pin tier now gets the ahead wording instead,
+  # then restore the ancestry test.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet shared.md "stale hook"
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
-  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+  git -C memory/ddaanet checkout -q --orphan gitlore-sideways-test
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge, sideways"
+  # The fixture's shape, asserted rather than assumed.
+  run ! git -C memory/ddaanet merge-base \
+    "$(git -C memory rev-parse ":ddaanet")" HEAD
 
   head_before=$(git -C memory rev-parse HEAD)
   pin_before=$(git -C memory rev-parse ":ddaanet")
@@ -201,7 +217,81 @@ EOF"
   [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
   [[ "$stderr" == *"moved off the commit the memory store records for it"* ]]
   [[ "$stderr" == *"is checked out at"* ]]
-  [[ "$stderr" == *"Return the tier to its pin with the command above"* ]]
+  # The wrapper's own sentence, which nothing else in the suite looks at. It
+  # names no remedy of its own — $pin_problems can carry tiers with different
+  # causes in one abort, so the wrapper points at the per-cause line each
+  # branch already printed. That the sideways line is a runnable command stays
+  # pinned on the producer, in tests/index_compose.bats.
+  [[ "$stderr" == *"Follow the remedy on each line above, then retry the commit"* ]]
+  # And not the ahead branch's words: for a sideways tier the return-to-the-pin
+  # remedy above is the right one.
+  [[ "$stderr" != *"ahead"* ]]
+}
+
+@test "the pin-abort's ahead wording reaches both the agent arm and the user arm" {
+  # resolve.sh's abort wrapper (gitlore_sync_memory_to_live) embeds
+  # gitlore_compose_check_pins' own $pin_problems verbatim in BOTH branches of
+  # gitlore_say_for_agent_or_user, so whatever index-compose.sh says for an
+  # ahead tier reaches stderr regardless of CLAUDECODE — this fixture proves
+  # it for the ahead case, complementing the sideways one above. A
+  # fast-forward `commit --allow-empty` stays a descendant of the tier's
+  # current HEAD (the pin the memory store still records): ahead, not
+  # sideways.
+  #
+  # What is asserted is what tests/index_compose.bats' ahead-of-pin test
+  # asserts, minus the shas: this test's job is that the wording CROSSES the
+  # wrapper into both arms, not to re-pin the message's content. Both positives
+  # are read off the tier's own report line, because the wrapper's agent arm
+  # wraps $pin_problems in remedy prose of its own and a whole-stderr match
+  # could be satisfied by that instead.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+  # The fixture's shape, asserted rather than assumed: a fast-forward
+  # `commit --allow-empty` stays a descendant of the commit the memory store
+  # still records, i.e. ahead.
+  git -C memory/ddaanet merge-base --is-ancestor \
+    "$(git -C memory rev-parse ":ddaanet")" HEAD
+
+  # The second run reuses this fixture, so what the first run leaves behind is
+  # snapshotted rather than assumed: a first run that stamped the commit-msg
+  # file, staged the gitlink or left merge state would make the second run's
+  # result mean something other than "the user arm says the same thing".
+  pin_before=$(git -C memory rev-parse ":ddaanet")
+  tier_head_before=$(git -C memory/ddaanet rev-parse HEAD)
+  tier_state_before=$(git -C memory/ddaanet status --porcelain)
+  mem_state_before=$(git -C memory status --porcelain)
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  agent_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
+  [[ "$agent_line" == *"ahead"* ]]
+  [[ "$agent_line" == *"discard"* ]]
+  [[ "$stderr" != *"checkout --detach"* ]]
+
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head_before" ]
+  [ "$(git -C memory/ddaanet status --porcelain)" = "$tier_state_before" ]
+  [ "$(git -C memory status --porcelain)" = "$mem_state_before" ]
+
+  unset CLAUDECODE
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  user_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
+  [[ "$user_line" == *"ahead"* ]]
+  [[ "$user_line" == *"discard"* ]]
+  [[ "$stderr" != *"checkout --detach"* ]]
+  # The report line is $pin_problems verbatim, so the two arms carry it
+  # unchanged; the arms themselves differ only in the remedy prose around it.
+  [ "$user_line" = "$agent_line" ]
+  # And the second run really was the other arm: scripts/lib/log.sh branches on
+  # CLAUDECODE, which a subagent dispatch sets in the ambient environment, so
+  # without a positive read of the user arm's own sentence this test could pass
+  # with the agent arm answering twice.
+  [[ "$stderr" == *"Open this project in Claude Code"* ]]
 }
 
 @test "a manifest refusal is reported and does not abort the commit" {
@@ -426,10 +516,10 @@ DRIVER
   [[ "$stderr" == *"ask it to repair the memory store, then retry."* ]]
   # Two things keep the negative below from going vacuous, both measured. An
   # empty or misrouted $stderr reds a positive above it rather than passing
-  # here — dropping the arm's own `>&2` reds the header assertion. And a
-  # wording drift in the agent remedy reds `a tier moved off its pin aborts the
-  # commit`, which asserts `Return the tier to its pin with the command above`
-  # positively over this same fixture, differing only in CLAUDECODE; without
-  # that pairing this line would refute wording no producer still emits.
-  [[ "$stderr" != *"Return the tier to its pin"* ]]
+  # here — dropping the arm's own `>&2` reds the header assertion. And the
+  # string it refutes is the agent arm's own remedy sentence, asserted
+  # positively by `a tier moved sideways off its pin aborts the commit`, so a
+  # wording drift reds that test rather than leaving this one refuting wording
+  # no producer still emits.
+  [[ "$stderr" != *"Follow the remedy on each line above"* ]]
 }

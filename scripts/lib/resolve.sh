@@ -1001,9 +1001,20 @@ gitlore_sync_memory_to_live() {
     if ! pin_problems=$(gitlore_compose_check_pins "$mempath"); then
       local pin_header="gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than adopt the move:
 $pin_problems"
+      # The agent arm names no remedy of its own. Every branch of
+      # gitlore_compose_check_pins already printed the one its cause takes —
+      # /gitlore:resolve mid-merge, the return-to-the-pin checkout sideways or
+      # diverged, inspect-and-stage for a tier ahead of its pin — and
+      # $pin_problems can carry several tiers with different causes in one
+      # abort, so no single remedy named here is right for all of them, and
+      # choosing per tier would re-derive a cause that function already
+      # decided. /gitlore:merge in particular sent the reader in a circle: it
+      # takes upstream through gitlore_adopt_advanced_live, which fires only
+      # when `live` is ahead of HEAD, so for a tier ahead of its own pin the
+      # remote is contained in HEAD and the take reports nothing to take.
       gitlore_say_for_agent_or_user \
         "$pin_header
-gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Return the tier to its pin with the command above, or run /gitlore:merge to take its content properly, then retry the commit — the approved summary is still in place." \
+gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit — the approved summary is still in place." \
         "$pin_header
 gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
       return 1
