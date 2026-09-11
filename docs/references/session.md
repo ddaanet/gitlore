@@ -103,7 +103,13 @@ has no `gitlore-memory` entry, no-op.
 9. **Compose the indexes**, then run the dangling-pointer report (D34). A
    refusal writes nothing and says why; a partial write says which indexes are
    composed.
-10. **Emit the standing orientation** on `additionalContext`: the FR11
+10. **Drain the relay markers.** A hook firing inside a subagent reports only to
+   that subagent, so it stages its report in a marker keyed by agent id (D51,
+   [cc-platform.md](cc-platform.md)). This folds in every marker no parent-side
+   batch collected, framed with the agent that staged it. The early exits above
+   — divergence, a failed fast-forward — return before this, which delays a
+   marker to the session after the repair rather than losing it.
+11. **Emit the standing orientation** on `additionalContext`: the FR11
    prohibition (D12) and the active tiers' own routing descriptions (D28).
 
 **Worktree creation — handled by `SessionStart`, not a `WorktreeCreate` hook.**

@@ -51,9 +51,10 @@ stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
 # add-tier-batch.sh resolve the SAME keyed name and drop the baseline they
 # consumed at batch end, even when nothing was touched.
 #
-# One residual, bounded rather than swept: a subagent that dies mid-batch leaves
-# its keyed files behind, and the next batch of that same agent id consumes and
-# deletes them. An agent id is not reused, so the leftovers are one pair per dead
+# One residual, bounded rather than swept. A pair stranded by an interrupted
+# batch is consumed and deleted by the next batch of that same agent id; one left
+# by a subagent that DIED is consumed by nothing, because that agent has no next
+# batch. An agent id is not reused, so those leftovers are one pair per dead
 # subagent, not unbounded growth — the same bound index-sync-post.sh already puts
 # on a stale pre-image.
 if [ ! -f "$stamp" ]; then
