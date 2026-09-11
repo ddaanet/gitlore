@@ -1,15 +1,18 @@
-# Claude Code platform workarounds — decisions D15, D18, D23
+# Claude Code platform workarounds — decisions D15, D18, D23, D51
 
-Three decisions whose subject is a Claude Code behaviour rather than gitlore's
+Four decisions whose subject is a Claude Code behaviour rather than gitlore's
 own design: the in-process worktree switch that strands memory, the absence of
-any hook field that can force a `Read`, and the `Edit` weld defect. Each carries
-the empirical work that established the platform behaviour, which is what makes
-them long and what makes them worth keeping whole.
+any hook field that can force a `Read`, the `Edit` weld defect, and the
+confinement of a hook's output to the subagent it fired in. Each carries the
+empirical work that established the platform behaviour, which is what makes them
+long and what makes them worth keeping whole.
 
 - Harness workarounds — **D15** an in-process-worktree memory-drift guard ·
   **D18** active recall is a skill the agent runs itself, with no hook and no
   state · **D23** the `Edit` weld defect is contained by a pair that computes
-  the intended result, repairs, and reports its own obsolescence
+  the intended result, repairs, and reports its own obsolescence · **D51** a
+  hook's output inside a subagent reaches that subagent alone, so its report is
+  relayed through a marker
 
 ---
 
@@ -178,6 +181,24 @@ The compose check and the sync refusal stay alongside it. The pair sees only
 glue arriving through `Edit`; a merge, a hand-edited carrier or a `Write`
 reaches an index without passing it.
 
+**D51 — A hook firing inside a subagent reports only to that subagent, so the
+report is relayed through a marker**
+
+Measured under CC 2.1.261, probe and control: the parent transcript carries zero
+`hook_*` attachments while the subagent's own JSONL carries all four, and the
+control run with no subagent surfaces both channels normally. `systemMessage`
+and `hookSpecificOutput.additionalContext` therefore both stop at the subagent.
+A composition triggered by a subagent's edit to the root index reports to nobody
+who can act on it, and the parent's only view is whatever the subagent chooses
+to narrate — model-mediated, not a mechanism.
+
+So a hook whose payload carries an `agent_id` stages its two bodies in a relay
+marker keyed by that id, and the next run without one folds every marker into
+its own report and removes it. The mechanism, and why the subagent still emits
+its own copy, are in [index-authoring-sync.md](index-authoring-sync.md). The
+relay helpers cite this decision for the measurement, which itself lives outside
+anything the plugin ships.
+
 ## Rejected alternatives
 
 **Hook-side injection of the bodies**, from a request file the agent writes:
@@ -198,3 +219,8 @@ denials as routine, corroding the channel that should mean stop. Arming it at
 `UserPromptSubmit` is worse still: it duplicates the native classifier that
 already fires there. The obligation lives in the calling skill's flow instead
 (D18).
+
+**Leaving a subagent's hook report to the subagent's own narration.** Both
+channels stop at the subagent, so what reaches the parent is prose the model
+chose to write rather than the report itself, and a report that never arrives
+leaves nothing behind to notice (D51).

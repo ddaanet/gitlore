@@ -66,7 +66,7 @@ rm -f "$stamp"
 gitlore_compose_and_report "$mempath" "$manifest_touched"
 
 # Keyed: the report above is confined to this subagent's own transcript
-# (measured under CC 2.1.261), so stage it for the next parent-side run to
+# (D51, measured under CC 2.1.261), so stage it for the next parent-side run to
 # fold in — in addition to, not instead of, the emission below: the subagent
 # is the actor and gets its own copy too. Guarded on the same emptiness the
 # emission guard below applies, and for the same reason: the drain frames

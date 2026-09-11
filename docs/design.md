@@ -221,11 +221,12 @@ git and decides (D7).
   the index git handed it, so the parent commit records the pointer its own hook
   just created; `pre-push` publishes in the same order. Both stand down rather
   than block a parent git operation, and divergence at either gate prepares a
-  merge and yields to `/gitlore:resolve`. `commit-memory.sh` and
-  `push-memory.sh` do the same work as callable scripts discovered through a
-  git-config key (D5, D16, D20); sharing a body with the hook keeps the
-  tier-before-memory ordering from drifting between the two paths (D42).
-  Orderings, contracts and the placeholder-remote marker are in
+  merge and yields to `/gitlore:resolve`. `pre-commit` composes the store before
+  it commits, so the carrier a tier's remote receives matches the root index
+  (D50). `commit-memory.sh` and `push-memory.sh` do the same work as callable
+  scripts discovered through a git-config key (D5, D16, D20); sharing a body
+  with the hook keeps the tier-before-memory ordering from drifting between the
+  two paths (D42). Orderings, contracts and the placeholder-remote marker are in
   [git-hooks-and-entry-points.md](references/git-hooks-and-entry-points.md).
 
 ### Install-time surfaces

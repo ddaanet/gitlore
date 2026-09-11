@@ -113,9 +113,9 @@ gitlore_compose_stamp_file() {
 # `gitlore-merge-state`, the `gitlore-merge-<artifact>` briefing files,
 # `gitlore-index-preimage` and `gitlore-compose-stamp`. A hook firing inside a
 # subagent has both its output channels confined to that subagent's own
-# transcript (measured under CC 2.1.261), so the report is staged here for the
-# next parent-side run to fold in and remove. $1 = memory path; $2 = agent id,
-# optional — same absent/empty-vs-non-empty contract as
+# transcript (D51, measured under CC 2.1.261), so the report is staged here for
+# the next parent-side run to fold in and remove. $1 = memory path; $2 = agent
+# id, optional — same absent/empty-vs-non-empty contract as
 # gitlore_index_preimage_file and gitlore_compose_stamp_file.
 gitlore_relay_marker_file() {
   git -C "$1" rev-parse --git-path "gitlore-relay$(_gitlore_agent_suffix "${2:-}")"

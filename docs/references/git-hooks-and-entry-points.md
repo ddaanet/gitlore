@@ -1,4 +1,4 @@
-# Git hooks and entry points — decisions D16, D20, D46
+# Git hooks and entry points — decisions D16, D20, D46, D50
 
 The git hooks that commit and publish memory, and the two callable scripts a
 caller outside gitlore's process reaches through a git-config key. The approval
@@ -10,6 +10,8 @@ in `design.md`.
   trigger file
 - The pointer — **D46** a parent commit is never rewritten to re-pin memory; a
   push refused by divergence is resolved and pushed again
+- The commit path — **D50** the store is composed before it is committed, a
+  compose refusal reported and a pin refusal fatal
 
 ---
 
@@ -46,7 +48,7 @@ session-less linked worktree) — never block a parent git operation over memory
 3. **Sync every dirty tier** and advance each tier's local `live`, so the
    gitlink the memory commit is about to record has already moved (D42).
 4. **Sync memory** through the shared `gitlore_sync_memory_to_live`: the FR11
-   dirty/freshness gate, `add -A`,
+   dirty/freshness gate, the pin guard and the down composition (D50), `add -A`,
    `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>`, remove the message file, then
    `push . HEAD:live` fast-forward-only. Divergence prepares a merge and yields
    (`gitlore_yield_merge`), exiting 1.
@@ -108,7 +110,8 @@ lookup and no coupling to gitlore's internal layout (D5, D16).
 
 **Shared body.** `gitlore_sync_memory_to_live` (lib) is the
 commit-and-advance-live logic factored out of `pre-commit`: dirty/freshness gate
-→ `add -A` → `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>` → `rm <msgfile>` →
+→ pin guard → compose (D50) → `add -A` →
+`GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>` → `rm <msgfile>` →
 `push . HEAD:live` (ff) → divergence (prepare / write merge-state / emit
 directive / exit 1). Both `pre-commit` and `commit-memory.sh` call it — one
 implementation, no drift.
@@ -197,12 +200,12 @@ and the remedy for its direction and nothing moves: which ref was intended is
 not recoverable from the refs. There is no approval step; FR11 gated the content
 at commit time.
 
-## Decisions — D16, D20, D46
+## Decisions — D16, D20, D46, D50
 
 Why the entry points have this shape: why each is standalone and arg-driven
 rather than a mode of the hook, and why the push skill calls one directly; and
 why a parent commit whose push was refused is never amended to catch up with
-memory.
+memory; and what the commit path does about a stale carrier before it commits.
 
 **D16 — Standalone memory-commit entry point (arg-driven)**
 
@@ -316,6 +319,55 @@ the merge is resolved. The loop that replaces it — resolve, push again, until
 the push lands — is the one the `push` skill already runs (D20), and a gitlink
 behind memory's tip is the same resting state every other memory advance leaves.
 
+**D50 — The commit path composes before it commits; a pin refusal is fatal**
+
+Composition otherwise runs from the session surfaces alone, so a carrier left
+stale by a missed in-session compose self-heals at the next `SessionStart` but
+**ships** if a memory commit lands first — and the carrier is what a tier's
+remote serves every other repo. `gitlore_sync_memory_to_live` composes before it
+commits, and ahead of `gitlore_sync_tiers_to_live`: composition writes carrier
+files inside the tiers, so a later pass would leave every gitlink pinning
+pre-compose content.
+
+**Dirty stores only.** Composing a clean store manufactures a dirty state no
+approved summary covers, and the gate would refuse the commit for a change the
+agent never made. A committed carrier already diverging from the committed root
+index waits for `SessionStart`, whose compose rides the next commit that has a
+summary. This holds the FR11 boundary: a carrier projects root index lines an
+approved summary already covered, never new content.
+
+**The two refusals are not interchangeable, and what separates them is what
+adopting one destroys.** A `gitlore_compose_check` refusal withholds a
+projection and destroys nothing, so the commit proceeds with the carrier as it
+stands and the refusal is only reported. Proceeding past a
+`gitlore_compose_check_pins` refusal instead lets this function's own `add -A`
+adopt the moved gitlink and remove the condition it refused on: the next compose
+projects root's older text over the carrier with nothing left to refuse,
+`gitlore_sync_tiers_to_live` commits that inside the tier, and `pre-push` ships
+it to the tier's own remote, so the approved upstream fact is destroyed one
+commit after the warning. The pin check therefore runs ahead of compose and
+aborts, naming no remedy of its own — every branch of
+`gitlore_compose_check_pins` prints the one its own cause takes, and a single
+abort can carry several tiers with different causes. A write failure aborts too
+— a half-written carrier must not be committed — and restamps the commit-msg
+file, so what that pass did write does not read as newer than the approval
+already given.
+
+**Staging a moved gitlink without projecting up first inverts that guard**, so
+`gitlore_adopt_recovered_merge` composes the recovered tier's carrier up into
+the root index, stages `MEMORY.md` and the tier together, and stages nothing
+when the projection fails. Staging alone returns the enclosing index to
+agreement with the tier's HEAD — the disagreement the pin check reads — so
+nothing is left to refuse and the next down projection writes root's older text
+over the merged-in facts.
+
+**A successful compose here stays silent**, by argument rather than omission: on
+rc 0 the result is discarded, so a commit that repairs a stale carrier says
+nothing. A non-empty result here does mean the in-session compose was missed,
+and one test would say so — but the in-session `PostToolBatch` report is the
+intended surface for that news, and repeating it puts a line on every commit
+that repairs anything, most of which the session has already seen.
+
 ## Rejected alternatives
 
 **Amending a tagged parent commit to re-pin memory after a `pre-push` merge.**
@@ -338,3 +390,11 @@ caller.** Fragile duplication of gitlore internals that would drift from
 validating freshness.** Couples external callers to a gitlore-internal path and
 keeps two approval semantics alive. Arg-driven (`-m`/`-F`) keeps the IPC
 handshake internal and gives callers one `git commit`-shaped contract (D16).
+
+**A refusal that instructs the agent to run compose.** Composition needs no
+judgement, so a gate that stops and asks for it is overhead the harness should
+absorb instead (NFR4, D50).
+
+**Reporting an off-pin tier and committing through it.** The commit's own
+`add -A` adopts the moved gitlink, so the report is followed at the next compose
+by exactly the silent overwrite it warned about (D50).

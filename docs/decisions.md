@@ -52,10 +52,14 @@ or push in flight.
 - **D16** — a standalone, arg-driven memory-commit entry point
 - **D20** — a push entry point the skill calls directly, with no trigger file
 - **D46** — a parent commit is never rewritten to re-pin memory
+- **D50** — the commit path composes the store before it commits; a pin refusal
+  aborts, a compose refusal only reports
 
 *Rejected:* a tip amend to re-pin memory · triggering a memory commit through a
 parent commit · reimplementing the sentinel, `push HEAD:live` and merge-state
-logic in a caller · a caller that pre-writes the commit-message file.
+logic in a caller · a caller that pre-writes the commit-message file · a refusal
+that instructs the agent to run compose · reporting an off-pin tier and
+committing through it.
 
 **Install and the memory remote** — what one-time setup does and refuses.
 [installation.md](references/installation.md)
@@ -100,9 +104,12 @@ empirical work that established it, which is why they stay whole.
 - **D18** — active recall is a skill the agent runs itself: no hook, no state
 - **D23** — the `Edit` weld defect is contained by a pair that computes the
   intended result, repairs, and reports its own obsolescence
+- **D51** — a hook's output inside a subagent reaches that subagent alone, so
+  its report is relayed through a marker
 
 *Rejected:* hook-side injection of the bodies from a request file the agent
-writes · a `PreToolUse` deny on the first durable write of an episode.
+writes · a `PreToolUse` deny on the first durable write of an episode · leaving
+a subagent's hook report to the subagent's own narration.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
