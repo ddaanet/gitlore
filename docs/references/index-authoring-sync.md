@@ -52,18 +52,19 @@ whether that call moved anything, which is also what covers a `Bash` call
 announcing no path. The first watched call of a batch stashes and later ones
 must not re-stash (that would diff against a mid-batch state and lose the
 earlier edits' changes); the post-hook drops the stash at every batch end, even
-one where the index went untouched, so a pre-image can never become
-*another agent's* baseline — a parent batch ending mid-subagent consumes its own
-and leaves the subagent's edit standing. A stash stranded by an interrupted
-batch is consumed by that same agent's next batch rather than discarded: the
-difference between it and the file is a propagation still owed. One left by a
-subagent that died mid-batch is consumed by nothing, and since an agent id is
-not reused the residual is one file per dead subagent rather than unbounded
-growth — a bound stated in a comment rather than swept. The compose hook's
-pre-batch stamp is its own file, keyed and dropped the same way, so neither hook
-depends on running before the other. `PreToolBatch` would pair more neatly but
-is unverified — absent from the hooks reference, with nothing observed
-confirming it fires for a single call.
+one where the index went untouched, so a pre-image never outlives the batch that
+took it. The key is what keeps one that does outlive it from becoming
+*another agent's* baseline — a parent batch ending mid-subagent consumes and
+removes its own only, and leaves the subagent's edit standing. A stash stranded
+by an interrupted batch is consumed by that same agent's next batch rather than
+discarded: the difference between it and the file is a propagation still owed.
+One left by a subagent that died mid-batch is consumed by nothing, and since an
+agent id is not reused the residual is one file per dead subagent rather than
+unbounded growth — a bound stated in a comment rather than swept. The compose
+hook's pre-batch stamp is its own file, keyed and dropped the same way, so
+neither hook depends on running before the other. `PreToolBatch` would pair more
+neatly but is unverified — absent from the hooks reference, with nothing
+observed confirming it fires for a single call.
 
 A frontmatter-only edit is left untouched; this hook never writes the index, and
 it deploys globally through the plugin hooks. It is
@@ -101,11 +102,13 @@ hook losing meaning is fixed **in the index line, not the file** — at the
 explicitness required for compliance, every clause earns its place.
 
 Inside a subagent both channels reach that subagent's own transcript and nothing
-else (measured under CC 2.1.261), so a keyed run also stages the two bodies in a
-relay marker named with the same `agent_id`. The next parent-side run — one with
-no agent id — folds every marker into its own report, frames each block with the
-agent that staged it, and removes them; `session-start.sh` drains the same way,
-so a marker outliving its session still lands. That staging is
+else (D51, measured under CC 2.1.261), so a keyed run also stages the two bodies
+in a relay marker named with the same `agent_id`. The next parent-side run whose
+own batch changed the index or the manifest — one with no agent id — folds every
+marker into its report, frames each block with the agent that staged it, and
+removes them; a batch that changed neither exits before the fold, so
+`session-start.sh` drains the same way and a marker no batch collected still
+lands. That staging is
 **in addition to the subagent's own emission, not instead of it**: the subagent
 is the actor and gets its copy. The marker therefore shares the pre-image's key
 and not its consumer — a baseline is consumed by the agent that took it, a
