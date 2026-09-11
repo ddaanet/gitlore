@@ -50,10 +50,11 @@ when a file is already present and every consumer `rm -f`s unconditionally, so a
 parent batch ending between a subagent's pre-hook and its post-hook consumed the
 subagent's baseline and stranded that edit silently. Every hook reads `agent_id`
 specifically and never `agent_type`, which also appears on the main thread of an
-`--agent` session. One residual is bounded rather than swept: a subagent that
-dies mid-batch leaves its keyed pair behind, and the next batch of that same
-agent id consumes and deletes it — an agent id is not reused, so the leftovers
-are one pair per dead subagent.
+`--agent` session. One residual is bounded rather than swept: a pair stranded by
+an interrupted batch is consumed and deleted by the next batch of that same
+agent id, and one left behind by a subagent that died is consumed by nothing —
+an agent id is not reused, so the leftovers are one pair per dead subagent
+rather than unbounded growth.
 
 Keying is what made the subagent relay possible. A hook firing inside a subagent
 has both `systemMessage` and `additionalContext` confined to that subagent's own

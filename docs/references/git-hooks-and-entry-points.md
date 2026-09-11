@@ -45,13 +45,14 @@ session-less linked worktree) — never block a parent git operation over memory
    sub-agent while `MERGE_HEAD` is there, and when a checkout has cleared it,
    classify what survives and repair, which may mean carrying straight on
    ([merge-state-recovery.md](merge-state-recovery.md)).
-3. **Sync every dirty tier** and advance each tier's local `live`, so the
-   gitlink the memory commit is about to record has already moved (D42).
-4. **Sync memory** through the shared `gitlore_sync_memory_to_live`: the FR11
-   dirty/freshness gate, the pin guard and the down composition (D50), `add -A`,
-   `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>`, remove the message file, then
-   `push . HEAD:live` fast-forward-only. Divergence prepares a merge and yields
-   (`gitlore_yield_merge`), exiting 1.
+3. **Compose the store, then sync every dirty tier** and advance each tier's
+   local `live`, so the gitlink the memory commit is about to record has already
+   moved (D42), onto composed carrier content (D50).
+4. **Sync memory** through the shared `gitlore_sync_memory_to_live`, which is
+   what runs step 3: the FR11 dirty/freshness gate, the pin guard, the down
+   composition, `add -A`, `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>`, remove
+   the message file, then `push . HEAD:live` fast-forward-only. Divergence
+   prepares a merge and yields (`gitlore_yield_merge`), exiting 1.
 5. **Stage the gitlink** into the index git handed the hook — the captured
    `GIT_INDEX_FILE`, restored for that one `git add`, because a bare `add`
    misses the `-a` and pathspec index flavors and dies on `index.lock` under
@@ -110,7 +111,7 @@ lookup and no coupling to gitlore's internal layout (D5, D16).
 
 **Shared body.** `gitlore_sync_memory_to_live` (lib) is the
 commit-and-advance-live logic factored out of `pre-commit`: dirty/freshness gate
-→ pin guard → compose (D50) → `add -A` →
+→ pin guard → compose (D50) → tier sync (D42) → `add -A` →
 `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>` → `rm <msgfile>` →
 `push . HEAD:live` (ff) → divergence (prepare / write merge-state / emit
 directive / exit 1). Both `pre-commit` and `commit-memory.sh` call it — one
@@ -324,10 +325,9 @@ behind memory's tip is the same resting state every other memory advance leaves.
 Composition otherwise runs from the session surfaces alone, so a carrier left
 stale by a missed in-session compose self-heals at the next `SessionStart` but
 **ships** if a memory commit lands first — and the carrier is what a tier's
-remote serves every other repo. `gitlore_sync_memory_to_live` composes before it
-commits, and ahead of `gitlore_sync_tiers_to_live`: composition writes carrier
-files inside the tiers, so a later pass would leave every gitlink pinning
-pre-compose content.
+remote serves. `gitlore_sync_memory_to_live` composes before it commits, and
+ahead of `gitlore_sync_tiers_to_live`: composition writes carrier files inside
+the tiers, so a later pass would pin every gitlink to pre-compose content.
 
 **Dirty stores only.** Composing a clean store manufactures a dirty state no
 approved summary covers, and the gate would refuse the commit for a change the
@@ -364,9 +364,9 @@ over the merged-in facts.
 **A successful compose here stays silent**, by argument rather than omission: on
 rc 0 the result is discarded, so a commit that repairs a stale carrier says
 nothing. A non-empty result here does mean the in-session compose was missed,
-and one test would say so — but the in-session `PostToolBatch` report is the
-intended surface for that news, and repeating it puts a line on every commit
-that repairs anything, most of which the session has already seen.
+and one `[ -n … ]` test would say so — but the in-session `PostToolBatch` report
+is the intended surface for that news, and repeating it puts a line on every
+commit that repairs anything, most of which the session has already seen.
 
 ## Rejected alternatives
 
