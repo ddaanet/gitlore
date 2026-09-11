@@ -10,9 +10,10 @@ quoted are under the 40-line budget.
 Two independent measurements, cross-checked against each other.
 
 **Ground truth (exact).** Every assistant message carries `message.usage`. The
-context size at API call *k* is `input_tokens + cache_creation_input_tokens +
-cache_read_input_tokens`. Summing that over all calls gives the session's total
-billed input. These are the model's own token counts, not estimates.
+context size at API call *k* is
+`input_tokens + cache_creation_input_tokens + cache_read_input_tokens`. Summing
+that over all calls gives the session's total billed input. These are the
+model's own token counts, not estimates.
 
 **Attribution (modelled, ±15%).** For each consecutive pair of API calls I take
 the *measured* context delta and split it across the transcript entries that
@@ -60,10 +61,10 @@ below are its unless stated; the other sessions are reported where they differ.
 
 ## Where the context goes
 
-Two views. **Share of peak context** answers "what filled the window". **Share
-of billed input** — token-turns, each block's size times the number of API calls
-that followed it — answers "what it cost", and is the one that should drive
-decisions, because a block added early is paid hundreds of times.
+Two views. **Share of peak context** answers "what filled the window".
+**Share of billed input** — token-turns, each block's size times the number of
+API calls that followed it — answers "what it cost", and is the one that should
+drive decisions, because a block added early is paid hundreds of times.
 
 ### Share of peak context (419,100 tok)
 
@@ -113,8 +114,8 @@ dispatch prompts 17.1%.
 files, 245,038 chars of results. The corrector reports are large by design:
 across the job's 69 reports, code-review reports average 16,240 bytes and
 test-review reports 15,073 bytes (max 24,713), against 6,452 for RED and 4,955
-for GREEN. Corrector output is 516KB of the job's 747KB of reports. The
-apparent "re-reads" are mostly paging — `sed -n '1,95p'` then `'95,215p'` then
+for GREEN. Corrector output is 516KB of the job's 747KB of reports. The apparent
+"re-reads" are mostly paging — `sed -n '1,95p'` then `'95,215p'` then
 `'215,300p'` through one report — not the same bytes twice. Genuine duplicate
 reads are two commands issued twice, about 7,200 chars. So there is almost no
 waste here to reclaim; the cost is that reports are long and the orchestrator
@@ -124,10 +125,11 @@ reads them end to end.
 median 6,836, mean 6,970, max 9,575, evenly split between `test-driver` and
 `corrector` (83.6K chars each). Two measurements matter for the hypotheses
 below. Line-level repetition across prompts is 15% of prompt chars, and the
-repeated lines are short boilerplate (`Working directory: ...`, `Commit
-nothing.`, the `Done criteria` heading). And an 8-gram provenance check against
-every candidate source gives: 4.6% from `runbook.md`, 1.2% from any report, 0.1%
-from `outline.md`, 0.0% from `docs/design.md` — **94.8% novel text**.
+repeated lines are short boilerplate (`Working directory: ...`,
+`Commit nothing.`, the `Done criteria` heading). And an 8-gram provenance check
+against every candidate source gives: 4.6% from `runbook.md`, 1.2% from any
+report, 0.1% from `outline.md`, 0.0% from `docs/design.md` —
+**94.8% novel text**.
 
 **Bash results other than reports (16.4% billed).** 52,267 chars over 32 calls
 of source-file reading, the largest being `scripts/lib/index-sync.sh` (12,145
@@ -187,9 +189,9 @@ actionable from the skill body.
 **3. The handoff task file appears twice in the base.** At session start the
 same ~9.7KB handoff text arrives once inside the `hook_success` stdout and again
 as `hook_additional_context` (10,516 and 10,988 chars). Whether *both* reach the
-API or the `hook_success` record is UI-only is not decidable from the
-transcript — a cross-session regression on this was inconclusive. Worth one
-`/context` check; if both are sent it is ~3K tokens on every call of the session.
+API or the `hook_success` record is UI-only is not decidable from the transcript
+— a cross-session regression on this was inconclusive. Worth one `/context`
+check; if both are sent it is ~3K tokens on every call of the session.
 
 **4. Two duplicated commands.** One `sed -n '80,135p' … item-3-1-s4-code-review`
 and one `awk '/^### 5b/…' … item-3-1-s5-code-review`, each issued twice, ~7,200
@@ -213,7 +215,8 @@ is a bigger single line than either, and the two of them together are beaten by
 the combination of base prompt + non-report Bash results (33.7%). More
 importantly, both are dwarfed by the *structural* effect described in
 recommendation A: the same content in a 366-call session costs three times what
-it costs in a 122-call session, and no reduction inside a category can beat that.
+it costs in a 122-call session, and no reduction inside a category can beat
+that.
 
 ### 2. "Dispatch prompts could be prepared in files, referenced by path" — FALSIFIED as stated
 
@@ -239,15 +242,16 @@ the file. Two shapes, and the data speaks to both.
   substantial to template.
 - *A composer subagent.* This is where the 94.8%-novel figure bites. That novel
   text is not invention for its own sake — inspection of the prompt structure
-  shows sections like `## Constraints established by measurement — do not
-  rediscover these` and `## The mutation round — this is the point of the
-  review`, which encode what the orchestrator learned from the *previous*
-  slice's reports, restated in its own words (hence only 1.2% overlap with the
-  report text). A composer subagent would need that knowledge, which means
-  either shipping it the reports (moving the cost, not removing it) or shipping
-  it the orchestrator's understanding (which is the expensive part). The saving
-  would be real but bounded by how much of the prompt is genuinely
-  context-free — and the measurement says most of it is not.
+  shows sections like
+  `## Constraints established by measurement — do not rediscover these` and
+  `## The mutation round — this is the point of the review`, which encode what
+  the orchestrator learned from the *previous* slice's reports, restated in its
+  own words (hence only 1.2% overlap with the report text). A composer subagent
+  would need that knowledge, which means either shipping it the reports (moving
+  the cost, not removing it) or shipping it the orchestrator's understanding
+  (which is the expensive part). The saving would be real but bounded by how
+  much of the prompt is genuinely context-free — and the measurement says most
+  of it is not.
 
 What *does* pay, cheaply: the 15% of prompt chars that are repeated boilerplate
 (~24,342 chars ≈ 10,000 tokens ≈ 1.9% of billed). Those lines — working
@@ -280,18 +284,18 @@ verdict" would plausibly return "correct, no changes needed" and drop §6 —
 that changes what happens next. The failure is silent: the orchestrator cannot
 tell a report with nothing in it from a summary that lost the one thing in it.
 
-So the qualified form: **delegating the whole report is unsafe; delegating by
-report class is sound.** RED and GREEN reports (mean 6,452 and 4,955 bytes) are
-mostly per-test output the orchestrator does not act on — it needs a pass/fail
-roll-up and a commit hash, both mechanically extractable and both verifiable
-against `git log` and a test re-run if wrong. Corrector reports are where
-judgement lives and should keep being read by the orchestrator. A cheaper and
-strictly safer variant for those: have the corrector's report format put a
-machine-shaped verdict block at the top — verdict, files changed, findings
-reported-not-applied, list-revision suggestions — so the orchestrator reads a
-short head first and pages into a section only when the head points at one. That
-keeps the orchestrator as the reader and cuts the bytes, with no summariser in
-the path.
+So the qualified form:
+**delegating the whole report is unsafe; delegating by report class is sound.**
+RED and GREEN reports (mean 6,452 and 4,955 bytes) are mostly per-test output
+the orchestrator does not act on — it needs a pass/fail roll-up and a commit
+hash, both mechanically extractable and both verifiable against `git log` and a
+test re-run if wrong. Corrector reports are where judgement lives and should
+keep being read by the orchestrator. A cheaper and strictly safer variant for
+those: have the corrector's report format put a machine-shaped verdict block at
+the top — verdict, files changed, findings reported-not-applied, list-revision
+suggestions — so the orchestrator reads a short head first and pages into a
+section only when the head points at one. That keeps the orchestrator as the
+reader and cuts the bytes, with no summariser in the path.
 
 ## Recommendations, ranked by measured saving
 
@@ -336,10 +340,11 @@ corrector appends to it, and the harness pushes a full snapshot back. Measured
 16,939 tok (`95b12e49`) and 21,636 tok (`4fe296f6`).
 
 **File:** `skills/orchestrate/SKILL.md` §3 and §4. Mechanism: read a report
-*after* the precommit that rewraps it, not before — or exclude `plans/*/reports/`
-from `just format-docs`' wrap set so a report is never rewritten after it is
-written. The second is cheaper and removes the cause rather than sequencing
-around it, but it touches the `justfile`, which is this repo's, not the plugin's.
+*after* the precommit that rewraps it, not before — or exclude
+`plans/*/reports/` from `just format-docs`' wrap set so a report is never
+rewritten after it is written. The second is cheaper and removes the cause
+rather than sequencing around it, but it touches the `justfile`, which is this
+repo's, not the plugin's.
 
 **Risk:** near zero for the sequencing change. Confirm first that the
 re-injections are in fact rewrap-driven — `git log -p --stat` on one report file
@@ -402,8 +407,8 @@ and a re-run, so the summariser failure mode is detectable rather than silent.
 - **Shrinking `just precommit` output.** It is 1.3% of peak / measured 5,296
   tokens over 16 calls. The background-task-plus-gate-file protocol in
   `CLAUDE.md` is already doing its job; there is nothing to reclaim.
-- **Compressing agent return messages.** 3,478 tokens over 24 returns, 0.8%.
-  The return contract is already one line.
+- **Compressing agent return messages.** 3,478 tokens over 24 returns, 0.8%. The
+  return contract is already one line.
 - **Fixing the two duplicated Bash commands.** ~7,200 chars. Noted for honesty;
   not a change worth making.
 - **Trimming the base prompt from inside orchestrate.** The 17.3% is real, but
@@ -414,9 +419,9 @@ and a re-run, so the summariser failure mode is detectable rather than silent.
 ## Uncertain, and what would settle it
 
 - **Base-prompt composition.** The 22,062-token invisible floor is measured; its
-  internal split between system prompt, tool schemas and the `CLAUDE.md` chain is
-  inferred from file sizes. Claude Code's `/context` command reports the split
-  directly.
+  internal split between system prompt, tool schemas and the `CLAUDE.md` chain
+  is inferred from file sizes. Claude Code's `/context` command reports the
+  split directly.
 - **Handoff double-injection.** Whether `hook_success` stdout and
   `hook_additional_context` both reach the API, or only one does. `/context` at
   the start of a session resumed from a handoff answers it.
@@ -426,8 +431,9 @@ and a re-run, so the summariser failure mode is detectable rather than silent.
   contract; it could differ under a different effort setting. It matters only if
   it changes — at 1–6% it is not a lever today.
 - **Cache economics.** 98% of the flagship session's billed input was
-  `cache_read_input_tokens`. Cache reads bill at a fraction of base input, so the
-  *monetary* ranking of these recommendations differs from the token ranking, and
-  recommendation A benefits most (it removes reads rather than writes). I have
-  not applied a price multiplier here; current per-model cache-read pricing
-  should be checked before converting any of these figures to money.
+  `cache_read_input_tokens`. Cache reads bill at a fraction of base input, so
+  the *monetary* ranking of these recommendations differs from the token
+  ranking, and recommendation A benefits most (it removes reads rather than
+  writes). I have not applied a price multiplier here; current per-model
+  cache-read pricing should be checked before converting any of these figures to
+  money.

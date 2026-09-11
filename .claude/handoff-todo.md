@@ -1,41 +1,41 @@
 ## Open decisions
 
-- **Two process items from my human partner, and the reason for this
-  compaction — do these before resuming Phase 4.**
-  1. `just precommit`'s bats output is far too noisy. It should print minimal
-     output on green and full detail only for failures and errors. Check
-     whether bats flags already do this before writing anything —
-     `scripts/run-bats.sh` is the wrapper and already filters to `not ok`
-     blocks plus a count, so the noise may be coming from somewhere else in
-     the recipe.
-  2. Orchestrate sessions churn through context. Delegate an **opus** agent to
-     analyse recent orchestrate sessions: what consumes context, and what can
-     be reduced or delegated? My human partner's own hypotheses, to test rather
-     than assume: dispatch-prompt authoring and report reading are the big
-     consumers; prompts could be prepared in files and referenced by path in
-     the Agent call; and since every edify agent already reports to a file
-     rather than by message, report *processing* can itself be delegated.
+- **Which of the orchestrate context-analysis recommendations to act on.**
+  Report at `plans/2026-09-10-orchestrate-context-analysis.md`. Recommendation A
+  — split a run across sessions at phase boundaries — measured 35% saving at two
+  splits, 55% at four, and bears directly on this runbook, which has a phase
+  boundary coming. Recommendation B's cleanest form is excluding
+  `plans/*/reports/` from what `just format-docs` hard-wraps, which changes this
+  repo's wrapping policy and is my human partner's call, not mine. C (dispatch
+  preamble to a fragment), D (verdict head on corrector reports) and E (delegate
+  RED/GREEN roll-up only) are all edify-plugin edits, i.e. another repo.
 
-- **The `precommit` gate returns verdicts spanning two trees, cause still
-  unidentified.** During Phase 3 it recurred from the main session, not a
-  subagent. Sentinels resolve through `git rev-parse --git-path` into a gitdir
-  every peer session shares, and nothing in a sentinel records which tree or
-  process wrote it — so a disagreeing hash is the lucky case, and a peer whose
-  tree happens to hash the same would write a pass for a suite you never ran.
-  Decide whether to settle it or to stop treating sentinels as evidence and
-  read verdicts from suite output. Did not recur across Item 1.2's or Item
-  1.3's gate runs.
+- **Where the chunked gate runner should live.** `/tmp/claude-1000/gate-chunks1.sh`
+  is the only fallback that has completed a full verdict twice, and it is in a
+  tmpfs that will not survive a reboot. It runs one bats suite per invocation,
+  appends `KEY=<tag>:<suite> bats: N passed, M failed` per chunk, and is
+  resumable by skipping recorded keys — which means its results file must be
+  deleted before a fresh run or it reports stale passes. Decide whether it
+  becomes a tracked script with its own recipe.
 
-- **Whether `CLAUDE.md` §Testing's gate paragraph is rewritten. Four errors
+- **Whether `CLAUDE.md` §Testing's gate paragraph is rewritten. Five errors
   now.** It says a sentinel is "valid for the tree when its mtime postdates the
   last edit to any gated input", but the mechanism is a content hash and mtime
   ordering is not evidence at all. It points at `just check-sentinel`, which
   does not exist — that is a justfile-prolog shell function, so the command
   errors with `Justfile does not contain recipe`. Its OOM fallback ("three
-  sequential `just` calls") failed outright in Phase 3. And new this session:
-  chunking at 2 suites, which the paragraph would be rewritten to recommend,
-  *also* OOMs when other sessions hold the box — only 1 suite at a time
-  completed. `/tmp/claude-1000/gate-chunks1.sh` is that variant.
+  sequential `just` calls") failed outright in Phase 3. Chunking at 2 suites
+  also OOMs when other sessions hold the box. And new this session: **`just
+  test-unit` alone at `GITLORE_TEST_JOBS=1` OOMs too**, so the paragraph's
+  fallback has no working rung left above the per-suite chunker.
+
+- **The `precommit` gate returns verdicts spanning two trees, cause still
+  unidentified.** Sentinels resolve through `git rev-parse --git-path` into a
+  gitdir every peer session shares, and nothing in a sentinel records which tree
+  or process wrote it — so a disagreeing hash is the lucky case, and a peer
+  whose tree happens to hash the same would write a pass for a suite you never
+  ran. Decide whether to settle it or to stop treating sentinels as evidence and
+  read verdicts from suite output.
 
 - The memory index against Claude Code's ~24,985-byte loader cutoff, per
   `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports
@@ -67,9 +67,7 @@
 
 - Whether a phantom-dotfile prohibition (never delete, commit or report one)
   goes into `memory/ddaanet/shared-claude.md`. No hook fires on the `` !`cmd` ``
-  expansion path, so prose is the only mechanism. Seen again this session: a
-  `git status` mid-run showed `.bashrc`, `.zshrc`, `.claude/agents` and a dozen
-  more as untracked; they were excluded from the commit by staging explicitly.
+  expansion path, so prose is the only mechanism.
 
 - Whether `2026-09-02-bang-expansion-hook-decompile.md` belonged in the move to
   sandbox-lies. Its finding matters to gitlore independently as a hook-heavy
@@ -81,21 +79,29 @@
 
 ## Remaining
 
-- Phase 4: Item 1.3 slice 2, then Items 4.1 + 4.2 in one commit, then 4.3.
+- Phase 4: Items 4.1 + 4.2 in one commit, then 4.3.
+
+- Add to `.claude/rules/shell.md`: **`set -e` does not abort a Bash tool
+  command.** A subagent's probe began `W="$TMPDIR/mbprobe"; cd "$W"` with
+  `$TMPDIR` unset, so `cd` failed — and the rest of the script ran in the repo
+  root, re-running `git init` and leaving HEAD on an unborn orphan branch. The
+  unset-`$TMPDIR` half is already recorded there; the non-aborting half is not,
+  and it is what turns a failed guard into action in the wrong directory.
 
 - Write the testing facts Phases 3, 1.2 and 1.3 produced, once the index budget
   allows. **An assertion positioned after a test's death point has never
-  executed** — bitten four times now. **A born-green case needs a mutation-red
-  proof.** **`jq -r` prints the literal string `null` for an absent key.** **A
-  fixture restore must be conditional.** New from Item 1.3: **a mutation proof
-  can go stale** — case 15's comment claimed a naive-predicate red that stopped
-  holding once staging became a pair, so a comment naming a mutation needs
-  re-checking whenever the SUT's shape changes. And **the fixture must create
-  the condition the projection actually acts on**: `gitlore_compose_down` keeps
-  a carrier-only line (`o=0, t=1, b=0`) and rewrites one root also carries, so
-  a probe whose upstream side *adds* an index line goes green against a
-  destructive implementation and proves nothing — it must *re-text a line both
-  surfaces already hold*.
+  executed.** **A born-green case needs a mutation-red proof.** **`jq -r` prints
+  the literal string `null` for an absent key.** **A fixture restore must be
+  conditional.** **A mutation proof can go stale** — slice 1's case 15 claimed a
+  naive-predicate red that stopped holding once staging became a pair. **The
+  fixture must create the condition the projection actually acts on**:
+  `gitlore_compose_down` keeps a carrier-only line (`o=0, t=1, b=0`) and
+  rewrites one root also carries, so a probe whose upstream side *adds* a line
+  goes green against a destructive implementation. New from slice 2: **a
+  negative assertion needs the mutation that makes the string appear**, not the
+  one that removes it — and **a fixture helper's name is not its shape**, so a
+  test should assert its own fixture's shape (`run ! git … merge-base …`) rather
+  than trust the helper.
 
 - Write the orchestration fact: every one of three `edify:test-driver` GREEN
   dispatches in Item 2.1 went idle waiting on a background `just precommit`
@@ -112,7 +118,7 @@
 
 - Write the citation-boundary fact: shipped plugin source cites neither
   `plans/` nor `memory/`, nor a runbook/slice identifier, nor a line number.
-  Item 1.3's code review stripped three more.
+  Slices 1.3/1 and 1.3/2 stripped six between them.
 
 - Record that `find` on this box is `bfs`, which rejects `-newermt '-60
   minutes'` and, under `2>/dev/null`, reads as "no files matched".
