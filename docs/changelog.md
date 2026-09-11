@@ -6,6 +6,14 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-11 — The commit path composes before it commits](changelog/2026-09-11-the-commit-path-composes-before-it-commits.md)
+  — a carrier left stale by a missed in-session compose self-healed at the next
+  `SessionStart` but shipped if a memory commit landed first, and the carrier is
+  what a tier's remote serves; `gitlore_sync_memory_to_live` now composes ahead
+  of the tier commits on dirty stores only, a compose refusal reports while a
+  pin refusal aborts rather than let `add -A` adopt the moved gitlink (D50), and
+  the `PostToolBatch` baselines are keyed per agent, which is what lets a
+  subagent's confined report relay to the parent through a keyed marker (D51)
 - [2026-09-07 — The decisions index leaves the hub](changelog/2026-09-07-the-decisions-index-leaves-the-hub.md)
   — `docs/design.md` hit the 400-line cap with a decision waiting; the decision
   groups and their *Rejected* lines move whole into `docs/decisions.md` along
