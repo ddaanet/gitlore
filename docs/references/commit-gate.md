@@ -3,9 +3,10 @@
 The FR11 approval gate: the nudge that opens an episode, the standalone commit
 it produces, and the decisions arguing for that shape. FR11 itself and the
 conclusions open the node below; this file is what you need while building or
-debugging approval. The git hooks and the two callable scripts that carry a
-commit or a push out are in
-[git-hooks-and-entry-points.md](git-hooks-and-entry-points.md).
+debugging approval. The git hooks that carry a commit or a push out are in
+[git-hooks.md](git-hooks.md), and the two callable scripts that do the same with
+no parent operation in flight are in
+[memory-entry-points.md](memory-entry-points.md).
 
 - Approval — **D4** the commit message travels by file handshake, and its
   presence is the approval signal · **D12** a submodule-side commit gate backs

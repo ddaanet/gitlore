@@ -96,12 +96,12 @@ failed to keep up rather than a state anything chose, and the take advances it
 with a local ff-checked `push . HEAD:live` rather than leaving it there. The
 publish preflight repairs that direction the same way and in place of the drift
 report it would otherwise make
-([git-hooks-and-entry-points.md](git-hooks-and-entry-points.md)). The move
-itself publishes nothing: every commit in `HEAD` reached it through a gate. The
-producer is a merge preparation that checked `HEAD` out at `origin/live` and
-could not continue, which leaves the remote contained in `HEAD` and `live` where
-it was — the store then calls itself finished on every later take while every
-push is refused as a non-fast-forward. That direction is the one *repaired*.
+([memory-entry-points.md](memory-entry-points.md)). The move itself publishes
+nothing: every commit in `HEAD` reached it through a gate. The producer is a
+merge preparation that checked `HEAD` out at `origin/live` and could not
+continue, which leaves the remote contained in `HEAD` and `live` where it was —
+the store then calls itself finished on every later take while every push is
+refused as a non-fast-forward. That direction is the one *repaired*.
 
 **The other direction is a take, and a checkout is what breaks it.** A tier's
 `live` ahead of a `HEAD` sitting at the pin holds commits the memory store never

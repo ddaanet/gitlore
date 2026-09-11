@@ -146,7 +146,7 @@ The session-start detach and fast-forward, the advance after a commit, the two
 divergence gates that reduce to one shape (D6, D41), and why the parent's ref
 layout is no concern of memory's are in
 [merge-and-resolve.md](references/merge-and-resolve.md); the gitlink invariant
-is in [git-hooks-and-entry-points.md](references/git-hooks-and-entry-points.md).
+is in [git-hooks.md](references/git-hooks.md).
 
 ### Configuration
 
@@ -226,8 +226,10 @@ git and decides (D7).
   (D50). `commit-memory.sh` and `push-memory.sh` do the same work as callable
   scripts discovered through a git-config key (D5, D16, D20); sharing a body
   with the hook keeps the tier-before-memory ordering from drifting between the
-  two paths (D42). Orderings, contracts and the placeholder-remote marker are in
-  [git-hooks-and-entry-points.md](references/git-hooks-and-entry-points.md).
+  two paths (D42). The hook orderings and the gitlink contract are in
+  [git-hooks.md](references/git-hooks.md); the two scripts, the `push` skill and
+  the placeholder-remote marker are in
+  [memory-entry-points.md](references/memory-entry-points.md).
 
 ### Install-time surfaces
 

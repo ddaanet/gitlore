@@ -78,7 +78,7 @@ commit itself rather than in a later, unrelated one. That pass is **up-only**
 **commit path, on a dirty store, before the commit**: the carrier is what a
 tier's remote serves, so one left stale by a missed in-session pass would ship
 rather than wait for the next `SessionStart` (D50,
-[git-hooks-and-entry-points.md](git-hooks-and-entry-points.md)).
+[git-hooks.md](git-hooks.md)).
 
 The mid-session trigger keys on
 **what changed, not on what the batch declared**: `index-sync-pre.sh` stamps the
