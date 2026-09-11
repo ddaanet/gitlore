@@ -179,12 +179,42 @@ $sysmsg"; fi
     if [ -n "$old_ctx" ]; then ctx="$old_ctx
 $ctx"; fi
   fi
+  # Built at "$marker.tmp" and installed with `mv` rather than written
+  # straight to "$marker": a process killed mid-write (or ENOSPC, or EIO)
+  # would otherwise leave a torn prefix on the marker path itself, and
+  # _gitlore_relay_sysblock/_gitlore_relay_ctxblock cannot tell a torn file
+  # from a whole one — the next drain folds the partial body in as if it
+  # were a real report and destroys it, taking down whatever was already
+  # staged for this agent along with it. A killed writer instead leaves only
+  # the temp; the marker this drain reads is untouched. `mv` within one
+  # gitdir is a same-filesystem rename, so the install itself cannot tear.
+  #
+  # `&&`, not a bare sequence relying on the function's `set -e`: both call
+  # sites are `if ! gitlore_relay_write …`, a condition context where
+  # errexit is off, so a failed write here must return non-zero itself
+  # rather than let the shell abort — that non-zero is what routes into the
+  # callers' own "could not be staged" reporting instead of silently losing
+  # the report.
   {
     printf -- '--- gitlore-relay-sysmsg ---\n'
     printf '%s\n' "$sysmsg"
     printf -- '--- gitlore-relay-ctx ---\n'
     printf '%s\n' "$ctx"
-  } > "$marker"
+  } > "$marker.tmp" || return 1
+  if [ -d "$marker" ]; then
+    # A directory already squatting the marker path is refused, the same
+    # shape gitlore_relay_drain's own `-type f` filter names as "what makes a
+    # relay write fail in the first place". Refused explicitly rather than
+    # left to `mv`: POSIX `mv` treats an existing directory destination as a
+    # target directory and moves the source *into* it instead of failing, so
+    # without this check the squat would silently succeed at
+    # "$marker/$(basename "$marker.tmp")" — landing nowhere the drain's glob
+    # (`gitlore-relay-*` at `-maxdepth 1`) ever looks. The temp is removed so
+    # the squat leaves nothing on disk for a later run to trip over.
+    rm -f "$marker.tmp"
+    return 1
+  fi
+  mv "$marker.tmp" "$marker"
 }
 
 # Fold every keyed relay marker in the memory gitdir into
@@ -215,10 +245,20 @@ gitlore_relay_drain() {
   # cannot remove it, so every later run would frame it again. That shape is
   # what makes a relay write fail in the first place — a directory already
   # occupying the marker path — not something a failed write leaves behind.
+  #
+  # `'!' -name '*.tmp'` excludes gitlore_relay_write's in-progress temp: a
+  # writer killed between opening "$marker.tmp" and its `mv` leaves that temp
+  # standing beside (or alone, if this is the agent's first write) the real
+  # marker, and without this exclusion it is enumerated as a "marker" of its
+  # own — framed under the bogus agent id its `.tmp` suffix becomes part of,
+  # its torn body folded in, and then rm -f'd as evidence. Excluding it here
+  # is also why the loop below never removes it itself: only the temp that
+  # belongs to a marker this drain actually drains is cleaned up, further
+  # down, once that marker is known to be a real one.
   names=""
   while IFS= read -r -d '' marker; do
     names="$names${marker##*/}"$'\n'
-  done < <(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' -print0)
+  done < <(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' '!' -name '*.tmp' -print0)
   [ -n "$names" ] || return 0
   # Sorted, because find's own directory order is not guaranteed. Basenames
   # rather than whole paths: a basename is `gitlore-relay-` plus the
@@ -252,6 +292,20 @@ $ctxblock
     # shape, so a marker this drain can read fine still costs its caller
     # everything if the directory it lives in refuses the remove.
     rm -f "$marker" || true
+    # A stranded "$marker.tmp" for THIS agent id — the writer that produced
+    # this very marker died on some *later* write than the one that landed,
+    # rather than on its first — is cleaned up here rather than left for the
+    # next drain to trip over again. Scoped to a marker actually drained
+    # above, not a blanket sweep of every `.tmp` in the gitdir: two main
+    # sessions in the same repo are not sequential the way hooks within one
+    # session are, and a blanket sweep could unlink a concurrent session's
+    # own in-flight temp out from under its `mv`, turning a harmless stranded
+    # file into a lost report for a session that is still running. The
+    # residual this leaves is one stranded temp per agent whose very first
+    # write died — no prior marker for `rm -f "$marker.tmp"` here to reach —
+    # which is bounded for the same reason the pre-image/compose-stamp pair
+    # already is: an agent id is never reused.
+    rm -f "$marker.tmp" || true
   done < <(printf '%s' "$names" | LC_ALL=C sort)
   return 0
 }

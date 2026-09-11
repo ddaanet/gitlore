@@ -1260,6 +1260,162 @@ C2
   [[ "$output" == *"OWN REPORT"* ]]
 }
 
+# Atomic relay write (follow-up to Item 3.1). The write's single `>`
+# truncates the marker before any of its four printfs run, so a process that
+# dies mid-write (kill, ENOSPC, EIO) leaves a torn prefix on the marker path,
+# and the drain has no way to tell that from a whole one:
+# `_gitlore_relay_sysblock` takes everything to EOF when the ctx delimiter
+# never arrives, so the torn body is folded into the parent's report and its
+# evidence rm -f'd — and since the write became a merge, a torn write now
+# destroys the previously staged report too, not only its own. The fix
+# writes to `$marker.tmp` and installs it with `mv` only once the write
+# finishes, so a killed writer leaves a `.tmp` a fixed drain excludes and
+# cleans up. These four cases pin the exclusion, that the exclusion is
+# selective, the write's atomicity, and the cleanup of a stranded temp.
+#
+# The torn fixtures below are written directly rather than through
+# gitlore_relay_write: the shape has to be an exact prefix of that function's
+# four printfs cut after the second — sysmsg delimiter, body, nothing — which
+# no completed call to the helper produces.
+
+@test "relay_drain does not fold a stranded .tmp marker" {
+  make_parent_with_memory
+  # Derived from the helper rather than spelled out against the gitdir: a
+  # killed writer's temp is whatever gitlore_relay_marker_file names for its
+  # agent id, plus `.tmp`. A hand-built path would keep passing after a
+  # rename of the marker family, testing a name nothing writes.
+  tmp="$(gitlore_relay_marker_file memory orphan).tmp"
+  {
+    printf -- '--- gitlore-relay-sysmsg ---\n'
+    printf 'TORN-BODY\n'
+  } > "$tmp"
+
+  # Alone in the gitdir, a .tmp must fold as if nothing were there — the
+  # both-empty case a drain that treats it as a real marker cannot produce.
+  rc=0
+  gitlore_relay_drain memory || rc=$?
+  [ "$rc" -eq 0 ]
+  [ -z "$GITLORE_RELAY_SYSMSG" ]
+  [ -z "$GITLORE_RELAY_CTX" ]
+  # ...and the torn write's own evidence is still on disk. A drain that
+  # excluded the .tmp from the fold but swept every .tmp in the gitdir
+  # satisfies both assertions above while destroying exactly what the temp
+  # exists to preserve — this one belongs to no marker the drain touched, so
+  # only the writer that died knows what it holds. Red today for its own
+  # reason (today's drain enumerates it and rm -f's it), proven so by a
+  # reordered run recorded in the test review, since under errexit the two
+  # assertions above die first.
+  [ -e "$tmp" ]
+}
+
+# The selective half of the case above, as a test of its own rather than
+# trailing it: behind a failing assertion it would never run under bats'
+# errexit and its first real execution would be at GREEN — the shape the
+# slice-4 cases above already name as making an assertion evidence of
+# nothing.
+@test "relay_drain still folds a real marker standing beside a stranded .tmp" {
+  make_parent_with_memory
+  tmp="$(gitlore_relay_marker_file memory orphan).tmp"
+  {
+    printf -- '--- gitlore-relay-sysmsg ---\n'
+    printf 'TORN-BODY\n'
+  } > "$tmp"
+  run gitlore_relay_write memory a1 "S1" "C1"
+  [ "$status" -eq 0 ]
+
+  rc=0
+  gitlore_relay_drain memory || rc=$?
+  [ "$rc" -eq 0 ]
+  # a1 is folded and framed on both channels, so the exclusion is selective
+  # rather than the drain returning early at the first name it will not take.
+  [[ "$GITLORE_RELAY_SYSMSG" == *"S1"* ]]
+  [[ "$GITLORE_RELAY_SYSMSG" == *"agent a1"* ]]
+  [[ "$GITLORE_RELAY_CTX" == *"C1"* ]]
+  # ...and neither the torn body nor the agent id the .tmp's filename would
+  # yield reaches either channel. Two strings, not one: the body proves the
+  # content was not folded, `orphan` proves no framing line was emitted for
+  # an agent that staged nothing.
+  [[ "$GITLORE_RELAY_SYSMSG" != *"TORN-BODY"* ]]
+  [[ "$GITLORE_RELAY_SYSMSG" != *"orphan"* ]]
+  [[ "$GITLORE_RELAY_CTX" != *"TORN-BODY"* ]]
+  [[ "$GITLORE_RELAY_CTX" != *"orphan"* ]]
+}
+
+@test "relay_write does not destroy a staged report when its temp cannot be written" {
+  make_parent_with_memory
+  run gitlore_relay_write memory a1 "S1" "C1"
+  [ "$status" -eq 0 ]
+  marker=$(gitlore_relay_marker_file memory a1)
+  before=$(cat "$marker")
+
+  # The atomic write builds the new marker at `$marker.tmp` and only then
+  # renames it into place; squatting that path with a directory is the
+  # "squatted marker path" mechanism from slice 4, one path segment over, so
+  # the write fails with the marker itself never opened. No root skip: a
+  # redirect onto a directory is EISDIR, not a permission bit, so it fails
+  # for root too — the same reason the slice-4 squat case carries none.
+  #
+  # The squat is left standing rather than rmdir'd at the end, for the reason
+  # that case gives: teardown_tmp_repo's `rm -rf` removes the fixture tree
+  # whether or not the body ran to the end, and a cleanup line here would not
+  # run on a mid-body failure anyway.
+  mkdir "$marker.tmp"
+
+  run gitlore_relay_write memory a1 "S2" "C2"
+  [ "$status" -ne 0 ]
+
+  # The squat is untouched (nothing landed there) and the FIRST report is
+  # still on disk byte for byte -- S2/C2 never overwrote it.
+  [ -d "$marker.tmp" ]
+  [ "$(cat "$marker")" = "$before" ]
+}
+
+# The cleanup half of the fix, pinned over a gitdir path holding a space,
+# because this is the only case in the section that puts a `.tmp` on such a
+# path: `rm -f "$marker.tmp"` is a new expansion of the unsanitized gitdir
+# prefix, and unquoted it would remove the wrong paths, leave this one
+# standing, and still exit 0. (The `mv` half needs no case of its own — the
+# two-marker spaced case above writes and drains on the same fixture, and an
+# unquoted rename there fails the write's own status assertion.)
+#
+# Born green: today's drain has no `.tmp` exclusion, so `gitlore-relay-a1.tmp`
+# is enumerated as a marker in its own right (agent id `a1.tmp`) and the
+# loop's ordinary `rm -f "$marker"` removes it — both files vanish today, but
+# because each is independently drained-and-removed as a legitimate report,
+# not because the cleanup step exists. Proven non-vacuous by mutation: add
+# `'!' -name '*.tmp'` to the drain's `find` WITHOUT the `rm -f "$marker.tmp"`
+# and this case reds on `[ ! -e "$marker.tmp" ]`, the exclusion alone meaning
+# nothing ever reaches the temp to remove it.
+@test "relay_drain removes a .tmp stranded alongside the marker it drains" {
+  root="$TMP_REPO/has space"
+  _gitlore_build_parent_with_memory "$root" memory
+  mem="$root/memory"
+  marker=$(gitlore_relay_marker_file "$mem" a1)
+  case "$marker" in
+    *\ *) : ;;                             # the fixture really is spaced
+    *) echo "fixture gitdir path has no space" >&2; return 1 ;;
+  esac
+
+  run gitlore_relay_write "$mem" a1 "S1" "C1"
+  [ "$status" -eq 0 ]
+  # A temp a killed writer left behind for the SAME agent id -- distinct from
+  # the orphan cases above, whose .tmp belongs to no real marker at all.
+  {
+    printf -- '--- gitlore-relay-sysmsg ---\n'
+    printf 'STRANDED\n'
+  } > "$marker.tmp"
+
+  rc=0
+  gitlore_relay_drain "$mem" || rc=$?
+  [ "$rc" -eq 0 ]
+  # The real marker was drained, not merely unlinked: without this a drain
+  # that removed every `gitlore-relay-*` name and folded nothing satisfies
+  # both existence assertions below.
+  [[ "$GITLORE_RELAY_SYSMSG" == *"S1"* ]]
+  [ ! -e "$marker" ]
+  [ ! -e "$marker.tmp" ]
+}
+
 # --- routing-key advisories ---------------------------------------------------
 
 # shellcheck disable=SC2016   # literal backticks/$VAR are the fixture text
