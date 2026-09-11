@@ -61,8 +61,8 @@ later than the contract asks, and by the reviewer rather than the test author.
 
 *Process defect. Hole is narrow and covered elsewhere.*
 
-`recovery: the same recovery for the memory root stages nothing in the parent
-repo` was born-green and its comment named the naive predicate (stage whenever
+`recovery: the same recovery for the memory root stages nothing in the parent repo`
+was born-green and its comment named the naive predicate (stage whenever
 `--show-superproject-working-tree` is non-empty) as the mutation that reds it.
 The code review then changed the implementation to stage a *pair*
 (`git add -- MEMORY.md memory`) rather than the gitlink alone, and
@@ -87,8 +87,8 @@ written and rotted inside the same slice.
 
 *Discipline lapse. No hole.*
 
-`tests/commit_memory.bats`, `a mid-merge tier is reported as a merge, not as a
-moved pin`, closes with
+`tests/commit_memory.bats`,
+`a mid-merge tier is reported as a merge, not as a moved pin`, closes with
 `[[ "$stderr" != *"moved off the commit the memory store records for it"* ]]`.
 The mutation that makes that string appear is the guard hoist, and under that
 hoist the *preceding* assertion (`*"holds a merge gitlore did not prepare"*`)
@@ -164,14 +164,15 @@ with one.
 ## What could not be audited
 
 1. **Per-commit suite greenness for eleven of nineteen slices.** Phase 1
-   (`item-1-1-s1/s2/s3/s4-green.md`) and Phase 2 slices 1–3 record gate
-   sentinel paths and mtimes. No report for **Item 1.3 (both slices) or Item 3.1
-   (all six slices)** records `just precommit`, a gate sentinel, or a full-suite
-   run — each records only its own targeted `scripts/run-bats.sh` invocation
-   over two or three suites. Item 2.1 slice 4's green report says the gate was
-   "left for the orchestrating session"; whether the orchestrator ran it before
-   `e26a7ef` is recorded nowhere in `reports/`. The dispatch forbids running the
-   suites here, so this cannot be closed from inside the audit.
+   (`item-1-1-s1/s2/s3/s4-green.md`) and Phase 2 slices 1–3 record gate sentinel
+   paths and mtimes. No report for
+   **Item 1.3 (both slices) or Item 3.1 (all six slices)** records
+   `just precommit`, a gate sentinel, or a full-suite run — each records only
+   its own targeted `scripts/run-bats.sh` invocation over two or three suites.
+   Item 2.1 slice 4's green report says the gate was "left for the orchestrating
+   session"; whether the orchestrator ran it before `e26a7ef` is recorded
+   nowhere in `reports/`. The dispatch forbids running the suites here, so this
+   cannot be closed from inside the audit.
 
    What *is* checkable: `.git/gitlore/gates/` at HEAD holds `test-unit` and
    `test-integration` at 15:05/15:06 and `lint`/`check-distribution` at
@@ -191,11 +192,11 @@ with one.
 ## Recommendations, ordered by what would most change the next run
 
 1. **Forbid the RED agent from landing stubs in the SUT.** Item 3.1 slice 1 is
-   the one slice whose red does not mean what a red is supposed to mean, and
-   the reason is that the dispatch asked for stubs to avoid a missing-symbol
-   red. The alternative that the rest of this run demonstrates works: treat the
-   slice as born-green from the start and require the mutation round against
-   the *real* implementation as the deliverable — which is what the code review
+   the one slice whose red does not mean what a red is supposed to mean, and the
+   reason is that the dispatch asked for stubs to avoid a missing-symbol red.
+   The alternative that the rest of this run demonstrates works: treat the slice
+   as born-green from the start and require the mutation round against the
+   *real* implementation as the deliverable — which is what the code review
    ended up doing anyway, one phase late.
 
 2. **Re-run a born-green case's mutation proof whenever its slice's
@@ -205,28 +206,28 @@ with one.
    and fail the slice when one no longer reds — rather than noticing it in
    passing and filing it as a residual.
 
-3. **Require a test in the same commit as any review fix that changes the
-   SUT.** D4's two instances both shipped behaviour that nothing exercised, and
-   both were only covered because a later slice happened to reach them. The
-   Item 1.1 slice 4 back-out is the cost: a subsequent slice had to un-write
-   the fix to obtain a red for it.
+3. **Require a test in the same commit as any review fix that changes the SUT.**
+   D4's two instances both shipped behaviour that nothing exercised, and both
+   were only covered because a later slice happened to reach them. The Item 1.1
+   slice 4 back-out is the cost: a subsequent slice had to un-write the fix to
+   obtain a red for it.
 
-4. **Record the gate verdict in the green report, not just in the
-   orchestrator's session.** Eleven of nineteen slices have no auditable
-   evidence that the suite was green when they were committed. The Phase 1 and
-   Phase 2 reports show the format that works — gate path, mtime, and the input
-   it postdates — and it costs one paragraph.
+4. **Record the gate verdict in the green report, not just in the orchestrator's
+   session.** Eleven of nineteen slices have no auditable evidence that the
+   suite was green when they were committed. The Phase 1 and Phase 2 reports
+   show the format that works — gate path, mtime, and the input it postdates —
+   and it costs one paragraph.
 
 5. **Prefer the isolating mutation over the pairing argument for a negative
    assertion.** Item 1.2 slice 3 shows the technique: when the dispatch's
    literal mutation kills an earlier assertion first, construct a narrower one
    that leaves the earlier text intact so the negative is reached and observed.
-   D3 is the case where that was not done, and Item 3.1 slice 5 case 2 shows
-   the same technique applied successfully two phases later.
+   D3 is the case where that was not done, and Item 3.1 slice 5 case 2 shows the
+   same technique applied successfully two phases later.
 
 6. **Settle M7b** (Item 3.1: a partially written relay marker) or record it as
-   an accepted gap in the design node. It is the only mutation gap from this
-   run that no later slice closed and that is not argued to be unenforceable.
+   an accepted gap in the design node. It is the only mutation gap from this run
+   that no later slice closed and that is not argued to be unenforceable.
 
 7. **Fix the report-set inconsistencies** (D5): one test-review per slice
    including born-green ones, and a stated rule for whether a test-only slice
@@ -238,10 +239,10 @@ with one.
   isolating mutations, each observed failing on its own line, plus a note on
   which fragment discriminates what. This is the standard the rest of the run
   should be measured against.
-- **Assertion-order swaps in scratch copies** (Items 2.1/3, 2.1/4, 3.1/2,
-  3.1/3) to prove assertions behind a death point independently discriminate,
-  with the scratch file appended in place rather than relocated so
-  `load helpers/…` still resolves.
+- **Assertion-order swaps in scratch copies** (Items 2.1/3, 2.1/4, 3.1/2, 3.1/3)
+  to prove assertions behind a death point independently discriminate, with the
+  scratch file appended in place rather than relocated so `load helpers/…` still
+  resolves.
 - **The three-`CLAUDECODE`-world runs** (Items 1.2/3, 1.3/1, 1.3/2) — the
   subagent's ambient `CLAUDECODE=1` is exactly the environment that hides a
   broken `unset` in a test body, and running all three worlds catches it.

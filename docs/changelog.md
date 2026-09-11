@@ -6,6 +6,15 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-11 — The hooks node splits from the entry points](changelog/2026-09-11-the-hooks-node-splits-from-the-entry-points.md)
+  — `git-hooks-and-entry-points.md` reached the 400-line cap, and the seam its
+  own title named splits it into `git-hooks.md` (the two hooks, the gitlink
+  invariant, D46, D50) and `memory-entry-points.md` (`commit-memory.sh`,
+  `push-memory.sh`, the `push` skill, D16, D20), each rejected alternative
+  following the decision it argues against; the room that frees moves
+  `gitlore_adopt_recovered_merge` out of D50's body into
+  `merge-state-recovery.md`, where the landed-merge case can say what it owes
+  the enclosing store
 - [2026-09-11 — The commit path composes before it commits](changelog/2026-09-11-the-commit-path-composes-before-it-commits.md)
   — a carrier left stale by a missed in-session compose self-healed at the next
   `SessionStart` but shipped if a memory commit landed first, and the carrier is

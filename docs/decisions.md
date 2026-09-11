@@ -45,21 +45,27 @@ every memory `Write`/`Edit` · an interactive prompt inside the `pre-commit` hoo
 · an in-session diff dump for commit review · a `PreToolUse` hook constraining
 the agent's git operations.
 
-**Git hooks and entry points** — satisfying FR11 and FR8 with no parent commit
-or push in flight.
-[git-hooks-and-entry-points.md](references/git-hooks-and-entry-points.md)
+**Git hooks** — what `pre-commit` and `pre-push` do inside a parent git
+operation, and the pointer invariant that rests on them.
+[git-hooks.md](references/git-hooks.md)
 
-- **D16** — a standalone, arg-driven memory-commit entry point
-- **D20** — a push entry point the skill calls directly, with no trigger file
 - **D46** — a parent commit is never rewritten to re-pin memory
 - **D50** — the commit path composes the store before it commits; a pin refusal
   aborts, a compose refusal only reports
 
-*Rejected:* a tip amend to re-pin memory · triggering a memory commit through a
-parent commit · reimplementing the sentinel, `push HEAD:live` and merge-state
-logic in a caller · a caller that pre-writes the commit-message file · a refusal
-that instructs the agent to run compose · reporting an off-pin tier and
-committing through it.
+*Rejected:* a tip amend to re-pin memory · a refusal that instructs the agent to
+run compose · reporting an off-pin tier and committing through it.
+
+**Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
+in flight.
+[memory-entry-points.md](references/memory-entry-points.md)
+
+- **D16** — a standalone, arg-driven memory-commit entry point
+- **D20** — a push entry point the skill calls directly, with no trigger file
+
+*Rejected:* triggering a memory commit through a parent commit · reimplementing
+the sentinel, `push HEAD:live` and merge-state logic in a caller · a caller that
+pre-writes the commit-message file.
 
 **Install and the memory remote** — what one-time setup does and refuses.
 [installation.md](references/installation.md)

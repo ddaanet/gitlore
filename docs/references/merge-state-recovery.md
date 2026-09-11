@@ -77,6 +77,19 @@ no unmerged entry for checkout to refuse over).
   preparation wrote is deleted, and the gate carries on, preparing the merge
   again if the divergence is still there.
 
+**A landed tier merge is adopted, not only cleared.** Putting HEAD back on the
+merge leaves the enclosing store's index still naming the commit the tier sat on
+before it, so `gitlore_adopt_recovered_merge` composes the recovered tier's
+carrier up into the root index and stages `MEMORY.md` and the tier together —
+the one shape in which a tier ahead of its pin may be adopted (D43), and what
+keeps the staging from inverting the pin guard (D50,
+[git-hooks.md](git-hooks.md)). A failed up projection therefore stages nothing
+and leaves the gitlink where it is, so the refusal the next gate owes that tier
+survives. It fires for a tier alone: the memory root's own recovery would
+otherwise write and stage in the user's project index, outside every approval
+gate. Nothing is committed here — the staged pair rides the next approved memory
+commit, which is D43's own degraded case rather than a fault.
+
 The artifacts are deleted rather than moved aside because the next preparation
 recomputes each of them from the two sides. One dead end remains: a state file
 that names no pending commit, with the pin gone too, leaves nothing that can say
