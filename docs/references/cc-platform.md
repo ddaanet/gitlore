@@ -182,7 +182,7 @@ glue arriving through `Edit`; a merge, a hand-edited carrier or a `Write`
 reaches an index without passing it.
 
 **D51 — A hook firing inside a subagent reports only to that subagent, so the
-report is relayed through a marker**
+report is relayed through a file keyed by session and agent**
 
 Measured under CC 2.1.261, probe and control: the parent transcript carries zero
 `hook_*` attachments while the subagent's own JSONL carries all four, and the

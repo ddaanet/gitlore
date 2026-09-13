@@ -108,14 +108,15 @@ has no `gitlore-memory` entry, no-op.
    file keyed by session and agent (D51, [cc-platform.md](cc-platform.md)). This
    folds in every report addressed to *this* session that no parent-side batch
    collected, framed with the agent that staged it — `compact` and `resume` keep
-   the session id, and neither fires the `PostToolBatch` drainer, so this is the
-   only path a report reaches a session that resumed. The sweep then removes
-   every relay file older than seven days regardless of session, temps included:
-   a report addressed to a session that ended is undeliverable, so it goes by
-   age rather than into a stranger's session. The early exits above —
-   divergence, a failed fast-forward — return before both, so a resume or
-   compaction of the same session still collects what is waiting, while a fresh
-   session after the repair leaves it to the sweep.
+   the session id and fire no batch of their own, so this pass delivers at the
+   resume itself rather than leaving a waiting report to the session's next
+   batch. The sweep then removes every relay file older than seven days
+   regardless of session, temps included: a report addressed to a session that
+   ended is undeliverable, so it goes by age rather than into a stranger's
+   session. The early exits above — divergence, a failed fast-forward — return
+   before both, so a resume or compaction of the same session still collects
+   what is waiting, while a fresh session after the repair leaves it to the
+   sweep.
 11. **Emit the standing orientation** on `additionalContext`: the FR11
    prohibition (D12) and the active tiers' own routing descriptions (D28).
 
