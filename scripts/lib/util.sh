@@ -217,6 +217,15 @@ gitlore_merge_state_file() {
   git -C "$mempath" rev-parse --git-path gitlore-merge-state
 }
 
+# Print abs path to a tier's landing record: the commit the tier sat on when the
+# commit path last began a commit inside it (gitlore_sync_tiers_to_live), read
+# back by gitlore_stage_landed_tiers. Lives in the tier's gitdir, so it is
+# invisible to `git status` and to the approval's freshness scan.
+# Args: $1 = tier worktree path.
+gitlore_tier_landing_file() {
+  git -C "$1" rev-parse --git-path gitlore-tier-landing
+}
+
 # Print abs path to one of the merge's read-only briefing artifacts — the two
 # side diffs and the store's file tree, written at prepare time for the merger
 # sub-agent. They live beside the state file in the gitdir, so they are invisible

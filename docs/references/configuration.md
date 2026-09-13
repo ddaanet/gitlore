@@ -41,7 +41,8 @@ gitdir because a gitdir write is blocked by the CC sandbox and read as
 self-configuration by the auto-mode classifier — the agent can write an ordinary
 project file and nothing else. Hook-owned state that the agent must *not* write
 goes the other way, into the store's gitdir: the once-per-episode nudge marker
-`gitlore-nudged` and the merge-state file.
+`gitlore-nudged`, the merge-state file, and a tier's `gitlore-tier-landing`
+record of the commit a tier commit started from (D50).
 
 > **No `autoMemoryDirectory` in project settings.** Claude Code resolves
 > `autoMemoryDirectory` only from `policySettings`, `flagSettings` (the

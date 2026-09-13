@@ -152,9 +152,29 @@ commit after the warning. The pin check therefore runs ahead of compose and
 aborts, naming no remedy of its own — every branch of
 `gitlore_compose_check_pins` prints the one its own cause takes, and a single
 abort can carry several tiers with different causes. A write failure aborts too
-— a half-written carrier must not be committed — and restamps the commit-msg
-file, so what that pass did write does not read as newer than the approval
-already given.
+— a half-written carrier must not be committed.
+
+**A failure keeps the approval, unless it prepared a merge.** What the run
+writes into the store — a composed carrier, a recovered merge's up projection —
+projects lines the summary already approved, yet reads newer than the commit-msg
+file, and the `pre-commit` retry reuses that file as it stands. So every later
+failure restamps it. A merge preparation does not: it checks merged content the
+summary never covered out into the worktree, and a stale approval is the right
+answer after it.
+
+**A tier commit the run could not record is adopted on the retry.** The tier
+commit moves the tier's HEAD, and only memory's later `add -A` stages the moved
+gitlink. A transient `index.lock` between the two — or a tier `live` that cannot
+advance, or a killed run — leaves the tier ahead of its pin, the shape the pin
+check refuses, and `memory-commit-batch.sh` promises a transparent retry.
+`gitlore_sync_tiers_to_live` therefore writes a landing record into the tier's
+gitdir just before each commit — the commit the tier sits on — and removes it
+when the commit fails or once `add -A` has staged every gitlink. Ahead of the
+pin check, `gitlore_stage_landed_tiers` stages the gitlink of any tier whose
+HEAD's parent is the recorded commit and still the pin. That overwrites nothing:
+the commit path composed that carrier from the root index just before committing
+it. The residual is a run killed between writing a record and its commit
+failing, followed by a commit made on the same pin by other means.
 
 **Staging a moved gitlink without projecting up first inverts that guard.**
 Staging alone returns the enclosing index to agreement with the tier's HEAD —
@@ -163,7 +183,9 @@ down projection writes root's older text over facts root has never seen. Every
 path that adopts a tier ahead of its pin therefore composes the carrier up into
 the root index first and stages the pair, or stages nothing at all; the adoption
 a recovered merge owes is one of them
-([merge-state-recovery.md](merge-state-recovery.md)).
+([merge-state-recovery.md](merge-state-recovery.md)). The one exception is a
+tier commit the commit path itself made, whose carrier root already describes,
+so there is nothing to project up.
 
 **A successful compose here stays silent**, by argument rather than omission: on
 rc 0 the result is discarded, so a commit that repairs a stale carrier says
@@ -187,3 +209,12 @@ absorb instead (NFR4, D50).
 **Reporting an off-pin tier and committing through it.** The commit's own
 `add -A` adopts the moved gitlink, so the report is followed at the next compose
 by exactly the silent overwrite it warned about (D50).
+
+**Recognising gitlore's own landed tier commit by its message.** Needs no state,
+but a session that edits memory while the retry is still blocked approves a new
+summary, the landed commit stops matching it, and the tier is refused for good
+(D50).
+
+**Staging each tier gitlink right after its commit.** Narrows the window without
+closing it: the staging is itself a write to memory's index, so the `index.lock`
+that stops `add -A` stops it too (D50).

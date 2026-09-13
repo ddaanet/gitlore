@@ -1,12 +1,15 @@
 ## Open decisions
 
-- **Which deliverable-review findings to fix, and in what order.** Report: `plans/index-edit-propagation/reports/deliverable-review.md`. Both Criticals were reproduced.
-  - **C1:** the Item 1.2 pin guard (`scripts/lib/resolve.sh`, in `gitlore_sync_memory_to_live`) permanently refuses the retry of a half-landed commit. A tier commit lands, then memory's `add -A` hits a transient `index.lock`, and the retry aborts with "ahead of the pin … no automatic remedy". On the `b6dbe92` scripts the same retry passes. `memory-commit-batch.sh` promises a transparent retry. Fix candidates: stage each tier gitlink right after its commit inside `gitlore_sync_tiers_to_live`, or have the guard accept a tier whose commits ahead of the pin are gitlore's own.
-  - **C2:** the relay write and drain in `scripts/lib/index-sync.sh` assume same-event hooks run in sequence. Claude Code runs all matching hooks in parallel (code.claude.com/docs/en/hooks). Over 200 probe runs: one of two concurrent writes lost 86 times and torn 2 times; two concurrent drains relayed the block twice 144 times and framed an empty block 51 times.
-  - **Majors:** M1, drain-vs-write lost update. M2, the parent drain sits behind the index-changed early exits, so an in-session relay usually waits for SessionStart. M3, markers are not keyed by `session_id`. M4, the ahead-of-pin remedy "stage the gitlink by hand" is the silent overwrite the guard exists to stop. M5, D50's adoption invariant is false for the take path's `gitlore_adopt_tier_into_root`. M6, no concurrent-hook test. M7, the `CLAUDE.md` gate-file fallback reads green on a docs-only failure.
-  - C2, M1, M2, M3 and M6 are one redesign of the relay: a lock or claim-by-rename, drain placement, session keying. M5 needs a design call: narrow D50, or change the take's failure arm.
+- **Which deliverable-review fix goes next: M5 or the relay redesign.** Report: `plans/index-edit-propagation/reports/deliverable-review.md`. C1 and M4 are fixed. Fixes run from the main session with a background `just precommit`, which is my human partner's standing default for this work.
+  - **M5 is a reproduced defect, not a doc disagreement.** Probe: `plans/index-edit-propagation/reports/m5-take-overwrite-probe.md`. When `gitlore_compose_up` fails, `gitlore_adopt_tier_into_root` (`scripts/lib/resolve.sh`) still stages and commits the tier gitlink. Its printed remedy (fix the store, edit `MEMORY.md`) then composes root's older text over the tier carrier's newer line, and compose reports success. Recommended: stage nothing on a failed compose-up, as `gitlore_adopt_recovered_merge` does. The cost is the SessionStart gitlink walk-back that the staging comment guards against, so this needs my human partner's call. D50's invariant text in `docs/references/git-hooks.md` then needs no narrowing.
+  - **Relay redesign: C2, M1, M2, M3 and M6 as one design pass**, recorded in `docs/references/index-authoring-sync.md` and `docs/decisions.md` before any code.
+    1. Probe whether a subagent's `PostToolBatch` hook payload carries the parent's `session_id`. The answer settles M3's key and what SessionStart may drain.
+    2. Proposed direction: write-once per-report files (temp then rename, no read-merge); a single drainer that claims each file by rename; the drain placed ahead of the index-changed early exits (M2); session keying.
+    3. Write a concurrent-hook test and see it fail on current code (M6).
+    4. Implement.
+  - M7 folds into the gate-paragraph decision below.
 
-- **The memory index against Claude Code's ~24,985-byte loader cutoff**, per `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports 102% of budget and is truncating, which is why no memory has been written across three sessions. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees ~4,600 by relocation and merges, the three dropped briefs a further ~10,400. Decide: curate first and re-measure, or do the composition reorder (D29 layout rule, D36 rewrite, `gitlore_order_merge` in `index-composition.md`). This gates every memory write below.
+- **The memory index against Claude Code's ~24,985-byte loader cutoff**, per `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports 102% of budget and is truncating, which is why no memory has been written across four sessions. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees ~4,600 by relocation and merges, the three dropped briefs a further ~10,400. Decide: curate first and re-measure, or do the composition reorder (D29 layout rule, D36 rewrite, `gitlore_order_merge` in `index-composition.md`). This gates every memory write below.
 
 - **Whether `CLAUDE.md` §Testing's gate paragraph is rewritten.** Errors:
   - It says a sentinel is valid when its mtime postdates the last edit to any gated input. The mechanism is a content hash, and mtime ordering is not evidence.
@@ -29,7 +32,7 @@
   - `plan-writing` (7 facts to 1) and `guard-design` (3 to 1);
   - folding `test-the-invocation-path` into `green-is-not-evidence`, `imperative-form-scope` into `skill-description-purpose-first`, `markdown-formatter-choice` into `claude-plugin-dev`, `bash-prolog-common-foundations` into `justfile-gotchas`, and `no-transition-special-cases` into `remove-cleanly-no-vestigial`;
   - whether `loose-generation` gets a trigger or is retired.
-  
+
   Several are brief-bound, so order matters.
 
 - Whether the guard and validation design facts go to `craft` (the current default) or to `prohibitions`.
@@ -46,7 +49,13 @@
 
 ## Remaining
 
+- Work through the deliverable review's Minor findings. Three are already folded into the C1 fix: the stale approval, the unquoted adoption remedies, and the `gitlore_compose_check_pins` caller comment. Also: the `pre-commit` step list in `docs/references/git-hooks.md` omits both the tier sync and the landed-tier staging.
+
+- Check whether a tier whose local `live` failed to advance after its commit, for a non-divergence reason, ever advances. `gitlore_sync_tiers_to_live` pushes `HEAD:live` only for dirty tiers, so the retry that stages the landed commit skips the push. Pre-existing, not probed.
+
 - Write the platform fact once the index budget allows: **all hooks matching one Claude Code event run in parallel** (code.claude.com/docs/en/hooks). Two `PostToolBatch` hooks sharing a file race. The relay was designed on the opposite assumption, and a vendored `plugin-dev:hook-development` skill already says "Assuming Hook Order" is a pitfall.
+
+- Write the approval-freshness facts once the index budget allows: `commit-memory.sh` rewrites the summary file on every call, so an approval-restamp bug surfaces only on the `pre-commit` path; and a merge preparation checks merged content out into the worktree, so restamping an approval after a merge yield would approve content no summary covered.
 
 - Add to `.claude/rules/shell.md`: **`set -e` does not abort a Bash tool command.** A `cd "$TMPDIR"` with `$TMPDIR` unset leaves the shell in the repo root and the following commands run there (an orphan `git init`, a stray fixture directory). The unset-`$TMPDIR` half is already recorded; the non-aborting half is not.
 

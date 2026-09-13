@@ -338,7 +338,7 @@ gitlore_adopt_recovered_merge() {
   fi
   # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
   gitlore_git -C "$super" add -- MEMORY.md "$rel" \
-    || printf 'gitlore: %s could not be staged in %s. Run `git -C %s add -- MEMORY.md %s` before the next session, or the pointer will be reset to its previous commit and the root index will be left describing facts the tier no longer holds.\n' \
+    || printf 'gitlore: %s could not be staged in %s. Run `git -C "%s" add -- MEMORY.md "%s"` before the next session, or the pointer will be reset to its previous commit and the root index will be left describing facts the tier no longer holds.\n' \
       "$rel" "$super" "$super" "$rel" >&2
   return 0
 }
@@ -874,7 +874,7 @@ gitlore_check_head_live_agree() {
 # Returns 1 after emitting a message if a tier commits but its local `live`
 # cannot be advanced. Args: $1 = memory worktree path, $2 = approved msg file.
 gitlore_sync_tiers_to_live() {
-  local mempath="$1" msgfile="$2" tier tierpath push_err
+  local mempath="$1" msgfile="$2" tier tierpath push_err landing pre
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -890,11 +890,24 @@ gitlore_sync_tiers_to_live() {
     # errexit transitively (SC2310) for everything called from here — an
     # unchecked failure would fall through to the push below, which is a no-op
     # success because HEAD never moved.
-    gitlore_git -C "$tierpath" add -A || return 1
+    # Every failure below that prepares no merge restamps $msgfile, for the
+    # reason gitlore_sync_memory_to_live gives above its own tier loop.
+    gitlore_git -C "$tierpath" add -A || { touch "$msgfile"; return 1; }
+    # Written before the commit, so no interruption can leave the commit without
+    # it, and dropped when the commit fails, so it never vouches for a commit
+    # made later by other means: gitlore_stage_landed_tiers reads it on the
+    # retry. A tier with no commit yet has no pin to compare, so records nothing.
+    landing=$(gitlore_tier_landing_file "$tierpath") || { touch "$msgfile"; return 1; }
+    if pre=$(git -C "$tierpath" rev-parse -q --verify HEAD); then
+      printf '%s\n' "$pre" > "$landing" || { touch "$msgfile"; return 1; }
+    fi
     # Blessed commit: the same sentinel that admits a memory commit past the FR11
     # gate, which emit-memory-gate.sh installs in each tier too.
-    GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$tierpath" commit -q -F "$msgfile" \
-      || return 1
+    if ! GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$tierpath" commit -q -F "$msgfile"; then
+      rm -f "$landing"
+      touch "$msgfile"
+      return 1
+    fi
     # `live` exists once SessionStart has fetched it; a tier that has never been
     # fetched has no local `live` to advance, and `-q --verify` is silent on that
     # expected miss.
@@ -910,6 +923,7 @@ gitlore_sync_tiers_to_live() {
 $push_err" \
               "gitlore: tier '$tier' was committed but its local 'live' could not be advanced. git said:
 $push_err" >&2
+            touch "$msgfile"
             return 1
             ;;
         esac
@@ -981,6 +995,22 @@ gitlore_sync_memory_to_live() {
     # guard inside that loop stays: it is that function's own precondition, and
     # a state this call passes is clean by the time it runs, so the second call
     # costs a rev-parse and a stat.
+    #
+    #
+    # From here on a failure restamps $msgfile before returning, unless it
+    # prepared a merge. What this run writes into the store — a recovered
+    # merge's up projection in this loop, a composed carrier below — is a
+    # projection of index lines the summary already approved, never new content,
+    # yet it is newer than $msgfile, so gitlore_commit_msg_freshness would read
+    # the approval stale on the retry and refuse it. Only commit-memory.sh
+    # rewrites the file; the pre-commit path retries on it as it stands. A merge
+    # preparation is the exception: it checks merged content out into the
+    # worktree, which the summary never covered, so a stale approval is the
+    # right answer after it — the stale-merge guard in this loop and the merge
+    # yields inside gitlore_sync_tiers_to_live return without one. Reaching here
+    # means $fresh was "yes", so the file exists and a restamp cannot create an
+    # empty one, and the memory commit that consumes it is the last step that
+    # can fail.
     local tier
     while IFS= read -r tier; do
       [ -n "$tier" ] || continue
@@ -989,12 +1019,15 @@ gitlore_sync_memory_to_live() {
       [ -e "$mempath/$tier/.git" ] || continue
       gitlore_guard_stale_merge_state "$mempath/$tier" || return 1
     done < <(gitlore_tier_paths "$mempath")
+    # A previous run that committed inside a tier and stopped before memory's
+    # `add -A` recorded it left that tier ahead of its pin — the shape the pin
+    # guard below refuses — so it is adopted first.
+    gitlore_stage_landed_tiers "$mempath" || { touch "$msgfile"; return 1; }
     # A tier off its pin refuses composition itself (D31, D36), but leaving that
     # refusal to gitlore_compose's own rc-1 arm would let this function's `add -A`
     # below stage the moved gitlink anyway — adopting the move silently in the
     # very commit that reported it as a problem. Checked here, ahead of compose,
-    # so an off-pin tier aborts instead. No restamp: this writes nothing, so the
-    # tree is no newer than $msgfile and the approval survives for the retry.
+    # so an off-pin tier aborts instead.
     # The declaration stays on its own line: folded into `local pin_problems=$(…)`
     # the status read is `local`'s, always 0, and the refusal is swallowed.
     local pin_problems
@@ -1017,6 +1050,7 @@ $pin_problems"
 gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit — the approved summary is still in place." \
         "$pin_header
 gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
+      touch "$msgfile"
       return 1
     fi
     # Compose before the tier commit below: composition writes carrier files
@@ -1056,13 +1090,7 @@ $compose_result"
 gitlore: the commit was aborted so the half-written carrier is not committed. Investigate that path (permissions, disk space, a read-only worktree), then retry the commit — the approved summary is still in place and the commit path composes again." \
           "$partial
 gitlore: the commit was aborted so the half-written carrier is not committed. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
-        # Keeping the file is not enough to keep the approval: whatever the pass
-        # DID write is now newer than $msgfile, so gitlore_commit_msg_freshness
-        # reads it stale on the retry and the commit is refused for a change
-        # the summary already covers — a carrier is a projection of root index
-        # lines it approved, never new content. Restamping restores the state
-        # this run started from. Reaching here means $fresh was "yes", so the
-        # file exists and this cannot create an empty one.
+        # The restamp above the tier loop names why.
         touch "$msgfile"
         return 1
         ;;
@@ -1079,7 +1107,7 @@ $compose_result"
 gitlore: the commit was aborted rather than commit a memory store in an unknown state. Establish what gitlore_compose did, then retry the commit — the approved summary is still in place." \
           "$unknown
 gitlore: the commit was aborted rather than commit a memory store in an unknown state. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
-        # Same approval-freshness reason as rc 2 above.
+        # The restamp above the tier loop names why.
         touch "$msgfile"
         return 1
         ;;
@@ -1088,16 +1116,24 @@ gitlore: the commit was aborted rather than commit a memory store in an unknown 
     # records that move in the memory commit. Reversing the order would pin the
     # pre-commit tier SHA — the same one-behind lag the parent's gitlink staging
     # exists to prevent.
+    # Restamps its own non-merge failures (see above the tier loop).
     gitlore_sync_tiers_to_live "$mempath" "$msgfile" || return 1
     # Checked explicitly, for the same reason as the tier loop above: called
     # via `|| exit $?` at the pre-commit call site, errexit is off here, and an
     # unchecked failure would delete the approved $msgfile below and let the
     # no-op push report success.
-    gitlore_git -C "$mempath" add -A || return 1
+    gitlore_git -C "$mempath" add -A || { touch "$msgfile"; return 1; }
+    # Every tier gitlink is staged now, so no landing record is left with a
+    # commit to vouch for.
+    while IFS= read -r tier; do
+      [ -n "$tier" ] || continue
+      [ -e "$mempath/$tier/.git" ] || continue
+      rm -f "$(gitlore_tier_landing_file "$mempath/$tier")"
+    done < <(gitlore_tier_paths "$mempath")
     # Blessed commit: carry the sentinel so the submodule gate (memory-pre-commit)
     # admits it. A naked commit never sets this and is blocked (FR11/D12).
     GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile" \
-      || return 1
+      || { touch "$msgfile"; return 1; }
     rm -f "$msgfile"
     # The dirty episode is over: clear the once-per-episode nudge marker so the
     # next round of uncommitted memory can be surfaced again (post-tool-use.sh).
@@ -1142,6 +1178,46 @@ $push_err" >&2
     fi
   fi
 
+  return 0
+}
+
+# Stage the gitlink of each tier whose HEAD is the commit gitlore_sync_tiers_to_live
+# made and a stopped run never recorded: memory's `add -A` failed after it (a
+# transient index.lock) or the run died between the two. That tier sits ahead of
+# its pin, the shape gitlore_compose_check_pins refuses for a tier moved behind
+# gitlore's back, so without this the retry memory-commit-batch.sh promises is
+# refused for good. Staging it overwrites nothing: the commit path composed that
+# carrier from the root index just before committing it.
+#
+# Recognised by the landing record written just before that commit — HEAD's
+# parent must be the commit the record names, and memory's index must still pin
+# it. Not by the commit's message: a session that edits memory before the retry
+# lands approves a new summary, and the old commit no longer matches it.
+# Residual: a run killed after writing the record and before its commit failed
+# leaves the record behind, and a commit later made on that same pin by other
+# means would be adopted.
+# Returns 1, after git's own message, when a gitlink cannot be staged.
+# Args: $1 = memory worktree path.
+gitlore_stage_landed_tiers() {
+  local mempath="$1" tier tierpath landing recorded pinned parent
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # `git -C` into an unmaterialized submodule walks up to the enclosing repo.
+    [ -e "$tierpath/.git" ] || continue
+    landing=$(gitlore_tier_landing_file "$tierpath") || continue
+    [ -f "$landing" ] || continue
+    recorded=""
+    IFS= read -r recorded < "$landing" || [ -n "$recorded" ] || continue
+    # `-q --verify` is silent on the expected misses: no gitlink in the index
+    # (mid-mount), and a HEAD that is a root commit.
+    pinned=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
+    parent=$(git -C "$tierpath" rev-parse -q --verify "HEAD^") || continue
+    [ "$recorded" = "$pinned" ] || continue
+    [ "$parent" = "$recorded" ] || continue
+    gitlore_git -C "$mempath" add -- "$tier" || return 1
+    rm -f "$landing"
+  done < <(gitlore_tier_paths "$mempath")
   return 0
 }
 
@@ -1684,7 +1760,7 @@ gitlore_adopt_tier_into_root() {
   # take into a failed merge.
   # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
   gitlore_git -C "$mempath" add -- MEMORY.md "$tier" \
-    || printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C %s add -- MEMORY.md %s` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$mempath" "$tier" >&2
+    || printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C "%s" add -- MEMORY.md "%s"` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$mempath" "$tier" >&2
   # Then commit the pair, so an explicit take leaves a clean store (D49). The
   # dirty reading is the one taken BEFORE the tree moved: everything dirty now is
   # this take's own work, and anything that was dirty before it is unapproved

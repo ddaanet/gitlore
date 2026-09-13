@@ -205,15 +205,12 @@ EOF"
   [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
   assert_bullets memory/ddaanet/MEMORY.md "- [shared](shared.md) — stale hook"
   [ -f "$(gitlore_commit_msg_file memory)" ]
-  # The approval survives the abort: gitlore_compose_check_pins writes nothing,
-  # so the tree is no newer than the summary and the retry is not refused for a
-  # change nobody made. It reads "absent" against unchanged code — the commit
-  # lands and consumes the file — and "no" against an abort placed late enough
-  # for the compose or the tier sync to have written first. What it cannot see
-  # is a `touch "$msgfile"` in the abort arm: reaching here means the freshness
-  # gate above already read yes, so a restamp changes no later answer, and the
-  # runbook's "No restamp" is a rule about not copying a line whose reason does
-  # not apply rather than a behaviour with an observable of its own.
+  # The approval survives the abort, so the retry is not refused for a change
+  # nobody made. It reads "absent" against a commit that lands and consumes the
+  # file. What it cannot see is the abort arm's restamp: this fixture writes
+  # nothing before the pin guard, so the tree is no newer than the summary with
+  # or without it — "a commit that fails after composing keeps the approval for
+  # the retry" is the case where the restamp has an observable.
   [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
   [[ "$stderr" == *"moved off the commit the memory store records for it"* ]]
   [[ "$stderr" == *"is checked out at"* ]]
@@ -292,6 +289,93 @@ EOF"
   # without a positive read of the user arm's own sentence this test could pass
   # with the agent arm answering twice.
   [[ "$stderr" == *"Open this project in Claude Code"* ]]
+}
+
+@test "a commit that landed a tier and then failed on memory's index retries to completion" {
+  # The tier commit moves the tier ahead of the gitlink memory's index records,
+  # and only memory's later `add -A` stages it. A transient index.lock between
+  # the two leaves the tier ahead of its pin — the same shape the pin guard
+  # refuses for a tier moved behind gitlore's back — and memory-commit-batch.sh
+  # promises the next batch retries transparently. The retry must recognise its
+  # own landed tier commit and finish, not abort with "no automatic remedy".
+  half_landed_tier_fixture
+  pin_before=$(git -C memory rev-parse ":ddaanet")
+
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  # The fixture's shape, asserted rather than assumed: the tier commit landed
+  # and memory's index still records the pin it started from.
+  [ -f "$lock" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD^)" = "$pin_before" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
+
+  rm -f "$lock"
+  run --separate-stderr bash "$CMD" -F "$(gitlore_commit_msg_file memory)"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  [ "$(git -C memory log -1 --pretty=%s)" = "memory: record the shared fact" ]
+  git -C memory/ddaanet show HEAD:MEMORY.md > "$BATS_TEST_TMPDIR/carrier.md"
+  assert_bullets "$BATS_TEST_TMPDIR/carrier.md" \
+    '- [shared](shared.md) — fresh hook'
+  [ -z "$(git -C memory status --porcelain)" ]
+}
+
+@test "a tier commit that never landed leaves no claim on a later foreign commit" {
+  # The retry adopts a tier commit only because gitlore recorded, just before
+  # making it, the pin it was made on. A tier commit that fails must drop that
+  # record: otherwise a commit made later on the same pin by anyone else reads
+  # as gitlore's own, and its gitlink is staged without composing up.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  hook="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/hooks/pre-commit"
+  mkdir -p "$(dirname "$hook")"
+  # shellcheck disable=SC2016  # $0 is the generated hook's own, not this shell's
+  printf '#!/bin/sh\nrm -f "$0"\nexit 1\n' > "$hook"
+  chmod +x "$hook"
+  pin_before=$(git -C memory rev-parse ":ddaanet")
+
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin_before" ]
+
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
+  [[ "$stderr" == *"ahead of the pin"* ]]
+}
+
+@test "a commit that fails after composing keeps the approval for the retry" {
+  # The pre-commit path retries on the summary file as it stands — only
+  # commit-memory.sh rewrites it. The first run's compose re-texts the carrier,
+  # a write newer than the summary, so a failure after it must restamp the file
+  # or the retry is refused as unapproved for a projection the summary covers.
+  half_landed_tier_fixture
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record the shared fact\n' > "$msgfile"
+  # gitlore_commit_msg_freshness compares whole-second mtimes with `>=`, so a
+  # carrier write landing in the summary's second would read fresh unrestamped.
+  sleep 1
+
+  driver="$BATS_TEST_TMPDIR/driver.sh"
+  cat > "$driver" <<DRIVER
+#!/usr/bin/env bash
+set -euo pipefail
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+source "$PLUGIN_ROOT/scripts/lib/log.sh"
+source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
+gitlore_sync_memory_to_live memory
+DRIVER
+
+  run --separate-stderr bash "$driver"
+  [ "$status" -ne 0 ]
+  # The fixture's shape: compose re-texted the carrier, and the run died past it.
+  assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — fresh hook'
+  [ -f "$lock" ]
+  [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
 }
 
 @test "a manifest refusal is reported and does not abort the commit" {

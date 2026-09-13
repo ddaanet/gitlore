@@ -294,8 +294,9 @@ $path"
 # and reports a successful compose. That is a silent overwrite of approved
 # upstream facts, so this refuses rather than reports.
 #
-# It lives OUTSIDE gitlore_compose_check, and only gitlore_compose calls it,
-# because the rule belongs to the down pass alone. gitlore_compose_up adopts a
+# It lives OUTSIDE gitlore_compose_check, called by gitlore_compose and by the
+# commit path's pin guard ahead of it, because the rule belongs to the down pass
+# alone. gitlore_compose_up adopts a
 # carrier at the end of a landed merge, where the tier is legitimately ahead of
 # the pin and the staging that restores it comes after the adoption — a
 # parameter on the shared check would leave the merge path one argument away
@@ -308,7 +309,7 @@ $path"
 # act (D43). Reading HEAD would call a landed merge a defect for as long as the
 # memory commit recording it is pending.
 gitlore_compose_check_pins() {
-  local mempath="$1" active tier tierpath pinned head abs problems=""
+  local mempath="$1" active tier tierpath pinned head abs memabs problems=""
   active=$(gitlore_active_tiers "$mempath")
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
@@ -344,9 +345,17 @@ gitlore_compose_check_pins() {
     # state — rather than letting its rc-128 `fatal:` reach the terminal. It
     # costs no coverage: a pin genuinely ancestral to HEAD is necessarily an
     # object here already, so what the guard rejects was never ahead.
+    #
+    # Staging the gitlink is not a remedy on its own: it satisfies this rule and
+    # the next pass then projects root's older text over the carrier — the
+    # overwrite being refused. So the remedy adopts the carrier into root by
+    # hand first, the step gitlore_compose_up performs on a merge. A tier
+    # gitlore's own commit path left ahead never reaches here: the commit path
+    # stages it first (gitlore_stage_landed_tiers).
     if git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null \
        && git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
-      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. There is no automatic remedy: inspect and stage the gitlink by hand, or return the tier to the pin, which discards the commits it carries ahead of it.
+      memabs=$(CDPATH='' cd -- "$mempath" && pwd) || memabs="$mempath"
+      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. There is no automatic remedy: first bring every line of $memabs/$tier/MEMORY.md into $memabs/MEMORY.md, each link prefixed with '$tier/', and only then stage the gitlink with \`git -C \"$memabs\" add -- \"$tier\"\` — staged before that, the next compose writes the root index's older text over the tier. Or return the tier to the pin, which discards the commits it carries ahead of it.
 "
       continue
     fi
