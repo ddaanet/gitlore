@@ -13,6 +13,7 @@ load helpers/tier-fixtures
 HOOK="$PLUGIN_ROOT/scripts/cc-hooks/index-compose.sh"
 PRE="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-pre.sh"
 POST="$PLUGIN_ROOT/scripts/cc-hooks/index-sync-post.sh"
+DRAIN="$PLUGIN_ROOT/scripts/cc-hooks/relay-drain.sh"
 
 setup() {
   setup_tmp_repo
@@ -51,11 +52,14 @@ pre() {
 # $1 = agent id, optional — same absent-vs-non-empty contract as pre()'s
 # second argument, and the same agent_type decoy. The payload's CONTENTS are
 # still drained rather than acted on for composition itself; only the agent
-# id is meant to steer which baseline this run consumes.
+# id is meant to steer which baseline this run consumes. `session_id` fixed
+# to the same "test-session" sync_feed() carries, so a fixture that gives
+# BOTH hooks a real report in one keyed batch (the concurrency case) relays
+# under one session rather than two.
 feed() {
   local agent="${1:-}"
-  jq -n --arg a "$agent" \
-    '{agent_type:"general-purpose"} + (if $a == "" then {} else {agent_id:$a} end)' \
+  jq -n --arg a "$agent" --arg s test-session \
+    '{agent_type:"general-purpose", session_id:$s} + (if $a == "" then {} else {agent_id:$a} end)' \
     | bash "$HOOK"
 }
 
@@ -72,6 +76,19 @@ sync_feed() {
     '{hook_event_name:"PostToolBatch", session_id:$s, tool_calls:[], tool_results:[],
       agent_type:"general-purpose"} + (if $a == "" then {} else {agent_id:$a} end)' \
     | bash "$POST"
+}
+
+# Drives relay-drain.sh the same way feed()/sync_feed() drive the other two
+# PostToolBatch hooks. $1 = agent id, optional, same absent-vs-non-empty
+# contract. $2 = session id, default "test-session" — the same fixed value
+# feed()/sync_feed() carry, so a marker either of them staged is found by an
+# unkeyed drain run with no override.
+drain_feed() {
+  local agent="${1:-}" session="${2:-test-session}"
+  jq -n --arg a "$agent" --arg s "$session" \
+    '{hook_event_name:"PostToolBatch", session_id:$s, tool_calls:[], tool_results:[],
+      agent_type:"general-purpose"} + (if $a == "" then {} else {agent_id:$a} end)' \
+    | bash "$DRAIN"
 }
 
 # A root index line AND the file it names, so the edit is a real fact rather
@@ -243,219 +260,197 @@ seed_root_fact() {
   run jq -r '.systemMessage' <<<"$json"
   [ "$status" -eq 0 ]
   [[ "$output" == *"recomposed tier pointers"* ]]
-  marker=$(gitlore_relay_marker_file memory a1)
+  marker=$(relay_marker_for memory a1)
   [ -f "$marker" ]
   grep -qF 'recomposed tier pointers' "$marker"
 }
 
-# The positive half: with a keyed marker already staged, the next unkeyed
-# (parent-side) compose run folds it into its own report — on the same
-# channel, attributed to the agent that left it — and removes it. Planted
-# directly via gitlore_relay_write (Item 3.1 slice 1, already committed)
-# rather than via a real keyed hook run, so this case is isolated from
-# whether the hook itself writes the marker (the case above).
-@test "an unkeyed compose run folds in the marker and removes it" {
+# Slice 2 (D51 revised): index-compose.sh no longer drains — relay-drain.sh is
+# the one drainer now. Replaces the three "unkeyed … folds in" cases and "both
+# PostToolBatch hooks in one keyed batch reach the parent", all of which
+# pinned the drain-in-each-hook behaviour this slice removes. The marker is
+# written under the empty/"nosession" mapping so this reds against TODAY's
+# code, which still drains unkeyed with no session concept at all — a marker
+# under a real session would already survive today, making the assertion
+# vacuous rather than red.
+@test "an unkeyed compose run leaves a marker in place" {
   seed_tier_bullet ddaanet shared.md "a portable fact"
-  gitlore_relay_write memory a1 "keyed relay sysmsg a1" "keyed relay ctx a1"
-  marker=$(gitlore_relay_marker_file memory a1)
+  gitlore_relay_write memory "" a1 compose "keyed relay sysmsg a1" "keyed relay ctx a1"
+  marker=$(relay_marker_for memory a1)
   [ -f "$marker" ]
   pre "$PWD/memory/MEMORY.md"
   seed_root_fact "p.md" "a project fact"
   run feed
   [ "$status" -eq 0 ]
   json="$output"
-  # Per channel, not over the raw JSON blob: the framing line and the body
-  # both reach additionalContext too, so a substring match on the whole
-  # object passes for a fold that reached only the model's channel and never
-  # the user's.
   run jq -r '.systemMessage' <<<"$json"
   [ "$status" -eq 0 ]
   [[ "$output" == *"recomposed tier pointers"* ]]
-  [[ "$output" == *"gitlore-relay agent a1"* ]]
-  [[ "$output" == *"keyed relay sysmsg a1"* ]]
-  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"gitlore-relay agent a1"* ]]
-  [[ "$output" == *"keyed relay ctx a1"* ]]
-  [ ! -f "$marker" ]
-}
-
-# The constraint neither case above can see, and the one the slice exists to
-# protect: a parent-side run whose ONLY report is a relayed one must still
-# emit. Both hooks guard emission on their own report being non-empty
-# (index-compose.sh:68, index-sync-post.sh:243), so a fold placed AFTER that
-# guard is correct in every case where the hook has something of its own to
-# say — which is every other case in this slice — and silently drops the
-# relay here.
-#
-# The fixture is "an already-composed store reports nothing" above with a
-# marker added: the first compose settles the store, then a second index edit
-# takes a baseline and moves the index, so the hook runs all the way to the
-# emission point and composition finds nothing left to do. The negative
-# assertion on its own report is what makes the case discriminate — without
-# it a hook that still had something to say would satisfy it too.
-@test "an unkeyed compose run with no report of its own still emits the relay" {
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  pre "$PWD/memory/MEMORY.md"
-  seed_root_fact "p.md" "a project fact"
-  feed >/dev/null
-  gitlore_relay_write memory a1 "keyed relay sysmsg a1" "keyed relay ctx a1"
-  marker=$(gitlore_relay_marker_file memory a1)
+  [[ "$output" != *"gitlore-relay agent a1"* ]]
   [ -f "$marker" ]
-  pre "$PWD/memory/MEMORY.md"
-  seed_root_fact "q.md" "another project fact"
-  run feed
-  [ "$status" -eq 0 ]
-  json="$output"
-  run jq -r '.systemMessage' <<<"$json"
-  [ "$status" -eq 0 ]
-  [[ "$output" != *"recomposed tier pointers"* ]]
-  [[ "$output" == *"gitlore-relay agent a1"* ]]
-  [[ "$output" == *"keyed relay sysmsg a1"* ]]
-  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"keyed relay ctx a1"* ]]
-  [ ! -f "$marker" ]
 }
 
-# The seam the two cases above leave open. The first asserts a marker exists
-# and holds the report text; the second folds a marker this file wrote for
-# itself with gitlore_relay_write. Nothing makes the two halves agree on the
-# on-disk FORMAT: a hook writing the raw body with no
-# `--- gitlore-relay-sysmsg ---` delimiter satisfies both, and
-# gitlore_relay_drain's awk then yields an empty body — the parent gets a
-# framing line wrapped around nothing. So: a marker written by a real keyed
-# run, folded by a real unkeyed one.
-#
-# The keyed run leaves the store composed, so the unkeyed run has nothing of
-# its own to say and every line it emits came out of the marker. That is what
-# lets `recomposed tier pointers` in the parent's report pin the seam without
-# depending on where in the report the relayed block lands.
-@test "an unkeyed compose run folds in a marker a keyed run wrote" {
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  pre "$PWD/memory/MEMORY.md" a1
-  seed_root_fact "p.md" "a project fact"
-  feed a1 >/dev/null
-  marker=$(gitlore_relay_marker_file memory a1)
-  [ -f "$marker" ]
-  pre "$PWD/memory/MEMORY.md"
-  seed_root_fact "q.md" "another project fact"
-  run feed
-  [ "$status" -eq 0 ]
-  json="$output"
-  run jq -r '.systemMessage' <<<"$json"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"gitlore-relay agent a1"* ]]
-  [[ "$output" == *"recomposed tier pointers"* ]]
-  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"tier composition rewrote these indexes"* ]]
-  [ ! -f "$marker" ]
+# Slice 2, case 1: concurrency at hook level. Replaces "both PostToolBatch
+# hooks in one keyed batch reach the parent" — same "both hooks report on one
+# keyed batch" shape, but the two writers now run as real separate processes
+# at once (`&`/`wait`, not sequential calls) and the fold happens in
+# relay-drain.sh rather than in either writer, so a lost report or a doubled
+# block would show up in the DRAINED output instead of in either hook's own.
+# Ten iterations, fresh per-iteration filenames (a$i.md, shared$i.md, p$i.md)
+# rather than a teardown/setup cycle, so a marker relay-drain.sh fails to
+# remove this round cannot pollute the count next round with a stale ghost —
+# the exact-once assertion would then fail for the wrong reason.
+@test "concurrency: both reporting hooks reach relay-drain.sh exactly once per keyed batch" {
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    seed_tier_bullet ddaanet "shared$i.md" "a portable fact $i"
+    printf -- '---\nname: a%s\ndescription: stale desc %s\n---\nbody\n' "$i" "$i" > "memory/a$i.md"
+    printf -- '- [A%s](a%s.md) — old hook %s\n' "$i" "$i" "$i" > memory/MEMORY.md
+    abs="$PWD/memory/MEMORY.md"
+    pre "$abs" a1
+    printf -- '- [A%s](a%s.md) — new hook %s\n' "$i" "$i" "$i" > memory/MEMORY.md
+
+    sync_feed a1 > "$BATS_TEST_TMPDIR/sync-$i.out" &
+    feed a1 > "$BATS_TEST_TMPDIR/compose-$i.out" &
+    wait
+
+    run drain_feed "" test-session
+    [ "$status" -eq 0 ]
+    # Counted on the DECODED channel, never on the raw JSON: jq emits the
+    # whole systemMessage as one physical line with its newlines escaped, so
+    # `grep -c` over $output counts at most one hit however many blocks the
+    # drain wrote — a report relayed twice, the C2 symptom this case exists
+    # to catch, would score 1 and pass. Decoding restores one line per block.
+    sysmsg=$(jq -r '.systemMessage' <<<"$output")
+    n_sync=$(printf '%s\n' "$sysmsg" | grep -c 'reset frontmatter to match MEMORY.md' || true)
+    n_compose=$(printf '%s\n' "$sysmsg" | grep -c 'recomposed tier pointers' || true)
+    n_frame=$(printf '%s\n' "$sysmsg" | grep -c -- '--- gitlore-relay agent a1 ---' || true)
+    [ "$n_sync" -eq 1 ] || { echo "iteration $i: n_sync=$n_sync sysmsg=$sysmsg"; return 1; }
+    [ "$n_compose" -eq 1 ] || { echo "iteration $i: n_compose=$n_compose sysmsg=$sysmsg"; return 1; }
+    # Two writers, two files, two framed blocks and nothing else. The phrase
+    # counts above pin each report present once; this pins that the drain
+    # framed nothing beyond them — a third block is a doubled relay even when
+    # the two phrase counts still read 1.
+    [ "$n_frame" -eq 2 ] || { echo "iteration $i: n_frame=$n_frame sysmsg=$sysmsg"; return 1; }
+  done
 }
 
-# Item 3.1 slice 2.5. hooks.json registers index-sync-post.sh and
-# index-compose.sh on the SAME PostToolBatch event, in that order, and both now
-# stage to gitlore_relay_marker_file's one path per agent. Adapted from the
-# code review's hand-run transcript (item-3-1-s2-code-review.md §F1): same
-# fixture shape — pre + a root index edit that gives BOTH hooks a real report,
-# then a real keyed run of each in hooks.json's own order, then an unkeyed
-# parent-side run. Differs from that transcript in driving index-sync-post.sh
-# through a real script invocation (sync_feed) rather than a manual `bash`
-# call, and in asserting on the drained PARENT report rather than on the
-# marker's raw bytes — the case the helper-level "relay_write merges a second
-# report" test (tests/index_sync.bats) cannot see, since it never drives a
-# hook.
-@test "both PostToolBatch hooks in one keyed batch reach the parent" {
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  printf -- '---\nname: a\ndescription: stale desc\n---\nbody\n' > memory/a.md
-  printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
-
-  abs="$PWD/memory/MEMORY.md"
-  pre "$abs" a1
-  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
-
-  # index-sync-post.sh fires first, keyed a1: a.md's hook text changed, so it
-  # relays "reset frontmatter to match MEMORY.md" to the a1 marker — and still
-  # emits its own copy, since "in addition to, not instead of" is unaffected
-  # by this defect.
-  run sync_feed a1
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"reset frontmatter to match MEMORY.md"* ]]
-  run grep '^description:' memory/a.md
-  [ "$output" = 'description: "new hook"' ]
-
-  # index-compose.sh fires second, same batch, same key: it splices ddaanet's
-  # unspliced bullet into the root index and relays "recomposed tier pointers"
-  # to the SAME a1 marker, truncating whatever sync just staged there.
-  run feed a1
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"recomposed tier pointers"* ]]
-  grep -qF 'ddaanet/shared.md' memory/MEMORY.md
-  marker=$(gitlore_relay_marker_file memory a1)
+# Slice 2, case 2 (M2): relay-drain.sh delivers on a batch that took no
+# baseline at all — no pre-hook stash, no index edit this batch — because it
+# is driven by the marker alone, unlike index-sync-post.sh/index-compose.sh.
+# This is the fix for M2's "the batch that dispatched the subagent has no
+# baseline, so the report waits for an unrelated index edit or the next
+# SessionStart". A keyed run must do the opposite: exit at once, emitting
+# nothing and touching no file — a subagent never drains.
+@test "relay-drain.sh delivers with no baseline (M2); a keyed run exits 0 silently and leaves the files" {
+  gitlore_relay_write memory test-session a1 sync "M2 SYSMSG" "M2 CTX"
+  marker=$(relay_marker_for memory a1)
   [ -f "$marker" ]
 
-  # The unkeyed, parent-side run that drains the marker. It needs its own
-  # baseline and a real change of its own to reach the drain at all —
-  # composition itself finds nothing new to splice, since ddaanet's bullet is
-  # already in — the same shape "an unkeyed compose run with no report of its
-  # own still emits the relay" (above) uses.
-  pre "$abs"
-  seed_root_fact "q.md" "another project fact"
-  run feed
+  run drain_feed a1 test-session
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -f "$marker" ]
+
+  run drain_feed "" test-session
   [ "$status" -eq 0 ]
   json="$output"
-  run jq -r '.systemMessage' <<<"$json"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"gitlore-relay agent a1"* ]]
-  [[ "$output" == *"reset frontmatter to match MEMORY.md"* ]]
-  [[ "$output" == *"recomposed tier pointers"* ]]
+  sysmsg=$(jq -r '.systemMessage' <<<"$json")
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$json")
+  [[ "$sysmsg" == *"M2 SYSMSG"* ]]
+  # The agent-facing channel too. M2 is about the PARENT learning what its
+  # subagent's hook found, and systemMessage reaches the user's terminal while
+  # additionalContext is the half the parent model reads — a delivery that
+  # dropped it would satisfy the line above and fix nothing.
+  [[ "$ctx" == *"M2 CTX"* ]]
   [ ! -f "$marker" ]
 }
 
-# Item 3.1 slice 4, Group A (item-3-1-s2-code-review.md F5). `mkdir` on the
-# marker path makes gitlore_relay_write's redirect fail with "Is a directory"
-# — no permission bits involved, so no root guard and nothing to restore.
-# Measured by hand-run today: the hook exits 1 with EMPTY stdout, so the
-# subagent's own compose report dies along with the relay it could not stage.
-# A relay failure must cost only the relay, never the hook's own report.
+# Slice 2, case 4: relay-drain.sh scopes its enumeration to its own session —
+# the hook-level pin of the library's "a write for session S2 is not drained
+# by S1 and survives it" (tests/index_sync.bats).
+@test "relay-drain.sh with session S1 leaves an S2 file standing" {
+  gitlore_relay_write memory s1 a1 sync "S1 BODY" "S1 CTX"
+  gitlore_relay_write memory s2 a2 sync "S2 BODY" "S2 CTX"
+  s1_marker=$(relay_marker_for memory a1)
+  s2_marker=$(relay_marker_for memory a2)
+  [ -f "$s1_marker" ]
+  [ -f "$s2_marker" ]
+
+  run drain_feed "" s1
+  [ "$status" -eq 0 ]
+  json="$output"
+  # Through jq rather than a substring match on the raw JSON: the positive is
+  # about which CHANNEL carries the body, and jq -r fails on malformed output,
+  # so "valid JSON carrying S1's report" is one assertion.
+  sysmsg=$(jq -r '.systemMessage' <<<"$json")
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$json")
+  [[ "$sysmsg" == *"S1 BODY"* ]]
+  [[ "$ctx" == *"S1 CTX"* ]]
+  # The refutation stays on the raw JSON: S2's body must be absent from every
+  # channel, including one this case does not name.
+  [[ "$json" != *"S2 BODY"* ]]
+  [[ "$json" != *"S2 CTX"* ]]
+  [ ! -e "$s1_marker" ]
+  [ -f "$s2_marker" ]
+}
+
+# Item 3.1 slice 4, Group A (item-3-1-s2-code-review.md F5), adapted for D51
+# (revised): the marker's name now carries an epoch and a pid unknown until
+# the hook itself runs, so nothing outside its process can `mkdir` the exact
+# path in advance the way the pre-revision squat did. Substitute: shadow `mv`
+# with a stub that fails only a relay-shaped destination (`*/gitlore-relay-*`)
+# and delegates everything else to the real `mv` — so gitlore_relay_write's
+# atomic `mv "$marker.tmp" "$marker"` fails while gitlore_compose_and_report's
+# own index-writing `mv` (index-compose.sh:702) is untouched, and composition
+# still succeeds exactly as this case requires.
 @test "a failed relay write leaves the subagent's own report intact" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
   seed_tier_bullet ddaanet shared.md "a portable fact"
-  squat=$(gitlore_relay_marker_file memory a1)
-  mkdir "$squat"
   pre "$PWD/memory/MEMORY.md" a1
   seed_root_fact "p.md" "a project fact"
-  # `--separate-stderr`: the failing redirect inside gitlore_relay_write prints
-  # "Is a directory" on stderr, and a merged capture would put that line ahead
-  # of the JSON — so the jq parse below would fail on a hook that survived and
-  # reported exactly as this case requires.
-  run --separate-stderr feed a1
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/mv" <<'EOF'
+#!/bin/sh
+case "$2" in
+  */gitlore-relay-*) exit 1 ;;
+esac
+exec /bin/mv "$@"
+EOF
+  chmod +x "$fakebin/mv"
+  PATH="$fakebin:$PATH" run --separate-stderr feed a1
   [ "$status" -eq 0 ]
   run jq -r '.systemMessage' <<<"$output"
   [ "$status" -eq 0 ]
   [[ "$output" == *"recomposed tier pointers"* ]]
-  rmdir "$squat"
 }
 
-# Item 3.1 slice 5 (item-3-1-s4-code-review.md §1). Slice 4 stopped a failed
-# relay write from taking the hook down and in doing so traded a loud failure
-# for a silent one: the parent loses the report and nobody — not the parent,
-# not the user, not the acting subagent — learns it existed. The fix appends
-# a not-staged line to additionalContext specifically: per the subagent-
-# confinement probe, systemMessage never leaves the subagent's own JSONL,
-# while additionalContext is what the acting model narrates unprompted — the
-# only path by which the fact can reach the parent at all, since the actor
-# has to carry it there itself.
+# Item 3.1 slice 5 (item-3-1-s4-code-review.md §1), same mv-stub substitution
+# as the case above. Slice 4 stopped a failed relay write from taking the hook
+# down and in doing so traded a loud failure for a silent one: the parent
+# loses the report and nobody — not the parent, not the user, not the acting
+# subagent — learns it existed. The fix appends a not-staged line to
+# additionalContext specifically: per the subagent-confinement probe,
+# systemMessage never leaves the subagent's own JSONL, while additionalContext
+# is what the acting model narrates unprompted — the only path by which the
+# fact can reach the parent at all, since the actor has to carry it there
+# itself.
 @test "a failed relay write tells the subagent it was not staged" {
+  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
   seed_tier_bullet ddaanet shared.md "a portable fact"
-  squat=$(gitlore_relay_marker_file memory a1)
-  mkdir "$squat"
   pre "$PWD/memory/MEMORY.md" a1
   seed_root_fact "p.md" "a project fact"
-  # `--separate-stderr`: the failing redirect inside gitlore_relay_write prints
-  # "Is a directory" on stderr, and a merged capture would put that line ahead
-  # of the JSON — so the jq parses below would fail on a hook that survived
-  # and reported exactly as this case requires.
-  run --separate-stderr feed a1
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/mv" <<'EOF'
+#!/bin/sh
+case "$2" in
+  */gitlore-relay-*) exit 1 ;;
+esac
+exec /bin/mv "$@"
+EOF
+  chmod +x "$fakebin/mv"
+  PATH="$fakebin:$PATH" run --separate-stderr feed a1
   [ "$status" -eq 0 ]
   json="$output"
   run jq -r '.systemMessage' <<<"$json"
@@ -467,37 +462,6 @@ seed_root_fact() {
   # before refuting anything on the channel's contents.
   [ "$output" != "null" ]
   [[ "$output" == *"could not be staged for the parent session"* ]]
-  rmdir "$squat"
-}
-
-# The companion to the case above, over the SAME squat: an unkeyed run. This
-# is the case that pins what `-type f` in gitlore_relay_drain is actually
-# for — not framing a non-marker into the parent's report and not removing
-# it — rather than for the abort a fix to §6 (below) would stop it causing.
-@test "an unkeyed run leaves a non-marker alone" {
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  squat=$(gitlore_relay_marker_file memory a1)
-  mkdir "$squat"
-  pre "$PWD/memory/MEMORY.md"
-  seed_root_fact "p.md" "a project fact"
-  # `--separate-stderr` for the reason the keyed cases above give: this
-  # fixture's whole point is a path that produces diagnostics, and $output has
-  # to mean the hook's own report and nothing else.
-  run --separate-stderr feed
-  [ "$status" -eq 0 ]
-  [ -d "$squat" ]
-  # Over the whole JSON, not one jq-extracted channel: the unkeyed fold puts
-  # the framing line on BOTH systemMessage and additionalContext, so a
-  # refutation scoped to either one alone would miss the other.
-  [[ "$output" != *"gitlore-relay agent a1"* ]]
-  # The paired positive over the same capture, and it is not left to the
-  # sibling case: the refutation above is satisfied by an EMPTY $output too,
-  # and this hook emits nothing at all when its compose report is empty — so
-  # without this line a regression that silenced the report would make the
-  # refutation vacuous rather than red. Placed after it, not before, so a run
-  # that breaks both reports the refutation, which is what this case is for.
-  [[ "$output" == *"recomposed tier pointers"* ]]
-  rmdir "$squat"
 }
 
 @test "a validation failure reports on both channels and exits 0" {

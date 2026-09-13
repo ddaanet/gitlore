@@ -210,7 +210,9 @@ git and decides (D7).
   per dirty episode (the FR11 opening), `PostToolBatch` acts on the two intent
   files and reports a mid-session plugin upgrade (D21), the
   `PreToolUse`/`PostToolBatch` index pair keys on what changed rather than on
-  what the call declared (D31), and `PostToolUse(EnterWorktree|ExitWorktree)`
+  what the call declared (D31), a `PostToolBatch` relay drainer is the one
+  consumer of the reports hooks write from inside a subagent, whose own output
+  reaches nobody else (D51), and `PostToolUse(EnterWorktree|ExitWorktree)`
   guards against in-process worktree drift (D15); `SessionStart` and
   `PreCompact` re-arm the once-per-episode notices.
   [session.md](references/session.md); the nudge in

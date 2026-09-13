@@ -12,7 +12,7 @@ long and what makes them worth keeping whole.
   state · **D23** the `Edit` weld defect is contained by a pair that computes
   the intended result, repairs, and reports its own obsolescence · **D51** a
   hook's output inside a subagent reaches that subagent alone, so its report is
-  relayed through a marker
+  relayed through a file keyed by session and agent
 
 ---
 
@@ -192,12 +192,17 @@ A composition triggered by a subagent's edit to the root index reports to nobody
 who can act on it, and the parent's only view is whatever the subagent chooses
 to narrate — model-mediated, not a mechanism.
 
-So a hook whose payload carries an `agent_id` stages its two bodies in a relay
-marker keyed by that id, and the next run without one folds every marker into
-its own report and removes it. The mechanism, and why the subagent still emits
-its own copy, are in [index-authoring-sync.md](index-authoring-sync.md). The
-relay helpers cite this decision for the measurement, which itself lives outside
-anything the plugin ships.
+The same probe logs the subagent's `PostToolUse` stdin carrying the **parent's**
+`session_id` alongside its own `agent_id`, so a hook inside a subagent can name
+the conversation its report is owed to.
+
+So a hook whose payload carries an `agent_id` writes its two bodies to a report
+file keyed by session and agent, drained by a dedicated `PostToolBatch` hook.
+The mechanism — the write-once name, the atomic install, the one drainer, the
+`SessionStart` drain and sweep, and why the subagent still emits its own copy —
+is in [index-authoring-sync.md](index-authoring-sync.md). The relay helpers cite
+this decision for the measurement, which itself lives outside anything the
+plugin ships.
 
 ## Rejected alternatives
 
@@ -224,3 +229,27 @@ already fires there. The obligation lives in the calling skill's flow instead
 channels stop at the subagent, so what reaches the parent is prose the model
 chose to write rather than the report itself, and a report that never arrives
 leaves nothing behind to notice (D51).
+
+**One shared marker per agent, each reporting hook merging into it.** Every hook
+matching one event runs in parallel, so two hooks staging in one batch race on a
+read-merge-write and the loser's report is overwritten. A file per report has no
+shared state to serialize (D51).
+
+**A drain inside each reporting hook** rather than a hook of its own. Parallel
+again: on a batch that fires both, each copy frames and emits the same reports,
+so the parent sees everything twice. Both hooks also act only when their own
+baseline fired, and the batch whose `Agent` call returned changed no index — so
+either placement skips exactly the batch the report was staged for, leaving it
+to an unrelated index edit or a `SessionStart` (D51).
+
+**Claim-by-rename before reading**, to close the window in which a drained
+report exists only in the draining hook's variables. Unique names already keep a
+drain from removing a file it did not read, so the rename buys only that window
+— and pays for it with a claimed file that a killed claimer strands under a name
+no later drain enumerates, converting a rare lost report into a permanently
+stranded one (D51).
+
+**Folding another session's stranded reports at `SessionStart`.** It lands a
+report in a conversation that never dispatched the agent and cannot act on it,
+while the store state the report described is already re-covered by that
+session's own structural pass. Age is the backstop instead (D51).

@@ -42,6 +42,10 @@ manifest="$mempath/.gitlore-tiers"
 # ancient index. Falling back to the unsuffixed name costs at most the keying —
 # a main-thread compose — while jq's own diagnostic still reaches stderr.
 agent_id=$(jq -r '.agent_id // empty' <<<"$payload") || agent_id=""
+# Non-fatal for the same reason: the relay write below keys its marker on this
+# session, but a jq failure must not be what stops the hook and strands the
+# stamp. Falling back to an empty session costs that keying alone.
+session=$(jq -r '.session_id // ""' <<<"$payload") || session=""
 stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
 [ -f "$stamp" ] || exit 0   # no baseline → no watched call this batch, for THIS agent
 
@@ -66,44 +70,27 @@ rm -f "$stamp"
 gitlore_compose_and_report "$mempath" "$manifest_touched"
 
 # Keyed: the report above is confined to this subagent's own transcript
-# (D51, measured under CC 2.1.261), so stage it for the next parent-side run to
-# fold in — in addition to, not instead of, the emission below: the subagent
-# is the actor and gets its own copy too. Guarded on the same emptiness the
-# emission guard below applies, and for the same reason: the drain frames
-# every marker it finds, so an empty one reaches the parent as a framing line
-# wrapped around nothing, on a batch the parent would otherwise pass in
-# silence. The ctx half needs no guard of its own — gitlore_compose_and_report
-# leaves it empty whenever the sysmsg is.
-#
-# Unkeyed: fold in whatever a subagent staged BEFORE the emission guard
-# below. A fold placed after it is satisfied whenever this run has a report
-# of its own and silently drops the relay on exactly the run it exists for
-# — a parent-side batch whose only report is a relayed one.
-if [ -n "$agent_id" ]; then
-  if [ -n "$GITLORE_COMPOSE_SYSMSG" ]; then
-    # `if !`, not `|| true`: a failed relay write must cost only the relay,
-    # never this subagent's own report — both suspend errexit over the call
-    # the same way — but the loss must not also be silent to everyone. On
-    # additionalContext, not systemMessage: a subagent's systemMessage reaches
-    # only that subagent's own transcript, while additionalContext is what the
-    # acting model narrates unprompted — the only path by which the fact can
-    # reach the parent, since the actor has to carry it there itself.
-    # Appended after the write, since the line describes the write's own
-    # failure and must not be staged by it.
-    if ! gitlore_relay_write "$mempath" "$agent_id" "$GITLORE_COMPOSE_SYSMSG" "$GITLORE_COMPOSE_CTX"; then
-      GITLORE_COMPOSE_CTX="${GITLORE_COMPOSE_CTX:+$GITLORE_COMPOSE_CTX
-
-}gitlore: the report above could not be staged for the parent session — the relay marker could not be written. A hook's output inside a subagent reaches no one else, so repeat it in your reply or it is lost."
-    fi
-  fi
-else
-  gitlore_relay_drain "$mempath"
-  if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
-    GITLORE_COMPOSE_SYSMSG="${GITLORE_COMPOSE_SYSMSG:+$GITLORE_COMPOSE_SYSMSG
-}$GITLORE_RELAY_SYSMSG"
+# (D51, measured under CC 2.1.261), so stage it for relay-drain.sh — the ONE
+# drainer — to fold into the next parent-side batch, in addition
+# to, not instead of, the emission below: the subagent is the actor and gets
+# its own copy too. Guarded on the same emptiness the emission guard below
+# applies: an empty report is nothing to stage. Unkeyed (the main thread),
+# this hook writes nothing toward the relay — it only ever emits its own
+# report; relay-drain.sh is the only hook that reads a marker.
+if [ -n "$agent_id" ] && [ -n "$GITLORE_COMPOSE_SYSMSG" ]; then
+  # `if !`, not `|| true`: a failed relay write must cost only the relay,
+  # never this subagent's own report — both suspend errexit over the call
+  # the same way — but the loss must not also be silent to everyone. On
+  # additionalContext, not systemMessage: a subagent's systemMessage reaches
+  # only that subagent's own transcript, while additionalContext is what the
+  # acting model narrates unprompted — the only path by which the fact can
+  # reach the parent, since the actor has to carry it there itself.
+  # Appended after the write, since the line describes the write's own
+  # failure and must not be staged by it.
+  if ! gitlore_relay_write "$mempath" "$session" "$agent_id" compose "$GITLORE_COMPOSE_SYSMSG" "$GITLORE_COMPOSE_CTX"; then
     GITLORE_COMPOSE_CTX="${GITLORE_COMPOSE_CTX:+$GITLORE_COMPOSE_CTX
 
-}$GITLORE_RELAY_CTX"
+}gitlore: the report above could not be staged for the parent session — the relay marker could not be written. A hook's output inside a subagent reaches no one else, so repeat it in your reply or it is lost."
   fi
 fi
 

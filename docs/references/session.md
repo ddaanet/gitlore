@@ -103,12 +103,19 @@ has no `gitlore-memory` entry, no-op.
 9. **Compose the indexes**, then run the dangling-pointer report (D34). A
    refusal writes nothing and says why; a partial write says which indexes are
    composed.
-10. **Drain the relay markers.** A hook firing inside a subagent reports only to
-   that subagent, so it stages its report in a marker keyed by agent id (D51,
-   [cc-platform.md](cc-platform.md)). This folds in every marker no parent-side
-   batch collected, framed with the agent that staged it. The early exits above
-   — divergence, a failed fast-forward — return before this, which delays a
-   marker to the session after the repair rather than losing it.
+10. **Drain this session's relay reports, then sweep by age.** A hook firing
+   inside a subagent reports only to that subagent, so it writes its report to a
+   file keyed by session and agent (D51, [cc-platform.md](cc-platform.md)). This
+   folds in every report addressed to *this* session that no parent-side batch
+   collected, framed with the agent that staged it — `compact` and `resume` keep
+   the session id, and neither fires the `PostToolBatch` drainer, so this is the
+   only path a report reaches a session that resumed. The sweep then removes
+   every relay file older than seven days regardless of session, temps included:
+   a report addressed to a session that ended is undeliverable, so it goes by
+   age rather than into a stranger's session. The early exits above —
+   divergence, a failed fast-forward — return before both, so a resume or
+   compaction of the same session still collects what is waiting, while a fresh
+   session after the repair leaves it to the sweep.
 11. **Emit the standing orientation** on `additionalContext`: the FR11
    prohibition (D12) and the active tiers' own routing descriptions (D28).
 

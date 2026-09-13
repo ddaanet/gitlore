@@ -5,6 +5,10 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
+# Read once, here, before the guards below start exiting: this is the script's
+# only read of stdin, and the session_id it carries is parsed from it at its
+# one use, near the relay drain at the end.
+payload=$(cat)
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
@@ -374,20 +378,31 @@ if [ -n "$tier_guidance" ]; then
 gitlore memory tiers: shared memory stores mounted inside the memory submodule. Write a portable fact into the matching tier's directory (same one-file-per-fact format), and add its index line to the ROOT $mempath/MEMORY.md with the tier prefix — '- [Title](<tier>/<file>.md) — hook'. gitlore mirrors that line down into the tier's own index for you. Facts specific to this project stay in $mempath/ with a bare path.$tier_guidance"
 fi
 
-# Relay backstop: fold in any marker a subagent's PostToolBatch hook staged
-# that no parent-side batch drained before the session ended — this is the
-# last chance before it strands across sessions. Only before the FINAL emit
-# below, never the diverged and ff-failure early exits above: on those a store
-# the user must repair with /gitlore:resolve is not the moment to surface a
-# subagent's report, and the marker survives undrained to the session after
-# the repair, so the relay is delayed rather than lost.
+# Relay: drain this session's own markers (D51) — the only path a report
+# reaches a session that resumed or compacted, since neither event fires the
+# PostToolBatch drainer relay-drain.sh is registered on. Own-session only: a
+# report addressed to a session that ended is undeliverable — the conversation
+# it describes is gone — so it is left for the sweep below rather than folded
+# into a stranger's session.
 #
-# Called bare, as both PostToolBatch hooks call it: the drain absorbs every
-# failure a marker or its gitdir can produce — one it cannot read folds as an
-# empty block, an `rm -f` the gitdir refuses is swallowed — and returns 0 on
-# every path, so there is no status to inspect and nothing here for this
-# file's `set -e` to trip on. A guard at this one call site would imply the
-# other two were taking a risk this one does not.
+# Placed before the FINAL emit below and after the diverged and ff-failure
+# early exits above: on those, a store the user must repair with
+# /gitlore:resolve is not the moment to surface a subagent's report. The
+# markers are left where they are — a resume or a compaction of this same
+# session still collects them here, since both keep the session id, and a
+# fresh session after the repair is a stranger to them and leaves them to the
+# sweep, exactly as it would for any other session's report.
+#
+# Then sweep: remove every gitlore-relay-* file older than 7 days, temps
+# included, regardless of session. A report addressed to a session that ended
+# with no further batch is never drained by anyone; age is the only backstop
+# it gets, and the store state it reported on is re-covered by this script's
+# own structural pass above.
+#
+# Both calls absorb every failure a marker or its gitdir can produce — a
+# marker that cannot be read folds as an empty block, an `rm -f`/`-delete` the
+# gitdir refuses is swallowed — and return 0 on every path, so there is
+# nothing here for this file's `set -e` to trip on.
 #
 # Guarded on $GITLORE_RELAY_SYSMSG, deliberately NOT nested inside
 # `[ -n "$sysmsg" ]`: every dirty branch above calls add_sysmsg
@@ -395,7 +410,13 @@ fi
 # but that is an accident of the branches above, not a contract this fold may
 # lean on. Conditioning on it would be behaviour-identical now and would
 # silently drop the relay the day one of those branches stops reporting.
-gitlore_relay_drain "$mempath"
+# Non-fatal: the relay is a backstop, never a reason a session fails to start.
+# jq has already parsed .claude/settings.json above — the hook exits when it
+# cannot — so the only failure left here is a malformed payload, and it costs
+# the own-session keying alone: the sweep below still runs.
+session=$(jq -r '.session_id // ""' <<<"$payload") || session=""
+gitlore_relay_drain "$mempath" "$session"
+gitlore_relay_sweep "$mempath"
 if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
   add_sysmsg "$GITLORE_RELAY_SYSMSG"
   protocol_ctx="$protocol_ctx

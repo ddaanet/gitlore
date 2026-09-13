@@ -152,3 +152,34 @@ _gitlore_build_parent_with_memory() {
     git commit -q -m "Add memory submodule"
   )
 }
+
+# Locate the one relay file `gitlore_relay_write` staged for agent $2 under
+# memory path $1, by glob rather than by predicted name — D51 (revised) names
+# each write `gitlore-relay-<S>-<A>-<epoch>-<pid>-<H>`, so nothing outside the
+# writer's own process can predict a file BEFORE it exists the way the retired
+# `gitlore_relay_marker_file` did. Excludes a writer's in-progress `.tmp`.
+# Anchored on the whole `-<agent>-<epoch>-<pid>-<tag>` tail rather than on a
+# bare `-$agent-*`: epoch and pid are decimal and the tag comes from a closed
+# set, so the pattern can only match where $agent occupies the agent field. A
+# loose `-$agent-*` would also match an agent id that $agent is a prefix of,
+# and a session id that happens to embed "-$agent-". The tail anchor excludes
+# a writer's in-progress `<name>.tmp` by construction — it ends in `.tmp`, not
+# in a tag.
+#
+# Exactly one match or a failure: two matches would otherwise be returned as a
+# two-line string and fail the caller's `[ -f "$marker" ]` with nothing said
+# about why.
+relay_marker_for() {
+  local mempath="$1" agent="$2" gitdir found n
+  gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir) || return 1
+  found=$(find "$gitdir" -maxdepth 1 -type f \
+    '(' -name "gitlore-relay-*-$agent-[0-9]*-[0-9]*-sync" \
+    -o -name "gitlore-relay-*-$agent-[0-9]*-[0-9]*-compose" ')' -print)
+  n=$(printf '%s' "$found" | grep -c . || true)
+  if [ "$n" -ne 1 ]; then
+    printf 'relay_marker_for: %s relay files for agent %s under %s\n' \
+      "$n" "$agent" "$gitdir" >&2
+    return 1
+  fi
+  printf '%s\n' "$found"
+}
