@@ -193,3 +193,24 @@ strand_live_ahead_of_pin() {
   git -C "memory/$tier" push -q . HEAD:refs/heads/live || return 1
   git -C "memory/$tier" checkout -q --detach "$pin" || return 1
 }
+
+# A memory store with one tier whose next commit lands and then fails on memory's
+# own index: the carrier and the root line disagree, so the commit path composes
+# and commits inside the tier, and a one-shot tier `post-commit` hook takes
+# memory's index.lock before memory's `add -A` can stage the moved gitlink.
+# Sets $lock to that lock's path, for the caller to assert on and clear.
+half_landed_tier_fixture() {
+  local hook
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "stale hook"
+  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  lock="$(git -C memory rev-parse --absolute-git-dir)/index.lock"
+  hook="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/hooks/post-commit"
+  mkdir -p "$(dirname "$hook")" || return 1
+  # One-shot: the hook removes itself, so a retry's tier pass is not locked again.
+  # shellcheck disable=SC2016  # $0 is the generated hook's own, not this shell's
+  printf '#!/bin/sh\n: > "%s"\nrm -f "$0"\n' "$lock" > "$hook" || return 1
+  chmod +x "$hook"
+}

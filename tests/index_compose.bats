@@ -394,6 +394,13 @@ pinned_store_with_tier() {
   [[ "$tierline" == *"${pinned:0:12}"* ]]
   [[ "$tierline" == *"ahead"* ]]
   [[ "$tierline" == *"discard"* ]]
+  # Staging the gitlink alone is the overwrite this refusal exists to stop: the
+  # next compose projects root's older text over the carrier. The remedy names
+  # the carrier to adopt into the root index first, then the runnable staging
+  # command, quoted so a spaced project path survives the paste.
+  memabs=$(cd memory && pwd)
+  [[ "$tierline" == *"ddaanet/MEMORY.md"* ]]
+  [[ "$tierline" == *"git -C \"$memabs\" add -- \"ddaanet\""* ]]
   # `checkout --detach <pinned>` is exactly the command that would destroy the
   # commits this tier carries, so the branch has not landed until it stops being
   # offered — asserted explicitly so it cannot pass by the ahead wording simply

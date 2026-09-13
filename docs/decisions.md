@@ -54,7 +54,9 @@ operation, and the pointer invariant that rests on them.
   aborts, a compose refusal only reports
 
 *Rejected:* a tip amend to re-pin memory · a refusal that instructs the agent to
-run compose · reporting an off-pin tier and committing through it.
+run compose · reporting an off-pin tier and committing through it · recognising
+gitlore's own landed tier commit by its message · staging each tier gitlink
+right after its commit.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.

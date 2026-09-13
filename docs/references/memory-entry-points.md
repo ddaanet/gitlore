@@ -36,7 +36,7 @@ lookup and no coupling to gitlore's internal layout (D5, D16).
 
 **Shared body.** `gitlore_sync_memory_to_live` (lib) is the
 commit-and-advance-live logic factored out of `pre-commit`: dirty/freshness gate
-→ pin guard → compose (D50) → tier sync (D42) → `add -A` →
+→ landed-tier staging → pin guard → compose (D50) → tier sync (D42) → `add -A` →
 `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>` → `rm <msgfile>` →
 `push . HEAD:live` (ff) → divergence (prepare / write merge-state / emit
 directive / exit 1). Both `pre-commit` and `commit-memory.sh` call it — one

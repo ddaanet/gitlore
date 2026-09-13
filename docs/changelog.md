@@ -6,6 +6,14 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-13 — A half-landed memory commit retries to completion](changelog/2026-09-13-a-half-landed-memory-commit-retries-to-completion.md)
+  — the D50 pin guard refused, for the rest of the session, the retry of a
+  commit that had landed a tier and then hit memory's `index.lock`; a landing
+  record written before each tier commit lets the retry stage its own commit's
+  gitlink, a failure past the freshness gate keeps the approval unless it
+  prepared a merge, and the ahead-of-pin remedy stops offering the hand staging
+  it refuses
+
 - [2026-09-11 — The hooks node splits from the entry points](changelog/2026-09-11-the-hooks-node-splits-from-the-entry-points.md)
   — `git-hooks-and-entry-points.md` reached the 400-line cap, and the seam its
   own title named splits it into `git-hooks.md` (the two hooks, the gitlink
