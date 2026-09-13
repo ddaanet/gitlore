@@ -156,6 +156,17 @@ canned commit — the pair includes `MEMORY.md`, whose recompose folds in whatev
 unapproved index edits the episode already held — and falls back to the
 staged-pair discipline below.
 
+**A take whose up projection fails records nothing and walks the tier back.**
+Staging the gitlink would put the tier on its pin while root still holds the
+older block, and the next compose would write that text over the carrier with
+nothing left to refuse (D50). Leaving the tier ahead of an unstaged pin instead
+has the pin guard refuse every commit until `SessionStart` walks it back, while
+a take finds nothing to take. So `gitlore_adopt_tier_into_root` checks the tier
+out at its pre-take commit and fails the take. The arrival stays in the tier's
+local `live`, the shape `gitlore_adopt_advanced_live` adopts, so fixing the
+store and taking again retries the whole adoption. The checkout loses nothing: a
+take refuses a dirty tier, and the up projection writes no carrier.
+
 **On the degraded path, the moved gitlink is staged.** `submodule update` checks
 a tier out at the sha the superproject's **index** holds, not the one its HEAD
 records, so the pin and a floating gitlink are only compatible while the move is
