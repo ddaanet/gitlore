@@ -1,22 +1,38 @@
 ## Open decisions
 
-- **The memory index against Claude Code's ~24,985-byte loader cutoff**, per `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports 102% of budget and is truncating, which is why no memory has been written across two sessions. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees ~4,600 by relocation and merges, the three dropped briefs a further ~10,400. Decide: curate first and re-measure, or do the composition reorder (D29 layout rule, D36 rewrite, `gitlore_order_merge` in `index-composition.md`). This gates every memory write below.
+- **Which deliverable-review findings to fix, and in what order.** Report: `plans/index-edit-propagation/reports/deliverable-review.md`. Both Criticals were reproduced.
+  - **C1:** the Item 1.2 pin guard (`scripts/lib/resolve.sh`, in `gitlore_sync_memory_to_live`) permanently refuses the retry of a half-landed commit. A tier commit lands, then memory's `add -A` hits a transient `index.lock`, and the retry aborts with "ahead of the pin … no automatic remedy". On the `b6dbe92` scripts the same retry passes. `memory-commit-batch.sh` promises a transparent retry. Fix candidates: stage each tier gitlink right after its commit inside `gitlore_sync_tiers_to_live`, or have the guard accept a tier whose commits ahead of the pin are gitlore's own.
+  - **C2:** the relay write and drain in `scripts/lib/index-sync.sh` assume same-event hooks run in sequence. Claude Code runs all matching hooks in parallel (code.claude.com/docs/en/hooks). Over 200 probe runs: one of two concurrent writes lost 86 times and torn 2 times; two concurrent drains relayed the block twice 144 times and framed an empty block 51 times.
+  - **Majors:** M1, drain-vs-write lost update. M2, the parent drain sits behind the index-changed early exits, so an in-session relay usually waits for SessionStart. M3, markers are not keyed by `session_id`. M4, the ahead-of-pin remedy "stage the gitlink by hand" is the silent overwrite the guard exists to stop. M5, D50's adoption invariant is false for the take path's `gitlore_adopt_tier_into_root`. M6, no concurrent-hook test. M7, the `CLAUDE.md` gate-file fallback reads green on a docs-only failure.
+  - C2, M1, M2, M3 and M6 are one redesign of the relay: a lock or claim-by-rename, drain placement, session keying. M5 needs a design call: narrow D50, or change the take's failure arm.
 
-- **Whether `CLAUDE.md` §Testing's gate paragraph is rewritten. Five errors.** It says a sentinel is "valid for the tree when its mtime postdates the last edit to any gated input", but the mechanism is a content hash and mtime ordering is not evidence at all. It points at `just check-sentinel`, which does not exist — that is a justfile-prolog shell function, so the command errors with `Justfile does not contain recipe`. Its OOM fallback ("three sequential `just` calls") failed outright in Phase 3. Chunking at 2 suites also OOMs when other sessions hold the box. And `just test-unit` alone at `GITLORE_TEST_JOBS=1` OOMs too, so the paragraph's fallback has no working rung left above the per-suite chunker.
+- **The memory index against Claude Code's ~24,985-byte loader cutoff**, per `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports 102% of budget and is truncating, which is why no memory has been written across three sessions. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees ~4,600 by relocation and merges, the three dropped briefs a further ~10,400. Decide: curate first and re-measure, or do the composition reorder (D29 layout rule, D36 rewrite, `gitlore_order_merge` in `index-composition.md`). This gates every memory write below.
 
-- **Where the chunked gate runner should live.** `/tmp/claude-1000/gate-chunks1.sh` is the only fallback that has completed a full verdict twice, and it is in a tmpfs that will not survive a reboot. It runs one bats suite per invocation, appends `KEY=<tag>:<suite> bats: N passed, M failed` per chunk, and is resumable by skipping recorded keys — which means its results file must be deleted before a fresh run or it reports stale passes. Decide whether it becomes a tracked script with its own recipe.
+- **Whether `CLAUDE.md` §Testing's gate paragraph is rewritten.** Errors:
+  - It says a sentinel is valid when its mtime postdates the last edit to any gated input. The mechanism is a content hash, and mtime ordering is not evidence.
+  - It points at `just check-sentinel`, which is a justfile-prolog function, not a recipe.
+  - Its OOM fallback of three sequential `just` calls failed in Phase 3. Chunking at 2 suites also OOMs, and so does `just test-unit` alone at `GITLORE_TEST_JOBS=1`.
+  - The deliverable review's M7 adds: `format-docs`, `check-memory-hygiene.py`, `check-docs-links.py` and `check-version` write no gate file, so a docs-only failure reads green. The gates path is per-worktree. The fallback omits `check-distribution`.
+  - It cites a `plans/` file.
 
-- **The `precommit` gate returns verdicts spanning two trees, cause still unidentified.** Sentinels resolve through `git rev-parse --git-path` into a gitdir every peer session shares, and nothing in a sentinel records which tree or process wrote it — so a disagreeing hash is the lucky case, and a peer whose tree happens to hash the same would write a pass for a suite you never ran. Decide whether to settle it or to stop treating sentinels as evidence and read verdicts from suite output.
+- **Where the chunked gate runner should live.** `/tmp/claude-1000/gate-chunks1.sh` is the only fallback that has completed a full verdict twice, and it is in a tmpfs that will not survive a reboot. It runs one bats suite per invocation, appends `KEY=<tag>:<suite> bats: N passed, M failed` per chunk, and resumes by skipping recorded keys, so its results file must be deleted before a fresh run. Decide whether it becomes a tracked script with its own recipe.
 
-- **Which of the orchestrate context-analysis recommendations to act on.** Report at `plans/2026-09-10-orchestrate-context-analysis.md`. Recommendation A — split a run across sessions at phase boundaries — measured 35% saving at two splits, 55% at four. Recommendation B's cleanest form is excluding `plans/*/reports/` from what `just format-docs` hard-wraps, which changes this repo's wrapping policy. C (dispatch preamble to a fragment), D (verdict head on corrector reports) and E (delegate RED/GREEN roll-up only) are all edify-plugin edits, i.e. another repo.
+- **The `precommit` gate returns verdicts spanning two trees; the cause is unidentified.** Sentinels resolve through `git rev-parse --git-path` into a gitdir every peer session shares, and nothing in a sentinel records which tree or process wrote it. Decide whether to settle it, or to stop treating sentinels as evidence and read verdicts from suite output.
 
-- **The TDD audit's two standing items**, from `plans/index-edit-propagation/reports/tdd-audit.md`. M3a (`ls | grep` instead of `find -print0` in the drain) is argued unenforceable by the existing cases and the runbook's "never an `ls` pipeline" clause is style rather than behaviour — decide whether to accept it as such in the design node. Separately, eleven of nineteen slices have no auditable record that the suite was green at commit time; the audit's recommendation 4 is to record the gate verdict in each green report.
+- **Which of the orchestrate context-analysis recommendations to act on.** Report at `plans/2026-09-10-orchestrate-context-analysis.md`. A: split a run across sessions at phase boundaries (35% saving at two splits, 55% at four). B: exclude `plans/*/reports/` from `just format-docs`. C, D and E are edify-plugin edits, i.e. another repo.
 
-- **Whether `docs/references/git-hooks.md` should carry the pre-split history.** Git's similarity detection paired the old `git-hooks-and-entry-points.md` with `memory-entry-points.md` (55%) at commit time, overriding the staged `git mv`, so `git log --follow` reaches the full history from the entry-points half and `git-hooks.md` starts fresh at `951b83a`. Defensible as it stands — the entry-points half took the larger share of the text. Changing it needs a re-commit with `-M` tuning or an explicit two-step.
+- **The TDD audit's two standing items**, from `plans/index-edit-propagation/reports/tdd-audit.md`. M3a (`ls | grep` in the drain) is argued unenforceable: accept it as style in the design node? Separately, eleven of nineteen slices have no auditable green-at-commit record; recommendation 4 is to record the gate verdict in each green report.
 
-- Which gitlore-side tier merges from `plans/2026-09-02-ddaanet-design-moment-facts.md` to execute: `plan-writing` (7 facts to 1), `guard-design` (3 to 1), folding `test-the-invocation-path` into `green-is-not-evidence`, `imperative-form-scope` into `skill-description-purpose-first`, `markdown-formatter-choice` into `claude-plugin-dev`, `bash-prolog-common-foundations` into `justfile-gotchas`, `no-transition-special-cases` into `remove-cleanly-no-vestigial`; and whether `loose-generation` gets a trigger or is retired. Several are brief-bound, so order matters.
+- **Whether `docs/references/git-hooks.md` should carry the pre-split history.** Git paired the old `git-hooks-and-entry-points.md` with `memory-entry-points.md` (55%), so `git log --follow` reaches the full history from the entry-points half, and `git-hooks.md` starts fresh at `951b83a`. Changing it needs a re-commit with `-M` tuning or an explicit two-step.
 
-- Whether the guard and validation design facts go to `craft` (current default) or to `prohibitions`.
+- Which gitlore-side tier merges from `plans/2026-09-02-ddaanet-design-moment-facts.md` to execute:
+  - `plan-writing` (7 facts to 1) and `guard-design` (3 to 1);
+  - folding `test-the-invocation-path` into `green-is-not-evidence`, `imperative-form-scope` into `skill-description-purpose-first`, `markdown-formatter-choice` into `claude-plugin-dev`, `bash-prolog-common-foundations` into `justfile-gotchas`, and `no-transition-special-cases` into `remove-cleanly-no-vestigial`;
+  - whether `loose-generation` gets a trigger or is retired.
+  
+  Several are brief-bound, so order matters.
+
+- Whether the guard and validation design facts go to `craft` (the current default) or to `prohibitions`.
 
 - Whether the toolkit release-and-vendoring skill belongs in `plugin-craft` or in `claude-plugin-dev`'s own `toolkit/README.md`.
 
@@ -24,27 +40,40 @@
 
 - Whether a phantom-dotfile prohibition (never delete, commit or report one) goes into `memory/ddaanet/shared-claude.md`. No hook fires on the `` !`cmd` `` expansion path, so prose is the only mechanism.
 
-- Whether `2026-09-02-bang-expansion-hook-decompile.md` belonged in the move to sandbox-lies. Its finding matters to gitlore independently as a hook-heavy plugin.
+- Whether `2026-09-02-bang-expansion-hook-decompile.md` belonged in the move to sandbox-lies. Its finding matters to gitlore independently, as a hook-heavy plugin.
 
-- The recall-size hook fires on `memory/ddaanet/shared-claude.md` demanding it be cut under 2.8KB, but that file is imported whole by `CLAUDE.md` and is never a recall target. Decide whether the hook should exempt it.
+- The recall-size hook fires on `memory/ddaanet/shared-claude.md`, demanding it be cut under 2.8KB. That file is imported whole by `CLAUDE.md` and is never a recall target. Decide whether the hook should exempt it.
 
 ## Remaining
 
-- Add to `.claude/rules/shell.md`: **`set -e` does not abort a Bash tool command.** A subagent's probe began `W="$TMPDIR/mbprobe"; cd "$W"` with `$TMPDIR` unset, so `cd` failed — and the rest of the script ran in the repo root, re-running `git init` and leaving HEAD on an unborn orphan branch. Hit again this session: a `cd "$TMPDIR"` with `$TMPDIR` unset is a no-op that leaves the shell in the repo root, so the following `mkdir -p` created a stray fixture directory there. The unset-`$TMPDIR` half is already recorded there; the non-aborting half is not.
+- Write the platform fact once the index budget allows: **all hooks matching one Claude Code event run in parallel** (code.claude.com/docs/en/hooks). Two `PostToolBatch` hooks sharing a file race. The relay was designed on the opposite assumption, and a vendored `plugin-dev:hook-development` skill already says "Assuming Hook Order" is a pitfall.
 
-- Write the testing facts Phases 1-3 produced, once the index budget allows. **An assertion positioned after a test's death point has never executed.** **A born-green case needs a mutation-red proof.** **`jq -r` prints the literal string `null` for an absent key.** **A fixture restore must be conditional.** **A mutation proof can go stale.** **The fixture must create the condition the projection actually acts on.** **A negative assertion needs the mutation that makes the string appear**, not the one that removes it. **A fixture helper's name is not its shape.**
+- Add to `.claude/rules/shell.md`: **`set -e` does not abort a Bash tool command.** A `cd "$TMPDIR"` with `$TMPDIR` unset leaves the shell in the repo root and the following commands run there (an orphan `git init`, a stray fixture directory). The unset-`$TMPDIR` half is already recorded; the non-aborting half is not.
 
-- Write the two traps this session's relay work produced. **POSIX `mv` moves its source INTO an existing-directory destination rather than failing**, exit 0 — so a write-to-temp-then-rename needs an explicit `[ -d "$dest" ]` refusal, or a squatted destination silently lands the file one level too deep and reports success. **A temp file sharing a name prefix with what a `find` glob enumerates is consumed as one of them** — narrow the glob when introducing a `.tmp` sibling.
+- Write the testing facts Phases 1-3 produced, once the index budget allows:
+  - An assertion positioned after a test's death point has never executed.
+  - A born-green case needs a mutation-red proof.
+  - `jq -r` prints the literal string `null` for an absent key.
+  - A fixture restore must be conditional.
+  - A mutation proof can go stale.
+  - The fixture must create the condition the projection actually acts on.
+  - A negative assertion needs the mutation that makes the string appear.
+  - A fixture helper's name is not its shape.
+  - A fixed-order test cannot exercise a same-file race between parallel hooks.
 
-- Write the orchestration fact: every one of three `edify:test-driver` GREEN dispatches in Item 2.1 went idle waiting on a background `just precommit` notification a subagent does not reliably receive, each time despite an explicit instruction not to wait. Instructing the agent does not work; the orchestrator owning the gate does. Corollary from Item 1.2: a born-green slice has no GREEN and no code review to run.
+- Write the two relay traps:
+  - POSIX `mv` moves its source INTO an existing-directory destination with exit 0, so a temp-then-rename needs an explicit `[ -d "$dest" ]` refusal.
+  - A temp file sharing a name prefix with what a `find` glob enumerates is consumed as one of them.
+
+- Write the orchestration fact: all three `edify:test-driver` GREEN dispatches in Item 2.1 went idle waiting on a background `just precommit` notification a subagent does not reliably receive, despite explicit instructions. The orchestrator owning the gate works. Corollary: a born-green slice has no GREEN and no code review to run.
 
 - Write the ambient-`CLAUDECODE` fact: a subagent dispatch exports `CLAUDECODE=1`, so a bats test branching on it passes under dispatch and fails for a human or CI. Run the suite in all three ambient worlds.
 
 - Write the report-cannot-cite-its-own-commit fact.
 
-- Write the citation-boundary fact: shipped plugin source cites neither `plans/` nor `memory/`, nor a runbook/slice identifier, nor a line number.
+- Write the citation-boundary fact: shipped plugin source cites neither `plans/` nor `memory/`, nor a runbook or slice identifier, nor a line number.
 
-- Record that `find` on this box is `bfs`, which rejects `-newermt '-60 minutes'` and, under `2>/dev/null`, reads as "no files matched".
+- Record that `find` on this box is `bfs`, which rejects `-newermt '-60 minutes'`, and under `2>/dev/null` that reads as "no files matched".
 
 - Narrow `test-unit`'s gate inputs to exclude `tests/integration_*`.
 
@@ -59,5 +88,3 @@
 - Continue the ddaanet review pass from `plans/ddaanet-memory-review.md` (entry 5, `hook-output-channels`).
 
 - Check the bang-expansion decompile report's verbatim excerpts against the CC 2.1.258 bundle before trusting its verdict.
-
-- Run `/deliverable-review plans/index-edit-propagation` (opus, fresh session) — the orchestrate run's closing follow-up.

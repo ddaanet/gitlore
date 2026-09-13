@@ -1,5 +1,3 @@
 ## Current task
 
-The `plans/index-edit-propagation/runbook.md` orchestration is complete through Phase 4, its checkpoint corrector and its closing TDD audit. No runbook work is in flight.
-
-What remains is this file's own backlog, most of it blocked behind the memory-index budget decision — every fact this session produced is waiting on it, so that decision is the one that unblocks the largest number of items.
+The deliverable review of `plans/index-edit-propagation` is complete. The consolidated report is `plans/index-edit-propagation/reports/deliverable-review.md`, with the three Layer 1 partition reports beside it (`deliverable-review-{code,test,prose}.md`). Counts: Critical 2, Major 7, Minor 26. Nothing has been fixed yet. The next step is deciding which findings to act on and in what order; that decision is the first item in the todo file.
