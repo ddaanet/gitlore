@@ -154,14 +154,15 @@ folded in as a report of its own; the residual is that it is never folded at
 all, and only the age sweep collects it.
 
 **`SessionStart` drains the same session, then sweeps by age.** `compact` and
-`resume` keep the session id and neither fires `PostToolBatch`, so that pass is
-the only path a report reaches a session that compacted or resumed. The sweep
-then removes every relay file older than seven days regardless of session, temps
-included — the `.tmp` exclusion is a drain rule, never a sweep rule. A report
-addressed to a session that ended is undeliverable: the conversation it
-describes is gone, and the store state it reported on is re-covered by
-`SessionStart`'s own structural pass. It goes by age rather than into a
-stranger's session.
+`resume` keep the session id and fire no `PostToolBatch` of their own, so this
+pass delivers at the compaction or resume itself instead of leaving a waiting
+report to the session's next batch — and it is the whole delivery for a session
+that runs none. The sweep then removes every relay file older than seven days
+regardless of session, temps included — the `.tmp` exclusion is a drain rule,
+never a sweep rule. A report addressed to a session that ended is undeliverable:
+the conversation it describes is gone, and the store state it reported on is
+re-covered by `SessionStart`'s own structural pass. It goes by age rather than
+into a stranger's session.
 
 **Two residuals bound delivery.** Between the drain and the emit the reports
 exist only in the hook's variables and the files are already gone, so a hook
