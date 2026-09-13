@@ -1597,7 +1597,7 @@ $ff_err" >&2
 
   # Adopt: the carrier that just arrived becomes root's block for this tier. The
   # memory root adopts nothing — its own index is one of the files that moved.
-  gitlore_adopt_tier_into_root "$mempath" "$tier" "$root_dirty_before" "$head"
+  gitlore_adopt_tier_into_root "$mempath" "$tier" "$root_dirty_before" "$head" || return 1
   return 0
 }
 
@@ -1727,7 +1727,7 @@ $err" >&2
   fi
   printf 'gitlore: %s — its local '\''live'\'' held commits the memory store never recorded; adopted them at %s.\n' \
     "$label" "$(git -C "$store" rev-parse --short HEAD)"
-  gitlore_adopt_tier_into_root "$mempath" "$tier" "$root_dirty_before" "$head"
+  gitlore_adopt_tier_into_root "$mempath" "$tier" "$root_dirty_before" "$head" || return 1
   return 0
 }
 
@@ -1736,21 +1736,42 @@ $err" >&2
 # tier's own remote or from a local `live` that ran ahead of the pin. A no-op for
 # the memory root, which adopts nothing: its own index is one of the files that
 # moved.
+#
+# A failed up projection records nothing and returns the tier's working tree to
+# the pre-take commit. Staging the gitlink alone would put the tier back on its
+# pin while root still holds the older block, so the next compose would write
+# that older text over the carrier and report success (D50). Leaving the tier
+# ahead of an unstaged pin is no better: the pin guard refuses every commit until
+# SessionStart walks it back, and a take meanwhile finds nothing to take. Walked
+# back here, the tier is on its pin with the arrival held in its local `live` —
+# the state gitlore_adopt_advanced_live adopts — so the next take retries the
+# whole adoption. The checkout loses nothing: a take refuses a dirty tier, and
+# the up projection writes no carrier.
 # Args: $1 = memory worktree, $2 = tier name ("" = the memory root), $3 = "1"
 #       when the root store was dirty before the take, $4 = the pre-take commit.
+# Returns 1 after emitting when the root index could not take the carrier.
 gitlore_adopt_tier_into_root() {
   local mempath="$1" tier="$2" root_dirty_before="$3" old_gitlink="$4"
-  local label composed rc=0
+  local label composed err abs rc=0
   [ -n "$tier" ] || return 0
   label="tier '$tier'"
 
   composed=$(gitlore_compose_up "$mempath" "$tier") || rc=$?
-  if [ "$rc" -eq 0 ]; then
-    [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /'
-  else
-    printf 'gitlore: the root index could not take %s'\''s lines, so they are not recallable yet. Fix the store, then edit MEMORY.md to retrigger composition:\n' "$label" >&2
+  if [ "$rc" -ne 0 ]; then
+    printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+    if ! err=$(gitlore_git -C "$mempath/$tier" checkout -q --detach "$old_gitlink" 2>&1); then
+      # Absolute, so the printed command runs from anywhere.
+      abs=$(CDPATH='' cd -- "$mempath/$tier" && pwd) || abs="$mempath/$tier"
+      # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+      printf 'gitlore: nothing was recorded, but %s could not be returned to the commit the memory store records. git said:\n%s\ngitlore: run `git -C "%s" checkout --detach %s`, fix the store, then run /gitlore:merge again.\n' \
+        "$label" "$err" "$abs" "$old_gitlink" >&2
+      return 1
+    fi
+    printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps what arrived. Fix the store, then run /gitlore:merge again.\n' "$label" >&2
+    return 1
   fi
+  [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /'
   # Stage the pair the take just produced. `submodule update` reads the gitlink
   # from the superproject's INDEX, so an unstaged one is walked back to the
   # pre-take commit by the next SessionStart tier pass — and the composed root

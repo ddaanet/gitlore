@@ -6,6 +6,13 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-13 — A take the root index cannot adopt records nothing](changelog/2026-09-13-a-take-the-root-index-cannot-adopt-records-nothing.md)
+  — a tier take whose up projection was refused still staged and committed the
+  moved gitlink, so the remedy it printed composed root's older text over the
+  carrier's newer line; a failed adoption now records nothing, walks the tier
+  back to its pre-take commit with the arrival kept in its local `live`, and
+  exits 1 so the next take retries it
+
 - [2026-09-13 — A half-landed memory commit retries to completion](changelog/2026-09-13-a-half-landed-memory-commit-retries-to-completion.md)
   — the D50 pin guard refused, for the rest of the session, the retry of a
   commit that had landed a tier and then hit memory's `index.lock`; a landing
