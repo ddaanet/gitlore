@@ -193,6 +193,24 @@ load helpers/setup
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh" ]
 }
 
+# D51: relay-drain.sh is the ONE drainer of the relay, so an entry
+# missing from hooks.json — or a duplicate one, which would relay every report
+# twice — silences or doubles every subagent report across every installed
+# repo, with no error, since hooks.json invokes by path. `length` is 1, not
+# `>= 1`, for the duplicate half.
+#
+@test "distribution: relay-drain hook is wired on PostToolBatch and executable" {
+  run jq -r '[.hooks.PostToolBatch[].hooks[].command | select(test("relay-drain"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/relay-drain.sh" ]
+  # Recorded mode, not the local filesystem mode: a marketplace clone reproduces
+  # git's mode, and a local chmod would mask the bug.
+  run git -C "$PLUGIN_ROOT" ls-files -s scripts/cc-hooks/relay-drain.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == 100755* ]]
+}
+
 # D21: the mid-session upgrade notice must be registered on PostToolBatch and
 # ship executable. It is the one gitlore notice a stale session can still emit —
 # hooks.json invokes by path, so a 100644 here would silence exactly the sessions

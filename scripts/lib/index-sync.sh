@@ -108,177 +108,134 @@ gitlore_compose_stamp_file() {
   git -C "$1" rev-parse --git-path "gitlore-compose-stamp$(_gitlore_agent_suffix "${2:-}")"
 }
 
-# Abs/relative path of a subagent's relay marker — the sixth untracked
-# `gitlore-…` file in the memory gitdir, beside `gitlore-nudged`,
-# `gitlore-merge-state`, the `gitlore-merge-<artifact>` briefing files,
-# `gitlore-index-preimage` and `gitlore-compose-stamp`. A hook firing inside a
-# subagent has both its output channels confined to that subagent's own
-# transcript (D51, measured under CC 2.1.261), so the report is staged here for
-# the next parent-side run to fold in and remove. $1 = memory path; $2 = agent
-# id, optional — same absent/empty-vs-non-empty contract as
-# gitlore_index_preimage_file and gitlore_compose_stamp_file.
-gitlore_relay_marker_file() {
-  git -C "$1" rev-parse --git-path "gitlore-relay$(_gitlore_agent_suffix "${2:-}")"
-}
-
-# Write both report bodies to the relay marker keyed by $2, so a later
-# unkeyed (parent-side) run can fold them in. $1 = memory path; $2 = agent id;
-# $3 = systemMessage body; $4 = additionalContext body. Returns 0 after
-# writing both bodies; returns non-zero without writing when the agent id is
-# empty, or when the marker cannot be created (e.g. something already occupies
-# that path as a directory) — the redirect below is the single write, so a
-# failed open leaves nothing on disk to clean up. File format: the literal line
-# `--- gitlore-relay-sysmsg ---`, the systemMessage body, the literal line
-# `--- gitlore-relay-ctx ---`, the additionalContext body. Neither body is
-# escaped: the contract guarantees neither contains a line equal to a
-# delimiter. A body that broke that guarantee would not corrupt the file, but
-# the drain would re-split it there and attribute the tail to the wrong
-# channel — silently, so the guarantee is the whole protection.
+# Write a subagent's report toward the relay (D51). $1 = memory path;
+# $2 = session id, "nosession" when empty; $3 = agent id, required; $4 = tag,
+# `sync` or `compose`; $5 = systemMessage body; $6 = additionalContext body.
+# Every failure path returns non-zero itself rather than leaning on errexit:
+# both call sites are `if ! gitlore_relay_write …`, a condition context where
+# errexit is off, and that non-zero is what routes into their own "could not
+# be staged" line instead of the report being lost silently.
 #
-# A marker already on disk for this agent is merged into, not truncated: two
-# hooks can stage to the same key within one PostToolBatch (hooks.json runs
-# more than one hook on that event), and a plain overwrite would make the
-# second hook's write destroy the first's. The two existing channels are read
-# fully into $old_sys/$old_ctx before the marker is opened for output — the
-# read must finish and close first, since the write below reopens that same
-# path and would otherwise truncate out from under it. Each new body is
-# appended after the old one on its own channel, so both survive in write
-# order and the fresh-write case (no marker yet) takes the same path as
-# always, byte for byte.
+# Write-once, never merged: builds a fresh file, never reads or folds an
+# existing one. Name is `gitlore-relay-<S>-<A>-<epoch>-<pid>-<H>` in the
+# memory gitdir — S the sanitized session id, A the sanitized agent id
+# (_gitlore_sanitize_id, shared with _gitlore_agent_suffix), epoch
+# `date +%s`, pid `${BASHPID:-$$}`, H the tag. Built at `<name>.tmp` and
+# installed by `mv`; refused (temp removed, return 1) when the destination
+# already exists — POSIX `mv` moves a source INTO an existing directory
+# destination with exit 0, so this existence check, not the `mv` itself, is
+# what stops that squat. A temp that cannot be opened at all leaves nothing
+# behind to clean up, so its return is bare.
 #
-# Reporting a non-zero return is the caller's, because only the caller has a
-# channel: both hooks guard the call with `if !` and append a not-staged line
-# to their own additionalContext — never systemMessage, which inside a
-# subagent reaches nobody — so the loss is at least known to the one agent
-# that can carry it out. gitlore_relay_drain takes no such guard anywhere: it
-# returns 0 on every path.
+# File format: the literal line `--- gitlore-relay-sysmsg ---`, the
+# systemMessage body, the literal line `--- gitlore-relay-ctx ---`, the
+# additionalContext body. Neither body is escaped: the contract is that
+# neither holds a line equal to a delimiter. A body that broke that would not
+# corrupt the file, but the drain would re-split there and attribute the tail
+# to the wrong channel — silently, so the guarantee is the whole protection.
+#
+# The tag is checked against its two values rather than sanitized, because it
+# is a parse anchor as well as a filename component: the drain recovers A as
+# `${rest%-*-*-*}`, which holds only while the last three fields are
+# dash-free. A closed set is the cheaper guarantee — no `tr` subprocess — and
+# it also bounds the component's length, where a sanitizer would map an
+# oversized or dashed argument to a name the filesystem or the drain rejects
+# further downstream. A caller passing anything else is refused through the
+# same path as any other failed write.
+#
+# Residual: two writes agreeing on session, agent, tag AND wall-clock second
+# from ONE PROCESS collide on one name and the second is refused — `<pid>`
+# only discriminates across processes. No caller writes twice from one
+# process within a second: the two reporting hooks are separate processes
+# carrying different tags. Stated as a bound, not fixed.
+#
+# `${N:-}` on every position past $1: an absent session is the same case as
+# an empty one, both bodies are legitimately empty on their own (the sync
+# hook's `failed` branch reports a sysmsg and no ctx), and an absent agent or
+# tag is refused by the guards below — which report through the caller's
+# channel, where `set -u` would instead abort the whole hook.
 gitlore_relay_write() {
-  local mempath="$1" agent_id="$2" sysmsg="$3" ctx="$4" marker old_sys old_ctx
-  # Refused before anything else: the drain enumerates keyed markers only
-  # (its `-name 'gitlore-relay-*'` glob), so an unkeyed write would land on
-  # the bare, unsuffixed name — a file nothing folds and nothing removes.
-  [ -n "$agent_id" ] || return 1
-  marker=$(gitlore_relay_marker_file "$mempath" "$agent_id") || return 1
-  if [ -f "$marker" ]; then
-    # `|| old_…=""`: awk exits non-zero on a marker it cannot read, and both
-    # callers are hooks running under `set -e`, so a marker whose mode has
-    # been mangled would abort the hook before it emits any JSON — losing this
-    # run's own report to save nothing. Degrading to the plain overwrite loses
-    # only what was already staged. The drain makes the same
-    # degrade-don't-abort trade on a marker it cannot read; neither ever costs
-    # the calling hook its own report.
-    old_sys=$(_gitlore_relay_sysblock "$marker") || old_sys=""
-    old_ctx=$(_gitlore_relay_ctxblock "$marker") || old_ctx=""
-    # Joined only when the old body is non-empty, the way index-sync-post.sh
-    # joins its own several blocks. A channel can be empty with the other one
-    # set — the sync hook's `failed` branch reports a sysmsg and no ctx — and
-    # an unguarded join would open that channel's merged body with a blank
-    # line.
-    if [ -n "$old_sys" ]; then sysmsg="$old_sys
-$sysmsg"; fi
-    if [ -n "$old_ctx" ]; then ctx="$old_ctx
-$ctx"; fi
-  fi
-  # Built at "$marker.tmp" and installed with `mv` rather than written
-  # straight to "$marker": a process killed mid-write (or ENOSPC, or EIO)
-  # would otherwise leave a torn prefix on the marker path itself, and
-  # _gitlore_relay_sysblock/_gitlore_relay_ctxblock cannot tell a torn file
-  # from a whole one — the next drain folds the partial body in as if it
-  # were a real report and destroys it, taking down whatever was already
-  # staged for this agent along with it. A killed writer instead leaves only
-  # the temp; the marker this drain reads is untouched. `mv` within one
-  # gitdir is a same-filesystem rename, so the install itself cannot tear.
-  #
-  # `&&`, not a bare sequence relying on the function's `set -e`: both call
-  # sites are `if ! gitlore_relay_write …`, a condition context where
-  # errexit is off, so a failed write here must return non-zero itself
-  # rather than let the shell abort — that non-zero is what routes into the
-  # callers' own "could not be staged" reporting instead of silently losing
-  # the report.
+  local mempath="$1" session="${2:-}" agent="${3:-}" tag="${4:-}" sysmsg="${5:-}" ctx="${6:-}"
+  local s a epoch pid marker
+  [ -n "$agent" ] || return 1
+  case "$tag" in sync|compose) ;; *) return 1 ;; esac
+  if [ -n "$session" ]; then s=$(_gitlore_sanitize_id "$session"); else s=nosession; fi
+  a=$(_gitlore_sanitize_id "$agent")
+  epoch=$(date +%s) || return 1
+  # `pid` read as a bare assignment, not expanded inside the `$(...)` below:
+  # a command substitution forks, so `${BASHPID:-$$}` in the `git rev-parse`
+  # argument would give the FORKED subshell's own PID — a fresh value on
+  # every call, from one process or twenty alike — rather than the calling
+  # process's, which is what discriminates one hook's writes from another's.
+  pid=${BASHPID:-$$}
+  marker=$(git -C "$mempath" rev-parse --git-path "gitlore-relay-$s-$a-$epoch-$pid-$tag") || return 1
   {
     printf -- '--- gitlore-relay-sysmsg ---\n'
     printf '%s\n' "$sysmsg"
     printf -- '--- gitlore-relay-ctx ---\n'
     printf '%s\n' "$ctx"
   } > "$marker.tmp" || return 1
-  if [ -d "$marker" ]; then
-    # A directory already squatting the marker path is refused, the same
-    # shape gitlore_relay_drain's own `-type f` filter names as "what makes a
-    # relay write fail in the first place". Refused explicitly rather than
-    # left to `mv`: POSIX `mv` treats an existing directory destination as a
-    # target directory and moves the source *into* it instead of failing, so
-    # without this check the squat would silently succeed at
-    # "$marker/$(basename "$marker.tmp")" — landing nowhere the drain's glob
-    # (`gitlore-relay-*` at `-maxdepth 1`) ever looks. The temp is removed so
-    # the squat leaves nothing on disk for a later run to trip over.
+  if [ -e "$marker" ]; then
     rm -f "$marker.tmp"
     return 1
   fi
   mv "$marker.tmp" "$marker"
 }
 
-# Fold every keyed relay marker in the memory gitdir into
-# GITLORE_RELAY_SYSMSG and GITLORE_RELAY_CTX — each block framed with the
-# agent id its filename suffix holds, folded in filename order — then remove
-# the markers. $1 = memory path. Both variables are set to the empty string
-# when no marker exists. Always returns 0 — on anything a marker's own
-# content or mode can do to it (one it cannot read is folded as an empty
-# block), and on an `rm -f` failing because the gitdir itself is unwritable
-# too, so a caller's own report never dies behind this call.
+# Fold every relay file for one session into GITLORE_RELAY_SYSMSG and
+# GITLORE_RELAY_CTX — each block framed `--- gitlore-relay agent <A> ---` on
+# both channels, in filename order (write order, since the name carries the
+# writer's epoch) — then remove exactly the files read. $1 = memory path;
+# $2 = session id, mapped to "nosession" when empty, the same mapping the
+# write side uses. Both variables are set to the empty string when nothing is
+# found. Always returns 0.
 #
-# Only keyed markers (`gitlore-relay-<id>`) are enumerated, never the bare
-# `gitlore-relay` name: nothing writes the unsuffixed marker, because the
-# hooks call gitlore_relay_write only when an agent id is present, and a run
-# with an agent id is exactly a run whose report needs relaying. A caller
-# passing an empty id anyway would strand a file this function never folds and
-# never removes, silently, which is why gitlore_relay_write refuses that id
-# outright rather than leaving the guard to its callers.
+# `'!' -name '*.tmp'` excludes a writer's in-progress temp: a writer killed
+# between opening `<name>.tmp` and its `mv` leaves that temp standing beside
+# real markers, and without this exclusion it would be folded in as a report
+# of its own. A temp stranded that way is never picked up here — only
+# gitlore_relay_sweep collects it, by age.
+#
+# `${2:-}`: an absent session is the same case as an empty one, mapped to
+# `nosession` the way the write side maps it, so the two meet.
 gitlore_relay_drain() {
-  local mempath="$1" gitdir names name marker agent sysblock ctxblock
+  local mempath="$1" session="${2:-}"
+  local gitdir s prefix names name marker rest agent sysblock ctxblock
   GITLORE_RELAY_SYSMSG=""
   GITLORE_RELAY_CTX=""
   gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir) || return 0
+  if [ -n "$session" ]; then s=$(_gitlore_sanitize_id "$session"); else s=nosession; fi
+  prefix="gitlore-relay-$s-"
   # `-print0` into `read -r -d ''`, never an `ls` pipeline or an unquoted
   # glob: nothing sanitizes the gitdir prefix and it may hold a space.
-  # `-type f` because anything else on a marker name is not a marker: framing
+  # `-type f` because anything else on a relay name is not a report: framing
   # it would attribute a block to an agent that staged nothing, and `rm -f`
-  # cannot remove it, so every later run would frame it again. That shape is
-  # what makes a relay write fail in the first place — a directory already
-  # occupying the marker path — not something a failed write leaves behind.
-  #
-  # `'!' -name '*.tmp'` excludes gitlore_relay_write's in-progress temp: a
-  # writer killed between opening "$marker.tmp" and its `mv` leaves that temp
-  # standing beside (or alone, if this is the agent's first write) the real
-  # marker, and without this exclusion it is enumerated as a "marker" of its
-  # own — framed under the bogus agent id its `.tmp` suffix becomes part of,
-  # its torn body folded in, and then rm -f'd as evidence. Excluding it here
-  # is also why the loop below never removes it itself: only the temp that
-  # belongs to a marker this drain actually drains is cleaned up, further
-  # down, once that marker is known to be a real one.
+  # cannot remove a directory, so every later run would frame it again.
   names=""
   while IFS= read -r -d '' marker; do
     names="$names${marker##*/}"$'\n'
-  done < <(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' '!' -name '*.tmp' -print0)
+  done < <(find "$gitdir" -maxdepth 1 -type f -name "$prefix*" '!' -name '*.tmp' -print0)
   [ -n "$names" ] || return 0
   # Sorted, because find's own directory order is not guaranteed. Basenames
-  # rather than whole paths: a basename is `gitlore-relay-` plus the
-  # `[A-Za-z0-9-]` _gitlore_agent_suffix emits, so a newline-joined list is
-  # unambiguous where one carrying the unsanitized gitdir prefix would not
-  # be — and that prefix, identical across markers, sorts nothing anyway.
+  # rather than whole paths: a name this library writes is `$prefix` followed
+  # by `[A-Za-z0-9_-]` only — the sanitizer's class, a decimal epoch and pid,
+  # and a tag from a closed set — so a newline-joined list is unambiguous
+  # where one carrying the unsanitized gitdir prefix would not be, and that
+  # prefix, identical across names, sorts nothing anyway. The bound: a file
+  # some other writer put on a matching name holding a newline splits into
+  # two names here, framing two empty blocks and removing neither.
   # `LC_ALL=C` for byte order: other collations ignore `-` at the first
   # level, which reorders two ids differing only there. (`sort -z` would
   # sidestep the join, but BSD sort has no `-z`.)
   while IFS= read -r name; do
     marker="$gitdir/$name"
-    agent=${name#gitlore-relay-}
-    # `|| …=""`: the `-type f` above screens non-files, not permissions, so a
-    # marker whose mode has been mangled still reaches here and its `awk`
-    # exits on the open failure — which under a caller's `set -e` would abort
-    # the hook before it emits any JSON. Folding an empty block instead is the
-    # same trade gitlore_relay_write makes on a marker it cannot read, and the
-    # framing line still tells the reader an agent staged something. The
-    # marker is removed below regardless: a drain that skipped it would strand
-    # the file for every later session to trip over again.
+    # A recovered by stripping the known prefix as a literal and then the
+    # three trailing `-<epoch>-<pid>-<H>` fields. Unambiguous even when S or
+    # A holds a dash — S is removed by length, not by pattern, and epoch, pid
+    # and H are dash-free by construction: two decimals and the tag
+    # gitlore_relay_write only accepts from a closed set.
+    rest=${name#"$prefix"}
+    agent=${rest%-*-*-*}
     sysblock=$(_gitlore_relay_sysblock "$marker") || sysblock=""
     ctxblock=$(_gitlore_relay_ctxblock "$marker") || ctxblock=""
     GITLORE_RELAY_SYSMSG="${GITLORE_RELAY_SYSMSG}--- gitlore-relay agent $agent ---
@@ -287,46 +244,41 @@ $sysblock
     GITLORE_RELAY_CTX="${GITLORE_RELAY_CTX}--- gitlore-relay agent $agent ---
 $ctxblock
 "
-    # `|| true`: this is the gitdir itself, not the marker's own mode — the
-    # `-type f` filter and the tolerant reads above only screen the marker's
-    # shape, so a marker this drain can read fine still costs its caller
-    # everything if the directory it lives in refuses the remove.
+    # `|| true`: this is the gitdir's own writability, not the marker's mode
+    # — a marker read fine here still costs its caller everything if the
+    # directory refuses the remove, and nothing a caller reports may die
+    # behind this call.
     rm -f "$marker" || true
-    # A stranded "$marker.tmp" for THIS agent id — the writer that produced
-    # this very marker died on some *later* write than the one that landed,
-    # rather than on its first — is cleaned up here rather than left for the
-    # next drain to trip over again. Scoped to a marker actually drained
-    # above, not a blanket sweep of every `.tmp` in the gitdir: two main
-    # sessions in the same repo are not sequential the way hooks within one
-    # session are, and a blanket sweep could unlink a concurrent session's
-    # own in-flight temp out from under its `mv`, turning a harmless stranded
-    # file into a lost report for a session that is still running. The
-    # residual this leaves is one stranded temp per agent whose very first
-    # write died — no prior marker for `rm -f "$marker.tmp"` here to reach —
-    # which is bounded for the same reason the pre-image/compose-stamp pair
-    # already is: an agent id is never reused.
-    rm -f "$marker.tmp" || true
   done < <(printf '%s' "$names" | LC_ALL=C sort)
   return 0
 }
 
+# Remove relay files older than 7 days (D51's SessionStart sweep), temps
+# included — the same `-mtime +7 -delete` shape as _gitlore_nudge_reset. The
+# `.tmp` exclusion above is a drain rule (a temp must never be folded as a
+# report), not a sweep rule: this age sweep is the only way a temp stranded
+# by a killed writer is ever collected. $1 = memory path. Always returns 0 —
+# on a missing gitdir, and on a gitdir whose mode refuses the unlink.
+gitlore_relay_sweep() {
+  local mempath="$1" gitdir
+  gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir) || return 0
+  [ -d "$gitdir" ] || return 0
+  # `|| true`: `-delete` exits non-zero when the gitdir refuses the unlink.
+  # Best-effort garbage collection must not abort a caller running under
+  # errexit — the same degrade-don't-abort trade gitlore_relay_drain's
+  # `rm -f` makes on the same directory.
+  find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' -mtime +7 -delete || true
+  return 0
+}
+
 # Print one channel of a marker: everything between that channel's delimiter
-# line and the next one, or EOF. $1 = a marker path. awk exits non-zero on
-# anything it cannot open: both callers screen the non-file shape (`[ -f ]` in
-# the write, `find -type f` in the drain) and tolerate the rest with
-# `|| …=""`, since a marker whose mode has been mangled passes either screen.
-#
-# One function per channel rather than the same awk inlined at both call sites:
-# the write's merge has to split an existing marker exactly the way the drain
-# does, the format carries no version marker, and a delimiter edited on one
-# side alone would mis-split silently rather than fail.
-#
-# The two are deliberately not one parameterised program. The ctx reader does
-# not reset on a second sysmsg delimiter, where the sysmsg reader does reset on
-# a second ctx one, and that asymmetry is what keeps a malformed marker
-# visible: a write that appended a whole second delimiter pair instead of
-# merging leaves the pair in the ctx channel verbatim, where a symmetric parser
-# would fold it away and report both channels as if nothing were wrong.
+# line and the next one, or EOF. $1 = a marker path. Only gitlore_relay_drain
+# calls the pair, guarded by its own `find -type f`; that screens shape, not
+# permissions, so a marker whose mode has been mangled still reaches here and
+# awk exits non-zero on the open. Both its call sites degrade to an empty
+# block with `|| …=""` rather than propagate: under a caller's errexit the
+# alternative is aborting the hook before it emits any JSON, losing that
+# run's own report to save nothing.
 _gitlore_relay_sysblock() {
   awk '/^--- gitlore-relay-sysmsg ---$/ { f=1; next } /^--- gitlore-relay-ctx ---$/ { f=0 } f' "$1"
 }
@@ -335,28 +287,33 @@ _gitlore_relay_ctxblock() {
   awk '/^--- gitlore-relay-ctx ---$/ { f=1; next } f' "$1"
 }
 
-# The `-<agent id>` suffix the three helpers above append; empty for an empty or
-# absent id, which is what keeps the main thread on today's names.
-#
-# The id is a raw hook-payload field spliced into a `rev-parse --git-path`
-# argument, and `--git-path` does no normalising — it hands back
-# `<gitdir>/<name>` verbatim. A `/` or a `..` component in the id would
-# therefore walk the result out of the gitdir, to somewhere the consumers `cp`
-# onto it and `rm -f` it. So everything outside `[A-Za-z0-9-]` collapses to
-# `_`, the same guard `_gitlore_nudge_file` below applies to the session id.
-# `tr -c` rather than that one's line-oriented `sed`, so an embedded newline is
-# folded too and the name stays a single line. Not a live exploit — Claude Code
-# mints the id and uses it as a filename itself (`agent-<id>.jsonl`) — but a
-# hook must not write outside the gitdir because an upstream id format changed,
-# and it would fail silently if it did.
+# Sanitize an id — an agent id or a session id — for use as a filename
+# component: every byte outside `[A-Za-z0-9-]` collapses to `_`, folding an
+# embedded newline too so the result stays a single line. The id is a raw
+# hook-payload field spliced into a `rev-parse --git-path` argument (which
+# does no normalising of its own) or directly into a relay filename, so a `/`
+# or a `..` component would otherwise walk the result out of the gitdir, to
+# somewhere the consumers `cp` onto and `rm -f`. `tr -c` rather than
+# `_gitlore_nudge_file`'s line-oriented `sed`, so a newline is folded too.
+# Not a live exploit today — Claude Code mints both ids and uses the agent
+# one as a filename itself (`agent-<id>.jsonl`) — but a hook must not write
+# outside the gitdir because an upstream id format changed, and it would fail
+# silently if it did.
 #
 # The mapping is not injective, so two ids differing only outside that class
-# would share a keyed file and race exactly as the unkeyed names do. Real agent
-# ids are `[A-Za-z0-9-]` and pass through byte for byte, so the collision is
-# reachable only from an id shape that does not occur.
+# collide. Real agent and session ids are `[A-Za-z0-9-]` and pass through
+# byte for byte, so the collision is reachable only from an id shape that
+# does not occur.
+_gitlore_sanitize_id() {
+  printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9-' '_'
+}
+
+# The `-<agent id>` suffix gitlore_index_preimage_file and
+# gitlore_compose_stamp_file append; empty for an empty or absent id, which
+# is what keeps the main thread on today's names.
 _gitlore_agent_suffix() {
   [ -n "${1:-}" ] || return 0
-  printf -- '-%s' "$(printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9-' '_')"
+  printf -- '-%s' "$(_gitlore_sanitize_id "$1")"
 }
 
 # Print the compose trigger's stamp: one `key<TAB>checksum` line per watched

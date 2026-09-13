@@ -6,6 +6,13 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-13 — The relay is one file per report](changelog/2026-09-13-the-relay-is-one-file-per-report.md)
+  — hooks matching one event run in parallel, so the per-agent marker the two
+  `PostToolBatch` reporters merged into lost a report to the race and the drain
+  branch each carried relayed the survivor twice; a report is now a write-once
+  file keyed by session and agent, installed by rename, drained by one hook that
+  needs no baseline, and swept by age when the session it names has ended
+
 - [2026-09-13 — A tier merge the root index cannot adopt records nothing](changelog/2026-09-13-a-tier-merge-the-root-index-cannot-adopt-records-nothing.md)
   — a merge continuation whose up projection was refused still staged and
   committed the moved tier gitlink; the merge now lands and publishes with

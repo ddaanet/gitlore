@@ -113,11 +113,15 @@ empirical work that established it, which is why they stay whole.
 - **D23** — the `Edit` weld defect is contained by a pair that computes the
   intended result, repairs, and reports its own obsolescence
 - **D51** — a hook's output inside a subagent reaches that subagent alone, so
-  its report is relayed through a marker
+  its report is a write-once file keyed by session and agent, drained by a
+  dedicated `PostToolBatch` hook
 
 *Rejected:* hook-side injection of the bodies from a request file the agent
 writes · a `PreToolUse` deny on the first durable write of an episode · leaving
-a subagent's hook report to the subagent's own narration.
+a subagent's hook report to the subagent's own narration · one shared marker per
+agent that each reporting hook merges into · a drain inside each reporting hook
+· claim-by-rename before reading · folding another session's stranded reports at
+`SessionStart`.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in

@@ -14,6 +14,14 @@ SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 # sides together and the positive case would stop pinning the actual wording.
 RELAY_FRAMING="--- gitlore-relay agent"
 
+# Drives SESSION_START with a session_id on stdin — the real payload shape,
+# once GREEN parses it. Today's script reads no stdin at all, so this changes
+# nothing about its current behaviour; it exists so the case 5 tests below
+# already carry the shape the fix needs. $1 = session id.
+run_session_start_with_session() {
+  jq -n --arg s "$1" '{session_id:$s}' | bash "$SESSION_START"
+}
+
 setup()    { setup_tmp_repo; export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"; }
 teardown() {
   [ -n "${WT:-}" ] && rm -rf "$WT"
@@ -348,33 +356,71 @@ assert_session_start_did_nothing() {
   [ "$(git -C "$WT/memory" rev-parse HEAD)" = "$(git -C "$WT/memory" rev-parse live)" ]
 }
 
-@test "session-start drains a stranded relay marker" {
-  # A subagent's PostToolBatch hook staged a report to its own marker and the
-  # session ended before any parent-side batch drained it.
-  # SessionStart is the backstop: it must fold the marker's two channels into
-  # its own systemMessage / additionalContext and remove the marker.
+# D51 (revised), slice 2 case 5: SessionStart drains its OWN session's marker
+# and leaves a peer session's standing — replaces "session-start drains a
+# stranded relay marker", which pinned a session-blind drain. Reds against
+# TODAY's session-start.sh: it drains unkeyed with no session concept at all
+# (never parses its payload's session_id), so a marker under a REAL session —
+# s1 or s2, neither "nosession" — is found by neither call, and the first
+# positive assertion below fails outright rather than passing vacuously.
+@test "session-start drains its own session's marker and leaves a peer session's standing" {
   make_parent_with_memory
-  # Bare helper call under bats' own errexit: capture status explicitly rather
-  # than let a write failure abort the test with no named assertion.
-  if gitlore_relay_write memory a1 "STRANDED SYSMSG BODY" "STRANDED CTX BODY"; then
-    write_status=0
-  else
-    write_status=$?
-  fi
-  [ "$write_status" -eq 0 ]
-  marker="$(gitlore_relay_marker_file memory a1)"
-  [ -f "$marker" ]
+  gitlore_relay_write memory s1 a1 sync "S1 SYSMSG BODY" "S1 CTX BODY"
+  gitlore_relay_write memory s2 a2 sync "S2 SYSMSG BODY" "S2 CTX BODY"
+  s1_marker="$(relay_marker_for memory a1)"
+  s2_marker="$(relay_marker_for memory a2)"
+  [ -f "$s1_marker" ]
+  [ -f "$s2_marker" ]
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr run_session_start_with_session s1
+  [ "$status" -eq 0 ]
+  sysmsg="$(printf '%s' "$output" | jq -r '.systemMessage')"
+  ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$sysmsg" == *"S1 SYSMSG BODY"* ]]
+  [[ "$ctx" == *"S1 CTX BODY"* ]]
+  # The framing wording itself, on both channels: `$RELAY_FRAMING` is declared
+  # at the head of this file as the string a negative refutes, and a negative
+  # refuting a string no positive asserts stops watching anything the day the
+  # wording moves. This is the positive that keeps "session-start with no
+  # marker emits no relay framing" honest.
+  [[ "$sysmsg" == *"$RELAY_FRAMING a1 ---"* ]]
+  [[ "$ctx" == *"$RELAY_FRAMING a1 ---"* ]]
+  [[ "$sysmsg" != *"S2 SYSMSG BODY"* ]]
+  [[ "$ctx" != *"S2 CTX BODY"* ]]
+  # Drained means read AND removed: a fold that emitted the block but left the
+  # file would relay it again at the next compact or resume.
+  [ ! -e "$s1_marker" ]
+  [ -f "$s2_marker" ]
+}
+
+# D51 (revised), slice 2 case 5, sweep half: SessionStart removes a relay
+# file older than 7 days regardless of session — today's session-start.sh
+# never calls gitlore_relay_sweep at all, so this reds on the aged marker
+# surviving.
+@test "session-start sweeps a relay file older than 7 days" {
+  make_parent_with_memory
+  gitlore_relay_write memory old-session a9 sync "OLD BODY" "OLD CTX"
+  old_marker=$(relay_marker_for memory a9)
+  [ -f "$old_marker" ]
+  # BSD `date -v` first; GNU has no `-v` and errors on it, so the `||` falls
+  # back to `-d` — provoking the platform mismatch is the detection
+  # mechanism, not a routine failure suppression.
+  old_ts=$(date -v-10d +%Y%m%d%H%M 2>/dev/null || date -d '10 days ago' +%Y%m%d%H%M)
+  touch -t "$old_ts" "$old_marker"
+  # The keeper for the assertion below: a sweep that deleted every relay file
+  # regardless of age would satisfy `! -e "$old_marker"` and pin nothing. This
+  # one is addressed to a session nothing here drains, so only its age can
+  # decide it, and its age says keep.
+  gitlore_relay_write memory other-session a8 sync "FRESH BODY" "FRESH CTX"
+  fresh_marker=$(relay_marker_for memory a8)
+  [ -f "$fresh_marker" ]
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  sysmsg="$(printf '%s' "$output" | jq -r '.systemMessage')"
-  ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
-  [[ "$sysmsg" == *"STRANDED SYSMSG BODY"* ]]
-  [[ "$sysmsg" == *"$RELAY_FRAMING a1 ---"* ]]
-  [[ "$ctx" == *"STRANDED CTX BODY"* ]]
-  [[ "$ctx" == *"$RELAY_FRAMING a1 ---"* ]]
-  [ ! -f "$marker" ]
+  [ ! -e "$old_marker" ]
+  [ -f "$fresh_marker" ]
 }
 
 @test "session-start with no marker emits no relay framing" {
@@ -412,13 +458,17 @@ assert_session_start_did_nothing() {
 @test "an unreadable marker costs the relay, not the hook" {
   [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
   make_parent_with_memory
-  if gitlore_relay_write memory a1 "STRANDED SYSMSG BODY" "STRANDED CTX BODY"; then
+  # Empty session, matching what today's still-unkeyed drain (no session
+  # concept) actually targets — see the case above for why a real session id
+  # here would leave this fixture's marker undrained for a reason unrelated
+  # to the one this case tests.
+  if gitlore_relay_write memory "" a1 sync "STRANDED SYSMSG BODY" "STRANDED CTX BODY"; then
     write_status=0
   else
     write_status=$?
   fi
   [ "$write_status" -eq 0 ]
-  marker="$(gitlore_relay_marker_file memory a1)"
+  marker="$(relay_marker_for memory a1)"
   chmod 0200 "$marker"
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json

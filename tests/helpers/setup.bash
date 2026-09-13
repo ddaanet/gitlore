@@ -16,6 +16,14 @@ export PLUGIN_ROOT
 source "${BATS_TEST_DIRNAME}/helpers/triggers.bash"
 
 setup_tmp_repo() {
+  # A hook reads its payload with `payload=$(cat)`, and a test that invokes one
+  # without piping anything into it inherits bats' own stdin — a socket or a
+  # terminal under an interactive run, never a closed pipe — so that `cat`
+  # blocks until the harness dies. `exec` rather than a per-call `</dev/null`:
+  # the redirection has to hold for every invocation in the body, and bats runs
+  # setup and the test in one process, so it does not leak to the next test. A
+  # test that means to feed a payload still pipes one, which overrides this.
+  exec 0</dev/null
   TMP_REPO="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-test.XXXXXX")"
   export TMP_REPO
   cd "$TMP_REPO"

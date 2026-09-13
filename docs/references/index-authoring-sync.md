@@ -11,7 +11,8 @@ nodes of the tiered-memory subsystem (FR15), whose entry point is
   drift is a manual sweep · **D47** authoring guidance is a skill and curation
   is a command, shipped by the plugin rather than held as memories · **D48** the
   skill is invoked by directive at the three moments that act on facts already
-  written
+  written · **the relay**, D51's mechanism: a subagent's confined report is a
+  write-once file keyed by session and agent, drained by a hook of its own
 
 ---
 
@@ -101,18 +102,76 @@ direction that the rewrite is complete (do not re-read to verify) and that a
 hook losing meaning is fixed **in the index line, not the file** — at the
 explicitness required for compliance, every clause earns its place.
 
+**The relay — D51's mechanism**
+
 Inside a subagent both channels reach that subagent's own transcript and nothing
-else (D51, measured under CC 2.1.261), so a keyed run also stages the two bodies
-in a relay marker named with the same `agent_id`. The next parent-side run whose
-own batch changed the index or the manifest — one with no agent id — folds every
-marker into its report, frames each block with the agent that staged it, and
-removes them; a batch that changed neither exits before the fold, so
-`session-start.sh` drains the same way and a marker no batch collected still
-lands. That staging is
+else (D51, measured under CC 2.1.261), so a keyed run also writes its two bodies
+to a report file in the memory gitdir. That staging is
 **in addition to the subagent's own emission, not instead of it**: the subagent
-is the actor and gets its copy. The marker therefore shares the pre-image's key
-and not its consumer — a baseline is consumed by the agent that took it, a
-report by the side that can show it.
+is the actor and gets its copy, and a write that fails says so on the subagent's
+own `additionalContext`, where the actor is asked to repeat the report in its
+reply. A report therefore shares the pre-image's key and not its consumer — a
+baseline is consumed by the agent that took it, a report by the side that can
+show it.
+
+**A report is a write-once file, never merged.** Its name is
+`gitlore-relay-<S>-<A>-<epoch>-<pid>-<H>`: the sanitized session id (`nosession`
+when the payload carries none), the sanitized agent id, `date +%s`, the writing
+process's pid, and the writer's tag, `sync` or `compose`. Every hook matching
+one event runs in parallel ("All matching hooks run in parallel",
+code.claude.com/docs/en/hooks), so a read-merge-write on one shared marker drops
+whichever report loses the race; two hooks in one batch write two files and have
+nothing shared to race on. The file is built at `<name>.tmp` and installed by
+`mv` inside the gitdir — a same-filesystem rename — and a name already occupied
+is refused with the temp removed rather than overwritten, since POSIX `mv` moves
+a source *into* an existing directory. Residual: two writes agreeing on session,
+agent, tag and wall-clock second **from one process** collide, and the second is
+refused through that caller's "could not be staged" line. No caller does that —
+the two reporting hooks are separate processes carrying different tags.
+
+**One drainer.** `scripts/cc-hooks/relay-drain.sh` is the only hook that reads a
+report. It is a `PostToolBatch` hook of its own rather than a branch inside the
+two reporting hooks, for two reasons that follow from the same parallelism: a
+drain living in both would run twice on a batch that fires both, framing and
+emitting every report a second time; and each of those hooks runs only when its
+own baseline fired, so a drain living in either would skip the batch whose
+`Agent` call returned — the batch that changed no index, left no stash and no
+stamp, and is exactly the one the subagent's report was staged for. The drainer
+takes no baseline of its own: it runs on every batch of the main thread, and the
+files alone decide whether it says anything. A keyed run exits at once, because
+a subagent only ever writes toward the next parent-side run.
+
+**It drains its own session only.** A subagent's hook payload carries the
+*parent's* `session_id` (the same measurement, CC 2.1.261), so the name says
+which conversation a report is owed to, and a peer session in the same checkout
+cannot take it. The drain enumerates `gitlore-relay-<S>-*`, frames each file
+`--- gitlore-relay agent <A> ---` on both channels in `LC_ALL=C` filename order
+— grouped by agent, then by write time — and removes exactly the files it read.
+Unique names are what make that safe: a drain never removes a file it did not
+read, so nothing has to be claimed before it is read. `.tmp` is excluded from
+every drain, so a temp whose writer was killed before installing it is never
+folded in as a report of its own; the residual is that it is never folded at
+all, and only the age sweep collects it.
+
+**`SessionStart` drains the same session, then sweeps by age.** `compact` and
+`resume` keep the session id and neither fires `PostToolBatch`, so that pass is
+the only path a report reaches a session that compacted or resumed. The sweep
+then removes every relay file older than seven days regardless of session, temps
+included — the `.tmp` exclusion is a drain rule, never a sweep rule. A report
+addressed to a session that ended is undeliverable: the conversation it
+describes is gone, and the store state it reported on is re-covered by
+`SessionStart`'s own structural pass. It goes by age rather than into a
+stranger's session.
+
+**Two residuals bound delivery.** Between the drain and the emit the reports
+exist only in the hook's variables and the files are already gone, so a hook
+killed in that window loses them; the drainer parses its payload first, which
+establishes that `jq` works at all and narrows the window without closing it
+(claim-by-rename would close it, and is rejected in
+[cc-platform.md](cc-platform.md)). And a background subagent whose report lands
+after the parent's last batch of a turn waits for the parent's next batch, or
+for the next compact or resume; a session that ends with no further batch loses
+it to the sweep.
 
 **D39 — Two routing-key advisories ride the same pass: byte budget and missing
 trigger token**

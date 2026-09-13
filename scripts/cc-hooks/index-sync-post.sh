@@ -19,8 +19,15 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # a watched call ran this batch, and comparing it to the file on disk says
 # whether that call moved anything.
 payload=$(cat)
-session=$(jq -r '.session_id // ""' <<<"$payload")
-agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
+# Non-fatal: the stash is what drives this hook, so an unparseable payload must
+# not be what stops it. A jq aborting under errexit would leave the stash
+# unconsumed, and index-sync-pre.sh's `if [ -f "$stash" ]` then hands that stale
+# baseline to a later batch, which propagates against an ancient index. Falling
+# back costs the session keying of the byte-budget nudge and the relay staging
+# below — never the propagation itself — while jq's own diagnostic still
+# reaches stderr.
+session=$(jq -r '.session_id // ""' <<<"$payload") || session=""
+agent_id=$(jq -r '.agent_id // empty' <<<"$payload") || agent_id=""
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
@@ -241,55 +248,36 @@ if [ -n "$failed" ]; then
 fi
 
 # Keyed: this run's report is confined to its own subagent transcript
-# (D51, measured under CC 2.1.261), so stage it for the next parent-side run to
-# fold in — in addition to, not instead of, the emission below: the subagent
-# is the actor and gets its own copy too. Guarded on the same emptiness the
-# emission guard below applies, and for the same reason: the drain frames
-# every marker it finds, so an empty one reaches the parent as a framing line
-# wrapped around nothing, on a batch the parent would otherwise pass in
-# silence. The ctx half needs no guard of its own — every block above that
-# sets a ctx sets a sysmsg with it.
-#
-# Unkeyed: fold in whatever a subagent staged BEFORE the emission guard
-# below. A fold placed after it is satisfied whenever this run has a report
-# of its own and silently drops the relay on exactly the run it exists for
-# — a parent-side batch whose only report is a relayed one.
-if [ -n "$agent_id" ]; then
-  if [ -n "$sysmsg" ]; then
-    # `if !`, not `|| true`: a failed relay write must cost only the relay,
-    # never this subagent's own report — both suspend errexit over the call
-    # the same way — but the loss must not also be silent to everyone. On
-    # additionalContext, not systemMessage: a subagent's systemMessage reaches
-    # only that subagent's own transcript, while additionalContext is what the
-    # acting model narrates unprompted — the only path by which the fact can
-    # reach the parent, since the actor has to carry it there itself.
-    # Appended after the write, since the line describes the write's own
-    # failure and must not be staged by it.
-    if ! gitlore_relay_write "$mempath" "$agent_id" "$sysmsg" "$ctx"; then
-      # `$sysmsg` when $ctx is empty rather than the separator alone: the
-      # `failed` block above is the reachable case here and it reports on the
-      # user's channel only, which inside a subagent reaches nobody — so
-      # without this the actor is told a report was lost and never shown the
-      # report it is being asked to repeat. index-compose.sh needs no such
-      # fallback: gitlore_compose_and_report sets both channels or neither.
-      if [ -n "$ctx" ]; then ctx="$ctx
+# (D51, measured under CC 2.1.261), so stage it for relay-drain.sh — the ONE
+# drainer — to fold into the next parent-side batch, in addition
+# to, not instead of, the emission below: the subagent is the actor and gets
+# its own copy too. Guarded on the same emptiness the emission guard below
+# applies: an empty report is nothing to stage. Unkeyed (the main thread),
+# this hook writes nothing toward the relay — it only ever emits its own
+# report; relay-drain.sh is the only hook that reads a marker.
+if [ -n "$agent_id" ] && [ -n "$sysmsg" ]; then
+  # `if !`, not `|| true`: a failed relay write must cost only the relay,
+  # never this subagent's own report — both suspend errexit over the call
+  # the same way — but the loss must not also be silent to everyone. On
+  # additionalContext, not systemMessage: a subagent's systemMessage reaches
+  # only that subagent's own transcript, while additionalContext is what the
+  # acting model narrates unprompted — the only path by which the fact can
+  # reach the parent, since the actor has to carry it there itself.
+  # Appended after the write, since the line describes the write's own
+  # failure and must not be staged by it.
+  if ! gitlore_relay_write "$mempath" "$session" "$agent_id" sync "$sysmsg" "$ctx"; then
+    # `$sysmsg` when $ctx is empty rather than the separator alone: the
+    # `failed` block above is the reachable case here and it reports on the
+    # user's channel only, which inside a subagent reaches nobody — so
+    # without this the actor is told a report was lost and never shown the
+    # report it is being asked to repeat. index-compose.sh needs no such
+    # fallback: gitlore_compose_and_report sets both channels or neither.
+    if [ -n "$ctx" ]; then ctx="$ctx
 
 "; else ctx="$sysmsg
 
 "; fi
-      ctx="${ctx}gitlore: the report above could not be staged for the parent session — the relay marker could not be written. A hook's output inside a subagent reaches no one else, so repeat it in your reply or it is lost."
-    fi
-  fi
-else
-  gitlore_relay_drain "$mempath"
-  if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
-    if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
-"; fi
-    sysmsg="${sysmsg}${GITLORE_RELAY_SYSMSG}"
-    if [ -n "$ctx" ]; then ctx="$ctx
-
-"; fi
-    ctx="${ctx}${GITLORE_RELAY_CTX}"
+    ctx="${ctx}gitlore: the report above could not be staged for the parent session — the relay marker could not be written. A hook's output inside a subagent reaches no one else, so repeat it in your reply or it is lost."
   fi
 fi
 
