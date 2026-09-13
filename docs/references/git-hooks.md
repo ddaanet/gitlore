@@ -183,9 +183,12 @@ down projection writes root's older text over facts root has never seen. Every
 path that adopts a tier ahead of its pin therefore composes the carrier up into
 the root index first and stages the pair, or stages nothing at all; the adoption
 a recovered merge owes is one of them
-([merge-state-recovery.md](merge-state-recovery.md)). The one exception is a
-tier commit the commit path itself made, whose carrier root already describes,
-so there is nothing to project up.
+([merge-state-recovery.md](merge-state-recovery.md)). A take and a landed merge
+continuation that stage nothing also return the tier to its pin, keeping what
+arrived in its local `live` for the next take to adopt
+([tier-stores.md](tier-stores.md)). The one exception is a tier commit the
+commit path itself made, whose carrier root already describes, so there is
+nothing to project up.
 
 **A successful compose here stays silent**, by argument rather than omission: on
 rc 0 the result is discarded, so a commit that repairs a stale carrier says

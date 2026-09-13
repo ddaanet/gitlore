@@ -1,6 +1,6 @@
 ## Open decisions
 
-- **After M5's continuation half: the relay redesign.** Report: `plans/index-edit-propagation/reports/deliverable-review.md`. Fixes run from the main session with a background `just precommit`, which is my human partner's standing default for this work. Code, tests and docs always land in one commit.
+- **Next: the relay redesign.** Report: `plans/index-edit-propagation/reports/deliverable-review.md`. Fixes run from the main session with a background `just precommit`, which is my human partner's standing default for this work. Code, tests and docs always land in one commit.
   - **Relay redesign: C2, M1, M2, M3 and M6 as one design pass**, recorded in `docs/references/index-authoring-sync.md` and `docs/decisions.md` before any code.
     1. Probe whether a subagent's `PostToolBatch` hook payload carries the parent's `session_id`. The answer settles M3's key and what SessionStart may drain.
     2. Proposed direction: write-once per-report files (temp then rename, no read-merge); a single drainer that claims each file by rename; the drain placed ahead of the index-changed early exits (M2); session keying.

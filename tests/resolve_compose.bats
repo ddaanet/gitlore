@@ -113,6 +113,100 @@ diverge_memory_with_index() {
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }
 
+# Prepare a tier merge and synthesize it, leaving the continuation to run. Both
+# sides add a line to the carrier, so the landed merge holds text root lacks.
+# $1 = the command whose refusal prepares the merge (default: pre-push).
+prepare_tier_merge_with_new_lines() {
+  local preparer="${1:-$PRE_PUSH}"
+  make_parent_with_memory
+  # The fixture's memory remote has no `live` yet, and a take fetches it.
+  git -C memory push -q origin live
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  approve "memory: record the org fact"
+  bash "$PRE_COMMIT"
+  push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
+  bash "$preparer" && return 1
+  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [org fact](f.md) — ours\n- [their fact](t.md) — theirs\n' \
+    > memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet add -A
+}
+
+@test "a tier merge the root index cannot adopt lands, records nothing in the root, and is adopted by the next take" {
+  # Staging the moved gitlink without the up projection puts the tier on its pin
+  # while root still holds the older block, so the next compose writes that
+  # older text over the merged carrier and reports success. The merge itself
+  # still lands; the root records nothing, and the tier rests on its pin with
+  # the merge in `live`, the shape the next take adopts.
+  prepare_tier_merge_with_new_lines
+  pin=$(git -C memory rev-parse :ddaanet)
+  mem_before=$(git -C memory rev-parse HEAD)
+  # A real gitlore_compose_check refusal: a line prefixed with an unmounted tier.
+  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"gone/x.md"* ]]
+  # The merge landed and was published...
+  merged=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-list --count --merges "$merged" -1)" = "1" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$merged" ]
+  [ ! -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
+  # ...the root recorded nothing: no gitlink staged, no bookkeeping commit...
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pin" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+  run ! grep -qF 'ddaanet/t.md' memory/MEMORY.md
+  # ...and the tier is back on its pin, so no compose can project over it.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  # Editing MEMORY.md retriggers nothing that adopts a tier; the take does.
+  [[ "$stderr" == *"/gitlore:merge"* ]]
+  [[ "$stderr" != *"edit MEMORY.md"* ]]
+
+  # The printed remedy: fix the store, take again.
+  sed -i.bak '/gone\/x\.md/d' memory/MEMORY.md
+  rm -f memory/MEMORY.md.bak
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$merged" ]
+  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+}
+
+@test "an unadopted tier merge landed by /gitlore:merge also rests the tier on its pin" {
+  # The `publish: no` exit is the continuation's second exit 0.
+  prepare_tier_merge_with_new_lines "$PLUGIN_ROOT/scripts/merge-memory.sh"
+  pin=$(git -C memory rev-parse :ddaanet)
+  remote_before=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
+  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"merged without publishing"* ]]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-list --count --merges live -1)" = "1" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$remote_before" ]
+}
+
+@test "an unadopted tier merge whose pin the merge does not contain stays on the merge and says so" {
+  # Returning the tier to a pin that is not an ancestor of the merge would put
+  # it on a commit the merge never built on. It stays put; the pin guard at the
+  # next memory commit is what names the remedy, and this run says as much.
+  prepare_tier_merge_with_new_lines
+  sideways=$(git -C memory/ddaanet commit-tree -m sideways "$(git -C memory/ddaanet write-tree)")
+  git -C memory update-index --cacheinfo "160000,$sideways,ddaanet"
+  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  merged=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$sideways" ]
+  [[ "$stderr" == *"stays on the merge"* ]]
+}
+
 @test "a compose refusal is reported but never strands the merge" {
   make_parent_with_memory
   diverge_memory_with_index '# Memory Index

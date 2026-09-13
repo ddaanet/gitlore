@@ -167,24 +167,37 @@ local `live`, the shape `gitlore_adopt_advanced_live` adopts, so fixing the
 store and taking again retries the whole adoption. The checkout loses nothing: a
 take refuses a dirty tier, and the up projection writes no carrier.
 
+**A tier merge the root index cannot adopt still lands, and the root records
+none of it.** The continuation commits the merge in the tier, clears the merge
+state, advances `live` and publishes, then skips the gitlink staging and the
+bookkeeping commit for the reason above. Once nothing is left to yield on, it
+checks the tier out at the pin the memory store's index holds and exits 0,
+because the merge landed. The remedy is printed instead — fix the store and run
+`/gitlore:merge` — and the next `/gitlore:resolve` run refuses the tier's `live`
+ahead of `HEAD` with the same one. A yield leaves the tier alone, because the
+merge it prepares sits at `HEAD` and that merge's own continuation retries the
+adoption. A pin the merge does not contain is not checked out either, since that
+would put the tier on history the merge never built on. The tier stays on the
+merge, and the pin guard at the next memory commit names the remedy.
+
 **On the degraded path, the moved gitlink is staged.** `submodule update` checks
 a tier out at the sha the superproject's **index** holds, not the one its HEAD
 records, so the pin and a floating gitlink are only compatible while the move is
 in the index. Every advancing path therefore stages the pair — `MEMORY.md` and
 the tier — before its bookkeeping commit, and keeps the staged pair when that
 commit is refused: the fast-forward-plus-adoption branch of
-`gitlore_merge_stores`, and the merge continuation, which stages *after* its
-merge commit because that commit does not exist before it. The **mount** is a
-third such path and stages the gitlink alone: `submodule add` records the
-remote's default branch and `/gitlore:add-tier` then detaches the tier at
-`live`, so the gitlink moves while the root index it feeds is written by the
-compose that follows and floats as ordinary dirt. Left in the working tree
-alone, the move survives exactly until the next `SessionStart`, which walks the
-tier back to the pre-merge commit while the recomposed root index — an ordinary
-file write, not a gitlink — survives to describe facts the carrier no longer
-holds. Nothing reports it: the command that landed the merge exited 0, and the
-session that reverted it calls the tier clean. Staging is what makes the pin
-idempotent instead of destructive.
+`gitlore_merge_stores`, and the merge continuation when the root adopted its
+tier, which stages *after* its merge commit because that commit does not exist
+before it. The **mount** is a third such path and stages the gitlink alone:
+`submodule add` records the remote's default branch and `/gitlore:add-tier` then
+detaches the tier at `live`, so the gitlink moves while the root index it feeds
+is written by the compose that follows and floats as ordinary dirt. Left in the
+working tree alone, the move survives exactly until the next `SessionStart`,
+which walks the tier back to the pre-merge commit while the recomposed root
+index — an ordinary file write, not a gitlink — survives to describe facts the
+carrier no longer holds. Nothing reports it: the command that landed the merge
+exited 0, and the session that reverted it calls the tier clean. Staging is what
+makes the pin idempotent instead of destructive.
 
 **D44 — Shared-tier conflicts resolve semantically; memory merges as prose,
 indexes entry-wise**

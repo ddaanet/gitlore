@@ -6,6 +6,12 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-13 — A tier merge the root index cannot adopt records nothing](changelog/2026-09-13-a-tier-merge-the-root-index-cannot-adopt-records-nothing.md)
+  — a merge continuation whose up projection was refused still staged and
+  committed the moved tier gitlink; the merge now lands and publishes with
+  nothing recorded in the root, and the tier rests on its pin with the merge in
+  its local `live` for the next take to adopt
+
 - [2026-09-13 — A take the root index cannot adopt records nothing](changelog/2026-09-13-a-take-the-root-index-cannot-adopt-records-nothing.md)
   — a tier take whose up projection was refused still staged and committed the
   moved gitlink, so the remedy it printed composed root's older text over the
