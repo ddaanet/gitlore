@@ -85,11 +85,14 @@ load_continuation_state() {
 # A refusal never blocks the merge. Compose is fail-safe (it writes nothing), and
 # the merge is synthesized and approved by this point: stranding it half-landed
 # over an index problem the agent fixes in one edit is the worse outcome. Report,
-# then commit what the merger produced.
+# then commit what the merger produced. A tier the root could not adopt is the
+# one case the report is not the whole answer: the root must then record nothing
+# of the merge, so this returns 1 and stages nothing in the root.
 # Sets `merged_tier` for the caller: the store's path relative to the memory
 # root, or empty when the merge is memory's own. The continuation needs it after
 # the commit to stage the moved gitlink, and this is where it is already derived.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
+# Returns 1 after emitting when a tier merge's up projection failed.
 compose_merged_indexes() {
   local memroot="$1" store="$2" memroot_abs composed dangling rc=0
   merged_tier=""
@@ -119,11 +122,19 @@ compose_merged_indexes() {
       echo "gitlore: these index lines name files that are not there. Nothing was rewritten or deleted:" >&2
       printf '%s\n' "$dangling" | sed 's/^/gitlore:   /' >&2
     fi
+  elif [ -n "$merged_tier" ]; then
+    # A tier the root index could not adopt: the merge still lands, but the root
+    # records none of it — see rest_unadopted_tier for why, and for the remedy
+    # printed once the merge has landed.
+    echo "gitlore: the root index could not take tier '$merged_tier''s lines — the merge is being committed in the tier, and the memory store will record none of it:" >&2
+    printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+    gitlore_git -C "$store" add -A
+    return 1
   elif [ "$rc" -eq 2 ]; then
-    echo "gitlore: the root index could not be written — the merge is being committed without the adopted tier's lines. Investigate the path named below, then edit MEMORY.md to retrigger composition:" >&2
+    echo "gitlore: the root index could not be written — the merge is being committed uncomposed. Investigate the path named below, then edit MEMORY.md to retrigger composition:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
   else
-    echo "gitlore: tier composition refused — the merge is being committed without the adopted tier's lines in the root index. Fix the store by hand, then edit MEMORY.md to retrigger it:" >&2
+    echo "gitlore: tier composition refused — the merge is being committed uncomposed. Fix the store by hand, then edit MEMORY.md to retrigger it:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
   fi
   # The merger already ran `git add -A` in the store being committed; re-running
@@ -142,6 +153,50 @@ compose_merged_indexes() {
   else
     echo "gitlore: the memory root $memroot_abs has no MEMORY.md, so no tier lines can compose into it. The merge is committed regardless; create the root index (\`# Memory Index\`) and edit it to trigger composition." >&2
   fi
+}
+
+# Rest a landed tier merge the root index could not adopt: the tier back on the
+# commit the memory store records, the merge kept in its local `live`.
+#
+# The same resting state a failed take leaves (gitlore_adopt_tier_into_root),
+# for the same reasons. Staging the moved gitlink alone puts the tier on its pin
+# while root still holds the older block, so the next compose writes that older
+# text over the merged carrier and reports success (D50). Leaving the tier on
+# the merge commit ahead of an unstaged pin has the pin guard refuse every
+# memory commit. On the pin with `live` ahead is the shape
+# gitlore_adopt_advanced_live adopts, so fixing the store and running the take
+# retries the adoption. The checkout loses nothing: the merge commit holds
+# everything the merger staged, and the up projection writes no carrier.
+#
+# Only onto a pin the merge contains. A pin off to the side is not this merge's
+# base, and checking it out would put the tier on history the merge never built
+# on; the tier stays on the merge, and the pin guard names that case's remedy.
+#
+# Exit status stays the caller's: the merge landed, which is what the
+# continuation reports, and the next take or resolve run fails on this state
+# with the same remedy printed here.
+# Args: $1 = memory root worktree path, $2 = tier name.
+rest_unadopted_tier() {
+  local memroot="$1" tier="$2" tierpath pin merged err abs
+  tierpath="$memroot/$tier"
+  abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
+  merged=$(git -C "$tierpath" rev-parse HEAD)
+  # `-q --verify` on both reads: no gitlink in the index at all, or a pin that is
+  # no object in this tier's database, are the expected misses, and each means
+  # the pin is not an ancestor.
+  if ! pin=$(git -C "$memroot" rev-parse -q --verify ":$tier") \
+     || ! git -C "$tierpath" rev-parse -q --verify "${pin}^{commit}" >/dev/null \
+     || ! git -C "$tierpath" merge-base --is-ancestor "$pin" "$merged"; then
+    echo "gitlore: tier '$tier' stays on the merge commit: the commit the memory store records for it is not one the merge contains. The next memory commit refuses that pin and names the remedy." >&2
+    return 0
+  fi
+  if ! err=$(gitlore_git -C "$tierpath" checkout -q --detach "$pin" 2>&1); then
+    # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+    printf 'gitlore: tier '\''%s'\'' could not be returned to the commit the memory store records. git said:\n%s\ngitlore: run `git -C "%s" checkout --detach %s`, fix the store, then run /gitlore:merge to adopt the merge into the root index.\n' \
+      "$tier" "$err" "$abs" "$pin" >&2
+    return 0
+  fi
+  echo "gitlore: tier '$tier' is back on the commit the memory store records; its local 'live' keeps the merge. Fix the store, then run /gitlore:merge to adopt the merge into the root index." >&2
 }
 
 # Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on
@@ -188,7 +243,8 @@ if [ $# -ge 1 ]; then
       load_continuation_state
       # Compose before committing, so what lands is composed: a merge is the one
       # write path into a memory store that no compose trigger sees.
-      compose_merged_indexes "$memroot" "$mempath"
+      tier_unadopted=""
+      compose_merged_indexes "$memroot" "$mempath" || tier_unadopted=1
       # Is the ROOT store carrying unapproved work this merge's bookkeeping
       # would sweep up? Asked of the paths OUTSIDE the pair: the preparation has
       # already moved the tier, so the root is dirty by construction here and a
@@ -219,7 +275,7 @@ if [ $# -ge 1 ]; then
       # SessionStart tier pass — silently, while the recomposed root index
       # survives to describe facts the tier no longer carries. Staged, the
       # unconditional pin is idempotent rather than destructive.
-      if [ -n "$merged_tier" ]; then
+      if [ -n "$merged_tier" ] && [ -z "$tier_unadopted" ]; then
         # Read the pointer the root still records — the commit the tier sat at
         # before this merge — for the bookkeeping body, before the `add` moves
         # it in the index and the commit moves it in HEAD.
@@ -244,8 +300,12 @@ if [ $# -ge 1 ]; then
       # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
       # gate leaves it empty, because a merge a refused push prepared exists to
       # let that push through.
+      # A yield above leaves a fresh merge prepared at the tier's HEAD, whose
+      # continuation retries the adoption; only a merge that has fully landed
+      # rests the tier.
       if [ "$publish" = "no" ]; then
         echo "gitlore: merged without publishing, as /gitlore:merge asks. Run /gitlore:push when you want these facts on the remote." >&2
+        [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
         exit 0
       fi
       if [ "$flavor" = "head-vs-remote" ]; then
@@ -255,6 +315,7 @@ if [ $# -ge 1 ]; then
           exit 1
         fi
       fi
+      [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
       exit 0
       ;;
     *)
