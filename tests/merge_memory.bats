@@ -926,3 +926,50 @@ push_tier_files() {
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
   grep -q 'ddaanet/local.md' memory/MEMORY.md
 }
+
+@test "a tier with no remote still adopts local live and reports the missing remote" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory rev-parse ":ddaanet")
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+
+  strand_live_ahead_of_pin ddaanet
+  live_sha=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$live_sha" != "$pin" ]
+
+  git -C memory/ddaanet remote remove origin
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"tier 'ddaanet' has no remote configured"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
+  grep -q 'ddaanet/local.md' memory/MEMORY.md
+}
+
+@test "a failed adoption does not hide a failed fetch" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory rev-parse ":ddaanet")
+
+  strand_live_ahead_of_pin ddaanet
+  # A dirty tier refuses the adoption.
+  printf 'uncommitted\n' > memory/ddaanet/dirty.md
+  git -C memory/ddaanet remote set-url origin "$TMP_REPO/missing.git"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"has uncommitted changes, so nothing was adopted"* ]]
+  [[ "$output$stderr" == *"could not fetch tier 'ddaanet'"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+}
