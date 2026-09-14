@@ -1086,33 +1086,34 @@ gitlore: composing would have overwritten what that tier holds. Open this projec
       0) ;;
       1)
         # A refusal writes nothing (D31, D36): projecting root's older text over
-        # an unadopted carrier would destroy approved upstream facts. Whether
-        # this commit may still go ahead turns on WHICH index the problems sit
-        # in: a problem in an index file this commit already carries changes
-        # to would be published by this very commit, so that aborts; a problem
-        # in a clean index — or a dirty index whose own carrier is unchanged —
-        # is nothing this commit publishes, and only reports, as before.
+        # an unadopted carrier would destroy approved upstream facts. The commit
+        # aborts only on a problem it would publish: a rule 1, 4 or 6 problem —
+        # the kinds that name their index file — in root's MEMORY.md or a tier
+        # carrier with uncommitted changes. The same problems in an index with
+        # no changes, a tier dirty only outside its carrier included, and rules
+        # 2 and 3, which name no index file, report and let the commit go ahead.
         local refusal="gitlore: tier composition refused — the memory indexes were left untouched:
 $compose_result"
-        # The `if cmd; then` form, not a bare `x=$(cmd)`: gitlore_compose_problems_in
-        # returns 1 on the expected "no match here" case, and a bare assignment
-        # would abort this whole function under errexit the moment a clean or
-        # problem-free index answers that way (SC2310).
-        local abort=0
-        if [ -n "$(git -C "$mempath" status --porcelain -- MEMORY.md)" ]; then
-          if printf '%s\n' "$compose_result" \
-            | gitlore_compose_problems_in "$mempath/MEMORY.md" >/dev/null; then
-            abort=1
-          fi
+        # A status read that fails aborts rather than reading as a clean index:
+        # the pre-commit hook's `|| exit $?` suspends errexit here, so an
+        # unchecked failure would publish the problem.
+        local abort=0 index_status
+        if printf '%s\n' "$compose_result" \
+          | gitlore_compose_problems_in "$mempath/MEMORY.md" >/dev/null; then
+          index_status=$(git -C "$mempath" status --porcelain -- MEMORY.md) \
+            || { touch "$msgfile"; return 1; }
+          [ -z "$index_status" ] || abort=1
         fi
         if [ "$abort" -eq 0 ]; then
-          local tier
           while IFS= read -r tier; do
             [ -n "$tier" ] || continue
             [ -e "$mempath/$tier/.git" ] || continue
-            [ -n "$(git -C "$mempath/$tier" status --porcelain -- MEMORY.md)" ] || continue
-            if printf '%s\n' "$compose_result" \
-              | gitlore_compose_problems_in "$mempath/$tier/MEMORY.md" >/dev/null; then
+            printf '%s\n' "$compose_result" \
+              | gitlore_compose_problems_in "$mempath/$tier/MEMORY.md" >/dev/null \
+              || continue
+            index_status=$(git -C "$mempath/$tier" status --porcelain -- MEMORY.md) \
+              || { touch "$msgfile"; return 1; }
+            if [ -n "$index_status" ]; then
               abort=1
               break
             fi
