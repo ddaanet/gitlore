@@ -104,7 +104,9 @@ fi
 # or `live` checked out by another session) and an in-flight merge are expected
 # transient conditions: on failure we leave the trigger AND the message file in
 # place, so the next PostToolBatch retries transparently — no agent action, no
-# lost approval.
+# lost approval. A refusal that needs an edit (an index problem the commit would
+# publish, an off-pin tier) retries on the same files; its reason names the fix,
+# so the agent message defers to it rather than promising no action.
 if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile" 2>&1); then
   rm -f "$trigger"
   # The agent's own next move, handed to it: this is the value 62 of 68 landings
@@ -114,6 +116,6 @@ if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile" 2>&1); then
     "gitlore: the memory commit you requested has landed. Memory HEAD is now $memhead, local live is advanced, and both IPC files have been removed. This is the authoritative outcome — do not run git status, git log, or ls to confirm it."
 else
   emit "gitlore: memory commit deferred, will retry automatically. $out" \
-    "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved. No action is needed from you and re-triggering will not help. Reason: $out"
+    "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved, and re-triggering will not help. When the reason below names a fix, make it and the retry picks it up; otherwise no action is needed from you. Reason: $out"
 fi
 exit 0

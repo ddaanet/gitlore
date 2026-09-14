@@ -202,6 +202,37 @@ EOF"
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
 }
 
+@test "an abort names every changed index file with a problem and no clean one" {
+  # Three problem-bearing indexes: root and tier 'other' changed, tier
+  # 'ddaanet' committed clean. The refusal lists all three problems; the abort
+  # names the two files that would publish theirs.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  make_tier_in_memory other
+  set_tier_manifest ddaanet other
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_tier_bullet ddaanet shared.md "hook"
+  git -C memory/ddaanet add -A
+  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q -m "carrier: duplicate pointer"
+  commit_memory_state
+  [ -z "$(git -C memory/ddaanet status --porcelain -- MEMORY.md)" ]
+  seed_tier_bullet other o.md "hook"
+  seed_tier_bullet other o.md "hook"
+  printf -- '- [A](a.md) — a- [B](b.md) — b\n' >> memory/MEMORY.md
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record o"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"memory/ddaanet/MEMORY.md: duplicate pointer path shared.md"* ]]
+  [[ "${output}${stderr}" == *"memory/other/MEMORY.md: duplicate pointer path o.md"* ]]
+  [[ "${output}${stderr}" == *"memory/MEMORY.md: line "*" welds two pointer bullets"* ]]
+  [[ "${output}${stderr}" == *"The changed index files with problems:
+memory/MEMORY.md
+memory/other/MEMORY.md
+Fix them"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+}
+
 @test "a carrier defect in a clean tier commits and reports" {
   # The abort is scoped to a problem-bearing index that IS dirty. A defect
   # already committed inside the tier's own history, with nothing uncommitted

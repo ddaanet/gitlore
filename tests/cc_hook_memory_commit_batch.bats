@@ -138,6 +138,27 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [ -f "$(gitlore_commit_msg_file memory)" ]
 }
 
+@test "a refusal that needs a fix keeps both IPC files and hands the agent the fix" {
+  # A welded line in root's changed index aborts the commit: a retry alone
+  # never lands it, so the agent must read that the reason names a fix.
+  make_parent_with_memory
+  printf -- '- [A](a.md) — a- [B](b.md) — b\n' >> memory/MEMORY.md
+  printf 'memory: record a and b\n' > "$(gitlore_commit_msg_file memory)"
+  : > "$(gitlore_commit_trigger_file memory)"
+  head_before=$(git -C memory rev-parse HEAD)
+
+  CLAUDECODE=1 run run_batch
+  [ "$status" -eq 0 ]
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"deferred"* ]]
+  [[ "$agent" == *"When the reason below names a fix, make it"* ]]
+  [[ "$agent" == *"welds two pointer bullets"* ]]
+  [[ "$agent" == *"aborted"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ -f "$(gitlore_commit_trigger_file memory)" ]
+  [ -f "$(gitlore_commit_msg_file memory)" ]
+}
+
 @test "trigger on clean memory reports nothing to commit and consumes the trigger" {
   make_parent_with_memory
   : > "$(gitlore_commit_trigger_file memory)"
