@@ -1377,12 +1377,11 @@ gitlore_push_stores() {
               # a tier take writes a bookkeeping commit that would meet an
               # equally-behind root's upstream one as a divergence.
               gitlore_merge_stores "$mempath" || return 1
-              # The take just above can repair a defective arrival on this tier,
-              # leaving local `live` strictly ahead of `origin/live` again — and
-              # lockstep (D17) means that repair reaches the remote before this
-              # loop moves on to the next tier, same as every other tier commit
-              # above.
-              if [ "$(gitlore_classify_refusal "$tierpath" live origin/live)" = "ahead" ]; then
+              # The take can repair a defective arrival, committing on top of
+              # what it fetched, and memory's push below records that commit —
+              # so a `live` the remote does not already hold goes out now, for
+              # the lockstep above (D17).
+              if ! git -C "$tierpath" merge-base --is-ancestor live origin/live; then
                 if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
                   gitlore_say_for_agent_or_user \
                     "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
@@ -1575,16 +1574,35 @@ gitlore_merge_stores() {
 # its own MEMORY.md moves with the fast-forward).
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
-  local label remote_url remote live head fetch_err root_dirty_before
+  local label remote_url fetched=0 fetch_err="" remote="" live head adopt_rc=0
+  local root_dirty_before
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
   remote_url=$(git -C "$store" config --get remote.origin.url || true)
   if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
-    # A tier whose local `live` ran ahead of the pin holds commits nothing
-    # below would otherwise adopt, so a store with no remote to take from still
-    # gets the local adoption before this reports and returns.
-    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
+    remote_url=""
+  elif fetch_err=$(git -C "$store" fetch -q origin live 2>&1); then
+    fetched=1
+    # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
+    remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || remote=""
+  fi
+
+  # A tier's local `live` ahead of HEAD holds commits the ancestry tests below
+  # cannot see, since they read HEAD, so those commits are adopted first —
+  # unless the fetched remote already contains `live`. Then the fast-forward
+  # takes origin's commits instead, including a repair of the same arrival that
+  # another consumer already published, which adopting the stale copy would
+  # repair a second time and diverge from. No remote, a failed fetch and a
+  # remote with no `live` all adopt: nothing else here reaches those commits. A
+  # failed adoption has reported itself, and the remote's report still follows,
+  # so neither problem hides the other.
+  live=$(git -C "$store" rev-parse -q --verify live) || live=""
+  if [ -z "$remote" ] || [ -z "$live" ] || ! git -C "$store" merge-base --is-ancestor "$live" "$remote"; then
+    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || adopt_rc=1
+  fi
+
+  if [ -z "$remote_url" ]; then
     # A tier exists to be shared, so one with no remote is a misconfiguration
     # worth stopping on. The memory root is not: a local-only install is a
     # supported end state (D20), and there is genuinely nothing to take.
@@ -1597,8 +1615,7 @@ gitlore_merge_one_store() {
       "gitlore: $label has no remote configured, so there is nothing to take." >&2
     return 1
   fi
-  if ! fetch_err=$(git -C "$store" fetch -q origin live 2>&1); then
-    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
+  if [ "$fetched" -eq 0 ]; then
     gitlore_say_for_agent_or_user \
       "gitlore: could not fetch $label from its remote. git said:
 $fetch_err" \
@@ -1606,21 +1623,11 @@ $fetch_err" \
 $fetch_err" >&2
     return 1
   fi
-  # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
-  remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || {
-    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
+  if [ -z "$remote" ]; then
     printf 'gitlore: %s — its remote has no '\''live'\'' branch yet; nothing to take.\n' "$label"
-    return 0
-  }
-
-  # Local `live` ahead of the fetched remote holds commits nothing else here
-  # would adopt, so it is taken before the classification below reads HEAD —
-  # unless the remote already contains it, in which case the fast-forward a few
-  # lines down takes origin's commits and there is nothing local to adopt.
-  live=$(git -C "$store" rev-parse -q --verify live) || live=""
-  if [ -z "$live" ] || ! git -C "$store" merge-base --is-ancestor "$live" "$remote"; then
-    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
+    return "$adopt_rc"
   fi
+  [ "$adopt_rc" -eq 0 ] || return 1
   head=$(git -C "$store" rev-parse HEAD) || return 1
 
   if git -C "$store" merge-base --is-ancestor "$remote" "$head"; then
