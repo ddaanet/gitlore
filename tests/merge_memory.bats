@@ -591,6 +591,33 @@ EOF
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$remote_sha" ]
 }
 
+@test "a take's repair keeps the duplicate its pin lacks" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  push_tier_fact ddaanet '- [A](a.md) — old' >/dev/null
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  [ "$(git -C memory/ddaanet show "$pin:MEMORY.md" | grep -cxF -- '- [A](a.md) — old')" -eq 1 ]
+  # The arrival adds a second, differing line for the same path after the
+  # pinned one, so a repair blind to the pin would keep the first, older line.
+  remote_sha=$(push_tier_fact ddaanet '- [A](a.md) — new')
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  R=$(git -C memory/ddaanet rev-parse HEAD)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
+  git -C memory/ddaanet show "$R:MEMORY.md" > "$BATS_TEST_TMPDIR/repaired.md"
+  [ "$(grep -cxF -- '- [A](a.md) — new' "$BATS_TEST_TMPDIR/repaired.md")" -eq 1 ]
+  ! grep -qF -- '— old' "$BATS_TEST_TMPDIR/repaired.md" || false
+  [[ "$output$stderr" == *"dropped a duplicate pointer line: - [A](a.md) — old"* ]]
+  [ "$(grep -cxF -- '- [A](ddaanet/a.md) — new' memory/MEMORY.md)" -eq 1 ]
+  ! grep -qF -- 'ddaanet/a.md) — old' memory/MEMORY.md || false
+}
+
 # The files under a tier's gitdir outside what git itself keeps moving —
 # objects, logs, refs, FETCH_HEAD, ORIG_HEAD — one per line, sorted. A take's
 # scratch copy or temporary index left behind shows up as a difference.
