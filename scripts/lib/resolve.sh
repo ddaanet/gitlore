@@ -1377,6 +1377,21 @@ gitlore_push_stores() {
               # a tier take writes a bookkeeping commit that would meet an
               # equally-behind root's upstream one as a divergence.
               gitlore_merge_stores "$mempath" || return 1
+              # The take just above can repair a defective arrival on this tier,
+              # leaving local `live` strictly ahead of `origin/live` again — and
+              # lockstep (D17) means that repair reaches the remote before this
+              # loop moves on to the next tier, same as every other tier commit
+              # above.
+              if [ "$(gitlore_classify_refusal "$tierpath" live origin/live)" = "ahead" ]; then
+                if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
+                  gitlore_say_for_agent_or_user \
+                    "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" \
+                    "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" >&2
+                  return 1
+                fi
+              fi
               continue
               ;;
             diverged)
@@ -1560,19 +1575,16 @@ gitlore_merge_stores() {
 # its own MEMORY.md moves with the fast-forward).
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
-  local label remote_url remote head fetch_err root_dirty_before
+  local label remote_url remote live head fetch_err root_dirty_before
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
-  # Before any ancestry is read: a tier whose local `live` ran ahead of the pin
-  # holds commits HEAD does not, and every test below reads HEAD. Adopting first
-  # means the classification against the remote sees everything this store
-  # already has, so local commits never present themselves as a fast-forward the
-  # ff-checked `push .` will then refuse.
-  gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
-
   remote_url=$(git -C "$store" config --get remote.origin.url || true)
   if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
+    # A tier whose local `live` ran ahead of the pin holds commits nothing
+    # below would otherwise adopt, so a store with no remote to take from still
+    # gets the local adoption before this reports and returns.
+    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
     # A tier exists to be shared, so one with no remote is a misconfiguration
     # worth stopping on. The memory root is not: a local-only install is a
     # supported end state (D20), and there is genuinely nothing to take.
@@ -1586,6 +1598,7 @@ gitlore_merge_one_store() {
     return 1
   fi
   if ! fetch_err=$(git -C "$store" fetch -q origin live 2>&1); then
+    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
     gitlore_say_for_agent_or_user \
       "gitlore: could not fetch $label from its remote. git said:
 $fetch_err" \
@@ -1595,9 +1608,19 @@ $fetch_err" >&2
   fi
   # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
   remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || {
+    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
     printf 'gitlore: %s — its remote has no '\''live'\'' branch yet; nothing to take.\n' "$label"
     return 0
   }
+
+  # Local `live` ahead of the fetched remote holds commits nothing else here
+  # would adopt, so it is taken before the classification below reads HEAD —
+  # unless the remote already contains it, in which case the fast-forward a few
+  # lines down takes origin's commits and there is nothing local to adopt.
+  live=$(git -C "$store" rev-parse -q --verify live) || live=""
+  if [ -z "$live" ] || ! git -C "$store" merge-base --is-ancestor "$live" "$remote"; then
+    gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || return 1
+  fi
   head=$(git -C "$store" rev-parse HEAD) || return 1
 
   if git -C "$store" merge-base --is-ancestor "$remote" "$head"; then
