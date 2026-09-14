@@ -316,3 +316,79 @@ mount_tier_at_live() {
   # carrying quotes must not be given an apostrophe-s on top of them.
   [[ "$msg" != *"''s"* ]]
 }
+
+# --- a repair the take makes inside a push publishes before memory records it ---
+
+# The hook installed on $MEMORY_REMOTE runs inside memory's own receive-pack,
+# which sets these to memory's quarantine; unset them before reading a wholly
+# different repository's ref, or the git invocation below resolves against
+# memory's object store instead of the tier's. Appended, one line per memory
+# push: a later push must not overwrite an earlier one's snapshot.
+install_tier_live_snapshot_hook() {
+  local hookfile="$1"
+  cat > "$MEMORY_REMOTE/hooks/pre-receive" <<HOOK
+#!/bin/sh
+unset GIT_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_QUARANTINE_PATH
+git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live >> "$hookfile"
+exit 0
+HOOK
+  chmod +x "$MEMORY_REMOTE/hooks/pre-receive"
+}
+
+@test "a repair taken inside a push is published before memory records it" {
+  # The take inside a push repairs a locally-stranded arrival before the loop
+  # reaches memory's own push, and the tier push that follows it publishes the
+  # repair — so the hook on memory's remote must see the repair already sitting
+  # on the tier's remote when it fires.
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  publish_memory
+  pin=$(git -C memory rev-parse ":ddaanet")
+
+  seed_tier_bullet ddaanet local.md "committed here, never recorded"
+  strand_live_ahead_of_pin ddaanet
+  stranded=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+
+  hookfile="$BATS_TEST_TMPDIR/tier-live-at-memory-push"
+  install_tier_live_snapshot_hook "$hookfile"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ -s "$hookfile" ]
+  R=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $stranded" ]
+  [ "$(cat "$hookfile")" = "$R" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$R" ]
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$R" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$R" ]
+}
+
+@test "a repair taken by the behind arm is published before memory records it" {
+  # The behind arm's take can also repair the arrival, and the same holds for
+  # it: the repair must reach the tier's remote before memory's own push
+  # records the gitlink, not merely land locally while the loop moves on.
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  publish_memory
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
+
+  hookfile="$BATS_TEST_TMPDIR/tier-live-at-memory-push"
+  install_tier_live_snapshot_hook "$hookfile"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ -s "$hookfile" ]
+  R=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
+  [ "$(cat "$hookfile")" = "$R" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$R" ]
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$R" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$R" ]
+}
