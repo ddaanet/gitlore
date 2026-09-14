@@ -110,9 +110,9 @@ to a report file in the memory gitdir. That staging is
 **in addition to the subagent's own emission, not instead of it**: the subagent
 is the actor and gets its copy, and a write that fails says so on the subagent's
 own `additionalContext`, where the actor is asked to repeat the report in its
-reply. A report therefore shares the pre-image's key and not its consumer — a
-baseline is consumed by the agent that took it, a report by the side that can
-show it.
+reply. A report therefore names the agent that wrote it, as the pre-image's key
+does, without sharing the pre-image's consumer — a baseline is consumed by the
+agent that took it, a report by the side that can show it.
 
 **A report is a write-once file, never merged.** Its name is
 `gitlore-relay-<S>-<A>-<epoch>-<pid>-<H>`: the sanitized session id (`nosession`
@@ -129,17 +129,18 @@ agent, tag and wall-clock second **from one process** collide, and the second is
 refused through that caller's "could not be staged" line. No caller does that —
 the two reporting hooks are separate processes carrying different tags.
 
-**One drainer.** `scripts/cc-hooks/relay-drain.sh` is the only hook that reads a
-report. It is a `PostToolBatch` hook of its own rather than a branch inside the
-two reporting hooks, for two reasons that follow from the same parallelism: a
-drain living in both would run twice on a batch that fires both, framing and
-emitting every report a second time; and each of those hooks runs only when its
-own baseline fired, so a drain living in either would skip the batch whose
-`Agent` call returned — the batch that changed no index, left no stash and no
-stamp, and is exactly the one the subagent's report was staged for. The drainer
-takes no baseline of its own: it runs on every batch of the main thread, and the
-files alone decide whether it says anything. A keyed run exits at once, because
-a subagent only ever writes toward the next parent-side run.
+**One `PostToolBatch` drainer.** `scripts/cc-hooks/relay-drain.sh` is the only
+`PostToolBatch` hook that reads a report; `SessionStart` drains too (below). It
+is a `PostToolBatch` hook of its own rather than a branch inside the two
+reporting hooks, for two reasons that follow from the same parallelism: a drain
+living in both would run twice on a batch that fires both, framing and emitting
+every report a second time; and each of those hooks runs only when its own
+baseline fired, so a drain living in either would skip the batch whose `Agent`
+call returned — the batch that changed no index, left no stash and no stamp, and
+is exactly the one the subagent's report was staged for. The drainer takes no
+baseline of its own: it runs on every batch of the main thread, and the files
+alone decide whether it says anything. A keyed run exits at once, because a
+subagent only ever writes toward the next parent-side run.
 
 **It drains its own session only.** A subagent's hook payload carries the
 *parent's* `session_id` (the same measurement, CC 2.1.261), so the name says

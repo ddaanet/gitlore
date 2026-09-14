@@ -39,9 +39,11 @@
 
 - The recall-size hook fires on `memory/ddaanet/shared-claude.md`, demanding it be cut under 2.8KB. That file is imported whole by `CLAUDE.md` and is never a recall target. Decide whether the hook should exempt it.
 
-## Remaining
+- **Minor-pass-2 code m3, restamp residuals** (`plans/index-edit-propagation/reports/minor-pass-2.md`). Should the stale-merge guard's report-only arms restamp the approval? The recommendation is yes, through a distinct return code from `gitlore_guard_stale_merge_state`. And does a failure-time restamp that blesses a concurrent write stand as a stated residual in `git-hooks.md`, or get snapshotted with `touch -r`? The recommendation is to accept it as a residual.
 
-- In a fresh opus session: `/deliverable-review plans/index-edit-propagation`, over the deliverables as they stand after the Critical, Major and Minor passes.
+- **Minor-pass-2 test m9.** Should non-final `[[ ]]` assertions be written as `[[ ]] || return 1` (bash < 4.1 errexit)? The recommendation is no suite-wide sweep.
+
+## Remaining
 
 - `_gitlore_nudge_reset`'s `find … -mtime +7 -delete` is unguarded under the calling hook's errexit; `gitlore_relay_sweep` guards its own. Flagged by the relay slice 1 code review, untouched.
 

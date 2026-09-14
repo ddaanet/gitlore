@@ -169,7 +169,8 @@ take refuses a dirty tier, and the up projection writes no carrier.
 
 **A tier merge the root index cannot adopt still lands, and the root records
 none of it.** The continuation commits the merge in the tier, clears the merge
-state, advances `live` and publishes, then skips the gitlink staging and the
+state and advances `live` — publishing only a merge a refused push prepared,
+never one `/gitlore:merge` prepared — then skips the gitlink staging and the
 bookkeeping commit for the reason above. Once nothing is left to yield on, it
 checks the tier out at the pin the memory store's index holds and exits 0,
 because the merge landed. The remedy is printed instead — fix the store and run

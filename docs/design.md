@@ -211,13 +211,17 @@ git and decides (D7).
   files and reports a mid-session plugin upgrade (D21), the
   `PreToolUse`/`PostToolBatch` index pair keys on what changed rather than on
   what the call declared (D31), per agent so a parent batch cannot consume a
-  subagent's baseline, a `PostToolBatch` relay drainer is the one consumer of
-  the reports hooks write from inside a subagent, whose own output reaches
-  nobody else (D51), and `PostToolUse(EnterWorktree|ExitWorktree)` guards
-  against in-process worktree drift (D15); `SessionStart` and `PreCompact`
-  re-arm the once-per-episode notices. [session.md](references/session.md); the
-  nudge in [commit-gate.md](references/commit-gate.md), the index pair in
-  [index-composition.md](references/index-composition.md).
+  subagent's baseline, a `PostToolBatch` relay drainer delivers — as
+  `SessionStart` does at a compaction or resume — the reports hooks write from
+  inside a subagent, whose own output reaches nobody else (D51), and
+  `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
+  drift (D15); `SessionStart` and `PreCompact` re-arm the once-per-episode
+  notices. [session.md](references/session.md); the nudge in
+  [commit-gate.md](references/commit-gate.md), the index pair in
+  [index-composition.md](references/index-composition.md), the per-agent keying
+  and the relay in
+  [index-authoring-sync.md](references/index-authoring-sync.md), D51 in
+  [cc-platform.md](references/cc-platform.md).
 - **Git hooks and entry points** — `pre-commit` commits every dirty tier, then
   memory, advances each store's local `live`, and stages the memory gitlink into
   the index git handed it, so the parent commit records the pointer its own hook

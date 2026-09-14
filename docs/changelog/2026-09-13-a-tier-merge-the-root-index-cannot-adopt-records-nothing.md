@@ -10,7 +10,8 @@ carrier. The deliverable review of `index-edit-propagation` flagged both halves
 (finding M5); the take half landed first.
 
 The merge still lands: the continuation commits it in the tier, clears the merge
-state, advances `live` and publishes. It no longer stages the gitlink or makes
+state, advances `live` and — for a merge a refused push prepared, never one
+`/gitlore:merge` prepared — publishes. It no longer stages the gitlink or makes
 the bookkeeping commit, and on the paths that exit 0 it checks the tier out at
 the pin the memory store's index holds, keeping the merge in the tier's local
 `live`. That is the resting state a failed take leaves, which

@@ -497,6 +497,12 @@ tier_prepare_head_vs_live() {
   [ "$status" -eq 0 ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$landed" ]
   [[ "$stderr" == *"could not be staged"* ]]
+  # The printed staging command runs verbatim, from outside the project.
+  line=$(printf '%s\n' "$stderr" | grep -F 'could not be staged')
+  cmd=${line#*\`}
+  cmd=${cmd%%\`*}
+  (cd / && eval "$cmd")
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$landed" ]
 }
 
 # BORN-GREEN, like case 3 above: unchanged code stages nothing anywhere, so this

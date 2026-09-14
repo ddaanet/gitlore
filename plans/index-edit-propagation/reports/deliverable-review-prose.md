@@ -1,293 +1,341 @@
-# Deliverable review — prose partition (Layer 1)
+# Deliverable review — prose and config partition (fresh, post fix pass)
 
-Range `b6dbe92..HEAD`, in-scope commits 2fa5328, ba68af9, ac3735f, 06e2323,
-1afbac4, 951b83a, plus the CLAUDE.md hunk from ca41cbe. 8523b47 changes no doc.
-Accuracy checked against `scripts/lib/resolve.sh`, `scripts/lib/index-sync.sh`,
-`scripts/lib/index-compose.sh`, `scripts/resolve.sh`,
-`scripts/git-hooks/pre-commit`, `scripts/cc-hooks/*.sh` and `justfile` at HEAD.
-Read-only: no repo file edited apart from this report.
+Counts: **Critical 0 · Major 1 · Minor 10**
 
-Counts: **Critical 0 · Major 2 · Minor 11**
+## Scope
+
+- **Range:** `b6dbe92..HEAD`, including the fix pass 7485483, 081e364, e36e7fc,
+  38de36b, 45624bd and 7d20aab.
+- **Files:**
+  - `docs/decisions.md`: the D50 and D51 hunks only.
+  - `docs/design.md`: the Claude Code hooks and Git hooks bullets.
+  - `docs/references/`: `git-hooks.md`, `memory-entry-points.md`,
+    `index-authoring-sync.md`, `index-composition.md`, `cc-platform.md`,
+    `session.md`, `commit-gate.md`, `merge-state-recovery.md`, `tier-stores.md`
+    and `configuration.md`.
+  - `docs/changelog.md` and the six `2026-09-11-*` / `2026-09-13-*` entries.
+  - `hooks/hooks.json`.
+- **Checked against:**
+  - `scripts/lib/resolve.sh`, `scripts/lib/index-sync.sh`,
+    `scripts/lib/index-compose.sh` and `scripts/resolve.sh`;
+  - `scripts/cc-hooks/`: `relay-drain.sh`, `session-start.sh`,
+    `index-sync-post.sh`, `index-compose.sh` and `add-tier-batch.sh`;
+  - `relay-redesign.md` §Docs and the outline's §Design record.
+- **Excluded:** `CLAUDE.md`, `testing.md`, `README.md` and the 2026-09-07
+  entries.
+- **Read-only:** no repo file was edited apart from this report.
+
+## Prior findings status
+
+Prior prose report, at HEAD:
+
+- **M1 / review M5, the D50 invariant against the take path — resolved.**
+  - `gitlore_adopt_tier_into_root` now returns 1 before any staging when
+    `gitlore_compose_up` fails.
+  - `compose_merged_indexes` returns 1 without staging root, and the
+    continuation skips the gitlink staging.
+  - `git-hooks.md` and `tier-stores.md` agree. A qualification gap remains; see
+    m3.
+- **M2, the `CLAUDE.md` gate paragraph — out of this partition.** It is an open
+  decision.
+- **m1, the `pre-commit` step list — resolved.** It is in execution order and
+  includes the tier sync. Merging steps 3 and 4 broke a step reference; see
+  Major M1.
+- **m2, the changelog sequence skipping the tier sync — resolved.** It now reads
+  "compose → tier commits → add -A".
+- **m3, "sixth untracked file" — resolved.** No "sixth" is left in `docs/` or
+  `scripts/`.
+- **m4, the relay write contract missing from the node — resolved.** The relay
+  block records the atomic install, the `.tmp` rule and both residuals, and
+  `configuration.md` lists the relay files. A list gap remains; see m8.
+- **m5, argued alternatives not named — partly resolved.** They are named in
+  `decisions.md`, and D50's line carries "dirty store". Three names have no
+  entry in their node's `## Rejected alternatives` section; see m5.
+- **m6, "all four" — resolved.** The four attachment kinds are enumerated.
+- **m7, `session.md` steps 6 and 10 — resolved.** Both arms of step 6 end the
+  pass, matching `session-start.sh:199-212`.
+- **m8, recovered-merge adoption covering only the checkout case — resolved.**
+  The text now reads "Whether HEAD already carries the merge or is put back onto
+  it".
+- **m9, the hub not mentioning the relay — resolved.** The hooks bullet names
+  the relay drainer and D51.
+- **m10, D51 linking to an unheaded paragraph — resolved.** The relay is a
+  titled block, **The relay — D51's mechanism**, named in the node's header
+  list.
+- **m11, `CLAUDE.md` citing `plans/` — out of this partition.** No `plans/<job>`
+  citation is left in `CLAUDE.md`.
+
+## Critical
+
+None.
 
 ## Major
 
-### M1 — D50's adoption invariant is false for the take path, and tier-stores.md contradicts it
+### M1 — the gitlink invariant cites a step that no longer exists
 
-- **Where:** `docs/references/git-hooks.md:159-166`. The contradiction is with
-  `docs/references/tier-stores.md:162-166` and
-  `scripts/lib/resolve.sh:1665-1693`.
-- **Axes:** functional correctness, consistency.
-- **The claim:** "Every path that adopts a tier ahead of its pin therefore
-  composes the carrier up into the root index first and stages the pair,
-  **or stages nothing at all**".
-- **What the code does:** `gitlore_adopt_tier_into_root` is the tail of both
-  take branches (`resolve.sh:1524`, `:1654`). When `gitlore_compose_up` returns
-  non-zero it prints the failure, then still runs
-  `gitlore_git -C "$mempath" add -- MEMORY.md "$tier"` and
-  `gitlore_commit_tier_bookkeeping`.
-- **Where else it breaks:**
-  - The merge continuation (`scripts/resolve.sh:125-141`) also stages after an
-    up refusal ("the merge is being committed without the adopted tier's
-    lines").
-  - `tier-stores.md` says every advancing path stages the pair. It makes no
-    exception for a failed up projection.
-  - The comment at `resolve.sh:285-287` names `gitlore_adopt_tier_into_root` as
-    "the precedent" for stage-nothing-on-failure. That function does not follow
-    the rule.
-- **Consequence:** the design record states one invariant and the code has
-  another, and two nodes disagree.
-  - A reader who audits the take path against D50 will call it compliant.
-  - A reader who makes the code comply ("stage nothing") breaks the staging that
-    `tier-stores.md` argues keeps `SessionStart` from walking the tier back.
-  - Which side is right is a design call: narrow the D50 sentence to the
-    recovery path, or change the take's failure arm. Either way the hazard D50
-    names is live after a refused take once the store is fixed by hand. The down
-    pass then projects root's older text for any line whose hook changed
-    upstream.
-
-### M2 — CLAUDE.md's gate-file fallback reports a false green on exactly a docs-only commit
-
-- **Where:** `CLAUDE.md:62-70`, from ca41cbe.
-- **Axes:** functional correctness, completeness.
-- **The claim:** read the `just precommit` verdict from
-  `.git/gitlore/gates/{lint,test-unit,test-integration,check-distribution}`,
-  each "valid for the tree when its mtime postdates the last edit to any gated
-  input".
-- **What `precommit` actually runs** (`justfile:48-59`):
-  - `format-docs`
-  - `scripts/check-memory-hygiene.py`
-  - `scripts/check-docs-links.py`
-  - `check-version`
-
-  None of the four has a gate file. `docs/` and `memory/` are out of
-  `precommit_inputs` (`justfile:15-19`).
-- **How the false green happens:**
-  1. A docs-only edit breaks `check-docs-links.py`.
-  2. `precommit` stops before `just check-version lint test`.
-  3. The earlier `lint`/`test-*` sentinels are untouched.
-  4. No gated input was edited, so the mtime rule calls them valid.
-  5. The subagent reports a pass.
-
-  That is the shape of every Phase 4 commit. Right now the working tree fails
-  `check-docs-links.py` with rc=1, from untracked `docs/plans/` and
-  `docs/superpowers/` files over the size cap. Meanwhile all four gate files
-  postdate the last gated-input edit and would read as green.
-- **Secondary problems:**
-  - Validity is really a hash match (`check-sentinel`, `justfile:169-179`), not
-    an mtime. The mtime proxy is too permissive when a gated file is deleted or
-    a tool version changes.
-  - The path is hard-coded to `.git/gitlore/gates`, but the recipe resolves
-    `git rev-parse --git-path gitlore/gates`, which is per-worktree in a linked
-    worktree.
-  - The "Only if the run dies" fallback (`just lint`, `just test-integration`,
-    `just test-unit`) leaves out `check-distribution` and all four uncached
-    checks. It does not reproduce `precommit`.
-- **Consequence:** a subagent commits over a failing docs-graph or hygiene
-  check, believing the gate passed.
+- **Where:** `docs/references/git-hooks.md:81-82`.
+- **Axes:** usability (broken reference), accuracy.
+- **Doc:** "`pre-commit` makes it `live` itself: step 5 stages the commit step 4
+  just advanced `live` to."
+- **The list it points at:** it now has four steps. Line 50 is "3.
+  **Sync memory** … then `push . HEAD:live` fast-forward-only", and line 63 is
+  "4. **Stage the gitlink** into the index git handed the hook".
+- **Cause:** the minor pass (item 1) merged the old steps 3 and 4 and renumbered
+  step 5 to 4. It did not update this sentence.
+- **Consequence:**
+  - "step 5" names nothing.
+  - "step 4" names the staging step, not the advance.
+  - The sentence is the one-line proof of the invariant that NFR5 and D46 rest
+    on, and a reader checking it against the list finds it wrong.
+- **Fix:** "step 4 stages the commit step 3 just advanced `live` to".
 
 ## Minor
 
-### m1 — the `pre-commit` step list reads out of execution order
+### m1 — "every later failure restamps it" has two non-restamping returns
 
-- **Where:** `docs/references/git-hooks.md:50-57`.
-- **Axis:** usability.
-- **Problem:** the list says "in this order", but step 3 (compose, tier sync)
-  runs *after* step 4's dirty/freshness gate and pin guard
-  (`resolve.sh:963-1091`). The corrector's line-neutral patch ("which is what
-  runs step 3") makes step 4 point backwards. Step 4's chain also leaves out the
-  tier sync between the down composition and `add -A`. The node is now 189
-  lines, so the 400/400 constraint behind that patch is gone.
-- **Consequence:** a reader ordering a new guard against the list places it
-  wrongly.
+- **Where:** `docs/references/git-hooks.md:162-168`.
+- **Axis:** accuracy.
+- **Doc:** "A failure keeps the approval, unless it prepared a merge. … So every
+  later failure restamps it."
+- **First counter-example:** the tier guard loop in
+  `gitlore_sync_memory_to_live`.
+  - The code is `gitlore_guard_stale_merge_state "$mempath/$tier" || return 1`,
+    with no `touch`.
+  - That guard also returns 1 without preparing anything: the
+    `orphaned-merge-head` arm ("holds a merge gitlore did not prepare … nothing
+    was changed"), and `gitlore_recover_landed_merge`'s "HEAD could not be put
+    back" arm.
+  - An earlier tier in the same loop may already have written the up projection
+    the doc names ("a recovered merge's up projection").
+- **Second counter-example:** `gitlore_sync_tiers_to_live`.
+  - When a non-fast-forward refusal does not classify as diverged, the code runs
+    `elif gitlore_check_head_live_agree …; then … fi; return 1`, also with no
+    `touch`.
+  - By then the compose has already written carriers.
+- **Reachability:** both need two tiers or a race.
+- **Note:** the code comment above the tier loop makes the same classification
+  ("the stale-merge guard in this loop … return without one"). The fix may
+  belong on the code side. Otherwise, narrow the sentence.
 
-### m2 — the changelog's sequence skips the tier sync
+### m2 — the drainer is called the only reader; `SessionStart` drains too
 
 - **Where:**
-  `docs/changelog/2026-09-11-the-commit-path-composes-before-it-commits.md:13`.
+  - `docs/references/index-authoring-sync.md:132`: "`relay-drain.sh` is the only
+    hook that reads a report."
+  - `docs/design.md:214`: "a `PostToolBatch` relay drainer is the one consumer
+    of the reports".
+  - Changelog `2026-09-13-the-relay-is-one-file-per-report.md:34`: "is new and
+    is the only consumer".
+- **Axes:** accuracy, consistency.
+- **Code:** `scripts/cc-hooks/session-start.sh:418` runs
+  `gitlore_relay_drain "$mempath" "$session"`. The node's own paragraph at line
+  156 says "`SessionStart` drains the same session".
+- **Why Minor:** both drainers call the one library function, so the
+  misstatement hides no divergent behaviour. `relay-redesign.md` and D51's
+  conclusion line say the precise thing: "the only PostToolBatch consumer",
+  "drained by a dedicated `PostToolBatch` hook".
+- **Also:** the same wording is in the comments at `index-compose.sh:79` and
+  `index-sync-post.sh:257`, which are outside this partition.
+
+### m3 — D50's adoption invariant is stated more broadly than the code
+
+- **First statement:** `docs/references/git-hooks.md:192-194`.
+  - **Doc:** "A take and a landed merge continuation that stage nothing also
+    return the tier to its pin".
+  - **Code:** `rest_unadopted_tier` in `scripts/resolve.sh` has an arm that
+    returns without a checkout: "tier '$tier' stays on the merge commit: the
+    commit the memory store records for it is not one the merge contains".
+  - **Code:** the yield arms (`gitlore_yield_merge … || exit 1; exit 1`) exit
+    before `rest_unadopted_tier`.
+  - `tier-stores.md:176-179` states both exceptions, so the sentence here needs
+    "on the paths that exit 0".
+- **Second statement:** `docs/references/merge-state-recovery.md:84-85`.
+  - **Doc:** "the one shape in which a tier ahead of its pin may be adopted
+    (D43)".
+  - `git-hooks.md:194-196` states an exception: "The one exception is a tier
+    commit the commit path itself made".
+  - **Code:** `gitlore_stage_landed_tiers` stages the gitlink alone
+    (`add -- "$tier"`).
+  - The two nodes disagree. The "one shape" claim is also D50's rule, not D43's.
+- **Also in `merge-state-recovery.md:88`:** "A failed up projection therefore
+  stages nothing" follows the no-op sentence that was inserted before it, so
+  "therefore" no longer points at its reason, the staging hazard.
+
+### m4 — the unadopted tier merge "publishes" unconditionally
+
+- **Where:** `docs/references/tier-stores.md:171-172`, with the same claim in
+  changelog `2026-09-13-a-tier-merge-…:12-13`.
 - **Axis:** accuracy.
-- **Problem:** `dirty/freshness gate → pin guard → compose → add -A → …` leaves
-  out `gitlore_sync_tiers_to_live`. The corrector fixed this defect in the node
-  (its fix 7) but not here. The next sentence then argues the placement ahead of
-  that very step.
-- **Consequence:** the changelog's sequence contradicts its own next sentence.
+- **Doc:** "The continuation commits the merge in the tier, clears the merge
+  state, advances `live` and publishes".
+- **Code:** in `scripts/resolve.sh`, the continuation exits early on
+  `if [ "$publish" = "no" ]; then … exit 0`. It pushes to origin only under
+  `if [ "$flavor" = "head-vs-remote" ]`.
+- **Consequence:** every merge `/gitlore:merge` prepares is marked no-publish.
+  The take-side case this paragraph describes is therefore exactly the one that
+  does not publish.
 
-### m3 — "a sixth untracked `gitlore-…` file" undercounts
+### m5 — named rejected alternatives with no entry in the node's section
 
-- **Where:** changelog entry `:64-65`. The same count is in the comment at
-  `scripts/lib/index-sync.sh:111`.
-- **Axis:** accuracy.
-- **Problem:** besides the five files named, the gitdir already holds:
-  - the three `gitlore-merge-<artifact>` files;
-  - `gitlore-budget-nudged-<session>` and `gitlore-upgrade-nudged-<session>`
-    (`index-sync.sh:412`, present since 2026-07-31).
-- **Consequence:** a wrong count in the write-time record. Harmless alone, but
-  counts like this get copied.
+- **Axis:** conformance. `design.md` says a rejected alternative is "argued in
+  the `## Rejected alternatives` section that closes the group's node".
+- **`docs/decisions.md`, git-hooks group:**
+  - "composing a clean store" is argued only inside D50's body
+    (`git-hooks.md:140`, "**Dirty stores only.**").
+  - "reporting a non-empty commit-path compose" is argued only inside D50's body
+    (`git-hooks.md:198`, "**A successful compose here stays silent**").
+  - `git-hooks.md:205-228` has neither.
+- **`docs/decisions.md`, D51 group:** "relaying in place of the subagent's own
+  emission" is argued only in `index-authoring-sync.md:110-112`.
+  `cc-platform.md`'s Rejected section has no entry for it.
+- **Unnamed alternative:** "staging nothing without the walk-back" on a failed
+  take — leaving the tier ahead of an unstaged pin.
+  - It is argued in `tier-stores.md:163-165`: "Leaving the tier ahead of an
+    unstaged pin instead has the pin guard refuse every commit".
+  - It is weighed in changelog `2026-09-13-a-take-…:19-27`.
+  - No *Rejected* line in `decisions.md` names it.
 
-### m4 — the relay's write contract and residual are not recorded in the node
+### m6 — "a report shares the pre-image's key"
 
-- **Where:** `docs/references/index-authoring-sync.md:104-115`.
-- **Axis:** completeness (FR-D).
-- **Problem:** the node states the pre-image's bounded residual but none of the
-  following, all of which live only in script comments:
-  - 8523b47's atomic install: build at `$marker.tmp`, `mv`, refuse a directory
-    squatting the marker path.
-  - The drain's `*.tmp` exclusion.
-  - The new residual: one stranded temp per agent whose first write died.
-  - The merge-not-truncate write (two `PostToolBatch` hooks stage to one key).
-  - The relay-failure line on `additionalContext`.
+- **Where:** `docs/references/index-authoring-sync.md:113`.
+- **Axis:** accuracy, left over from the per-agent design.
+- **Doc:** "A report therefore shares the pre-image's key and not its consumer".
+- **Code:** the pre-image path is
+  `gitlore-index-preimage$(_gitlore_agent_suffix "${2:-}")`, keyed by agent
+  alone. The relay name is `gitlore-relay-$s-$a-$epoch-$pid-$tag`, keyed by
+  session and agent. The next paragraph states the relay name correctly.
 
-  `docs/references/configuration.md:42-44` still lists gitdir hook state as only
-  `gitlore-nudged` and the merge-state file. That is the corrector's item D,
-  left unfixed.
-- **Consequence:** the record's lifecycle story ends at "removes them". A reader
-  who finds `gitlore-relay-*.tmp` in a gitdir, or who plans to simplify the
-  write back to a redirect, has nothing in `docs/` saying why it is not a leak
-  or why it must stay atomic.
+### m7 — the pin rule's callers are under-enumerated
 
-### m5 — alternatives argued at paragraph length are not named as rejected
+- **Where:** `docs/references/index-composition.md:103-105`.
+- **Axis:** accuracy, clarity.
+- **Doc:** "only the down-projecting passes run it — the in-session one and the
+  commit path".
+- **Code:** `gitlore_compose` itself runs
+  `gitlore_compose_check_pins "$mempath" || refused=1`. That covers
+  `session-start.sh`, `index-compose.sh` and `add-tier-batch.sh`, plus the
+  commit path's own pre-check.
+- **Consequence:** the singular "the in-session one" reads as the
+  `PostToolBatch` pass. The Down bullet in the same node (line 232) lists three
+  down passes: `PostToolBatch`, `SessionStart` and the commit path.
 
-- **Where:** `docs/decisions.md:56-57` and `:116-118`;
-  `docs/references/git-hooks.md:175-189`; `docs/references/cc-platform.md:202+`.
-- **Axis:** conformance (CLAUDE.md: every rejected alternative by name).
-- **Unnamed alternatives:**
-  - Composing a clean store too (D50 body, "Dirty stores only").
-  - Reporting a non-empty commit-path compose result (D50, "stays silent").
-  - Relaying *instead of* the subagent's own emission (argued in the outline §D
-    and `index-authoring-sync.md:112`).
-- **Also:** D50's conclusion lines leave out the dirty-only scope, which the
-  runbook's Item 4.1 lists as part of the decision.
-- **Consequence:** these are the likeliest to be re-proposed. The index is the
-  file read before weighing a new decision, and it does not show them.
+### m8 — `configuration.md`'s gitdir state list
 
-### m6 — D51 says "all four" without saying four of what
+- **Where:** `docs/references/configuration.md:43-48`.
+- **Axes:** completeness, accuracy.
+- **Missing files:** the list now carries `gitlore-tier-landing` and the relay
+  files. It still omits `gitlore-index-preimage[-<agent>]` and
+  `gitlore-compose-stamp[-<agent>]`. These are hook-owned gitdir state whose
+  names this plan changed (FR-C), and the same holds for the budget and upgrade
+  nudge files.
+- **Wrong wording:** "removed by the drain that folds it into the parent's own
+  report" does not fit `relay-drain.sh`, which has no report of its own. It
+  emits only `GITLORE_RELAY_SYSMSG` and `GITLORE_RELAY_CTX`. Only `SessionStart`
+  folds reports into its own output.
 
-- **Where:** `docs/references/cc-platform.md:188`.
+### m9 — the hub bullet links neither D51's node nor the per-agent keying
+
+- **Where:** `docs/design.md:209-221`.
 - **Axis:** usability.
-- **Problem:** "the subagent's own JSONL carries all four" refers to a count
-  defined only in the probe under `plans/`, which docs may not cite.
-- **Consequence:** the one shipped statement of the measurement is not
-  self-contained. Two hooks times two channels would say it.
+- **Doc:** the bullet adds "per agent so a parent batch cannot consume a
+  subagent's baseline" and the relay drainer (D51). Its links remain
+  "[session.md]; the nudge in [commit-gate.md], the index pair in
+  [index-composition.md]".
+- **Where the content lives:** the keying and the relay mechanism are in
+  `index-authoring-sync.md`, and D51 is in `cc-platform.md`. Neither is linked
+  from the bullet.
 
-### m7 — session.md steps 6 and 10 disagree about fast-forward failures
+### m10 — the changelog list switches from tight to loose
 
-- **Where:** `docs/references/session.md:84-86` against `:109-111`.
-- **Axis:** consistency.
-- **Problem:** step 6 says "A fast-forward that fails is divergence" and never
-  says it exits. Step 10 relies on "the early exits above — divergence, a failed
-  fast-forward" as two cases. The script separates them and both exit early
-  (`session-start.sh:194-208`).
-- **Consequence:** step 10 points back at exits that step 6 does not describe.
-  Step 6's merge of the two cases is pre-existing, but step 10 now builds on it.
-
-### m8 — the recovered-merge adoption paragraph covers only the checkout case
-
-- **Where:** `docs/references/merge-state-recovery.md:80-84`.
-- **Axis:** accuracy.
-- **Problem:** "Putting HEAD back on the merge leaves the enclosing store's
-  index still naming…" frames adoption as following the checkout. It also fires
-  when HEAD already contains the landed merge and nothing is checked out
-  (`resolve.sh:237-242`).
-- **Consequence:** a reader concludes the no-checkout arm skips adoption.
-
-### m9 — the hub does not mention the subagent relay
-
-- **Where:** `docs/design.md:205-218`, the Claude Code hooks bullet.
-- **Axis:** completeness.
-- **Problem:** the bullet lists what `PostToolBatch` and `SessionStart` do. It
-  says nothing of the per-agent keying or the relay drain, which is user-visible
-  behaviour of both. D51 is reachable only through `decisions.md`.
-- **Consequence:** a reader of the architecture summary does not learn that a
-  subagent's reports reach the parent through a marker. Many decisions are
-  absent from the hub, so this is Minor.
-
-### m10 — D51 links to a paragraph with no locator
-
-- **Where:** `docs/references/cc-platform.md:196-197` →
-  `docs/references/index-authoring-sync.md:104`.
-- **Axis:** usability.
-- **Problem:** the relay mechanism, which covers the compose hook's report too,
-  sits unheaded inside D38's body ("Authoring-time sync is one-way"). The link
-  gives no locator.
-- **Consequence:** a reader who follows D51's pointer has to search a 314-line
-  node for a paragraph under an unrelated decision.
-
-### m11 — CLAUDE.md cites `plans/`
-
-- **Where:** `CLAUDE.md:61`.
-- **Axis:** conformance.
-- **Problem:** it cites
-  `plans/index-edit-propagation/background-run-timeout-probe.md`, and `plans/`
-  is swept.
-- **Consequence:** the citation breaks when the plan directory is swept.
-
-## Outside this partition — script comments
-
-- **`scripts/lib/index-sync.sh:139-141`** says "the redirect below is the single
-  write, so a failed open leaves nothing on disk to clean up". That is stale
-  since 8523b47: a failed write can leave `$marker.tmp`.
-- **`scripts/lib/index-compose.sh:297`** says "only gitlore_compose calls it"
-  (`gitlore_compose_check_pins`). `gitlore_sync_memory_to_live` calls it too
-  (`resolve.sh:1001`).
-
-## The corrector's fixes hold
-
-- **Fixes 1–7:** all present at HEAD. Fix 1's ordering fix moved into
-  `git-hooks.md` with the split; fix 7's chain is at
-  `memory-entry-points.md:38-41`.
-- **Out-of-scope A** (D31 said three triggers): closed by 1afbac4. D31 says four
-  points, the off-pin rule names the commit path, and D36's Down bullet lists
-  the commit path.
-- **Out-of-scope B** (session step list had no drain): closed by step 10.
-- **Out-of-scope C** (`index-sync-pre.sh` residual comment): closed.
-- **Out-of-scope D** (`configuration.md`): still open, see m4.
+- **Where:** `docs/changelog.md:15,21,28,36`.
+- **Axis:** style.
+- **Problem:** the four 2026-09-13 bullets are separated by blank lines. Every
+  other bullet in the file, including both 2026-09-11 entries directly below, is
+  tight. In CommonMark one blank line makes the whole list loose, so every entry
+  renders as a paragraph.
 
 ## Checks that passed
 
-- **Old node name.** No inbound reference to `git-hooks-and-entry-points`
-  outside `plans/` and git history. The only hits are dated changelog entries
-  (history, plain text, not links) and `.claude/handoff-todo.md` (tooling,
-  prose).
-- **Links and decision graph.** `python3 scripts/check-docs-links.py` reports
-  broken-link, unstubbed-decision, stub-without-body, duplicate-decision,
-  duplicate-conclusion, undefined-decision, enumeration-drift and
-  delegation-drift all 0. Its rc=1 comes from 11 oversized files, all untracked
-  `docs/plans/` and `docs/superpowers/` files not in HEAD. None of the changed
-  docs uses a `#anchor` link.
-- **Decision records.** D50 and D51 each have:
-  - one conclusion bullet in `decisions.md`;
-  - rejected alternatives by name on their group line, mirrored under the node's
-    `## Rejected alternatives`;
-  - a group link to the node holding the argument.
+- **Docs graph:** `python3 scripts/check-docs-links.py` exits 0 with every
+  counter at zero: broken-link, unstubbed-decision, stub-without-body,
+  duplicate-decision, duplicate-conclusion, undefined-decision,
+  enumeration-drift, delegation-drift and oversized-file.
+- **Size and wrap:**
+  - Every changed doc is under 400 lines. The largest are `session.md` at 392
+    and `index-authoring-sync.md` at 374.
+  - No prose line in a changed doc exceeds 80 characters, counted in characters
+    and not bytes. The only overruns are link-only bullet lines in
+    `changelog.md`.
+- **Tense:** added lines in `docs/references`, `design.md` and `decisions.md`
+  carry no "now", "no longer" or "previously" correction framing. Changelog
+  entries are history, as they should be.
+- **Old node name:** no live reference to `git-hooks-and-entry-points` outside
+  `plans/`, dated changelog entries and `.claude/handoff-todo.md`.
+- **`relay-redesign.md` §Docs, every item landed:**
+  - `index-authoring-sync.md` has the titled relay block, named in the header
+    list. It covers the atomic install, the occupied-name refusal, the `.tmp`
+    drain rule and its residual, and the delivery-timing and drain-to-emit
+    residuals.
+  - `cc-platform.md` D51 has the "keyed by session and agent, drained by a
+    dedicated `PostToolBatch` hook" sentence, with its pointer.
+  - `session.md` step 10 covers the own-session drain and the age sweep.
+  - D51's line in `decisions.md` names all four redesign rejections.
+  - The hub bullet names the drainer.
+  - `configuration.md` lists the relay files.
+  - `changelog.md` has the entry.
+  - The old-premise comments are gone: no "sequential" or "merged into, not
+    truncated" left in the relay code.
+- **Relay claims verified against code:**
+  - The name `gitlore-relay-<S>-<A>-<epoch>-<pid>-<H>`, with `nosession` when
+    there is no session id, the closed tag set and `${BASHPID:-$$}`.
+  - Built at `.tmp`, installed by `mv`, and an existing name refused with the
+    temp removed.
+  - The drain uses `find -type f … '!' -name '*.tmp'`, sorts `LC_ALL=C`,
+    recovers the agent as `${rest%-*-*-*}`, frames both channels and removes
+    only what it read.
+  - The sweep is `-mtime +7`, temps included.
+  - `relay-drain.sh` parses its payload first, exits at once on a keyed run, and
+    needs no baseline.
+  - A failed write appends to `additionalContext`, with the `$sysmsg` fallback
+    in the sync hook.
+  - `session-start.sh` drains after the diverged and failed-fast-forward exits.
+- **The same probe, cited consistently:** `index-authoring-sync.md`,
+  `cc-platform.md`, `session.md`, `design.md`, `decisions.md` and the changelog
+  agree on D51 in substance, apart from m2. The parent `session_id` measurement
+  and CC 2.1.261 are cited the same way in every one.
+- **`hooks/hooks.json`:** `relay-drain.sh` is registered as its own
+  `PostToolBatch` group with no matcher, beside the five existing groups. The
+  script exists and is executable (`-rwxr-xr-x`). The JSON parses.
+- **D50 claims verified against `gitlore_sync_memory_to_live`:**
+  - The order: memory guard, freshness gate, tier guards, then
+    `gitlore_stage_landed_tiers`, the pin guard (abort, restamp, no remedy of
+    its own), compose (rc 1 reports; rc 2 and unknown abort and restamp),
+    `gitlore_sync_tiers_to_live`, `add -A`, landing-record removal, the commit,
+    and `push . HEAD:live`.
+  - The landing record is written before each tier commit, removed on a failed
+    commit and after `add -A`, and matched on HEAD's parent and the index pin.
+  - The pin is read from the index (`:$tier`).
+- **The D50 invariant across nodes** (`git-hooks.md`, `tier-stores.md`,
+  `merge-state-recovery.md`): up first, then stage the pair, or stage nothing.
+  It holds in:
+  - `gitlore_adopt_recovered_merge`, including the already-adopted short-circuit
+    (`[ "$tier_head" = "$pinned" ] && return 0`);
+  - `gitlore_adopt_tier_into_root`, which walks the tier back and returns 1;
+  - the continuation, which skips the staging when `tier_unadopted`.
 
-  Headings and titles enumerate them (`git-hooks.md` D46, D50; `cc-platform.md`
-  D15, D18, D23, D51; `memory-entry-points.md` D16, D20). The wording agrees
-  across the hub, the index, the node heading and the node summary bullet.
-- **Trigger count.** Four compose trigger points wherever they are enumerated
-  (`index-composition.md` D31 and D36). "Three callers" appears only in the
-  changelog entry's past-tense history, and it counts `gitlore_compose` callers,
-  not triggers.
-- **Hub.** `design.md` gives D50 one summarizing clause and does not argue it.
-- **Tense.** Added lines in `docs/references`, `design.md` and `decisions.md`
-  contain no "previously", "no longer" or "now" correction framing.
-- **Size and wrap.** Every changed file is under 400 lines (largest:
-  `session.md` 381). Every prose line is within 80 characters; the only overruns
-  are pre-existing code-block lines in `session.md`.
-- **Citations.** No `plans/`, `memory/`, runbook, slice or line-number citations
-  in the changed docs. `design.md:15` names `plans/` as a location, not a
-  citation.
-- **Verified true against the scripts:**
-  - D50 ordering: pin guard ahead of compose, compose ahead of the tier sync.
-  - Dirty-only scope.
-  - rc-1 reports and proceeds; rc-2 and unknown statuses abort and restamp; the
-    pin abort does not restamp.
-  - The pin abort names no remedy of its own.
-  - Per-agent keying through `_gitlore_agent_suffix`; `agent_id` read, never
-    `agent_type`, in all five hooks.
-  - The drain runs only on a batch that changed the index or manifest, with
-    `session-start.sh` as backstop and its early exits skipping the drain.
-  - `gitlore_adopt_recovered_merge`: compose up, stage the named pair, stage
-    nothing on failure, tier only.
-- **Requirement coverage:**
-  - FR-B, FR-F (D50) and FR-C (`index-authoring-sync.md`) are recorded.
-  - FR-D's measurement (D51), relay and SessionStart drain are recorded.
-  - FR-D's atomic install from 8523b47 is not (m4).
+  The exceptions and wording are in m3.
+- **Remedy claims:** the next `/gitlore:resolve` names `/gitlore:merge` for a
+  tier whose `live` is ahead (`gitlore_check_head_live_agree`). The adoption
+  remedies quote their paths (`resolve.sh:356`, `:1799`).
+- **Decision records:**
+  - D50 and D51 each have one conclusion line.
+  - Node heading, header bullet, `decisions.md` line and hub clause agree.
+  - The node titles enumerate `git-hooks.md` (D46, D50) and `cc-platform.md`
+    (D15, D18, D23, D51).
+- **Changelog:**
+  - Both surfaces are present for all six entries.
+  - Bullets run newest-first and match commit order within each day.
+  - Every entry is titled with its decision.
+- **Outline §Design record:** the D50 decision, its dirty-only scope, the
+  refusal asymmetry, the "instructs the agent to run compose" rejection, the hub
+  bullet and the changelog are all present.

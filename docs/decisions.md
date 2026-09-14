@@ -57,7 +57,8 @@ operation, and the pointer invariant that rests on them.
 run compose · reporting an off-pin tier and committing through it · recognising
 gitlore's own landed tier commit by its message · staging each tier gitlink
 right after its commit · composing a clean store · reporting a non-empty
-commit-path compose.
+commit-path compose · leaving a tier whose adoption failed ahead of an unstaged
+pin.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.

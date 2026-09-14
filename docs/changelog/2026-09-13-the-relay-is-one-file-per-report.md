@@ -31,7 +31,8 @@ rather than fixed: two writes agreeing on session, agent, tag and wall-clock
 second **from one process** collide and the second is refused through that
 caller's "could not be staged" line. No caller does that.
 
-`scripts/cc-hooks/relay-drain.sh` is new and is the only consumer. It is its own
+`scripts/cc-hooks/relay-drain.sh` is new and is the only `PostToolBatch`
+consumer; `SessionStart` drains the same session too. It is its own
 `PostToolBatch` hook precisely because a drain living in the two reporting hooks
 inherits both of their defects — run twice under parallelism, and gated on a
 baseline the dispatching batch never sets. It takes no baseline, so it runs on

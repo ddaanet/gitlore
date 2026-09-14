@@ -200,11 +200,11 @@ the conversation its report is owed to.
 
 So a hook whose payload carries an `agent_id` writes its two bodies to a report
 file keyed by session and agent, drained by a dedicated `PostToolBatch` hook.
-The mechanism — the write-once name, the atomic install, the one drainer, the
-`SessionStart` drain and sweep, and why the subagent still emits its own copy —
-is in [index-authoring-sync.md](index-authoring-sync.md). The relay helpers cite
-this decision for the measurement, which itself lives outside anything the
-plugin ships.
+The mechanism — the write-once name, the atomic install, the one `PostToolBatch`
+drainer, the `SessionStart` drain and sweep, and why the subagent still emits
+its own copy — is in [index-authoring-sync.md](index-authoring-sync.md). The
+relay helpers cite this decision for the measurement, which itself lives outside
+anything the plugin ships.
 
 ## Rejected alternatives
 
@@ -255,3 +255,11 @@ stranded one (D51).
 report in a conversation that never dispatched the agent and cannot act on it,
 while the store state the report described is already re-covered by that
 session's own structural pass. Age is the backstop instead (D51).
+
+**Relaying in place of the subagent's own emission.** The parent would get the
+report either way, but the subagent is the actor: it made the edit the report
+describes, and without its own copy it goes through the rest of its run blind to
+what its hook found. A relay write that fails is also reported on that emission,
+where the subagent is asked to carry the report into its reply, so without it
+the failure reaches nobody. The relay is staged in addition to the emission
+(D51).

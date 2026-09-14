@@ -12,20 +12,17 @@ Newest first.
   branch each carried relayed the survivor twice; a report is now a write-once
   file keyed by session and agent, installed by rename, drained by one hook that
   needs no baseline, and swept by age when the session it names has ended
-
 - [2026-09-13 — A tier merge the root index cannot adopt records nothing](changelog/2026-09-13-a-tier-merge-the-root-index-cannot-adopt-records-nothing.md)
   — a merge continuation whose up projection was refused still staged and
-  committed the moved tier gitlink; the merge now lands and publishes with
-  nothing recorded in the root, and the tier rests on its pin with the merge in
-  its local `live` for the next take to adopt
-
+  committed the moved tier gitlink; the merge now lands with nothing recorded in
+  the root, and the tier rests on its pin with the merge in its local `live` for
+  the next take to adopt
 - [2026-09-13 — A take the root index cannot adopt records nothing](changelog/2026-09-13-a-take-the-root-index-cannot-adopt-records-nothing.md)
   — a tier take whose up projection was refused still staged and committed the
   moved gitlink, so the remedy it printed composed root's older text over the
   carrier's newer line; a failed adoption now records nothing, walks the tier
   back to its pre-take commit with the arrival kept in its local `live`, and
   exits 1 so the next take retries it
-
 - [2026-09-13 — A half-landed memory commit retries to completion](changelog/2026-09-13-a-half-landed-memory-commit-retries-to-completion.md)
   — the D50 pin guard refused, for the rest of the session, the retry of a
   commit that had landed a tier and then hit memory's `index.lock`; a landing
@@ -33,7 +30,6 @@ Newest first.
   gitlink, a failure past the freshness gate keeps the approval unless it
   prepared a merge, and the ahead-of-pin remedy stops offering the hand staging
   it refuses
-
 - [2026-09-11 — The hooks node splits from the entry points](changelog/2026-09-11-the-hooks-node-splits-from-the-entry-points.md)
   — `git-hooks-and-entry-points.md` reached the 400-line cap, and the seam its
   own title named splits it into `git-hooks.md` (the two hooks, the gitlink

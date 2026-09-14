@@ -731,9 +731,8 @@ batch_payload() {
 }
 
 # Item 3.1/D: the same relay mechanism as the compose hook, over the sync
-# hook's own report. The subagent's own report is unaffected by this item —
-# "in addition to, not instead of" — so the systemMessage assertion is already
-# true today; only the marker half is new.
+# hook's own report. The subagent keeps its own report — "in addition to,
+# not instead of" — so the systemMessage assertion holds beside the marker.
 @test "a keyed index-sync run writes its replacement report to a marker" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
@@ -764,17 +763,17 @@ batch_payload() {
 # is the one drainer now. Replaces "an unkeyed index-sync run folds in the
 # marker" and "... with no report of its own still emits the relay", both of
 # which pinned the drain-in-each-hook behaviour this slice removes. The
-# marker is written under the empty/"nosession" mapping so this reds against
-# TODAY's code, which still drains unkeyed with no session concept at all —
-# a marker under a real session would already survive today, making the
-# assertion vacuous rather than red.
+# marker is staged under the session the hook runs in, so any drain returning
+# to the hook would consume it, whether scoped to that session (the D51
+# shape) or unscoped; a marker under another session survives both and
+# asserts nothing.
 @test "an unkeyed index-sync run leaves a marker in place" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   printf -- '---\nname: a\ndescription: OLD\n---\n' > memory/a.md
   printf -- '- [A](a.md) — old hook\n' > memory/MEMORY.md
   abs="$PWD/memory/MEMORY.md"
-  gitlore_relay_write memory "" a1 sync "keyed relay sysmsg a1" "keyed relay ctx a1"
+  gitlore_relay_write memory test-session a1 sync "keyed relay sysmsg a1" "keyed relay ctx a1"
   marker=$(relay_marker_for memory a1)
   [ -f "$marker" ]
   payload=$(jq -n --arg f "$abs" \
@@ -882,21 +881,15 @@ batch_payload() {
   [ "$output" = "$base-agent-7" ]
 }
 
-# --- relay markers (Item 3.1/D51 revision) -------------------------------------
+# --- relay markers (D51) -------------------------------------------------------
 #
-# Redesigned per plans/index-edit-propagation/relay-redesign.md: a subagent's
-# report is now a write-once file keyed by session AND agent, never merged,
-# and drained by session rather than folded in by any unkeyed run. Two
-# channels — sysmsg is the user's, ctx is the model's — must not
-# cross-contaminate on drain.
-#
-# RED stub (slice 1): gitlore_relay_write and gitlore_relay_drain accept the
-# new argument positions (mempath session agent tag sysmsg ctx / mempath
-# session) but still key a relay file on the agent id alone, still merge a
-# second write into the first, and still ignore the session argument on
-# drain — exactly the defects cases 1-3 below exist to catch.
-# gitlore_relay_sweep is inert. gitlore_relay_marker_file is retired: no case
-# below predicts a relay filename, all locate files with `find`.
+# A subagent's report is a write-once file keyed by session AND agent, never
+# merged, and drained by session. Two channels — sysmsg is the user's, ctx is
+# the model's — must not cross-contaminate on drain. Cases 1-3 catch the
+# three defects of a relay keyed on the agent alone: a second write merged
+# into the first, lost reports under concurrent writers, and a drain blind to
+# its session. No case predicts a relay filename from outside the writing
+# process; they locate files with `find`.
 
 # 1: two writes under one agent in one session yield two files; the drain
 # frames both, in write order, and removes both.
@@ -919,9 +912,8 @@ batch_payload() {
   run gitlore_relay_write memory s1 a-1 sync "S2" "C2"
   [ "$status" -eq 0 ]
 
-  # Two files on disk before the drain removes them — red on the RED stub,
-  # which still keys a relay file on the agent id alone and merges a second
-  # write into the first (see gitlore_relay_write's RED STUB comment).
+  # Two files on disk before the drain removes them — red on a relay keyed on
+  # the agent id alone, which merges a second write into the first.
   count=0
   while IFS= read -r -d '' _; do
     count=$((count + 1))
@@ -1005,10 +997,9 @@ batch_payload() {
 }
 
 # 3: a write for session S2 is not drained by S1 and survives it. Different
-# agent ids for the two sessions, so the RED stub's write always creates a
-# fresh, distinct file (no cross-write merge muddying this case) — the only
-# defect this case can catch is the drain's blindness to its own session
-# argument.
+# agent ids for the two sessions, so even an agent-keyed write creates two
+# distinct files (no cross-write merge muddying this case) — the only defect
+# this case can catch is the drain's blindness to its own session argument.
 @test "relay_drain: a write for session S2 is not drained by S1 and survives it" {
   make_parent_with_memory
   gitdir=$(git -C memory rev-parse --absolute-git-dir)
@@ -1024,10 +1015,9 @@ batch_payload() {
   [[ "$GITLORE_RELAY_SYSMSG" == *"S1-BODY"* ]]
   [[ "$GITLORE_RELAY_SYSMSG" != *"S2-BODY"* ]]
 
-  # The S2 write is untouched by S1's drain — red on the RED stub, which
-  # ignores the session argument and drains every keyed file it finds
-  # regardless of which session it was written for (see
-  # gitlore_relay_drain's RED STUB comment).
+  # The S2 write is untouched by S1's drain — red on a drain that ignores the
+  # session argument and drains every relay file it finds, whichever session
+  # it was written for.
   count=0
   while IFS= read -r -d '' _; do
     count=$((count + 1))
@@ -1070,18 +1060,39 @@ batch_payload() {
   [[ "$GITLORE_RELAY_SYSMSG" != *"TORN-BODY"* ]]
   [[ "$GITLORE_RELAY_SYSMSG" != *"orphan"* ]]
   [ -e "$tmp" ]
-  # Born green against the RED stub — the `.tmp` exclusion is unchanged from
-  # the pre-revision code — so the ordering supplies no red here and the
-  # discrimination was shown by mutation instead. Dropping `'!' -name
-  # '*.tmp'` from the drain's `find` reds the TORN-BODY assertion; widening
-  # the drain's per-marker `rm -f "$marker.tmp"` to `rm -f
-  # "$gitdir"/gitlore-relay-*.tmp` — the plausible "clean up strays" form —
-  # reds `[ -e "$tmp" ]`. One mutation per half, so neither is decoration.
+  # Each half is shown to discriminate by mutation. Dropping `'!' -name
+  # '*.tmp'` from the drain's `find` reds the TORN-BODY assertion; adding
+  # `rm -f "$gitdir"/gitlore-relay-*.tmp` to the drain — the plausible "clean
+  # up strays" form — reds `[ -e "$tmp" ]`. One mutation per half, so neither
+  # is decoration.
+}
+
+# The write and the drain must agree on the gitdir whatever shape it has. A
+# store whose `.git` is a directory — a plain clone, never an absorbed
+# submodule — makes `rev-parse --git-path` print a path relative to the
+# store, which the write would then open relative to the caller's cwd: the
+# report lands in some other gitdir and the drain, looking in the store's
+# absolute one, never sees it. Driven from the root of another repository,
+# as a hook runs from the project root.
+@test "relay_write lands where the drain looks for a store whose .git is a directory" {
+  git init -q plain
+  [ -d plain/.git ]
+
+  run gitlore_relay_write plain s1 a1 sync "PLAIN-BODY" "PLAIN-CTX"
+  [ "$status" -eq 0 ]
+
+  rc=0
+  gitlore_relay_drain plain s1 || rc=$?
+  [ "$rc" -eq 0 ]
+  [[ "$GITLORE_RELAY_SYSMSG" == *"PLAIN-BODY"* ]]
+  [[ "$GITLORE_RELAY_CTX" == *"PLAIN-CTX"* ]]
+  run find .git -maxdepth 1 -name 'gitlore-relay-*'
+  [ -z "$output" ]
 }
 
 # 5: the sweep removes relay files older than 7 days, temps included, and
-# leaves fresh ones alone. Red on the inert RED stub: gitlore_relay_sweep is a
-# no-op, so the aged marker is never removed.
+# leaves fresh ones alone. Red on a sweep that does nothing: the aged marker
+# is never removed.
 @test "relay_sweep: removes relay files older than 7 days, temps included, and leaves fresh ones alone" {
   make_parent_with_memory
   gitdir=$(git -C memory rev-parse --absolute-git-dir)
@@ -1163,6 +1174,19 @@ batch_payload() {
   [ "$rc" -eq 0 ]
   [[ "$GITLORE_RELAY_SYSMSG" == *"NOSESSION-BODY"* ]]
   [[ "$GITLORE_RELAY_CTX" == *"NOSESSION-CTX"* ]]
+
+  # The reverse half: a write under the literal session id "nosession",
+  # drained with an empty session, reaches it. The two halves pin the mapping
+  # in both directions. The drain runs bare, not under `run`: it reports
+  # through GITLORE_RELAY_SYSMSG and GITLORE_RELAY_CTX, which `run`'s
+  # subshell would lose.
+  run gitlore_relay_write memory nosession a2 sync "LITERAL-BODY" "LITERAL-CTX"
+  [ "$status" -eq 0 ]
+  rc=0
+  gitlore_relay_drain memory "" || rc=$?
+  [ "$rc" -eq 0 ]
+  [[ "$GITLORE_RELAY_SYSMSG" == *"LITERAL-BODY"* ]]
+  [[ "$GITLORE_RELAY_CTX" == *"LITERAL-CTX"* ]]
 }
 
 # 7 (flagged in relay-s1-code-review.md "The tag guard ships untested"): a tag
@@ -1177,6 +1201,93 @@ batch_payload() {
   [ "$rc" -ne 0 ]
   run find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*'
   [ -z "$output" ]
+}
+
+# D51 refuses an install onto an occupied name, and the `-e` check ahead of
+# the `mv` is what carries it: `mv` onto a file replaces an earlier report,
+# and `mv` onto a directory moves the temp inside it, both returning 0. The
+# name is made predictable the way the staged-report case below makes it:
+# `date` frozen and every write from this one process.
+@test "relay_write refuses a final name already occupied, by a report or a directory" {
+  make_parent_with_memory
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_date=$(command -v date)
+  cat > "$fakebin/date" <<EOF
+#!/bin/sh
+case "\$1" in
+  +%s) echo 1700000000; exit 0 ;;
+esac
+exec "$real_date" "\$@"
+EOF
+  chmod +x "$fakebin/date"
+  saved_path="$PATH"
+  PATH="$fakebin:$PATH"
+
+  rc=0
+  gitlore_relay_write memory s1 a1 sync "FIRST-S" "FIRST-C" || rc=$?
+  [ "$rc" -eq 0 ]
+  marker=$(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' '!' -name '*.tmp' -print)
+  [ -n "$marker" ]
+  before=$(cat "$marker")
+
+  rc=0
+  gitlore_relay_write memory s1 a1 sync "SECOND-S" "SECOND-C" || rc=$?
+  [ "$rc" -ne 0 ]
+  [ "$(cat "$marker")" = "$before" ]
+  [ ! -e "$marker.tmp" ]
+
+  squat="$gitdir/gitlore-relay-s1-a2-1700000000-${BASHPID:-$$}-sync"
+  mkdir "$squat"
+  rc=0
+  gitlore_relay_write memory s1 a2 sync "SQUAT-S" "SQUAT-C" || rc=$?
+  PATH="$saved_path"
+  [ "$rc" -ne 0 ]
+  [ -z "$(ls -A "$squat")" ]
+  [ ! -e "$squat.tmp" ]
+}
+
+# Only a regular file on a relay name is a report. A directory there must
+# not be framed as a block for an agent that staged nothing, and `rm -f`
+# cannot remove it, so framing it would repeat on every later drain.
+@test "relay_drain frames no block for a directory on a relay name" {
+  make_parent_with_memory
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+  run gitlore_relay_write memory s1 a1 sync "REAL-S" "REAL-C"
+  [ "$status" -eq 0 ]
+  mkdir "$gitdir/gitlore-relay-s1-a9-1-1-sync"
+
+  rc=0
+  gitlore_relay_drain memory s1 || rc=$?
+  [ "$rc" -eq 0 ]
+  [[ "$GITLORE_RELAY_SYSMSG" == *"REAL-S"* ]]
+  [[ "$GITLORE_RELAY_SYSMSG" != *"agent a9"* ]]
+  [[ "$GITLORE_RELAY_CTX" != *"agent a9"* ]]
+  [ -d "$gitdir/gitlore-relay-s1-a9-1-1-sync" ]
+}
+
+# The relay name splices both ids from the hook payload. Sanitized, a `/` or a
+# `..` in either stays one filename component inside the gitdir; spliced raw,
+# it walks the write out of it.
+@test "relay_write sanitizes the session and agent ids into one name inside the gitdir" {
+  make_parent_with_memory
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+  session='../s 1/..'
+  agent='../../a/b'
+  s_safe=$(printf '%s' "$session" | LC_ALL=C tr -c 'A-Za-z0-9-' '_')
+  a_safe=$(printf '%s' "$agent" | LC_ALL=C tr -c 'A-Za-z0-9-' '_')
+
+  run gitlore_relay_write memory "$session" "$agent" sync "ODD-S" "ODD-C"
+  [ "$status" -eq 0 ]
+  name=$(find "$gitdir" -maxdepth 1 -type f -name 'gitlore-relay-*' '!' -name '*.tmp' -print)
+  [ -n "$name" ]
+  [[ "${name##*/}" == "gitlore-relay-$s_safe-$a_safe-"* ]]
+
+  rc=0
+  gitlore_relay_drain memory "$session" || rc=$?
+  [ "$rc" -eq 0 ]
+  [[ "$GITLORE_RELAY_SYSMSG" == *"ODD-S"* ]]
 }
 
 # --- relay markers: robustness cases carried over, adapted to the new signatures

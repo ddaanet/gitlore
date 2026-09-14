@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
+# The spaced-root cases re-root $TMP_REPO inside their own test body.
+# shellcheck disable=SC2030,SC2031
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -388,6 +390,52 @@ strand_live_behind_head() {
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$remote_sha" ]
   grep -qF -- '- [upstream](ddaanet/upstream.md) — published by another repo' memory/MEMORY.md
+}
+
+# A take whose pair cannot be staged prints the staging command for a human
+# to run. Under a project path holding a space it must still run verbatim,
+# from anywhere: quoted, and absolute rather than relative to the project
+# root the take ran from. A `git` shim refuses only the pair's `add`, so the
+# fetch, the fast-forward and the up projection all land first.
+@test "a take whose pair cannot be staged prints a staging command that runs from anywhere under a spaced root" {
+  teardown_tmp_repo
+  TMP_REPO="$(mktemp -d "${TMPDIR:-/tmp}/gitlore test.XXXXXX")"
+  export TMP_REPO
+  cd "$TMP_REPO"
+  git init -q -b main
+  git config user.email "test@example.com"
+  git config user.name "Test"
+  MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  remote_sha=$(push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo')
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" add -- MEMORY.md "*) echo "fatal: shim refuses the pair" >&2; exit 128 ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  # The fixture's shape: the tier advanced and the pair is not staged.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" != "$remote_sha" ]
+  line=$(printf '%s\n' "$stderr" | grep -F 'could not be staged')
+  cmd=${line#*\`}
+  cmd=${cmd%%\`*}
+  [[ "$cmd" == *"gitlore test."* ]]
+  (cd / && eval "$cmd")
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$remote_sha" ]
+  [ -n "$(git -C memory diff --cached --name-only -- MEMORY.md)" ]
 }
 
 @test "a fast-forwarded tier survives the next SessionStart's unconditional pin" {

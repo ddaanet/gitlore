@@ -76,7 +76,7 @@ gitlore_compose_and_report "$mempath" "$manifest_touched"
 # its own copy too. Guarded on the same emptiness the emission guard below
 # applies: an empty report is nothing to stage. Unkeyed (the main thread),
 # this hook writes nothing toward the relay — it only ever emits its own
-# report; relay-drain.sh is the only hook that reads a marker.
+# report; relay-drain.sh and session-start.sh are the hooks that read a marker.
 if [ -n "$agent_id" ] && [ -n "$GITLORE_COMPOSE_SYSMSG" ]; then
   # `if !`, not `|| true`: a failed relay write must cost only the relay,
   # never this subagent's own report — both suspend errexit over the call

@@ -1,323 +1,365 @@
-# Deliverable review — test partition (Layer 1)
+# Deliverable review — test partition (fresh, post fix pass)
 
-Plan: `plans/index-edit-propagation`. Range `b6dbe92..HEAD`, excluding the hunks
-of `3d50a1f`, `c2e7950` and `ae54c1b`. Baseline: `runbook.md` (as-executed and
-as-amended notes take precedence) and `outline.md`. I read
-`reports/tdd-audit.md` first and do not repeat its process findings (D1–D6). The
-one overlap is M7b, a partially written marker. `8523b47` made the write atomic
-after the audit ran, and the `.tmp` cases now pin that, so M7b is closed at the
-single-writer level. C1 below covers the concurrent-writer form of the same
-problem.
+## Scope
 
-I did not run any suite. I read the code and ran one shell probe in
-`/tmp/claude/relayprobe/probe.sh`, which sources the real
-`scripts/lib/index-sync.sh`.
+Plan `plans/index-edit-propagation`, range `b6dbe92..HEAD` (HEAD `7d20aab`).
+Files: the thirteen suites and three helpers the dispatch names;
+`justfile_gates`, `check_docs_links` and `check_memory_hygiene` excluded. Code
+under test read where a test's claim depended on it.
 
-**Counts:** Critical 1 · Major 1 · Minor 9
+Baseline, in precedence order: `relay-redesign.md` §Slices for the relay;
+`runbook.md` with its as-executed notes for Items 1.1–3.1; `outline.md` §B–D;
+the fix-pass changelog entries `docs/changelog/2026-09-13-*.md`.
 
-## Coverage against the runbook
+Method. Every case was run as a single `bats -f` call, sequentially. Mutation
+probes ran against a copy of `scripts/`, `tests/` and `hooks/` under
+`/tmp/claude/drt-test`, never in the tree. The fix-pass tests were also run
+against the pre-fix scripts (`git archive <fix>^ scripts`) with the HEAD tests.
+Each finding says whether it was reproduced or read from the code. `git status`
+is clean apart from this report.
 
-Every case the runbook names exists and asserts what the runbook says. I checked
-each item and slice:
+**Counts:** Critical 0 · Major 2 · Minor 9
 
-- **Item 1.1:**
-  - Slice 1: both entry points.
-  - Slice 2: the clean case and the dirty case.
-  - Slice 3: the rc-1 case, re-homed by 1.2, and the rc-2 case.
-  - Slice 4: four cases.
-- **Item 1.2:** slice 1 (both entry points), slice 2 (manifest refusal and
-  mid-merge ordering) and slice 3 (pin-abort user arm).
-- **Item 1.3:**
-  - Slice 1: all seven listed cases, plus the host-project case.
-  - Slice 2: all five listed cases, including branch order through both
-    mid-merge predicates.
-- **Item 2.1:** slices 1–4, including the traversal guard and the `agent_type`
-  decoy on every unkeyed payload.
-- **Item 3.1:** slices 1, 2, 2.5 and 3–5. Slice 4's
-  `an unkeyed run survives a non-file squatting on a marker name` was retired in
-  slice 5. Its superset, `an unkeyed run leaves a non-marker alone`, replaced it
-  (see m7).
+## Prior findings status
 
-Permission cases:
+IDs from `deliverable-review.md`.
 
-- All six carry the `id -u` root skip.
-- Every restore sits immediately after `run` and is conditional where the fixed
-  code removes the target.
-- `jq -r` null handling is explicit wherever a negative reads an extracted
-  channel.
+- **M6** (no concurrent test). Resolved. The library case reds on a
+  race-sensitive mutation. The hook-level case runs concurrently but does not
+  hit the race window (m1).
+- **Minor, squat comments** (`index_sync.bats:1118`,
+  `cc_hook_index_compose.bats:416-455`). Resolved: those cases were retired or
+  rewritten, and the remaining `.tmp`-squat comment is accurate.
+- **Minor, sideways case names the wrong red line.** Resolved (`7d20aab`).
+- **Minor, `resolve_recovery.bats` predicate comment.** Resolved.
+- **Minor, "bats leaves CLAUDECODE unset" comments.** Resolved. No occurrence
+  remains.
+- **Minor, non-final `[[ ]]` under bash < 4.1.** Unchanged; house style (m9).
+- **Minor, hook-entry off-pin case asserts no reason.** Resolved
+  (`git_hook_pre_commit.bats:243`).
+- **Minor, untested `|| agent_id=""`.** Partly resolved. The `index-compose.sh`
+  and `index-sync-post.sh` cases red when the fallback is removed. The
+  `add-tier-batch.sh` fallback is still unpinned (m7).
+- **Minor, failable `rev-parse` between `chmod a-w` and `run`.** Resolved.
+- **Minor, unquoted adoption remedy, no spaced case.** Partly resolved. The code
+  quotes the remedy, and `index_compose.bats:402-403` pins the ahead-of-pin
+  remedy's quoting. There is still no spaced-root case, and `resolve.sh`'s
+  quoted remedies are unasserted (m8).
+- **Runbook drift** (retired slice-4 case, superseded remedy sentence).
+  Resolved: both now carry as-executed notes.
 
-On the bash side, `unset CDPATH` in `tests/helpers/setup.bash` removes the
-ambient `cd` hazard for the whole suite.
+## Coverage table
 
-CLAUDECODE worlds:
+Verdicts: **ok** means the case exists and asserts what the baseline specifies.
+**ok†** means it is conformant but has a specificity finding.
 
-- Every case that reads one arm sets it with a `CLAUDECODE=1 run` prefix or runs
-  `unset CLAUDECODE` in the body.
-- Cases that read neither arm assert only arm-independent text, such as the
-  headers inside `$partial`/`$unknown` and the direct `printf` lines in
-  `gitlore_adopt_recovered_merge`.
-- So all three worlds (set to 1, unset, empty) give the same verdict.
+**Relay, slice 1 (library)**
+
+| Baseline case | Test | Verdict |
+|---|---|---|
+| 1. two writes, two files, drained in write order, removed | `index_sync.bats:903` | ok |
+| 2. 20 concurrent writers, one drain, every body once | `index_sync.bats:972` | ok (`bash -c` processes; red on race mutation) |
+| 3. S2 write not drained by S1 | `index_sync.bats:1012` | ok |
+| 4. `.tmp` neither folded nor removed | `index_sync.bats:1048` | ok (spaced gitdir) |
+| 5. sweep: >7 days incl. `.tmp`; fresh kept | `index_sync.bats:1085` | ok |
+| 6. empty agent refused; empty session → `nosession` **on both sides** | `index_sync.bats:1126` | **Major M2**: drain side unpinned |
+
+**Relay, slice 2 (hooks)**
+
+| Baseline case | Test | Verdict |
+|---|---|---|
+| 1. both reporters at once ×10, drain, each report once | `cc_hook_index_compose.bats:321` | ok† (m1) |
+| 2. drain with no baseline delivers; keyed run silent, files kept | `cc_hook_index_compose.bats:362` | ok |
+| 3. unkeyed `index-sync-post.sh` / `index-compose.sh` leave a marker | `index_sync.bats:771`, `cc_hook_index_compose.bats:294` | **Major M1**: vacuous against a session-scoped drain |
+| 4. drain S1 leaves S2 | `cc_hook_index_compose.bats:389` | ok |
+| 5. session-start drains own, not peer; sweeps >7 days | `cc_hook_session_start.bats:366`, `:401` | ok |
+| 6. failed-write cases keep passing | `cc_hook_index_compose.bats:424`, `:456` | ok (compose hook only, the accepted residual) |
+| `relay-drain.sh` listed once, exists, 100755 | `plugin_distribution.bats:202` | ok (run at HEAD) |
+
+**Fix pass**
+
+| Fix | Test | Verdict |
+|---|---|---|
+| C1: half-landed retry completes | `commit_memory.bats:296` | ok. Red on pre-fix scripts; red with `gitlore_stage_landed_tiers` dropped |
+| C1: failed tier commit drops its landing record | `commit_memory.bats:325` | ok. Born green on pre-fix, as a guard; red with `rm -f "$landing"` dropped |
+| C1: failure after compose keeps approval | `commit_memory.bats:353` | ok† (m2). Red on pre-fix scripts; red with the `add -A` restamp dropped |
+| M4: ahead remedy names the carrier, quoted staging | `index_compose.bats:402-403` | ok. Red on pre-fix scripts |
+| M5 take: records nothing, retaken after fix | `merge_memory.bats:354` | ok. Red on pre-fix (`status -eq 1`) |
+| M5 continuation: lands, root records nothing, next take adopts | `resolve_compose.bats:137` | ok. Red on pre-fix |
+| M5 continuation: `publish: no` exit rests the tier too | `resolve_compose.bats:177` | ok. Red on pre-fix |
+| M5 continuation: pin not contained → stays on merge | `resolve_compose.bats:193` | ok. Red on pre-fix |
+| Minor pass: adoption short-circuit | `resolve_recovery.bats:397` | ok. Red with the short-circuit removed |
+| Minor pass: agent_id fallbacks | `cc_hook_index_compose.bats:160`, `index_sync.bats:300` | ok. Both red with the fallback removed |
+
+**Items 1.1–2.1** (unchanged by the fix pass apart from comments and one added
+assertion): every backticked case name in `runbook.md` matches a current
+`@test`, or is recorded as re-homed or retired. The one exception is
+`a tier moved off its pin aborts the commit`, renamed to
+`a tier moved sideways off its pin aborts the commit` in `313cf5d`, as the prior
+review accepted. The relay cases named in Item 3.1 are superseded by
+`relay-redesign.md`.
 
 ## Critical
 
-### C1 — The two PostToolBatch hooks run in parallel, and the relay loses, tears or duplicates reports under that
-
-- **Locations:** `scripts/lib/index-sync.sh:166-217` (`gitlore_relay_write`) and
-  `:236` (`gitlore_relay_drain`). The test is
-  `tests/cc_hook_index_compose.bats:357-411`.
-- **Axis:** functional correctness and invocation path.
-
-**The premise is false.** Slice 2.5 and its test say `hooks.json` runs
-`index-sync-post.sh` and `index-compose.sh` "on the SAME PostToolBatch event, in
-that order". The comment at `tests/cc_hook_index_compose.bats:357` states it
-too. Claude Code does not order them. The hooks reference
-(code.claude.com/docs/en/hooks, fetched 2026-09-12) says: "All matching hooks
-run in parallel."
-
-**Why the design breaks.** `gitlore_relay_write` is read → merge → write, and
-the write goes to a temp path, `$marker.tmp`, that is the same for every writer
-with the same agent id. `gitlore_relay_drain` is find → awk → rm with no lock.
-Both hooks write to one keyed marker in a subagent batch. Both drain the same
-markers in a parent batch.
-
-**Probe.** Two concurrent calls, 200 iterations each, against the real library:
-
-- Two parallel `gitlore_relay_write m a1 …` calls:
-  - 92 kept both reports.
-  - **106 lost one report.** 108 calls returned non-zero, because the second
-    writer's `mv` finds the temp already renamed.
-  - **2 left a torn marker**, where both writers interleaved into the shared
-    temp. One drained body was `COMPO------ gitlore-relay-ctx -SYNCOMPCTX`.
-- Two parallel `gitlore_relay_drain m` calls over one marker:
-  - **199 framed the same block twice.** Both `find`s ran before either `rm`.
-  - **13 framed an empty block.** One `rm` landed between the other drain's
-    `find` and its `awk`.
-
-The not-staged line tells the subagent about some of the lost writes. The torn
-marker and the duplicated or empty drain reach the parent with nothing said.
-
-**Failure scenario.** A subagent edits `MEMORY.md` with a tier mounted, which is
-the ordinary case slice 2.5 was written to fix. About half the time the parent
-never receives the frontmatter-sync report. On the next parent batch that
-touches the index, both hooks drain and the user sees each relayed block twice.
-
-**Why the suite is green.** The one case that exercises the slice 2.5 defect,
-`both PostToolBatch hooks in one keyed batch reach the parent`, drives the hooks
-one after the other in a fixed order. Every drain case drives a single hook.
-FR-D ("reports produced inside a subagent reach the parent session") does not
-hold under the harness's real scheduling.
-
-This is a SUT defect, found through the test partition's invocation-path check.
-The fix needs a design call, for example:
-
-- a per-writer temp name plus a lock around the merge, or
-- one marker per (agent, hook) with the drain recovering the agent id, which
-  slice 2.5 rejected for the parsing cost it adds.
+None.
 
 ## Major
 
-### M1 — No case drives the PostToolBatch hooks concurrently, and the slice 2.5 case asserts an order the harness does not give
+### M1 — "An unkeyed run leaves a marker in place" cannot see a drain that is back in a reporting hook
 
-- **Location:** `tests/cc_hook_index_compose.bats:368`, plus the four
-  unkeyed-drain cases (`:257`, `:297`, `:334`; `tests/index_sync.bats:751`,
-  `:796`).
-- **Axis:** completeness and invocation path.
+- **Where:** `tests/index_sync.bats:771`,
+  `tests/cc_hook_index_compose.bats:294`.
+- **Axis:** vacuity (slice 2, case 3). **Reproduced.**
 
-The runbook's must-check asks whether the C and D races are actually exercised:
+Both cases stage their marker under the empty session, which maps to
+`nosession`. Both then run the reporting hook with a payload carrying
+`session_id: "test-session"` (`batch_payload`, `feed`). Their comments say the
+mismatch was chosen so the case would red against the pre-redesign drain, which
+ignored sessions.
 
-- **Race C is.** The parent/subagent interleavings in `tests/index_sync.bats`
-  (`a parent post-hook leaves a subagent's pre-image intact` and its
-  continuation) and in `tests/cc_hook_index_compose.bats:183,208` are the
-  correct deterministic form, because the two agents' files are disjoint.
-- **Race D is not.** It is a race between two hooks writing one file. A fixed
-  sequential order can only exercise the merge logic, never the concurrency.
+After the redesign, the regression this case exists to catch is a drain branch
+returning to `index-sync-post.sh` or `index-compose.sh`. That branch would
+naturally be the D51 shape, `gitlore_relay_drain "$mempath" "$session"`. It
+would drain `test-session` markers and never touch a `nosession` one.
 
-**Mutation that ships green.** Replace the `mv` install with `cat tmp > marker`,
-or drop the merge's read-before-open ordering. Every case still passes, because
-no case has two writers or two drainers alive at the same moment.
+**Probe.** Added an unkeyed `gitlore_relay_drain "$mempath" "$session"` that
+folds into the emitted `systemMessage`, to both hooks:
 
-**Fix shape.**
+- Both "leaves a marker in place" cases stayed green.
+- The concurrency, M2 and S1/S2 drain cases also stayed green.
+- A control case, identical but with the marker under `test-session`, went red
+  under the mutation and green at HEAD. So the mutation really drains.
 
-- Run `sync_feed a1 & feed a1 & wait` in a loop, for example 20 iterations, and
-  assert that the parent's report carries both lines every time.
-- Do the same for two concurrent unkeyed drains, asserting exactly one framing
-  line.
-- The probe above reds in the first few iterations.
+That regression is C2's drain half: two parallel drains on one batch relay each
+report twice. No test in the suite catches it.
+
+**Fix shape:** write the marker under the same `test-session` the hook's payload
+carries.
+
+### M2 — The drain side of "empty session maps to nosession" is untested
+
+- **Where:** `tests/index_sync.bats:1126`; code at
+  `scripts/lib/index-sync.sh:207`.
+- **Axis:** coverage (slice 1, case 6). **Reproduced.**
+
+The baseline names the mapping "on both sides". The case writes with `""` and
+asserts the `nosession` filename, which pins the write side. It then drains with
+the literal `nosession`, never with `""`. Its own comment concedes the drain
+half "cannot red on its own".
+
+**Probe.** Replaced line 207 with an unconditional `_gitlore_sanitize_id`, so
+`""` enumerates `gitlore-relay--*`. All 24 relay cases stayed green, across
+`index_sync`, `cc_hook_index_compose` and `cc_hook_session_start`. That includes
+the session-start unreadable-marker case, which drains with an empty session
+(see m5).
+
+In production the reach is small: Claude Code payloads carry `session_id`. The
+guard is still a specified contract and nothing pins it.
+
+**Fix shape:** `gitlore_relay_drain memory ""` must return the `NOSESSION-BODY`.
 
 ## Minor
 
-### m1 — Mid-test `[[ … ]]` assertions do not fail on bash < 4.1
+### m1 — The hook-level concurrency case launches concurrently but never races the write
 
-- **Scope:** cross-cutting; 102 added `[[` lines across the reviewed files.
-- **Axis:** macOS robustness.
+- **Where:** `tests/cc_hook_index_compose.bats:321`.
+- **Axis:** specificity (concurrency). **Reproduced.**
 
-bats-core documents that a failing `[[ ]]` does not trigger errexit on bash
-before 4.1 unless it is the last command in the test. If macOS runs the suite
-under `/bin/bash` 3.2, every non-final `[[` in these files goes silent. That
-includes the discriminating negatives in `tests/commit_memory.bats:228,524` and
-all the relay channel checks.
+**Probe.** Replaced the relay filename with a count-then-create name that is
+correct when writers run sequentially and collides when they overlap:
+`<S>-<A>-<n existing>-0-sync`.
 
-This is house style: the baseline already has 574 such lines. It is also
-unobservable on the Linux box. It is recorded because the dispatch lists it as a
-must-check. The per-assertion fix is `[[ … ]] || false`. The alternative is to
-state that bats requires bash ≥ 4.1.
+- **Library case:** red at once. 20 writers, most bodies lost.
+- **Hook case:** green on three consecutive runs, 30 iterations. The two hooks
+  do different amounts of work, so their write windows never overlapped.
 
-### m2 — Comments still describe the pre-atomic write
+The case still discriminates the pre-fix design deterministically: a merged
+marker frames once, so the frame count reads 1. It also catches any
+timing-independent name collision. The race itself is carried only by
+`index_sync.bats:972`.
 
-- **Locations:** `tests/index_sync.bats:1118`,
-  `tests/cc_hook_index_compose.bats:416,427-428,454-455`.
-- **Axis:** specificity (the comments misstate the mechanism).
+The comment's "real separate processes at once" is true of launch, not of the
+critical section. A barrier (each writer blocks on a FIFO the test opens after
+both have started) would make the hook case exercise overlap. Otherwise, the
+comment should say the library case owns the race.
 
-The comments say the directory squat makes "the write's redirect fail with 'Is a
-directory'" and that the redirect prints that line on stderr. Since `8523b47`,
-the redirect targets `$marker.tmp` and succeeds. The explicit `[ -d "$marker" ]`
-check is what refuses, and it prints nothing. The assertions still discriminate:
+### m2 — The "failure keeps the approval" rule is pinned on one arm of many
 
-- A trailing `return 0` reds `relay_write refuses a squatted marker path`.
-- Dropping the `-d` check makes `mv` move the temp into the directory and return
-  0, which reds the not-staged case.
+- **Where:** `tests/commit_memory.bats:353`; `scripts/lib/resolve.sh:923`,
+  `:1151`, `:1232`.
+- **Axis:** coverage. **Reproduced.**
 
-The next reader is told the wrong reason, though, and the `--separate-stderr`
-justification at `:427` and `:454` no longer applies.
+The changelog states the rule generally: a failure after the freshness gate
+keeps the approval unless it prepared a merge. The case induces only the memory
+`add -A` failure (`:1140`).
 
-### m3 — The sideways test names the wrong red line for its own mutation
+**Probe.** Removed three things together:
 
-- **Location:** `tests/commit_memory.bats:180-186`.
-- **Axis:** specificity.
+- the restamp on a failed tier commit (`:923`);
+- the restamp on a failed memory commit (`:1151`);
+- the `[ "$parent" = "$recorded" ]` check in `gitlore_stage_landed_tiers`
+  (`:1232`).
 
-The comment says that under the "ahead branch without the ancestry test"
-mutation, `"is checked out at"` goes red. The ahead message also contains
-`is checked out at` (`scripts/lib/index-compose.sh:349`), so that assertion
-stays green. The red actually comes from `[[ "$stderr" != *"ahead"* ]]` at
-`:228`. Under m1 on bash 3.2, that negative is silent.
+All three C1 cases stayed green, and so did `git_hook_pre_commit.bats`
+`a failed memory commit is reported` and
+`an aborted compose keeps the approved summary usable`.
 
-### m4 — The born-green comment on the memory-root case describes a predicate the code does not have
+The parent check is what stops a leftover landing record from adopting a foreign
+commit stacked on a landed one.
 
-- **Location:** `tests/resolve_recovery.bats:390-400`.
-- **Axis:** specificity.
+The case also drives `gitlore_sync_memory_to_live` through a driver script. The
+entry point whose retry depends on the restamp is
+`scripts/git-hooks/pre-commit`, and no hook-level half-landed retry exists.
 
-The comment says staging is scoped by "the recovered store's own path … is one
-of `gitlore_tier_paths "$superproject"`". `gitlore_adopt_recovered_merge`
-deliberately has no such test (`scripts/lib/resolve.sh`, the header of that
-function). The comment at `:474-480` in the same file says so, and names the
-own-path exclusion clause instead. The two comments contradict each other.
-`:402-411` already downgrades the case to a characterization; the predicate text
-above it should follow.
+### m3 — Two relay guards the code argues for lost their cases in the redesign
 
-### m5 — Comments wrongly say bats clears CLAUDECODE
+- **Where:** `scripts/lib/index-sync.sh:178` (occupied-destination refusal) and
+  `:217` (`-type f`).
+- **Axis:** coverage. **Reproduced.**
 
-- **Locations:** `tests/commit_memory.bats:456,481,505`, and the `:444` phrase
-  "the state a bats run leaves it in anyway".
-- **Axis:** specificity.
+D51 states "a path already occupied at install time is refused, temp removed".
+The code comment calls the `-e` check, not `mv`, what stops a directory squat.
+Relay slice 2 retired `relay_write refuses a squatted marker path` and
+`an unkeyed run leaves a non-marker alone`. It said the `-type f` coverage "is
+already carried by" the `.tmp` case, which tests `'!' -name '*.tmp'`, not
+`-type f`.
 
-Each comment opens with "A bats run leaves CLAUDECODE unset". The runbook (Item
-1.1 note), `tests/push_memory.bats` and `tests/tier_lockstep.bats` all state the
-opposite: bats inherits it. The `unset` that follows is correct. The comment
-teaches the misconception it guards against.
+**Probe.** Deleting the `-e` block, or dropping `-type f`, left all 24 relay
+cases green. The squat half needs no filename prediction:
 
-### m6 — The hook-entry off-pin case does not assert why it aborted
+- `index_sync.bats:1268` already freezes `date` and writes twice from one
+  process, so the second write can meet an occupied final name (file or
+  directory).
+- A drain case can `mkdir` any `gitlore-relay-s1-a1-1-1-sync`.
 
-- **Location:** `tests/git_hook_pre_commit.bats:225`.
-- **Axis:** specificity.
+### m4 — The relay write's id sanitization is unpinned
 
-The case asserts non-zero exit, unchanged HEAD, unchanged `:ddaanet` and an
-unchanged carrier. An abort for any other reason satisfies all four: a freshness
-refusal, the stale-merge loop, or a hook that dies early on its environment.
+- **Where:** `scripts/lib/index-sync.sh:162-163`.
+- **Axis:** coverage (whitespace and traversal safety). **Reproduced.**
 
-It does discriminate the specified mutation: removing the pin guard lets the
-commit land. What stays unpinned is that the second entry point's abort is the
-pin guard. One `--separate-stderr` assertion on
-`moved off the commit the memory store records for it` would pin it. The runbook
-specified only the four state assertions, so this is Minor.
+`an agent id outside [A-Za-z0-9-] cannot leave the gitdir` covers the pre-image
+and stamp paths only. Splicing the raw session and agent ids into the relay
+name, which lets a `/` or `..` from the payload walk out of the gitdir, left
+every relay case green. Not a live exploit, since Claude Code mints both ids.
 
-### m7 — The runbook still lists a retired case and a superseded remedy sentence
+### m5 — The session-start unreadable-marker case never checks that the drain reached the marker
 
-- **Location:** `runbook.md` Item 3.1 slice 4 (`:1212`) and Item 1.2 (`:428`,
-  `:474`, `:571`).
-- **Axis:** conformance.
+- **Where:** `tests/cc_hook_session_start.bats:458`.
+- **Axis:** specificity. **Reproduced** under the M2 mutation.
 
-Two points in the runbook no longer match the suite:
+With the drain enumerating nothing, the marker is never opened, yet the case
+passes. It asserts only exit 0 and the commit-protocol context, both of which
+hold with no drain at all.
 
-- **Retired case.** Slice 5's green removed
-  `an unkeyed run survives a non-file squatting on a marker name`
-  (`reports/item-3-1-s5-green.md:39-46`), and its assertions live on in
-  `an unkeyed run leaves a non-marker alone`. The runbook's slice 4 list still
-  names the case, with no as-executed note.
-- **Remedy sentence.** Item 1.2 fixes the agent remedy as
-  `Return the tier to its pin with the command above`. The code and tests now
-  pin `Follow the remedy on each line above`
-  (`tests/commit_memory.bats:225,524`), and no amendment records the change.
+**Fix shape:** `[ ! -e "$marker" ]` after the run, since the fixed drain removes
+an unreadable marker. Its comment ("today's still-unkeyed drain (no session
+concept)") is stale as well.
 
-The tests are right. The design baseline is stale.
+### m6 — RED-phase narration and false helper comments ship in the relay suites
 
-### m8 — The non-fatal `agent_id` read in two hooks has no test
+- **Axis:** clarity. **From the code.**
 
-- **Locations:** `scripts/cc-hooks/index-compose.sh:44`,
-  `scripts/cc-hooks/add-tier-batch.sh:66`.
-- **Axis:** coverage.
+**RED-stub references.**
+`tests/index_sync.bats:893-897, 922-924, 1008, 1027-1030, 1073, 1083, 1149`
+describe a "RED stub" and cite "gitlore_relay_write's RED STUB comment". Neither
+exists.
 
-Both hooks justify `|| agent_id=""` at length. In index-compose, an aborting jq
-would leave the stamp unconsumed and hand this agent's next batch an ancient
-baseline. In add-tier, no payload shape may abort a mount. No case feeds a
-non-JSON payload, so deleting `|| agent_id=""` ships green.
+**"Today" / "TODAY's code" framing.** Present at:
 
-`index-sync-pre.sh:40` and `index-sync-post.sh:23` read the same field fatally.
-The asymmetry is unargued in tests and code alike.
+- `tests/index_sync.bats:736, 768-769`;
+- `tests/cc_hook_index_compose.bats:214, 266, 290-292`;
+- `tests/cc_hook_session_start.bats:18, 362, 398, 461`.
 
-The `index-sync-post.sh` not-staged branch that falls back to `$sysmsg` is also
-unpinned, but the runbook records that one as an accepted residual (Item 3.1
-slice 5).
+It narrates pre-GREEN code, against the present-tense rule.
 
-### m9 — No spaced-path case for the recovery's adoption, and its printed remedy is not runnable with a space
+**False helper comment.** `sync_feed`'s comment
+(`cc_hook_index_compose.bats:64-71`) says the hook "never inspects
+tool_calls/session_id" and that slice 2.5's case is the only user.
+`index-sync-post.sh:29` parses `session_id` for the relay and the nudge key, and
+the concurrency case is the user.
 
-- **Location:** `scripts/lib/resolve.sh:341`, `tests/resolve_recovery.bats`.
-- **Axis:** whitespace safety.
+**Stale root skips.** The two failed-write cases (`:425`, `:457`) keep
+`skip "root ignores permission bits"` after switching to an `mv` stub, so they
+skip under root for no reason.
 
-`gitlore_adopt_recovered_merge` derives `rel` by prefix-stripping `$super` from
-`$abs` and passes paths to `compose_up` and `git add`. All of it is quoted, but
-no case runs it under a spaced root. The relay cases are the only new
-spaced-path coverage.
+### m7 — `add-tier-batch.sh`'s `|| agent_id=""` is still untested
 
-Its staging-failure message prints ``Run `git -C %s add -- MEMORY.md %s` `` with
-both paths unquoted. With a space in the project path, the command a user copies
-does not run. This breaks the verbatim-runnable rule that
-`gitlore_compose_check_pins` follows by quoting `\"$abs\"`.
-`recovery: a staging failure … is reported` asserts only the phrase
-`could not be staged`, so a spaced fixture plus an assertion on the quoted
-command would pin both.
+- **Where:** `scripts/cc-hooks/add-tier-batch.sh:66`.
+- **Axis:** coverage. **Reproduced.**
 
-Smaller robustness point: in `tests/git_hook_pre_commit.bats:388-392`,
-`head_before=$(git … rev-parse HEAD)` sits between `chmod a-w memory/beta` and
-`run`. That is the "nothing failable between the chmod and the restore" shape
-the comment at `tests/index_sync.bats` warns about. If it failed, `memory/beta`
-would stay at mode 555 and teardown could not remove the fixture. Capture it
-above the chmod.
+Removing the fallback left all four agent-keyed and failure `cc_hook_add_tier`
+cases green. The `7d20aab` message scopes its new cases to the compose and
+post-sync hooks, so this half of the prior finding stays open.
 
-## Checked and clean
+### m8 — No in-suite spaced-root case for the fix-pass paths
 
-- **Must-have state assertions.**
-  - Off-pin fixtures move the index gitlink `:ddaanet` against the tier's HEAD,
-    never `HEAD:ddaanet`.
-  - The ahead, orphan and diverged shapes are each asserted with `merge-base` /
-    `--is-ancestor` rather than assumed.
-  - The two-tier rc-2 case asserts its composition order from the output.
-- **Negatives.** Each is backed by a positive over the same literal elsewhere:
-  - `!= *checkout --detach*`, `!= */gitlore:merge*`, `!= *ahead*`;
-  - the agent remedy refuted in the user arm;
-  - the relay framing refuted in `session-start with no marker`;
-  - `!= *SCRATCH.md*` against an `add -A` mutation.
-- **`jq -r` null trap.**
-  - `cc_hook_session_start.bats` and `cc_hook_index_compose.bats:448` guard
-    against the literal `null`.
-  - Elsewhere, every negative on an extracted channel is followed by a positive
-    on the same capture, so a missing key reds it.
-- **Invocation path.**
-  - Hooks are driven with real stdin JSON: `agent_id` present and absent, and
-    always with an `agent_type` decoy.
-  - Executable-bit tests exist for index-compose, add-tier-batch and both
-    index-sync hooks.
-  - The pre-commit hook runs as `bash "$HOOK"` with `CLAUDE_PLUGIN_ROOT`
-    exported.
-- **macOS portability.** The added lines use no GNU-only `sed -i`, `stat -c` or
-  `find -printf`. `mktemp` templates end in `X`s, and `sed '$d'`, `tr -c` and
-  `find -print0` are BSD-safe.
+- **Axis:** whitespace safety. **Reproduced (probe passes).**
+
+The landing record, `gitlore_stage_landed_tiers`, the take walk-back and
+`rest_unadopted_tier` all handle paths.
+
+**Probe.** Re-ran the C1, M5-take, M5-continuation, short-circuit and
+hook-concurrency cases with `TMPDIR="/tmp/claude/drt sp"`. The fixtures landed
+under the spaced path, confirmed by printing `TMP_REPO`, and all passed. The
+code is whitespace-safe on these paths.
+
+The suite only proves that when the ambient `TMPDIR` holds a space. The quoted
+`git -C "%s" checkout --detach` and `add --` remedies in `resolve.sh`
+(`081e364`, `7485483`) are asserted nowhere.
+
+### m9 — Non-final `[[ ]]` assertions go silent under bash < 4.1
+
+House style, carried from the prior review. The added relay cases lean on it
+too, for example the channel negatives at `cc_hook_index_compose.bats:409-410`.
+
+## Checks that passed
+
+**Fix-pass tests red on pre-fix code.** Each new case was run with its HEAD test
+against the scripts of the commit before its fix:
+
+- C1 retry and C1 approval: red.
+- M4 remedy text: red.
+- M5 take case: red.
+- All three M5 continuation cases: red.
+
+The C1 landing-record guard is born green on pre-fix code, by design. It is red
+under its own mutation.
+
+**Critical-fix mutations.**
+
+- Dropping `gitlore_stage_landed_tiers` reds the retry case.
+- Keeping the landing record on commit failure reds the foreign-commit case.
+- Dropping the `add -A` restamp reds the approval case.
+- Dropping the adoption short-circuit reds `resolve_recovery.bats:397`.
+
+**Relay concurrency is production-shaped.**
+
+- Library writers are `bash -c` processes, not `&` subshells.
+- Hook writers are separate `bash "$HOOK"` processes.
+- Channels are decoded before counting.
+- The whole framing line is matched with `grep -x`.
+
+**Invocation path.**
+
+- `relay-drain.sh` is registered once on `PostToolBatch`, executable, and 100755
+  in the index (run at HEAD).
+- The other hooks keep their registration and `-x` cases.
+- Every relay hook case pipes real payload JSON with an `agent_type` decoy.
+
+**Independence.**
+
+- The C1 cases and the hook-entry off-pin case pass with `CLAUDECODE` unset and
+  with it set to 1.
+- `setup_tmp_repo` unsets `CDPATH` and closes stdin.
+- The `PATH` stubs (`date`, `mv`) are restored or scoped to one `run`.
+- Fixtures build per test, and the hook concurrency loop uses fresh filenames
+  per iteration.
+
+**Permission cases.** The `chmod` restores sit immediately after `run` and are
+guarded where the fixed code removes the target.
+
+**macOS / BSD.** Added lines use `sed -i.bak`, `date -v … || date -d`,
+`touch -t`, `find -print0` and `LC_ALL=C sort`. There is no `stat -c`, no
+`-printf`, and no bare `sed -i`.
+
+**Full run.** All 24 relay cases and all fix-pass cases pass at HEAD.

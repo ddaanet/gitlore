@@ -81,17 +81,18 @@ no unmerged entry for checkout to refuse over).
 carries the merge or is put back onto it, the enclosing store's index still
 names the commit the tier sat on before it, so `gitlore_adopt_recovered_merge`
 composes the recovered tier's carrier up into the root index and stages
-`MEMORY.md` and the tier together — the one shape in which a tier ahead of its
-pin may be adopted (D43), and what keeps the staging from inverting the pin
-guard (D50, [git-hooks.md](git-hooks.md)). When the enclosing index already
-records the tier's HEAD, the adoption is a no-op, so a re-run after a completed
-bookkeeping commit does not project the carrier over root-index edits made
-since. A failed up projection therefore stages nothing and leaves the gitlink
-where it is, so the refusal the next gate owes that tier survives. It fires for
-a tier alone: the memory root's own recovery would otherwise write and stage in
-the user's project index, outside every approval gate. Nothing is committed here
-— the staged pair rides the next approved memory commit, which is D43's own
-degraded case rather than a fault.
+`MEMORY.md` and the tier together — the shape D50 requires of every adoption of
+a tier ahead of its pin but the commit path's own landed tier commit, and what
+keeps the staging from inverting the pin guard ([git-hooks.md](git-hooks.md)). A
+failed up projection therefore stages nothing and leaves the gitlink where it
+is, so the refusal the next gate owes that tier survives. When the enclosing
+index already records the tier's HEAD, the adoption is a no-op, so a re-run
+after a completed bookkeeping commit does not project the carrier over
+root-index edits made since. The adoption fires for a tier alone: the memory
+root's own recovery would otherwise write and stage in the user's project index,
+outside every approval gate. Nothing is committed here — the staged pair rides
+the next approved memory commit, which is D43's own degraded case rather than a
+fault.
 
 The artifacts are deleted rather than moved aside because the next preparation
 recomputes each of them from the two sides. One dead end remains: a state file
