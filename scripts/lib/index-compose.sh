@@ -349,13 +349,14 @@ gitlore_compose_check_pins() {
     # Staging the gitlink is not a remedy on its own: it satisfies this rule and
     # the next pass then projects root's older text over the carrier — the
     # overwrite being refused. So the remedy adopts the carrier into root by
-    # hand first, the step gitlore_compose_up performs on a merge. A tier
+    # hand first, replacing root's block for the tier, the step
+    # gitlore_compose_up performs on a merge. A tier
     # gitlore's own commit path left ahead never reaches here: the commit path
     # stages it first (gitlore_stage_landed_tiers).
     if git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null \
        && git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
       memabs=$(CDPATH='' cd -- "$mempath" && pwd) || memabs="$mempath"
-      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. There is no automatic remedy: first bring every line of $memabs/$tier/MEMORY.md into $memabs/MEMORY.md, each link prefixed with '$tier/', and only then stage the gitlink with \`git -C \"$memabs\" add -- \"$tier\"\` — staged before that, the next compose writes the root index's older text over the tier. Or return the tier to the pin, which discards the commits it carries ahead of it.
+      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. There is no automatic remedy: first replace every line of $memabs/MEMORY.md whose link starts with '$tier/' by the lines of $memabs/$tier/MEMORY.md, each link prefixed with '$tier/', keeping no '$tier/' line the carrier lacks, and only then stage the gitlink with \`git -C \"$memabs\" add -- \"$tier\"\` — staged before that, the next compose writes the root index's older text over the tier. Or return the tier to the pin, which discards the commits it carries ahead of it.
 "
       continue
     fi

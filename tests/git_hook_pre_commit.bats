@@ -360,6 +360,34 @@ committed_stale_carrier_store() {
     '- [shared](shared.md) — fresh hook'
 }
 
+# The retry the landing record exists for, through the entry point whose
+# retry runs on the summary file as it stands: the pre-commit hook. The first
+# run composes and commits inside the tier, then loses memory's index.lock;
+# the second must adopt its own landed tier commit and finish, which needs
+# both the restamp on that failure and the landed-tier staging.
+@test "a commit half-landed in a tier retries to completion from the hook" {
+  half_landed_tier_fixture
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record the shared fact\n' > "$msgfile"
+  # Whole-second mtimes compared with `>=`: a carrier written in the summary's
+  # second would read fresh with no restamp at all.
+  sleep 1
+  pin_before=$(git -C memory rev-parse ":ddaanet")
+
+  run --separate-stderr bash "$HOOK"
+  [ "$status" -ne 0 ]
+  [ -f "$lock" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD^)" = "$pin_before" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
+
+  rm -f "$lock"
+  run --separate-stderr bash "$HOOK"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  [ "$(git -C memory log -1 --pretty=%s)" = "memory: record the shared fact" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+}
+
 @test "an aborted compose keeps the approved summary usable" {
   # The case that would have caught slice 3 code review's Major 1: a partial
   # compose (rc 2) restamps whatever it DID write, so the approved summary

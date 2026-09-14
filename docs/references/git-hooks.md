@@ -78,8 +78,8 @@ fetch. Divergence routes to `/gitlore:resolve`, which diagnoses the flavor.
 ### The gitlink and `live`
 
 **The gitlink a parent commit records is always an ancestor of memory's `live`,
-or `live` itself.** `pre-commit` makes it `live` itself: step 5 stages the
-commit step 4 just advanced `live` to. Every path that advances memory without a
+or `live` itself.** `pre-commit` makes it `live` itself: step 4 stages the
+commit step 3 just advanced `live` to. Every path that advances memory without a
 parent commit — the `SessionStart` fast-forward, `commit-memory.sh`,
 `/gitlore:merge`, a resolved merge — moves `live` forward and leaves the gitlink
 behind as an ancestor; a `head-vs-remote` merge in particular keeps the pending
@@ -162,10 +162,15 @@ abort can carry several tiers with different causes. A write failure aborts too
 **A failure keeps the approval, unless it prepared a merge.** What the run
 writes into the store — a composed carrier, a recovered merge's up projection —
 projects lines the summary already approved, yet reads newer than the commit-msg
-file, and the `pre-commit` retry reuses that file as it stands. So every later
-failure restamps it. A merge preparation does not: it checks merged content the
-summary never covered out into the worktree, and a stale approval is the right
-answer after it.
+file, and the `pre-commit` retry reuses that file as it stands. So a later
+failure that prepared no merge restamps it. A merge preparation does not: it
+checks merged content the summary never covered out into the worktree, and a
+stale approval is the right answer after it. The stale-merge guard over the
+tiers restamps on none of its failures, because it does not report which arm
+failed, and some of its arms prepare nothing — a merge gitlore did not prepare,
+a merge state nothing can classify, a recovery whose checkout failed. After one
+of those, a retry following an earlier tier's recovered up projection reads the
+approval stale.
 
 **A tier commit the run could not record is adopted on the retry.** The tier
 commit moves the tier's HEAD, and only memory's later `add -A` stages the moved
@@ -188,12 +193,13 @@ down projection writes root's older text over facts root has never seen. Every
 path that adopts a tier ahead of its pin therefore composes the carrier up into
 the root index first and stages the pair, or stages nothing at all; the adoption
 a recovered merge owes is one of them
-([merge-state-recovery.md](merge-state-recovery.md)). A take and a landed merge
-continuation that stage nothing also return the tier to its pin, keeping what
-arrived in its local `live` for the next take to adopt
-([tier-stores.md](tier-stores.md)). The one exception is a tier commit the
-commit path itself made, whose carrier root already describes, so there is
-nothing to project up.
+([merge-state-recovery.md](merge-state-recovery.md)). A take that stages nothing
+also returns the tier to its pin, keeping what arrived in its local `live` for
+the next take to adopt, and so does a landed merge continuation that stages
+nothing and exits 0 onto a pin the merge contains; a yield and a pin off to the
+side leave the tier where it is ([tier-stores.md](tier-stores.md)). The one
+exception to composing up is a tier commit the commit path itself made, whose
+carrier root already describes, so there is nothing to project up.
 
 **A successful compose here stays silent**, by argument rather than omission: on
 rc 0 the result is discarded, so a commit that repairs a stale carrier says
@@ -226,3 +232,21 @@ summary, the landed commit stops matching it, and the tier is refused for good
 **Staging each tier gitlink right after its commit.** Narrows the window without
 closing it: the staging is itself a write to memory's index, so the `index.lock`
 that stops `add -A` stops it too (D50).
+
+**Composing a clean store.** A carrier diverging from a committed root index
+would be repaired at once, but the compose leaves a dirty state no approved
+summary covers, and the gate refuses the commit for a change the agent never
+made. `SessionStart` repairs it instead, riding the next commit that has a
+summary (D50).
+
+**Reporting a non-empty commit-path compose.** It would say that the in-session
+compose was missed, but the in-session `PostToolBatch` report is the surface for
+that news, and repeating it puts a line on every commit that repairs anything,
+most of which the session has already seen (D50).
+
+**Leaving a tier whose adoption failed ahead of an unstaged pin.** Nothing is
+staged, so the root index is not composed over, but the pin guard then refuses
+every memory commit until `SessionStart` walks the tier back, and a take
+meanwhile finds nothing to take, the arrival being contained in the tier's HEAD.
+Walked back to the pin with the arrival kept in its local `live`, the tier is in
+the shape the next take adopts (D50).

@@ -169,6 +169,27 @@ write_intent() {
   [ -f "$decoy" ]
 }
 
+# The intent, not the payload, asks for the mount, so an unparseable payload
+# must not abort one. Reds when the hook's `|| agent_id=""` fallback is
+# removed: jq's parse failure then kills the hook under errexit, exiting
+# non-zero before add-tier.sh runs, so nothing mounts.
+@test "add-tier hook: an unparseable payload still mounts and drops the bare compose baseline" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+  bare_stamp=$(gitlore_compose_stamp_file memory)
+  printf 'index\tstale\n' > "$bare_stamp"
+
+  # shellcheck disable=SC2016  # $1 expands inside the bash -c script, not here
+  run --separate-stderr bash -c 'printf "not json" | bash "$1"' _ "$BATCH"
+  [ "$status" -eq 0 ]
+  [ -e memory/ddaanet/.git ]
+  [ ! -f .claude/gitlore-add-tier ]
+  [ ! -f "$bare_stamp" ]
+  sys=$(jq -r '.systemMessage' <<<"$output")
+  [[ "$sys" == *"mounted at memory/ddaanet"* ]]
+}
+
 # --- failure ---------------------------------------------------------------
 
 @test "add-tier hook: a failure still exits 0 so the JSON is not discarded" {

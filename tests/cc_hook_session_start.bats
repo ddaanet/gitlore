@@ -15,9 +15,7 @@ SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 RELAY_FRAMING="--- gitlore-relay agent"
 
 # Drives SESSION_START with a session_id on stdin — the real payload shape,
-# once GREEN parses it. Today's script reads no stdin at all, so this changes
-# nothing about its current behaviour; it exists so the case 5 tests below
-# already carry the shape the fix needs. $1 = session id.
+# which the hook parses to scope its relay drain. $1 = session id.
 run_session_start_with_session() {
   jq -n --arg s "$1" '{session_id:$s}' | bash "$SESSION_START"
 }
@@ -357,12 +355,11 @@ assert_session_start_did_nothing() {
 }
 
 # D51 (revised), slice 2 case 5: SessionStart drains its OWN session's marker
-# and leaves a peer session's standing — replaces "session-start drains a
-# stranded relay marker", which pinned a session-blind drain. Reds against
-# TODAY's session-start.sh: it drains unkeyed with no session concept at all
-# (never parses its payload's session_id), so a marker under a REAL session —
-# s1 or s2, neither "nosession" — is found by neither call, and the first
-# positive assertion below fails outright rather than passing vacuously.
+# and leaves a peer session's standing. Both markers sit under a REAL session
+# — s1 or s2, neither "nosession" — so a drain that never parses its
+# payload's session_id finds neither, and the first positive assertion below
+# fails outright rather than passing vacuously; a session-blind drain that
+# enumerates every session fails the S2 refutations instead.
 @test "session-start drains its own session's marker and leaves a peer session's standing" {
   make_parent_with_memory
   gitlore_relay_write memory s1 a1 sync "S1 SYSMSG BODY" "S1 CTX BODY"
@@ -395,9 +392,8 @@ assert_session_start_did_nothing() {
 }
 
 # D51 (revised), slice 2 case 5, sweep half: SessionStart removes a relay
-# file older than 7 days regardless of session — today's session-start.sh
-# never calls gitlore_relay_sweep at all, so this reds on the aged marker
-# surviving.
+# file older than 7 days regardless of session — a hook that never calls
+# gitlore_relay_sweep reds this on the aged marker surviving.
 @test "session-start sweeps a relay file older than 7 days" {
   make_parent_with_memory
   gitlore_relay_write memory old-session a9 sync "OLD BODY" "OLD CTX"
@@ -458,10 +454,8 @@ assert_session_start_did_nothing() {
 @test "an unreadable marker costs the relay, not the hook" {
   [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
   make_parent_with_memory
-  # Empty session, matching what today's still-unkeyed drain (no session
-  # concept) actually targets — see the case above for why a real session id
-  # here would leave this fixture's marker undrained for a reason unrelated
-  # to the one this case tests.
+  # Empty session on both sides: the hook below runs with no payload, so its
+  # drain enumerates the `nosession` reports, and the write lands there too.
   if gitlore_relay_write memory "" a1 sync "STRANDED SYSMSG BODY" "STRANDED CTX BODY"; then
     write_status=0
   else
@@ -473,13 +467,15 @@ assert_session_start_did_nothing() {
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  # Restore only if the drain (or the mutation-red run below) left the marker
-  # behind — the fixed drain's own `rm -f` removes it regardless of its mode,
-  # since deletion depends on the containing directory's permissions, not the
-  # target file's.
+  # Restore only if the drain left the marker behind — its `rm -f` removes it
+  # regardless of its mode, since deletion depends on the containing
+  # directory's permissions, not the target file's.
   [ -e "$marker" ] && chmod 0600 "$marker"
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never commit"; "i")'
+  # The drain reached the marker: a drain enumerating nothing never opens it,
+  # and the two assertions above hold with no drain at all.
+  [ ! -e "$marker" ]
 }
 
 # A third case — "a stranded marker is the only thing SessionStart has to

@@ -207,6 +207,37 @@ prepare_tier_merge_with_new_lines() {
   [[ "$stderr" == *"stays on the merge"* ]]
 }
 
+@test "a staging failure in the continuation aborts before the commit, and a rerun lands the merge" {
+  # A memory index.lock that outlasts gitlore_git's retries fails the root
+  # index's staging after an adopted up projection. The continuation stops
+  # there, before the merge commit, and keeps the merge state; it does not
+  # read the failure as a tier the root could not adopt.
+  prepare_tier_merge_with_new_lines
+  tier_head=$(git -C memory/ddaanet rev-parse HEAD)
+  lock="$(git -C memory rev-parse --absolute-git-dir)/index.lock"
+  : > "$lock"
+  # Exported, not a prefix on `run`, and not empty: `${…:-default}` turns an
+  # empty value into the default schedule of several seconds.
+  export GITLORE_GIT_RETRY_SCHEDULE=0
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  rm -f "$lock"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"index.lock"* ]]
+  [[ "$stderr" != *"could not take tier"* ]]
+  # HEAD rather than MERGE_HEAD: "no merge commit" is a statement about HEAD,
+  # and the abort comes before `commit`, so the tier still sits on the commit
+  # the preparation left it on.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
+  [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
+
+  # With the lock gone, rerunning the continuation lands and adopts the merge.
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+}
+
 @test "a compose refusal is reported but never strands the merge" {
   make_parent_with_memory
   diverge_memory_with_index '# Memory Index

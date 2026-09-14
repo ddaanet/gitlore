@@ -1,326 +1,398 @@
-# Deliverable review — code partition (Layer 1)
+# Deliverable review — code partition (fresh, after the fix pass)
 
-Plan: `index-edit-propagation`. Range `b6dbe92..HEAD`, excluding 3d50a1f,
-c2e7950, ae54c1b; 8523b47 included. Baseline: `outline.md` §B–D and `runbook.md`
-FR-B, FR-F, FR-C, FR-D (Phases 1–3, amendments taking precedence). The review
-was read-only. No suite was run. Two scratch probes ran under
-`/tmp/claude-1000/dr-code-*`.
+## Scope
 
-**Counts: Critical 0 · Major 5 · Minor 4**
+Plan `index-edit-propagation`, range `b6dbe92..HEAD` at `7d20aab`. Files in
+scope:
 
-## What checks out
+- `scripts/lib/resolve.sh`, `scripts/lib/index-sync.sh`,
+  `scripts/lib/index-compose.sh` and `scripts/lib/util.sh`;
+- `scripts/resolve.sh`;
+- `scripts/cc-hooks/` — `index-compose.sh`, `index-sync-post.sh`,
+  `index-sync-pre.sh`, `add-tier-batch.sh`, `session-start.sh` and
+  `relay-drain.sh`;
+- `hooks/hooks.json`.
 
-- **`agent_id`, never `agent_type`.** All four consumers read
-  `.agent_id // empty`: `index-sync-pre.sh`, `index-sync-post.sh`,
-  `index-compose.sh` and `add-tier-batch.sh`. The keyed name is what
-  `add-tier-batch.sh` drops. The falsified pre-hook comment is rewritten, and
-  the residual is bounded in a comment (FR-C).
-- **Id sanitisation.** `_gitlore_agent_suffix` uses `LC_ALL=C tr -c` into
-  `[A-Za-z0-9-]`, so `--git-path` cannot leave the gitdir.
-- **Portability.** Nothing in the change needs GNU tools or bash 4. It uses
-  `find -maxdepth … '!' -name … -print0` into `read -r -d ''`, `LC_ALL=C sort`
-  without `-z`, `${head:0:12}` and `$'\n'`.
-- **Whitespace.** The drain enumerates markers whitespace-safely, and the
-  delimiter parse runs per file.
-- **Channel discipline.**
-  - The commit path reports through `gitlore_say_for_agent_or_user … >&2`.
-  - `gitlore_compose` and `gitlore_compose_check_pins` output is captured, not
-    leaked to git's stdout.
-  - `gitlore_adopt_recovered_merge` writes only to stderr.
-  - The PostToolBatch hooks still emit one `jq -n` object.
-- **Commit-path order** matches the runbook as amended:
-  1. freshness check;
-  2. per-tier stale-merge loop;
-  3. pin guard (abort, no restamp);
-  4. `gitlore_compose`, where rc 1 reports and proceeds, and rc 2 and `*` abort
-     with `touch "$msgfile"`;
-  5. `gitlore_sync_tiers_to_live`;
-  6. `add -A`.
-- **Squatted marker directory.** The `[ -d "$marker" ]` refusal before `mv` is
-  there, so POSIX `mv`-into-directory is covered. The `.tmp` exclusion is safe,
-  because a sanitised id can never contain `.`.
-- **Citations.** No added line cites `plans/`, `memory/`, runbook or slice ids,
-  or `file:line`. D50, D51 and D43 all resolve in `docs/`.
+Out of scope: `justfile` and the two `check-*.py` scripts.
+
+The baseline is `outline.md` §B–D, as amended by `runbook.md` (FR-F), with
+`relay-redesign.md` superseding D51. The new code from the fix pass got the most
+attention: `7485483`, `081e364`, `e36e7fc`, `38de36b` and `7d20aab`.
+
+No suite or `just` recipe ran. What did run:
+
+- one single bats case: `commit_memory.bats` "a commit that landed a tier and
+  then failed on memory's index retries to completion" (ok);
+- two throwaway bats probes under `/tmp/claude-1000/drc-root/tests/`, which
+  symlinks the real `scripts/` and `tests/helpers/`;
+- two shell probes under `/tmp/claude-1000/drc probe/` (the path has a space).
+
+**Probe debris to remove.** The first relay probe ran against a plain `git init`
+store. As m1 explains, that sent 122 files named `gitlore-relay-S1-a{0,1,2}-*`
+into this repository's own `.git/`. The sandbox classifier refused my cleanup.
+They are inert: no real session id is `S1`, and nothing drains the parent
+gitdir. To remove them:
+
+```sh
+G=/Users/david/code/gitlore/.git
+find "$G" -maxdepth 1 -type f -name 'gitlore-relay-S1-a[012]-*' -delete
+ls "$G" | grep -c '^gitlore-relay-' # prints 0 when they are gone
+```
+
+**Counts: Critical 0 · Major 2 · Minor 5**
+
+## Prior findings status
+
+Sources: the 2026-09-12 aggregate (C/M numbering) and its code partition
+(code-M, code-m).
+
+- **C1 / code-M4** (the pin guard refuses the retry of a half-landed commit):
+  resolved. `gitlore_stage_landed_tiers` works from a landing record. Verified
+  by the single bats case above, and by a probe of the untested variant (the
+  tier `live` advance fails on a ref lock): the retry exits 0 and stages the
+  gitlink.
+- **C2 / code-M1** (read-merge-write race between parallel hooks): resolved.
+  Reports are write-once files with unique names. A probe of 40 concurrent
+  writer processes against 30 interleaved drains, over a spaced gitdir, ran
+  three times: every body was delivered exactly once and nothing was left over.
+- **M1 / code-M2** (the drain unlinks a report written between its read and its
+  `rm`): resolved by construction. The drain removes only names it listed, and
+  `.tmp` files are excluded.
+- **M2 / code-M3** (the drain was gated on an index change): resolved.
+  `relay-drain.sh` runs on every main-thread batch and takes no baseline.
+- **M3 / code-m4** (markers keyed by agent only): resolved. Names carry the
+  sanitized session, and both drains enumerate their own session only.
+- **M4 / code-M5** ("stage the gitlink by hand" was the overwrite itself):
+  resolved. The remedy now adopts the carrier into root first. Its wording still
+  has a gap (m5).
+- **M5** (the take and the continuation staged after a failed up projection):
+  resolved. Both now record nothing. The walk-back introduces Major 1.
+- **M6** (no concurrent test): resolved at the code level. Two concurrency cases
+  exist (`index_sync.bats:972`, `cc_hook_index_compose.bats:321`). Their quality
+  belongs to the test partition.
+- **M7** (`CLAUDE.md` gate paragraph): prose partition, not assessed here.
+- **code-m1 / Minor** (approval left stale on failure paths): resolved, since
+  non-merge failures now restamp. Two residuals remain (m2, m3).
+- **code-m2 / Minor** (adoption composes up when the pin already records HEAD):
+  resolved by the short-circuit in `gitlore_adopt_recovered_merge`.
+- **code-m3 / Minor** (unquoted printed staging command): resolved. Both
+  adoption remedies quote `"%s"`.
+- **Minor** (stale "the redirect below is the single write" comment): resolved;
+  the comment is gone.
+- **Minor** (`index-compose.sh` "only gitlore_compose calls it"): resolved; the
+  comment now names the pin guard.
+- **Minor** (non-fatal `agent_id` read untested, fatal reads not argued):
+  resolved. There is a fallback case in each hook suite, and `index-sync-pre.sh`
+  argues its fatal read. The session read in `index-sync-post.sh` is now
+  non-fatal too.
+- **Minor** ("sixth untracked file" in the `index-sync.sh` comment): resolved;
+  the comment is gone.
+
+## Critical
+
+None.
 
 ## Major
 
-### M1 — `scripts/lib/index-sync.sh:155-217`: the relay write's merge is an unserialised read-modify-write on a shared temp name, and the PostToolBatch hooks run in parallel
+### 1. A defect in the arriving carrier makes a failed take unrepairable where the remedy points, and blocks every push
 
-- **Axes:** concurrency / functional correctness. **Severity:** Major.
+- **Where:** `scripts/lib/resolve.sh:1778-1787` (`gitlore_adopt_tier_into_root`,
+  the walk-back arm) and `scripts/resolve.sh:179-200` (`rest_unadopted_tier`).
+  Reached through `gitlore_push_stores` (`resolve.sh:1309`, `:1334`) and hence
+  `scripts/git-hooks/pre-push:59`.
+- **Axes:** functional correctness, error signaling.
+- **Requirement:** D50 (compose up and stage the pair, or stage nothing), and
+  printed remedies that can actually be carried out.
+- **Mechanism.** `gitlore_compose_up` refuses through `gitlore_compose_check`.
+  That check validates every index, the checked-out carrier included (rule 1:
+  duplicate pointer; rule 4: a stray non-bullet line; rule 6: a welded line).
+  When the refusal lies in the carrier that just arrived, the walk-back does
+  three things:
+  1. It checks the tier out at the pre-take commit, which does not hold the
+     defect.
+  2. It prints problem lines naming `memory/<tier>/MEMORY.md`.
+  3. It says "Fix the store, then run /gitlore:merge again".
 
-`hooks/hooks.json` puts `index-sync-post.sh` and `index-compose.sh` on the same
-`PostToolBatch` event. Claude Code runs all matching hooks **in parallel**; the
-vendored `plugin-dev:hook-development` skill says so under "Parallel Execution"
-and lists "Assuming Hook Order" as a pitfall.
+  The file it names is clean in the worktree, because the defect exists only in
+  `live`. So every later take goes through `gitlore_adopt_advanced_live`, checks
+  out `live`, refuses again and walks back again. `gitlore_push_stores` runs
+  that take whenever a tier's `live` is ahead of HEAD, so the gate refuses every
+  `/gitlore:push` and every parent `git push`. The only way out by hand is to
+  check out `live`, fix the carrier and commit. But the commit path's pin guard
+  refuses a tier ahead of its pin, and no printed remedy describes that route.
+  The same applies to a merge synthesis carrying such a defect, via
+  `rest_unadopted_tier` ("Fix the store, then run /gitlore:merge to adopt").
 
-`gitlore_relay_write` has three steps:
+  Before the fix pass the take staged anyway, and the defect surfaced as a
+  non-fatal compose refusal on a store the user could edit. The overwrite hazard
+  M5 described was real, but it needed a later compose-down over a re-texted
+  line. This failure blocks publishing outright.
+- **Reproduced.** Probe `probe2.bats` used the real `merge-memory.sh` and
+  `push-memory.sh` on the `merge_memory.bats` fixture, with a tier remote given
+  two commits that each append `- [dup](dup.md)`.
 
-1. test `[ -f "$marker" ]`;
-2. read both channels;
-3. write the fixed path `"$marker.tmp"`, then `mv` it into place.
+  | Step | Output |
+  |---|---|
+  | Take | exit 1: `memory/ddaanet/MEMORY.md: duplicate pointer path dup.md` … "Fix the store, then run /gitlore:merge again" |
+  | Tier state | `HEAD = pin = a11bbf7`, `live = 5c37068` |
+  | `grep -c dup.md memory/ddaanet/MEMORY.md` | 0 |
+  | `push-memory.sh` | exit 1, same three lines |
+- **Impact.** One malformed commit that another consumer publishes to a shared
+  tier stops this repository's memory publishing and parent pushes. The remedy
+  names a file that has nothing wrong with it. Rule 6 (two bullets welded onto
+  one line) is what appending to a carrier with no trailing newline produces, an
+  ordinary hand edit on the tier remote.
+- **Fix direction.** Split the problem lines by file. When a refusal names the
+  tier's own carrier, the walk-back remedy must say the defect is in the tier's
+  `live`. It must also give the commands to fix it there, or the push gate must
+  not make a take whose arrival cannot be adopted fatal to publishing what this
+  repository already has.
 
-Nothing serialises two writers for the same agent id, so two failures follow:
+### 2. `|| tier_unadopted=1` turns off errexit for all of `compose_merged_indexes`, and a failed root staging reads as "the root index could not take the tier"
 
-- **Lost update, silent.** Both writers see no marker, and both `mv`
-  successfully. The second rename replaces the first writer's report, and both
-  return 0.
-- **Shared temp.** Both writers open the same `$marker.tmp`. The first `mv`
-  takes the inode away, so the second `mv` fails with `cannot stat …tmp`.
-  - The second hook tells its subagent that the report could not be staged.
-  - The parent gets only one of the two reports.
-  - The bytes the second writer was still writing may be spliced into the
-    installed marker.
+- **Where:** `scripts/resolve.sh:247`; the function's last command at `:152`;
+  the consequences at `:278`, `:308` and `:318`.
+- **Axes:** error signaling, robustness, functional correctness.
+- **Requirement:** D50 on the continuation. Every failure path must be
+  observable as what it is.
+- **Mechanism.**
+  - Called in an `||` list, the function runs with errexit suspended throughout,
+    and its status is its last command's status.
+  - When the up projection succeeds, that last command is
+    `gitlore_git -C "$memroot" add -- MEMORY.md`.
+  - So an `index.lock` on memory that outlasts `gitlore_git`'s ~10 s of retries
+    sets `tier_unadopted=1` for a tier that was adopted.
+  - The continuation then commits the merge and skips the gitlink staging and
+    the bookkeeping commit. It clears the merge state and advances `live`.
+  - Last, `rest_unadopted_tier` checks the tier out at its old pin, while root
+    `MEMORY.md` still holds the up-projected block, unstaged.
+  - The printed line says "Fix the store, then run /gitlore:merge". Nothing
+    about the store needs fixing, and the lock is never named as the cause.
 
-Slice 2.5 exists to stop exactly this ordinary case: one subagent batch that
-edits `MEMORY.md` with a tier mounted. The fix holds only if the hooks run one
-after the other.
+  At `b6dbe92` the bare call aborted under `set -e` before the commit, and the
+  merge state survived for the retry. The failing tail
+  `gitlore_git -C "$store" add -A` is now swallowed too.
 
-**Probe** (`/tmp/claude-1000/dr-code-relay-race.sh`: two concurrent
-`gitlore_relay_write mem a1 …`, then one drain, with the gitdir path holding a
-space):
-
-| Start timing | Iterations missing one report | Signalled as a write failure | Silent loss |
-|---|---|---|---|
-| Simultaneous | 165 / 300 | 163 | 2 |
-| Second writer delayed 0–49 ms at random | 6 / 300 | all | — |
-
-**Stale comment.** The drain comment at `:299-301` says hooks "within one
-session are sequential". That is false for same-event hooks, and it is the
-premise the design leans on.
-
-**Failure scenario.** A subagent re-texts a root index line in a store with a
-tier mounted. Both hooks finish within a few milliseconds of each other. The
-parent receives the `recomposed tier pointers` block but not
-`reset frontmatter to match MEMORY.md`. In the silent interleaving, nobody
-learns that report existed.
-
-**Fix direction.**
-- Take a per-agent `mkdir` lock (atomic on BSD and GNU) around read, merge and
-  `mv`.
-- Use a per-writer temp (`"$marker.tmp.$$"`). The drain's `'!' -name '*.tmp'`
-  would then need to become `'*.tmp*'`.
-
-### M2 — `scripts/lib/index-sync.sh:280-308`: the drain reads, then removes, with no atomic claim, so it loses a write that lands in between and can unlink an in-flight temp
-
-- **Axes:** concurrency / atomicity. **Severity:** Major.
-
-The drain runs `_gitlore_relay_sysblock "$marker"`, then
-`_gitlore_relay_ctxblock "$marker"` (two separate `awk` opens), then
-`rm -f "$marker"`, then `rm -f "$marker.tmp"`.
-
-Parent-side and subagent-side hooks do run concurrently. The outline's own §C
-evidence is a subagent pre-hook and a parent pre-hook 243 ms apart, and a
-background subagent keeps running while the parent takes batches. So a
-subagent's `gitlore_relay_write` can `mv` a merged marker into place between the
-drain's reads and its `rm`:
-
-- **Before both reads:** the drain folds the old content and deletes the new
-  file. That subagent's latest report is lost, and its write returned 0, so
-  nobody is told.
-- **Between the two reads:** the parent's sysmsg carries the old body and its
-  ctx carries old plus new. The user never sees the new body.
-
-The `rm -f "$marker.tmp"` at `:308` can also unlink the temp a concurrent writer
-for the same agent is still filling. That writer's `mv` then fails. This one is
-at least signalled to the subagent, but the report is lost for the parent.
-
-The comment at `:295-307` justifies the scoped removal as safe against another
-session's in-flight temp. It does not consider the same agent writing again
-while the parent drains, which is the concurrency C and D exist for.
-
-**Failure scenario.** A background subagent edits the index twice in quick
-succession while the parent's own index-editing batch ends. The parent's drain
-reads marker v1, the subagent installs v2 (v1 plus its second report), and the
-drain removes v2. The second report reaches no one.
-
-**Fix direction.** Claim before reading: `mv "$marker" "$marker.drain.$$"`, a
-rename that can lose nothing. Then read and remove the claimed file. Drop the
-`.tmp` removal, or do it only under M1's lock.
-
-### M3 — `scripts/cc-hooks/index-compose.sh:46,64` and `scripts/cc-hooks/index-sync-post.sh:40,42`: the parent-side drain sits behind the hooks' own no-change exits, so the common foreground-subagent report does not reach the parent session
-
-- **Axes:** functional completeness / conformance (FR-D). **Severity:** Major.
-
-The unkeyed drain (`index-compose.sh:100`, `index-sync-post.sh:284`) is reached
-only after the parent's own batch left a stamp or pre-image **and** changed the
-index. `index-sync-pre.sh` is registered on `Write|Edit|Bash` only, so the
-parent batch that issued the `Agent`/`Task` call has no baseline and exits
-before the fold. That batch is the natural moment for a relay to land.
-
-In the ordinary flow the report waits for one of two things:
-
-- a later parent batch that edits the root index itself, which may never happen;
-  or
-- the next `SessionStart`. That is startup, resume, clear or compact — a later
-  session or a context reset, not the parent session that dispatched the
-  subagent.
-
-FR-D reads "reports produced inside a subagent reach the parent session". The
-runbook notes this (slice 2: "a marker is not necessarily drained by the very
-next parent-side batch; slice 3 is the backstop"). But that backstop fires in a
-different session, so the requirement is unmet for the case the outline was
-written about: a subagent composes and the parent never learns of it.
-
-**Failure scenario.** The parent dispatches a subagent. The subagent edits
-`memory/MEMORY.md`, which composes and re-texts a carrier. The subagent returns,
-and the parent carries on with code edits and commits. No relayed report appears
-in the parent session. It surfaces in whatever session next fires SessionStart,
-attributed to an agent id that session never saw.
-
-**Fix direction.** In both hooks, drain unkeyed runs before the stamp/stash
-early exits (or in one of them, to avoid double folding). The cost is one
-`rev-parse --absolute-git-dir` plus one `find` per parent batch.
-
-### M4 — `scripts/lib/resolve.sh:1000-1021` with `:1091-1100`: the pin guard permanently refuses a retry after gitlore's own partial commit, with no correct gitlore remedy
-
-- **Axes:** functional correctness / robustness (a regression FR-F introduced).
-  **Severity:** Major.
-
-`gitlore_sync_tiers_to_live` commits inside each dirty tier, which moves the
-tier's HEAD. Only the later `gitlore_git -C "$mempath" add -A` stages that move
-into memory's index. Anything that stops the run between the two leaves the tier
-HEAD ahead of the pin its memory index records, with the approved `$msgfile`
-kept:
-
-- a failed tier `live` advance that is not a divergence (`:907-913`);
-- a second tier's commit failing after the first landed;
-- `add -A` or the memory `commit` failing after the retries run out on an
-  `index.lock`;
-- Ctrl-C or OOM during the hook.
-
-Before Item 1.2, the retry's `add -A` adopted the move and the commit completed.
-Now the pin guard runs first and aborts with `gitlore_compose_check_pins`' new
-ahead-of-pin line, "There is no automatic remedy: inspect and stage the gitlink
-by hand, or return the tier to the pin, which discards the commits it carries
-ahead of it".
-
-- The only option that moves anything is the destructive one: it discards the
-  user-approved tier commit.
-- The by-hand option is correct here, but only by luck (see M5).
-- Every later commit in the session aborts the same way.
-- The next SessionStart re-pins the tier, which walks the committed facts out of
-  its worktree.
-
-**Failure scenario.** A memory commit writes tier `ddaanet` and commits it. The
-memory `add -A` then hits an `index.lock` that an IDE's `git status` holds past
-the ~10 s retry schedule, and the hook returns 1. The agent retries. It gets "a
-tier was moved off the commit the memory store records for it … ahead of the
-pin" and follows the remedy to return the tier to its pin, so the approved fact
-edit is gone from the tier.
-
-**Fix direction.** The guard cannot tell "gitlore committed this tier in this
-episode" from "the tier moved behind root's back". The options:
-
-- stage each tier's gitlink immediately after its commit inside
-  `gitlore_sync_tiers_to_live` (D43's last-act rule, one level down); or
-- have the guard accept a tier whose commits ahead of the pin carry the gitlore
-  commit sentinel or message.
-
-### M5 — `scripts/lib/index-compose.sh:349`: the ahead-of-pin remedy "stage the gitlink by hand" is the silent overwrite the guard exists to stop
-
-- **Axes:** functional correctness / error signalling (NFR2). **Severity:**
-  Major.
-
-`scripts/lib/resolve.sh:279-291` states the invariant: staging a tier that is
-ahead of its pin, without first composing up, "turns [the refusal] into a silent
-overwrite". The next down compose writes root's older text over the carrier. The
-only safe adoption is compose-up, then stage the pair.
-
-The new ahead-of-pin message offers the unsafe half as its first remedy, gives
-no command, and says nothing about composing up. `gitlore_adopt_recovered_merge`
-leans on this same message: its compose-up failure branch (`resolve.sh:330`)
-says "the next gate refuses the tier instead", and that refusal is this line.
-
-**Failure scenario.**
-1. A landed tier merge re-texts a line root also holds, and root's index cannot
-   take it: `gitlore_compose_up` returns 1, so the recovery leaves the gitlink
-   unstaged.
-2. The next commit aborts with the ahead-of-pin line.
-3. The agent does as told: `git -C memory add ddaanet`, then retries.
-4. The pin guard passes. `gitlore_compose` projects root's older text over the
-   carrier. `gitlore_sync_tiers_to_live` commits that inside the tier, and
-   `pre-push` publishes it. The upstream fact is destroyed without a refusal.
-
-Item 1.3's own slice-1 code review measured this destruction for staging alone.
-
-**Fix direction.** Name the safe adoption, or say explicitly that staging alone
-overwrites the tier's text at the next compose. A remedy that must not be
-followed as written is worse than none.
+  For memory's own merge (`merged_tier` empty), the same failure calls
+  `rest_unadopted_tier "$memroot" ""`, which prints "tier '' stays on the merge
+  commit". If the lock clears before `git commit`, that commit also lands
+  without the composed index staged.
+- **Reproduced (mechanism).** Probe `p2.sh` extracted the real
+  `compose_merged_indexes` with `sed` and ran it under `set -euo pipefail`.
+  Stubs: `gitlore_compose_up` returns 0; `gitlore_git` fails only on
+  `add -- MEMORY.md`. The call then printed `merged_tier=tier tier_unadopted=1`,
+  and the script continued past the failed add.
+- **Impact.**
+  - Root describes merged facts while the tier sits on its pre-merge pin.
+  - The next compose-down (PostToolBatch or SessionStart) passes the pin guard
+    and projects root's merged lines onto the old carrier, dangling at that pin.
+  - That dirties the tier, which then makes `gitlore_adopt_advanced_live` refuse
+    the retake the remedy asks for.
+  - The trigger is narrow: a lock held past the retry schedule.
+- **Fix direction.**
+  - Return an explicit, distinct status (for example 3) from the unadopted arm,
+    and check each staging command inside the function explicitly.
+  - Or call the function bare, and signal "unadopted" through a variable, as
+    `merged_tier` already is.
 
 ## Minor
 
-### m1 — `scripts/lib/resolve.sh:990, 996-997, 1027, 1091-1100`: the approval is left stale on failure paths after the tree was written, and the "No restamp" comment is falsified
+### m1. The relay write and its drain resolve the gitdir two different ways
 
-- **Axes:** robustness / stale comment. **Severity:** Minor.
+- **Where:** `scripts/lib/index-sync.sh:171` (`rev-parse --git-path`) against
+  `:206` and `:264` (`--absolute-git-dir`).
+- **Axes:** robustness, conformance (D51: "in the memory gitdir").
+- **Mechanism.** For a store whose `.git` is a directory, `--git-path` prints
+  `.git/gitlore-relay-…`, relative to `-C`'s directory. The write then opens
+  that path relative to the caller's cwd, which is the project root in every
+  hook. The file lands in the parent's gitdir and returns 0. The drain and sweep
+  look in the store's absolute gitdir and never see it. The loss is silent, and
+  the subagent is told nothing.
 
-The `touch "$msgfile"` restamp covers only the rc-2 and `*` arms. Three other
-paths write under `$mempath` after the freshness check and then return 1 without
-restamping:
+  Not reachable from gitlore's own install: `init-submodule.sh` absorbs the
+  gitdir and `add-tier.sh` clones through `submodule add`, so `--git-path` is
+  absolute in production. The preimage and stamp helpers share the pattern but
+  pair with themselves; the relay is the first consumer that mixes the two
+  forms.
+- **Reproduced** by accident (see Scope): writes against a plain `git init`
+  store landed in `/Users/david/code/gitlore/.git/`, and the drain found
+  nothing.
+- **Fix direction:** build the name from `--absolute-git-dir` in the write, as
+  the drain does.
 
-- **Per-tier guard loop (`:990`).** It runs `gitlore_recover_landed_merge`,
-  whose `checkout --detach` and `gitlore_compose_up` write tier and root files.
-  If the pin guard then aborts, the approval is stale. Two cases reach this:
-  compose-up failed by design (so the tier stays unstaged), or another tier is
-  off its pin.
-- **Successful compose (`:1027`).** If `gitlore_sync_tiers_to_live`, `add -A` or
-  `commit` then fails, the carrier it wrote is newer than the approval.
+### m2. The pin-guard abort promises "the approved summary is still in place", but every remedy it prints invalidates it
 
-In each case the retry is refused as stale and asks for a new approval covering
-nothing new, though the abort text says "the approved summary is still in
-place".
+- **Where:** `scripts/lib/resolve.sh:1065` and `:1068`.
+- **Axes:** error signaling, clarity.
+- **Mechanism.** `gitlore_commit_msg_freshness` compares the message file's
+  mtime against every file under the store, tier worktrees included. Each remedy
+  writes into that tree:
+  - the ahead-of-pin remedy edits root `MEMORY.md`;
+  - the sideways and diverged remedy checks the tier out;
+  - `/gitlore:resolve` lands a merge.
 
-The comment at `:996-997` ("this writes nothing, so the tree is no newer than
-$msgfile") was true of the guard itself. It stopped being true of the run once
-Item 1.3 put writes in the loop just above it.
+  So the `touch "$msgfile"` on this arm never keeps the approval usable. After
+  following the remedy, the retry is refused with "no approved commit summary",
+  contrary to what the agent was just told. Requiring re-approval is correct,
+  since a hand-edited root index is new content; the promise is what is wrong.
+- **From the code.**
 
-**Scenario.** Tier A holds a stale-no-merge-head landed merge that the root
-index cannot take, and tier B is off its pin. The commit recovers A (checkout
-writes), then aborts on B. After B is fixed, the retry demands re-approval.
+### m3. The restamp's coverage and its justification
 
-### m2 — `scripts/lib/resolve.sh:318-343`: the recovered-merge adoption composes up even when the memory index already records the tier's HEAD
+- **Where:** `scripts/lib/resolve.sh` — the comment at `~1014-1030`, and the
+  `touch "$msgfile"` arms at `:910-941` and `:1040-1151`.
+- **Axes:** robustness, conformance (FR11).
+- **Two gaps.**
+  - **Guard failures that prepare no merge.** The comment says the stale-merge
+    guard in the per-tier loop returns 1 only after preparing a merge. Several
+    of its arms prepare nothing:
+    - "manual intervention required";
+    - the failed checkout arms of `gitlore_recover_landed_merge`;
+    - the interrupted-preparation and dead-merge arms.
 
-- **Axes:** functional correctness / idempotency. **Severity:** Minor, because
-  the window is narrow.
+    If an earlier tier's recovery composed up, and a later tier fails in one of
+    these arms, the approval is left stale. That is the old code-m1 residual.
+  - **Concurrent writes.** A restamp at failure time also covers any write
+    another agent made to memory between the freshness check and the `touch`.
+    The window includes `gitlore_git`'s lock retries. The success path has the
+    same window up to `add -A`, but the restamp extends the blessing to a retry
+    arbitrarily later. Background subagents writing memory are the premise of
+    FR-C.
+- **From the code.**
 
-`gitlore_adopt_recovered_merge` has no `":$rel" == HEAD` short-circuit.
+### m4. The continuation's non-divergence push failures skip the rest
 
-A continuation can be killed after it staged the gitlink and made the
-bookkeeping commit (`scripts/resolve.sh:227-232`) but before
-`gitlore_clear_merge_state`. That leaves a stale-no-merge-head store whose merge
-is already adopted and pinned. The next gate's recovery takes the "HEAD already
-carries the merge" branch and still runs `gitlore_compose_up`. That replaces
-root's whole block for the tier with the carrier's text, reverting any
-root-index edit made to that tier's lines since.
+- **Where:** `scripts/resolve.sh:296` and `:312`, via `push_or_report`, which
+  runs `exit 1` itself.
+- **Axes:** functional completeness.
+- **Mechanism.** With `tier_unadopted=1`, a local `HEAD:live` or origin push
+  refused for a non-divergence reason exits inside `push_or_report`, before
+  either `rest_unadopted_tier` call. The merge state is already cleared, so the
+  tier is left on the merge commit, ahead of an unstaged pin. `live` is either
+  not advanced (the local push failed) or equal to HEAD (the origin push
+  failed), so `/gitlore:merge` finds nothing to adopt: `live` is not ahead of
+  HEAD. The pin guard refuses every memory commit with the by-hand adoption
+  remedy.
 
-On the commit path this runs inside the per-tier loop, after the freshness
-check. The reverted edit is therefore the approved one the commit is about to
-record, and the only trace is a composed-lines echo on stderr.
+  The changelog names only two paths that leave the tier in place: a yield, and
+  a pin the merge does not contain. This is a third.
+- **From the code.**
 
-**Fix direction.** Return early when
-`git -C "$super" rev-parse -q --verify ":$rel"` equals the store's HEAD.
+### m5. The ahead-of-pin remedy under-specifies the adoption it asks for
 
-### m3 — `scripts/lib/resolve.sh:341`: the printed staging command is not verbatim-runnable on a spaced path
+- **Where:** `scripts/lib/index-compose.sh:358`.
+- **Axes:** error signaling, clarity.
+- **Mechanism.** "Bring every line of … into `MEMORY.md`, each link prefixed"
+  does not say to **replace** root's existing `<tier>/` lines.
+  - Appending a re-texted line leaves a duplicate pointer, and the next pass
+    refuses it (rule 1).
+  - It also leaves root's lines for paths the carrier dropped. The next
+    compose-down projects those back into the carrier as dangling pointers.
 
-- **Axes:** whitespace safety. **Severity:** Minor.
+  What `gitlore_compose_up` does is replace root's block for the tier; the
+  remedy should say so.
+- **From the code.**
 
-``Run `git -C %s add -- MEMORY.md %s` `` interpolates `$super` and `$rel`
-unquoted. With a project at `/Users/x/my project`, the pasted command runs
-`git -C /Users/x/my project/memory add …`, which fails. The message it belongs
-to exists to prevent a silent pointer reset.
+## Checks that passed
 
-This copies the precedent at `:1687`, which has the same defect. The
-neighbouring `gitlore_recover_*` messages quote `\"$abs\"`.
+- **Relay write** (`index-sync.sh:157-183`):
+  - The name `gitlore-relay-<S>-<A>-<epoch>-<pid>-<H>` matches D51.
+  - `pid` is read outside the command substitution, so it is the hook's process
+    id.
+  - The tag comes from a closed set, which keeps `${rest%-*-*-*}` unambiguous.
+  - The occupied-name refusal comes before `mv`, so `mv`-into-directory is
+    covered.
+  - Every failure returns non-zero into both callers' `if !`.
+  - An empty agent id is refused.
+- **Relay drain:**
+  - Own-session prefix only, and `-type f` excludes directories.
+  - `.tmp` is excluded, and the sanitized class cannot contain `.`.
+  - Enumeration is `-print0` into `read -d ''`; sorting is basename
+    `LC_ALL=C sort` with no `-z` (BSD-safe).
+  - It removes exactly the files it read, and `rm` failures are absorbed.
+  - Session ids are fixed-length UUIDs, so one session's prefix cannot match
+    another's.
+- **Writer vs drainer vs sweep:**
+  - The concurrent probe was clean (see Prior findings, C2).
+  - The sweep's `-mtime +7` cannot touch a live write or temp.
+  - SessionStart drains before it sweeps, so a session resumed after more than
+    seven days still receives its own reports first.
+- **`relay-drain.sh`:**
+  - It is executable and registered on `PostToolBatch` in `hooks.json`.
+  - Unparseable payloads and keyed runs exit 0 before any drain; the parse fails
+    toward not draining.
+  - It emits one `jq -n` object on both channels.
+  - The residual (reports lost if the hook is killed between drain and emit) is
+    stated.
+- **Reporting hooks:**
+  - Their drain branches are gone. They write when keyed (guarded on a non-empty
+    report) and otherwise emit only.
+  - The `session_id` and `agent_id` reads in the PostToolBatch hooks are
+    non-fatal.
+  - A failed relay write appends the "could not be staged" line to
+    `additionalContext`. `index-sync-post.sh` falls back to `sysmsg` when `ctx`
+    is empty.
+  - `agent_id`, never `agent_type`, is used everywhere, and `add-tier-batch.sh`
+    drops the keyed stamp.
+- **`session-start.sh`:**
+  - It reads stdin once, before the first guard exit.
+  - It sources `index-sync.sh`.
+  - The drain and sweep sit after the tier and compose passes and before the
+    final emit, and both always return 0 under `set -e`.
+- **Landing record** (`resolve.sh:913-925`, `:1143-1148`, `:1216-1246`):
+  - The record is written before the tier commit and removed when that commit
+    fails.
+  - All records are cleared once memory's `add -A` succeeds.
+  - A record is honoured only when `HEAD^` equals the record and the pin; a
+    foreign commit on a failed-commit pin is refused (bats case at
+    `commit_memory.bats:325`).
+  - It stages the gitlink only. That is safe because the carrier in that commit
+    was composed from root in the same run, or committed as-is after an rc-1
+    refusal, which is what `add -A` would have staged anyway.
+  - Unmaterialized tiers are skipped.
+- **Retry of a tier `live` advance failure** (probe `probe.bats`, one-shot
+  `live.lock`): the first run exits 1 and leaves the record; the retry exits 0
+  and records the tier HEAD. The tier's `live` stays behind HEAD after the
+  retry. That predates this range (a clean tier skips the advance), and
+  `gitlore_repair_stranded_live` in the push gate repairs it.
+- **Commit-path order:**
+  1. freshness;
+  2. the per-tier stale-merge loop;
+  3. `gitlore_stage_landed_tiers`;
+  4. the pin guard;
+  5. `gitlore_compose` (rc 0 proceeds, rc 1 reports and proceeds, rc 2 and `*`
+     abort);
+  6. `gitlore_sync_tiers_to_live`;
+  7. `add -A`, clearing records;
+  8. commit.
 
-### m4 — `scripts/lib/index-sync.sh:236` and `scripts/cc-hooks/session-start.sh:398`: markers are keyed by agent only, so any session's parent-side run or SessionStart drains another live session's reports
-
-- **Axes:** concurrency / functional correctness. **Severity:** Minor.
-
-The drain enumerates every `gitlore-relay-*` in the shared memory gitdir.
-Consider two Claude Code sessions in the same checkout, or a `/compact` or
-resume while a background subagent is live. Either session's unkeyed
-PostToolBatch run or SessionStart folds and removes the other's subagent
-markers. The report goes to the wrong conversation, framed with an agent id it
-never dispatched, and the right one never gets it.
-
-The design already keys nudge markers by `session_id`, and a relay marker could
-carry the same field.
+  All messages go to stderr through `gitlore_say_for_agent_or_user`. The
+  `local pin_problems` declaration is split from its assignment, so the status
+  is not lost.
+- **Take failure arm** (`resolve.sh:1776-1788`):
+  - Nothing is staged or committed, and the tier is checked out at the pre-take
+    commit.
+  - Both callers propagate `|| return 1`.
+  - A failed checkout prints a quoted, absolute, runnable command.
+  - The walk-back loses no work: both take paths refuse a dirty tier first, and
+    `gitlore_compose_up` writes only root through temp+mv.
+- **Continuation:**
+  - An unadopted tier skips the gitlink staging and bookkeeping.
+  - The rest runs only on the two exit-0 paths.
+  - The pin-ancestry check uses `rev-parse -q --verify "${pin}^{commit}"` before
+    `merge-base`.
+  - The checkout-failure remedy is quoted and absolute.
+- **`gitlore_adopt_recovered_merge`:**
+  - It short-circuits when `:<rel>` equals the tier's HEAD.
+  - A failed up projection stages nothing.
+  - It stages the named pair only, never `add -A`.
+- **`gitlore_compose_check_pins` ahead-of-pin arm:**
+  - It guards `merge-base` with `rev-parse -q --verify`.
+  - The absolute path is computed in the capture subshell.
+  - The staging command is quoted.
+- **Portability and whitespace.** Nothing new needs bash 4 or GNU tools:
+  `find -maxdepth/-delete/'!'/-print0`, `date +%s`, `${BASHPID:-$$}` and
+  `tr -c 'A-Za-z0-9-' '_'` all work on BSD and bash 3.2. Every path expansion in
+  the new code is quoted, and tier lists are read line by line with `read -r`.
+- **Citations.** No code comment added in the fix pass cites `plans/`, a runbook
+  item or a finding id.

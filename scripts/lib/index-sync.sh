@@ -156,7 +156,7 @@ gitlore_compose_stamp_file() {
 # channel, where `set -u` would instead abort the whole hook.
 gitlore_relay_write() {
   local mempath="$1" session="${2:-}" agent="${3:-}" tag="${4:-}" sysmsg="${5:-}" ctx="${6:-}"
-  local s a epoch pid marker
+  local s a epoch pid gitdir marker
   [ -n "$agent" ] || return 1
   case "$tag" in sync|compose) ;; *) return 1 ;; esac
   if [ -n "$session" ]; then s=$(_gitlore_sanitize_id "$session"); else s=nosession; fi
@@ -168,7 +168,11 @@ gitlore_relay_write() {
   # every call, from one process or twenty alike — rather than the calling
   # process's, which is what discriminates one hook's writes from another's.
   pid=${BASHPID:-$$}
-  marker=$(git -C "$mempath" rev-parse --git-path "gitlore-relay-$s-$a-$epoch-$pid-$tag") || return 1
+  # `--absolute-git-dir`, the form the drain and the sweep read: `--git-path`
+  # prints a path relative to the store for a store whose `.git` is a
+  # directory, and the write would open it relative to the caller's cwd.
+  gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir) || return 1
+  marker="$gitdir/gitlore-relay-$s-$a-$epoch-$pid-$tag"
   {
     printf -- '--- gitlore-relay-sysmsg ---\n'
     printf '%s\n' "$sysmsg"

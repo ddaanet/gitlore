@@ -948,7 +948,9 @@ $push_err" >&2
           # Diverged from its own local `live` — the same gate memory has here,
           # and the same resolution. The merge lands in the tier's gitdir.
           gitlore_yield_merge "$tierpath" live head-vs-live HEAD || return 1
-        elif gitlore_check_head_live_agree "$tierpath" "tier '$tier'" "$tier"; then
+          return 1
+        fi
+        if gitlore_check_head_live_agree "$tierpath" "tier '$tier'" "$tier"; then
           # Refused with the two refs in agreement and no divergence: neither
           # diagnosis applies, so git's own words are all there is to go on.
           gitlore_say_for_agent_or_user \
@@ -957,6 +959,8 @@ $push_err" \
             "gitlore: tier '$tier' was committed but its local 'live' could not be advanced. git said:
 $push_err" >&2
         fi
+        # No merge was prepared on this arm, so it restamps.
+        touch "$msgfile"
         return 1
       fi
     fi
@@ -1021,11 +1025,15 @@ gitlore_sync_memory_to_live() {
     # rewrites the file; the pre-commit path retries on it as it stands. A merge
     # preparation is the exception: it checks merged content out into the
     # worktree, which the summary never covered, so a stale approval is the
-    # right answer after it — the stale-merge guard in this loop and the merge
-    # yields inside gitlore_sync_tiers_to_live return without one. Reaching here
-    # means $fresh was "yes", so the file exists and a restamp cannot create an
-    # empty one, and the memory commit that consumes it is the last step that
-    # can fail.
+    # right answer after it — the merge yields inside gitlore_sync_tiers_to_live
+    # return without one. The stale-merge guard in this loop returns without
+    # one on every arm, because it does not tell its caller which arm failed,
+    # and several prepare nothing: a merge gitlore did not prepare, a merge
+    # state nothing can classify, a recovery whose checkout failed. When an
+    # earlier tier's recovery has already composed up, the retry after one of
+    # those reads the approval stale. Reaching here means $fresh was "yes", so
+    # the file exists and a restamp cannot create an empty one, and the memory
+    # commit that consumes it is the last step that can fail.
     local tier
     while IFS= read -r tier; do
       [ -n "$tier" ] || continue
@@ -1062,7 +1070,7 @@ $pin_problems"
       # remote is contained in HEAD and the take reports nothing to take.
       gitlore_say_for_agent_or_user \
         "$pin_header
-gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit — the approved summary is still in place." \
+gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit. Every remedy writes into the memory store, so the summary has to be approved again before the retry." \
         "$pin_header
 gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
       touch "$msgfile"
@@ -1794,9 +1802,12 @@ gitlore_adopt_tier_into_root() {
   # tier no longer holds. Staged, the unconditional pin is idempotent rather than
   # destructive. Staging is best-effort: a failure here must not turn a landed
   # take into a failed merge.
-  # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
-  gitlore_git -C "$mempath" add -- MEMORY.md "$tier" \
-    || printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C "%s" add -- MEMORY.md "%s"` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$mempath" "$tier" >&2
+  # The printed path is absolute, so the command runs from anywhere.
+  if ! gitlore_git -C "$mempath" add -- MEMORY.md "$tier"; then
+    abs=$(CDPATH='' cd -- "$mempath" && pwd) || abs="$mempath"
+    # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+    printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C "%s" add -- MEMORY.md "%s"` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$abs" "$tier" >&2
+  fi
   # Then commit the pair, so an explicit take leaves a clean store (D49). The
   # dirty reading is the one taken BEFORE the tree moved: everything dirty now is
   # this take's own work, and anything that was dirty before it is unapproved

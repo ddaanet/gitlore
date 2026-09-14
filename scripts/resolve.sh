@@ -87,15 +87,21 @@ load_continuation_state() {
 # over an index problem the agent fixes in one edit is the worse outcome. Report,
 # then commit what the merger produced. A tier the root could not adopt is the
 # one case the report is not the whole answer: the root must then record nothing
-# of the merge, so this returns 1 and stages nothing in the root.
-# Sets `merged_tier` for the caller: the store's path relative to the memory
-# root, or empty when the merge is memory's own. The continuation needs it after
-# the commit to stage the moved gitlink, and this is where it is already derived.
+# of the merge, so this sets `tier_unadopted` and stages nothing in the root.
+# Sets two variables for the caller. `merged_tier`: the store's path relative to
+# the memory root, or empty when the merge is memory's own; the continuation
+# needs it after the commit to stage the moved gitlink, and this is where it is
+# already derived. `tier_unadopted`: 1 when a tier merge's up projection failed,
+# after emitting, and empty otherwise.
+# Returns 0. A failed staging command aborts the continuation under errexit,
+# before the merge commit, which keeps the merge state for a rerun. The caller
+# calls it bare: an `||` on the call would suspend errexit across the whole
+# body, and a failed `add` would then read as a tier the root could not adopt.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
-# Returns 1 after emitting when a tier merge's up projection failed.
 compose_merged_indexes() {
   local memroot="$1" store="$2" memroot_abs composed dangling rc=0
   merged_tier=""
+  tier_unadopted=""
   # The state file records an absolute store path while `memroot` is the
   # submodule path as `.gitmodules` spells it, so the two are compared in one
   # form. `-ef` rather than string equality: this decides whether a tier is
@@ -129,7 +135,8 @@ compose_merged_indexes() {
     echo "gitlore: the root index could not take tier '$merged_tier''s lines — the merge is being committed in the tier, and the memory store will record none of it:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
     gitlore_git -C "$store" add -A
-    return 1
+    tier_unadopted=1
+    return 0
   elif [ "$rc" -eq 2 ]; then
     echo "gitlore: the root index could not be written — the merge is being committed uncomposed. Investigate the path named below, then edit MEMORY.md to retrigger composition:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
@@ -243,8 +250,7 @@ if [ $# -ge 1 ]; then
       load_continuation_state
       # Compose before committing, so what lands is composed: a merge is the one
       # write path into a memory store that no compose trigger sees.
-      tier_unadopted=""
-      compose_merged_indexes "$memroot" "$mempath" || tier_unadopted=1
+      compose_merged_indexes "$memroot" "$mempath"
       # Is the ROOT store carrying unapproved work this merge's bookkeeping
       # would sweep up? Asked of the paths OUTSIDE the pair: the preparation has
       # already moved the tier, so the root is dirty by construction here and a

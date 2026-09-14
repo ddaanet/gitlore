@@ -400,6 +400,11 @@ pinned_store_with_tier() {
   # command, quoted so a spaced project path survives the paste.
   memabs=$(cd memory && pwd)
   [[ "$tierline" == *"ddaanet/MEMORY.md"* ]]
+  # The adoption replaces root's block for the tier, as gitlore_compose_up
+  # does: appending to it leaves a re-texted line twice (a duplicate pointer
+  # the next pass refuses) and keeps root's lines for paths the carrier
+  # dropped, which the next compose projects back as dangling pointers.
+  [[ "$tierline" == *"replace every line of $memabs/MEMORY.md whose link starts with 'ddaanet/'"* ]]
   [[ "$tierline" == *"git -C \"$memabs\" add -- \"ddaanet\""* ]]
   # `checkout --detach <pinned>` is exactly the command that would destroy the
   # commits this tier carries, so the branch has not landed until it stops being
