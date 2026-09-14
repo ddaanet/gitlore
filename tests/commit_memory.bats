@@ -184,6 +184,111 @@ EOF"
   [ "$(git -C memory/ddaanet rev-parse live)" = "$tier_live_before" ]
 }
 
+@test "a dirty root index with a welded line aborts the memory commit" {
+  # Root's own index carrying changes aborts like a dirty carrier does, here
+  # on a rule 6 weld rather than a rule 1 duplicate.
+  make_parent_with_memory
+  printf -- '- [A](a.md) — a- [B](b.md) — b\n' >> memory/MEMORY.md
+  n=$(wc -l < memory/MEMORY.md | tr -d ' ')
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record a and b"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"memory/MEMORY.md: line $n welds two pointer bullets"* ]]
+  # The weld line prints on the advisory arm too; these two name the arm.
+  [[ "${output}${stderr}" == *"aborted"* ]]
+  [[ "${output}${stderr}" != *"the commit went ahead"* ]]
+  [ -n "$(git -C memory status --porcelain -- MEMORY.md)" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+}
+
+@test "a carrier defect in a clean tier commits and reports" {
+  # The abort is scoped to a problem-bearing index that IS dirty. A defect
+  # already committed inside the tier's own history, with nothing uncommitted
+  # in the carrier, reports instead — even though memory itself is dirty from
+  # an unrelated root edit.
+  committed_carrier_defect_store
+  seed_root_bullet "unrelated.md" "an unrelated fact"
+  printf -- '---\nname: unrelated\ndescription: ""\n---\n\nbody\n' > memory/unrelated.md
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record an unrelated fact"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [[ "${output}${stderr}" == *"the commit went ahead"* ]]
+  [[ "${output}${stderr}" == *"memory/ddaanet/MEMORY.md: duplicate pointer path shared.md"* ]]
+}
+
+@test "a tier dirty only outside its carrier commits and reports" {
+  # Same committed carrier defect as above, but the tier's worktree is dirty
+  # from a file that is not MEMORY.md — the abort reads dirtiness of the
+  # carrier itself, not of the tier as a whole.
+  committed_carrier_defect_store
+  printf 'a new tier fact\n' > memory/ddaanet/extra.md
+  seed_root_bullet "unrelated.md" "an unrelated fact"
+  printf -- '---\nname: unrelated\ndescription: ""\n---\n\nbody\n' > memory/unrelated.md
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record an unrelated fact"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [[ "${output}${stderr}" == *"the commit went ahead"* ]]
+  [[ "${output}${stderr}" == *"memory/ddaanet/MEMORY.md: duplicate pointer path shared.md"* ]]
+}
+
+# A tier whose committed carrier holds a duplicate pointer, recorded as the
+# tier's pin, with the carrier clean. The clean-carrier check is what keeps the
+# callers honest: a carrier left dirty turns their commit-and-report case into
+# the abort.
+committed_carrier_defect_store() {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_tier_bullet ddaanet shared.md "hook"
+  git -C memory/ddaanet add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q -m "carrier: duplicate pointer" || return 1
+  commit_memory_state || return 1
+  [ -z "$(git -C memory/ddaanet status --porcelain -- MEMORY.md)" ] || {
+    echo "committed_carrier_defect_store: the carrier is dirty" >&2
+    return 1
+  }
+}
+
+@test "a root index dirty only outside MEMORY.md commits and reports" {
+  # Root's counterpart of the tier case above: a committed root defect with
+  # memory dirty from a new fact file reports, because root's MEMORY.md itself
+  # carries no changes.
+  make_parent_with_memory
+  seed_root_bullet "dup.md" "hook"
+  seed_root_bullet "dup.md" "hook"
+  printf -- '---\nname: dup\ndescription: ""\n---\n\nbody\n' > memory/dup.md
+  commit_memory_state
+  printf -- '---\nname: unrelated\ndescription: ""\n---\n\nbody\n' > memory/unrelated.md
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record an unrelated fact"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [[ "${output}${stderr}" == *"the commit went ahead"* ]]
+  [[ "${output}${stderr}" == *"memory/MEMORY.md: duplicate pointer path dup.md"* ]]
+}
+
+@test "a leftover root prefix commits and reports even when root is dirty" {
+  # Rule 3 problems carry no file prefix at all, so the attribution helper can
+  # never match them to root's file — they report unconditionally, regardless
+  # of root's own dirtiness.
+  make_parent_with_memory
+  seed_root_bullet "gone/x.md" "leftover"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record a leftover prefix"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [[ "${output}${stderr}" == *"root index line 'gone/x.md' has a prefix naming no mounted tier"* ]]
+  [[ "${output}${stderr}" == *"the commit went ahead"* ]]
+}
+
 @test "a tier holding a merge gitlore did not prepare is not composed into" {
   # The refusal in gitlore_sync_tiers_to_live says nothing was changed. Compose
   # runs ahead of it and writes carrier files, so without a matching guard on
