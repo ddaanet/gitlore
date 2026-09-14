@@ -239,6 +239,8 @@ teardown() { teardown_tmp_repo; }
   pin_before=$(git -C memory rev-parse ":ddaanet")
   run bash "$HOOK"
   [ "$status" -ne 0 ]
+  # Names WHY it aborted, so a different abort could not satisfy this case.
+  [[ "$output" == *"moved off the commit the memory store records for it"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
   # The carrier, in the worktree rather than at HEAD: the abort means nothing
@@ -385,9 +387,9 @@ committed_stale_carrier_store() {
   # the tree newer than the summary) and then fail on beta, which is what
   # gitlore_compose's rc 2 requires. Blocking alpha instead would fail before
   # anything was written, and the msgfile would never go stale.
+  head_before=$(git -C memory rev-parse HEAD)
   chmod a-w memory/beta
 
-  head_before=$(git -C memory rev-parse HEAD)
   run bash "$HOOK"
   chmod u+w memory/beta
   [ "$status" -ne 0 ]

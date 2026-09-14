@@ -294,6 +294,23 @@ batch_payload() {
   [ ! -f "$stash" ]   # stash consumed
 }
 
+# Reds when the hook's `|| agent_id=""` fallback (line ~30) is removed: jq's
+# parse failure then kills the hook under errexit before the stash is ever
+# consumed, so nothing propagates and the stash survives.
+@test "post: an unparseable payload still propagates on the unkeyed baseline (fallback proof)" {
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '---\nname: a\ndescription: stale desc\n---\nbody\n' > memory/a.md
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  printf -- '- [A](a.md) — old hook\n' > "$stash"
+  printf -- '- [A](a.md) — new hook\n' > memory/MEMORY.md
+  run bash -c 'printf "not json" | bash "$1"' _ "$POST"
+  [ "$status" -eq 0 ]
+  run grep '^description:' memory/a.md
+  [ "$output" = 'description: "new hook"' ]
+  [ ! -f "$stash" ]
+}
+
 @test "post: refuses to propagate a hook carrying a markdown link (glue artifact)" {
   # `gitlore_index_pairs` splits on the FIRST ") — ", so a welded line is one
   # syntactically valid pair whose hook happens to contain a whole second

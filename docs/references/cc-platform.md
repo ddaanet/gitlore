@@ -185,10 +185,12 @@ reaches an index without passing it.
 report is relayed through a file keyed by session and agent**
 
 Measured under CC 2.1.261, probe and control: the parent transcript carries zero
-`hook_*` attachments while the subagent's own JSONL carries all four, and the
-control run with no subagent surfaces both channels normally. `systemMessage`
-and `hookSpecificOutput.additionalContext` therefore both stop at the subagent.
-A composition triggered by a subagent's edit to the root index reports to nobody
+`hook_*` attachments while the subagent's own JSONL carries all four hook
+attachment kinds — `hook_system_message`, `hook_additional_context`,
+`hook_success` and `hook_non_blocking_error` — and the control run with no
+subagent surfaces both channels normally. `systemMessage` and
+`hookSpecificOutput.additionalContext` therefore both stop at the subagent. A
+composition triggered by a subagent's edit to the root index reports to nobody
 who can act on it, and the parent's only view is whatever the subagent chooses
 to narrate — model-mediated, not a mechanism.
 

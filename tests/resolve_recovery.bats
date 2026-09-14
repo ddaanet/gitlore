@@ -387,17 +387,52 @@ tier_prepare_head_vs_live() {
   [ "$(git -C memory rev-parse ":ddaanet")" = "$landed" ]
 }
 
+# A continuation killed right after its own bookkeeping commit, then re-run.
+# The pair is already adopted — memory's index already records the tier's
+# HEAD — and the tier's merge-state file is left in place (that commit clears
+# only the tier's own MERGE_HEAD, never memory's leftover state), so the next
+# gate still classifies this as a landed merge to recover. Without the
+# short-circuit, gitlore_adopt_recovered_merge composes up again and projects
+# the carrier's text over the root-index edit made since.
+@test "recovery: adoption is a no-op when the enclosing index already records the tier's HEAD" {
+  tier_prepare_head_vs_live ddaanet
+
+  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  landed=$(git -C memory/ddaanet rev-parse HEAD)
+
+  # Adopt once, directly, and commit it in memory — exactly what a
+  # continuation's own tail does. Calling the adoption directly, rather than
+  # through gitlore_recover_landed_merge, leaves the tier's merge-state file
+  # untouched for the recovery call below to still find.
+  abs=$(cd memory/ddaanet && pwd)
+  gitlore_adopt_recovered_merge memory/ddaanet "$abs"
+  commit_memory_state "memory: adopt the tier merge"
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$landed" ]
+
+  # A root-index edit to that tier's own line, made after the pair was
+  # adopted — the edit a second up projection would overwrite.
+  awk '/^- \[org fact\]/ { sub(/ — .*/, " — edited after adoption"); } { print }' \
+    memory/MEMORY.md > "$BATS_TEST_TMPDIR/edited-index"
+  cp "$BATS_TEST_TMPDIR/edited-index" memory/MEMORY.md
+  grep -qxF -- "- [org fact](ddaanet/f.md) — edited after adoption" memory/MEMORY.md
+
+  run --separate-stderr gitlore_guard_stale_merge_state memory/ddaanet
+  [ "$status" -eq 0 ]
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/edited-index"
+  git -C memory diff --cached --quiet
+}
+
 # BORN-GREEN, unlike the four cases around it. `--show-superproject-working-tree`
 # does not by itself distinguish a tier (superproject = an enclosing memory
 # store) from the memory root (superproject = the user's own project, which is
 # never a memory store just for having one) — so staging must be scoped by an
-# explicit tier predicate: the superproject carries MEMORY.md at its root AND
-# the recovered store's own path, relative to that superproject, is one of
-# `gitlore_tier_paths "$superproject"` (both conditions, so a host project that
-# happens to keep a MEMORY.md at its root does not qualify on the file test
-# alone). Staging the memory root's own gitlink into the user's project index
-# is the pre-commit hook's job, gated by FR11's approval — not this recovery's
-# to do unprompted.
+# explicit predicate: the superproject carries MEMORY.md at its root AND the
+# recovered store's own path, relative to that superproject, is NOT the
+# superproject's own `submodule.gitlore-memory.path` (both conditions — no
+# membership test against `gitlore_tier_paths`, which would only restate what
+# `--show-superproject-working-tree` already settled). Staging the memory
+# root's own gitlink into the user's project index is the pre-commit hook's job,
+# gated by FR11's approval — not this recovery's to do unprompted.
 #
 # "Nothing staged in the parent repo" held against the code as it stood when
 # this case was written, so it characterizes the scope rule rather than proving
@@ -405,10 +440,11 @@ tier_prepare_head_vs_live() {
 # and the case that isolates that clause is the host-project one below: drop the
 # exclusion and THAT case reds, while this one does not.
 #
-# It no longer reds under the naive predicate either. Adoption stages the pair,
-# so a parent with no root MEMORY.md fails `add -- MEMORY.md memory` on the
-# pathspec and stages nothing — this case then passes for the wrong reason. Read
-# it as a characterization of the memory root's scope, not as the clause's pin.
+# It no longer reds under a predicate missing the exclusion clause either:
+# adoption stages the pair, so a parent with no root MEMORY.md fails
+# `add -- MEMORY.md memory` on the pathspec and stages nothing — this case then
+# passes for the wrong reason. Read it as a characterization of the memory
+# root's scope, not as the clause's pin.
 @test "recovery: the same recovery for the memory root stages nothing in the parent repo" {
   make_diverged_head_vs_live memory
   run --separate-stderr bash "$PRE_COMMIT"

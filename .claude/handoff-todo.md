@@ -1,13 +1,12 @@
 ## Open decisions
 
-- **The memory index against Claude Code's ~24,985-byte loader cutoff**, per `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports 102% of budget and is truncating, which is why no memory has been written across five sessions. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees ~4,600 by relocation and merges, the three dropped briefs a further ~10,400. Decide: curate first and re-measure, or do the composition reorder (D29 layout rule, D36 rewrite, `gitlore_order_merge` in `index-composition.md`). This gates every memory write below.
+- **The memory index against Claude Code's ~24,985-byte loader cutoff**, per `plans/2026-08-27-memory-index-budget-decision.md`. The root index reports 102% of budget and is truncating, which is why no memory has been written across six sessions. `plans/2026-09-02-ddaanet-design-moment-facts.md` frees ~4,600 by relocation and merges, the three dropped briefs a further ~10,400. Decide: curate first and re-measure, or do the composition reorder (D29 layout rule, D36 rewrite, `gitlore_order_merge` in `index-composition.md`). This gates every memory write below.
 
 - **Whether `CLAUDE.md` §Testing's gate paragraph is rewritten.** Errors:
   - It says a sentinel is valid when its mtime postdates the last edit to any gated input. The mechanism is a content hash, and mtime ordering is not evidence.
   - It points at `just check-sentinel`, which is a justfile-prolog function, not a recipe.
   - Its OOM fallback of three sequential `just` calls failed in Phase 3. Chunking at 2 suites also OOMs, and so does `just test-unit` alone at `GITLORE_TEST_JOBS=1`.
   - The deliverable review's M7 adds: `format-docs`, `check-memory-hygiene.py`, `check-docs-links.py` and `check-version` write no gate file, so a docs-only failure reads green. The gates path is per-worktree. The fallback omits `check-distribution`.
-  - It cites a `plans/` file.
 
 - **Where the chunked gate runner should live.** `/tmp/claude-1000/gate-chunks1.sh` is the only fallback that has completed a full verdict twice, and it is in a tmpfs that will not survive a reboot. It runs one bats suite per invocation, appends `KEY=<tag>:<suite> bats: N passed, M failed` per chunk, and resumes by skipping recorded keys, so its results file must be deleted before a fresh run. Decide whether it becomes a tracked script with its own recipe.
 
@@ -42,9 +41,7 @@
 
 ## Remaining
 
-- Work through the deliverable review's Minor findings, dispatched to sonnet. Already folded: the stale approval, the unquoted adoption remedies and the `gitlore_compose_check_pins` caller comment (C1 fix); every relay-side comment and design-record item (relay redesign). Still open: the `gitlore_adopt_recovered_merge` short-circuit; the squatted-marker and mutation-red comments in `tests/index_sync.bats`, `tests/cc_hook_index_compose.bats`, `tests/commit_memory.bats`, `tests/resolve_recovery.bats`; the untested `|| agent_id=""` and the unargued fatal reads; `tests/git_hook_pre_commit.bats` items; the `pre-commit` step list in `docs/references/git-hooks.md` (order, tier sync, landed-tier staging) and the changelog's sequence; the untracked-file count; the three unrecorded rejected alternatives and D50's dirty-only scope in `decisions.md`; `cc-platform.md` "all four"; `session.md` steps 6 and 10 exit disagreement; `merge-state-recovery.md:80-84`; the hub's hooks bullet; `CLAUDE.md:61`'s `plans/` citation; the two runbook-drift lines.
-
-- Then, in a fresh opus session: `/deliverable-review plans/index-edit-propagation`.
+- In a fresh opus session: `/deliverable-review plans/index-edit-propagation`, over the deliverables as they stand after the Critical, Major and Minor passes.
 
 - `_gitlore_nudge_reset`'s `find … -mtime +7 -delete` is unguarded under the calling hook's errexit; `gitlore_relay_sweep` guards its own. Flagged by the relay slice 1 code review, untouched.
 
@@ -71,6 +68,7 @@
   - `$$` is fixed at shell startup and shared by `&` subshells; `$BASHPID` is per-subshell but absent on bash 3.2; a concurrency test spawns `bash -c` processes.
   - Inside bats, stdin is a socket, not `/dev/null`: a hook that `cat`s its payload hangs when invoked bare (`exec 0</dev/null` in `setup_tmp_repo` now covers it).
   - `grep -c` over a hook's JSON cannot see a doubled block inside a one-line `systemMessage`.
+  - `jq` exits 5 on unparseable input, so a `PreToolUse` hook dying on a parse under `set -e` never blocks its tool (only exit 2 blocks).
 
 - Write the two relay traps:
   - POSIX `mv` moves its source INTO an existing-directory destination with exit 0, so a temp-then-rename needs an explicit `[ -e "$dest" ]` refusal.

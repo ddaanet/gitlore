@@ -37,6 +37,14 @@ if [ "$tool" != "Bash" ]; then
   [ -n "$target" ] || exit 0
 fi
 
+# Fatal here, unlike the `|| agent_id=""` fallback the three PostToolBatch
+# hooks carry: this read cannot fail on shape — the `tool=` read above already
+# parsed the same payload — and a PRE hook that dies here has written no
+# baseline yet, so nothing is stranded. The post hooks then find no stash and
+# no stamp and skip the batch, the same outcome as a non-index call. `jq`
+# exits 5 on unparseable input, and a `PreToolUse` hook blocks its tool only on
+# exit 2, so a dead read here never blocks the Write/Edit/Bash it was
+# observing.
 agent_id=$(jq -r '.agent_id // empty' <<<"$payload")
 stash=$(gitlore_index_preimage_file "$mempath" "$agent_id")   # absolute; parent dir exists
 stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")

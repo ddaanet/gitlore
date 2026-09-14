@@ -180,9 +180,11 @@ EOF"
   # Born-green: today ahead and sideways abort identically, so this cannot go
   # red by writing it — its red is owed to the test review's mutation:
   # implement slice 2's branch WITHOUT the `merge-base --is-ancestor` test
-  # (unconditionally, for every off-pin tier), watch "is checked out at" go
-  # red here because every off-pin tier now gets the ahead wording instead,
-  # then restore the ancestry test.
+  # (unconditionally, for every off-pin tier). "is checked out at" stays green
+  # under that mutation — the ahead wording (index-compose.sh:358) carries the
+  # same phrase — so what goes red is the negative `!= *"ahead"*` assertion
+  # near the end of this case, once every off-pin tier gets the ahead wording
+  # instead of the sideways one. Restore the ancestry test afterward.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -525,8 +527,9 @@ DRIVER
   # longer reaches this rc-1 manifest-refusal arm — re-homed onto a manifest
   # problem instead: 'phantom' is listed but never mounted, so
   # gitlore_compose_check refuses (rule 2) while the tier stays ON its pin, and
-  # gitlore_compose_check_pins passes. CLAUDECODE unset (the state a bats run
-  # leaves it in anyway) so this reads the USER arm rather than the agent one.
+  # gitlore_compose_check_pins passes. A bats run inherits CLAUDECODE from the
+  # invoking shell, and a subagent dispatch exports it as 1, so it is unset
+  # explicitly below to read the USER arm regardless of the ambient environment.
   # Characterization: the wording is already correct, so no red exists here —
   # the two assertions are the same sentence's two endings, so no other
   # producer on this channel can satisfy or break them by accident.
@@ -537,9 +540,10 @@ DRIVER
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
 
   head_before=$(git -C memory rev-parse HEAD)
-  # A bats run leaves CLAUDECODE unset, but the invoking shell may not — force
-  # it, the way tests/git_hook_memory_pre_commit.bats:29 does, so this test
-  # reads the user arm regardless of the ambient environment.
+  # A bats run inherits CLAUDECODE from the invoking shell, and a subagent
+  # dispatch exports it as 1, so it is unset explicitly here (as
+  # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
+  # regardless of the ambient environment.
   unset CLAUDECODE
   run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
   [ "$status" -eq 0 ]
@@ -562,9 +566,10 @@ DRIVER
 
   head_before=$(git -C memory rev-parse HEAD)
   chmod a-w memory/ddaanet
-  # A bats run leaves CLAUDECODE unset, but the invoking shell may not — force
-  # it, the way tests/git_hook_memory_pre_commit.bats:29 does, so this test
-  # reads the user arm regardless of the ambient environment.
+  # A bats run inherits CLAUDECODE from the invoking shell, and a subagent
+  # dispatch exports it as 1, so it is unset explicitly here (as
+  # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
+  # regardless of the ambient environment.
   unset CLAUDECODE
   run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
   chmod u+w memory/ddaanet
@@ -586,9 +591,10 @@ DRIVER
   git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
 
   head_before=$(git -C memory rev-parse HEAD)
-  # A bats run leaves CLAUDECODE unset, but the invoking shell may not — force
-  # it, the way tests/git_hook_memory_pre_commit.bats:29 does, so this test
-  # reads the user arm regardless of the ambient environment.
+  # A bats run inherits CLAUDECODE from the invoking shell, and a subagent
+  # dispatch exports it as 1, so it is unset explicitly here (as
+  # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
+  # regardless of the ambient environment.
   unset CLAUDECODE
   run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
   [ "$status" -ne 0 ]

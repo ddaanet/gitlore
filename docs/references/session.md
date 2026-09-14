@@ -82,8 +82,11 @@ has no `gitlore-memory` entry, no-op.
    without `--recurse-submodules`, since the branch model references `live` as a
    local ref.
 6. **Detach at `live` and fast-forward**, or skip the fast-forward with a notice
-   when memory is dirty. A fast-forward that fails is divergence: report it and
-   route to `/gitlore:resolve`.
+   when memory is dirty. A refused fast-forward that classifies as divergence
+   reports it and routes to `/gitlore:resolve`; any other refusal reports git's
+   own words instead, since a lock, a corrupt object or an unwritable worktree
+   refuse `--ff-only` too and routing them to resolve would be a guess. Both
+   arms end the pass there.
 7. **Repair a missing root index.** A store with no `MEMORY.md` — an install
    seeded from an auto-memory dir that existed but held nothing committed an
    empty tree — gets the `# Memory Index` scaffold written back as an
