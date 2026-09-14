@@ -137,6 +137,53 @@ EOF"
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }
 
+@test "a dirty carrier with a duplicate pointer aborts the memory commit" {
+  # A compose refusal in an index file this commit carries changes to aborts:
+  # committing it would publish the defect. Refusals elsewhere only report.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  # A fresh mount has no local `live`; one is created so a commit that lands
+  # the tier would advance it, giving the "unmoved" assertion something to catch.
+  git -C memory/ddaanet branch -f live
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_root_bullet "ddaanet/shared.md" "hook"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  tier_head_before=$(git -C memory/ddaanet rev-parse HEAD)
+  tier_live_before=$(git -C memory/ddaanet rev-parse live)
+  carrier_before=$(cat memory/ddaanet/MEMORY.md)
+  tier_state_before=$(git -C memory/ddaanet status --porcelain)
+  mem_state_before=$(git -C memory status --porcelain)
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"memory/ddaanet/MEMORY.md: duplicate pointer path shared.md"* ]]
+  [[ "${output}${stderr}" == *"aborted"* ]]
+  # The abort replaces the advisory text rather than appending to it.
+  [[ "${output}${stderr}" != *"the commit went ahead"* ]]
+  [ -n "$(git -C memory/ddaanet status --porcelain -- MEMORY.md)" ]
+  [ "$(cat memory/ddaanet/MEMORY.md)" = "$carrier_before" ]
+  [ "$(git -C memory/ddaanet status --porcelain)" = "$tier_state_before" ]
+  [ "$(git -C memory status --porcelain)" = "$mem_state_before" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head_before" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$tier_live_before" ]
+
+  # The user arm aborts too. CLAUDECODE is unset explicitly: a subagent
+  # dispatch exports it, and the arm's own sentence proves which arm answered.
+  unset CLAUDECODE
+  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"aborted"* ]]
+  [[ "${output}${stderr}" != *"the commit went ahead"* ]]
+  [[ "${output}${stderr}" == *"Open this project in Claude Code"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head_before" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$tier_live_before" ]
+}
+
 @test "a tier holding a merge gitlore did not prepare is not composed into" {
   # The refusal in gitlore_sync_tiers_to_live says nothing was changed. Compose
   # runs ahead of it and writes carrier files, so without a matching guard on
