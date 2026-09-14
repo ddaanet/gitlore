@@ -324,7 +324,7 @@ $line"
   while IFS= read -r line || [ -n "$line" ]; do
     cur="$line"
     while gitlore_weld_tail "$cur" >/dev/null &&
-          wpath=$(gitlore_welded_path "$cur") && [ -f "$tierdir/$wpath" ]; do
+          wpath=$(gitlore_welded_path "$cur") && gitlore_repair_tier_file "$tierdir" "$wpath"; do
       second=$(gitlore_weld_tail "$cur")
       p1+=("${cur%"$second"}")
       report="${report}split a welded line before $wpath
@@ -338,9 +338,17 @@ $line"
   # 4.4 reads "${a[@]}" of an empty array as unbound under `set -u`. With no
   # bullet there is no weld, stray line or duplicate to repair.
   [ "${#p1[@]}" -gt 0 ] || return 0
-  local first last n=0
-  read -r first last < <(gitlore_index_region <(printf '%s\n' "${p1[@]}"))
+  # gitlore_index_region's bounds, read off the split lines in this shell.
+  local first=0 last=0 n=0
+  for line in "${p1[@]}"; do
+    n=$((n + 1))
+    if gitlore_bullet_path "$line" >/dev/null; then
+      [ "$first" -gt 0 ] || first=$n
+      last=$n
+    fi
+  done
   [ "$first" -gt 0 ] || return 0
+  n=0
 
   # The stray test is gitlore_compose_check_index's rule 4 test. Moved lines
   # land right after the last bullet, so the region's bounds stay put.
@@ -442,6 +450,15 @@ $line"
   mv -- "$scratch" "$file" || { rm -f "$scratch"; return 1; }
   printf '%s' "$report"
   return 0
+}
+
+# True when $2 names an existing file under tier directory $1. A `..`
+# component or a leading `/` names no file of the tier's, whatever it reaches.
+gitlore_repair_tier_file() {
+  case "$2" in
+    /*|..|../*|*/..|*/../*) return 1 ;;
+  esac
+  [ -f "$1/$2" ]
 }
 
 # Print the lines of gitlore_compose_check output (stdin) that name index file

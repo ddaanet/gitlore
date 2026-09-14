@@ -439,13 +439,12 @@ correction framing; citations follow the docs' own conventions.
 - Item 6.2: `docs/references/git-hooks.md` — D50's conclusion amended (a compose
   problem in an index file the commit changes aborts, restamping the approval;
   root rules 2 and 3 and clean files report), with the wording/structure line
-  linked to D52; the summary bullet at lines 15-16, the mechanism step at
-  line 55 ("rc 1 reports and continues") and D50's argument paragraph at lines
+  linked to D52; the summary bullet at lines 15-16, the mechanism step at line
+  55 ("rc 1 reports and continues") and D50's argument paragraph at lines
   147-150 ("the commit proceeds … only reported") match it. The same item
   rewrites `docs/references/commit-gate.md:54-57` ("on any failure … no agent
   action"): an index-problem abort, like an off-pin tier, needs an edit before
-  the batch retry lands. Requirements: K5, K7. Depends
-  on: Item 1.1.
+  the batch retry lands. Requirements: K5, K7. Depends on: Item 1.1.
 - Item 6.3: `docs/references/index-composition.md` lines 116-120 — the
   continuation paragraph states that problems in the merged index block the
   landing and what still commits uncomposed. Requirements: K4, K7. Depends on:

@@ -1350,8 +1350,11 @@ gitlore_push_stores() {
     # equally-behind root's upstream one as a divergence. No `continue` after it
     # — unlike a take from the remote, what was adopted here has never been
     # published, so this tier's push is exactly what has to happen next.
+    #
+    # This take and the behind arm's run marked as inside a push, so a repair
+    # names this push as what publishes it rather than /gitlore:push.
     if gitlore_live_ahead_of_head "$tierpath"; then
-      gitlore_merge_stores "$mempath" || return 1
+      GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores "$mempath" || return 1
     fi
     gitlore_check_head_live_agree "$tierpath" "tier '$tier'" "$tier" || return 1
     # `origin/live` has to be current before it can serve as the merge authority.
@@ -1376,7 +1379,7 @@ gitlore_push_stores() {
               # The whole take pass, not this tier alone: it runs root-first, and
               # a tier take writes a bookkeeping commit that would meet an
               # equally-behind root's upstream one as a divergence.
-              gitlore_merge_stores "$mempath" || return 1
+              GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores "$mempath" || return 1
               # The take can repair a defective arrival, committing on top of
               # what it fetched, and memory's push below records that commit —
               # so a `live` the remote does not already hold goes out now, for
@@ -1873,8 +1876,8 @@ gitlore_adopt_tier_into_root() {
 # lines that already passed an approval gate and adds no text. The worktree
 # never holds the repair uncommitted — the rewrite happens on a scratch copy
 # inside the tier's gitdir, and the tier moves only by checking out `live` once
-# it holds the commit — so a killed take leaves the tier clean, on the arrival
-# or its pin, with `live` holding the arrival or the repair.
+# it holds the commit — so a killed take leaves the tier clean, on the arrival,
+# the repair or its pin, with `live` holding the arrival or the repair.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
 #       $4 = "1" when the root store was dirty before the take,
 #       $5 = "tier '<name>'", $6 = the first refusal's problems naming the
@@ -1885,6 +1888,7 @@ gitlore_adopt_tier_into_root() {
 gitlore_adopt_repair_arrival() {
   local mempath="$1" tier="$2" old_gitlink="$3" root_dirty_before="$4" label="$5" carrier_problems="$6"
   local tierpath="$mempath/$tier" gitdir scratch report line repair="" err retry_composed retry_rc=0
+  local remedy=""
 
   if ! gitdir=$(git -C "$tierpath" rev-parse --absolute-git-dir) ||
      ! scratch=$(mktemp -d "$gitdir/gitlore-repair.XXXXXX"); then
@@ -1909,13 +1913,14 @@ gitlore_adopt_repair_arrival() {
       [ -n "$line" ] || continue
       printf 'gitlore:   live:MEMORY.md: %s\n' "${line#"$tierpath/MEMORY.md: "}" >&2
     done <<<"$carrier_problems"
+    remedy="Once the index is fixed where it was published, run /gitlore:merge again."
   elif ! repair=$(gitlore_adopt_commit_repair "$tierpath" "$tier" "$scratch" "$report"); then
     printf 'gitlore: %s — its arrival could not be repaired: building the repair commit failed.\n' "$label" >&2
     repair=""
   fi
   rm -rf -- "$scratch"
   if [ -z "$repair" ]; then
-    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" || :
     return 1
   fi
 
@@ -1939,7 +1944,13 @@ gitlore_adopt_repair_arrival() {
     gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$retry_composed" || :
     return 1
   fi
-  printf 'gitlore: %s — the repair is committed in its local '\''live'\''; /gitlore:push publishes it.\n' "$label"
+  # Inside a push the take is itself publishing, and naming /gitlore:push would
+  # send the reader to run again what is already running.
+  if [ -n "${GITLORE_TAKE_IN_PUSH:-}" ]; then
+    printf 'gitlore: %s — the repair is committed in its local '\''live'\'', and this push publishes it.\n' "$label"
+  else
+    printf 'gitlore: %s — the repair is committed in its local '\''live'\''; /gitlore:push publishes it.\n' "$label"
+  fi
   [ -n "$retry_composed" ] && printf '%s\n' "$retry_composed" | sed 's/^/gitlore: /'
   gitlore_adopt_stage_pair_and_commit "$mempath" "$tier" "$root_dirty_before" "$old_gitlink" "$label"
 }
@@ -1978,10 +1989,12 @@ gitlore_adopt_report_refusal_and_walk_back() {
 # Return the tier to the commit the memory store records, after a refusal left
 # nothing to adopt.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
-#       $4 = "tier '<name>'", for the messages.
+#       $4 = "tier '<name>'", for the messages, $5 = the closing remedy when
+#       the store is not what needs fixing (optional).
 # Returns 1 after emitting, whether or not the checkout succeeded.
 gitlore_adopt_walk_back_tier() {
   local mempath="$1" tier="$2" old_gitlink="$3" label="$4" err abs
+  local remedy="${5:-Fix the store, then run /gitlore:merge again.}"
   if ! err=$(gitlore_git -C "$mempath/$tier" checkout -q --detach "$old_gitlink" 2>&1); then
     # Absolute, so the printed command runs from anywhere.
     abs=$(CDPATH='' cd -- "$mempath/$tier" && pwd) || abs="$mempath/$tier"
@@ -1990,7 +2003,7 @@ gitlore_adopt_walk_back_tier() {
       "$label" "$err" "$abs" "$old_gitlink" >&2
     return 1
   fi
-  printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps what arrived. Fix the store, then run /gitlore:merge again.\n' "$label" >&2
+  printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps what arrived. %s\n' "$label" "$remedy" >&2
   return 1
 }
 
