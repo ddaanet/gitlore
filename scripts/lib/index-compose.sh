@@ -225,10 +225,10 @@ EOF
   return 1
 }
 
-# Print the path of a SECOND pointer bullet welded onto line $1; return 1 when
-# there is none. Keyed on the first link's closing paren rather than on the
-# `) — ` separator, so glue that lands ahead of the first hook — leaving no
-# separator between the two links at all — is still caught.
+# Print the substring of $1 starting at a SECOND pointer bullet welded onto
+# it; return 1 when there is none. Keyed on the first link's closing paren
+# rather than on the `) — ` separator, so glue that lands ahead of the first
+# hook — leaving no separator between the two links at all — is still caught.
 #
 # No backtick-awareness, by policy rather than by parsing: a hook has no
 # legitimate use for a bare markdown hyperlink, since the entry already links
@@ -237,8 +237,12 @@ EOF
 # backreferences and POSIX leaves them undefined in EREs, so a balanced-span
 # pattern would force this check out of the idiom the rest of the index parsing
 # uses — to buy a guarantee the policy already gives.
-gitlore_welded_path() {
-  local line="$1" tail second
+#
+# Shared by gitlore_welded_path (which reduces the result to a path) and
+# gitlore_repair_index (which splits the line on it) — one scan, so a repair
+# splits exactly the shape the check flags.
+gitlore_weld_tail() {
+  local line="$1" tail
   gitlore_bullet_path "$line" >/dev/null || return 1
   tail=${line#*](}
   tail=${tail#*)}                  # everything past the first link
@@ -246,12 +250,21 @@ gitlore_welded_path() {
     *"- ["*) ;;
     *) return 1 ;;
   esac
-  second="- [${tail#*"- ["}"
+  printf '%s\n' "- [${tail#*"- ["}"
+}
+
+# Print the path of a SECOND pointer bullet welded onto line $1; return 1 when
+# there is none.
+gitlore_welded_path() {
+  local line="$1" second
+  second=$(gitlore_weld_tail "$line") || return 1
   gitlore_bullet_path "$second"
 }
 
 # Rules 1, 4 and 6 for a single index file. Prints problems; always returns 0
-# (the caller aggregates).
+# (the caller aggregates). A rule added here gains a matching repair rule in
+# gitlore_repair_index in the same change — a problem this reports and
+# gitlore_repair_index cannot fix is a defect no take can walk back from.
 gitlore_compose_check_index() {
   local file="$1" first last n=0 line path welded seen=""
   read -r first last < <(gitlore_index_region "$file")
@@ -279,6 +292,177 @@ $path"
       printf '%s: interleaved non-bullet line %s inside the pointer block\n' "$file" "$n"
     fi
   done < "$file"
+  return 0
+}
+
+# Rewrite <file> in place with the mechanical repair for rules 1, 4 and 6 above
+# — welds, then interleaved non-bullet lines, then duplicate pointers, in that
+# order — leaving every other line's bytes and relative order untouched. $2 is
+# the pin's carrier, read as empty when it names no file; $3 is the tier
+# directory a weld's second path must name a file under to count. Prints one
+# report line per edit, nothing when none was made. Returns 0, or 1 when the
+# rewrite could not be written, leaving the file unchanged.
+gitlore_repair_index() {
+  local file="$1" pin="$2" tierdir="$3"
+  local line report="" i
+
+  local pin_lines=""
+  if [ -f "$pin" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      pin_lines="$pin_lines
+$line"
+    done < "$pin"
+  fi
+
+  local -a p1=()
+  local cur second wpath
+  while IFS= read -r line || [ -n "$line" ]; do
+    cur="$line"
+    while wpath=$(gitlore_welded_path "$cur") && [ -f "$tierdir/$wpath" ]; do
+      second=$(gitlore_weld_tail "$cur")
+      p1+=("${cur%"$second"}")
+      report="${report}split a welded line before $wpath
+"
+      cur="$second"
+    done
+    p1+=("$cur")
+  done < "$file"
+
+  local first last
+  read -r first last < <(gitlore_index_region <(printf '%s\n' "${p1[@]}"))
+  local -a p2=()
+  if [ "$first" -eq 0 ]; then
+    p2=("${p1[@]}")
+  else
+    local -a pre=() reg=() stray=() trail=()
+    local i=0 idx
+    while [ "$i" -lt "${#p1[@]}" ]; do
+      idx=$((i + 1))
+      line="${p1[i]}"
+      if [ "$idx" -lt "$first" ]; then
+        pre+=("$line")
+      elif [ "$idx" -gt "$last" ]; then
+        trail+=("$line")
+      elif gitlore_bullet_path "$line" >/dev/null; then
+        reg+=("$line")
+      elif [ -z "${line//[[:space:]]/}" ]; then
+        reg+=("$line")
+      else
+        stray+=("$line")
+        report="${report}moved a non-bullet line out of the pointer block: $line
+"
+      fi
+      i=$((i + 1))
+    done
+    p2=("${pre[@]}" "${reg[@]}" "${stray[@]}" "${trail[@]}")
+  fi
+
+  read -r first last < <(gitlore_index_region <(printf '%s\n' "${p2[@]}"))
+  local -a p3=()
+  if [ "$first" -eq 0 ]; then
+    p3=("${p2[@]}")
+  else
+    local -a pre2=() reg2=() trail2=()
+    local i=0 idx
+    while [ "$i" -lt "${#p2[@]}" ]; do
+      idx=$((i + 1))
+      line="${p2[i]}"
+      if [ "$idx" -lt "$first" ]; then
+        pre2+=("$line")
+      elif [ "$idx" -gt "$last" ]; then
+        trail2+=("$line")
+      else
+        reg2+=("$line")
+      fi
+      i=$((i + 1))
+    done
+
+    # Duplicates: group by path, keep the first line the pin's carrier lacks
+    # when the group has both a known and a lacked line, else keep the first.
+    local m=${#reg2[@]}
+    local -a keep=() isdrop=()
+    local seenpaths="" path pathj survivor pos anyknown anylacked
+    i=0
+    while [ "$i" -lt "$m" ]; do
+      path=$(gitlore_bullet_path "${reg2[i]}")
+      if grep -qxF -- "$path" <<<"$seenpaths"; then
+        i=$((i + 1))
+        continue
+      fi
+      seenpaths="$seenpaths
+$path"
+      local -a group=()
+      local j=$i
+      while [ "$j" -lt "$m" ]; do
+        pathj=$(gitlore_bullet_path "${reg2[j]}")
+        [ "$pathj" = "$path" ] && group+=("$j")
+        j=$((j + 1))
+      done
+      if [ "${#group[@]}" -gt 1 ]; then
+        anyknown=0 anylacked=0
+        for pos in "${group[@]}"; do
+          if grep -qxF -- "${reg2[$pos]}" <<<"$pin_lines"; then
+            anyknown=1
+          else
+            anylacked=1
+          fi
+        done
+        survivor=""
+        if [ "$anyknown" -eq 1 ] && [ "$anylacked" -eq 1 ]; then
+          for pos in "${group[@]}"; do
+            if ! grep -qxF -- "${reg2[$pos]}" <<<"$pin_lines"; then
+              survivor="$pos"
+              break
+            fi
+          done
+        else
+          survivor="${group[0]}"
+        fi
+        for pos in "${group[@]}"; do
+          [ "$pos" != "$survivor" ] && isdrop[pos]=1
+        done
+      fi
+      i=$((i + 1))
+    done
+    i=0
+    while [ "$i" -lt "$m" ]; do
+      if [ "${isdrop[i]:-0}" = 1 ]; then
+        report="${report}dropped a duplicate pointer line: ${reg2[i]}
+"
+      else
+        keep+=("${reg2[i]}")
+      fi
+      i=$((i + 1))
+    done
+    p3=("${pre2[@]}" "${keep[@]}" "${trail2[@]}")
+  fi
+
+  [ -n "$report" ] || return 0
+
+  local dir scratch
+  dir=$(dirname -- "$file")
+  scratch=$(mktemp "$dir/.gitlore-repair-index.XXXXXX") || return 1
+
+  local terminated=1
+  [ -s "$file" ] && [ "$(tail -c 1 "$file" | wc -l | tr -d ' ')" = 0 ] && terminated=0
+
+  if [ "$terminated" -eq 1 ]; then
+    printf '%s\n' "${p3[@]}" > "$scratch" || { rm -f "$scratch"; return 1; }
+  else
+    local last_i=$((${#p3[@]} - 1))
+    i=0
+    while [ "$i" -le "$last_i" ]; do
+      if [ "$i" -eq "$last_i" ]; then
+        printf '%s' "${p3[i]}"
+      else
+        printf '%s\n' "${p3[i]}"
+      fi
+      i=$((i + 1))
+    done > "$scratch" || { rm -f "$scratch"; return 1; }
+  fi
+
+  mv -- "$scratch" "$file" || { rm -f "$scratch"; return 1; }
+  printf '%s' "$report"
   return 0
 }
 
