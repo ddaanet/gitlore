@@ -282,6 +282,22 @@ $path"
   return 0
 }
 
+# Print the lines of gitlore_compose_check output (stdin) that name index file
+# $1 — every line with the exact "$1: " prefix, no pattern interpretation of
+# $1. Return 0 when at least one matched, 1 otherwise.
+gitlore_compose_problems_in() {
+  local file="$1" line found=1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "$file: "*) ;;
+      *) continue ;;
+    esac
+    printf '%s\n' "$line"
+    found=0
+  done
+  return "$found"
+}
+
 # Rule 7 — every ACTIVE tier sits at the commit the memory store records for it.
 # Print one problem per moved tier and return 1; print nothing and return 0
 # otherwise. Depends on gitlore_active_tiers and gitlore_merge_state_file

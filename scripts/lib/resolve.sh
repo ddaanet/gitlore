@@ -1086,16 +1086,47 @@ gitlore: composing would have overwritten what that tier holds. Open this projec
       0) ;;
       1)
         # A refusal writes nothing (D31, D36): projecting root's older text over
-        # an unadopted carrier would destroy approved upstream facts, so the
-        # commit proceeds with the carrier as it stands and this only reports.
-        # The header is gitlore_compose_and_report's own, held in one variable
-        # so the two arms cannot drift apart. The remedy stops at what this
-        # commit does: the pin guard above aborts on any
-        # gitlore_compose_check_pins refusal, so rc 1 reaches here only from
-        # gitlore_compose_check, whose problem lines carry no commit id — there
-        # is no pin figure printed above for a remedy to call stale.
+        # an unadopted carrier would destroy approved upstream facts. Whether
+        # this commit may still go ahead turns on WHICH index the problems sit
+        # in: a problem in an index file this commit already carries changes
+        # to would be published by this very commit, so that aborts; a problem
+        # in a clean index — or a dirty index whose own carrier is unchanged —
+        # is nothing this commit publishes, and only reports, as before.
         local refusal="gitlore: tier composition refused — the memory indexes were left untouched:
 $compose_result"
+        # The `if cmd; then` form, not a bare `x=$(cmd)`: gitlore_compose_problems_in
+        # returns 1 on the expected "no match here" case, and a bare assignment
+        # would abort this whole function under errexit the moment a clean or
+        # problem-free index answers that way (SC2310).
+        local abort=0
+        if [ -n "$(git -C "$mempath" status --porcelain -- MEMORY.md)" ]; then
+          if printf '%s\n' "$compose_result" \
+            | gitlore_compose_problems_in "$mempath/MEMORY.md" >/dev/null; then
+            abort=1
+          fi
+        fi
+        if [ "$abort" -eq 0 ]; then
+          local tier
+          while IFS= read -r tier; do
+            [ -n "$tier" ] || continue
+            [ -e "$mempath/$tier/.git" ] || continue
+            [ -n "$(git -C "$mempath/$tier" status --porcelain -- MEMORY.md)" ] || continue
+            if printf '%s\n' "$compose_result" \
+              | gitlore_compose_problems_in "$mempath/$tier/MEMORY.md" >/dev/null; then
+              abort=1
+              break
+            fi
+          done < <(gitlore_tier_paths "$mempath")
+        fi
+        if [ "$abort" -eq 1 ]; then
+          gitlore_say_for_agent_or_user \
+            "$refusal
+gitlore: the commit was aborted because a problem is in an index file this commit changes — committing would publish it. Fix it by editing the named lines, then retry; the summary needs approval again." \
+            "$refusal
+gitlore: the commit was aborted because a problem is in an index file this commit changes. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
+          touch "$msgfile"
+          return 1
+        fi
         gitlore_say_for_agent_or_user \
           "$refusal
 gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand — composition runs again at the next memory commit. This commit also stages each tier at the commit its worktree is on now." \
