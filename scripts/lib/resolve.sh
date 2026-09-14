@@ -1089,40 +1089,45 @@ gitlore: composing would have overwritten what that tier holds. Open this projec
         # an unadopted carrier would destroy approved upstream facts. The commit
         # aborts only on a problem it would publish: a rule 1, 4 or 6 problem —
         # the kinds that name their index file — in root's MEMORY.md or a tier
-        # carrier with uncommitted changes. The same problems in an index with
-        # no changes, a tier dirty only outside its carrier included, and rules
-        # 2 and 3, which name no index file, report and let the commit go ahead.
+        # carrier, when that file has uncommitted changes. The same problems in
+        # a file with none, a tier dirty only outside its carrier included, and
+        # rules 2 and 3, which name no index file, report and let the commit go
+        # ahead. The pin guard above aborts on any gitlore_compose_check_pins
+        # refusal, so rc 1 reaches here only from gitlore_compose_check: no
+        # rule 7 line needs attributing, and the advisory remedy has no pin
+        # figure to call stale. The header is gitlore_compose_and_report's own,
+        # held in one variable so the arms cannot drift apart.
         local refusal="gitlore: tier composition refused — the memory indexes were left untouched:
 $compose_result"
         # A status read that fails aborts rather than reading as a clean index:
         # the pre-commit hook's `|| exit $?` suspends errexit here, so an
-        # unchecked failure would publish the problem.
-        local abort=0 index_status
+        # unchecked failure would publish the problem. Every changed file with
+        # a problem is collected, so one abort names all of them.
+        local abort_files="" index_status
         if printf '%s\n' "$compose_result" \
           | gitlore_compose_problems_in "$mempath/MEMORY.md" >/dev/null; then
           index_status=$(git -C "$mempath" status --porcelain -- MEMORY.md) \
             || { touch "$msgfile"; return 1; }
-          [ -z "$index_status" ] || abort=1
+          [ -z "$index_status" ] || abort_files="$mempath/MEMORY.md"
         fi
-        if [ "$abort" -eq 0 ]; then
-          while IFS= read -r tier; do
-            [ -n "$tier" ] || continue
-            [ -e "$mempath/$tier/.git" ] || continue
-            printf '%s\n' "$compose_result" \
-              | gitlore_compose_problems_in "$mempath/$tier/MEMORY.md" >/dev/null \
-              || continue
-            index_status=$(git -C "$mempath/$tier" status --porcelain -- MEMORY.md) \
-              || { touch "$msgfile"; return 1; }
-            if [ -n "$index_status" ]; then
-              abort=1
-              break
-            fi
-          done < <(gitlore_tier_paths "$mempath")
-        fi
-        if [ "$abort" -eq 1 ]; then
+        while IFS= read -r tier; do
+          [ -n "$tier" ] || continue
+          [ -e "$mempath/$tier/.git" ] || continue
+          printf '%s\n' "$compose_result" \
+            | gitlore_compose_problems_in "$mempath/$tier/MEMORY.md" >/dev/null \
+            || continue
+          index_status=$(git -C "$mempath/$tier" status --porcelain -- MEMORY.md) \
+            || { touch "$msgfile"; return 1; }
+          [ -z "$index_status" ] \
+            || abort_files="${abort_files:+$abort_files
+}$mempath/$tier/MEMORY.md"
+        done < <(gitlore_tier_paths "$mempath")
+        if [ -n "$abort_files" ]; then
           gitlore_say_for_agent_or_user \
             "$refusal
-gitlore: the commit was aborted because a problem is in an index file this commit changes — committing would publish it. Fix it by editing the named lines, then retry; the summary needs approval again." \
+gitlore: the commit was aborted because a problem is in an index file this commit changes — committing would publish it. The changed index files with problems:
+$abort_files
+Fix them by editing the lines above that name those files, then retry; the summary needs approval again." \
             "$refusal
 gitlore: the commit was aborted because a problem is in an index file this commit changes. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
           touch "$msgfile"
