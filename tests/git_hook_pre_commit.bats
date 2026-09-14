@@ -388,6 +388,43 @@ committed_stale_carrier_store() {
   [ -z "$(git -C memory status --porcelain)" ]
 }
 
+@test "a dirty carrier with a duplicate pointer aborts the commit and restamps the approval" {
+  # The hook's own path through the abort commit-memory.sh already takes:
+  # gitlore_sync_memory_to_live is the shared body, and here the retry runs on
+  # the summary as it stands, so only the abort's restamp keeps it approved.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_root_bullet "ddaanet/shared.md" "hook"
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record the shared fact\n' > "$msgfile"
+
+  # Backdate the summary and every tracked memory file to one stamp, so
+  # gitlore_commit_msg_freshness reads "yes" and the run reaches compose, and
+  # a restamp reads newer even within the second the seeds were written.
+  touch -t 200001010000 "$msgfile"
+  while IFS= read -r -d '' f; do
+    touch -t 200001010000 "$f"
+  done < <(find memory -type f -not -path '*/.git/*' -print0)
+  stamp_epoch=$(_gitlore_mtime "$msgfile")
+  [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
+
+  head_before=$(git -C memory rev-parse HEAD)
+  tier_head_before=$(git -C memory/ddaanet rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$HOOK"
+  [ "$status" -ne 0 ]
+  [[ "${output}${stderr}" == *"memory/ddaanet/MEMORY.md: duplicate pointer path shared.md"* ]]
+  # The duplicate line prints on the advisory arm too; these two name the arm.
+  [[ "${output}${stderr}" == *"aborted"* ]]
+  [[ "${output}${stderr}" != *"the commit went ahead"* ]]
+  [ -n "$(git -C memory/ddaanet status --porcelain -- MEMORY.md)" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head_before" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(_gitlore_mtime "$msgfile")" -gt "$stamp_epoch" ]
+}
+
 @test "an aborted compose keeps the approved summary usable" {
   # The case that would have caught slice 3 code review's Major 1: a partial
   # compose (rc 2) restamps whatever it DID write, so the approved summary

@@ -1102,6 +1102,30 @@ b" ]
   [[ "$output" == *"could not write memory/ddaanet/MEMORY.md"* ]]
 }
 
+@test "problem attribution matches the exact file prefix" {
+  # A space in the mempath and a tier name that is a prefix of another both
+  # defeat a naive matcher: a regex would read "." as any char, and unquoted
+  # word splitting would break on the space.
+  input=$(printf '%s\n' \
+    "my mem.d/MEMORY.md: duplicate pointer path dup.md" \
+    "my mem.d/a/MEMORY.md: duplicate pointer path other.md" \
+    "my mem.d/ab/MEMORY.md: duplicate pointer path third.md" \
+    "my memXd/MEMORY.md: duplicate pointer path decoy.md" \
+    "root index line 'gone/x.md' has a prefix naming no mounted tier — it is a leftover from a removed tier and must be fixed by hand")
+
+  run gitlore_compose_problems_in "my mem.d/a/MEMORY.md" <<< "$input"
+  [ "$status" -eq 0 ]
+  [ "$output" = "my mem.d/a/MEMORY.md: duplicate pointer path other.md" ]
+
+  run gitlore_compose_problems_in "my mem.d/MEMORY.md" <<< "$input"
+  [ "$status" -eq 0 ]
+  [ "$output" = "my mem.d/MEMORY.md: duplicate pointer path dup.md" ]
+
+  run gitlore_compose_problems_in "my mem.d/b/MEMORY.md" <<< "$input"
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+}
+
 @test "a failing check writes nothing at all" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
