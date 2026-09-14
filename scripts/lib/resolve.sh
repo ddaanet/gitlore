@@ -1807,31 +1807,75 @@ $err" >&2
 # the state gitlore_adopt_advanced_live adopts — so the next take retries the
 # whole adoption. The checkout loses nothing: a take refuses a dirty tier, and
 # the up projection writes no carrier.
+#
+# A refusal naming the arriving carrier itself (K2) is repaired rather than
+# walked back: gitlore_adopt_repair_arrival rewrites a scratch copy (K3),
+# commits it on top of the arrival, and retries. A refusal naming anything else
+# — root, the manifest, another tier — is this repo's own to fix, so the first
+# refusal's problem list stays unprinted and the walk-back below never runs for
+# it; the repair commit rests in the tier's local `live` for the next take.
 # Args: $1 = memory worktree, $2 = tier name ("" = the memory root), $3 = "1"
 #       when the root store was dirty before the take, $4 = the pre-take commit.
 # Returns 1 after emitting when the root index could not take the carrier.
 gitlore_adopt_tier_into_root() {
   local mempath="$1" tier="$2" root_dirty_before="$3" old_gitlink="$4"
-  local label composed err abs rc=0
+  local label composed carrier carrier_problems rc=0
   [ -n "$tier" ] || return 0
   label="tier '$tier'"
+  carrier="$mempath/$tier/MEMORY.md"
 
   composed=$(gitlore_compose_up "$mempath" "$tier") || rc=$?
+  if [ "$rc" -eq 1 ] && carrier_problems=$(gitlore_compose_problems_in "$carrier" <<<"$composed"); then
+    gitlore_adopt_repair_arrival "$mempath" "$tier" "$old_gitlink" \
+      "$root_dirty_before" "$label" "$carrier_problems" || return 1
+    return 0
+  fi
   if [ "$rc" -ne 0 ]; then
-    printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
-    printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
-    if ! err=$(gitlore_git -C "$mempath/$tier" checkout -q --detach "$old_gitlink" 2>&1); then
-      # Absolute, so the printed command runs from anywhere.
-      abs=$(CDPATH='' cd -- "$mempath/$tier" && pwd) || abs="$mempath/$tier"
-      # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
-      printf 'gitlore: nothing was recorded, but %s could not be returned to the commit the memory store records. git said:\n%s\ngitlore: run `git -C "%s" checkout --detach %s`, fix the store, then run /gitlore:merge again.\n' \
-        "$label" "$err" "$abs" "$old_gitlink" >&2
-      return 1
-    fi
-    printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps what arrived. Fix the store, then run /gitlore:merge again.\n' "$label" >&2
+    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" || :
     return 1
   fi
   [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /'
+  gitlore_adopt_stage_pair_and_commit "$mempath" "$tier" "$root_dirty_before" "$old_gitlink" "$label"
+}
+
+# Return the tier to the commit the memory store records, after a refusal left
+# nothing to adopt. Always leaves the caller to report failure.
+# Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
+#       $4 = "tier '<name>'", for the messages.
+gitlore_adopt_walk_back_tier() {
+  local mempath="$1" tier="$2" old_gitlink="$3" label="$4" err abs
+  if ! err=$(gitlore_git -C "$mempath/$tier" checkout -q --detach "$old_gitlink" 2>&1); then
+    # Absolute, so the printed command runs from anywhere.
+    abs=$(CDPATH='' cd -- "$mempath/$tier" && pwd) || abs="$mempath/$tier"
+    # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+    printf 'gitlore: nothing was recorded, but %s could not be returned to the commit the memory store records. git said:\n%s\ngitlore: run `git -C "%s" checkout --detach %s`, fix the store, then run /gitlore:merge again.\n' \
+      "$label" "$err" "$abs" "$old_gitlink" >&2
+    return 1
+  fi
+  printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps what arrived. Fix the store, then run /gitlore:merge again.\n' "$label" >&2
+  return 1
+}
+
+# Today's refusal: print the problems the up projection could not take, then
+# walk the tier back. Shared by a first refusal naming nothing this take can
+# repair and by a repair's retry that still finds the root (or another store)
+# refusing.
+# Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
+#       $4 = "tier '<name>'", $5 = the compose problems.
+gitlore_adopt_report_refusal_and_walk_back() {
+  local mempath="$1" tier="$2" old_gitlink="$3" label="$4" composed="$5"
+  printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
+  printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+  gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+  return 1
+}
+
+# Stage the tier's newly-adopted carrier pair and record it in a canned commit
+# — the tail a landed take and a landed repair share.
+# Args: $1 = memory worktree, $2 = tier name, $3 = "1" when the root store was
+#       dirty before the take, $4 = the pre-take commit, $5 = "tier '<name>'".
+gitlore_adopt_stage_pair_and_commit() {
+  local mempath="$1" tier="$2" root_dirty_before="$3" old_gitlink="$4" label="$5" abs
   # Stage the pair the take just produced. `submodule update` reads the gitlink
   # from the superproject's INDEX, so an unstaged one is walked back to the
   # pre-take commit by the next SessionStart tier pass — and the composed root
@@ -1850,6 +1894,111 @@ gitlore_adopt_tier_into_root() {
   # this take's own work, and anything that was dirty before it is unapproved
   # content the canned commit must not sweep up.
   gitlore_commit_tier_bookkeeping "$mempath" "$tier" "$root_dirty_before" "$old_gitlink"
+}
+
+# Repair a refusal that names the arriving carrier (K2): rewrite a scratch copy
+# (K3), commit it on top of the arrival from a temporary index, advance the
+# tier's local `live` to it and retry the up projection. The worktree never
+# holds the repair uncommitted (K1) — a killed take here leaves the tier clean,
+# on the arrival or its pin, never wedged. Returns 0 once the retry adopts R;
+# returns 1, having emitted and walked the tier back to its pin, when the
+# rewrite fails, the check still refuses the repaired copy, `live` cannot be
+# advanced, or the retry still refuses (root or another store's problem, left
+# for the next take once R rests in `live`).
+# Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
+#       $4 = "1" when the root store was dirty before the take,
+#       $5 = "tier '<name>'", $6 = the carrier's own problems from the first
+#       refusal (this take's numbering, before the repair).
+gitlore_adopt_repair_arrival() {
+  local mempath="$1" tier="$2" old_gitlink="$3" root_dirty_before="$4" label="$5" carrier_problems="$6"
+  local carrier abs_gitdir copy pincopy idxfile
+  local report cpline rline mode blob tree R err rc=0 retry_composed retry_rc=0
+
+  carrier="$mempath/$tier/MEMORY.md"
+  if ! abs_gitdir=$(git -C "$mempath/$tier" rev-parse --absolute-git-dir); then
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    return 1
+  fi
+  copy=$(mktemp "$abs_gitdir/gitlore-repair-arrival.XXXXXX") \
+    || { gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :; return 1; }
+  pincopy=$(mktemp "$abs_gitdir/gitlore-repair-pin.XXXXXX") \
+    || { rm -f "$copy"; gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :; return 1; }
+  idxfile=$(mktemp "$abs_gitdir/gitlore-repair-index.XXXXXX") \
+    || { rm -f "$copy" "$pincopy"; gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :; return 1; }
+
+  if ! git -C "$mempath/$tier" show HEAD:MEMORY.md > "$copy"; then
+    printf 'gitlore: %s — its arrival could not be read for repair.\n' "$label" >&2
+    rm -f "$copy" "$pincopy" "$idxfile"
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    return 1
+  fi
+  # The pin commit may predate the tier's own MEMORY.md; the redirect only
+  # discards the expected "not found" message, and gitlore_repair_index reads a
+  # missing pin-carrier as empty.
+  if ! git -C "$mempath/$tier" show "$old_gitlink:MEMORY.md" > "$pincopy" 2>/dev/null; then
+    rm -f "$pincopy"
+  fi
+
+  if ! report=$(gitlore_repair_index "$copy" "$pincopy" "$mempath/$tier"); then
+    printf 'gitlore: %s — its arrival could not be rewritten during repair.\n' "$label" >&2
+    rm -f "$copy" "$pincopy" "$idxfile"
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    return 1
+  fi
+
+  if [ -n "$(gitlore_compose_check_index "$copy")" ]; then
+    printf 'gitlore: tier '\''%s'\'' took an index the take cannot repair; it is held in the tier'\''s local '\''live'\'' and must be fixed where it was published:\n' "$tier" >&2
+    while IFS= read -r cpline || [ -n "$cpline" ]; do
+      [ -n "$cpline" ] || continue
+      printf 'live:MEMORY.md: %s\n' "${cpline#"$carrier: "}" >&2
+    done <<<"$carrier_problems"
+    rm -f "$copy" "$pincopy" "$idxfile"
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    return 1
+  fi
+
+  # R: a plain commit on top of the arrival (D6, D49 — history stays linear and
+  # unprompted), built from a temporary index so the worktree is never the
+  # commit's staging area.
+  mode=$(git -C "$mempath/$tier" ls-tree HEAD -- MEMORY.md | awk '{print $1}')
+  [ -n "$mode" ] || mode=100644
+  if ! GIT_INDEX_FILE="$idxfile" git -C "$mempath/$tier" read-tree HEAD; then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! blob=$(git -C "$mempath/$tier" hash-object -w "$copy"); then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! GIT_INDEX_FILE="$idxfile" git -C "$mempath/$tier" update-index --cacheinfo "$mode,$blob,MEMORY.md"; then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! tree=$(GIT_INDEX_FILE="$idxfile" git -C "$mempath/$tier" write-tree); then rc=1; fi
+  if [ "$rc" -eq 0 ] && ! R=$(git -C "$mempath/$tier" commit-tree -p HEAD "$tree" \
+      -m "Repair the MEMORY.md structure $tier received" -m "$report"); then rc=1; fi
+  if [ "$rc" -ne 0 ]; then
+    printf 'gitlore: %s — its arrival could not be repaired: building the repair commit failed.\n' "$label" >&2
+    rm -f "$copy" "$pincopy" "$idxfile"
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    return 1
+  fi
+  rm -f "$copy" "$pincopy" "$idxfile"
+
+  if ! err=$(gitlore_git -C "$mempath/$tier" push -q . "$R:refs/heads/live" 2>&1); then
+    printf 'gitlore: %s — its repair could not advance its local '\''live'\''. git said:\n%s\n' "$label" "$err" >&2
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    return 1
+  fi
+  if ! err=$(gitlore_git -C "$mempath/$tier" checkout -q --detach live 2>&1); then
+    printf 'gitlore: %s — its repair advanced its local '\''live'\'' but its working tree could not follow. git said:\n%s\n' "$label" "$err" >&2
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    return 1
+  fi
+  while IFS= read -r rline || [ -n "$rline" ]; do
+    [ -n "$rline" ] || continue
+    printf 'gitlore: repaired %s'\''s arrival: %s\n' "$tier" "$rline"
+  done <<<"$report"
+
+  retry_composed=$(gitlore_compose_up "$mempath" "$tier") || retry_rc=$?
+  if [ "$retry_rc" -ne 0 ]; then
+    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$retry_composed" || :
+    return 1
+  fi
+  printf 'gitlore: %s — the repair is committed in its local '\''live'\''; /gitlore:push publishes it.\n' "$label"
+  [ -n "$retry_composed" ] && printf '%s\n' "$retry_composed" | sed 's/^/gitlore: /'
+  gitlore_adopt_stage_pair_and_commit "$mempath" "$tier" "$root_dirty_before" "$old_gitlink" "$label"
 }
 
 # Commit the root index and moved tier gitlink an explicit take just staged,
