@@ -429,6 +429,13 @@ surface, backfilling descriptions that never matched their index lines.
   - user remedy —
     `gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry.`
 
+  **As executed, the agent remedy is**
+  `gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit — the approved summary is still in place.`
+  — generic rather than the fixed sentence above, because each
+  `gitlore_compose_check_pins` branch already prints the remedy its own cause
+  takes and one abort can carry several causes, so no single named remedy fits
+  all of them.
+
   **Two of Item 1.1's cases induce rc 1 off a pin mismatch**, so both assert the
   behaviour this item removes and both are re-homed in the slices below:
   `an off-pin compose refusal is reported and does not abort the commit` and
@@ -1218,6 +1225,9 @@ surface, backfilling descriptions that never matched their index lines.
        before it writes any JSON, so a failed relay costs the entire report.
        `gitlore_relay_drain`'s `-type f` is what prevents it, and slice 1 has no
        case that makes a directory marker.
+
+     **As executed, the last case above did not survive slice 5**, which retired
+     it for `an unkeyed run leaves a non-marker alone`; see that slice.
 
   5. **A relay that fails says so, on the channel a subagent can actually be
      heard on.** Added after slice 4's code review. Slice 4 stopped a failed

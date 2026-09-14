@@ -47,15 +47,20 @@ session-less linked worktree) — never block a parent git operation over memory
    sub-agent while `MERGE_HEAD` is there, and when a checkout has cleared it,
    classify what survives and repair, which may mean carrying straight on
    ([merge-state-recovery.md](merge-state-recovery.md)).
-3. **Compose the store, then sync every dirty tier** and advance each tier's
-   local `live`, so the gitlink the memory commit is about to record has already
-   moved (D42), onto composed carrier content (D50).
-4. **Sync memory** through the shared `gitlore_sync_memory_to_live`, which is
-   what runs step 3: the FR11 dirty/freshness gate, the pin guard, the down
-   composition, `add -A`, `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>`, remove
-   the message file, then `push . HEAD:live` fast-forward-only. Divergence
-   prepares a merge and yields (`gitlore_yield_merge`), exiting 1.
-5. **Stage the gitlink** into the index git handed the hook — the captured
+3. **Sync memory** through the shared `gitlore_sync_memory_to_live`: memory's
+   own stale-merge guard, the FR11 dirty/freshness gate, each mounted tier's
+   stale-merge guard, `gitlore_stage_landed_tiers` (adopting a tier a previous
+   run committed inside but never recorded — the retry of a half-landed commit,
+   D50), the pin guard (`gitlore_compose_check_pins`, aborting on an off-pin
+   tier), down composition (`gitlore_compose`; rc 1 reports and continues, rc 2
+   aborts), `gitlore_sync_tiers_to_live` (each dirty tier: `add -A`, write its
+   landing record, commit, advance its local `live`, so the gitlink the memory
+   commit is about to record has already moved (D42), onto composed carrier
+   content (D50)), memory's own `add -A`, removing the landing records,
+   `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>`, and removing the message file,
+   then `push . HEAD:live` fast-forward-only. Divergence prepares a merge and
+   yields (`gitlore_yield_merge`), exiting 1.
+4. **Stage the gitlink** into the index git handed the hook — the captured
    `GIT_INDEX_FILE`, restored for that one `git add`, because a bare `add`
    misses the `-a` and pathspec index flavors and dies on `index.lock` under
    them.

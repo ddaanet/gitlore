@@ -58,7 +58,7 @@ from the script the node names.
   10-minute foreground wait, so from an agent run it with
   `run_in_background: true` — a background task has no duration cap and runs
   across turns in the main session; the completion notification carries the
-  verdict (`plans/index-edit-propagation/background-run-timeout-probe.md`).
+  verdict.
   In a subagent that notification may never arrive, and the run is still fine:
   read the verdict from the gates instead — `.git/gitlore/gates/{lint,test-unit,test-integration,check-distribution}`,
   each written on that recipe's pass, valid for the tree when its mtime

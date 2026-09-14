@@ -10,12 +10,12 @@ longer holds, and nothing on the publishing side ever notices.
 `gitlore_sync_memory_to_live` in `scripts/lib/resolve.sh` now composes, and that
 one function is the shared body behind both commit entry points — the
 `pre-commit` hook and `commit-memory.sh` — so the sequence is
-`dirty/freshness gate → pin guard → compose → add -A → …` wherever a memory
-commit starts. The placement ahead of `gitlore_sync_tiers_to_live` is
-load-bearing: composition writes carrier files *inside* the tiers, so it has to
-land before the tier commits move their gitlinks, or the gitlink pins the
-pre-compose content — the one-behind lag the existing tier-first ordering
-already exists to prevent.
+`dirty/freshness gate → pin guard → compose → tier commits → add -A → …`
+wherever a memory commit starts. The placement ahead of
+`gitlore_sync_tiers_to_live` is load-bearing: composition writes carrier files
+*inside* the tiers, so it has to land before the tier commits move their
+gitlinks, or the gitlink pins the pre-compose content — the one-behind lag the
+existing tier-first ordering already exists to prevent.
 
 Dirty stores only. Composing a clean store can *create* a dirty state the user
 never approved a summary for, and the FR11 gate would then refuse the commit for
@@ -61,8 +61,8 @@ has both `systemMessage` and `additionalContext` confined to that subagent's own
 transcript (D51, measured under CC 2.1.261), so a subagent's edit to the root
 index triggered a composition whose report reached neither the parent's context
 nor the user — the parent's only view was whatever the subagent chose to
-narrate. A keyed run now stages its report in `gitlore-relay-<agent_id>`, a
-sixth untracked `gitlore-…` file in the memory gitdir, and the next unkeyed
+narrate. A keyed run now stages its report in `gitlore-relay-<agent_id>`,
+another untracked `gitlore-…` file in the memory gitdir, and the next unkeyed
 parent-side run folds every marker in — each block framed with the agent id its
 filename carries — and removes them. `session-start.sh` drains the same way, so
 a marker that outlives its session is not lost. The write merges into an

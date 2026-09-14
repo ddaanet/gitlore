@@ -50,13 +50,14 @@ operation, and the pointer invariant that rests on them.
 [git-hooks.md](references/git-hooks.md)
 
 - **D46** — a parent commit is never rewritten to re-pin memory
-- **D50** — the commit path composes the store before it commits; a pin refusal
-  aborts, a compose refusal only reports
+- **D50** — the commit path composes a dirty store before it commits; a pin
+  refusal aborts, a compose refusal only reports
 
 *Rejected:* a tip amend to re-pin memory · a refusal that instructs the agent to
 run compose · reporting an off-pin tier and committing through it · recognising
 gitlore's own landed tier commit by its message · staging each tier gitlink
-right after its commit.
+right after its commit · composing a clean store · reporting a non-empty
+commit-path compose.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.
@@ -121,7 +122,7 @@ writes · a `PreToolUse` deny on the first durable write of an episode · leavin
 a subagent's hook report to the subagent's own narration · one shared marker per
 agent that each reporting hook merges into · a drain inside each reporting hook
 · claim-by-rename before reading · folding another session's stranded reports at
-`SessionStart`.
+`SessionStart` · relaying in place of the subagent's own emission.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in

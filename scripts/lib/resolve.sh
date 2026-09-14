@@ -309,6 +309,10 @@ gitlore: restore it with: git -C \"$abs\" checkout --detach $landed, then re-run
 # superproject only where that repo registers it, so the test would restate what
 # --show-superproject-working-tree already settled.
 #
+# Short-circuits when the enclosing index already records the tier's current
+# HEAD — a continuation killed right after its own bookkeeping commit, then
+# re-run.
+#
 # Best-effort, like gitlore_adopt_tier_into_root's own staging: a failure here
 # must not turn a landed recovery into a failed one. The named pair only, never
 # `add -A` — an over-broad stage would sweep unapproved worktree edits into the
@@ -326,6 +330,17 @@ gitlore_adopt_recovered_merge() {
   own_path=$(git config --file "$super/.gitmodules" \
     "submodule.${GITLORE_SUBMODULE_NAME}.path") || own_path=""
   [ "$rel" != "$own_path" ] || return 0
+
+  # Already adopted: the enclosing index's gitlink already names the tier's
+  # current HEAD, which means a prior pass (or this same one, before a kill)
+  # already composed the carrier up and staged the pair. Composing again would
+  # project the carrier's text over any root-index edit made to that tier's
+  # lines since — the pair was already adopted, and a second up projection is
+  # not a repeat of that adoption, it is an overwrite of what happened after.
+  local tier_head pinned
+  tier_head=$(git -C "$store" rev-parse HEAD) || tier_head=""
+  pinned=$(git -C "$super" rev-parse -q --verify ":$rel") || pinned=""
+  [ -n "$tier_head" ] && [ "$tier_head" = "$pinned" ] && return 0
 
   composed=$(gitlore_compose_up "$super" "$rel") || rc=$?
   if [ "$rc" -ne 0 ]; then

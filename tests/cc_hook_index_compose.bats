@@ -154,6 +154,24 @@ seed_root_fact() {
   [ "$status" -eq 0 ]
 }
 
+# Reds when the hook's `|| agent_id=""` fallback (line ~44) is removed: jq's
+# parse failure then kills the hook under errexit before the stamp is ever
+# consumed, so nothing composes and the stamp survives.
+@test "an unparseable payload still composes on the unkeyed baseline (fallback proof)" {
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  pre "$PWD/memory/MEMORY.md"
+  [ -f "$(gitlore_compose_stamp_file memory)" ]
+  seed_root_fact "p.md" "a project fact"
+  # shellcheck disable=SC2016  # $1 expands inside the bash -c script, not here
+  run --separate-stderr bash -c 'printf "not json" | bash "$1"' _ "$HOOK"
+  [ "$status" -eq 0 ]
+  [ ! -f "$(gitlore_compose_stamp_file memory)" ]
+  grep -qF 'ddaanet/shared.md' memory/MEMORY.md
+  [[ "$output" == *systemMessage* ]]
+  run jq -e . <<<"$output"
+  [ "$status" -eq 0 ]
+}
+
 @test "a Bash-applied index edit composes, though it named no file" {
   seed_tier_bullet ddaanet shared.md "a portable fact"
   pre Bash
