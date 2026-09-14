@@ -367,6 +367,10 @@ HOOK
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$R" ]
   [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$R" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$R" ]
+  # The push is what publishes the repair, so it never sends the reader to run
+  # /gitlore:push again.
+  [[ "$output$stderr" == *"gitlore: tier 'ddaanet' — the repair is committed in its local 'live', and this push publishes it."* ]]
+  [[ "$output$stderr" != *"/gitlore:push publishes it"* ]]
 }
 
 @test "a repair taken by the behind arm is published before memory records it" {
@@ -391,4 +395,58 @@ HOOK
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$R" ]
   [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$R" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$R" ]
+  # The push is what publishes the repair, so it never sends the reader to run
+  # /gitlore:push again.
+  [[ "$output$stderr" == *"gitlore: tier 'ddaanet' — the repair is committed in its local 'live', and this push publishes it."* ]]
+  [[ "$output$stderr" != *"/gitlore:push publishes it"* ]]
+}
+
+@test "a repair resting on a root problem inside a push publishes nothing until it is fixed" {
+  # The take repairs the stranded arrival but root's own leftover line keeps it
+  # from adopting: the repair waits in the tier's local `live`, and neither the
+  # tier's remote nor memory's may learn of it. Once root is fixed, the next
+  # push adopts that same repair and publishes it, tier before memory.
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  publish_memory
+  pin=$(git -C memory rev-parse ":ddaanet")
+  tier_remote_before=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
+  memory_remote_before=$(git --git-dir="$MEMORY_REMOTE" rev-parse live)
+
+  seed_tier_bullet ddaanet local.md "committed here, never recorded"
+  strand_live_ahead_of_pin ddaanet
+  stranded=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"gone/x.md"* ]]
+  [[ "$output$stderr" == *"gitlore: repaired ddaanet's arrival: dropped a duplicate pointer line:"* ]]
+  [[ "$output$stderr" != *"publishes it"* ]]
+  R=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $stranded" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$tier_remote_before" ]
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$memory_remote_before" ]
+
+  sed -i.bak '/gone\/x\.md/d' memory/MEMORY.md
+  rm -f memory/MEMORY.md.bak
+  commit_memory_state
+
+  hookfile="$BATS_TEST_TMPDIR/tier-live-at-memory-push"
+  install_tier_live_snapshot_hook "$hookfile"
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$output$stderr" != *"repaired"* ]]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$R" ]
+  [ "$(cat "$hookfile")" = "$R" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$R" ]
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$R" ]
 }

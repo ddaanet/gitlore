@@ -1230,6 +1230,21 @@ b" ]
   cmp -s file.md file.before
 }
 
+# The escaping path exists beside the tier, so only the guard's containment
+# keeps the line whole.
+@test "a weld whose path climbs out of the tier is left unchanged" {
+  mkdir -p tier
+  touch outside.md
+  printf -- '- [A](kept.md) — hook- [x](../outside.md)\n' > file.md
+  run gitlore_compose_check_index file.md
+  [[ "$output" == "file.md: line 1 welds two pointer bullets onto one line — ../outside.md is invisible"* ]]
+  cp file.md file.before
+  run gitlore_repair_index file.md pin.md tier
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  cmp -s file.md file.before
+}
+
 @test "a link the check does not report as a weld is left unchanged" {
   mkdir -p tier
   touch tier/y.md

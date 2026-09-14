@@ -767,6 +767,9 @@ push_tier_files() {
   [[ "$all" == *"gitlore: tier 'ddaanet' took an index the take cannot repair; it is held in the tier's local 'live' and must be fixed where it was published:"* ]]
   [[ "$all" == *"live:MEMORY.md: line $weld_line_n welds"* ]]
   [[ "$all" != *"line $((weld_line_n - 1)) welds"* ]]
+  # The closing remedy points upstream too, never at this store's clean carrier.
+  [[ "$all" == *"its local 'live' keeps what arrived. Once the index is fixed where it was published, run /gitlore:merge again."* ]]
+  [[ "$all" != *"Fix the store"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
