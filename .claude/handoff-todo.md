@@ -50,7 +50,7 @@
 
 ## Remaining
 
-- Run `/deliverable-review plans/unadoptable-tier-arrival` (opus, fresh session).
+- Fix deliverable-review Major 1 of `plans/unadoptable-tier-arrival`: `skills/merge/SKILL.md:68-72` tells the agent `/gitlore:push` publishes a repair unconditionally, but a repair resting on this repo's own index problems publishes nothing — the next push's take refuses again. Make the claim conditional on the run printing `…; /gitlore:push publishes it.`, and in the resting case say it publishes once the listed problems are fixed.
 - Split `scripts/lib/index-compose.sh` (~1075 lines; the check, the repair and their parsing primitives), and track `scripts/lib/resolve.sh` (~2170 lines) and `tests/resolve_compose.bats` (~650 lines) against the 400-line cap.
 - Close the batch-retry approval gap: on the PostToolBatch path the retry reuses the preserved summary, so the edit fixing an aborting index commits under the old approval although the abort text says the summary needs approval again (the pin guard's remedy has the same gap); needs a status protocol between `commit-memory.sh` and the batch hook.
 - A take killed after `gitlore_compose_up` writes root but before the pair is staged leaves root describing a tier SessionStart pins back; the next compose projects it down and dirties the tier.
