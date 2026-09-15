@@ -750,6 +750,8 @@ push_tier_files() {
   all="$output$stderr"
   [[ "$all" == *"gone/x.md"* ]]
   [[ "$all" == *"gitlore: repaired ddaanet's arrival: dropped a duplicate pointer line: - [A](a.md) — x"* ]]
+  [[ "$stderr" == *"its local 'live' keeps the repair."* ]]
+  run ! grep -qF 'keeps what arrived' <<<"$stderr"
   # What adoption waits on is the root problem alone: the first refusal's
   # carrier problem, already repaired, is not reported.
   run ! grep -qF 'duplicate pointer path' <<<"$all"
