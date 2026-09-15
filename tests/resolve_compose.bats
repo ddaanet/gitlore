@@ -391,6 +391,27 @@ prepare_tier_merge_head_vs_live() {
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
 }
 
+@test "a refused merge commit leaves no message file behind and keeps the merge for a rerun" {
+  prepare_tier_merge_with_new_lines
+  hook="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/hooks/commit-msg"
+  printf '#!/bin/sh\necho "commit refused by hook" >&2\nexit 1\n' > "$hook"
+  chmod +x "$hook"
+  mkdir "$BATS_TEST_TMPDIR/msgtmp"
+  export TMPDIR="$BATS_TEST_TMPDIR/msgtmp"
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"commit refused by hook"* ]]
+  [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
+  [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
+  git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
+
+  rm -f "$hook"
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+}
+
 @test "a duplicate in the merged root index keeps the merge unlanded" {
   make_parent_with_memory
   diverge_memory_with_index '# Memory Index
