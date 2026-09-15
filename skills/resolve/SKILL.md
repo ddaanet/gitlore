@@ -85,3 +85,6 @@ index blocked the landing until a new synthesis cleared them; say which they wer
 Any other `gitlore:` line — a composition refusal naming another index, index
 pointers naming files that are not there, a refused push with its remedy — came
 after the merge commit landed; relay it, because it is a problem only you can fix.
+A printed remedy (`gitlore: tier '<t>' stays on the merge commit … Run:` and the
+command lines under it) is still to run even when the **Loop**'s `resolve.sh`
+then reports the state healthy: run those lines, or relay them as not yet run.
