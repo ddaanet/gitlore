@@ -98,13 +98,14 @@ load_continuation_state() {
 # needs it after the commit to stage the moved gitlink, and this is where it is
 # already derived. `tier_unadopted`: 1 when a tier merge's up projection failed,
 # after emitting, and empty otherwise.
-# Returns 1, before staging anything, when the merge fails its own check (see
-# above) — the caller's bare call then aborts the continuation under errexit,
-# with the merge state kept for a rerun. Returns 0 otherwise; a failed staging
-# command still aborts the continuation under errexit, before the merge
-# commit, for the same reason. The caller calls it bare: an `||` on the call
-# would suspend errexit across the whole body, and a failed `add` would then
-# read as a tier the root could not adopt.
+# EXITS 1, before staging anything, when the merge fails its own check (see
+# above), with the merge state kept for a new synthesis — an exit rather than a
+# return, because the caller cannot check a status without an `||` on the call.
+# Returns 0 otherwise. A failed staging command aborts the continuation under
+# errexit, before the merge commit, which keeps the merge state for a rerun. The
+# caller calls it bare: an `||` on the call would suspend errexit across the
+# whole body, and a failed `add` would then read as a tier the root could not
+# adopt.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
   local memroot="$1" store="$2" memroot_abs composed dangling merged_index index_problems rc=0
@@ -133,7 +134,7 @@ compose_merged_indexes() {
     if index_problems=$(gitlore_compose_problems_in "$merged_index" <<<"$composed"); then
       echo "gitlore: the merged index fails the check, so the merge was not committed; the merge stays prepared for a new synthesis:" >&2
       printf '%s\n' "$index_problems" | sed 's/^/gitlore:   /' >&2
-      return 1
+      exit 1
     fi
   fi
   if [ "$rc" -eq 0 ]; then
