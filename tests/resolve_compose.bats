@@ -226,6 +226,64 @@ prepare_tier_merge_head_vs_live() {
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
 }
 
+@test "a refused tier merge answers an unapproved parent commit with its continuation directive" {
+  # The kept merge moves the tier's gitlink, so memory reads dirty with no
+  # fresh approval. The merge speaks first: a summary request would put a
+  # merge in front of the user, and nothing may commit on top of it anyway.
+  prepare_tier_merge_with_new_lines
+  duplicate_tier_carrier
+  run bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  tier_head=$(git -C memory/ddaanet rev-parse HEAD)
+  mem_before=$(git -C memory rev-parse HEAD)
+  [ "$(gitlore_commit_msg_freshness memory)" != "yes" ]
+
+  run --separate-stderr bash "$PRE_COMMIT"
+  [ "$status" -eq 1 ]
+  all="${output}${stderr}"
+  [[ "$all" == *"memory merge prepared"* ]]
+  [[ "$all" == *"continue-after-merge"* ]]
+  [[ "$all" != *"no approved commit summary"* ]]
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+}
+
+@test "a tier merge whose incoming side welds a line is refused, and the split synthesis publishes" {
+  # A weld that arrives on the far side of a divergence reaches a synthesis,
+  # not a take, so it is re-authored rather than repaired: the entry-wise pass
+  # carries the welded line through as one bullet, the gate refuses it, and the
+  # split lands and reaches the tier's remote.
+  make_parent_with_memory
+  git -C memory push -q origin live
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  approve "memory: record the org fact"
+  bash "$PRE_COMMIT"
+  push_tier_fact ddaanet "- [their fact](t.md) — theirs- [their other](u.md) — also theirs" >/dev/null
+  run bash "$PRE_PUSH"
+  [ "$status" -eq 1 ]
+  tier_head=$(git -C memory/ddaanet rev-parse HEAD)
+  git -C memory/ddaanet add -A
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"was not committed"* ]]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md: line "*" welds two pointer bullets onto one line — u.md"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
+
+  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [org fact](f.md) — ours\n- [their fact](t.md) — theirs\n- [their other](u.md) — also theirs\n' \
+    > memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet add -A
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  git --git-dir="$TMP_REPO/.bare-ddaanet.git" show live:MEMORY.md > "$BATS_TEST_TMPDIR/published"
+  grep -qxF -- '- [their other](u.md) — also theirs' "$BATS_TEST_TMPDIR/published"
+  grep -qxF -- '- [their other](ddaanet/u.md) — also theirs' memory/MEMORY.md
+}
+
 @test "a tier merge the root index cannot adopt lands, records nothing in the root, and is adopted by the next take" {
   # Staging the moved gitlink without the up projection puts the tier on its pin
   # while root still holds the older block, so the next compose writes that
@@ -407,8 +465,9 @@ prepare_tier_merge_head_vs_live() {
   mount_tier_at_live ddaanet
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
-  # A store the installer seeded from an empty auto-memory dir: no MEMORY.md at
-  # all. Composition tolerates that; the continuation's staging step must too.
+  # A store migrated from an auto-memory dir that held no MEMORY.md: no root
+  # index at all. Composition tolerates that; the continuation's staging step
+  # must too.
   git -C memory rm -q MEMORY.md
   GITLORE_MEMORY_COMMIT=1 git -C memory -c user.email=t@t -c user.name=t commit -q -m "No root index"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md

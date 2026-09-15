@@ -997,6 +997,18 @@ gitlore_sync_memory_to_live() {
     local fresh
     fresh=$(gitlore_commit_msg_freshness "$mempath")
     if [ "$fresh" != "yes" ]; then
+      # A tier holding a prepared merge makes memory dirty by construction — its
+      # gitlink has moved — so that merge is answered first: asking for a
+      # summary would put a merge in front of the user, which both of its sides
+      # already approved (D49), and the retry would stop on the directive anyway.
+      # The loop below still guards the fresh path; this one only decides which
+      # refusal speaks.
+      local stale_tier
+      while IFS= read -r stale_tier; do
+        [ -n "$stale_tier" ] || continue
+        [ -e "$mempath/$stale_tier/.git" ] || continue
+        gitlore_guard_stale_merge_state "$mempath/$stale_tier" || return 1
+      done < <(gitlore_tier_paths "$mempath")
       # The clause is a multi-line block, so it goes last rather than mid-sentence.
       gitlore_say_for_agent_or_user \
         "$(printf '%s\n\n%s\n' \

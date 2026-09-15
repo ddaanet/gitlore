@@ -99,7 +99,8 @@ load_continuation_state() {
 # already derived. `tier_unadopted`: 1 when a tier merge's up projection failed,
 # after emitting, and empty otherwise.
 # EXITS 1, before staging anything, when the merge fails its own check (see
-# above), with the merge state kept for a new synthesis — an exit rather than a
+# above; a store with no root index runs no check), with the merge state kept
+# for a new synthesis — an exit rather than a
 # return, because the caller cannot check a status without an `||` on the call.
 # Returns 0 otherwise. A failed staging command aborts the continuation under
 # errexit, before the merge commit, which keeps the merge state for a rerun. The
@@ -169,10 +170,13 @@ compose_merged_indexes() {
   # working-tree change. For a memory merge the two calls are the same repo, and
   # the second is what stages the compose write the first ran too early to see.
   gitlore_git -C "$store" add -A
-  # A store with no root index — seeded from an empty auto-memory dir — has
-  # nothing to stage; gitlore_compose_up tolerated its absence above, and the
-  # merge must not be blocked on it. Say so: nothing composes up into a root
-  # index that does not exist, and that is the store's defect, not the merge's.
+  # A store with no root index — migrated from an auto-memory dir that held no
+  # MEMORY.md, or one whose index was deleted by hand — has nothing to stage;
+  # gitlore_compose_up returned 0 for it above without running the check, so
+  # the gate that keeps a failing merged index unlanded never ran either, and
+  # the merge must not be blocked on it. Say so: nothing composes up into a
+  # root index that does not exist, and that is the store's defect, not the
+  # merge's.
   if [ -f "$memroot/MEMORY.md" ]; then
     gitlore_git -C "$memroot" add -- MEMORY.md
   else
