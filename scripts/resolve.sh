@@ -201,12 +201,13 @@ compose_merged_indexes() {
 # base, and checking it out would put the tier on history the merge never built
 # on; the tier stays on the merge, and the pin guard names that case's remedy.
 #
-# Only when the tier's local `live` already holds the merge. A refused push
-# (push_or_report's status 2 at either continue-after-merge push site) can
-# reach here with `live` still short of HEAD; checking out the pin then would
-# strand the merge reachable only through the reflog, so this leaves the tier
-# on the merge commit instead and prints the two commands that push `live` up
-# to it and then repeat this rest by hand.
+# Only when the tier's local `live` already holds the merge. A refused local
+# `HEAD:live` push reaches here with `live` still short of HEAD; checking out
+# the pin then would strand the merge reachable only through the reflog, so
+# this leaves the tier on the merge commit instead and prints the two commands
+# that push `live` up to it and then repeat this rest by hand. The second one
+# re-asks the same ancestry question, so run after a push refused again it
+# leaves the tier where it is.
 #
 # Exit status stays the caller's either way: the merge landed, which is what
 # the continuation reports, and the next take or resolve run fails on this
@@ -228,8 +229,8 @@ rest_unadopted_tier() {
   fi
   if ! git -C "$tierpath" rev-parse -q --verify live >/dev/null \
      || ! git -C "$tierpath" merge-base --is-ancestor HEAD live; then
-    printf 'gitlore: tier '\''%s'\'' stays on the merge commit because its local '\''live'\'' does not hold it. Run:\ngitlore:   git -C "%s" push . HEAD:live\ngitlore:   git -C "%s" checkout --detach %s\ngitlore: then fix the problems listed above and run /gitlore:merge.\n' \
-      "$tier" "$abs" "$abs" "$pin" >&2
+    printf 'gitlore: tier '\''%s'\'' stays on the merge commit because its local '\''live'\'' does not hold it. Run:\ngitlore:   git -C "%s" push . HEAD:live\ngitlore:   git -C "%s" merge-base --is-ancestor HEAD live && git -C "%s" checkout --detach %s\ngitlore: then fix the problems listed above and run /gitlore:merge.\n' \
+      "$tier" "$abs" "$abs" "$abs" "$pin" >&2
     return 0
   fi
   if ! err=$(gitlore_git -C "$tierpath" checkout -q --detach "$pin" 2>&1); then
@@ -245,8 +246,8 @@ rest_unadopted_tier() {
 # success; returns 1 when git's parenthesized reason says the ref diverged,
 # which is the caller's cue to prepare a merge; reports git's own explanation
 # and returns 2 on any other refusal — a protected branch, a pre-receive
-# decline, a bad credential, a full quota. Never exits: each caller has its own
-# commit state to unwind before deciding what a status-2 refusal means for it.
+# decline, a bad credential, a full quota. Never exits, so a caller holding a
+# landed tier merge can rest that tier before it exits on a status-2 refusal.
 #
 # The same discriminator `pre-push` and `gitlore_sync_memory_to_live` apply, and
 # for the same reason: only divergence is something a merge can fix. Without it

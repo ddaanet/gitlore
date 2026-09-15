@@ -545,7 +545,7 @@ decline_pushes_to() {
   abs=$(CDPATH='' cd -- memory/ddaanet && pwd)
   [[ "$stderr" == *"gitlore: tier 'ddaanet' stays on the merge commit because its local 'live' does not hold it. Run:
 gitlore:   git -C \"$abs\" push . HEAD:live
-gitlore:   git -C \"$abs\" checkout --detach $pin
+gitlore:   git -C \"$abs\" merge-base --is-ancestor HEAD live && git -C \"$abs\" checkout --detach $pin
 gitlore: then fix the problems listed above and run /gitlore:merge."* ]]
 }
 
@@ -581,6 +581,31 @@ gitlore: then fix the problems listed above and run /gitlore:merge."* ]]
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$merged" ]
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+}
+
+@test "the remedy keeps the tier on the merge while its local live update is still refused" {
+  prepare_tier_merge_with_new_lines
+  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
+  lock="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/refs/heads/live.lock"
+  : > "$lock"
+  export GITLORE_GIT_RETRY_SCHEDULE=0
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  merged=$(git -C memory/ddaanet rev-parse HEAD)
+
+  remedy=()
+  while IFS= read -r line; do
+    remedy+=("$line")
+  done < <(printf '%s\n' "$stderr" | sed -n 's/^gitlore:   \(git -C .*\)$/\1/p')
+  [ "${#remedy[@]}" -eq 2 ]
+  # The lock still held: the push fails again, and running the next line
+  # regardless must not move the tier off a merge no ref holds.
+  run bash -c "${remedy[0]}"
+  [ "$status" -ne 0 ]
+  run bash -c "${remedy[1]}"
+  rm -f "$lock"
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
 }
 
 @test "default-mode gates exit 1 on a policy refusal" {
