@@ -1962,7 +1962,7 @@ gitlore_adopt_repair_arrival() {
   fi
   if ! err=$(gitlore_git -C "$tierpath" checkout -q --detach live 2>&1); then
     printf 'gitlore: %s — its repair advanced its local '\''live'\'' but its working tree could not follow. git said:\n%s\n' "$label" "$err" >&2
-    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." "the repair" || :
     return 1
   fi
   while IFS= read -r line || [ -n "$line" ]; do

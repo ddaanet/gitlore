@@ -622,6 +622,54 @@ EOF
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
 }
 
+@test "a repair whose checkout follow fails walks back and keeps the repair" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory/ddaanet rev-parse HEAD)
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
+
+  # The take's own fast-forward checks `live` out first, so the repair's own
+  # checkout is the SECOND `checkout -q --detach live` call; every other call
+  # forwards to the real git.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  count_file="$BATS_TEST_TMPDIR/checkout-live-count"
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" checkout -q --detach live "*)
+    n=\$(cat "$count_file" 2>/dev/null || echo 0)
+    n=\$((n + 1))
+    printf '%s' "\$n" > "$count_file"
+    if [ "\$n" -eq 2 ]; then
+      echo "fatal: shim refuses the second checkout" >&2
+      exit 1
+    fi
+    ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"shim refuses the second checkout"* ]]
+  # The take's own fast-forward words its failure "could not follow" too; this
+  # is the repair arm's line.
+  [[ "$stderr" == *"its repair advanced its local 'live' but its working tree could not follow"* ]]
+  [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
+  [[ "$stderr" == *"its local 'live' keeps the repair. Run /gitlore:merge again."* ]]
+  [[ "$stderr" != *"Fix the store"* ]]
+  R=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
+  [ "$(git -C memory/ddaanet log -1 --format=%s "$R")" = "Repair the MEMORY.md structure ddaanet received" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+}
+
 @test "a take's repair keeps the duplicate its pin lacks" {
   wire_memory_remote
   make_tier_in_memory ddaanet
