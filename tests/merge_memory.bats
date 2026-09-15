@@ -622,6 +622,51 @@ EOF
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
 }
 
+# The scratch directory is removed once the commit is built, so it is observed
+# mid-repair: the stub lists both candidate locations when `commit-tree` runs.
+@test "a repair's scratch directory lives under TMPDIR, not the tier's gitdir" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
+
+  gitdir=$(git -C memory/ddaanet rev-parse --absolute-git-dir)
+  tmp_env="$BATS_TEST_TMPDIR/tmp"
+  mkdir -p "$tmp_env"
+  seen="$BATS_TEST_TMPDIR/seen"
+
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" commit-tree "*)
+    # One of the two globs is expected to match nothing; ls reports it on stderr.
+    ls -d "$gitdir"/gitlore-repair.* "$tmp_env"/gitlore-repair.* >> "$seen" 2>/dev/null
+    ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  TMPDIR="$tmp_env" PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  # Premise: the stub really ran during the repair.
+  [ -e "$seen" ]
+  [ "$(grep -c -F -- "$gitdir/gitlore-repair." "$seen")" -eq 0 ]
+  [ "$(grep -c -F -- "$tmp_env/gitlore-repair." "$seen")" -eq 1 ]
+  # The repair is adopted: a commit on the arrival, in `live` and memory's gitlink.
+  R=$(git -C memory/ddaanet rev-parse HEAD)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
+  [ "$(git -C memory/ddaanet log -1 --format=%s "$R")" = "Repair the MEMORY.md structure ddaanet received" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$R" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$R" ]
+  [ "$(grep -cxF -- '- [A](ddaanet/a.md) — x' memory/MEMORY.md)" -eq 1 ]
+}
+
 @test "a repair whose checkout follow fails walks back and keeps the repair" {
   wire_memory_remote
   make_tier_in_memory ddaanet

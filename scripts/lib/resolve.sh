@@ -1887,7 +1887,7 @@ gitlore_adopt_tier_into_root() {
 # History stays linear (D6), and the commit is unprompted (D49): it restructures
 # lines that already passed an approval gate and adds no text. The worktree
 # never holds the repair uncommitted — the rewrite happens on a scratch copy
-# inside the tier's gitdir, and the tier moves only by checking out `live` once
+# outside the repository, and the tier moves only by checking out `live` once
 # it holds the commit — so a killed take leaves the tier clean, on the arrival,
 # the repair or its pin, with `live` holding the arrival or the repair.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
@@ -1903,11 +1903,10 @@ gitlore_adopt_tier_into_root() {
 # retry still refuses.
 gitlore_adopt_repair_arrival() {
   local mempath="$1" tier="$2" old_gitlink="$3" root_dirty_before="$4" label="$5" carrier_problems="$6" composed="$7"
-  local tierpath="$mempath/$tier" gitdir scratch report line repair="" err retry_composed retry_rc=0
+  local tierpath="$mempath/$tier" scratch report line repair="" err retry_composed retry_rc=0
   local remedy="" other_lines
 
-  if ! gitdir=$(git -C "$tierpath" rev-parse --absolute-git-dir) ||
-     ! scratch=$(mktemp -d "$gitdir/gitlore-repair.XXXXXX"); then
+  if ! scratch=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-repair.XXXXXX"); then
     gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
     return 1
   fi
