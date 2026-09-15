@@ -201,9 +201,16 @@ compose_merged_indexes() {
 # base, and checking it out would put the tier on history the merge never built
 # on; the tier stays on the merge, and the pin guard names that case's remedy.
 #
-# Exit status stays the caller's: the merge landed, which is what the
-# continuation reports, and the next take or resolve run fails on this state
-# with the same remedy printed here.
+# Only when the tier's local `live` already holds the merge. A refused push
+# (push_or_report's status 2 at either continue-after-merge push site) can
+# reach here with `live` still short of HEAD; checking out the pin then would
+# strand the merge reachable only through the reflog, so this leaves the tier
+# on the merge commit instead and prints the two commands that push `live` up
+# to it and then repeat this rest by hand.
+#
+# Exit status stays the caller's either way: the merge landed, which is what
+# the continuation reports, and the next take or resolve run fails on this
+# state with the remedy printed here.
 # Args: $1 = memory root worktree path, $2 = tier name.
 rest_unadopted_tier() {
   local memroot="$1" tier="$2" tierpath pin merged err abs
@@ -219,6 +226,12 @@ rest_unadopted_tier() {
     echo "gitlore: tier '$tier' stays on the merge commit: the commit the memory store records for it is not one the merge contains. The next memory commit refuses that pin and names the remedy." >&2
     return 0
   fi
+  if ! git -C "$tierpath" rev-parse -q --verify live >/dev/null \
+     || ! git -C "$tierpath" merge-base --is-ancestor HEAD live; then
+    printf 'gitlore: tier '\''%s'\'' stays on the merge commit because its local '\''live'\'' does not hold it. Run:\ngitlore:   git -C "%s" push . HEAD:live\ngitlore:   git -C "%s" checkout --detach %s\ngitlore: then fix the problems listed above and run /gitlore:merge.\n' \
+      "$tier" "$abs" "$abs" "$pin" >&2
+    return 0
+  fi
   if ! err=$(gitlore_git -C "$tierpath" checkout -q --detach "$pin" 2>&1); then
     # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
     printf 'gitlore: tier '\''%s'\'' could not be returned to the commit the memory store records. git said:\n%s\ngitlore: run `git -C "%s" checkout --detach %s`, fix the store, then run /gitlore:merge to adopt the merge into the root index.\n' \
@@ -231,8 +244,9 @@ rest_unadopted_tier() {
 # Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on
 # success; returns 1 when git's parenthesized reason says the ref diverged,
 # which is the caller's cue to prepare a merge; reports git's own explanation
-# and EXITS 1 on any other refusal — a protected branch, a pre-receive decline,
-# a bad credential, a full quota.
+# and returns 2 on any other refusal — a protected branch, a pre-receive
+# decline, a bad credential, a full quota. Never exits: each caller has its own
+# commit state to unwind before deciding what a status-2 refusal means for it.
 #
 # The same discriminator `pre-push` and `gitlore_sync_memory_to_live` apply, and
 # for the same reason: only divergence is something a merge can fix. Without it
@@ -260,7 +274,7 @@ push_or_report() {
 $push_err" \
     "gitlore: pushing '$*' in $store failed, and not because of divergence — no merge can fix this. git said:
 $push_err" >&2
-  exit 1
+  return 2
 }
 
 # Subcommand dispatch (Plan 03 continuations).
@@ -321,8 +335,12 @@ if [ $# -ge 1 ]; then
       # then — when the merge was against the remote — the remote's `live` too.
       # Either can lose a race with a concurrent advance; re-prepare against
       # whichever side refused and yield again.
-      if ! push_or_report "$mempath" . HEAD:live; then
+      rc=0; push_or_report "$mempath" . HEAD:live || rc=$?
+      if [ "$rc" -eq 1 ]; then
         gitlore_yield_merge "$mempath" live head-vs-live HEAD || exit 1
+        exit 1
+      elif [ "$rc" -eq 2 ]; then
+        [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
         exit 1
       fi
       # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
@@ -337,9 +355,13 @@ if [ $# -ge 1 ]; then
         exit 0
       fi
       if [ "$flavor" = "head-vs-remote" ]; then
-        if ! push_or_report "$mempath" origin live; then
+        rc=0; push_or_report "$mempath" origin live || rc=$?
+        if [ "$rc" -eq 1 ]; then
           gitlore_git -C "$mempath" fetch -q origin live || true
           gitlore_yield_merge "$mempath" origin/live head-vs-remote live || exit 1
+          exit 1
+        elif [ "$rc" -eq 2 ]; then
+          [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
           exit 1
         fi
       fi
@@ -400,9 +422,12 @@ check_store_gates() {
   # `tier` is the store's tier name, empty for the memory root: the head-vs-live
   # gate's remedy differs by store kind, because a tier is pinned at the gitlink
   # the memory store records (D43) and the root is not.
-  local store="$1" tier="${2-}"
+  local store="$1" tier="${2-}" rc
   gitlore_git -C "$store" fetch -q origin live || true
-  if ! push_or_report "$store" . HEAD:live; then
+  rc=0; push_or_report "$store" . HEAD:live || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    exit 1
+  elif [ "$rc" -eq 1 ]; then
     # git refuses a merely-BEHIND ref with the same wording as a genuinely
     # diverged one; only ancestry tells them apart. Same discriminator every
     # other yield site applies (gitlore_sync_tiers_to_live et al.) — this was
@@ -420,7 +445,10 @@ check_store_gates() {
       exit 1
     fi
   fi
-  if ! push_or_report "$store" origin live; then
+  rc=0; push_or_report "$store" origin live || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    exit 1
+  elif [ "$rc" -eq 1 ]; then
     case "$(gitlore_classify_refusal "$store" live origin/live)" in
       behind)
         # Nothing of ours to publish — the remote is ahead, which is
