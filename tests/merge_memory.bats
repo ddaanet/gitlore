@@ -591,6 +591,37 @@ EOF
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$remote_sha" ]
 }
 
+@test "a repair whose commit build fails walks back and points upstream" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory/ddaanet rev-parse HEAD)
+  push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')" >/dev/null
+
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" commit-tree "*) echo "fatal: shim refuses commit-tree" >&2; exit 1 ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"shim refuses commit-tree"* ]]
+  [[ "$stderr" == *"building the repair commit failed"* ]]
+  [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
+  [[ "$stderr" == *"Run /gitlore:merge again."* ]]
+  [[ "$stderr" != *"Fix the store"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+}
+
 @test "a take's repair keeps the duplicate its pin lacks" {
   wire_memory_remote
   make_tier_in_memory ddaanet

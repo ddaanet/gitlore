@@ -1946,13 +1946,17 @@ gitlore_adopt_repair_arrival() {
   fi
   rm -rf -- "$scratch"
   if [ -z "$repair" ]; then
-    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" || :
+    if [ -n "$remedy" ]; then
+      gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" || :
+    else
+      gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." || :
+    fi
     return 1
   fi
 
   if ! err=$(gitlore_git -C "$tierpath" push -q . "$repair:refs/heads/live" 2>&1); then
     printf 'gitlore: %s — its repair could not advance its local '\''live'\''. git said:\n%s\n' "$label" "$err" >&2
-    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." || :
     return 1
   fi
   if ! err=$(gitlore_git -C "$tierpath" checkout -q --detach live 2>&1); then
@@ -2000,15 +2004,17 @@ gitlore_adopt_commit_repair() {
 
 # Print the problems the up projection could not take, then walk the tier back.
 # Shared by a refusal naming nothing in the arriving carrier and by a repair's
-# retry that still finds root, the manifest or another tier refusing.
+# transient failure or retry that still finds root, the manifest or another
+# tier refusing.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
-#       $4 = "tier '<name>'", $5 = the compose problems.
+#       $4 = "tier '<name>'", $5 = the compose problems, $6 = the closing
+#       remedy (optional; empty keeps the default).
 # Returns 1 after emitting.
 gitlore_adopt_report_refusal_and_walk_back() {
-  local mempath="$1" tier="$2" old_gitlink="$3" label="$4" composed="$5"
+  local mempath="$1" tier="$2" old_gitlink="$3" label="$4" composed="$5" remedy="${6:-}"
   printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
   printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
-  gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+  gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" || :
   return 1
 }
 
