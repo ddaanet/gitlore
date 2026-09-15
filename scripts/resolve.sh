@@ -307,8 +307,12 @@ if [ $# -ge 1 ]; then
       # `git commit` itself, and `VAR=1 printf … | git commit` exports it to
       # the wrong end of the pipeline.
       merge_msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-merge-msg.XXXXXX")
-      gitlore_merge_commit_message "$memroot" "$mempath" > "$merge_msgfile"
-      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$merge_msgfile"
+      # A refused commit keeps MERGE_HEAD and the merge state, so a rerun lands
+      # it; only the message file is this run's to remove.
+      gitlore_merge_commit_message "$memroot" "$mempath" > "$merge_msgfile" \
+        || { rm -f "$merge_msgfile"; exit 1; }
+      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$merge_msgfile" \
+        || { rm -f "$merge_msgfile"; exit 1; }
       rm -f "$merge_msgfile"
       # Stage the gitlink the commit above just moved — after it, because the
       # merge commit does not exist until then and an earlier `add` would pin
@@ -478,19 +482,22 @@ while IFS= read -r store; do
   gitlore_guard_stale_merge_state "$store" || exit 1
 done < <(gitlore_memory_stores "$mempath")
 
-check_store_gates "$mempath"
-
 # Every mounted tier, through the identical pair of gates — one merge policy at
-# every level. A tier with no remote or no local `live` has nothing to reconcile
-# yet; `pre-push` is where a missing tier remote is fatal, because that is the
-# point at which its absence starts losing writes.
+# every level — and before memory's, the order gitlore_push_stores keeps too:
+# memory's commit records each tier's, so memory published ahead of a tier push
+# that then fails leaves a pointer the tier's remote cannot resolve (D17). A
+# tier with no remote or no local `live` has nothing to reconcile yet;
+# `pre-push` is where a missing tier remote is fatal, because that is the point
+# at which its absence starts losing writes.
 while IFS= read -r store; do
   if [ "$store" = "$mempath" ]; then continue; fi
   [ -n "$(git -C "$store" config --get remote.origin.url || true)" ] || continue
   git -C "$store" rev-parse -q --verify live >/dev/null || continue
-  # Every store under `$mempath` is a tier; the root was handled above.
+  # Every store under `$mempath` is a tier; the root is handled below.
   check_store_gates "$store" "${store##*/}"
 done < <(gitlore_memory_stores "$mempath")
+
+check_store_gates "$mempath"
 
 echo "gitlore: state is healthy. Nothing to do." >&2
 exit 0

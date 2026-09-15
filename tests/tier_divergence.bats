@@ -176,6 +176,28 @@ tier_state_file() { git -C "memory/${1:-ddaanet}" rev-parse --git-path gitlore-m
   [ ! -f "$(tier_state_file ddaanet)" ]
 }
 
+@test "the standalone resolver publishes no memory pointer ahead of a tier it could not publish" {
+  # Memory's commit records the tier's, so memory going out first would leave
+  # a colleague fetching a gitlink the tier remote cannot resolve (D17).
+  make_parent_with_memory
+  git -C memory push -q origin live
+  mount_tier_at_live ddaanet
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  approve "memory: record the org fact"
+  bash "$PRE_COMMIT"
+  git -C memory merge-base --is-ancestor origin/live live
+  [ "$(git -C memory rev-parse live)" != "$(git -C memory rev-parse origin/live)" ]
+  published=$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)
+  printf '#!/bin/sh\necho "declined by policy" >&2\nexit 1\n' > "$TMP_REPO/.bare-ddaanet.git/hooks/pre-receive"
+  chmod +x "$TMP_REPO/.bare-ddaanet.git/hooks/pre-receive"
+
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"declined by policy"* ]]
+  [ "$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)" = "$published" ]
+}
+
 # --- a prepared merge must survive the next session start ---
 
 # A prepared merge leaves the tier detached AT live with the merge staged, and a
