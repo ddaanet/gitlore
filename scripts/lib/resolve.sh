@@ -1926,14 +1926,13 @@ gitlore_adopt_repair_arrival() {
       [ -n "$line" ] || continue
       printf 'gitlore:   live:MEMORY.md: %s\n' "${line#"$tierpath/MEMORY.md: "}" >&2
     done <<<"$carrier_problems"
-    other_lines=""
-    while IFS= read -r line || [ -n "$line" ]; do
-      [ -n "$line" ] || continue
-      case "$line" in
-        "$tierpath/MEMORY.md: "*) continue ;;
-      esac
-      other_lines="${other_lines:+$other_lines$'\n'}$line"
-    done <<<"$composed"
+    other_lines=$(
+      while IFS= read -r line || [ -n "$line" ]; do
+        [ -n "$line" ] || continue
+        gitlore_compose_problems_in "$tierpath/MEMORY.md" <<<"$line" >/dev/null && continue
+        printf '%s\n' "$line"
+      done <<<"$composed"
+    )
     if [ -n "$other_lines" ]; then
       printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
       printf '%s\n' "$other_lines" | sed 's/^/gitlore:   /' >&2
