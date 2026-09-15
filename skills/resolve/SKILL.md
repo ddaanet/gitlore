@@ -65,6 +65,8 @@ Do not escalate to the user: a merge is automated from their perspective, becaus
 
 On approval, the sub-agent runs the continuation command. The merge commit's message is canned — the continuation writes it; the summary is for your review and your report to the user, not for the commit.
 
+If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed`, the merge did not land and stays prepared. Resume the **same** sub-agent with `rejected:` followed by the problem lines it quoted, and evaluate the new synthesis as before. Do not go to **Loop** for this: `resolve.sh` re-emits a directive without the problem lines, and a fresh sub-agent can honestly answer `No conflict.` into the same refusal. If a re-synthesis draws the same problem line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
+
 ## Loop
 
 After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0.
@@ -77,7 +79,9 @@ If this skill was triggered by a commit failure, retry the original git commit n
 
 Tell the user what was merged and what state the repo is in now.
 
-The continuation composes the memory indexes before it commits, so its output may
-carry `gitlore:` lines the merge itself did not cause — a composition refusal, or
-index pointers naming files that are not there. The merge landed either way;
-relay those lines, because they are index problems only you can fix.
+The continuation checks and composes the memory indexes before it commits, so its
+output may carry index problems. Keep the two kinds apart. Problems in the merged
+index blocked the landing until a new synthesis cleared them; say which they were.
+Any other `gitlore:` line — a composition refusal naming another index, index
+pointers naming files that are not there, a refused push with its remedy — came
+after the merge commit landed; relay it, because it is a problem only you can fix.

@@ -14,7 +14,10 @@ that commits memory and ends leaves every fact in the local clone only. This
 skill closes that gap on its own.
 
 There is no approval step here. FR11 gated this content when it was committed;
-publishing an already-approved commit adds no disclosure decision.
+publishing an already-approved commit adds no disclosure decision. A take in the
+run can add a repair commit to a tier whose arrival broke its index structure,
+and that commit restructures lines without adding text, so it adds none either
+(D52).
 
 ## Publish
 
@@ -28,9 +31,11 @@ Exit codes:
   commits each published, which stores were fast-forwarded to take what their
   remote held (a push is attempt → take → attempt again, so a behind store is
   reconciled in the run rather than left as a `/gitlore:merge` errand), any
-  trailing notice about uncommitted changes, and — on a repo whose memory store
-  is local-only — that memory has no remote of its own and stayed local while
-  its tiers were published.
+  `gitlore: repaired <tier>'s arrival:` lines from a take that restructured a
+  broken tier index and published that repair in this run, any trailing notice
+  about uncommitted changes, and — on a repo whose memory store is local-only —
+  that memory has no remote of its own and stayed local while its tiers were
+  published.
 - Non-zero **with `gitlore: memory merge prepared` in the output** — a remote
   diverged. Go to **Diverged** below.
 - Non-zero **without** it — surface the output verbatim and stop. It names the

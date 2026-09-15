@@ -61,3 +61,14 @@ store clean; the run says so when it happens, and says when the pair was only
 staged instead because the store held uncommitted work. Say plainly that
 nothing was published, and that `/gitlore:push` is what puts this repo's own
 facts on their remotes.
+
+A tier whose arrival broke the index structure — a duplicate pointer, a welded
+line, a non-bullet line inside the pointer block — is repaired by the take
+itself: a commit on top of the arrival that restructures and adds no text. Relay
+every `gitlore: repaired <tier>'s arrival:` line verbatim, each dropped line
+included, and say that the repair is committed in the tier's local `live` and
+`/gitlore:push` publishes it. When the take then rests because this repo's own
+index has problems, relay the problems adoption waits on: they are this repo's to
+fix, and the next take adopts the repair without repairing again. An arrival the
+repair cannot fix is reported with its problem lines; it must be fixed where it
+was published, then `/gitlore:merge` runs again.
