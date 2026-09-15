@@ -670,6 +670,55 @@ EOF
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
 }
 
+@test "a repair whose live advance fails walks back and keeps the arrival" {
+  export GITLORE_GIT_RETRY_SCHEDULE=0
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory/ddaanet rev-parse HEAD)
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
+
+  # Root's own stranded-`live` repair and the tier's take fast-forward each make
+  # one `push -q . …:refs/heads/live` call ahead of the repair, so the repair's
+  # own advance is the THIRD such call; every other call forwards to the real
+  # git.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  count_file="$BATS_TEST_TMPDIR/push-live-count"
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" push -q . "*":refs/heads/live "*)
+    n=\$(cat "$count_file" 2>/dev/null || echo 0)
+    n=\$((n + 1))
+    printf '%s' "\$n" > "$count_file"
+    if [ "\$n" -eq 3 ]; then
+      echo "fatal: shim refuses the third live advance" >&2
+      exit 1
+    fi
+    ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  # Premise: the stub actually ran on the repair's own advance.
+  [ "$(cat "$count_file")" -eq 3 ]
+  [[ "$stderr" == *"shim refuses the third live advance"* ]]
+  [[ "$stderr" == *"its repair could not advance its local 'live'"* ]]
+  [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
+  [[ "$stderr" == *"Run /gitlore:merge again."* ]]
+  [[ "$stderr" != *"Fix the store"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  # The advance never landed: `live` still holds the arrival, not the repair.
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
+}
+
 @test "a take's repair keeps the duplicate its pin lacks" {
   wire_memory_remote
   make_tier_in_memory ddaanet
