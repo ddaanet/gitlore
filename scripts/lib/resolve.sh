@@ -1894,10 +1894,13 @@ gitlore_adopt_tier_into_root() {
 #       $4 = "1" when the root store was dirty before the take,
 #       $5 = "tier '<name>'", $6 = the first refusal's problems naming the
 #       carrier, in the arrival's own line numbering, $7 = the first refusal's
-#       full text, for the problems it raised beyond the carrier.
+#       full text, printed whole when the repair fails on something the next
+#       take redoes, and for its problems beyond the carrier when the repair
+#       cannot fix it.
 # Returns 0 once the retry adopts the repair. Returns 1, having emitted and
 # walked the tier back to its pin, when the repair cannot be built or cannot fix
-# the carrier, `live` cannot be advanced, or the retry still refuses.
+# the carrier, `live` cannot be advanced, the worktree cannot follow it, or the
+# retry still refuses.
 gitlore_adopt_repair_arrival() {
   local mempath="$1" tier="$2" old_gitlink="$3" root_dirty_before="$4" label="$5" carrier_problems="$6" composed="$7"
   local tierpath="$mempath/$tier" gitdir scratch report line repair="" err retry_composed retry_rc=0
