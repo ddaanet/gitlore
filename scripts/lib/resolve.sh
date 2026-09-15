@@ -1972,7 +1972,7 @@ gitlore_adopt_repair_arrival() {
 
   retry_composed=$(gitlore_compose_up "$mempath" "$tier") || retry_rc=$?
   if [ "$retry_rc" -ne 0 ]; then
-    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$retry_composed" || :
+    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$retry_composed" "" "the repair" || :
     return 1
   fi
   # Inside a push the take is itself publishing, and naming /gitlore:push would
@@ -2009,13 +2009,15 @@ gitlore_adopt_commit_repair() {
 # finds root, the manifest or another tier refusing.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
 #       $4 = "tier '<name>'", $5 = the compose problems, $6 = the closing
-#       remedy (optional; empty keeps the default).
+#       remedy (optional; empty keeps the default), $7 = what the tier's local
+#       `live` keeps (optional; empty keeps the default).
 # Returns 1 after emitting.
 gitlore_adopt_report_refusal_and_walk_back() {
   local mempath="$1" tier="$2" old_gitlink="$3" label="$4" composed="$5" remedy="${6:-}"
+  local live_holds="${7:-}"
   printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
   printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
-  gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" || :
+  gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" "$live_holds" || :
   return 1
 }
 
@@ -2023,11 +2025,13 @@ gitlore_adopt_report_refusal_and_walk_back() {
 # nothing to adopt.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
 #       $4 = "tier '<name>'", for the messages, $5 = the closing remedy when
-#       the store is not what needs fixing (optional).
+#       the store is not what needs fixing (optional), $6 = what the tier's
+#       local `live` keeps (optional; empty keeps "what arrived").
 # Returns 1 after emitting, whether or not the checkout succeeded.
 gitlore_adopt_walk_back_tier() {
   local mempath="$1" tier="$2" old_gitlink="$3" label="$4" err abs
   local remedy="${5:-Fix the store, then run /gitlore:merge again.}"
+  local live_holds="${6:-what arrived}"
   if ! err=$(gitlore_git -C "$mempath/$tier" checkout -q --detach "$old_gitlink" 2>&1); then
     # Absolute, so the printed command runs from anywhere.
     abs=$(CDPATH='' cd -- "$mempath/$tier" && pwd) || abs="$mempath/$tier"
@@ -2036,7 +2040,7 @@ gitlore_adopt_walk_back_tier() {
       "$label" "$err" "$abs" "$old_gitlink" >&2
     return 1
   fi
-  printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps what arrived. %s\n' "$label" "$remedy" >&2
+  printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps %s. %s\n' "$label" "$live_holds" "$remedy" >&2
   return 1
 }
 
