@@ -777,6 +777,30 @@ push_tier_files() {
   [ "$(tier_gitdir_files ddaanet)" = "$gitdir_before" ]
 }
 
+@test "an arrival the repair cannot fix beside a root duplicate reports both and the two-fix remedy" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [B](b.md) — y\n- [B](b.md) — y\n- [a](a.md) — a- [z](z.md) — z')")
+  run ! git --git-dir="$TMP_REPO/.bare-ddaanet.git" cat-file -e "$remote_sha:z.md"
+  # Root carries an uncommitted duplicate pointer alongside the unrepairable arrival.
+  seed_root_bullet "dup.md" "root dup"
+  seed_root_bullet "dup.md" "root dup"
+  [ "$(grep -cF '(dup.md)' memory/MEMORY.md)" -eq 2 ]
+  run ! git -C memory diff --quiet -- MEMORY.md
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *$'\ngitlore:   live:MEMORY.md:'* ]]
+  [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/MEMORY.md: duplicate pointer path dup.md"* ]]
+  # Only the lines not naming the carrier go under that header: the carrier's
+  # are already listed in their live:MEMORY.md form.
+  [[ "$stderr" != *"memory/ddaanet/MEMORY.md:"* ]]
+  [[ "$stderr" == *"Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again." ]]
+}
+
 @test "a local live that ran ahead with a defective carrier is repaired" {
   wire_memory_remote
   make_tier_in_memory ddaanet

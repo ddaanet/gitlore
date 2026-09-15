@@ -1871,7 +1871,7 @@ gitlore_adopt_tier_into_root() {
   composed=$(gitlore_compose_up "$mempath" "$tier") || rc=$?
   if [ "$rc" -eq 1 ] && carrier_problems=$(gitlore_compose_problems_in "$mempath/$tier/MEMORY.md" <<<"$composed"); then
     gitlore_adopt_repair_arrival "$mempath" "$tier" "$old_gitlink" \
-      "$root_dirty_before" "$label" "$carrier_problems" || return 1
+      "$root_dirty_before" "$label" "$carrier_problems" "$composed" || return 1
     return 0
   fi
   if [ "$rc" -ne 0 ]; then
@@ -1893,14 +1893,15 @@ gitlore_adopt_tier_into_root() {
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
 #       $4 = "1" when the root store was dirty before the take,
 #       $5 = "tier '<name>'", $6 = the first refusal's problems naming the
-#       carrier, in the arrival's own line numbering.
+#       carrier, in the arrival's own line numbering, $7 = the first refusal's
+#       full text, for the problems it raised beyond the carrier.
 # Returns 0 once the retry adopts the repair. Returns 1, having emitted and
 # walked the tier back to its pin, when the repair cannot be built or cannot fix
 # the carrier, `live` cannot be advanced, or the retry still refuses.
 gitlore_adopt_repair_arrival() {
-  local mempath="$1" tier="$2" old_gitlink="$3" root_dirty_before="$4" label="$5" carrier_problems="$6"
+  local mempath="$1" tier="$2" old_gitlink="$3" root_dirty_before="$4" label="$5" carrier_problems="$6" composed="$7"
   local tierpath="$mempath/$tier" gitdir scratch report line repair="" err retry_composed retry_rc=0
-  local remedy=""
+  local remedy="" other_lines
 
   if ! gitdir=$(git -C "$tierpath" rev-parse --absolute-git-dir) ||
      ! scratch=$(mktemp -d "$gitdir/gitlore-repair.XXXXXX"); then
@@ -1925,7 +1926,21 @@ gitlore_adopt_repair_arrival() {
       [ -n "$line" ] || continue
       printf 'gitlore:   live:MEMORY.md: %s\n' "${line#"$tierpath/MEMORY.md: "}" >&2
     done <<<"$carrier_problems"
-    remedy="Once the index is fixed where it was published, run /gitlore:merge again."
+    other_lines=""
+    while IFS= read -r line || [ -n "$line" ]; do
+      [ -n "$line" ] || continue
+      case "$line" in
+        "$tierpath/MEMORY.md: "*) continue ;;
+      esac
+      other_lines="${other_lines:+$other_lines$'\n'}$line"
+    done <<<"$composed"
+    if [ -n "$other_lines" ]; then
+      printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
+      printf '%s\n' "$other_lines" | sed 's/^/gitlore:   /' >&2
+      remedy="Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again."
+    else
+      remedy="Once the index is fixed where it was published, run /gitlore:merge again."
+    fi
   elif ! repair=$(gitlore_adopt_commit_repair "$tierpath" "$tier" "$scratch" "$report"); then
     printf 'gitlore: %s — its arrival could not be repaired: building the repair commit failed.\n' "$label" >&2
     repair=""
