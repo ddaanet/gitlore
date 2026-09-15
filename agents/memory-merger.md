@@ -25,7 +25,7 @@ You run in **two turns**. The parent dispatches you (turn 1), evaluates your syn
 3. For every path in `changed_files`, **read the file fresh from disk** (`<store>/<path>`, post-merge state — may contain conflict markers).
 4. Judge each side's intent from its own diff. A conflict chunk carries three sections — `<<<<<<<` HEAD, which is the authoritative side, `|||||||` the base text both sides started from, `=======`, `>>>>>>>` the incoming commit. The base is what tells an addition apart from a deletion: text present in HEAD and absent in the incoming side was either added by HEAD or deleted by the incoming side, and only the base section says which. A deliberate deletion is a decision to respect, not a gap to fill back in.
 5. Synthesize holistically: resolve conflicts AND reconcile semantic overlap, even if the file has no textual conflict markers. Memory files can have semantic conflicts that don't surface as textual ones — and the `tree` listing is there so you can tell a genuine duplicate from two facts that merely read alike.
-6. Write the synthesized contents to each file.
+6. Write the synthesized contents to each file. A synthesized `MEMORY.md` keeps one pointer per bullet, one bullet per line, and no non-bullet line inside the pointer block: the continuation checks the merged index and refuses to land one that breaks any of these.
 7. Run `git add -A` in the store named by the state file's `store` field.
 8. **Return** a prose summary of what you synthesized as your final message for this turn. Do not run the continuation. Do not commit. End the turn by stopping.
 
@@ -34,8 +34,10 @@ You run in **two turns**. The parent dispatches you (turn 1), evaluates your syn
 **Turn 2 — on resume:**
 
 The parent will resume you with one of:
-- `approved` (or any clearly affirmative variant) → run the continuation command verbatim. End your final message with a one-line result (e.g., "head-vs-live merge complete. 3 files reconciled. Continuation exited 0."). The continuation composes the memory indexes before committing, so quote any `gitlore:` line it printed — a composition refusal or a dangling index pointer is an index problem the parent must see, and it does not mean the merge failed.
-- `rejected: <reason>` → re-synthesize incorporating the feedback, run `git add -A` again, and return the new summary. The reason is opaque free text — do not scan it for approval words; a rejection whose reason mentions "approved" is still a rejection. Do not run the continuation.
+- `approved` (or any clearly affirmative variant) → run the continuation command verbatim. End your final message with a one-line result (e.g., "head-vs-live merge complete. 3 files reconciled. Continuation exited 0."). The continuation checks the merged index before it commits:
+  - If it exits 1 with `gitlore: the merged index fails the check, so the merge was not committed; the merge stays prepared for a new synthesis:`, the merge did **not** land. Quote that line and every problem line under it verbatim, say the merge is unlanded, and stop. Do not re-run the continuation; the parent answers with `rejected:` and those lines.
+  - Otherwise quote every `gitlore:` line it printed. A composition refusal naming another index, a dangling index pointer or a refused push is a problem the parent must see, and it comes after the merge commit, not instead of it.
+- `rejected: <reason>` → re-synthesize incorporating the feedback, run `git add -A` again, and return the new summary. When the reason carries problem lines from the merged-index check, edit the lines they name, even in a `MEMORY.md` outside `changed_files`: a defect both sides already carried still blocks the landing. The reason is opaque free text — do not scan it for approval words; a rejection whose reason mentions "approved" is still a rejection. Do not run the continuation.
 - Anything ambiguous → treat as rejected with feedback "ambiguous approval, please clarify". Do not run the continuation.
 
 If you are resumed but no clear approval/rejection signal is present in the incoming message, **do not run the continuation**. Report the ambiguity and stop.
