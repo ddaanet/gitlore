@@ -43,7 +43,21 @@
 
 - **Minor-pass-2 test m9.** Should non-final `[[ ]]` assertions be written as `[[ ]] || return 1` (bash < 4.1 errexit)? The recommendation is no suite-wide sweep.
 
+- `memory/ddaanet/gitlore-tier-merge-direction.md` as a whole meets the test that dropped Item 7.1 of `plans/unadoptable-tier-arrival`: which index to edit after a tier take, and wording fixes only after propagating, is gitlore usage documentation. Decide whether it moves into gitlore (the merge/push skills or `docs/`) and leaves the ddaanet tier.
+- A memory store with no root `MEMORY.md` runs no index check on any path: commit abort, take repair and merged-index refusal all skip it because `gitlore_compose` and `gitlore_compose_up` return 0 when root is absent. Reachable when `init-submodule.sh` copies a non-empty auto-memory dir lacking `MEMORY.md`, or a user deletes and commits it. Decide whether the checks apply to a rootless store or the docs' statement that it runs none stands.
+- After a refused local `live` update leaves an unadopted tier on its merge (the rest guard's remedy case), no later command re-derives the rest if the printed remedy is skipped: `resolve.sh` reports healthy, merge/push report uncommitted changes, and only the remedy or SessionStart recovers. Decide whether a take or gate should rest a clean tier ahead of its pin when its `live` contains HEAD, which replaces the pin guard's "no automatic remedy" for that sub-case.
+- Nothing in code bounds refuse/re-synthesize cycles of the merged-index gate; `skills/resolve/SKILL.md` stops when the same problem line returns. Decide whether a mechanical bound (a retry cap, or problem lines carried in the re-emitted directive) is wanted.
+
 ## Remaining
+
+- Run `/deliverable-review plans/unadoptable-tier-arrival` (opus, fresh session).
+- Split `scripts/lib/index-compose.sh` (~1075 lines; the check, the repair and their parsing primitives), and track `scripts/lib/resolve.sh` (~2170 lines) and `tests/resolve_compose.bats` (~650 lines) against the 400-line cap.
+- Close the batch-retry approval gap: on the PostToolBatch path the retry reuses the preserved summary, so the edit fixing an aborting index commits under the old approval although the abort text says the summary needs approval again (the pin guard's remedy has the same gap); needs a status protocol between `commit-memory.sh` and the batch hook.
+- A take killed after `gitlore_compose_up` writes root but before the pair is staged leaves root describing a tier SessionStart pins back; the next compose projects it down and dirties the tier.
+- Confirm a repair take end to end on macOS (bash 3.2); nothing on this box exercises the bash < 4.4 hazards.
+- Add the untested review-fix behaviours from `plans/unadoptable-tier-arrival/reports/tdd-audit.md` F2: a failed `git status` in the commit path's rc 1 arm restamps and aborts; `gitlore_repair_index` keeps the file mode; `hash-object --no-filters` keeps CRLF bytes. Add a refused-`push .` mutation red for Item 2.2 slice 6 ("a refused live update after the repair leaves no trace").
+- `resolve.sh`'s "remote has no live branch. Pushing." step pushes memory's `live` before any tier gate on a never-published memory remote; unprobed.
+- The entry-wise index pass (`scripts/lib/index-merge.sh`, `_gitlore_index_merge_bullets`) drops interleaved non-bullet and blank lines inside the pointer region with rc 0 in ordinary merges, and `gitlore_merge_indexes` stages the result. It predates this job; outline-review Major 3 of `plans/unadoptable-tier-arrival` probed it. Schedule it as its own defect.
 
 - `_gitlore_nudge_reset`'s `find … -mtime +7 -delete` is unguarded under the calling hook's errexit; `gitlore_relay_sweep` guards its own. Flagged by the relay slice 1 code review, untouched.
 
