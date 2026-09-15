@@ -1940,17 +1940,18 @@ gitlore_adopt_repair_arrival() {
     else
       remedy="Once the index is fixed where it was published, run /gitlore:merge again."
     fi
+    rm -rf -- "$scratch"
+    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" || :
+    return 1
   elif ! repair=$(gitlore_adopt_commit_repair "$tierpath" "$tier" "$scratch" "$report"); then
     printf 'gitlore: %s — its arrival could not be repaired: building the repair commit failed.\n' "$label" >&2
     repair=""
   fi
   rm -rf -- "$scratch"
+  # Every arm left here without a repair failed on something the next take
+  # redoes from scratch.
   if [ -z "$repair" ]; then
-    if [ -n "$remedy" ]; then
-      gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" || :
-    else
-      gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." || :
-    fi
+    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." || :
     return 1
   fi
 
@@ -2003,9 +2004,9 @@ gitlore_adopt_commit_repair() {
 }
 
 # Print the problems the up projection could not take, then walk the tier back.
-# Shared by a refusal naming nothing in the arriving carrier and by a repair's
-# transient failure or retry that still finds root, the manifest or another
-# tier refusing.
+# Shared by a refusal naming nothing in the arriving carrier, by a repair that
+# fails on something the next take redoes, and by a repair's retry that still
+# finds root, the manifest or another tier refusing.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
 #       $4 = "tier '<name>'", $5 = the compose problems, $6 = the closing
 #       remedy (optional; empty keeps the default).
