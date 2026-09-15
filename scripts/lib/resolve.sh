@@ -2009,8 +2009,8 @@ gitlore_adopt_commit_repair() {
 # finds root, the manifest or another tier refusing.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
 #       $4 = "tier '<name>'", $5 = the compose problems, $6 = the closing
-#       remedy (optional; empty keeps the default), $7 = what the tier's local
-#       `live` keeps (optional; empty keeps the default).
+#       remedy and $7 = what the tier's local `live` keeps, both optional and
+#       passed to gitlore_adopt_walk_back_tier, whose default an empty one keeps.
 # Returns 1 after emitting.
 gitlore_adopt_report_refusal_and_walk_back() {
   local mempath="$1" tier="$2" old_gitlink="$3" label="$4" composed="$5" remedy="${6:-}"
@@ -2025,8 +2025,9 @@ gitlore_adopt_report_refusal_and_walk_back() {
 # nothing to adopt.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
 #       $4 = "tier '<name>'", for the messages, $5 = the closing remedy when
-#       the store is not what needs fixing (optional), $6 = what the tier's
-#       local `live` keeps (optional; empty keeps "what arrived").
+#       the store is not what needs fixing (optional; empty keeps "Fix the
+#       store, …"), $6 = what the tier's local `live` keeps (optional; empty
+#       keeps "what arrived").
 # Returns 1 after emitting, whether or not the checkout succeeded.
 gitlore_adopt_walk_back_tier() {
   local mempath="$1" tier="$2" old_gitlink="$3" label="$4" err abs
