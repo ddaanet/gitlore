@@ -2,9 +2,10 @@
 
 The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17 points
 at. Motivation, FR15 itself and the Architecture overview live in `design.md`;
-the decision-level detail is here and in three sibling nodes. Most of it is
-needed only when touching this subsystem; the exception is the tier-store trio
-D42–D44, which the commit and merge paths reach from outside it.
+the decision-level detail is here and in four sibling nodes. Most of it is
+needed only when touching this subsystem; the exception is the tier-store
+decisions D42–D44 and D52, which the commit and merge paths reach from outside
+it.
 
 ---
 
@@ -19,7 +20,7 @@ and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
 gitlore's *composition* of the root index. The mechanism is a subsystem rather
 than a single call, so its decisions are recorded individually as
-**D26–D40, D42–D44 and D47**, across this node and three siblings:
+**D26–D40, D42–D44, D47 and D52**, across this node and four siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -38,6 +39,10 @@ than a single call, so its decisions are recorded individually as
   · **D43** tier pinning · **D44** tier merges. All three assume the
   detached-at-`live` branch model, which is D41, in
   [merge-and-resolve.md](merge-and-resolve.md).
+- Defective arriving indexes, in
+  [tier-arrival-repair.md](tier-arrival-repair.md) — **D52** the take repairs an
+  arrival the root cannot adopt, and a merged index that fails the check does
+  not land
 
 **D26 — The root index one-liner is canonical; frontmatter is a secondary
 surface**

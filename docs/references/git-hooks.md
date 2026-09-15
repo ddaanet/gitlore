@@ -12,8 +12,9 @@ described there. The approval gate `pre-commit` carries out is in
 
 - The pointer — **D46** a parent commit is never rewritten to re-pin memory; a
   push refused by divergence is resolved and pushed again
-- The commit path — **D50** the store is composed before it is committed, a
-  compose refusal reported and a pin refusal fatal
+- The commit path — **D50** the store is composed before it is committed; a pin
+  refusal is fatal, and so is a compose problem in an index file the commit
+  changes, while every other compose refusal is reported
 
 ---
 
@@ -48,15 +49,18 @@ session-less linked worktree) — never block a parent git operation over memory
    classify what survives and repair, which may mean carrying straight on
    ([merge-state-recovery.md](merge-state-recovery.md)).
 3. **Sync memory** through the shared `gitlore_sync_memory_to_live`: memory's
-   own stale-merge guard, the FR11 dirty/freshness gate, each mounted tier's
-   stale-merge guard, `gitlore_stage_landed_tiers` (adopting a tier a previous
-   run committed inside but never recorded — the retry of a half-landed commit,
-   D50), the pin guard (`gitlore_compose_check_pins`, aborting on an off-pin
-   tier), down composition (`gitlore_compose`; rc 1 reports and continues, rc 2
-   aborts), `gitlore_sync_tiers_to_live` (each dirty tier: `add -A`, write its
-   landing record, commit, advance its local `live`, so the gitlink the memory
-   commit is about to record has already moved (D42), onto composed carrier
-   content (D50)), memory's own `add -A`, removing the landing records,
+   own stale-merge guard, the FR11 dirty/freshness gate (a store with no fresh
+   approval first meets any tier's prepared-merge directive, then the summary
+   request), each mounted tier's stale-merge guard, `gitlore_stage_landed_tiers`
+   (adopting a tier a previous run committed inside but never recorded — the
+   retry of a half-landed commit, D50), the pin guard
+   (`gitlore_compose_check_pins`, aborting on an off-pin tier), down composition
+   (`gitlore_compose`; rc 1 aborts on a problem in an index file with
+   uncommitted changes and otherwise reports and continues, rc 2 aborts),
+   `gitlore_sync_tiers_to_live` (each dirty tier: `add -A`, write its landing
+   record, commit, advance its local `live`, so the gitlink the memory commit is
+   about to record has already moved (D42), onto composed carrier content
+   (D50)), memory's own `add -A`, removing the landing records,
    `GITLORE_MEMORY_COMMIT=1 commit -F <msgfile>`, and removing the message file,
    then `push . HEAD:live` fast-forward-only. Divergence prepares a merge and
    yields (`gitlore_yield_merge`), exiting 1.
@@ -128,7 +132,8 @@ the merge is resolved. The loop that replaces it — resolve, push again, until
 the push lands — is the one the `push` skill already runs (D20), and a gitlink
 behind memory's tip is the same resting state every other memory advance leaves.
 
-**D50 — The commit path composes before it commits; a pin refusal is fatal**
+**D50 — The commit path composes before it commits; a pin refusal, or a compose
+problem in an index file the commit changes, is fatal**
 
 Composition otherwise runs from the session surfaces alone, so a carrier left
 stale by a missed in-session compose self-heals at the next `SessionStart` but
@@ -145,16 +150,28 @@ summary. This holds the FR11 boundary: a carrier projects root index lines an
 approved summary already covered, never new content.
 
 **The two refusals are not interchangeable, and what separates them is what
-adopting one destroys.** A `gitlore_compose_check` refusal withholds a
-projection and destroys nothing, so the commit proceeds with the carrier as it
-stands and the refusal is only reported. Proceeding past a
-`gitlore_compose_check_pins` refusal instead lets this function's own `add -A`
-adopt the moved gitlink and remove the condition it refused on: the next compose
-projects root's older text over the carrier with nothing left to refuse,
-`gitlore_sync_tiers_to_live` commits that inside the tier, and `pre-push` ships
-it to the tier's own remote, so the approved upstream fact is destroyed one
-commit after the warning. The pin check therefore runs ahead of compose and
-aborts, naming no remedy of its own — every branch of
+committing past one destroys or publishes.** A `gitlore_compose_check` refusal
+withholds a projection and destroys nothing, so what committing past it risks is
+publishing the problem, and only a file the commit changes can do that. A
+duplicate, interleaved or welded line in root's `MEMORY.md` or in a tier carrier
+with uncommitted changes aborts: the output lists every changed index file with
+a problem, the approval is restamped, and the agent is told to edit the named
+lines and retry, the summary needing approval again. Compose rc 1 writes
+nothing, so what reads as changed is the same before and after it. The same
+problem in a file with no uncommitted changes — a tier dirty only outside its
+carrier included — is not what this commit carries, and the manifest and
+leftover-prefix rules name no index file; all of those are reported and the
+commit goes ahead. The line this draws is the one D52
+([tier-arrival-repair.md](tier-arrival-repair.md)) builds on: the wording of an
+index a tier publishes is upstream's to change, and a structural defect that
+arrives anyway — from a hand push, or an older gitlore — is the take's to
+repair. Proceeding past a `gitlore_compose_check_pins` refusal instead lets this
+function's own `add -A` adopt the moved gitlink and remove the condition it
+refused on: the next compose projects root's older text over the carrier with
+nothing left to refuse, `gitlore_sync_tiers_to_live` commits that inside the
+tier, and `pre-push` ships it to the tier's own remote, so the approved upstream
+fact is destroyed one commit after the warning. The pin check therefore runs
+ahead of compose and aborts, naming no remedy of its own — every branch of
 `gitlore_compose_check_pins` prints the one its own cause takes, and a single
 abort can carry several tiers with different causes. A write failure aborts too
 — a half-written carrier must not be committed.
@@ -194,12 +211,13 @@ path that adopts a tier ahead of its pin therefore composes the carrier up into
 the root index first and stages the pair, or stages nothing at all; the adoption
 a recovered merge owes is one of them
 ([merge-state-recovery.md](merge-state-recovery.md)). A take that stages nothing
-also returns the tier to its pin, keeping what arrived in its local `live` for
-the next take to adopt, and so does a landed merge continuation that stages
-nothing and exits 0 onto a pin the merge contains; a yield and a pin off to the
-side leave the tier where it is ([tier-stores.md](tier-stores.md)). The one
-exception to composing up is a tier commit the commit path itself made, whose
-carrier root already describes, so there is nothing to project up.
+also returns the tier to its pin, keeping what arrived — or the take's repair of
+it (D52) — in its local `live` for the next take to adopt, and so does a landed
+merge continuation that stages nothing, onto a pin the merge contains once its
+local `live` holds the merge; a yield, a pin off to the side and a `live` short
+of the merge leave the tier where it is ([tier-stores.md](tier-stores.md)). The
+one exception to composing up is a tier commit the commit path itself made,
+whose carrier root already describes, so there is nothing to project up.
 
 **A successful compose here stays silent**, by argument rather than omission: on
 rc 0 the result is discarded, so a commit that repairs a stale carrier says

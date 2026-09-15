@@ -9,7 +9,9 @@ reads standalone; the subsystem's entry point is
   a tier is pinned at its gitlink, and advancing one is a merge · **D44**
   shared-tier conflicts resolve semantically. All three assume the
   detached-at-`live` branch model, which is D41, in
-  [merge-and-resolve.md](merge-and-resolve.md).
+  [merge-and-resolve.md](merge-and-resolve.md). How a take repairs an arrival
+  the root index cannot adopt is D52, in
+  [tier-arrival-repair.md](tier-arrival-repair.md).
 
 ---
 
@@ -116,12 +118,17 @@ store records, which is precisely the state the down projection refuses. So the
 publish gate's bare "put `HEAD` back on `live`" remedy is the one that breaks
 the store, and a tier is sent to the take instead. `gitlore_adopt_advanced_live`
 runs the same fast-forward-plus-adoption a remote arrival gets, sourced from the
-local ref and moving no ref at all, at the head of every take and from the
-publish preflight; `gitlore_adopt_tier_into_root` is the tail the two share. The
-preflight runs the *whole* take pass rather than adopting the one tier, for the
-reason the behind-tier branch gives: it goes root-first, and a tier's
-bookkeeping commit would otherwise meet an equally-behind root's upstream one as
-a divergence.
+local ref and moving no ref at all, from the publish preflight and in every
+take, right after the take's fetch. A take skips it when the fetched
+`origin/live` already contains `live`: the remote fast-forward then takes
+origin's commits, among them a repair of the same arrival that another consumer
+already published, which adopting the stale copy would repair a second time
+(D52). No remote, a failed fetch and a remote with no `live` all adopt, since
+nothing else reaches those commits. `gitlore_adopt_tier_into_root` is the tail
+the two share. The preflight runs the *whole* take pass rather than adopting the
+one tier, for the reason the behind-tier branch gives: it goes root-first, and a
+tier's bookkeeping commit would otherwise meet an equally-behind root's upstream
+one as a divergence.
 
 The memory root is excluded from that adoption. It has no pin above it —
 SessionStart checks it out at `live` and the parent's gitlink is allowed to lag
@@ -162,24 +169,49 @@ older block, and the next compose would write that text over the carrier with
 nothing left to refuse (D50). Leaving the tier ahead of an unstaged pin instead
 has the pin guard refuse every commit until `SessionStart` walks it back, while
 a take finds nothing to take. So `gitlore_adopt_tier_into_root` checks the tier
-out at its pre-take commit and fails the take. The arrival stays in the tier's
-local `live`, the shape `gitlore_adopt_advanced_live` adopts, so fixing the
-store and taking again retries the whole adoption. The checkout loses nothing: a
-take refuses a dirty tier, and the up projection writes no carrier.
+out at its pre-take commit and fails the take. What the take brought in stays in
+the tier's local `live`, the shape `gitlore_adopt_advanced_live` adopts, so the
+next take retries the whole adoption once the refusal is fixed. The checkout
+loses nothing: a take refuses a dirty tier, and the up projection writes no
+carrier. A refusal in which a problem names the arriving carrier is repaired
+before it walks anything back (D52). The tier walks back only when no problem
+names the carrier, when the repair cannot be built or cannot fix the carrier, or
+when the retry still refuses on what this repo holds, and in that last case
+`live` keeps the repair rather than the arrival.
 
 **A tier merge the root index cannot adopt still lands, and the root records
-none of it.** The continuation commits the merge in the tier, clears the merge
-state and advances `live` — publishing only a merge a refused push prepared,
-never one `/gitlore:merge` prepared — then skips the gitlink staging and the
-bookkeeping commit for the reason above. Once nothing is left to yield on, it
-checks the tier out at the pin the memory store's index holds and exits 0,
-because the merge landed. The remedy is printed instead — fix the store and run
-`/gitlore:merge` — and the next `/gitlore:resolve` run refuses the tier's `live`
-ahead of `HEAD` with the same one. A yield leaves the tier alone, because the
+none of it.** A merged carrier that fails the check never gets here: that merge
+commits nothing and stays prepared for a new synthesis (D52). What reaches this
+path is a refusal elsewhere, in root, the manifest or another tier. The
+continuation commits the merge in the tier, clears the merge state and advances
+`live` — publishing only a merge a refused push prepared, never one
+`/gitlore:merge` prepared — then skips the gitlink staging and the bookkeeping
+commit for the reason above. Once nothing is left to yield on, it checks the
+tier out at the pin the memory store's index holds, the merge kept in `live`. It
+exits 0 when its pushes went through, because the merge landed, and exits 1
+after resting the tier when a push is refused for any reason but divergence. The
+remedy is printed instead — fix the store and run `/gitlore:merge` — and the
+next `/gitlore:resolve` run refuses the tier's `live` ahead of `HEAD` with the
+same one.
+
+Three cases leave the tier off its pin. A yield leaves it alone, because the
 merge it prepares sits at `HEAD` and that merge's own continuation retries the
 adoption. A pin the merge does not contain is not checked out either, since that
-would put the tier on history the merge never built on. The tier stays on the
-merge, and the pin guard at the next memory commit names the remedy.
+would put the tier on history the merge never built on; the tier stays on the
+merge, and the pin guard at the next memory commit names the remedy. And the
+tier rests on its pin only when its local `live` holds the merge. A refused
+local `HEAD:live` push leaves `live` short of it, and checking the pin out would
+leave the merge reachable only through the reflog, so the tier stays on the
+merge. The continuation prints two commands that finish the rest by hand, to be
+followed by fixing the problems it listed and running `/gitlore:merge`:
+
+```text
+git -C "<abs>" push . HEAD:live
+git -C "<abs>" merge-base --is-ancestor HEAD live && git -C "<abs>" checkout --detach <pin>
+```
+
+The second re-asks the guard's own question, so run after a push refused again
+it leaves the tier where it is.
 
 **On the degraded path, the moved gitlink is staged.** `submodule update` checks
 a tier out at the sha the superproject's **index** holds, not the one its HEAD
@@ -210,9 +242,11 @@ deliberately *not* used: it concatenates blindly and would leave duplicate
 pointer lines needing a cleanup pass. And because each index occupies a distinct
 filename namespace — the root holds bare project paths, each tier carrier only
 that tier's filenames — composed blocks never share a path across indexes
-either. So no duplicate-pointer residue arises on any path and no dedup pass is
-needed. No append-only constraint is imposed; conflicts are expected rare (the
-more global a tier, the more stable it presumably is).
+either. So no duplicate-pointer residue arises on any of gitlore's own paths,
+and no dedup pass is needed there; an arrival from a writer outside gitlore that
+carries one is repaired by the take (D52). No append-only constraint is imposed;
+conflicts are expected rare (the more global a tier, the more stable it
+presumably is).
 
 **Memory files merge as prose with a base section; index files merge as
 entries.** `gitlore_prepare_merge` runs git's own three-way with

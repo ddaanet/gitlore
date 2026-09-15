@@ -51,7 +51,8 @@ operation, and the pointer invariant that rests on them.
 
 - **D46** — a parent commit is never rewritten to re-pin memory
 - **D50** — the commit path composes a dirty store before it commits; a pin
-  refusal aborts, a compose refusal only reports
+  refusal aborts, a compose problem in an index file the commit changes aborts,
+  and every other compose refusal reports
 
 *Rejected:* a tip amend to re-pin memory · a refusal that instructs the agent to
 run compose · reporting an off-pin tier and committing through it · recognising
@@ -130,8 +131,10 @@ the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
 [tiered-memory.md](references/tiered-memory.md), composition (D29–D31, D34–D37)
 in [index-composition.md](references/index-composition.md), the authoring-time
 sync and the authoring guidance with its invocation (D38–D40, D47, D48) in
-[index-authoring-sync.md](references/index-authoring-sync.md), and the tier
-stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md).
+[index-authoring-sync.md](references/index-authoring-sync.md), the tier stores
+and merges (D42–D44) in [tier-stores.md](references/tier-stores.md), and the
+repair of an arriving index and the merged-index gate (D52) in
+[tier-arrival-repair.md](references/tier-arrival-repair.md).
 
 - **D17** — FR15: nested tier submodules plus a structurally composed root index
 
@@ -143,7 +146,12 @@ paired guard plugin (index-composition.md) · frontmatter `description` as the
 source of truth for the index one-liner · scoring an index hook against its
 body, tf-idf style (index-authoring-sync.md) · an append-only constraint on
 shared-tier indexes · a `merge` driver plus `.gitattributes` ·
-`**/MEMORY.md merge=union` plus a dedup-by-path pass (tier-stores.md).
+`**/MEMORY.md merge=union` plus a dedup-by-path pass (tier-stores.md) · a
+message fix alone for an unadoptable arrival · a push that tolerates the defect
+· a `--no-ff` merge of the arrival onto the pin · an agent-driven repair through
+the memory-merger · a mechanical repair of a merge synthesis · repairing only
+when every problem names the carrier · a continuation that commits a defective
+merged index uncomposed (tier-arrival-repair.md).
 
 ---
 

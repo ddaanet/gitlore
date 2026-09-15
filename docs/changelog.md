@@ -6,6 +6,15 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-15 — An arrival the root index cannot adopt is repaired](changelog/2026-09-15-an-arrival-the-root-index-cannot-adopt-is-repaired.md)
+  — a tier carrier arriving with a duplicate pointer, a stray line or a welded
+  line left every take refusing and every push failing, with no local remedy;
+  the commit path now aborts on such a problem in an index file it changes
+  (D50), a take repairs the arrival with a plain commit that restructures and
+  never rewords and publishes it the way the take does (D52), a merge
+  continuation keeps a merged index that fails the check unlanded, a push
+  refused for any other reason rests the tier only when its `live` holds the
+  merge, and `/gitlore:resolve` gates tiers before memory
 - [2026-09-13 — The relay is one file per report](changelog/2026-09-13-the-relay-is-one-file-per-report.md)
   — hooks matching one event run in parallel, so the per-agent marker the two
   `PostToolBatch` reporters merged into lost a report to the race and the drain

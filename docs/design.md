@@ -49,7 +49,9 @@ the mechanism it argues. Plans and specs live in `plans/`.
     explicit user approval of a prose summary before the commit message file is
     written and the commit executes — the effective control over what reaches
     the remote. Merge and take-bookkeeping commits are its stated exemption:
-    both sides already passed this gate *(D49)*.
+    both sides already passed this gate *(D49)*. So is a take's repair of an
+    arriving index, which restructures lines upstream already approved and adds
+    no text *(D52)*.
 12. **Coexistence.** Repos without a `gitlore-memory` submodule are unaffected
     when the plugin is present; every hook no-ops silently when it is not
     registered.
@@ -194,13 +196,14 @@ git and decides (D7).
   gate, a fresh-context sub-agent (D9), the parent's approval and a continuation
   script; `push`, which publishes every store with no parent push and no
   approval step, because FR11 gated the content at commit time; `merge`, which
-  takes what every remote holds and publishes nothing (D43, D49); `recall`,
-  which fetches bodies into context mid-task with no hook, no request file and
-  no state (D18); and `memory-writing`, whether a learning becomes a fact, what
-  it says, which tier it lands in, whether its line routes, and where it is
-  invoked (D47, D48). Each is a skill rather than a command because each has an
-  entry no user types — a hook's stderr, a session start, an ending session, a
-  token in a tool result, a write under `memory/`. Steps in
+  takes what every remote holds, repairing an arriving index the root cannot
+  adopt, and publishes nothing (D43, D49, D52); `recall`, which fetches bodies
+  into context mid-task with no hook, no request file and no state (D18); and
+  `memory-writing`, whether a learning becomes a fact, what it says, which tier
+  it lands in, whether its line routes, and where it is invoked (D47, D48). Each
+  is a skill rather than a command because each has an entry no user types — a
+  hook's stderr, a session start, an ending session, a token in a tool result, a
+  write under `memory/`. Steps in
   [merge-and-resolve.md](references/merge-and-resolve.md).
 - **Claude Code hooks** — `SessionStart` is the self-healing pass and does the
   most work; it is also where a new worktree's memory worktree is created,
@@ -228,13 +231,14 @@ git and decides (D7).
   just created; `pre-push` publishes in the same order. Both stand down rather
   than block a parent git operation, and divergence at either gate prepares a
   merge and yields to `/gitlore:resolve`. `pre-commit` composes the store before
-  it commits, so the carrier a tier's remote receives matches the root index
-  (D50). `commit-memory.sh` and `push-memory.sh` do the same work as callable
-  scripts discovered through a git-config key (D5, D16, D20); sharing a body
-  with the hook keeps the tier-before-memory ordering from drifting between the
-  two paths (D42). The hook orderings and the gitlink contract are in
-  [git-hooks.md](references/git-hooks.md); the two scripts, the `push` skill and
-  the placeholder-remote marker are in
+  it commits, so the carrier a tier's remote receives matches the root index,
+  and aborts on a compose problem in an index file the commit changes, which
+  committing would publish (D50). `commit-memory.sh` and `push-memory.sh` do the
+  same work as callable scripts discovered through a git-config key (D5, D16,
+  D20); sharing a body with the hook keeps the tier-before-memory ordering from
+  drifting between the two paths (D42). The hook orderings and the gitlink
+  contract are in [git-hooks.md](references/git-hooks.md); the two scripts, the
+  `push` skill and the placeholder-remote marker are in
   [memory-entry-points.md](references/memory-entry-points.md).
 
 ### Install-time surfaces

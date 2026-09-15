@@ -53,9 +53,13 @@ it can force a standalone memory commit.
 
 **Both IPC files are removed only on a complete commit.** A locked repo and an
 in-flight merge are expected transients, so on any failure the trigger *and* the
-message file stay put and the next batch retries — no agent action, no lost
-approval. A trigger with no approved summary is likewise kept, so the commit
-completes on its own the moment the summary lands.
+message file stay put and the next batch retries — no lost approval, and for a
+transient no agent action. A refusal that needs an edit is retried the same way
+but lands only once the edit is made: a problem in an index file the commit
+changes (D50, in [git-hooks.md](git-hooks.md)) or an off-pin tier. Its reason
+names the fix, and the hook's message to the agent defers to it. A trigger with
+no approved summary is likewise kept, so the commit completes on its own the
+moment the summary lands.
 
 ## Decisions — D4, D12, D19, D22
 
@@ -117,7 +121,9 @@ Two complementary mechanisms close it:
   An env sentinel — not "fresh magic file present" — because resolve's merge
   commits use git's `MERGE_MSG`, not the magic file, so a file-presence gate
   would block legitimate resolve commits. One sentinel covers all three blessed
-  paths uniformly.
+  paths uniformly. A take's repair of an arriving index needs none: it is built
+  with `commit-tree`, which runs no hook, and FR11 exempts it (D52, in
+  [tier-arrival-repair.md](tier-arrival-repair.md)).
 
   The wrapper mirrors the parent wrappers (D5): it resolves the live plugin via
   `git config gitlore.hooksDir` and degrades to a clean `exit 0` + hint when
