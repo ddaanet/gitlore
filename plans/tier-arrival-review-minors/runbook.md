@@ -111,6 +111,17 @@ and a remedy that fits its arm. The walk-back names what `live` holds.
    - stderr contains `Run /gitlore:merge again.`;
    - the tier's `live` equals the repair commit, whose parent is the arrival;
    - the tier `HEAD` is back on the pin.
+5. **`live` advance fails.** **Guard** (slice 2's GREEN rewired this arm). A new
+   test uses the :558 fixture with `GITLORE_GIT_RETRY_SCHEDULE=0` and a `git`
+   stub that exits 1 on the `push -q . <sha>:refs/heads/live` advance. It
+   asserts:
+   - stderr contains the arm's own failure line;
+   - stderr contains the refusal header, then the carrier's duplicate line;
+   - stderr contains `Run /gitlore:merge again.` and not `Fix the store`;
+   - the tier `HEAD` is back on the pin.
+
+   The test review proves it with the mutant "the arm calls
+   `gitlore_adopt_walk_back_tier` directly".
 
 **Interfaces:**
 - `gitlore_adopt_repair_arrival <mempath> <tier> <old_gitlink> <root_dirty_before> <label> <carrier_problems> <composed>`
