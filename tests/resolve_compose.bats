@@ -134,6 +134,98 @@ prepare_tier_merge_with_new_lines() {
   git -C memory/ddaanet add -A
 }
 
+# Rewrite the synthesized ddaanet carrier with one pointer twice, so the merged
+# index fails the check on the carrier itself.
+duplicate_tier_carrier() {
+  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [their fact](t.md) — theirs\n- [their fact](t.md) — theirs\n' \
+    > memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet add -A
+}
+
+# The head-vs-live counterpart to prepare_tier_merge_with_new_lines: the tier
+# diverges from its own local `live`, as tier_divergence.bats's pre-commit
+# preparation does, rather than from its remote, so pre-commit prepares the
+# merge instead of pre-push.
+prepare_tier_merge_head_vs_live() {
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  advance_branch_with_file memory/ddaanet live other.md body "sideways" live
+  printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  approve "memory: record the org fact"
+  bash "$PRE_COMMIT" && return 1
+  return 0
+}
+
+@test "a tier merge whose merged carrier has a duplicate pointer is not committed" {
+  prepare_tier_merge_with_new_lines
+  [ "$(jq -r .flavor "$(gitlore_merge_state_file memory/ddaanet)")" = "head-vs-remote" ]
+  tier_head=$(git -C memory/ddaanet rev-parse HEAD)
+  mem_before=$(git -C memory rev-parse HEAD)
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root-before"
+  duplicate_tier_carrier
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"was not committed"* ]]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md: duplicate pointer path t.md"* ]]
+  [ -f "$(gitlore_merge_state_file memory/ddaanet)" ]
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
+  cmp -- "$BATS_TEST_TMPDIR/root-before" memory/MEMORY.md
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+}
+
+@test "a head-vs-live tier merge whose merged carrier has a duplicate pointer is not committed" {
+  prepare_tier_merge_head_vs_live
+  [ "$(jq -r .flavor "$(gitlore_merge_state_file memory/ddaanet)")" = "head-vs-live" ]
+  tier_head=$(git -C memory/ddaanet rev-parse HEAD)
+  mem_before=$(git -C memory rev-parse HEAD)
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root-before"
+  duplicate_tier_carrier
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"was not committed"* ]]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md: duplicate pointer path t.md"* ]]
+  [ -f "$(gitlore_merge_state_file memory/ddaanet)" ]
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
+  cmp -- "$BATS_TEST_TMPDIR/root-before" memory/MEMORY.md
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+}
+
+@test "a kept refused merge re-emits the continuation directive" {
+  prepare_tier_merge_with_new_lines
+  duplicate_tier_carrier
+  run bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"continue-after-merge"* ]]
+}
+
+@test "a fixed merged carrier lands" {
+  prepare_tier_merge_with_new_lines
+  duplicate_tier_carrier
+  run bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+
+  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [their fact](t.md) — theirs\n' \
+    > memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet add -A
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  merged=$(git -C memory/ddaanet rev-parse HEAD)
+  git -C memory/ddaanet rev-parse -q --verify "$merged^2" >/dev/null
+  run ! git -C memory/ddaanet rev-parse -q --verify "$merged^3"
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$merged" ]
+  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+}
+
 @test "a tier merge the root index cannot adopt lands, records nothing in the root, and is adopted by the next take" {
   # Staging the moved gitlink without the up projection puts the tier on its pin
   # while root still holds the older block, so the next compose writes that
@@ -238,7 +330,7 @@ prepare_tier_merge_with_new_lines() {
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
 }
 
-@test "a compose refusal is reported but never strands the merge" {
+@test "a duplicate in the merged root index keeps the merge unlanded" {
   make_parent_with_memory
   diverge_memory_with_index '# Memory Index
 
@@ -247,18 +339,47 @@ prepare_tier_merge_with_new_lines() {
 
   run bash "$PRE_COMMIT"
   [ "$status" -ne 0 ]
+  mem_before=$(git -C memory rev-parse HEAD)
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"was not committed"* ]]
+  [[ "$stderr" == *"memory/MEMORY.md: duplicate pointer path p.md"* ]]
+  [ -f "$(gitlore_merge_state_file memory)" ]
+  [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+}
+
+@test "a memory-root merge whose merged index welds a line is not committed" {
+  make_parent_with_memory
+  diverge_memory_with_index '# Memory Index
+
+- [A](a.md) — a- [B](b.md) — b'
+
+  run bash "$PRE_COMMIT"
+  [ "$status" -ne 0 ]
+  mem_before=$(git -C memory rev-parse HEAD)
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"was not committed"* ]]
+  [[ "$stderr" == *"memory/MEMORY.md: line "*" welds two pointer bullets"* ]]
+  [ -f "$(gitlore_merge_state_file memory)" ]
+  [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+}
+
+@test "a memory-root merge with only a leftover root prefix commits uncomposed" {
+  make_parent_with_memory
+  diverge_memory_with_index '# Memory Index
+
+- [Old fact](gone/x.md) — a tier that is no longer mounted'
+
+  run bash "$PRE_COMMIT"
+  [ "$status" -ne 0 ]
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
   all="${output}${stderr}"
-  [[ "$all" == *"composition refused"* ]]
-  [[ "$all" == *"duplicate pointer path p.md"* ]]
-
-  # The merge landed anyway, uncomposed and unmangled: both lines intact, the
-  # state file gone, `live` on the merge commit.
-  committed=$(git -C memory show HEAD:MEMORY.md)
-  [[ "$committed" == *"- [P](p.md) — one"* ]]
-  [[ "$committed" == *"- [P again](p.md) — two"* ]]
-  [ ! -f "$(gitlore_merge_state_file memory)" ]
+  [[ "$all" == *"committed uncomposed"* ]]
+  [[ "$all" == *"gone/x.md"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$(git -C memory rev-parse live)" ]
 }
 

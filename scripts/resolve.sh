@@ -82,24 +82,32 @@ load_continuation_state() {
 # implied, and the layout, the four validations and the dangling report all still
 # have something to say about it.
 #
-# A refusal never blocks the merge. Compose is fail-safe (it writes nothing), and
-# the merge is synthesized and approved by this point: stranding it half-landed
-# over an index problem the agent fixes in one edit is the worse outcome. Report,
-# then commit what the merger produced. A tier the root could not adopt is the
-# one case the report is not the whole answer: the root must then record nothing
-# of the merge, so this sets `tier_unadopted` and stages nothing in the root.
+# A refusal blocks the merge only when it targets the index the merge is about
+# to publish: a problem gitlore_compose_check attributes to the merged carrier
+# (tier merge) or to root's own MEMORY.md under rules 1, 4 and 6 (memory-root
+# merge) means that text fails its own check, so nothing is staged and the
+# merge stays prepared for a new synthesis. Every other refusal still lands:
+# compose is fail-safe (it writes nothing), and the merge is synthesized and
+# approved by this point — stranding it half-landed over a problem elsewhere in
+# the store is the worse outcome. Report, then commit what the merger produced.
+# A tier the root could not adopt is the one case the report is not the whole
+# answer: the root must then record nothing of the merge, so this sets
+# `tier_unadopted` and stages nothing in the root.
 # Sets two variables for the caller. `merged_tier`: the store's path relative to
 # the memory root, or empty when the merge is memory's own; the continuation
 # needs it after the commit to stage the moved gitlink, and this is where it is
 # already derived. `tier_unadopted`: 1 when a tier merge's up projection failed,
 # after emitting, and empty otherwise.
-# Returns 0. A failed staging command aborts the continuation under errexit,
-# before the merge commit, which keeps the merge state for a rerun. The caller
-# calls it bare: an `||` on the call would suspend errexit across the whole
-# body, and a failed `add` would then read as a tier the root could not adopt.
+# Returns 1, before staging anything, when the merge fails its own check (see
+# above) — the caller's bare call then aborts the continuation under errexit,
+# with the merge state kept for a rerun. Returns 0 otherwise; a failed staging
+# command still aborts the continuation under errexit, before the merge
+# commit, for the same reason. The caller calls it bare: an `||` on the call
+# would suspend errexit across the whole body, and a failed `add` would then
+# read as a tier the root could not adopt.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
-  local memroot="$1" store="$2" memroot_abs composed dangling rc=0
+  local memroot="$1" store="$2" memroot_abs composed dangling merged_index index_problems rc=0
   merged_tier=""
   tier_unadopted=""
   # The state file records an absolute store path while `memroot` is the
@@ -119,6 +127,15 @@ compose_merged_indexes() {
   fi
 
   composed=$(gitlore_compose_up "$memroot" "$merged_tier") || rc=$?
+  if [ "$rc" -eq 1 ]; then
+    merged_index="$memroot/MEMORY.md"
+    [ -n "$merged_tier" ] && merged_index="$memroot/$merged_tier/MEMORY.md"
+    if index_problems=$(gitlore_compose_problems_in "$merged_index" <<<"$composed"); then
+      echo "gitlore: the merged index fails the check, so the merge was not committed; the merge stays prepared for a new synthesis:" >&2
+      printf '%s\n' "$index_problems" | sed 's/^/gitlore:   /' >&2
+      return 1
+    fi
+  fi
   if [ "$rc" -eq 0 ]; then
     [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
     # The dangling pass reports rather than refuses, so it runs on the composed
