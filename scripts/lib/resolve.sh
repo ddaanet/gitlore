@@ -1907,7 +1907,8 @@ gitlore_adopt_repair_arrival() {
   local remedy="" other_lines
 
   if ! scratch=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-repair.XXXXXX"); then
-    gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :
+    printf 'gitlore: %s — its arrival could not be repaired: no scratch directory could be made.\n' "$label" >&2
+    gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." || :
     return 1
   fi
   # A pin that predates the tier's own MEMORY.md leaves no pin copy, which
