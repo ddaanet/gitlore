@@ -85,15 +85,23 @@ The division of labour is D7's: the script decides, the agent writes prose.
    sub-agent via `SendMessage`. A rejection re-synthesizes. The user is never
    prompted: both sides of the merge already passed an approval gate, so the
    resolution is automated from their perspective (D49).
-4. **The continuation** (`resolve.sh continue-after-merge`) composes the
-   indexes, runs the dangling-pointer report, commits under the canned merge
-   message (D49), commits a tier merge's bookkeeping in the root store, and
-   pushes when the flavor calls for it. It finds the prepared merge by walking
+4. **The continuation** (`resolve.sh continue-after-merge`) composes the indexes
+   — refusing to commit, and keeping the merge prepared, while the merged index
+   itself fails the check, so the parent rejects with the problem lines and the
+   sub-agent re-synthesizes (D52) — runs the dangling-pointer report, commits
+   under the canned merge message (D49), commits a tier merge's bookkeeping in
+   the root store, and pushes when the flavor calls for it; a push refused for
+   any reason but divergence exits 1 once an unadopted tier is rested
+   ([tier-stores.md](tier-stores.md)). It finds the prepared merge by walking
    the stores rather than assuming memory, and refuses outright if two are
    prepared at once.
 5. **The skill loops** until `resolve.sh` exits 0 (a second flavor can be
-   waiting), then retries the original commit and tells the user which store was
-   merged — a tier is shared with other repositories, the project store is not.
+   waiting; the script gates every tier before memory, the order publishing
+   keeps, so memory's pointer never goes out ahead of a tier it records), then
+   retries the original commit and tells the user which store was merged — a
+   tier is shared with other repositories, the project store is not. A rest
+   remedy the continuation printed is relayed as still to run: the loop can
+   reach a healthy exit before it has run.
 
 A crashed merge leaves a state file behind, and every gate guards on it —
 classifying what survives and repairing, which may mean carrying straight on.
@@ -303,9 +311,12 @@ Both parents of every gitlore merge already passed an approval gate: the local
 side at its own FR11 commit, the upstream side in the repo that published it. A
 merge introduces no unapproved content, so prompting the user gates a decision
 already made — a merge is automated from their perspective, and merge and
-bookkeeping commits are FR11's stated exemption. The parent agent still reviews
-the sub-agent's synthesis before the continuation runs; that check is the
-reviewer's, not the user's.
+bookkeeping commits are FR11's stated exemption. So is the commit a take makes
+to repair an arriving index the root cannot adopt, which restructures lines
+upstream already approved and adds no text (D52, in
+[tier-arrival-repair.md](tier-arrival-repair.md)). The parent agent still
+reviews the sub-agent's synthesis before the continuation runs; that check is
+the reviewer's, not the user's.
 
 The messages are canned, shaped for each commit's readers. A **merge commit**,
 in whichever store diverged, is `merge <merged-repo> from <consumer>` — repo
