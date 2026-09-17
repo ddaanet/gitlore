@@ -643,3 +643,52 @@ HOOK
   [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" = "$aa_live" ]
   [ "$(sed -n 1p "$snapfile")" = "$aa_live" ]
 }
+
+# --- the post-loop pass words a non-fast-forward refusal by its own reason ---
+
+@test "a post-loop publication push refused as a non-fast-forward is worded as a moved remote, not as a non-divergence failure" {
+  setup_repair_race_on_aa
+  bb_fact=$(push_tier_fact bb "- [B](b.md) — y")
+
+  # A `git` stub on PATH for the command under test only. It logs which tier
+  # each `push -q origin live` names, and fails the second one naming `aa` as a
+  # non-fast-forward; every other call goes to the real git. `aa`'s own
+  # iteration pushes P before `bb`'s is reached, and neither `bb`'s behind arm
+  # nor the take it runs sends `aa` to its remote, so an `aa` push logged after
+  # `bb`'s can only be the post-loop pass publishing the take's repair.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  pushes="$BATS_TEST_TMPDIR/tier-pushes"
+  : > "$pushes"
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *"/aa push -q origin live ")
+    echo aa >> "$pushes"
+    if [ "\$(grep -c '^aa\$' "$pushes")" -eq 2 ]; then
+      echo " ! [rejected]        live -> live (non-fast-forward)" >&2
+      exit 1
+    fi
+    ;;
+  *"/bb push -q origin live ") echo bb >> "$pushes" ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+
+  # Everything the wording rests on, asserted first: the push failed; `aa`'s
+  # push of P, `bb`'s refused push, then the pass's push of `aa` is the one
+  # refused; `bb`'s take ran, repairing `aa` on top of D.
+  [ "$status" -eq 1 ]
+  [ "$(tr '\n' ' ' < "$pushes")" = "aa bb aa " ]
+  git -C memory/bb merge-base --is-ancestor "$bb_fact" live
+  aa_live=$(git -C memory/aa rev-parse live)
+  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $D" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" = "$D" ]
+
+  [[ "$output$stderr" == *"The remote moved during the push"* ]]
+  [[ "$output$stderr" != *"not because of divergence"* ]]
+}
