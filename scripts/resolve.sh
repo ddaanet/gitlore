@@ -103,10 +103,11 @@ load_continuation_state() {
 # for a new synthesis — an exit rather than a
 # return, because the caller cannot check a status without an `||` on the call.
 # Returns 0 otherwise. A failed staging command aborts the continuation under
-# errexit, before the merge commit, which keeps the merge state for a rerun. The
-# caller calls it bare: an `||` on the call would suspend errexit across the
-# whole body, and a failed `add` would then read as a tier the root could not
-# adopt.
+# errexit, before the merge commit, which keeps the merge state for a rerun —
+# with git's own text on stderr and no `gitlore:` line, since wrapping the
+# command would suspend errexit around it. The caller calls it bare: an `||`
+# on the call would suspend errexit across the whole body, and a failed `add`
+# would then read as a tier the root could not adopt.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
   local memroot="$1" store="$2" memroot_abs composed dangling merged_index index_problems rc=0
@@ -307,15 +308,19 @@ if [ $# -ge 1 ]; then
       # `git commit` itself, and `VAR=1 printf … | git commit` exports it to
       # the wrong end of the pipeline.
       merge_msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-merge-msg.XXXXXX")
-      # A refused commit keeps MERGE_HEAD and the merge state, so a rerun lands
-      # it; only the message file is this run's to remove.
+      # A refused commit or a failed message build keeps MERGE_HEAD and the
+      # merge state, so a rerun lands it; only the message file is this run's
+      # to remove. Removal comes first in each `||` group below: errexit stays
+      # armed on its right-hand side, so a failing write to stderr there would
+      # skip whatever follows it and leave the scratch file behind.
       gitlore_merge_commit_message "$memroot" "$mempath" > "$merge_msgfile" \
-        || { rm -f "$merge_msgfile"; exit 1; }
+        || {
+          rm -f "$merge_msgfile"
+          echo "gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared." >&2
+          exit 1
+        }
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$merge_msgfile" \
         || {
-          # Removal first: this group is the right-hand side of `||`, where
-          # errexit stays armed, so a failing write to stderr here would skip
-          # whatever follows it and leave the scratch file behind.
           rm -f "$merge_msgfile"
           echo "gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared." >&2
           exit 1

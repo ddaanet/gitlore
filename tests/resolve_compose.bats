@@ -417,6 +417,56 @@ prepare_tier_merge_head_vs_live() {
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
 }
 
+@test "a message build failure leaves no message file behind and keeps the merge prepared" {
+  prepare_tier_merge_with_new_lines
+  mkdir "$BATS_TEST_TMPDIR/msgtmp"
+  export TMPDIR="$BATS_TEST_TMPDIR/msgtmp"
+  second=$(git -C memory/ddaanet rev-parse MERGE_HEAD)
+  # Fail the message build, which lists the subjects the merge brings in from
+  # its second parent. The stub is keyed on that revision range, so no other
+  # git call in the run can match it, and every other invocation reaches the
+  # real binary. The build is coupled to this argv by the stub alone: were it
+  # to stop logging the range, nothing would fail the build and the status
+  # assertion below would catch the run landing the merge instead.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  log_hits="$BATS_TEST_TMPDIR/log-hits"
+  : > "$log_hits"
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" log --format=%s HEAD..$second "*) echo "\$*" >> "$log_hits"; exit 1 ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  # The build is what failed, not some other call the stub forwarded.
+  grep -qF -- "log --format=%s HEAD..$second" "$log_hits"
+  # Already true of the unfixed script: the commit is never reached, so the
+  # merge stays prepared — MERGE_HEAD, the merge state and the staged synthesis
+  # all survive — and the scratch message file is removed on the way out.
+  git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
+  [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
+  [ -n "$(git -C memory/ddaanet diff --cached --name-only -- MEMORY.md)" ]
+  [ -n "$(git -C memory diff --cached --name-only -- MEMORY.md)" ]
+  [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
+  [[ "$stderr" == *"gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared."* ]]
+  # The build arm, not the refused-commit arm, which the run never reaches.
+  # No ordering glob pairs with it: the build's own failure is the stub's
+  # silent `exit 1`, so there is no git reason on stderr for it to follow.
+  [[ "$stderr" != *"the merge commit was refused"* ]]
+
+  # Prepared, not abandoned: with the stub gone the continuation lands.
+  rm -f "$fakebin/git"
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+}
+
 @test "a duplicate in the merged root index keeps the merge unlanded" {
   make_parent_with_memory
   diverge_memory_with_index '# Memory Index
