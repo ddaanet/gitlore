@@ -267,7 +267,7 @@ gitlore_welded_path() {
 # Rules 1, 4 and 6 for a single index file. Prints problems; always returns 0
 # (the caller aggregates). A rule added here gains a matching repair rule in
 # gitlore_repair_index in the same change — a problem this reports and
-# gitlore_repair_index cannot fix is a defect no take can walk back from.
+# gitlore_repair_index cannot fix is a defect no take can adopt past.
 gitlore_compose_check_index() {
   local file="$1" first last n=0 line path welded seen=""
   read -r first last < <(gitlore_index_region "$file")
@@ -319,7 +319,11 @@ $line"
 
   # A redirected function call runs in this shell, so the screen costs no
   # subshell and only a line that carries a weld pays for the captures.
-  local -a p1=()
+  # p1last shadows p1 one for one, 1 on the single element that is the
+  # input's last line or that line's tail after a weld split — the only
+  # element termination can ever hinge on. It rides p1's transforms below so
+  # the tag, not the text, is what gets tracked to the output's last element.
+  local -a p1=() p1last=()
   local cur second wpath
   while IFS= read -r line || [ -n "$line" ]; do
     cur="$line"
@@ -327,17 +331,20 @@ $line"
           wpath=$(gitlore_welded_path "$cur") && gitlore_repair_tier_file "$tierdir" "$wpath"; do
       second=$(gitlore_weld_tail "$cur")
       p1+=("${cur%"$second"}")
+      p1last+=(0)
       report="${report}split a welded line before $wpath
 "
       cur="$second"
     done
     p1+=("$cur")
+    p1last+=(0)
   done < "$file"
 
   # Guarded before every expansion of an array that may be empty: bash before
   # 4.4 reads "${a[@]}" of an empty array as unbound under `set -u`. With no
   # bullet there is no weld, stray line or duplicate to repair.
   [ "${#p1[@]}" -gt 0 ] || return 0
+  p1last[${#p1[@]} - 1]=1
   # gitlore_index_region's bounds, read off the split lines in this shell.
   local first=0 last=0 n=0
   for line in "${p1[@]}"; do
@@ -352,19 +359,22 @@ $line"
 
   # The stray test is gitlore_compose_check_index's rule 4 test. Moved lines
   # land right after the last bullet, so the region's bounds stay put.
-  local -a p2=() stray=()
+  local -a p2=() p2last=() stray=() straylast=()
   for line in "${p1[@]}"; do
     n=$((n + 1))
     if [ "$n" -gt "$first" ] && [ "$n" -lt "$last" ] &&
        [ -n "${line//[[:space:]]/}" ] && ! gitlore_bullet_path "$line" >/dev/null; then
       stray+=("$line")
+      straylast+=("${p1last[n - 1]}")
       report="${report}moved a non-bullet line out of the pointer block: $line
 "
       continue
     fi
     p2+=("$line")
+    p2last+=("${p1last[n - 1]}")
     if [ "$n" -eq "$last" ] && [ "${#stray[@]}" -gt 0 ]; then
       p2+=("${stray[@]}")
+      p2last+=("${straylast[@]}")
     fi
   done
 
@@ -409,7 +419,7 @@ $line"
     fi
     i=$((i + 1))
   done
-  local -a p3=()
+  local -a p3=() p3last=()
   i=0
   while [ "$i" -lt "$m" ]; do
     if [ -n "${drop[i]:-}" ]; then
@@ -417,6 +427,7 @@ $line"
 "
     else
       p3+=("${p2[i]}")
+      p3last+=("${p2last[i]}")
     fi
     i=$((i + 1))
   done
@@ -432,10 +443,17 @@ $line"
   local terminated=1
   [ -s "$file" ] && [ "$(tail -c 1 "$file" | wc -l | tr -d ' ')" = 0 ] && terminated=0
 
+  # The output stays unterminated only when the input did and its own last
+  # element is still the tagged one — the input's last line, or that line's
+  # tail after a weld split. A drop or a move can retire that element or shift
+  # what ends up last; either way the new last element gains the newline it
+  # never had a chance to lose.
+  local last_i=$((${#p3[@]} - 1))
+  [ "$last_i" -ge 0 ] && [ "${p3last[last_i]}" = 1 ] || terminated=1
+
   if [ "$terminated" -eq 1 ]; then
     printf '%s\n' "${p3[@]}" > "$scratch" || { rm -f "$scratch"; return 1; }
   else
-    local last_i=$((${#p3[@]} - 1))
     i=0
     while [ "$i" -le "$last_i" ]; do
       if [ "$i" -eq "$last_i" ]; then

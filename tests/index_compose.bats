@@ -1345,6 +1345,22 @@ b" ]
   [ -z "$output" ]
 }
 
+# The dropped duplicate was the unterminated last line: the line before it
+# becomes last and keeps the newline it had in the input.
+@test "a duplicate dropped from the end terminates the new last line" {
+  mkdir -p tier
+  touch pin.md
+  printf -- '- [K](kept.md) — kept\n- [A](a.md) — hook\n- [A](a.md) — hook\n' > file.md
+  unterminate_index file.md
+  [ "$(tail -c 1 file.md | wc -l)" -eq 0 ]
+  [ "$(grep -c -F -- '- [A](a.md) — hook' file.md)" -eq 2 ]
+  run gitlore_repair_index file.md pin.md tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "dropped a duplicate pointer line: - [A](a.md) — hook" ]
+  printf -- '- [K](kept.md) — kept\n- [A](a.md) — hook\n' > expected.md
+  cmp -s file.md expected.md
+}
+
 # The same repair then succeeds with the directory writable and $TMPDIR not:
 # the refusal came from <file>'s directory, and the scratch file lives there.
 @test "a rewrite that cannot be written leaves the file unchanged" {
