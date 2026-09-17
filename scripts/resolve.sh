@@ -313,8 +313,11 @@ if [ $# -ge 1 ]; then
         || { rm -f "$merge_msgfile"; exit 1; }
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$merge_msgfile" \
         || {
-          echo "gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared." >&2
+          # Removal first: this group is the right-hand side of `||`, where
+          # errexit stays armed, so a failing write to stderr here would skip
+          # whatever follows it and leave the scratch file behind.
           rm -f "$merge_msgfile"
+          echo "gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared." >&2
           exit 1
         }
       rm -f "$merge_msgfile"

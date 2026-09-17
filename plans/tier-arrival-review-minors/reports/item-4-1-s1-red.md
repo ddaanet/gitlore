@@ -2,9 +2,9 @@
 
 ## Scope
 
-Tightened `tests/resolve_compose.bats:394` (`a refused merge commit leaves no
-message file behind and keeps the merge for a rerun`) only. No production
-code touched.
+Tightened `tests/resolve_compose.bats:394`
+(`a refused merge commit leaves no message file behind and keeps the merge for a rerun`)
+only. No production code touched.
 
 ## Diff
 
@@ -37,18 +37,18 @@ not ok 1 a refused merge commit leaves no message file behind and keeps the merg
 bats: 0 passed, 1 failed
 ```
 
-Line 405 is the new "gitlore: the merge commit was refused …" assertion —
-the line before it (`[ "$status" -eq 1 ]`) and the one after it
+Line 405 is the new "gitlore: the merge commit was refused …" assertion — the
+line before it (`[ "$status" -eq 1 ]`) and the one after it
 (`commit refused by hook`) both passed, so:
 
-- the `-eq 1` tightening holds on current code (status is genuinely 1, not
-  some other nonzero value);
+- the `-eq 1` tightening holds on current code (status is genuinely 1, not some
+  other nonzero value);
 - the ordering assertions (`hook_line`, `gitlore_line`, `-lt`) never execute
   because bats stops at the first failing line — they are new but not yet
-  exercised as reds themselves; they will be proven once the gitlore line
-  exists to compare against.
-- the red is exactly the new "gitlore:" line current `scripts/resolve.sh`
-  does not print.
+  exercised as reds themselves; they will be proven once the gitlore line exists
+  to compare against.
+- the red is exactly the new "gitlore:" line current `scripts/resolve.sh` does
+  not print.
 
 ## Full-file run
 
@@ -58,8 +58,8 @@ the line before it (`[ "$status" -eq 1 ]`) and the one after it
 bats: 22 passed, 1 failed
 ```
 
-The single failure is the same test/line as above; every other assertion in
-the file, including the rest of this test's own assertions (rerun after
+The single failure is the same test/line as above; every other assertion in the
+file, including the rest of this test's own assertions (rerun after
 `rm -f "$hook"` succeeds with the fact merged), is unaffected.
 
 ## Checks

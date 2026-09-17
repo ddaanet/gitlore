@@ -317,7 +317,9 @@ green; no test is added for it.
 **What changes.**
 - A failed build prints
   `gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared.`
-  to stderr before removing the message file and exiting 1.
+  to stderr after removing the message file, then exits 1. The removal comes
+  first because `errexit` stays armed inside a `||` brace group, so a failing
+  write to stderr would skip whatever follows it.
 - A refused commit prints
   `gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared.`
   the same way.

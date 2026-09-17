@@ -17,10 +17,10 @@ gitlore_line=$(printf '%s\n' "$stderr" | grep -n 'gitlore: the merge commit was 
 
 Assessed against the three hazards named in the dispatch:
 
-- **Empty line number.** Real, though currently unreachable: the two
-  presence assertions above it guarantee both greps match, so the
-  `[ "" -lt 5 ]` integer error cannot fire today. It becomes reachable the
-  moment either presence assertion is loosened, and the failure mode is a
+- **Empty line number.** Real, though currently unreachable: the two presence
+  assertions above it guarantee both greps match, so the `[ "" -lt 5 ]` integer
+  error cannot fire today. It becomes reachable the moment either presence
+  assertion is loosened, and the failure mode is a
   `[: : integer expression expected` error rather than a failed assertion.
 - **Embedded colon.** Not a defect. `grep -n` reading stdin emits
   `<lineno>:<text>` with no filename prefix, and a line number contains no
@@ -44,10 +44,10 @@ After:
 [[ "$stderr" == *"commit refused by hook"*"gitlore: the merge commit was refused"* ]]
 ```
 
-Chosen because it is equivalent for this test and cannot error: a multi-`*`
-glob is bash 3.2 (no `+(…)`, no `=~`), and byte order in `$stderr` is exactly
-what "the gitlore line follows git's reason" means. The two presence assertions
-are kept above it deliberately rather than folded in, so each failure is
+Chosen because it is equivalent for this test and cannot error: a multi-`*` glob
+is bash 3.2 (no `+(…)`, no `=~`), and byte order in `$stderr` is exactly what
+"the gitlore line follows git's reason" means. The two presence assertions are
+kept above it deliberately rather than folded in, so each failure is
 self-diagnosing: the first says the hook text is absent, the second says the
 gitlore line is absent or misworded, the third says both are present and out of
 order. The only behavioural difference from the line arithmetic is that the glob
@@ -77,13 +77,12 @@ also accepts both texts on one physical line, which no producer here emits.
    - the same message emitted *before* the commit (reversed order): the run
      fails at the ordering assertion, quoting it, with no shell error.
 4. **Spec fidelity.** The asserted string is byte-identical to the runbook's
-   `plans/tier-arrival-review-minors/runbook.md:322` and the outline's
-   `:190`, trailing `; the merge stays prepared.` included (compared under
-   `cat -A`).
+   `plans/tier-arrival-review-minors/runbook.md:322` and the outline's `:190`,
+   trailing `; the merge stays prepared.` included (compared under `cat -A`).
 5. **Hygiene.** `shellcheck -x tests/resolve_compose.bats` clean. bash 3.2 and
-   BSD safe — the fix removes the only pipeline in the block, and nothing
-   splits on whitespace. `TMPDIR` usage unchanged and consistent with the
-   sibling assertion: the test exports it from `$BATS_TEST_TMPDIR/msgtmp` and
+   BSD safe — the fix removes the only pipeline in the block, and nothing splits
+   on whitespace. `TMPDIR` usage unchanged and consistent with the sibling
+   assertion: the test exports it from `$BATS_TEST_TMPDIR/msgtmp` and
    `find "$TMPDIR"` checks the directory the script's `${TMPDIR:-/tmp}` mktemp
    actually writes to. The added comment carries no line number, path or plan
    id, and matches the explanatory-comment density of the neighbouring tests.
@@ -91,10 +90,10 @@ also accepts both texts on one physical line, which no producer here emits.
 ## Notes
 
 - Nothing committed; nothing staged. Working tree holds only the
-  `tests/resolve_compose.bats` change (plus the pre-existing untracked
-  `inbox/` and `plans/` files from before this dispatch).
+  `tests/resolve_compose.bats` change (plus the pre-existing untracked `inbox/`
+  and `plans/` files from before this dispatch).
 - No UNFIXABLE items.
 - One procedural deviation to record: the full-file run's output was piped
-  through `tail -30`, against the dispatch constraints. The wrapper's own
-  count line (`22 passed, 1 failed`) plus the single `not ok` block shown
-  makes the crop lossless here, but the constraint was still broken.
+  through `tail -30`, against the dispatch constraints. The wrapper's own count
+  line (`22 passed, 1 failed`) plus the single `not ok` block shown makes the
+  crop lossless here, but the constraint was still broken.
