@@ -1404,11 +1404,7 @@ gitlore_push_stores() {
               # below; one to a later tier goes out with that tier's own push.
               if ! git -C "$tierpath" merge-base --is-ancestor live origin/live; then
                 if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
-                  gitlore_say_for_agent_or_user \
-                    "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" \
-                    "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" >&2
+                  gitlore_report_tier_push_failure "$tier" "$tier_err"
                   return 1
                 fi
               fi
@@ -1425,21 +1421,13 @@ $tier_err" >&2
               # origin/live, or with a ref that could not be read. Nothing here
               # is a merge: preparing one against a stale authority would send
               # out a merge missing the work that caused the refusal.
-              gitlore_say_for_agent_or_user \
-                "gitlore: pushing tier '$tier' was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
-$tier_err" \
-                "gitlore: pushing tier '$tier' was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
-$tier_err" >&2
+              gitlore_report_tier_push_failure "$tier" "$tier_err"
               return 1
               ;;
           esac
           ;;
         *)
-          gitlore_say_for_agent_or_user \
-            "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" \
-            "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" >&2
+          gitlore_report_tier_push_failure "$tier" "$tier_err"
           ;;
       esac
       return 1
@@ -1464,11 +1452,7 @@ $tier_err" >&2
     origin_live=$(git -C "$tierpath" rev-parse -q --verify refs/remotes/origin/live) || origin_live=""
     if [ -z "$origin_live" ] || ! git -C "$tierpath" merge-base --is-ancestor live "$origin_live"; then
       if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
-        gitlore_say_for_agent_or_user \
-          "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" \
-          "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" >&2
+        gitlore_report_tier_push_failure "$tier" "$tier_err"
         return 1
       fi
     fi
@@ -1565,6 +1549,31 @@ $push_err" >&2
   # HEAD-vs-remote divergence. Prepare and yield.
   gitlore_yield_merge "$mempath" origin/live head-vs-remote live || return 1
   return 1
+}
+
+# Words a failed tier push by git's own reason, the discriminator
+# gitlore_push_stores's callers already read: a refusal shaped like divergence
+# (fetch first / non-fast-forward) means the remote moved during the push, or
+# the fetch before it failed; anything else is not divergence.
+# Args: $1 = tier name, $2 = git's stderr from the failed push.
+gitlore_report_tier_push_failure() {
+  local tier="$1" tier_err="$2"
+  case "$tier_err" in
+    *"(fetch first)"*|*"(non-fast-forward)"*)
+      gitlore_say_for_agent_or_user \
+        "gitlore: pushing tier '$tier' was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
+$tier_err" \
+        "gitlore: pushing tier '$tier' was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed. git said:
+$tier_err" >&2
+      ;;
+    *)
+      gitlore_say_for_agent_or_user \
+        "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" \
+        "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" >&2
+      ;;
+  esac
 }
 
 # Take whatever each store's remote is holding, without publishing anything:
