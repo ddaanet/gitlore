@@ -450,3 +450,129 @@ HOOK
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$R" ]
   [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$R" ]
 }
+
+# --- a repair the mid-loop take makes to a DIFFERENT tier is published too ---
+
+# Advance a tier past its own remote with a plain commit that adds no index
+# line — the ordinary shape of a local advance, before the push that would
+# publish it. Leaves both HEAD and local `live` on the new commit (not
+# stranded — `strand_live_ahead_of_pin` is the fixture for that shape).
+# Args: $1 = tier, $2 = file (default "plain.md").
+advance_tier_past_remote() {
+  local tier="$1" file="${2:-plain.md}"
+  printf 'x\n' > "memory/$tier/$file" || return 1
+  git -C "memory/$tier" add "$file" || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -q -m "plain commit, no index line" || return 1
+  git -C "memory/$tier" branch -f live HEAD
+}
+
+# Build a commit as a child of $2, in a scratch clone of the tier's own local
+# repo (so an ancestor never pushed to the tier's remote is still reachable),
+# and push it to $3 on the tier's bare remote — a side ref, not `live`: the
+# remote's `live` only moves once the hook below fires on its next receive.
+# Echoes the new commit's sha. Args: $1 = tier, $2 = parent sha, $3 = ref,
+# $4 = line appended to MEMORY.md.
+push_side_ref_child() {
+  local tier="$1" parent="$2" refname="$3" line="$4" work
+  local bare="$TMP_REPO/.bare-$tier.git"
+  work="$(mktemp -d "$BATS_TEST_TMPDIR/tier-work.XXXXXX")" || return 1
+  git clone -q "memory/$tier" "$work" || return 1
+  git -C "$work" config user.email "test@example.com" || return 1
+  git -C "$work" config user.name "Test" || return 1
+  git -C "$work" checkout -q --detach "$parent" || return 1
+  printf '%s\n' "$line" >> "$work/MEMORY.md" || return 1
+  git -C "$work" commit -aqm "duplicate arrival" || return 1
+  git -C "$work" push -q "$bare" "HEAD:$refname" || return 1
+  git -C "$work" rev-parse HEAD
+}
+
+# A one-shot post-receive hook on a tier's bare remote: on the next push it
+# receives, it snaps `live` onto $2 and removes itself — the idiom
+# half_landed_tier_fixture uses for a lock, here for a ref. Args: $1 = tier,
+# $2 = the sha `live` lands on.
+install_tier_live_snap_hook() {
+  local tier="$1" target="$2"
+  local hook="$TMP_REPO/.bare-$tier.git/hooks/post-receive"
+  # shellcheck disable=SC2016  # $0 is the generated hook's own, not this shell's
+  printf '#!/bin/sh\ngit update-ref refs/heads/live %s\nrm -f "$0"\n' "$target" > "$hook" || return 1
+  chmod +x "$hook"
+}
+
+# Shared shape for both variants below: two tiers, `aa` mounted before `bb`
+# (their `.gitmodules` order, which the tier loop and the take pass both
+# read). `aa`'s own loop iteration publishes P; a post-receive hook then snaps
+# its remote's `live` onto D — a child of P carrying a duplicate bullet twice
+# (the arrival shape :376 repairs) — behind the push's back. Whatever the
+# variant does with `bb` next runs the take pass over every tier, `aa`
+# included: it fast-forwards `aa` onto D and repairs the duplicate into a new
+# commit entirely inside `aa`'s local `live` — `aa`'s own loop iteration
+# already ran and does not come back around to publish it.
+# Called directly, never in `$(...)`, so errexit covers every step. Sets $P, $D.
+setup_repair_race_on_aa() {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live aa
+  mount_tier_at_live bb
+  set_tier_manifest aa bb
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  publish_memory
+
+  advance_tier_past_remote aa
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  P=$(git -C memory/aa rev-parse HEAD)
+  [ "$(git -C memory rev-parse live:aa)" = "$P" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" != "$P" ]
+
+  D=$(push_side_ref_child aa "$P" refs/heads/stash-d \
+    "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
+  [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse stash-d)" = "$D" ]
+  install_tier_live_snap_hook aa "$D"
+}
+
+# Everything the defect rests on, asserted before the defect itself so a red
+# can only mean the repair went unpublished: the push succeeded, the hook moved
+# `aa`'s remote onto D, the take repaired `aa` on top of D, and memory's remote
+# records that repair as `aa`'s gitlink. Args: $1 = the push's status, $2 = its
+# combined output. Sets $aa_live.
+assert_aa_repaired_mid_loop() {
+  local push_status="$1" push_output="$2"
+  [ "$push_status" -eq 0 ]
+  [ ! -e "$TMP_REPO/.bare-aa.git/hooks/post-receive" ]
+  git --git-dir="$TMP_REPO/.bare-aa.git" merge-base --is-ancestor "$D" live
+  aa_live=$(git -C memory/aa rev-parse live)
+  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $D" ]
+  [ "$(git -C memory/aa show "$aa_live:MEMORY.md" | grep -cF -- '- [A](a.md) — x')" -eq 1 ]
+  [[ "$push_output" == *"repaired aa's arrival"* ]]
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:aa)" = "$aa_live" ]
+}
+
+@test "a repair the take makes to another tier mid-loop is published, not left for the next push (behind)" {
+  setup_repair_race_on_aa
+  bb_fact=$(push_tier_fact bb "- [B](b.md) — y")
+
+  run --separate-stderr bash "$CMD"
+  assert_aa_repaired_mid_loop "$status" "$output$stderr"
+  # `bb`'s behind arm is what ran the take: `bb` took its remote's fact.
+  git -C memory/bb merge-base --is-ancestor "$bb_fact" live
+  # The defect: `aa`'s own remote never received the repair memory records.
+  run git --git-dir="$TMP_REPO/.bare-aa.git" cat-file -e "$aa_live^{commit}"
+  [ "$status" -eq 0 ]
+}
+
+@test "a repair the take makes to another tier mid-loop is published, not left for the next push (ahead-of-HEAD)" {
+  setup_repair_race_on_aa
+  strand_live_ahead_of_pin bb
+  bb_stranded=$(git -C memory/bb rev-parse live)
+
+  run --separate-stderr bash "$CMD"
+  assert_aa_repaired_mid_loop "$status" "$output$stderr"
+  # `bb`'s ahead-of-HEAD arm is what ran the take: it adopted `bb`'s own
+  # stranded commit and published it.
+  [[ "$output$stderr" == *"tier 'bb' — its local 'live' held commits the memory store never recorded"* ]]
+  git --git-dir="$TMP_REPO/.bare-bb.git" merge-base --is-ancestor "$bb_stranded" live
+  run git --git-dir="$TMP_REPO/.bare-aa.git" cat-file -e "$aa_live^{commit}"
+  [ "$status" -eq 0 ]
+}
