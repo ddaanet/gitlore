@@ -1381,6 +1381,24 @@ b" ]
   cmp -s file.md expected.md
 }
 
+# The unterminated last line is a trailer after the pointer block: the stray
+# lands between the last bullet and the trailer, and the trailer stays last and
+# unterminated.
+@test "a stray moved ahead of an unterminated trailer leaves the trailer unterminated" {
+  mkdir -p tier
+  touch pin.md
+  printf -- '- [A](a.md) — hook\nStray line\n- [B](b.md) — hook\n\nTrailing prose\n' > file.md
+  unterminate_index file.md
+  [ "$(tail -c 1 file.md | wc -l)" -eq 0 ]
+  [ "$(wc -l < file.md)" -eq 4 ]
+  [ "$(sed -n '5p' file.md)" = 'Trailing prose' ]
+  run gitlore_repair_index file.md pin.md tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "moved a non-bullet line out of the pointer block: Stray line" ]
+  printf -- '- [A](a.md) — hook\n- [B](b.md) — hook\nStray line\n\nTrailing prose' > expected.md
+  cmp -s file.md expected.md
+}
+
 # The same repair then succeeds with the directory writable and $TMPDIR not:
 # the refusal came from <file>'s directory, and the scratch file lives there.
 @test "a rewrite that cannot be written leaves the file unchanged" {
