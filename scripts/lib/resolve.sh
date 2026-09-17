@@ -1551,9 +1551,10 @@ $push_err" >&2
   return 1
 }
 
-# Words a failed tier push by git's own reason, the discriminator
-# gitlore_push_stores's callers already read: a refusal shaped like divergence
-# (fetch first / non-fast-forward) means the remote moved during the push, or
+# Words a failed tier push by git's parenthesized reason, the discriminator
+# gitlore_push_stores applies to its own pushes. A refusal shaped like
+# divergence (fetch first / non-fast-forward) reaches here only once ancestry
+# has left nothing to merge, so it means the remote moved during the push, or
 # the fetch before it failed; anything else is not divergence.
 # Args: $1 = tier name, $2 = git's stderr from the failed push.
 gitlore_report_tier_push_failure() {
