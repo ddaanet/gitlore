@@ -692,3 +692,57 @@ EOF
   [[ "$output$stderr" == *"The remote moved during the push"* ]]
   [[ "$output$stderr" != *"not because of divergence"* ]]
 }
+
+# A pre-receive hook on tier $1's bare remote that accepts the first push it
+# receives and declines by policy every one after, appending the sha each push
+# offers for `live` to file $2 either way. A hook decline is not a divergence:
+# git's own fast-forward check already passed, so its error carries no
+# non-fast-forward reason. Args: $1 = tier, $2 = ledger file.
+decline_tier_pushes_after_first() {
+  local tier="$1" ledger="$2"
+  local hook="$TMP_REPO/.bare-$tier.git/hooks/pre-receive"
+  cat > "$hook" <<HOOK || return 1
+#!/bin/sh
+while read -r old new ref; do
+  [ "\$ref" = refs/heads/live ] && echo "\$new" >> "$ledger"
+done
+if [ "\$(grep -c "" "$ledger")" -ge 2 ]; then
+  echo "declined by policy" >&2
+  exit 1
+fi
+exit 0
+HOOK
+  chmod +x "$hook"
+}
+
+@test "a post-loop publication push refused by policy is worded as a non-divergence failure, not as a moved remote" {
+  setup_repair_race_on_aa
+  bb_fact=$(push_tier_fact bb "- [B](b.md) — y")
+
+  # No stub: real remotes. `aa`'s remote logs the commit each push offers. Its
+  # own iteration offers P, accepted. The second push it receives is declined,
+  # and it can only be the post-loop pass's if what it offers is the repair:
+  # that commit does not exist until `bb`'s take makes it, and neither `bb`'s
+  # behind arm nor the take sends `aa` to its remote.
+  ledger="$BATS_TEST_TMPDIR/aa-pushed"
+  : > "$ledger"
+  decline_tier_pushes_after_first aa "$ledger"
+
+  run --separate-stderr bash "$CMD"
+
+  # Everything the wording rests on, asserted first: the push failed; `bb`
+  # took its remote's fact, the take that repaired `aa` on top of D; `aa`'s
+  # remote received P and then that repair, and declined the repair.
+  [ "$status" -eq 1 ]
+  git -C memory/bb merge-base --is-ancestor "$bb_fact" live
+  aa_live=$(git -C memory/aa rev-parse live)
+  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $D" ]
+  [ "$(tr '\n' ' ' < "$ledger")" = "$P $aa_live " ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" = "$D" ]
+
+  [[ "$output$stderr" == *"declined by policy"* ]]
+  [[ "$output$stderr" == *"pushing tier 'aa' failed, and not because of divergence"* ]]
+  [[ "$output$stderr" != *"The remote moved during the push"* ]]
+  [[ "$output$stderr" != *"(non-fast-forward)"* ]]
+  [[ "$output$stderr" != *"(fetch first)"* ]]
+}
