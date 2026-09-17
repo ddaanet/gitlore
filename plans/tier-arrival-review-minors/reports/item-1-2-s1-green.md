@@ -14,7 +14,8 @@
 **Tests:**
 - `scripts/run-bats.sh tests/merge_memory.bats --filter "a repair's scratch directory lives under TMPDIR"`
   → `bats: 1 passed, 0 failed`.
-- `scripts/run-bats.sh tests/merge_memory.bats` (whole file) → `bats: 40 passed, 0 failed`.
+- `scripts/run-bats.sh tests/merge_memory.bats` (whole file) →
+  `bats: 40 passed, 0 failed`.
 - `grep -rln "gitlore-repair" tests/` → only `tests/merge_memory.bats`, already
   run above.
 - `gitlore_repair_index`'s rename-within-directory and `hash-object -w`: no
@@ -23,9 +24,8 @@
   from the new scratch location) and all pass.
 - `shellcheck scripts/lib/resolve.sh tests/merge_memory.bats` → clean.
 
-**Commit:** `refactor: Item 1.2/1 — the repair's scratch copy lives under TMPDIR`,
-staged by explicit path (`tests/merge_memory.bats scripts/lib/resolve.sh
-plans/tier-arrival-review-minors/reports/item-1-2-s1-red.md
-plans/tier-arrival-review-minors/reports/item-1-2-s1-test-review.md
-plans/tier-arrival-review-minors/reports/item-1-2-s1-green.md`). Tree clean
-afterwards.
+**Commit:**
+`refactor: Item 1.2/1 — the repair's scratch copy lives under TMPDIR`, staged by
+explicit path
+(`tests/merge_memory.bats scripts/lib/resolve.sh plans/tier-arrival-review-minors/reports/item-1-2-s1-red.md plans/tier-arrival-review-minors/reports/item-1-2-s1-test-review.md plans/tier-arrival-review-minors/reports/item-1-2-s1-green.md`).
+Tree clean afterwards.

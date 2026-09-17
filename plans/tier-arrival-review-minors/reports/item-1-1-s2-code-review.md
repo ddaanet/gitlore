@@ -17,19 +17,19 @@ Item 1.2's `mktemp` arm would not trip it. That arm fails before the if/elif
 chain and calls the report helper directly. The next arm added to the chain
 would trip it.
 
-**Fix:** the unrepairable arm now removes the scratch directory, walks back
-with its own remedy and returns 1 inside its own `elif`. The shared tail handles
-only transient failures. It always calls
+**Fix:** the unrepairable arm now removes the scratch directory, walks back with
+its own remedy and returns 1 inside its own `elif`. The shared tail handles only
+transient failures. It always calls
 `gitlore_adopt_report_refusal_and_walk_back … "$composed" "Run /gitlore:merge again."`,
 under a two-line comment saying so. The cost is one duplicated
 `rm -rf -- "$scratch"`. `$remedy` is now read only inside the arm that sets it.
 
 ### 2. Report helper comment (minor) — FIXED
 
-"by a repair's transient failure or retry that still finds root, the manifest
-or another tier refusing" parsed as the transient failure finding root refusing.
-It now reads: "by a repair that fails on something the next take redoes, and by
-a repair's retry that still finds root, the manifest or another tier refusing."
+"by a repair's transient failure or retry that still finds root, the manifest or
+another tier refusing" parsed as the transient failure finding root refusing. It
+now reads: "by a repair that fails on something the next take redoes, and by a
+repair's retry that still finds root, the manifest or another tier refusing."
 
 ### 3. Checks with no finding
 
@@ -64,13 +64,13 @@ a repair's retry that still finds root, the manifest or another tier refusing."
 - **A: shared tail reverted** to a bare `gitlore_adopt_walk_back_tier`, applied
   after the fix. The slice test **redded** at line 619, the header assertion.
 - **B: `live`-advance arm reverted** to a bare `gitlore_adopt_walk_back_tier`.
-  The whole `tests/merge_memory.bats` stays **green**, 37/37. That arm's rewiring
-  has no test. The runbook's slices do not include one. A test is a RED task,
-  so it is not added in this review. The orchestrator should decide whether to
-  add a slice: a `git` stub failing `push -q . <sha>:refs/heads/live`, with
-  `GITLORE_GIT_RETRY_SCHEDULE=0`. The arrival-read, pin-read and rewrite arms
-  share the tail the commit-build test covers, so after the fix they are
-  covered structurally.
+  The whole `tests/merge_memory.bats` stays **green**, 37/37. That arm's
+  rewiring has no test. The runbook's slices do not include one. A test is a RED
+  task, so it is not added in this review. The orchestrator should decide
+  whether to add a slice: a `git` stub failing
+  `push -q . <sha>:refs/heads/live`, with `GITLORE_GIT_RETRY_SCHEDULE=0`. The
+  arrival-read, pin-read and rewrite arms share the tail the commit-build test
+  covers, so after the fix they are covered structurally.
 
 ## Verification
 

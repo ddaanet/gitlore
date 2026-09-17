@@ -1,7 +1,8 @@
 # Item 1.1 / slice 1 — GREEN
 
-**Test:** `an arrival the repair cannot fix beside a root duplicate reports both
-and the two-fix remedy` (`tests/merge_memory.bats`).
+**Test:**
+`an arrival the repair cannot fix beside a root duplicate reports both and the two-fix remedy`
+(`tests/merge_memory.bats`).
 
 ## Implementation
 
@@ -13,13 +14,13 @@ and the two-fix remedy` (`tests/merge_memory.bats`).
   prefixed `"$tierpath/MEMORY.md: "` into `other_lines`. When non-empty, it
   prints the `gitlore: the root index could not take <label>'s lines:` header
   (same wording as `gitlore_adopt_report_refusal_and_walk_back`) followed by
-  each line prefixed `gitlore:   `, and sets the remedy to the two-fix
-  sentence. Otherwise the remedy is unchanged.
+  each line prefixed `gitlore:   `, and sets the remedy to the two-fix sentence.
+  Otherwise the remedy is unchanged.
 
 ## Runs
 
-- `scripts/run-bats.sh tests/merge_memory.bats --filter "beside a root
-  duplicate reports both and the two-fix remedy"` — 1 passed, 0 failed.
+- `scripts/run-bats.sh tests/merge_memory.bats --filter "beside a root duplicate reports both and the two-fix remedy"`
+  — 1 passed, 0 failed.
 - `scripts/run-bats.sh tests/merge_memory.bats` (whole file) — 36 passed, 0
   failed.
 - Grep for other bats files exercising `could not be repaired` /
@@ -28,10 +29,11 @@ and the two-fix remedy` (`tests/merge_memory.bats`).
 
 ## Commit
 
-One commit, subject `feat: Item 1.1/1 — unrepairable arm reports the root
-index's problems`, carrying the test, the implementation and this report
-trio. (A commit's own hash cannot be written into its own tree without
-changing it; `git log -1 --format=%H -- scripts/lib/resolve.sh` on this
-report's commit gives it.)
+One commit, subject
+`feat: Item 1.1/1 — unrepairable arm reports the root index's problems`,
+carrying the test, the implementation and this report trio. (A commit's own hash
+cannot be written into its own tree without changing it;
+`git log -1 --format=%H -- scripts/lib/resolve.sh` on this report's commit gives
+it.)
 
 Tree clean afterward (verified with `git status --short`).
