@@ -407,9 +407,17 @@ prepare_tier_merge_head_vs_live() {
   # above: the gitlore line says what the refusal means, so it follows the
   # reason git and the hook already gave rather than preceding it.
   [[ "$stderr" == *"commit refused by hook"*"gitlore: the merge commit was refused"* ]]
+  # The refused-commit arm, not the build arm: the message was built, so a run
+  # that also claimed a build failure would be emitting both arms' text.
+  [[ "$stderr" != *"the merge message could not be built"* ]]
   [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
   [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
   git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
+  # The synthesis the merger staged survives a refused commit, in both stores:
+  # `commit` leaves the index alone when a hook declines it, so the rerun below
+  # lands the same content rather than a recomposed approximation of it.
+  [ -n "$(git -C memory/ddaanet diff --cached --name-only -- MEMORY.md)" ]
+  [ -n "$(git -C memory diff --cached --name-only -- MEMORY.md)" ]
 
   rm -f "$hook"
   run --separate-stderr bash "$RESOLVE" continue-after-merge
