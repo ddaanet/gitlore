@@ -175,9 +175,10 @@ then calls `gitlore_adopt_report_refusal_and_walk_back` with
 
 **What changes.** A take that runs during the tier loop can repair a tier whose
 own loop iteration already pushed. Every such repair is now published before
-memory's push. The behind arm's retry push (the
+memory's push. The behind arm keeps its retry push (the
 `merge-base --is-ancestor live origin/live` block after
-`GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores`) is removed. After the tier loop,
+`GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores`), so its own tier's repair is out
+before a later tier's failure returns 1 from the loop. After the tier loop,
 before the memory remote check (so a memory with no remote still publishes every
 tier), one pass over `gitlore_tier_paths`:
 - skips a tier with no checkout or no local `live`, as the loop does;
@@ -186,8 +187,9 @@ tier), one pass over `gitlore_tier_paths`:
 - on a failed push, prints the removed retry's "failed, and not because of
   divergence" message and returns 1 (Item 2.2 classifies it).
 
-The comments at :1366-1367 and :1395-1398 that describe the retry are updated to
-name the pass.
+The pass's comment names what it publishes: a repair to a tier whose iteration
+already finished. It notes that the loop's pushes move `origin/live`, so a tier
+already out is not pushed again.
 
 **Requirements:** M5.
 
@@ -215,8 +217,19 @@ name the pass.
    does, stop and report; nothing is fixed on reasoning alone. A variant that
    does not reproduce is kept as a guard and reported as such.
 
-After green, the tests at :338, :376 and :404 pass unchanged; :376 now publishes
-through the pass.
+2. **A behind arm's repair survives a later tier's failure.** A new test in the
+   same section. Tiers `aa` then `bb`, mounted and published as in slice 1.
+   `aa`'s remote receives a duplicate-bullet fact (`push_tier_fact`), so `aa` is
+   behind and its own take repairs it. `bb` is ahead of its remote, whose
+   `pre-receive` hook rejects every push. After `scripts/push-memory.sh` runs,
+   the test asserts:
+   - exit status 1, and stderr names `bb`'s failed push;
+   - `aa`'s remote `live` equals `aa`'s local `live`, the repair commit.
+
+   **Red** against the slice 1 commit, which removed the retry; the pre-change
+   code published it.
+
+After green, the tests at :338, :376 and :404 pass unchanged.
 
 ### Item 2.2: one reporter for a failed tier push
 

@@ -502,7 +502,8 @@ install_tier_live_snap_hook() {
 # (their `.gitmodules` order, which the tier loop and the take pass both
 # read). `aa`'s own loop iteration publishes P; a post-receive hook then snaps
 # its remote's `live` onto D — a child of P carrying a duplicate bullet twice
-# (the arrival shape :376 repairs) — behind the push's back. Whatever the
+# (the arrival shape "a repair taken by the behind arm is published before
+# memory records it" repairs) — behind the push's back. Whatever the
 # variant does with `bb` next runs the take pass over every tier, `aa`
 # included: it fast-forwards `aa` onto D and repairs the duplicate into a new
 # commit entirely inside `aa`'s local `live` — `aa`'s own loop iteration
@@ -575,4 +576,70 @@ assert_aa_repaired_mid_loop() {
   git --git-dir="$TMP_REPO/.bare-bb.git" merge-base --is-ancestor "$bb_stranded" live
   run git --git-dir="$TMP_REPO/.bare-aa.git" cat-file -e "$aa_live^{commit}"
   [ "$status" -eq 0 ]
+}
+
+# --- a behind arm's own repair must survive a later tier's failure ---
+
+# A pre-receive hook on tier $1's bare remote that declines every push for a
+# reason other than divergence, after appending tier $2's remote `live` to file
+# $3 — what $2 had published by the moment $1's push was tried, one line per
+# attempt. The quarantine variables are unset for the reason
+# install_tier_live_snapshot_hook gives. Args: $1 = declining tier,
+# $2 = watched tier, $3 = snapshot file.
+decline_tier_pushes_recording() {
+  local tier="$1" watched="$2" snapfile="$3"
+  local hook="$TMP_REPO/.bare-$tier.git/hooks/pre-receive"
+  cat > "$hook" <<HOOK || return 1
+#!/bin/sh
+unset GIT_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_QUARANTINE_PATH
+git --git-dir="$TMP_REPO/.bare-$watched.git" rev-parse live >> "$snapfile"
+echo "declined by policy" >&2
+exit 1
+HOOK
+  chmod +x "$hook"
+}
+
+@test "a behind arm's repair survives a later tier's failure" {
+  # aa is processed first (.gitmodules order) and its own behind arm repairs
+  # the duplicate arrival by taking and correcting it, as in "a repair taken by
+  # the behind arm is published before memory records it". bb comes next and
+  # its remote declines every push, so the loop returns 1 there. aa's repair
+  # has to be on aa's remote already when bb's push is tried.
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live aa
+  mount_tier_at_live bb
+  publish_memory
+
+  aa_fact=$(push_tier_fact aa "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
+  aa_live_before=$(git -C memory/aa rev-parse live)
+  # aa is behind before the push: its own take is what repairs it.
+  [ "$aa_live_before" != "$aa_fact" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" = "$aa_fact" ]
+  git --git-dir="$TMP_REPO/.bare-aa.git" merge-base --is-ancestor "$aa_live_before" "$aa_fact"
+
+  advance_tier_past_remote bb
+  snapfile="$BATS_TEST_TMPDIR/aa-remote-at-bb-push"
+  decline_tier_pushes_recording bb aa "$snapfile"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  # bb's refusal is the hook's policy decline, not a divergence.
+  [[ "$output$stderr" == *"pushing tier 'bb' failed, and not because of divergence"* ]]
+  [[ "$output$stderr" == *"declined by policy"* ]]
+  [ -s "$snapfile" ]
+  [[ "$output$stderr" == *"gitlore: tier 'aa' — the repair is committed in its local 'live', and this push publishes it."* ]]
+
+  # aa's own take repaired it: the repair commit's parent is the fetched fact,
+  # and its MEMORY.md carries the duplicate bullet once.
+  aa_live=$(git -C memory/aa rev-parse live)
+  [ "$aa_live" != "$aa_fact" ]
+  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $aa_fact" ]
+  [ "$(git -C memory/aa show "$aa_live:MEMORY.md" | grep -cF -- '- [A](a.md) — x')" -eq 1 ]
+
+  # aa's remote holds the repair, and held it already at bb's first push: the
+  # behind arm publishes its own tier, not a pass that bb's failure skips or
+  # that runs only after bb was tried.
+  [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" = "$aa_live" ]
+  [ "$(sed -n 1p "$snapfile")" = "$aa_live" ]
 }
