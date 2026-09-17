@@ -295,10 +295,11 @@ defect no take can walk back from" to "a defect no take can adopt past".
    `cmp -s` against a `printf`-built expected file as :1334 does, that the
    output equals the input with that last line removed and the new last line
    ending in exactly one newline.
-2. **Moved stray at the end.** Input: an unterminated index whose last line is
-   the last bullet, with a non-bullet line between two bullets. The test asserts
-   that the output bytes equal the stray moved after that bullet, the bullet
-   ending in one newline, and the stray ending in one newline.
+2. **Moved stray at the end.** **Guard** (slice 1's GREEN implemented the whole
+   rule). Input: an unterminated index whose last line is the last bullet, with
+   a non-bullet line between two bullets. The test asserts that the output bytes
+   equal the stray moved after that bullet, the bullet ending in one newline,
+   and the stray ending in one newline.
 
 An unterminated index whose last line survives a repair elsewhere is already
 covered with byte equality by :1334

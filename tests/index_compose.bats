@@ -1361,6 +1361,26 @@ b" ]
   cmp -s file.md expected.md
 }
 
+# The last bullet was the unterminated last line and a stray moves after it:
+# the stray becomes last and keeps its own newline, and the bullet — no longer
+# last — gains the newline it lacked.
+@test "a stray moved past an unterminated last bullet keeps its newline and terminates the bullet" {
+  mkdir -p tier
+  touch pin.md
+  printf -- '- [A](a.md) — hook\nStray line\n- [B](b.md) — hook\n' > file.md
+  unterminate_index file.md
+  [ "$(tail -c 1 file.md | wc -l)" -eq 0 ]
+  [ "$(wc -l < file.md)" -eq 2 ]
+  [ "$(sed -n '1p' file.md)" = '- [A](a.md) — hook' ]
+  [ "$(sed -n '2p' file.md)" = 'Stray line' ]
+  [ "$(sed -n '3p' file.md)" = '- [B](b.md) — hook' ]
+  run gitlore_repair_index file.md pin.md tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "moved a non-bullet line out of the pointer block: Stray line" ]
+  printf -- '- [A](a.md) — hook\n- [B](b.md) — hook\nStray line\n' > expected.md
+  cmp -s file.md expected.md
+}
+
 # The same repair then succeeds with the directory writable and $TMPDIR not:
 # the refusal came from <file>'s directory, and the scratch file lives there.
 @test "a rewrite that cannot be written leaves the file unchanged" {
