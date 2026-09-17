@@ -568,8 +568,10 @@ EOF
   [ "$(grep -cxF -- '- [A](a.md) — x' "$BATS_TEST_TMPDIR/arrival.md")" -eq 2 ]
   [ -n "$(gitlore_compose_check_index "$BATS_TEST_TMPDIR/arrival.md")" ]
   gitdir_before=$(tier_gitdir_files ddaanet)
+  tmp_env="$BATS_TEST_TMPDIR/tmp"
+  mkdir -p "$tmp_env"
 
-  run --separate-stderr bash "$CMD"
+  TMPDIR="$tmp_env" run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
   R=$(git -C memory/ddaanet rev-parse HEAD)
   [ "$(git -C memory/ddaanet rev-parse live)" = "$R" ]
@@ -587,6 +589,7 @@ EOF
   [ "$(grep -cxF -- '- [A](ddaanet/a.md) — x' memory/MEMORY.md)" -eq 1 ]
   [ -z "$(git -C memory status --porcelain)" ]
   [ "$(tier_gitdir_files ddaanet)" = "$gitdir_before" ]
+  [ -z "$(repair_scratch_dirs "$tmp_env")" ]
   # A take publishes nothing: the tier's remote still holds the arrival.
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$remote_sha" ]
 }
@@ -611,15 +614,18 @@ esac
 exec "$real_git" "\$@"
 EOF
   chmod +x "$fakebin/git"
+  tmp_env="$BATS_TEST_TMPDIR/tmp"
+  mkdir -p "$tmp_env"
 
-  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  TMPDIR="$tmp_env" PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"shim refuses commit-tree"* ]]
   [[ "$stderr" == *"building the repair commit failed"* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
-  [[ "$stderr" == *"Run /gitlore:merge again."* ]]
+  [[ "$stderr" == *"its local 'live' keeps what arrived. Run /gitlore:merge again."* ]]
   [[ "$stderr" != *"Fix the store"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ -z "$(repair_scratch_dirs "$tmp_env")" ]
 }
 
 # The scratch directory is removed once the commit is built, so it is observed
@@ -658,6 +664,7 @@ EOF
   [ -e "$seen" ]
   [ "$(grep -c -F -- "$gitdir/gitlore-repair." "$seen")" -eq 0 ]
   [ "$(grep -c -F -- "$tmp_env/gitlore-repair." "$seen")" -eq 1 ]
+  [ -z "$(repair_scratch_dirs "$tmp_env")" ]
   # The repair is adopted: a commit on the arrival, in `live` and memory's gitlink.
   R=$(git -C memory/ddaanet rev-parse HEAD)
   [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
@@ -694,7 +701,7 @@ EOF
   [ -e "$BATS_TEST_TMPDIR/mktemp-hit" ]
   [[ "$stderr" == *"no scratch directory could be made"* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
-  [[ "$stderr" == *"Run /gitlore:merge again."* ]]
+  [[ "$stderr" == *"its local 'live' keeps what arrived. Run /gitlore:merge again."* ]]
   [[ "$stderr" != *"Fix the store"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
 }
@@ -789,7 +796,7 @@ EOF
   [[ "$stderr" == *"shim refuses the third live advance"* ]]
   [[ "$stderr" == *"its repair could not advance its local 'live'"* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
-  [[ "$stderr" == *"Run /gitlore:merge again."* ]]
+  [[ "$stderr" == *"its local 'live' keeps what arrived. Run /gitlore:merge again."* ]]
   [[ "$stderr" != *"Fix the store"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
   # The advance never landed: `live` still holds the arrival, not the repair.
@@ -834,6 +841,11 @@ tier_gitdir_files() {
     find . -type f ! -path './objects/*' ! -path './logs/*' ! -path './refs/*' \
       ! -name FETCH_HEAD ! -name ORIG_HEAD | LC_ALL=C sort
   )
+}
+
+# The repair scratch directories left directly under $1, one per line.
+repair_scratch_dirs() {
+  find "$1" -mindepth 1 -maxdepth 1 -name 'gitlore-repair.*' -print
 }
 
 @test "a take repairs a welded line that arrived" {
@@ -925,7 +937,7 @@ push_tier_files() {
   [[ "$all" == *"gone/x.md"* ]]
   [[ "$all" == *"gitlore: repaired ddaanet's arrival: dropped a duplicate pointer line: - [A](a.md) — x"* ]]
   [[ "$stderr" == *"its local 'live' keeps the repair."* ]]
-  run ! grep -qF 'keeps what arrived' <<<"$stderr"
+  [[ "$stderr" != *"keeps what arrived"* ]]
   # What adoption waits on is the root problem alone: the first refusal's
   # carrier problem, already repaired, is not reported.
   run ! grep -qF 'duplicate pointer path' <<<"$all"
@@ -967,8 +979,10 @@ push_tier_files() {
   [ "$dup_line_n" -lt "$weld_line_n" ]
   run ! git --git-dir="$TMP_REPO/.bare-ddaanet.git" cat-file -e "$remote_sha:z.md"
   gitdir_before=$(tier_gitdir_files ddaanet)
+  tmp_env="$BATS_TEST_TMPDIR/tmp"
+  mkdir -p "$tmp_env"
 
-  run --separate-stderr bash "$CMD"
+  TMPDIR="$tmp_env" run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
   all="$output$stderr"
   [[ "$all" == *"gitlore: tier 'ddaanet' took an index the take cannot repair; it is held in the tier's local 'live' and must be fixed where it was published:"* ]]
@@ -982,6 +996,7 @@ push_tier_files() {
   [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
   run ! grep -qxF 'Repair the MEMORY.md structure ddaanet received' < <(git -C memory/ddaanet log --all --reflog --format=%s)
   [ "$(tier_gitdir_files ddaanet)" = "$gitdir_before" ]
+  [ -z "$(repair_scratch_dirs "$tmp_env")" ]
 }
 
 @test "an arrival the repair cannot fix beside a root duplicate reports both and the two-fix remedy" {
