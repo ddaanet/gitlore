@@ -400,8 +400,13 @@ prepare_tier_merge_head_vs_live() {
   export TMPDIR="$BATS_TEST_TMPDIR/msgtmp"
 
   run --separate-stderr bash "$RESOLVE" continue-after-merge
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 1 ]
   [[ "$stderr" == *"commit refused by hook"* ]]
+  [[ "$stderr" == *"gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared."* ]]
+  # Order, checked as one glob so a missing line fails on its own assertion
+  # above: the gitlore line says what the refusal means, so it follows the
+  # reason git and the hook already gave rather than preceding it.
+  [[ "$stderr" == *"commit refused by hook"*"gitlore: the merge commit was refused"* ]]
   [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
   [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
   git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
