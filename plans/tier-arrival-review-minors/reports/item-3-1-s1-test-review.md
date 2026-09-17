@@ -11,9 +11,10 @@ UNFIXABLE findings.
    `cmp -s file.md expected.md`. It is the same after the fixes.
 2. **Right reason.** The unterminated precondition, the duplicate count (2),
    `$status` 0 and the report line all pass before the `cmp -s`. The empty pin
-   comes from `touch pin.md`. The expected file is the input minus its last line,
-   and the new last line ends in exactly one `\n`, as the spec requires. The RED
-   report's `od -c` shows the actual output is short by exactly that newline.
+   comes from `touch pin.md`. The expected file is the input minus its last
+   line, and the new last line ends in exactly one `\n`, as the spec requires.
+   The RED report's `od -c` shows the actual output is short by exactly that
+   newline.
 3. **Spec fidelity.** It uses `cmp -s` against a `printf`-built `expected.md`,
    like "welds are split before duplicates are resolved". The call is
    `gitlore_repair_index file.md pin.md tier`, with the same argument order as
@@ -36,13 +37,13 @@ UNFIXABLE findings.
 ## Fixes applied
 
 - **Comment inaccuracy.** The comment said the new last line "must gain the
-  newline the input never gave it". It is wrong: that line was terminated in
-  the input, and the repair strips its newline. The comment now reads: "the
-  line before it becomes last and keeps the newline it had in the input."
+  newline the input never gave it". It is wrong: that line was terminated in the
+  input, and the repair strips its newline. The comment now reads: "the line
+  before it becomes last and keeps the newline it had in the input."
 - **Comparison form.** The unterminated precondition was
   `[ "$(tail -c 1 file.md | wc -l | tr -d ' ')" = 0 ]`. It is now
-  `[ "$(tail -c 1 file.md | wc -l)" -eq 0 ]`. An integer test ignores BSD
-  `wc`'s padding, so no `tr` is needed.
+  `[ "$(tail -c 1 file.md | wc -l)" -eq 0 ]`. An integer test ignores BSD `wc`'s
+  padding, so no `tr` is needed.
 
 Re-run after the fixes: 81 passed, 1 failed, still on the `cmp -s` at line
 1361. `shellcheck tests/index_compose.bats` exits 0.
