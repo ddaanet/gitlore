@@ -490,7 +490,7 @@ push_side_ref_child() {
 # receives, it snaps `live` onto $2 and removes itself — the idiom
 # half_landed_tier_fixture uses for a lock, here for a ref. Args: $1 = tier,
 # $2 = the sha `live` lands on.
-install_tier_live_snap_hook() {
+move_tier_remote_live_on_next_push() {
   local tier="$1" target="$2"
   local hook="$TMP_REPO/.bare-$tier.git/hooks/post-receive"
   # shellcheck disable=SC2016  # $0 is the generated hook's own, not this shell's
@@ -530,7 +530,15 @@ setup_repair_race_on_aa() {
   D=$(push_side_ref_child aa "$P" refs/heads/stash-d \
     "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
   [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse stash-d)" = "$D" ]
-  install_tier_live_snap_hook aa "$D"
+  move_tier_remote_live_on_next_push aa "$D"
+}
+
+# `aa`'s local `live` is a repair of $1: a commit whose only parent is $1 and
+# whose MEMORY.md carries the duplicated bullet once. Sets $aa_live.
+assert_aa_live_repairs() {
+  aa_live=$(git -C memory/aa rev-parse live)
+  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $1" ]
+  [ "$(git -C memory/aa show "$aa_live:MEMORY.md" | grep -cF -- '- [A](a.md) — x')" -eq 1 ]
 }
 
 # Everything the defect rests on, asserted before the defect itself so a red
@@ -543,9 +551,7 @@ assert_aa_repaired_mid_loop() {
   [ "$push_status" -eq 0 ]
   [ ! -e "$TMP_REPO/.bare-aa.git/hooks/post-receive" ]
   git --git-dir="$TMP_REPO/.bare-aa.git" merge-base --is-ancestor "$D" live
-  aa_live=$(git -C memory/aa rev-parse live)
-  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $D" ]
-  [ "$(git -C memory/aa show "$aa_live:MEMORY.md" | grep -cF -- '- [A](a.md) — x')" -eq 1 ]
+  assert_aa_live_repairs "$D"
   [[ "$push_output" == *"repaired aa's arrival"* ]]
   [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:aa)" = "$aa_live" ]
 }
@@ -558,7 +564,7 @@ assert_aa_repaired_mid_loop() {
   assert_aa_repaired_mid_loop "$status" "$output$stderr"
   # `bb`'s behind arm is what ran the take: `bb` took its remote's fact.
   git -C memory/bb merge-base --is-ancestor "$bb_fact" live
-  # The defect: `aa`'s own remote never received the repair memory records.
+  # `aa`'s own remote holds the repair memory records.
   run git --git-dir="$TMP_REPO/.bare-aa.git" cat-file -e "$aa_live^{commit}"
   [ "$status" -eq 0 ]
 }
@@ -632,10 +638,7 @@ HOOK
 
   # aa's own take repaired it: the repair commit's parent is the fetched fact,
   # and its MEMORY.md carries the duplicate bullet once.
-  aa_live=$(git -C memory/aa rev-parse live)
-  [ "$aa_live" != "$aa_fact" ]
-  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $aa_fact" ]
-  [ "$(git -C memory/aa show "$aa_live:MEMORY.md" | grep -cF -- '- [A](a.md) — x')" -eq 1 ]
+  assert_aa_live_repairs "$aa_fact"
 
   # aa's remote holds the repair, and held it already at bb's first push: the
   # behind arm publishes its own tier, not a pass that bb's failure skips or
@@ -685,8 +688,7 @@ EOF
   [ "$status" -eq 1 ]
   [ "$(tr '\n' ' ' < "$pushes")" = "aa bb aa " ]
   git -C memory/bb merge-base --is-ancestor "$bb_fact" live
-  aa_live=$(git -C memory/aa rev-parse live)
-  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $D" ]
+  assert_aa_live_repairs "$D"
   [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" = "$D" ]
 
   [[ "$output$stderr" == *"The remote moved during the push"* ]]
@@ -735,8 +737,7 @@ HOOK
   # remote received P and then that repair, and declined the repair.
   [ "$status" -eq 1 ]
   git -C memory/bb merge-base --is-ancestor "$bb_fact" live
-  aa_live=$(git -C memory/aa rev-parse live)
-  [ "$(git -C memory/aa rev-list --parents -n 1 "$aa_live")" = "$aa_live $D" ]
+  assert_aa_live_repairs "$D"
   [ "$(tr '\n' ' ' < "$ledger")" = "$P $aa_live " ]
   [ "$(git --git-dir="$TMP_REPO/.bare-aa.git" rev-parse live)" = "$D" ]
 
