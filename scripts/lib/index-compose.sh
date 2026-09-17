@@ -344,7 +344,7 @@ $line"
   # 4.4 reads "${a[@]}" of an empty array as unbound under `set -u`. With no
   # bullet there is no weld, stray line or duplicate to repair.
   [ "${#p1[@]}" -gt 0 ] || return 0
-  p1last[${#p1[@]} - 1]=1
+  p1last[${#p1[@]}-1]=1
   # gitlore_index_region's bounds, read off the split lines in this shell.
   local first=0 last=0 n=0
   for line in "${p1[@]}"; do
@@ -445,9 +445,9 @@ $line"
 
   # The output stays unterminated only when the input did and its own last
   # element is still the tagged one — the input's last line, or that line's
-  # tail after a weld split. A drop or a move can retire that element or shift
-  # what ends up last; either way the new last element gains the newline it
-  # never had a chance to lose.
+  # tail after a weld split. A drop or a move can retire that element or put
+  # another after it; either way the element that ends up last is written with
+  # a newline.
   local last_i=$((${#p3[@]} - 1))
   [ "$last_i" -ge 0 ] && [ "${p3last[last_i]}" = 1 ] || terminated=1
 

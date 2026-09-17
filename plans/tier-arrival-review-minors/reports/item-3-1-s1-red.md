@@ -1,8 +1,8 @@
 # Item 3.1 / Slice 1 — RED
 
-**Test added:** `tests/index_compose.bats:1349` (`@test "a duplicate dropped
-from the end terminates the new last line"`), in the repair section right
-after "welds are split before duplicates are resolved".
+**Test added:** `tests/index_compose.bats:1349`
+(`@test "a duplicate dropped from the end terminates the new last line"`), in
+the repair section right after "welds are split before duplicates are resolved".
 
 ## Fixture
 
