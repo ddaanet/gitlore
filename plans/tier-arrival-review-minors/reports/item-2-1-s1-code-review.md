@@ -13,17 +13,17 @@ Conforms on every point checked.
 - It skips a tier with no checkout (`[ -e "$tierpath/.git" ]`) or no local
   `live` (`rev-parse -q --verify live`), with the loop's own guards.
 - It pushes when `live` is not an ancestor of `origin/live`. A missing
-  `origin/live` resolves to an empty `origin_live` and pushes. A
-  `merge-base` error (exit 128) also pushes, which is the safe side.
-- It prints the "failed, and not because of divergence" wording and returns 1
-  on a failed push. Item 2.2 owns the classification.
-- A tier with no remote or a stale merge state never reaches the pass: the
-  loop has already returned 1.
-- errexit: `origin_live=$(…) || origin_live=""`, `|| continue` and `if !`
-  guard every command whose status can be non-zero. `gitlore_git` wraps the
-  push, as the loop's push does. Tier paths are double-quoted throughout, and
-  names come from the same `IFS= read -r` over `gitlore_tier_paths` as the
-  loop. No bash 3.2 or BSD issue.
+  `origin/live` resolves to an empty `origin_live` and pushes. A `merge-base`
+  error (exit 128) also pushes, which is the safe side.
+- It prints the "failed, and not because of divergence" wording and returns 1 on
+  a failed push. Item 2.2 owns the classification.
+- A tier with no remote or a stale merge state never reaches the pass: the loop
+  has already returned 1.
+- errexit: `origin_live=$(…) || origin_live=""`, `|| continue` and `if !` guard
+  every command whose status can be non-zero. `gitlore_git` wraps the push, as
+  the loop's push does. Tier paths are double-quoted throughout, and names come
+  from the same `IFS= read -r` over `gitlore_tier_paths` as the loop. No bash
+  3.2 or BSD issue.
 
 ## Interactions
 
@@ -32,13 +32,12 @@ Conforms on every point checked.
   exactly once, and the pass skipped it. A submodule checkout carries
   `+refs/heads/*:refs/remotes/origin/*`, so the loop's successful push moves
   `origin/live`, and the pass's ancestry check sees it.
-- Nothing between the loop and the pass depends on the behind arm's tier
-  having been pushed. The only step between them is the loop ending.
+- Nothing between the loop and the pass depends on the behind arm's tier having
+  been pushed. The only step between them is the loop ending.
 - The ahead-of-HEAD arm pushes its own tier in-loop after its take. A repair
   that take makes to a later tier is pushed by that tier's own iteration. A
-  repair to an earlier tier is left to the pass. The diverged arm and the
-  other arms return 1 before the pass, and nothing from them needs
-  publishing.
+  repair to an earlier tier is left to the pass. The diverged arm and the other
+  arms return 1 before the pass, and nothing from them needs publishing.
 
 ## Findings
 
@@ -77,8 +76,8 @@ This slice adds the behind arm's own tier followed by any later failure in the
 loop. The outline's claim that the pass "covers the current tier, as the retry
 did" does not hold on this early-return path.
 
-**Why it is not fixed here.** Each cheap fix conflicts with the spec or with
-the next item.
+**Why it is not fixed here.** Each cheap fix conflicts with the spec or with the
+next item.
 
 1. **Reinstate the in-arm push for the current tier alongside the pass.** This
    restores the pre-change behaviour, but the runbook says the retry "is
@@ -86,26 +85,24 @@ the next item.
    the *second* `aa push -q origin live`, which would then be the retry instead
    of the pass.
 2. **Run the pass on the loop's failure returns.** This would publish a repair
-   that its take could not adopt. Test :404 ("a repair resting on a root
-   problem … publishes nothing until it is fixed") pins that such a repair
-   stays local.
+   that its take could not adopt. Test :404 ("a repair resting on a root problem
+   … publishes nothing until it is fixed") pins that such a repair stays local.
 3. **Accept the behaviour and reword.** Phase 7.2, which rewrites
-   `tier-arrival-repair.md:92-98`, would then have to say that a push failing
-   on a later tier leaves the repair for the next push. The message itself
-   could name that condition.
+   `tier-arrival-repair.md:92-98`, would then have to say that a push failing on
+   a later tier leaves the repair for the next push. The message itself could
+   name that condition.
 
-Recommendation: option 3, with a test pinning the chosen behaviour. The
-failure the reader already sees sends them to push again, and that push
-publishes the repair. Option 1 costs Item 2.2's test design. The decision
-belongs to the orchestrator or my human partner.
+Recommendation: option 3, with a test pinning the chosen behaviour. The failure
+the reader already sees sends them to push again, and that push publishes the
+repair. Option 1 costs Item 2.2's test design. The decision belongs to the
+orchestrator or my human partner.
 
 ### MINOR — fixed: the pass's comment described only the cross-tier race
 
 The comment said the pass catches a repair to "a tier whose iteration already
 finished". The pass is also now the only publisher of the behind arm's *own*
-tier's repair, the :376 case. The comment now names both cases and states
-that the loop's pushes move `origin/live`, so a tier already out is not
-pushed again.
+tier's repair, the :376 case. The comment now names both cases and states that
+the loop's pushes move `origin/live`, so a tier already out is not pushed again.
 
 ### Note — scheduled elsewhere
 
@@ -118,11 +115,11 @@ identifiers.
 
 ## Mutation run
 
-The pass was removed in place, `tests/push_behind_vs_diverged.bats` was run,
-and `resolve.sh` was restored. Result: 14 passed, 3 failed.
+The pass was removed in place, `tests/push_behind_vs_diverged.bats` was run, and
+`resolve.sh` was restored. Result: 14 passed, 3 failed.
 
-- :376 "a repair taken by the behind arm is published before memory records
-  it" (hook snapshot mismatch)
+- :376 "a repair taken by the behind arm is published before memory records it"
+  (hook snapshot mismatch)
 - the two new mid-loop tests (`status -eq 0`)
 
 `git status --short scripts` was clean after the restore. The probe tests were
@@ -136,7 +133,6 @@ also removed, and `tests/` was clean.
 ## After fixes
 
 - `shellcheck -x scripts/lib/resolve.sh`: clean.
-- `scripts/run-bats.sh tests/push_behind_vs_diverged.bats`: 17 passed, 0
-  failed.
+- `scripts/run-bats.sh tests/push_behind_vs_diverged.bats`: 17 passed, 0 failed.
 - `scripts/run-bats.sh tests/push_rejection_discriminator.bats`: 9 passed, 0
   failed.

@@ -28,21 +28,21 @@ project lints at default severity, info included).
 2. **Major — setup failures were silent.** `d=$(setup_repair_race_on_aa)` ran
    the whole fixture in a command substitution, where bash does not inherit
    errexit: any failing step except the final `printf` was ignored, and any
-   stdout a helper printed would pollute `$d`. Likewise
-   `push_side_ref_child`'s status was that of its trailing `rm -rf`, not of the
-   push. Now `setup_repair_race_on_aa` is called directly and sets `$P`/`$D`;
-   every step in the two scratch helpers carries `|| return 1`; the sha capture
-   is the helper's last command.
+   stdout a helper printed would pollute `$d`. Likewise `push_side_ref_child`'s
+   status was that of its trailing `rm -rf`, not of the push. Now
+   `setup_repair_race_on_aa` is called directly and sets `$P`/`$D`; every step
+   in the two scratch helpers carries `|| return 1`; the sha capture is the
+   helper's last command.
 
 3. **Major — preconditions were incomplete or inferred.** Push exit 0 was
-   checked first (fine); the repair was only "`live` differs from D and
-   contains it", which any later commit would satisfy. Now
-   `assert_aa_repaired_mid_loop` (called before the defect assertion) checks:
-   status 0; hook gone and D reached `aa`'s remote; `aa`'s local `live` has
-   exactly D as parent; that commit's `MEMORY.md` holds the duplicated bullet
-   once; the output names `repaired aa's arrival`; memory's remote records it
-   as `aa`'s gitlink. The setup also asserts P is memory's recorded `aa` pin,
-   P is not on `aa`'s remote yet, and D sits on the side ref.
+   checked first (fine); the repair was only "`live` differs from D and contains
+   it", which any later commit would satisfy. Now `assert_aa_repaired_mid_loop`
+   (called before the defect assertion) checks: status 0; hook gone and D
+   reached `aa`'s remote; `aa`'s local `live` has exactly D as parent; that
+   commit's `MEMORY.md` holds the duplicated bullet once; the output names
+   `repaired aa's arrival`; memory's remote records it as `aa`'s gitlink. The
+   setup also asserts P is memory's recorded `aa` pin, P is not on `aa`'s remote
+   yet, and D sits on the side ref.
 
 4. **Minor — neither variant proved its own `bb` arm ran.** Added: behind
    asserts `bb`'s remote fact is in `bb`'s local `live`; ahead-of-HEAD asserts
@@ -53,9 +53,9 @@ project lints at default severity, info included).
 
 5. **Minor — hygiene.** Scratch clone moved from `${TMPDIR:-/tmp}` to
    `$BATS_TEST_TMPDIR` (no cleanup needed). `advance_tier_past_remote` uses
-   `git -C` rather than a `cd` subshell. A shared assertion helper reading
-   bats' `$status`/`$output` tripped SC2030/SC2031; it takes them as
-   arguments instead.
+   `git -C` rather than a `cd` subshell. A shared assertion helper reading bats'
+   `$status`/`$output` tripped SC2030/SC2031; it takes them as arguments
+   instead.
 
 ## Fixture fidelity (check 3)
 

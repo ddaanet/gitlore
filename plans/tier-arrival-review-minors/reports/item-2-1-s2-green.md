@@ -11,9 +11,8 @@ made to a *different* tier is left to the post-loop pass.
 
 The post-loop pass's own comment gained one clause: the loop above's own pushes
 already moved each tier's `origin/live`, so a tier already out is not pushed
-again there. The pass's comment otherwise still names only the cross-tier
-case — the behind arm's own-tier repair is now the retry's job again, not the
-pass's.
+again there. The pass's comment otherwise still names only the cross-tier case —
+the behind arm's own-tier repair is now the retry's job again, not the pass's.
 
 In `tests/push_behind_vs_diverged.bats`, `setup_repair_race_on_aa`'s comment no
 longer cites `:376`; it names the test "a repair taken by the behind arm is
@@ -40,4 +39,5 @@ tier's failure": red (per `item-2-1-s2-red.md`) → green.
 
 ## Shellcheck
 
-`shellcheck -x scripts/lib/resolve.sh tests/push_behind_vs_diverged.bats`: clean.
+`shellcheck -x scripts/lib/resolve.sh tests/push_behind_vs_diverged.bats`:
+clean.

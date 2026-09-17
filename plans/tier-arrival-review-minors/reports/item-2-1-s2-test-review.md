@@ -22,11 +22,11 @@ ends on the repair. The final-state assertion cannot tell that fix from the
 in-arm push. The spec's behaviour is narrower: the repair "is out before a later
 tier's failure returns 1 from the loop".
 
-**Fix.** `decline_pushes_to` is replaced by `decline_tier_pushes_recording bb aa
-<file>`. It installs `bb`'s declining `pre-receive` hook, which first appends
-`aa`'s remote `live` to `$BATS_TEST_TMPDIR/aa-remote-at-bb-push`. It unsets the
-quarantine variables, as `install_tier_live_snapshot_hook` does. The test then
-asserts:
+**Fix.** `decline_pushes_to` is replaced by
+`decline_tier_pushes_recording bb aa <file>`. It installs `bb`'s declining
+`pre-receive` hook, which first appends `aa`'s remote `live` to
+`$BATS_TEST_TMPDIR/aa-remote-at-bb-push`. It unsets the quarantine variables, as
+`install_tier_live_snapshot_hook` does. The test then asserts:
 
 - the hook ran (`[ -s "$snapfile" ]`), as a precondition;
 - `aa`'s remote `live` equals the repair (unchanged, still the red on the
@@ -50,18 +50,18 @@ loop.
 
 ### Minor — fixed: the precondition mutated the fixture
 
-`git -C memory/aa fetch -q origin live` ran before the command under test,
-which moved `aa`'s `origin/live` ahead of the push's own fetch. The behind check
-now reads the bare remote directly: its `live` is the fact, and
-`aa_live_before` is an ancestor of it. The command starts from the state
-`mount_tier_at_live` leaves.
+`git -C memory/aa fetch -q origin live` ran before the command under test, which
+moved `aa`'s `origin/live` ahead of the push's own fetch. The behind check now
+reads the bare remote directly: its `live` is the fact, and `aa_live_before` is
+an ancestor of it. The command starts from the state `mount_tier_at_live`
+leaves.
 
 ### Minor — fixed: comments cited a line number and described a defect
 
 - The header cited `:376`. It now names the test "a repair taken by the behind
   arm is published before memory records it".
-- The closing comment said "The defect: … stuck …". That goes stale at green,
-  so it now states in the present tense what the assertions pin.
+- The closing comment said "The defect: … stuck …". That goes stale at green, so
+  it now states in the present tense what the assertions pin.
 
 ### Note — out of scope, not edited
 
@@ -78,8 +78,7 @@ now reads the bare remote directly: its `live` is the fact, and
    - `aa` is behind (local `live` ≠ the fact, the remote's `live` is the fact,
      and ancestry holds);
    - exit 1;
-   - `bb`'s non-divergence line, `declined by policy`, and a non-empty
-     snapshot;
+   - `bb`'s non-divergence line, `declined by policy`, and a non-empty snapshot;
    - the in-push repair message for `aa`;
    - the repair ≠ the fact, its sole parent is the fact, and the bullet appears
      once.
@@ -106,6 +105,7 @@ now reads the bare remote directly: its `live` is the fact, and
      unquoted heredoc expanded at install time, quoted paths inside the hook,
      and `|| return 1` on the write.
    - The snapshot file lives under `$BATS_TEST_TMPDIR`.
-   - No `set -e` reliance inside command substitutions. `aa_fact=$(push_tier_fact …)`
-     is checked by the ancestry and equality assertions that follow.
+   - No `set -e` reliance inside command substitutions.
+     `aa_fact=$(push_tier_fact …)` is checked by the ancestry and equality
+     assertions that follow.
    - The code uses no bash 4 constructs and no GNU-only flags (`sed -n 1p`).
