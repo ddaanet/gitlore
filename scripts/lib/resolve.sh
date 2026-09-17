@@ -1364,9 +1364,10 @@ gitlore_push_stores() {
     # published, so this tier's push is exactly what has to happen next.
     #
     # This take and the behind arm's run marked as inside a push, so a repair
-    # names this push as what publishes it rather than /gitlore:push — true
-    # even when the tier the repair lands on is a different one than this
-    # iteration is processing: the post-loop pass below publishes that one.
+    # names this push as what publishes it rather than /gitlore:push — also
+    # when the repair lands on a different tier than this iteration's: a later
+    # tier goes out with its own iteration's push, and one whose iteration
+    # already finished with the post-loop pass below.
     if gitlore_live_ahead_of_head "$tierpath"; then
       GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores "$mempath" || return 1
     fi
@@ -1398,8 +1399,9 @@ gitlore_push_stores() {
               # what it fetched, and memory's push below records that commit —
               # so a `live` the remote does not already hold goes out now, for
               # the lockstep above (D17), and before a later tier's failure can
-              # return 1 from the loop first. A repair the same take made to a
-              # different tier is left to the post-loop pass below.
+              # return 1 from the loop. A repair the same take made to a tier
+              # whose iteration already finished is left to the post-loop pass
+              # below; one to a later tier goes out with that tier's own push.
               if ! git -C "$tierpath" merge-base --is-ancestor live origin/live; then
                 if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
                   gitlore_say_for_agent_or_user \
