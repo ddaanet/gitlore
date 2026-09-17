@@ -40,20 +40,20 @@ the wording line, which a red run never reaches.
 `grep -rn -- 'log .*--format' scripts/` and `grep -rn -- 'HEAD\.\.' scripts/`
 give the whole population of candidates:
 
-- `scripts/lib/resolve.sh:2254` — `git -C "$store" log --format='%s'
-  "HEAD..$second"`, inside `gitlore_merge_commit_message`. The only `HEAD..`
-  anywhere under `scripts/`.
-- `scripts/lib/resolve.sh:2160` — `log --format='%s' "$old_gitlink..HEAD"`.
-  Argv is `… log --format=%s <sha>..HEAD`, which cannot match a pattern anchored
-  on `HEAD..`, and it runs only after a landed commit.
-- `scripts/cc-hooks/memory-commit-batch.sh:114` — `log -1 --format='%h %s'`;
-  no match, and not in this run's path.
+- `scripts/lib/resolve.sh:2254` —
+  `git -C "$store" log --format='%s' "HEAD..$second"`, inside
+  `gitlore_merge_commit_message`. The only `HEAD..` anywhere under `scripts/`.
+- `scripts/lib/resolve.sh:2160` — `log --format='%s' "$old_gitlink..HEAD"`. Argv
+  is `… log --format=%s <sha>..HEAD`, which cannot match a pattern anchored on
+  `HEAD..`, and it runs only after a landed commit.
+- `scripts/cc-hooks/memory-commit-batch.sh:114` — `log -1 --format='%h %s'`; no
+  match, and not in this run's path.
 
-So the original `case " $* " in *" log --format=%s HEAD.."*)` had no false
-match today. It was still loose in two ways, both **fixed**: the pattern was
-unanchored on the right, so any future call beginning `HEAD..` would also
-match, and it did not pin *which* merge's range was logged. The stub is now
-keyed on the concrete second parent, captured before the run:
+So the original `case " $* " in *" log --format=%s HEAD.."*)` had no false match
+today. It was still loose in two ways, both **fixed**: the pattern was
+unanchored on the right, so any future call beginning `HEAD..` would also match,
+and it did not pin *which* merge's range was logged. The stub is now keyed on
+the concrete second parent, captured before the run:
 
 ```
   second=$(git -C memory/ddaanet rev-parse MERGE_HEAD)
@@ -62,8 +62,8 @@ keyed on the concrete second parent, captured before the run:
 ```
 
 The wrapping spaces of `" $* "` close the pattern on both sides, and the
-revision range is the invocation's last argument, so the match is now
-argv-exact rather than a prefix.
+revision range is the invocation's last argument, so the match is now argv-exact
+rather than a prefix.
 
 `exec`ing the real git for everything else does not mask a second failure. If
 any earlier git call failed, the script would exit before the message build,
@@ -78,9 +78,8 @@ error injection has to name a command. It is not fragile, though, because it
 fails loudly: a reimplementation of `gitlore_merge_commit_message` that stops
 logging the range leaves nothing to fail the build, the continuation lands the
 merge, and `[ "$status" -eq 1 ]` fails. What is *pinned* is the build failing
-and the state it leaves; the argv is only the lever. The test's comment now
-says so, so a future reader knows to re-point the stub rather than delete the
-test:
+and the state it leaves; the argv is only the lever. The test's comment now says
+so, so a future reader knows to re-point the stub rather than delete the test:
 
 > Fail the message build, which lists the subjects the merge brings in from its
 > second parent. The stub is keyed on that revision range, so no other git call
@@ -91,8 +90,8 @@ test:
 
 ## 4. Ordering
 
-No ordering assertion is added, and one would be vacuous here. Slice 1's glob
-is meaningful because the `commit-msg` hook writes `commit refused by hook` to
+No ordering assertion is added, and one would be vacuous here. Slice 1's glob is
+meaningful because the `commit-msg` hook writes `commit refused by hook` to
 stderr, so there are two lines to order. The build's own failure is the stub's
 bare `exit 1`: it prints nothing, and `sed` downstream of the failed `git log`
 is silent too, so the build line is the only text about the failure on stderr.
@@ -107,14 +106,14 @@ check. Added, with the reason inline:
   [[ "$stderr" != *"the merge commit was refused"* ]]
 ```
 
-This kills a GREEN that routes both failures through one shared message, or
-that emits both lines.
+This kills a GREEN that routes both failures through one shared message, or that
+emits both lines.
 
 ## 5. State after the run — three invariants were missing
 
 The delivered test pinned `MERGE_HEAD` and the absent message file. It did not
-pin the merge state, the staged synthesis, or that the merge is still landable
-— so a change that removed `MERGE_HEAD`'s siblings, or reset the index, or
+pin the merge state, the staged synthesis, or that the merge is still landable —
+so a change that removed `MERGE_HEAD`'s siblings, or reset the index, or
 abandoned the preparation, would have passed. Added, matching slice 1:
 
 ```
@@ -146,9 +145,9 @@ directory on `PATH` is harmless.
   exported to `$BATS_TEST_TMPDIR/msgtmp` so the script's `mktemp` lands
   somewhere the test can sweep, with `fakebin` and `log-hits` kept under
   `$BATS_TEST_TMPDIR` rather than the redirected `$TMPDIR`.
-- Stub shape follows `tests/merge_memory.bats`: `case " $* "`, `exec "$real_git"
-  "$@"`, `$real_git` resolved before the stub goes on `PATH`, `PATH` prefixed
-  only on the `run` line.
+- Stub shape follows `tests/merge_memory.bats`: `case " $* "`,
+  `exec "$real_git" "$@"`, `$real_git` resolved before the stub goes on `PATH`,
+  `PATH` prefixed only on the `run` line.
 - Whitespace safety: every interpolated path in the heredoc lands inside double
   quotes in the generated script (`"$real_git"`, `>> "$log_hits"`), and every
   command substitution in the assertions is quoted. `find … -print -quit` and

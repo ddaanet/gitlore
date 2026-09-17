@@ -8,23 +8,21 @@ green. `scripts/run-bats.sh tests/resolve_compose.bats`: 24 passed, 0 failed.
 
 ## Changes in `scripts/resolve.sh`
 
-1. The message-build arm (`gitlore_merge_commit_message … > "$merge_msgfile"
-   || { … }`) now removes the message file first, then emits
-   `gitlore: the merge message could not be built, so the merge was not
-   committed; the merge stays prepared.` to stderr, then `exit 1` — matching
-   slice 1's refused-commit arm shape.
-2. Folded the two arms' comments into one, placed above both `||` groups
-   (before the `gitlore_merge_commit_message` call): it now states that either
-   arm keeps `MERGE_HEAD` and the merge state for a rerun, and that removal
-   comes first in each group because errexit stays armed on the right-hand
-   side of `||`. The refused-commit arm's inline comment (slice 1) is gone —
-   folded rather than duplicated, since the reasoning is identical for both
-   arms.
-3. The `compose_merged_indexes` comment rider (docstring above the function,
-   the "Returns 0 otherwise" sentence) now states that a failed staging
-   command aborts under errexit with git's own text on stderr and no
-   `gitlore:` line, since wrapping the command would suspend errexit around
-   it.
+1. The message-build arm
+   (`gitlore_merge_commit_message … > "$merge_msgfile" || { … }`) now removes
+   the message file first, then emits
+   `gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared.`
+   to stderr, then `exit 1` — matching slice 1's refused-commit arm shape.
+2. Folded the two arms' comments into one, placed above both `||` groups (before
+   the `gitlore_merge_commit_message` call): it now states that either arm keeps
+   `MERGE_HEAD` and the merge state for a rerun, and that removal comes first in
+   each group because errexit stays armed on the right-hand side of `||`. The
+   refused-commit arm's inline comment (slice 1) is gone — folded rather than
+   duplicated, since the reasoning is identical for both arms.
+3. The `compose_merged_indexes` comment rider (docstring above the function, the
+   "Returns 0 otherwise" sentence) now states that a failed staging command
+   aborts under errexit with git's own text on stderr and no `gitlore:` line,
+   since wrapping the command would suspend errexit around it.
 
 ## Bats counts
 
