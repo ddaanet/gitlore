@@ -319,11 +319,7 @@ $line"
 
   # A redirected function call runs in this shell, so the screen costs no
   # subshell and only a line that carries a weld pays for the captures.
-  # p1last shadows p1 one for one, 1 on the single element that is the
-  # input's last line or that line's tail after a weld split — the only
-  # element termination can ever hinge on. It rides p1's transforms below so
-  # the tag, not the text, is what gets tracked to the output's last element.
-  local -a p1=() p1last=()
+  local -a p1=()
   local cur second wpath
   while IFS= read -r line || [ -n "$line" ]; do
     cur="$line"
@@ -331,20 +327,17 @@ $line"
           wpath=$(gitlore_welded_path "$cur") && gitlore_repair_tier_file "$tierdir" "$wpath"; do
       second=$(gitlore_weld_tail "$cur")
       p1+=("${cur%"$second"}")
-      p1last+=(0)
       report="${report}split a welded line before $wpath
 "
       cur="$second"
     done
     p1+=("$cur")
-    p1last+=(0)
   done < "$file"
 
   # Guarded before every expansion of an array that may be empty: bash before
   # 4.4 reads "${a[@]}" of an empty array as unbound under `set -u`. With no
   # bullet there is no weld, stray line or duplicate to repair.
   [ "${#p1[@]}" -gt 0 ] || return 0
-  p1last[${#p1[@]}-1]=1
   # gitlore_index_region's bounds, read off the split lines in this shell.
   local first=0 last=0 n=0
   for line in "${p1[@]}"; do
@@ -359,22 +352,25 @@ $line"
 
   # The stray test is gitlore_compose_check_index's rule 4 test. Moved lines
   # land right after the last bullet, so the region's bounds stay put.
-  local -a p2=() p2last=() stray=() straylast=()
+  # tagged follows the input's last line, or that line's tail after a weld
+  # split — the one element termination can hinge on — by its index in p2;
+  # p3tagged is its index in p3, or -1 when a drop retires it. That line is
+  # never inside the region, so it is never moved.
+  local -a p2=() stray=()
+  local tagged=-1
   for line in "${p1[@]}"; do
     n=$((n + 1))
     if [ "$n" -gt "$first" ] && [ "$n" -lt "$last" ] &&
        [ -n "${line//[[:space:]]/}" ] && ! gitlore_bullet_path "$line" >/dev/null; then
       stray+=("$line")
-      straylast+=("${p1last[n - 1]}")
       report="${report}moved a non-bullet line out of the pointer block: $line
 "
       continue
     fi
     p2+=("$line")
-    p2last+=("${p1last[n - 1]}")
+    [ "$n" -lt "${#p1[@]}" ] || tagged=$((${#p2[@]} - 1))
     if [ "$n" -eq "$last" ] && [ "${#stray[@]}" -gt 0 ]; then
       p2+=("${stray[@]}")
-      p2last+=("${straylast[@]}")
     fi
   done
 
@@ -419,7 +415,8 @@ $line"
     fi
     i=$((i + 1))
   done
-  local -a p3=() p3last=()
+  local -a p3=()
+  local p3tagged=-1
   i=0
   while [ "$i" -lt "$m" ]; do
     if [ -n "${drop[i]:-}" ]; then
@@ -427,7 +424,7 @@ $line"
 "
     else
       p3+=("${p2[i]}")
-      p3last+=("${p2last[i]}")
+      [ "$i" -ne "$tagged" ] || p3tagged=$((${#p3[@]} - 1))
     fi
     i=$((i + 1))
   done
@@ -449,7 +446,7 @@ $line"
   # another after it; either way the element that ends up last is written with
   # a newline.
   local last_i=$((${#p3[@]} - 1))
-  [ "$last_i" -ge 0 ] && [ "${p3last[last_i]}" = 1 ] || terminated=1
+  [ "$p3tagged" -eq "$last_i" ] || terminated=1
 
   if [ "$terminated" -eq 1 ]; then
     printf '%s\n' "${p3[@]}" > "$scratch" || { rm -f "$scratch"; return 1; }
