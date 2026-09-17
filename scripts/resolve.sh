@@ -312,7 +312,11 @@ if [ $# -ge 1 ]; then
       gitlore_merge_commit_message "$memroot" "$mempath" > "$merge_msgfile" \
         || { rm -f "$merge_msgfile"; exit 1; }
       GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$merge_msgfile" \
-        || { rm -f "$merge_msgfile"; exit 1; }
+        || {
+          echo "gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared." >&2
+          rm -f "$merge_msgfile"
+          exit 1
+        }
       rm -f "$merge_msgfile"
       # Stage the gitlink the commit above just moved — after it, because the
       # merge commit does not exist until then and an earlier `add` would pin
