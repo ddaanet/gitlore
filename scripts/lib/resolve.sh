@@ -1306,7 +1306,7 @@ gitlore_stage_landed_tiers() {
 # ordering guarantee below cannot drift between the two entry points.
 # Args: $1 = memory worktree path.
 gitlore_push_stores() {
-  local mempath="$1" remote_url tier tierpath tier_err push_err
+  local mempath="$1" remote_url tier tierpath tier_err push_err origin_live
 
   # Never publish on top of a half-finished merge, at any level.
   gitlore_guard_stale_merge_state "$mempath" || return 1
@@ -1364,7 +1364,9 @@ gitlore_push_stores() {
     # published, so this tier's push is exactly what has to happen next.
     #
     # This take and the behind arm's run marked as inside a push, so a repair
-    # names this push as what publishes it rather than /gitlore:push.
+    # names this push as what publishes it rather than /gitlore:push — true
+    # even when the tier the repair lands on is a different one than this
+    # iteration is processing: the post-loop pass below publishes that one.
     if gitlore_live_ahead_of_head "$tierpath"; then
       GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores "$mempath" || return 1
     fi
@@ -1394,18 +1396,9 @@ gitlore_push_stores() {
               GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores "$mempath" || return 1
               # The take can repair a defective arrival, committing on top of
               # what it fetched, and memory's push below records that commit —
-              # so a `live` the remote does not already hold goes out now, for
-              # the lockstep above (D17).
-              if ! git -C "$tierpath" merge-base --is-ancestor live origin/live; then
-                if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
-                  gitlore_say_for_agent_or_user \
-                    "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" \
-                    "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
-$tier_err" >&2
-                  return 1
-                fi
-              fi
+              # so a `live` the remote does not already hold has to go out, for
+              # the lockstep above (D17). The post-loop pass covers that, along
+              # with a repair the same take made to a tier other than this one.
               continue
               ;;
             diverged)
@@ -1437,6 +1430,32 @@ $tier_err" >&2
           ;;
       esac
       return 1
+    fi
+  done < <(gitlore_tier_paths "$mempath")
+
+  # A take run mid-loop, while a different tier's own iteration was being
+  # processed, can fetch and repair a tier whose iteration already finished —
+  # committing on top of what it fetched, entirely in that tier's local
+  # `live`, with no push of its own to send it out. One more pass over every
+  # tier, before memory's remote is even considered (a memory kept local still
+  # publishes every tier), catches anything left behind this way.
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    [ -e "$tierpath/.git" ] || continue
+    git -C "$tierpath" rev-parse -q --verify live >/dev/null || continue
+    # No local `origin/live` to compare against is the same as `live` not
+    # being its ancestor: push rather than assume nothing changed.
+    origin_live=$(git -C "$tierpath" rev-parse -q --verify refs/remotes/origin/live) || origin_live=""
+    if [ -z "$origin_live" ] || ! git -C "$tierpath" merge-base --is-ancestor live "$origin_live"; then
+      if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
+        gitlore_say_for_agent_or_user \
+          "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" \
+          "gitlore: pushing tier '$tier' failed, and not because of divergence. git said:
+$tier_err" >&2
+        return 1
+      fi
     fi
   done < <(gitlore_tier_paths "$mempath")
 
