@@ -4,8 +4,8 @@
 (`tests/merge_memory.bats`, after "a repair whose checkout follow fails walks
 back and keeps the repair").
 
-Root's own stranded-`live` repair and the tier's take fast-forward each make
-one `push -q . …:refs/heads/live` call in this fixture before the repair's own
+Root's own stranded-`live` repair and the tier's take fast-forward each make one
+`push -q . …:refs/heads/live` call in this fixture before the repair's own
 advance, so the stub fails the *third* such call (verified empirically, not
 assumed) rather than the second.
 
@@ -20,9 +20,11 @@ bats: 1 passed, 0 failed — full log: /tmp/gitlore-bats.sFK8c2
 
 ## Mutant
 
-Applied in place, then reverted (`scripts/` diff confirmed clean afterward):
-the `live`-advance arm's `gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." || :`
-replaced with `gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :`
+Applied in place, then reverted (`scripts/` diff confirmed clean afterward): the
+`live`-advance arm's
+`gitlore_adopt_report_refusal_and_walk_back "$mempath" "$tier" "$old_gitlink" "$label" "$composed" "Run /gitlore:merge again." || :`
+replaced with
+`gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" || :`
 (`scripts/lib/resolve.sh:1963`).
 
 ```

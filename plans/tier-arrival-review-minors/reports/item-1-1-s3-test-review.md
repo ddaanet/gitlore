@@ -1,8 +1,8 @@
 # Item 1.1 slice 3 — test review
 
 Test: `a repair beside a root problem lands in live and waits`
-(`tests/merge_memory.bats`), the two assertions added after the `repaired
-ddaanet's arrival` check.
+(`tests/merge_memory.bats`), the two assertions added after the
+`repaired ddaanet's arrival` check.
 
 ## Verdict
 
@@ -17,12 +17,12 @@ Sound after one fix. Still red on an assertion; shellcheck clean.
 
 2. **Wrong-reason hunting.**
    - **Stream (fixed).** Both assertions matched `$all` (stdout+stderr), and the
-     runbook says stderr. `gitlore_adopt_walk_back_tier` prints its message
-     with `>&2`. The test runs `run --separate-stderr`, so `$stderr` is
-     available and still intact at these lines, which come before any later
-     `run`. Both assertions now match `$stderr`. The negative's here-string is
-     expanded before `run !` executes, so overwriting `$output`/`$stderr` does
-     not affect it. Neither phrase has a legitimate stdout source (the stdout
+     runbook says stderr. `gitlore_adopt_walk_back_tier` prints its message with
+     `>&2`. The test runs `run --separate-stderr`, so `$stderr` is available and
+     still intact at these lines, which come before any later `run`. Both
+     assertions now match `$stderr`. The negative's here-string is expanded
+     before `run !` executes, so overwriting `$output`/`$stderr` does not affect
+     it. Neither phrase has a legitimate stdout source (the stdout
      `repair is committed in its local 'live'` line does not match), so this
      tightens the test rather than fixing a false pass.
    - **Right walk-back.** In `gitlore_adopt_repair_arrival`, the only walk-back
@@ -30,9 +30,9 @@ Sound after one fix. Still red on an assertion; shellcheck clean.
      the retry-refusal call (`retry_rc -ne 0` →
      `gitlore_adopt_report_refusal_and_walk_back … "$retry_composed"`). The
      build, advance and checkout-follow arms all return before those lines are
-     printed. The test already asserts the `repaired … dropped a duplicate
-     pointer line` line and the `gone/x.md` root problem, so this fixture
-     reaches the retry refusal and no other walk-back.
+     printed. The test already asserts the
+     `repaired … dropped a duplicate pointer line` line and the `gone/x.md` root
+     problem, so this fixture reaches the retry refusal and no other walk-back.
    - **Negative is effective.** Probe: with the positive assertion deleted
      temporarily, the test failed at
      `run ! grep -qF 'keeps what arrived' <<<"$stderr"` with "expected nonzero

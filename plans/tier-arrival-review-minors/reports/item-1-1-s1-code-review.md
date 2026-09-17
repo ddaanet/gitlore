@@ -37,10 +37,9 @@ other_lines=$(
 
 The command substitution also removes the one-off
 `"${other_lines:+$other_lines$'\n'}$line"` accumulator. That form depends on
-`extquote`, which is on by default in bash 3.2 as well, so it was not a
-defect, but it is not an idiom used elsewhere in `scripts/`. The `&& continue`
-list is exempt from `set -e`, and the function runs under `|| return 1` in any
-case.
+`extquote`, which is on by default in bash 3.2 as well, so it was not a defect,
+but it is not an idiom used elsewhere in `scripts/`. The `&& continue` list is
+exempt from `set -e`, and the function runs under `|| return 1` in any case.
 
 ## Checks
 
@@ -64,10 +63,10 @@ case.
 - **Comment density.** No comment on the new block, in keeping with the
   surrounding arm, and none is needed.
 - **Test.** The assertions match the slice: the `live:MEMORY.md:` line, the
-  header followed directly by the `memory/MEMORY.md: duplicate pointer path
-  dup.md` line, the tail remedy, and no `memory/ddaanet/MEMORY.md:` line
-  anywhere. The negative assertion is what catches an unfiltered
-  implementation.
+  header followed directly by the
+  `memory/MEMORY.md: duplicate pointer path dup.md` line, the tail remedy, and
+  no `memory/ddaanet/MEMORY.md:` line anywhere. The negative assertion is what
+  catches an unfiltered implementation.
 
 ## Runs
 
@@ -80,8 +79,8 @@ case.
 - `scripts/run-bats.sh tests/merge_memory.bats` with the fix: 36 passed, 0
   failed.
 - Re-run after the mutation restore,
-  `scripts/run-bats.sh tests/merge_memory.bats --filter 'repair cannot fix'`:
-  2 passed, 0 failed.
+  `scripts/run-bats.sh tests/merge_memory.bats --filter 'repair cannot fix'`: 2
+  passed, 0 failed.
 
 Nothing committed.
 

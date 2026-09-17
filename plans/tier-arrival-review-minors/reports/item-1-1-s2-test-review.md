@@ -23,8 +23,8 @@ gitlore: tier 'ddaanet' — its arrival could not be repaired: building the repa
 gitlore: nothing was recorded, and tier 'ddaanet' is back on the commit the memory store records; its local 'live' keeps what arrived. Fix the store, then run /gitlore:merge again.
 ```
 
-The status 1, stub-hit and `building the repair commit failed` premises pass. The
-first missing behavior is the header.
+The status 1, stub-hit and `building the repair commit failed` premises pass.
+The first missing behavior is the header.
 
 ## 2. Wrong-reason hunting
 
@@ -35,19 +35,19 @@ first missing behavior is the header.
   `gitlore_adopt_commit_repair` (`scripts/lib/resolve.sh:1998`), so the stub
   matches only the intended call. Its message text cannot contain
   ` commit-tree `.
-- **Listed assertions.** All five are present: build-failed line, header followed
-  by the carrier line, `Run /gitlore:merge again.`, no `Fix the store`, and tier
-  `HEAD` on the pin. The header check requires the carrier line to come right
-  after the header. That is stricter than "then a line containing". It matches
-  the helper's output, since the composed refusal here is exactly one line, and
-  slice 1's style at :828.
+- **Listed assertions.** All five are present: build-failed line, header
+  followed by the carrier line, `Run /gitlore:merge again.`, no `Fix the store`,
+  and tier `HEAD` on the pin. The header check requires the carrier line to come
+  right after the header. That is stricter than "then a line containing". It
+  matches the helper's output, since the composed refusal here is exactly one
+  line, and slice 1's style at :828.
 - **Pin assertion is not vacuous.** `pin` is the real tier `HEAD`, captured
   before `push_tier_fact`, which commits in a throwaway clone. Reaching the
   build-failed arm requires the take to have checked out the arrival: the arm
   reads the duplicate from `HEAD:MEMORY.md`. So `HEAD = pin` proves the
   walk-back ran.
-- **Right-reason pass (probe, reverted).** The probe patched the commit-build arm
-  to print the header and `$composed` and to set
+- **Right-reason pass (probe, reverted).** The probe patched the commit-build
+  arm to print the header and `$composed` and to set
   `remedy="Run /gitlore:merge again."`, which is the report helper's output
   shape. The test passed, with stderr:
   ```

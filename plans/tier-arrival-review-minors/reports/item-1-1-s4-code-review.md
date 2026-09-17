@@ -6,9 +6,9 @@ slices 1–4.
 
 ## Verdict
 
-Item 1.1's Changes and Interfaces are implemented. One Minor defect: the
-repair function's header comment went stale over slices 2–4. It is fixed. No
-code defects in scope.
+Item 1.1's Changes and Interfaces are implemented. One Minor defect: the repair
+function's header comment went stale over slices 2–4. It is fixed. No code
+defects in scope.
 
 ## Checks
 
@@ -28,8 +28,8 @@ code defects in scope.
    - Arrival read, pin read, rewrite and commit build each print their own
      `could not …` line. They then reach the shared `[ -z "$repair" ]` call to
      `gitlore_adopt_report_refusal_and_walk_back … "$composed" "Run /gitlore:merge again."`.
-   - The `live` advance and checkout follow arms each print their own line,
-     then make the same call.
+   - The `live` advance and checkout follow arms each print their own line, then
+     make the same call.
    - The checkout follow arm also passes `"the repair"`.
    - The `mktemp` arm still makes a bare walk-back. That is Item 1.2's, and out
      of scope.
@@ -43,18 +43,18 @@ code defects in scope.
      holds the arrival: the advance either failed or was never reached.
 5. **Interfaces.** The argument order matches all three signatures. Return
    codes:
-   - `gitlore_adopt_repair_arrival` returns 1 on every walk-back. On adoption
-     it returns `gitlore_adopt_stage_pair_and_commit`'s status, which is
+   - `gitlore_adopt_repair_arrival` returns 1 on every walk-back. On adoption it
+     returns `gitlore_adopt_stage_pair_and_commit`'s status, which is
      best-effort 0 by design (`gitlore_commit_tier_bookkeeping`).
    - Both helpers return 1.
 6. **Header wording for the checkout follow arm.** The arm prints the first
-   refusal under `the root index could not take tier '<t>''s lines:`. That
-   stays true: those problems are what the root index refused from the arrival.
-   The walk-back line that follows says `live` keeps the repair, and the next
-   take adopts the repair through `gitlore_adopt_advanced_live`, so
+   refusal under `the root index could not take tier '<t>''s lines:`. That stays
+   true: those problems are what the root index refused from the arrival. The
+   walk-back line that follows says `live` keeps the repair, and the next take
+   adopts the repair through `gitlore_adopt_advanced_live`, so
    `Run /gitlore:merge again.` holds. The reader does see carrier problems that
-   `live` has already fixed. That is the spec's choice, and the wording does
-   not contradict it.
+   `live` has already fixed. That is the spec's choice, and the wording does not
+   contradict it.
 7. **Whitespace.** `$tierpath` is matched through a quoted `case` prefix in
    `gitlore_compose_problems_in`. No word splitting on paths.
 
@@ -66,16 +66,16 @@ mutant has the right walk-back wording but prints no refusal.
 - Command:
   `scripts/run-bats.sh tests/merge_memory.bats --filter 'checkout follow fails'`
 - Result: `not ok 1`, line 664. The refusal-header assertion failed.
-- The SUT was restored from `HEAD`. `git status --porcelain scripts/lib/resolve.sh`
-  was empty afterwards.
+- The SUT was restored from `HEAD`.
+  `git status --porcelain scripts/lib/resolve.sh` was empty afterwards.
 
 ## Fix applied
 
 The `gitlore_adopt_repair_arrival` header comment:
 - **`$7`** said the full text was passed "for the problems it raised beyond the
   carrier". Since slice 2 the transient arms print it whole. It now reads:
-  printed whole when the repair fails on something the next take redoes, and
-  for its problems beyond the carrier when the repair cannot fix it.
+  printed whole when the repair fails on something the next take redoes, and for
+  its problems beyond the carrier when the repair cannot fix it.
 - **Returns** listed every walk-back cause except the checkout follow. Added:
   "the worktree cannot follow it".
 

@@ -5,8 +5,8 @@ in `tests/merge_memory.bats`).
 
 ## Verdict
 
-Conforms to the Walk-back wording change. One Minor comment inconsistency, fixed.
-No other defects in scope.
+Conforms to the Walk-back wording change. One Minor comment inconsistency,
+fixed. No other defects in scope.
 
 ## Checks
 
@@ -33,25 +33,25 @@ No other defects in scope.
    default an empty one keeps. That way the default strings are written in one
    place only.
 
-3. **Checkout-failure branch of the walk-back.** It prints `nothing was recorded,
-   but <label> could not be returned to the commit the memory store records`,
+3. **Checkout-failure branch of the walk-back.** It prints
+   `nothing was recorded, but <label> could not be returned to the commit the memory store records`,
    then git's error and a manual `git -C … checkout --detach` command. None of
    that says what `live` holds, so it takes no `live_holds`. Left unchanged.
    - Observation (outside this slice's brief, not changed): that branch
      hardcodes `fix the store, then run /gitlore:merge again.` and ignores
      `$remedy`. The transient arms (`Run /gitlore:merge again.`) and the
-     unrepairable arm (fix where published) therefore get the fix-the-store
-     tail when the walk-back checkout itself fails. This predates Item 1.1. The
-     spec names only the success message. It needs a runbook decision before
-     anything changes.
+     unrepairable arm (fix where published) therefore get the fix-the-store tail
+     when the walk-back checkout itself fails. This predates Item 1.1. The spec
+     names only the success message. It needs a runbook decision before anything
+     changes.
 
 4. **Positional shift in other callers.** Every caller is in
    `scripts/lib/resolve.sh`; `grep` over `*.sh`/`*.bats` finds none elsewhere.
    - `gitlore_adopt_walk_back_tier` is called with 4 args (mktemp arm,
      checkout-follow arm) or 5 args (unrepairable arm). None passes a sixth.
    - `gitlore_adopt_report_refusal_and_walk_back` is called with 5 args
-     (non-carrier refusal in `gitlore_adopt_tier_into_root`), 6 args
-     (no-repair and `live`-advance arms), or 7 args (retry refusal).
+     (non-carrier refusal in `gitlore_adopt_tier_into_root`), 6 args (no-repair
+     and `live`-advance arms), or 7 args (retry refusal).
    - No call site's arguments change meaning.
 
 5. **Mutant run.** The retry-refusal call was mutated back to five args (no
@@ -59,8 +59,8 @@ No other defects in scope.
    `scripts/run-bats.sh tests/merge_memory.bats --filter '^a repair beside a root problem lands in live and waits$'`
    the test **redded**: `not ok 1`, line 753,
    `[[ "$stderr" == *"its local 'live' keeps the repair."* ]]` failed. The SUT
-   was restored from a saved copy, and `git status` was clean before the fix
-   was applied.
+   was restored from a saved copy, and `git status` was clean before the fix was
+   applied.
 
 ## Verification after the fix
 
