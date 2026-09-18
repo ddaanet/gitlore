@@ -575,12 +575,12 @@ EOF
 
 @test "an interleaved line in the merged root index keeps the merge unlanded" {
   make_parent_with_memory
-  # The duplicate path is load-bearing, not incidental: a clean entry-wise
-  # index merge rebuilds the bullet block path-by-path and drops any line that
-  # carries no path, so a lone stray line never reaches the merged file. A
-  # side with an internal duplicate is unmergeable (gitlore_index_merge bails),
-  # which leaves git's own line-wise merge result standing — stray line intact
-  # — for gitlore_compose_check_index to find.
+  # The duplicate p.md is what gets the stray line to the check. When the
+  # entry-wise index merge succeeds it rebuilds the bullet block from paths,
+  # and a line carrying no path is lost without a report — a gap of its own,
+  # not the behaviour this test covers. A side naming one path twice makes
+  # gitlore_index_merge decline, so git's line-wise result stands, stray line
+  # intact, for gitlore_compose_check_index to find.
   diverge_memory_with_index '# Memory Index
 
 - [P](p.md) — one

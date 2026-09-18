@@ -203,8 +203,8 @@ EOF"
 }
 
 @test "an interleaved non-bullet line in a dirty carrier aborts the memory commit" {
-  # The :140 fixture, with a stray line between two distinct bullets in place
-  # of the duplicate — rule 4's own abort, over the same tested attribution.
+  # The duplicate-carrier fixture above, with a stray line between two distinct
+  # bullets in place of the duplicate: a rule 4 problem aborts as rule 1 does.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet

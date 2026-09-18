@@ -1103,9 +1103,10 @@ b" ]
 }
 
 @test "problem attribution matches the exact file prefix" {
-  # A space in the mempath and a tier name that is a prefix of another both
-  # defeat a naive matcher: a regex would read "." as any char, and unquoted
-  # word splitting would break on the space.
+  # A space in the mempath, a tier name that is a prefix of another and a
+  # longer path ending in the queried one all defeat a naive matcher: a regex
+  # would read "." as any char, unquoted word splitting would break on the
+  # space, and an unanchored match would take the longer path.
   input=$(printf '%s\n' \
     "my mem.d/MEMORY.md: duplicate pointer path dup.md" \
     "my mem.d/a/MEMORY.md: duplicate pointer path other.md" \
