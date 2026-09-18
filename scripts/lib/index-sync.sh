@@ -406,29 +406,6 @@ gitlore_upgrade_nudge_file() { _gitlore_nudge_file "$1" "$2" upgrade; }
 # is a summary, and the session is still running the old plugin root.
 gitlore_upgrade_nudge_reset() { _gitlore_nudge_reset "$1" "$2" upgrade; }
 
-# "bytes<TAB>path" for the $2 (default 5) largest bullets, descending — where
-# curation actually pays. LC_ALL=C so awk's length() counts bytes rather than
-# characters; the separator alone is a 3-byte em-dash, so the two differ.
-#
-# The last stage reads to EOF instead of `head -n`: callers run with `set -o
-# pipefail`, and an early-exiting consumer leaves `sort` writing into a closed
-# pipe — SIGPIPE, exit 141, and the advisory lost on exactly the large indexes
-# it exists to report on.
-gitlore_index_largest() {
-  local file="$1" n="${2:-5}"
-  LC_ALL=C awk '
-    /^- \[/ {
-      sep = ") — "
-      d = index($0, sep); if (d == 0) next
-      left = substr($0, 1, d)
-      lp = index(left, "]("); if (lp == 0) next
-      rest = substr(left, lp + 2)
-      rp = index(rest, ")"); if (rp == 0) next
-      print length($0) "\t" substr(rest, 1, rp - 1)
-    }
-  ' "$file" | sort -rn | awk -v n="$n" 'NR <= n'
-}
-
 # Return 0 when $1 carries at least one LITERAL token — the kind of thing a
 # future query actually contains: a backticked span, a flag, a path, a dotfile,
 # a filename, $VAR, a key=value, a version, snake_case, camelCase, an acronym.

@@ -49,3 +49,12 @@ paths:
 
 - **`$TMPDIR` is unset under `dangerouslyDisableSandbox`**, so `$TMPDIR/foo`
   becomes `/foo`. Use an absolute scratchpad path.
+
+- **`set -e` does not abort a Bash tool command.** The tool runs the command in
+  a context whose exit status is tested, and errexit is suppressed throughout
+  such a context: `$-` still contains `e`, yet a failing command only sets `$?`
+  and the next one runs anyway. So a `cd "$TMPDIR"` with `$TMPDIR` unset leaves
+  the shell in the repo root and everything after it operates there. Chain with
+  `&&`, or test the step that must hold — a `set -e` at the top of the command
+  buys nothing. A script file run as `bash script.sh` aborts normally; the
+  difference is the tool's wrapper, not the shell.

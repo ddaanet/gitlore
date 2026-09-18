@@ -604,7 +604,7 @@ gitlore_cap_list() {
   # awk reads to EOF rather than exiting early like `head -n` would — callers
   # run under `set -o pipefail`, and an early-exiting consumer here would send
   # the producer SIGPIPE and lose exactly the "… and N more" summary this
-  # function exists to add (same shape gitlore_index_largest already avoids).
+  # function exists to add.
   printf '%s\n' "$input" | awk -v n="$GITLORE_DANGLING_CAP" 'NR<=n'
   if [ "$total" -gt "$GITLORE_DANGLING_CAP" ]; then
     printf '… and %d more\n' "$((total - GITLORE_DANGLING_CAP))"

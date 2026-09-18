@@ -1,4 +1,4 @@
-# Git hooks — decisions D46, D50
+# Git hooks — decisions D46, D50, D53, D54
 
 The two git hooks that commit and publish memory inside a parent git operation:
 what each does in order, what makes them stand down, and the invariant binding
@@ -15,6 +15,10 @@ described there. The approval gate `pre-commit` carries out is in
 - The commit path — **D50** the store is composed before it is committed; a pin
   refusal is fatal, and so is a compose problem in an index file the commit
   changes, while every other compose refusal is reported
+- The approval after a failure — **D53** the stale-merge guard's report-only
+  arms do not restamp it, the guard not saying which arm failed; **D54** a
+  restamp that blesses a write another session made mid-run is an accepted
+  residual
 
 ---
 
@@ -102,10 +106,11 @@ by divergence is therefore resolved and pushed again, however many times
 `origin/live` moves while a merge is under review; the parent commit — tagged or
 not — is never rewritten to name the merged memory (D46).
 
-## Decisions — D46, D50
+## Decisions — D46, D50, D53, D54
 
 Why a parent commit whose push was refused is never amended to catch up with
-memory, and what the commit path does about a stale carrier before it commits.
+memory, what the commit path does about a stale carrier before it commits, and
+which failures leave the approved summary standing.
 
 **D46 — A parent commit is never rewritten to re-pin memory; a push refused by
 divergence is resolved and pushed again**
@@ -187,7 +192,13 @@ tiers restamps on none of its failures, because it does not report which arm
 failed, and some of its arms prepare nothing — a merge gitlore did not prepare,
 a merge state nothing can classify, a recovery whose checkout failed. After one
 of those, a retry following an earlier tier's recovered up projection reads the
-approval stale.
+approval stale (D53). The restamp is a `touch`, so it stamps the approval at
+now, and freshness is `msgfile` mtime against the newest file in the store: a
+write another session landed while the run was failing therefore reads as
+covered by a summary that never saw it. That is an accepted residual (D54) — the
+successful path holds the same window open, freshness being read once near the
+top of `gitlore_sync_memory_to_live` and the commit's `add -A` running after
+compose and the tier commits.
 
 **A tier commit the run could not record is adopted on the retry.** The tier
 commit moves the tier's HEAD, and only memory's later `add -A` stages the moved
@@ -226,6 +237,50 @@ and one `[ -n … ]` test would say so — but the in-session `PostToolBatch` re
 is the intended surface for that news, and repeating it puts a line on every
 commit that repairs anything, most of which the session has already seen.
 
+**D53 — The stale-merge guard's report-only arms do not restamp the approval**
+
+`gitlore_guard_stale_merge_state` returns 1 from every failing arm and says
+nothing about which one, and its arms differ in exactly the way the restamp
+turns on. A continued prepared merge, and a recovery that restored a landed one,
+leave content in the store the summary never covered; an orphaned `MERGE_HEAD`,
+a state file nothing can classify, and a recovery whose checkout failed leave
+the store as they found it. Restamping uniformly would mark the approval fresh
+over merged content, so the guard restamps on none of its arms, and the price is
+that a retry after a report-only arm — following an earlier tier's recovered up
+projection — asks for the summary again.
+
+The way to recover that is a per-arm return code, the guard distinguishing
+"changed nothing" from "left merged content in the store" so the caller restamps
+on the first. It is refused on the asymmetry of what each mistake costs. A
+misclassified arm marks an approval fresh over content no summary covers, which
+is the FR11 boundary breached silently, inside the one gate that exists to hold
+it; what the code buys back is one visible re-approval, in a case that already
+put a refusal in front of the agent. The guard would also have to keep the
+classification true across every future arm, and an arm added later defaults to
+whichever code its author picks rather than to the safe answer.
+
+**D54 — A failure-time restamp that blesses a concurrent write is an accepted
+residual**
+
+`gitlore_commit_msg_freshness` reads the approval as fresh when the commit-msg
+file's mtime is at least the newest file in the store, and the restamp is a bare
+`touch`, which stamps it at now. A write another session landed in the store
+while the run was failing is therefore older than the restamp, and the retry
+commits it under a summary that never saw it.
+
+The considered close was to snapshot the file's mtime at the top of the run and
+restore it with `touch -r`, so a restamp reinstates the freshness the run began
+with instead of minting new. It is refused because the success path holds the
+same window open and wider: freshness is read once, near the top of
+`gitlore_sync_memory_to_live`, while the `add -A` that decides what the commit
+carries runs after the pin check, compose and every tier commit. A write landing
+in between is committed under the approved summary with no restamp involved at
+all. Closing the failure path alone would add state carried across the run for a
+narrower instance of a window that stays open either way, and would read as a
+guarantee the commit path does not make. What FR11 gates is a session approving
+its own store; a second writer inside that store is outside what the approval
+can speak for.
+
 ## Rejected alternatives
 
 **Amending a tagged parent commit to re-pin memory after a `pre-push` merge.**
@@ -261,6 +316,20 @@ summary (D50).
 compose was missed, but the in-session `PostToolBatch` report is the surface for
 that news, and repeating it puts a line on every commit that repairs anything,
 most of which the session has already seen (D50).
+
+**A per-arm return code from `gitlore_guard_stale_merge_state`.** Would let the
+arms that change nothing restamp the approval, saving one re-approval on a retry
+that already carries a refusal. Costs a classification that must stay true
+across every arm added later, and a misclassified one marks an approval fresh
+over content no summary covers — the FR11 boundary breached silently by the gate
+holding it (D53).
+
+**A `touch -r` snapshot of the approval's mtime.** Would stop a failure-time
+restamp blessing a write another session made mid-run, by reinstating the
+freshness the run began with. The success path holds the same window open and
+wider — freshness is read once, the `add -A` that decides the commit's contents
+runs after compose and the tier commits — so the snapshot adds run-scoped state
+for a narrower instance of a window that stays open anyway (D54).
 
 **Leaving a tier whose adoption failed ahead of an unstaged pin.** Nothing is
 staged, so the root index is not composed over, but the pin guard then refuses
