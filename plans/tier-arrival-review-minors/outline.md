@@ -181,7 +181,7 @@ gains exactly one newline.
 
 ## Phase 4: continuation pre-landing exits (tdd, then prose), item 15
 
-**Harness** (`scripts/resolve.sh:309-326`). The new lines are descriptive only,
+**Harness** (`scripts/resolve.sh:309-330`). The new lines are descriptive only,
 with no directive:
 - A failed `mktemp` for the message file prints
   `gitlore: the merge message file could not be created, so the merge was not committed; the merge stays prepared.`
@@ -205,6 +205,10 @@ fall through and be reported as a landed merge.
   handling; a non-zero status with no recognised line is reported as an
   unrecognised failure with no landing claim, because the post-landing
   `not because of divergence` push failure also exits 1.
+- `gitlore: memory merge prepared` is the one recognised post-landing non-zero
+  line: a `live` push after the merge commit was refused as divergence and a
+  fresh merge is prepared. The merger reports the merge landed and a new one
+  waiting; the skill goes to **Loop**, which picks the new merge up.
 - `agents/memory-merger.md:39`: turn 2's `approved` branch reports the exit
   status and branches on it first.
   - Exit 0: the merge landed; quote every `gitlore:` line as post-landing
