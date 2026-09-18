@@ -519,7 +519,7 @@ gitlore_compose_problems_in() {
 # act (D43). Reading HEAD would call a landed merge a defect for as long as the
 # memory commit recording it is pending.
 gitlore_compose_check_pins() {
-  local mempath="$1" active tier tierpath pinned head abs memabs problems=""
+  local mempath="$1" active tier tierpath pinned head abs live checkout_err problems=""
   active=$(gitlore_active_tiers "$mempath")
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
@@ -546,9 +546,8 @@ gitlore_compose_check_pins() {
     fi
     # A tier whose HEAD is a fast-forward descendant of the pin takes a
     # different remedy from one moved sideways or diverged: HEAD already
-    # contains the pin, so the return-to-the-pin checkout below would discard
-    # real commits rather than recover lost ones, and /gitlore:merge would
-    # report nothing to take, the remote being contained in HEAD already.
+    # contains the pin, so the return-to-the-pin checkout the sideways branch
+    # names would discard real commits rather than recover lost ones.
     # The `rev-parse -q --verify` guard removes the one expected failure of
     # `merge-base --is-ancestor` here — a pin that is no object in this
     # database at all, which the truncation comment below records as a normal
@@ -558,15 +557,37 @@ gitlore_compose_check_pins() {
     #
     # Staging the gitlink is not a remedy on its own: it satisfies this rule and
     # the next pass then projects root's older text over the carrier — the
-    # overwrite being refused. So the remedy adopts the carrier into root by
-    # hand first, replacing root's block for the tier, the step
-    # gitlore_compose_up performs on a merge. A tier
+    # overwrite being refused. Adoption is the tooling's, never a hand edit of
+    # root's block: /gitlore:merge composes the carrier up into the root index
+    # and stages the pair together (gitlore_adopt_advanced_live). A tier
     # gitlore's own commit path left ahead never reaches here: the commit path
     # stages it first (gitlore_stage_landed_tiers).
     if git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null \
        && git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
-      memabs=$(CDPATH='' cd -- "$mempath" && pwd) || memabs="$mempath"
-      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. There is no automatic remedy: first replace every line of $memabs/MEMORY.md whose link starts with '$tier/' by the lines of $memabs/$tier/MEMORY.md, each link prefixed with '$tier/', keeping no '$tier/' line the carrier lacks, and only then stage the gitlink with \`git -C \"$memabs\" add -- \"$tier\"\` — staged before that, the next compose writes the root index's older text over the tier. Or return the tier to the pin, which discards the commits it carries ahead of it.
+      # Absolute, so the printed command runs from anywhere; quoted, so a tier
+      # path containing whitespace survives being pasted into a shell.
+      abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
+      # The take reads the tier's local `live`, so a tier whose `live` already
+      # holds what HEAD holds reaches it: the checkout back to the pin loses
+      # nothing and leaves precisely the state gitlore_adopt_advanced_live
+      # adopts from — a clean tier on its pin with `live` ahead of it. A dirty
+      # tier is left where it is: the checkout would carry work no summary
+      # covers onto the pin, and the take refuses a dirty store anyway. So does
+      # a `live` short of HEAD, which would strand the commits HEAD alone holds.
+      if [ "$(gitlore_memory_dirty "$tierpath")" = "0" ] \
+         && live=$(git -C "$tierpath" rev-parse -q --verify live) \
+         && git -C "$tierpath" merge-base --is-ancestor "$head" "$live"; then
+        # One problem per line, so git's own message is folded onto this one.
+        if checkout_err=$(gitlore_git -C "$tierpath" checkout -q --detach "$pinned" 2>&1); then
+          problems="${problems}tier '$tier' was checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}, and its local 'live' holds those commits: it is back on the pin, so none of them is lost. Run /gitlore:merge to adopt them into the root index, then retry.
+"
+          continue
+        fi
+        problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}, and could not be returned to the pin for /gitlore:merge to adopt what its local 'live' holds. git said: $(printf '%s' "$checkout_err" | tr '\n' ' '). Return it with \`git -C \"$abs\" checkout --detach $pinned\` — 'live' holds the commits, so nothing is lost — then run /gitlore:merge.
+"
+        continue
+      fi
+      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. Adoption is /gitlore:merge's, which takes a tier's commits from its local 'live' and only from a clean tier: put HEAD's commits there with \`git -C \"$abs\" push . HEAD:refs/heads/live\`, leave nothing uncommitted in $abs, then run this again — the tier goes back on its pin and /gitlore:merge adopts what 'live' holds. A push refused as a non-fast-forward means 'live' moved too: run /gitlore:resolve.
 "
       continue
     fi

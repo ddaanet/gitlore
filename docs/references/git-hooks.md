@@ -181,6 +181,27 @@ ahead of compose and aborts, naming no remedy of its own — every branch of
 abort can carry several tiers with different causes. A write failure aborts too
 — a half-written carrier must not be committed.
 
+**A tier merely ahead of its pin is put back on it, and the take adopts from
+there.** A clean tier whose local `live` contains its `HEAD` has nothing to
+lose: every commit `HEAD` holds is reachable from `live`, so
+`gitlore_compose_check_pins` checks it out at the pin — the commit the memory
+store's index already records, and the one `submodule update` would restore at
+the next `SessionStart` — and what is left is exactly the state
+`gitlore_adopt_advanced_live` takes, a clean tier on its pin with `live` ahead
+of it. The refusal stands over that, with `/gitlore:merge` as its remedy,
+because the root index still has to take the carrier before any pass composes
+down onto it, and that adoption is the tooling's: compose the carrier up, stage
+the pair (D43). Two states are left where they are. A dirty tier, because the
+checkout would carry work no approved summary covers onto the pin and the take
+refuses a dirty store in any case. And a tier whose `live` is short of `HEAD`,
+where the checkout would strand the commits `HEAD` alone holds; its remedy is
+the ff-checked `push . HEAD:refs/heads/live` — the move
+`gitlore_repair_stranded_live` makes wherever it runs — after which the guard
+returns the tier to its pin and the take adopts, and a push refused as a
+non-fast-forward is a divergence for `/gitlore:resolve`. A checkout that fails
+leaves the tier untouched and reports git's own words with the command that
+finishes the return.
+
 **A failure keeps the approval, unless it prepared a merge.** What the run
 writes into the store — a composed carrier, a recovered merge's up projection —
 projects lines the summary already approved, yet reads newer than the commit-msg
@@ -330,6 +351,24 @@ freshness the run began with. The success path holds the same window open and
 wider — freshness is read once, the `add -A` that decides the commit's contents
 runs after compose and the tier commits — so the snapshot adds run-scoped state
 for a narrower instance of a window that stays open anyway (D54).
+
+**A blanket refusal for every tier ahead of its pin.** One message for the whole
+branch, with no state to establish and no store touched by a check. Its remedy
+had to be a hand rebuild of the root index's block for the tier followed by
+staging the gitlink — the adoption every other path performs mechanically, asked
+of a reader in prose, with a silent overwrite as the cost of getting the order
+wrong. The state it refused is one checkout away from the one the take already
+handles, and that checkout discards nothing (D50).
+
+**Adopting inside the pin guard rather than directing to `/gitlore:merge`.**
+Would finish the job in one pass instead of two. But the guard runs from every
+compose — `SessionStart`, `PostToolBatch`, the commit path — and adoption writes
+the root index and stages a gitlink, which inside a check would land work no
+approval covers in the next approved commit. The take owns that adoption
+together with its failure handling: the walk-back, the arrival repair (D52), the
+canned bookkeeping commit (D49). What the guard does instead is the one move
+that writes no index and needs no approval — a checkout to the commit the store
+already records (D50).
 
 **Leaving a tier whose adoption failed ahead of an unstaged pin.** Nothing is
 staged, so the root index is not composed over, but the pin guard then refuses

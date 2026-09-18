@@ -289,6 +289,51 @@ Fix them"* ]]
   [[ "${output}${stderr}" != *"the commit went ahead"* ]]
   [[ "${output}${stderr}" != *"the commit was aborted because a problem is in an index file"* ]]
   [ "$msgfile" -nt "$TMP_REPO/before-run" ]
+  # A refused commit with nothing said about why is the worse failure: the caller
+  # sees only a non-zero exit. What the abort owes is the index whose status
+  # could not be read, that the commit stopped, that the approval it restamped
+  # is still good, and the next command.
+  [[ "$stderr" == *"could not read the status of memory/ddaanet/MEMORY.md"* ]]
+  [[ "$stderr" == *"the commit was aborted"* ]]
+  [[ "$stderr" == *"the approved summary is still in place"* ]]
+  [[ "$stderr" == *"retry the commit"* ]]
+  # The compose refusal that sent the run to this read travels with it: the
+  # problem list is what the retry has to fix.
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md: duplicate pointer path shared.md"* ]]
+}
+
+@test "a root index whose status cannot be read aborts the commit and says which index" {
+  # The same arm over root's own MEMORY.md, whose read decides the same
+  # question. The stub matches the `-- MEMORY.md` pathspec form only, so the
+  # bare `git -C memory status --porcelain` gitlore_memory_dirty makes earlier
+  # in the run goes through and the abort reached is this one.
+  make_parent_with_memory
+  printf -- '---\nname: local\ndescription: ""\n---\n\nbody\n' > memory/local.md
+  seed_root_bullet "local.md" "a local fact"
+  seed_root_bullet "local.md" "a local fact"
+
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record a local fact\n' > "$msgfile"
+
+  head_before=$(git -C memory rev-parse HEAD)
+  # shellcheck disable=SC2016  # driver text, expanded by the shell that sources it
+  write_sync_driver 'git() {
+  if [ "$1" = -C ] && [ "$2" = memory ] && [ "$3" = status ] && [ "${5:-}" = -- ]; then
+    echo "fatal: simulated status failure" >&2
+    return 128
+  fi
+  command git "$@"
+}'
+  CLAUDECODE=1 run --separate-stderr bash "$driver"
+  [ "$status" -eq 1 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [[ "$stderr" == *"could not read the status of memory/MEMORY.md"* ]]
+  [[ "$stderr" == *"the commit was aborted"* ]]
+  [[ "$stderr" == *"the approved summary is still in place"* ]]
+  [[ "$stderr" == *"memory/MEMORY.md: duplicate pointer path local.md"* ]]
+  # Neither rc-1 arm answered: the read failed before either could be chosen.
+  [[ "${output}${stderr}" != *"the commit went ahead"* ]]
+  [[ "${output}${stderr}" != *"the commit was aborted because a problem is in an index file"* ]]
 }
 
 @test "a carrier defect in a clean tier commits and reports" {
@@ -480,6 +525,10 @@ committed_carrier_defect_store() {
   # current HEAD (the pin the memory store still records): ahead, not
   # sideways.
   #
+  # The mount leaves the tier no local `live`, so this is the ahead tier whose
+  # commits HEAD alone holds — refused where it stands, its remedy the push
+  # that puts them where /gitlore:merge can adopt them.
+  #
   # What is asserted is what tests/index_compose.bats' ahead-of-pin test
   # asserts, minus the shas: this test's job is that the wording CROSSES the
   # wrapper into both arms, not to re-pin the message's content. Both positives
@@ -511,7 +560,7 @@ committed_carrier_defect_store() {
   [ "$status" -ne 0 ]
   agent_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
   [[ "$agent_line" == *"ahead"* ]]
-  [[ "$agent_line" == *"discard"* ]]
+  [[ "$agent_line" == *"leave nothing uncommitted"* ]]
   [[ "$stderr" != *"checkout --detach"* ]]
   # Every remedy the abort prints writes into the store, which the approved
   # summary's freshness is measured against, so the agent arm must not promise
@@ -529,7 +578,7 @@ committed_carrier_defect_store() {
   [ "$status" -ne 0 ]
   user_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
   [[ "$user_line" == *"ahead"* ]]
-  [[ "$user_line" == *"discard"* ]]
+  [[ "$user_line" == *"leave nothing uncommitted"* ]]
   [[ "$stderr" != *"checkout --detach"* ]]
   # The report line is $pin_problems verbatim, so the two arms carry it
   # unchanged; the arms themselves differ only in the remedy prose around it.
@@ -547,7 +596,7 @@ committed_carrier_defect_store() {
   # the two leaves the tier ahead of its pin — the same shape the pin guard
   # refuses for a tier moved behind gitlore's back — and memory-commit-batch.sh
   # promises the next batch retries transparently. The retry must recognise its
-  # own landed tier commit and finish, not abort with "no automatic remedy".
+  # own landed tier commit and finish, not send it round the take.
   half_landed_tier_fixture
   pin_before=$(git -C memory rev-parse ":ddaanet")
 

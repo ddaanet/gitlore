@@ -240,6 +240,18 @@ move_tier_off_pin() {
   GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge"
 }
 
+# The same advance with the tier's local `live` following HEAD — a tier commit
+# moves both refs together, and this is the state left when the memory side
+# then loses the moved gitlink. Nothing the tier carries lives in HEAD alone,
+# which is what makes returning HEAD to the pin lose nothing. The mount leaves
+# no local `live` behind (tests/helpers/tier-fixtures.bash), so move_tier_off_pin
+# above stands for the tier whose commits HEAD alone holds.
+move_tier_off_pin_into_live() {
+  local tier="${1:-ddaanet}"
+  move_tier_off_pin "$tier" || return 1
+  git -C "memory/$tier" push -q . HEAD:refs/heads/live
+}
+
 # Move a tier's HEAD SIDEWAYS onto UNRELATED history: an orphan branch's first
 # commit shares nothing with anything already in the tier, the pin included, so
 # `merge-base --is-ancestor "$pinned" "$head"` reads false — the predicate Item
@@ -359,65 +371,146 @@ pinned_store_with_tier() {
   [[ "$output" != *"ahead"* ]]
 }
 
-@test "a tier ahead of its pin is refused with ahead-of-the-pin wording, not the return-to-pin remedy" {
-  # Slice 2 adds a branch to gitlore_compose_check_pins, keyed on
-  # `merge-base --is-ancestor "$pinned" "$head"`: an AHEAD tier (HEAD is a
-  # descendant of the pin — move_tier_off_pin's fixture) must be refused in
-  # words that do not name `checkout --detach` as the remedy, because that
-  # command would discard the commits the tier already carries.
+@test "a tier ahead of its pin whose commits HEAD alone holds is refused where it stands" {
+  # An AHEAD tier (HEAD is a descendant of the pin — move_tier_off_pin's
+  # fixture) with no local `live` at all: the take reads `live`, so the
+  # checkout back to the pin would strand every commit HEAD alone holds, and
+  # the tier is left exactly where it is. What the refusal owes is the act that
+  # puts those commits where the tooling can reach them.
   #
-  # The sentence is GREEN's to write; what is pinned here is what it has to
-  # carry. Three positives on the tier's OWN report line, so none of them can be
-  # satisfied by a different line of the report:
-  #   both truncated shas — which commit the tier is on and which one the store
-  #     records. "Inspect and stage the gitlink by hand" is not a runnable
-  #     remedy without them, and the sideways message already prints both.
-  #   "ahead"  — the direction. Loose in the whole output it could belong to a
-  #     sentence saying the opposite; tied to this line it cannot.
-  #   "discard" — what returning to the pin costs. The runbook fixes this verb
-  #     for the branch ("discard the commits it carries"); a synonym would read
-  #     the same to a user, so this is the one residual wording constraint, and
-  #     it is a cheap one for GREEN to meet.
-  # Two negatives carry "no automatic adoption" as behaviour rather than as the
-  # runbook's phrase: neither destructive command nor a take may be offered.
+  # Three positives on the tier's OWN report line, so none of them can be
+  # satisfied by a different line of the report: both truncated shas — which
+  # commit the tier is on and which one the store records — and "ahead", the
+  # direction, which loose in the whole output could belong to a sentence
+  # saying the opposite.
   pinned_store_with_tier
   pinned=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin ddaanet
   moved=$(git -C memory/ddaanet rev-parse HEAD)
-  # The fixture's shape, asserted rather than assumed: HEAD contains the pin.
+  # The fixture's shape, asserted rather than assumed: HEAD contains the pin,
+  # and the mount left no local `live` for the take to read.
   git -C memory/ddaanet merge-base --is-ancestor "$pinned" "$moved"
+  run ! git -C memory/ddaanet rev-parse -q --verify live
+  abs=$(cd memory/ddaanet && pwd)
 
   run gitlore_compose memory
   [ "$status" -eq 1 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
   tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
   [[ "$tierline" == *"${moved:0:12}"* ]]
   [[ "$tierline" == *"${pinned:0:12}"* ]]
   [[ "$tierline" == *"ahead"* ]]
-  [[ "$tierline" == *"discard"* ]]
-  # Staging the gitlink alone is the overwrite this refusal exists to stop: the
-  # next compose projects root's older text over the carrier. The remedy names
-  # the carrier to adopt into the root index first, then the runnable staging
-  # command, quoted so a spaced project path survives the paste.
-  memabs=$(cd memory && pwd)
-  [[ "$tierline" == *"ddaanet/MEMORY.md"* ]]
-  # The adoption replaces root's block for the tier, as gitlore_compose_up
-  # does: appending to it leaves a re-texted line twice (a duplicate pointer
-  # the next pass refuses) and keeps root's lines for paths the carrier
-  # dropped, which the next compose projects back as dangling pointers.
-  [[ "$tierline" == *"replace every line of $memabs/MEMORY.md whose link starts with 'ddaanet/'"* ]]
-  [[ "$tierline" == *"git -C \"$memabs\" add -- \"ddaanet\""* ]]
+  # The remedy is the tooling's own adoption, reached by putting HEAD's commits
+  # in the tier's local `live`: the runnable push, quoted so a spaced project
+  # path survives the paste, and the take that adopts from there.
+  [[ "$tierline" == *"git -C \"$abs\" push . HEAD:refs/heads/live"* ]]
+  [[ "$tierline" == *"/gitlore:merge"* ]]
+  # Adoption is never a hand edit of root's block: the superseded remedy had the
+  # reader retext the root index and stage the gitlink themselves, which is the
+  # overwrite this refusal exists to stop — staged before the carrier is adopted
+  # up, the next compose writes root's older text over it.
+  [[ "$output" != *"replace every line"* ]]
+  [[ "$output" != *"add -- \"ddaanet\""* ]]
   # `checkout --detach <pinned>` is exactly the command that would destroy the
-  # commits this tier carries, so the branch has not landed until it stops being
-  # offered — asserted explicitly so it cannot pass by the ahead wording simply
-  # never having been written.
+  # commits this tier carries while `live` does not hold them, so it must not be
+  # offered here — asserted explicitly so it cannot pass by the ahead wording
+  # simply never having been written.
   [[ "$output" != *"checkout --detach"* ]]
-  # And not the sideways message's other half either. `/gitlore:merge` runs
-  # gitlore_adopt_advanced_live ahead of every ancestry test, which fires only
-  # when `live` is ahead of HEAD; for a tier already ahead of its pin the remote
-  # is contained in HEAD and the take reports nothing to take (Item 1.3's own
-  # finding). Offering it here sends the user in a circle, which is what "no
-  # automatic adoption exists" means in behaviour.
-  [[ "$output" != *"/gitlore:merge"* ]]
+}
+
+@test "a dirty tier ahead of its pin is refused where it stands" {
+  # The same refusal for the other reason: `live` holds every commit HEAD does,
+  # so the checkout would lose no commit — but it would carry work no approved
+  # summary covers onto the pin, and the take refuses a dirty store in any case.
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin_into_live ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  printf -- '---\nname: pending\ndescription: ""\n---\n\nunapproved\n' > memory/ddaanet/pending.md
+  # The fixture's shape: the take's own reachability test passes, and only the
+  # dirt separates this from the returned-to-the-pin case.
+  git -C memory/ddaanet merge-base --is-ancestor "$moved" live
+  [ -n "$(git -C memory/ddaanet status --porcelain)" ]
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
+  [ -f memory/ddaanet/pending.md ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"ahead"* ]]
+  # Leaving the tier clean is the act that unblocks it, and the refusal names it.
+  [[ "$tierline" == *"leave nothing uncommitted"* ]]
+  [[ "$output" != *"it is back on the pin"* ]]
+}
+
+@test "a tier ahead of its pin whose local 'live' holds its commits is returned to the pin for the take" {
+  # The state a tier commit leaves once the memory side loses the moved gitlink:
+  # `live` holds every commit HEAD does, so the pin checkout discards nothing
+  # and leaves exactly what gitlore_adopt_advanced_live takes — a clean tier on
+  # its pin with `live` ahead of it. The refusal stands, because the root index
+  # still has to take the carrier before anything composes down onto it.
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin_into_live ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  # The fixture's shape, asserted rather than assumed: HEAD contains the pin,
+  # and `live` contains HEAD.
+  git -C memory/ddaanet merge-base --is-ancestor "$pinned" "$moved"
+  git -C memory/ddaanet merge-base --is-ancestor "$moved" live
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  # The act: HEAD back on the pin, the commits still in `live`, and the working
+  # tree actually followed — a ref move that left the carrier where it was would
+  # have the down pass overwrite it on the next pass all the same.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pinned" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$moved" ]
+  git -C memory/ddaanet show "$pinned:MEMORY.md" > "$BATS_TEST_TMPDIR/pinned-carrier.md"
+  cmp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/pinned-carrier.md"
+  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
+
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"${moved:0:12}"* ]]
+  [[ "$tierline" == *"${pinned:0:12}"* ]]
+  # The next command is the take, which adopts the carrier into the root index
+  # before the gitlink moves.
+  [[ "$tierline" == *"/gitlore:merge"* ]]
+  # Adoption is the tooling's: neither a hand rebuild of root's block nor the
+  # command that puts HEAD's commits into `live`, which they are already in.
+  [[ "$output" != *"replace every line"* ]]
+  [[ "$output" != *"HEAD:refs/heads/live"* ]]
+}
+
+@test "a tier that cannot be returned to its pin is refused untouched, with git's own message" {
+  # The failure is stood in for rather than provoked: `git checkout` exits 0
+  # after reporting files it could not unlink (measured on git 2.47 against a
+  # read-only worktree directory), so a permission induction would move HEAD
+  # and prove nothing. The stub intercepts that one call and leaves every other
+  # git call in the pass alone. A refusal that reported the return as done would
+  # leave the next pass composing root's older text over a carrier still ahead.
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin_into_live ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  abs=$(cd memory/ddaanet && pwd)
+  git() {
+    if [ "$1" = -C ] && [ "$3" = checkout ]; then
+      echo "fatal: simulated checkout failure" >&2
+      return 128
+    fi
+    command git "$@"
+  }
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"could not be returned to the pin"* ]]
+  # git's own message, on the one line this report gives the tier, and the
+  # command that finishes the return once the path is writable again.
+  [[ "$tierline" == *"git said:"* ]]
+  [[ "$tierline" == *"git -C \"$abs\" checkout --detach $pinned"* ]]
+  [[ "$output" != *"it is back on the pin"* ]]
 }
 
 @test "a moved tier holding MERGE_HEAD is sent to /gitlore:resolve instead" {
