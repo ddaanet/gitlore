@@ -311,10 +311,16 @@ green; no test is added for it.
 ### Item 4.1: not-committed lines
 
 **Target:** `scripts/resolve.sh`:
-- the merge message build and `commit` pair at :310-315;
+- the message file's `mktemp`, the merge message build and the `commit`, at
+  :309-326;
 - the comment at :105-109.
 
 **What changes.**
+- A failed `mktemp` for the message file prints
+  `gitlore: the merge message file could not be created, so the merge was not committed; the merge stays prepared.`
+  to stderr, then exits 1. Nothing to remove first: `mktemp` failed, so there is
+  no scratch file. The assignment is a command substitution, so `|| { … }`
+  reaches the line rather than letting `errexit` abort silently.
 - A failed build prints
   `gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared.`
   to stderr after removing the message file, then exits 1. The removal comes
@@ -342,6 +348,24 @@ green; no test is added for it.
    - stderr contains the build line;
    - `MERGE_HEAD` still exists;
    - no message file remains.
+3. **Message file cannot be created.** New test in `tests/resolve_compose.bats`,
+   written from the slice-2 test. `TMPDIR` cannot be pointed at a missing
+   directory to force this: `gitlore_git` (`scripts/lib/util.sh:342`) and the
+   composition helpers take `mktemp` under the same `TMPDIR` well before :309,
+   so the run would die elsewhere. Use a `mktemp` stub instead, keyed on the
+   template so only the message file's call fails:
+   `case " $* " in *" ${TMPDIR}/gitlore-merge-msg.XXXXXX "*)` records the hit
+   and exits 1 with mktemp's own text on stderr; everything else `exec`s the
+   real binary. The test asserts:
+   - exit 1;
+   - the stub's hit file names the merge-msg template, so the failure is the
+     targeted call and not a forwarded one;
+   - stderr contains the message-file line;
+   - stderr contains neither the build line nor the refused-commit line — both
+     arms sit below this one and the run never reaches them;
+   - `MERGE_HEAD` still exists, the merge state file is still there, and the
+     staged synthesis survives in both stores;
+   - no message file remains under `$TMPDIR`.
 
 ## Phase 5: Test specificity (type: general)
 
@@ -419,23 +443,51 @@ would also trip, so the reported line is the new one.
 
 - **Item 6.1:** `agents/memory-merger.md` and `skills/resolve/SKILL.md`, the two
   readers of Item 4.1's lines, edited together so they split them the same way.
+  The split is an **allow-list**: the merge landed only where the continuation
+  says so, and everything else is reported without a landing claim. A deny-list
+  on `the merge was not committed` would read every exit that carries no
+  `gitlore:` line — a failed `mktemp` before Item 4.1 slice 3, an errexit abort
+  on `jq` over a malformed state file, a failed staging command — as a landed
+  merge. The allow-list closes those without a message for each.
+  - The landed signal is **exit status 0**. `continue-after-merge` is the only
+    subcommand, every exit before the merge commit at :321 is non-zero, and
+    every exit 0 is below it; so status 0 means the commit landed and nothing
+    else does. A non-zero status with a recognised line gets that line's
+    handling; a non-zero status with no recognised line is reported as an
+    unrecognised failure, quoted whole, with no claim either way — the
+    post-landing `not because of divergence` push failure also exits 1, so
+    "non-zero" alone does not mean unlanded.
   - `agents/memory-merger.md`:
     - Step 6's index rules add "no two bullets naming the same path".
-    - Turn 2's `approved` branch keys on any line containing
-      `the merge was not committed`:
-      - for the merged-index line, keep the current handling;
-      - for the build or refused-commit line, quote it with git's reason printed
-        above it, say the merge is unlanded, and stop without re-running the
-        continuation.
-    - "Otherwise" stays as the post-landing branch.
+    - Turn 2's `approved` branch reports the continuation's exit status, and
+      branches on it before any line matching:
+      - exit 0 → the merge landed. Quote every `gitlore:` line it printed: a
+        composition refusal naming another index, a dangling pointer or a
+        refused push comes after the merge commit, not instead of it.
+      - non-zero with `gitlore: the merged index fails the check` → as now:
+        quote it and every problem line under it, say the merge is unlanded,
+        stop. The parent answers with `rejected:` and those lines.
+      - non-zero with the message-file, build or refused-commit line → quote it
+        with git's reason printed above it, say the merge is unlanded and stays
+        prepared, and stop without re-running the continuation.
+      - any other non-zero → quote everything the continuation printed on both
+        streams, name the exit status, and say the outcome is unrecognised and
+        the merge's fate unknown. Do not re-run it.
+    - "Otherwise" stops being the post-landing branch: nothing falls through to
+      a landing claim.
   - `skills/resolve/SKILL.md`:
-    - At :68, beside the merged-index arm: a sub-agent report of the build or
-      refused-commit line gets no `rejected:` and no **Loop** (a rerun re-emits
-      the same directive and meets the same refusal); go to **Summarize**.
+    - At :68, beside the merged-index arm: a sub-agent report of the
+      message-file, build or refused-commit line gets no `rejected:` and no
+      **Loop** (a rerun re-emits the same directive and meets the same refusal);
+      go to **Summarize**. An unrecognised non-zero report goes to **Summarize**
+      the same way.
     - Summarize section (:82-87): a merged-index refusal is re-synthesized, as
-      now. A build or refused-commit line is relayed with git's reason: the
-      merge stays prepared, and the remedy is to fix that reason and run
-      `/gitlore:resolve` again. Every other `gitlore:` line stays post-landing.
+      now. A message-file, build or refused-commit line is relayed with git's
+      reason: the merge stays prepared, and the remedy is to fix that reason and
+      run `/gitlore:resolve` again. An unrecognised non-zero outcome is relayed
+      verbatim with its status, as a state to inspect rather than a landing to
+      report. Only an exit 0 is summarized as a landed merge, and its `gitlore:`
+      lines stay post-landing.
   - **Requirements:** M14, M15.
   - **Depends on:** Item 4.1.
 
