@@ -154,6 +154,78 @@ seed_root_fact() {
   [ "$status" -eq 0 ]
 }
 
+# --- a report with an empty context half carries no additionalContext key ---
+#
+# An `additionalContext` present and empty is a block CC injects with nothing in
+# it, so the key is omitted instead — the shape index-sync-post.sh emits. No
+# report producer reaches that state today: each sets both channels or neither,
+# and the drain frames a block per agent whether or not the agent staged any
+# context. The tests below drive it through the producer, so the emission is
+# pinned by what it is given rather than by what today's producers happen to
+# give it.
+
+# A plugin root whose libraries are the real ones with $2 appended to the last
+# one the hook under test sources, so a test can hand that hook a report shape
+# its producer does not reach. The hook script itself is the real one, invoked
+# by its real path — only CLAUDE_PLUGIN_ROOT is redirected. Echoes the root.
+# Args: $1 = basename of the library the override is appended to, $2 = shell
+# text defining it.
+shim_plugin_root() {
+  local last="$1" override="$2" root lib
+  root="$BATS_TEST_TMPDIR/shim-root"
+  mkdir -p "$root/scripts/lib" || return 1
+  for lib in "$PLUGIN_ROOT"/scripts/lib/*.sh; do
+    printf 'source "%s"\n' "$lib" > "$root/scripts/lib/${lib##*/}" || return 1
+  done
+  printf '%s\n' "$override" >> "$root/scripts/lib/$last" || return 1
+  printf '%s\n' "$root"
+}
+
+@test "index-compose.sh omits additionalContext when the context half is empty" {
+  root=$(shim_plugin_root index-sync.sh 'gitlore_compose_and_report() {
+  GITLORE_COMPOSE_SYSMSG="a report for the user"
+  GITLORE_COMPOSE_CTX=""
+}')
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_fact "p.md" "a project fact"
+  json=$(CLAUDE_PLUGIN_ROOT="$root" feed)
+  [ "$(jq -r '.systemMessage' <<<"$json")" = "a report for the user" ]
+  run jq -e 'has("hookSpecificOutput")' <<<"$json"
+  [ "$status" -eq 1 ]
+}
+
+@test "relay-drain.sh omits additionalContext when the context half is empty" {
+  root=$(shim_plugin_root index-sync.sh 'gitlore_relay_drain() {
+  GITLORE_RELAY_SYSMSG="a relayed report for the user"
+  GITLORE_RELAY_CTX=""
+}')
+  json=$(CLAUDE_PLUGIN_ROOT="$root" drain_feed)
+  [ "$(jq -r '.systemMessage' <<<"$json")" = "a relayed report for the user" ]
+  run jq -e 'has("hookSpecificOutput")' <<<"$json"
+  [ "$status" -eq 1 ]
+}
+
+# The paired positive: with a context half, both hooks carry the key. Without
+# it the absence above could pass on a hook that never emits the block at all.
+@test "both hooks carry additionalContext when the context half is not empty" {
+  root=$(shim_plugin_root index-sync.sh 'gitlore_compose_and_report() {
+  GITLORE_COMPOSE_SYSMSG="a report for the user"
+  GITLORE_COMPOSE_CTX="a report for the model"
+}
+gitlore_relay_drain() {
+  GITLORE_RELAY_SYSMSG="a relayed report for the user"
+  GITLORE_RELAY_CTX="a relayed report for the model"
+}')
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_fact "p.md" "a project fact"
+  json=$(CLAUDE_PLUGIN_ROOT="$root" feed)
+  [ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$json")" = "a report for the model" ]
+  [ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$json")" = "PostToolBatch" ]
+  json=$(CLAUDE_PLUGIN_ROOT="$root" drain_feed)
+  [ "$(jq -r '.hookSpecificOutput.additionalContext' <<<"$json")" = "a relayed report for the model" ]
+  [ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$json")" = "PostToolBatch" ]
+}
+
 # Reds when the hook's `|| agent_id=""` fallback (line ~44) is removed: jq's
 # parse failure then kills the hook under errexit before the stamp is ever
 # consumed, so nothing composes and the stamp survives.

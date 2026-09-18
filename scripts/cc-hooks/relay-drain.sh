@@ -45,8 +45,12 @@ mempath=$(gitlore_memory_path)
 
 gitlore_relay_drain "$mempath" "$session"
 if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
+  # The context half only when there is one: an `additionalContext` present and
+  # empty is a block injected with nothing in it.
   jq -n --arg s "$GITLORE_RELAY_SYSMSG" --arg c "$GITLORE_RELAY_CTX" \
-    '{systemMessage: $s, suppressOutput: true,
-      hookSpecificOutput: {hookEventName: "PostToolBatch", additionalContext: $c}}'
+    '{systemMessage: $s, suppressOutput: true}
+     + (if $c == "" then {} else
+         {hookSpecificOutput: {hookEventName: "PostToolBatch", additionalContext: $c}}
+       end)'
 fi
 exit 0

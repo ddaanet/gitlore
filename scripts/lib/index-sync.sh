@@ -381,7 +381,12 @@ _gitlore_nudge_reset() {
   rm -f "$marker"
   dir=$(dirname -- "$marker")
   [ -d "$dir" ] || return 0
-  find "$dir" -maxdepth 1 -name "gitlore-$kind-nudged-*" -type f -mtime +7 -delete
+  # `|| true`: `-delete` exits non-zero when the gitdir refuses the unlink.
+  # Sweeping markers other sessions left behind is best-effort, and must not
+  # abort a caller running under errexit — the same degrade-don't-abort trade
+  # gitlore_relay_sweep makes on the same directory. The marker this call was
+  # asked to clear is already gone by here.
+  find "$dir" -maxdepth 1 -name "gitlore-$kind-nudged-*" -type f -mtime +7 -delete || true
   return 0
 }
 

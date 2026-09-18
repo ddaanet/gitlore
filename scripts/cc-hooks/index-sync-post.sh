@@ -231,11 +231,11 @@ fi
 if [ -n "$budget" ]; then
   if [ -n "$sysmsg" ]; then sysmsg="$sysmsg
 "; fi
-  sysmsg="${sysmsg}gitlore: MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte always-loaded budget"
+  sysmsg="${sysmsg}gitlore: MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte always-loaded budget — a size notice, nothing to act on"
   if [ -n "$ctx" ]; then ctx="$ctx
 
 "; fi
-  ctx="${ctx}MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte budget. Past 24.4KB, Claude Code's own loader silently truncates the tail of this file — entries beyond the cutoff never reach a session."
+  ctx="${ctx}MEMORY.md is at ${pct}% of the ${GITLORE_INDEX_BUDGET_BYTES}-byte budget. This is ambient information about the store, not a task: the fact just written stands, and nothing here asks for curation now or says any particular line should go. What the number is for: past 24.4KB, Claude Code's own loader silently truncates the tail of this file, so entries beyond the cutoff never reach a session. Curation is a deliberate store-wide pass — /gitlore:index-audit — run when it is asked for."
 fi
 
 if [ -n "$failed" ]; then
