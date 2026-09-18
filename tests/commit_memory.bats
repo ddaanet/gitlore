@@ -251,6 +251,46 @@ Fix them"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
 }
 
+@test "a tier whose index status cannot be read aborts the commit and restamps the approval" {
+  # The rc-1 arm's fail-closed half. The pre-commit hook calls this behind
+  # `|| exit $?`, which suspends errexit, so a status read that failed would
+  # read as a clean index and let the commit publish the problem the refusal
+  # just named. The read is stood in for rather than provoked: every way of
+  # breaking a tier's gitdir also fails `git -C memory status` in
+  # gitlore_memory_dirty, which exits 0 long before this arm.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_tier_bullet ddaanet shared.md "hook"
+  seed_root_bullet "ddaanet/shared.md" "hook"
+
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record the shared fact\n' > "$msgfile"
+  # Whole-second mtimes: the marker sits a second after the approval and the run
+  # a second after the marker, so only a restamp leaves the approval the newer.
+  sleep 1
+  : > "$TMP_REPO/before-run"
+  sleep 1
+
+  head_before=$(git -C memory rev-parse HEAD)
+  # shellcheck disable=SC2016  # driver text, expanded by the shell that sources it
+  write_sync_driver 'git() {
+  if [ "$1" = -C ] && [ "$2" = memory/ddaanet ] && [ "$3" = status ]; then
+    echo "fatal: simulated status failure" >&2
+    return 128
+  fi
+  command git "$@"
+}'
+  CLAUDECODE=1 run --separate-stderr bash "$driver"
+  [ "$status" -eq 1 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  # Neither rc-1 arm answered: the read failed before either could be chosen.
+  [[ "${output}${stderr}" != *"the commit went ahead"* ]]
+  [[ "${output}${stderr}" != *"the commit was aborted because a problem is in an index file"* ]]
+  [ "$msgfile" -nt "$TMP_REPO/before-run" ]
+}
+
 @test "a carrier defect in a clean tier commits and reports" {
   # The abort is scoped to a problem-bearing index that IS dirty. A defect
   # already committed inside the tier's own history, with nothing uncommitted

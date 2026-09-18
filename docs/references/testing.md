@@ -68,3 +68,31 @@ standing.
 `check-version` run uncached and write no gate file, so four fresh gates are not
 the same thing as a green `precommit`. `GITLORE_GATE_FORCE=1` runs a gate
 whatever its sentinel says.
+
+## Proving a test discriminates
+
+A test written against code that already behaves gets its evidence from a
+mutation: break the behaviour it names, and the test must go red. Hand-running
+that is where the accidents live — a run read as a mutant result when the edit
+never landed, mutants stacked on each other, a backup written to `/` because
+`$TMPDIR` was unset. `scripts/mutate-and-run.sh` does the whole cycle:
+
+```sh
+scripts/mutate-and-run.sh <file> <sed-script> <bats-file> [<filter>]
+```
+
+The mutation is a sed script, so a report can quote it as the mutation's name; a
+script matching nothing is refused rather than run, which is what keeps an
+unmutated run from reading as a verdict. The subject must be tracked and clean,
+the backup lives under `git rev-parse --git-path gitlore/mutate`, and the
+subject is restored on every exit path and then checked against the index. A
+backup still sitting there is a crashed run: the next invocation refuses and
+prints the command that puts the subject back.
+
+Exit codes: **0** the mutant was KILLED, the suite went red and the `not ok`
+lines are in the output; **1** it SURVIVED, so nothing pins the behaviour; **2**
+refused or broken — dirty or untracked subject, empty mutation, a filter that
+selected no test, or a restore that did not come back byte for byte.
+
+It is a developer tool. The one thing it cannot be pointed at is itself: the
+outer run holds the file open while bash is still reading it.

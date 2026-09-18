@@ -1423,3 +1423,24 @@ b" ]
   cmp -s dir/file.md expected.md
   [ "$(ls -A dir)" = "$(printf 'file.before\nfile.md')" ]
 }
+
+# The rewrite lands through a mktemp scratch, and mktemp creates 0600. The
+# repaired index keeps its own mode only because the copy carries it across the
+# rename — a memory index dropping to 0600 is unreadable to anything but its
+# owner, and a commit records the change.
+@test "a repaired index keeps the file's mode" {
+  mkdir -p tier
+  printf -- '- [A](a.md) — x\n- [A](a.md) — x\n' > file.md
+  chmod 640 file.md
+  [ "$(file_mode file.md)" = 640 ]
+  run gitlore_repair_index file.md pin.md tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "dropped a duplicate pointer line: - [A](a.md) — x" ]
+  [ "$(file_mode file.md)" = 640 ]
+}
+
+# A file's permission bits in octal. The GNU form is tried first and its
+# failure is the probe: BSD/macOS stat spells the same field `-f '%Lp'`.
+file_mode() {
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
