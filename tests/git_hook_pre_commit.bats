@@ -395,6 +395,9 @@ committed_stale_carrier_store() {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
+  # A fresh mount has no local `live`; one is created so a commit that lands
+  # the tier would advance it, giving the "unmoved" assertion something to catch.
+  git -C memory/ddaanet branch -f live
   seed_tier_bullet ddaanet shared.md "hook"
   seed_tier_bullet ddaanet shared.md "hook"
   seed_root_bullet "ddaanet/shared.md" "hook"
@@ -413,14 +416,46 @@ committed_stale_carrier_store() {
 
   head_before=$(git -C memory rev-parse HEAD)
   tier_head_before=$(git -C memory/ddaanet rev-parse HEAD)
+  tier_live_before=$(git -C memory/ddaanet rev-parse live)
   CLAUDECODE=1 run --separate-stderr bash "$HOOK"
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 1 ]
   [[ "${output}${stderr}" == *"memory/ddaanet/MEMORY.md: duplicate pointer path shared.md"* ]]
   # The duplicate line prints on the advisory arm too; these two name the arm.
   [[ "${output}${stderr}" == *"aborted"* ]]
   [[ "${output}${stderr}" != *"the commit went ahead"* ]]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$tier_live_before" ]
   [ -n "$(git -C memory/ddaanet status --porcelain -- MEMORY.md)" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head_before" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(_gitlore_mtime "$msgfile")" -gt "$stamp_epoch" ]
+}
+
+@test "a dirty root index with a welded line aborts the commit and restamps the approval" {
+  # No tier: root's own index is the one carrying the change, so the abort has
+  # to come from the root branch of the rc-1 arm rather than a tier's.
+  make_parent_with_memory
+  printf -- '- [A](a.md) — a- [B](b.md) — b\n' >> memory/MEMORY.md
+  n=$(wc -l < memory/MEMORY.md | tr -d ' ')
+  msgfile=$(gitlore_commit_msg_file memory)
+  printf 'memory: record a and b\n' > "$msgfile"
+
+  # Backdate the summary and every tracked memory file to one stamp, so
+  # gitlore_commit_msg_freshness reads "yes" and the run reaches compose, and
+  # a restamp reads newer even within the second the seeds were written.
+  touch -t 200001010000 "$msgfile"
+  while IFS= read -r -d '' f; do
+    touch -t 200001010000 "$f"
+  done < <(find memory -type f -not -path '*/.git/*' -print0)
+  stamp_epoch=$(_gitlore_mtime "$msgfile")
+  [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
+
+  head_before=$(git -C memory rev-parse HEAD)
+  CLAUDECODE=1 run --separate-stderr bash "$HOOK"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"memory/MEMORY.md: line $n welds two pointer bullets"* ]]
+  # The weld line prints on the advisory arm too; these two name the arm.
+  [[ "${output}${stderr}" == *"aborted"* ]]
+  [[ "${output}${stderr}" != *"the commit went ahead"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(_gitlore_mtime "$msgfile")" -gt "$stamp_epoch" ]
 }

@@ -202,6 +202,24 @@ EOF"
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
 }
 
+@test "an interleaved non-bullet line in a dirty carrier aborts the memory commit" {
+  # The :140 fixture, with a stray line between two distinct bullets in place
+  # of the duplicate — rule 4's own abort, over the same tested attribution.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet a.md "hook a"
+  printf 'Stray line\n' >> memory/ddaanet/MEMORY.md
+  seed_tier_bullet ddaanet b.md "hook b"
+  seed_root_bullet "ddaanet/a.md" "hook a"
+  seed_root_bullet "ddaanet/b.md" "hook b"
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record a and b"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"memory/ddaanet/MEMORY.md: interleaved non-bullet line"* ]]
+  [[ "${output}${stderr}" == *"aborted"* ]]
+}
+
 @test "an abort names every changed index file with a problem and no clean one" {
   # Three problem-bearing indexes: root and tier 'other' changed, tier
   # 'ddaanet' committed clean. The refusal lists all three problems; the abort
