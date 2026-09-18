@@ -475,6 +475,62 @@ EOF
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
 }
 
+@test "a failed mktemp for the merge message file leaves the merge prepared" {
+  prepare_tier_merge_with_new_lines
+  mkdir "$BATS_TEST_TMPDIR/msgtmp"
+  export TMPDIR="$BATS_TEST_TMPDIR/msgtmp"
+  # A stub, not a missing TMPDIR: gitlore_git and the composition helpers take
+  # mktemp under this same TMPDIR before the message file does, so pointing it
+  # at a missing directory would kill the run elsewhere. The stub is keyed on
+  # the merge-msg template, so only that call fails and every other mktemp
+  # reaches the real binary.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_mktemp=$(command -v mktemp)
+  log_hits="$BATS_TEST_TMPDIR/mktemp-hits"
+  : > "$log_hits"
+  cat > "$fakebin/mktemp" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" ${TMPDIR}/gitlore-merge-msg.XXXXXX "*)
+    echo "\$*" >> "$log_hits"
+    echo "mktemp: failed to create file via template" >&2
+    exit 1
+    ;;
+esac
+exec "$real_mktemp" "\$@"
+EOF
+  chmod +x "$fakebin/mktemp"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  # The targeted call is the one that failed, not some other mktemp the stub
+  # forwarded.
+  grep -qF -- "${TMPDIR}/gitlore-merge-msg.XXXXXX" "$log_hits"
+  # Already true of the unfixed script: the commit is never reached, so the
+  # merge stays prepared — MERGE_HEAD, the merge state and the staged synthesis
+  # all survive. No message file was ever created, so none may appear either.
+  git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
+  [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
+  [ -n "$(git -C memory/ddaanet diff --cached --name-only -- MEMORY.md)" ]
+  [ -n "$(git -C memory diff --cached --name-only -- MEMORY.md)" ]
+  [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
+  [[ "$stderr" == *"gitlore: the merge message file could not be created, so the merge was not committed; the merge stays prepared."* ]]
+  # Order, checked as one glob so a missing line fails on its own assertion
+  # above: the gitlore line follows mktemp's own reason rather than replacing
+  # or preceding it.
+  [[ "$stderr" == *"mktemp: failed to create file via template"*"gitlore: the merge message file could not be created"* ]]
+  # Neither sibling arm: both sit below this one and the run never reaches them.
+  [[ "$stderr" != *"the merge message could not be built"* ]]
+  [[ "$stderr" != *"the merge commit was refused"* ]]
+
+  # Prepared, not abandoned: with the stub gone the continuation lands.
+  rm -f "$fakebin/mktemp"
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 0 ]
+  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+}
+
 @test "a duplicate in the merged root index keeps the merge unlanded" {
   make_parent_with_memory
   diverge_memory_with_index '# Memory Index
