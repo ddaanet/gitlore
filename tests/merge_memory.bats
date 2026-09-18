@@ -594,6 +594,34 @@ EOF
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$remote_sha" ]
 }
 
+@test "a repair keeps the arrival's CRLF bytes" {
+  # The repair commit is built by hashing the rewritten arrival, and the tier
+  # whose line endings these are is the one whose config decides what a filter
+  # would do to them. `core.autocrlf=input` cleans CRLF out on the way into the
+  # object database and leaves checkout alone, so it is the clean filter alone
+  # that the hash has to refuse: the repair rewrites the lines it names and
+  # nothing else, and a line ending is not one of them.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  git -C memory/ddaanet config core.autocrlf input
+  gitlore_compose memory
+  commit_memory_state
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\r\n- [A](a.md) — x\r')")
+  # Premise: the arrival really carries CRLF on the tier's own remote.
+  git --git-dir="$TMP_REPO/.bare-ddaanet.git" cat-file blob "$remote_sha:MEMORY.md" \
+    > "$BATS_TEST_TMPDIR/arrival.md"
+  [ "$(tr -dc '\r' < "$BATS_TEST_TMPDIR/arrival.md" | wc -c | tr -d ' ')" -eq 2 ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  R=$(git -C memory/ddaanet rev-parse HEAD)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
+  # One duplicate dropped, and the line that stays keeps its carriage return.
+  git -C memory/ddaanet cat-file blob "$R:MEMORY.md" > "$BATS_TEST_TMPDIR/repaired.md"
+  [ "$(tr -dc '\r' < "$BATS_TEST_TMPDIR/repaired.md" | wc -c | tr -d ' ')" -eq 1 ]
+}
+
 @test "a repair whose commit build fails walks back and points upstream" {
   wire_memory_remote
   make_tier_in_memory ddaanet
