@@ -1111,6 +1111,7 @@ b" ]
     "my mem.d/a/MEMORY.md: duplicate pointer path other.md" \
     "my mem.d/ab/MEMORY.md: duplicate pointer path third.md" \
     "my memXd/MEMORY.md: duplicate pointer path decoy.md" \
+    "nested/my mem.d/MEMORY.md: duplicate pointer path suffix.md" \
     "root index line 'gone/x.md' has a prefix naming no mounted tier — it is a leftover from a removed tier and must be fixed by hand")
 
   run gitlore_compose_problems_in "my mem.d/a/MEMORY.md" <<< "$input"
@@ -1140,7 +1141,7 @@ b" ]
   cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 }
 
-# --- gitlore_repair_index (K3): welds, then interleaved lines, then duplicates ---
+# --- gitlore_repair_index: welds, then interleaved lines, then duplicates ---
 #
 # A plain scratch file stands in for the arrival's carrier, and a plain
 # directory for the tier a weld's second path must resolve under — the
