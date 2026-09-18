@@ -401,6 +401,63 @@ HOOK
   [[ "$output$stderr" != *"/gitlore:push publishes it"* ]]
 }
 
+# --- the behind arm's own retry push words a refusal by its own reason ---
+
+@test "a behind arm's retry push refused as a non-fast-forward is worded as a moved remote, not as a non-divergence failure" {
+  # The arm's retry is the push that publishes what the take repaired, and it
+  # is routed through the same reporter the rest of the loop uses — so a
+  # refusal naming divergence is worded by what the tier's refs actually say:
+  # `live` already contains the remote's, and the remote moved underneath.
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  publish_memory
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
+
+  # A `git` stub on PATH for the command under test only, the idiom the
+  # post-loop cases below use. `ddaanet` is behind, so the real remote refuses
+  # its first push and the behind arm takes and repairs the arrival; the retry
+  # that publishes the repair is the second push naming the tier, and that is
+  # the one the stub refuses as a non-fast-forward. Every other call goes to
+  # the real git.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_git=$(command -v git)
+  pushes="$BATS_TEST_TMPDIR/tier-pushes"
+  : > "$pushes"
+  cat > "$fakebin/git" <<EOF
+#!/bin/sh
+case " \$* " in
+  *"/ddaanet push -q origin live ")
+    echo ddaanet >> "$pushes"
+    if [ "\$(grep -c '^ddaanet\$' "$pushes")" -eq 2 ]; then
+      echo " ! [rejected]        live -> live (non-fast-forward)" >&2
+      exit 1
+    fi
+    ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$fakebin/git"
+
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+
+  # Everything the wording rests on, asserted first: the push failed; exactly
+  # two pushes named the tier, so the refused one is the arm's own retry and
+  # not the post-loop pass; and the take repaired the arrival on top of what
+  # it fetched, which is what that retry was publishing.
+  [ "$status" -eq 1 ]
+  [ "$(tr '\n' ' ' < "$pushes")" = "ddaanet ddaanet " ]
+  R=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
+
+  [[ "$output$stderr" == *"pushing tier 'ddaanet' was refused as a non-fast-forward"* ]]
+  [[ "$output$stderr" == *"The remote moved during the push"* ]]
+  [[ "$output$stderr" != *"not because of divergence"* ]]
+  # A refused publication is not a divergence to resolve: nothing is prepared.
+  [[ "$output$stderr" != *"memory merge prepared"* ]]
+}
+
 @test "a repair resting on a root problem inside a push publishes nothing until it is fixed" {
   # The take repairs the stranded arrival but root's own leftover line keeps it
   # from adopting: the repair waits in the tier's local `live`, and neither the

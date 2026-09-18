@@ -190,8 +190,14 @@ session, so cost is bytes, not lines, and the longest entries are where curation
 pays — measured here, the five longest lines are ~a fifth of the whole blob
 while every terse behavioural line together is a rounding error. Past
 `GITLORE_INDEX_BUDGET_WARN_PCT` (80) of `GITLORE_INDEX_BUDGET_BYTES` (25600) the
-pass names the percentage and the five largest lines. It is arithmetic, so it
-has no false positives.
+pass names the percentage. It is arithmetic, so it has no false positives.
+
+Both channels word it as **ambient information, not a goal**: the number says
+nothing about whether any particular fact should go, and an agent that reads it
+mid-write as an instruction to get under the line abandons the write it was
+asked for to curate a store nobody asked it to curate. Deciding what goes is the
+store-wide pass's business (`commands/index-audit.md`, D47), which a human
+starts.
 
 The second flags a line **carrying no trigger token** — no path, flag, error
 string, identifier, filename or version of the kind a future query would

@@ -167,6 +167,42 @@ ctx_of() { printf '%s' "$1" | jq -r '.hookSpecificOutput.additionalContext'; }
   [[ "$(sys_of "$output")" == *"$SYS_TRIGGER"* ]]
 }
 
+# The age sweep of markers other sessions left behind is best-effort garbage
+# collection: a gitdir that refuses the unlink must not abort the hook, or this
+# session's own markers survive the reset that was meant to clear them and both
+# once-per-episode notices stay silent for the rest of it.
+@test "a failing sweep does not stop the reset from clearing this session's markers" {
+  make_parent_with_memory
+  budget=$(gitlore_index_budget_nudge_file memory sess-1)
+  upgrade=$(gitlore_upgrade_nudge_file memory sess-1)
+  mkdir -p "$(dirname "$budget")"
+  touch "$budget" "$upgrade"
+
+  # A `find` stub on PATH for the hook only: it fails every call carrying
+  # `-delete`, which on this path is the sweep and nothing else, and passes
+  # every other call through to the real find.
+  fakebin="$BATS_TEST_TMPDIR/fakebin"
+  mkdir -p "$fakebin"
+  real_find=$(command -v find)
+  cat > "$fakebin/find" <<EOF
+#!/bin/sh
+for a in "\$@"; do
+  if [ "\$a" = -delete ]; then
+    echo "find: cannot delete" >&2
+    exit 1
+  fi
+done
+exec "$real_find" "\$@"
+EOF
+  chmod +x "$fakebin/find"
+
+  PATH="$fakebin:$PATH" run run_reset
+  [ "$status" -eq 0 ]
+  # The second reset runs only if the first one's sweep did not abort the hook.
+  [ ! -f "$budget" ]
+  [ ! -f "$upgrade" ]
+}
+
 # Which entry gets named: the project-scoped one when the record holds both.
 # The remedy does not depend on which, but reporting the user-scoped version to
 # a repo pinned elsewhere would send the reader chasing the wrong number.

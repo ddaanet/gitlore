@@ -1603,7 +1603,7 @@ EOF
   [[ "$output" == *"trigger"* ]]
 }
 
-@test "post: warns past the byte threshold, states pct and the hard limit only" {
+@test "post: notes the size past the byte threshold, states pct and the hard limit only" {
   make_parent_with_memory
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GITLORE_INDEX_BUDGET_BYTES=200
   hook="$(printf '%0.sx' $(seq 1 190))"
@@ -1624,9 +1624,9 @@ EOF
   # rationale line, a dropped clause and a reworded one alike, where refuting a
   # phrase production never had could only ever pass.
   run jq -r '.systemMessage' <<<"$json"
-  [ "$output" = "gitlore: MEMORY.md is at ${pct}% of the 200-byte always-loaded budget" ]
+  [ "$output" = "gitlore: MEMORY.md is at ${pct}% of the 200-byte always-loaded budget — a size notice, nothing to act on" ]
   run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
-  [ "$output" = "MEMORY.md is at ${pct}% of the 200-byte budget. Past 24.4KB, Claude Code's own loader silently truncates the tail of this file — entries beyond the cutoff never reach a session." ]
+  [ "$output" = "MEMORY.md is at ${pct}% of the 200-byte budget. This is ambient information about the store, not a task: the fact just written stands, and nothing here asks for curation now or says any particular line should go. What the number is for: past 24.4KB, Claude Code's own loader silently truncates the tail of this file, so entries beyond the cutoff never reach a session. Curation is a deliberate store-wide pass — /gitlore:index-audit — run when it is asked for." ]
 }
 
 @test "post: does NOT re-warn the SAME session on a later over-threshold batch" {
