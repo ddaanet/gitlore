@@ -1012,13 +1012,18 @@ push_tier_files() {
   seed_root_bullet "dup.md" "root dup"
   [ "$(grep -cF '(dup.md)' memory/MEMORY.md)" -eq 2 ]
   run ! git -C memory diff --quiet -- MEMORY.md
+  head_before=$(git -C memory rev-parse HEAD)
 
   run --separate-stderr bash "$CMD"
+  # The unrepairable arm walks the tier back rather than falling through to a
+  # commit: the root's own HEAD never moves for a take it refused.
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$status" -eq 1 ]
   [[ "$stderr" == *$'\ngitlore:   live:MEMORY.md:'* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/MEMORY.md: duplicate pointer path dup.md"* ]]
   # Only the lines not naming the carrier go under that header: the carrier's
   # are already listed in their live:MEMORY.md form.
+  run ! grep -Eq '^gitlore:   .*ddaanet/MEMORY\.md: ' <<<"$stderr"
   [[ "$stderr" != *"memory/ddaanet/MEMORY.md:"* ]]
   [[ "$stderr" == *"Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again." ]]
 }
