@@ -966,6 +966,7 @@ push_tier_files() {
   set_tier_manifest ddaanet
   gitlore_compose memory
   commit_memory_state
+  memory_head_before=$(git -C memory rev-parse HEAD)
   gitlink=$(git -C memory rev-parse HEAD:ddaanet)
   remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [B](b.md) — y\n- [B](b.md) — y\n- [a](a.md) — a- [z](z.md) — z')")
   arrival_text=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" show "$remote_sha:MEMORY.md")
@@ -983,11 +984,17 @@ push_tier_files() {
   mkdir -p "$tmp_env"
 
   TMPDIR="$tmp_env" run --separate-stderr bash "$CMD"
+  # The unrepairable arm walks the tier back rather than falling through to a
+  # commit: the root's own HEAD never moves for a take it refused.
+  [ "$(git -C memory rev-parse HEAD)" = "$memory_head_before" ]
   [ "$status" -eq 1 ]
   all="$output$stderr"
   [[ "$all" == *"gitlore: tier 'ddaanet' took an index the take cannot repair; it is held in the tier's local 'live' and must be fixed where it was published:"* ]]
   [[ "$all" == *"live:MEMORY.md: line $weld_line_n welds"* ]]
   [[ "$all" != *"line $((weld_line_n - 1)) welds"* ]]
+  # Nothing here names the carrier: every problem in this refusal is the
+  # carrier's own, already listed above in its live:MEMORY.md form.
+  run ! grep -Eq '^gitlore:   .*ddaanet/MEMORY\.md: ' <<<"$stderr"
   # The closing remedy points upstream too, never at this store's clean carrier.
   [[ "$all" == *"its local 'live' keeps what arrived. Once the index is fixed where it was published, run /gitlore:merge again."* ]]
   [[ "$all" != *"Fix the store"* ]]
@@ -1012,18 +1019,13 @@ push_tier_files() {
   seed_root_bullet "dup.md" "root dup"
   [ "$(grep -cF '(dup.md)' memory/MEMORY.md)" -eq 2 ]
   run ! git -C memory diff --quiet -- MEMORY.md
-  head_before=$(git -C memory rev-parse HEAD)
 
   run --separate-stderr bash "$CMD"
-  # The unrepairable arm walks the tier back rather than falling through to a
-  # commit: the root's own HEAD never moves for a take it refused.
-  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$status" -eq 1 ]
   [[ "$stderr" == *$'\ngitlore:   live:MEMORY.md:'* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/MEMORY.md: duplicate pointer path dup.md"* ]]
   # Only the lines not naming the carrier go under that header: the carrier's
   # are already listed in their live:MEMORY.md form.
-  run ! grep -Eq '^gitlore:   .*ddaanet/MEMORY\.md: ' <<<"$stderr"
   [[ "$stderr" != *"memory/ddaanet/MEMORY.md:"* ]]
   [[ "$stderr" == *"Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again." ]]
 }
