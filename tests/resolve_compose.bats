@@ -410,6 +410,8 @@ prepare_tier_merge_head_vs_live() {
   # The refused-commit arm, not the build arm: the message was built, so a run
   # that also claimed a build failure would be emitting both arms' text.
   [[ "$stderr" != *"the merge message could not be built"* ]]
+  # Nor the message-file arm: the file was created, or the build would not run.
+  [[ "$stderr" != *"the merge message file could not be created"* ]]
   [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
   [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
   git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
@@ -467,6 +469,9 @@ EOF
   # No ordering glob pairs with it: the build's own failure is the stub's
   # silent `exit 1`, so there is no git reason on stderr for it to follow.
   [[ "$stderr" != *"the merge commit was refused"* ]]
+  # Nor the message-file arm above it: the file was created, and the build
+  # failed writing into it.
+  [[ "$stderr" != *"the merge message file could not be created"* ]]
 
   # Prepared, not abandoned: with the stub gone the continuation lands.
   rm -f "$fakebin/git"

@@ -312,7 +312,7 @@ green; no test is added for it.
 
 **Target:** `scripts/resolve.sh`:
 - the message file's `mktemp`, the merge message build and the `commit`, at
-  :309-326;
+  :309-330;
 - the comment at :105-109.
 
 **What changes.**
@@ -450,13 +450,20 @@ would also trip, so the reported line is the new one.
   on `jq` over a malformed state file, a failed staging command — as a landed
   merge. The allow-list closes those without a message for each.
   - The landed signal is **exit status 0**. `continue-after-merge` is the only
-    subcommand, every exit before the merge commit at :321 is non-zero, and
-    every exit 0 is below it; so status 0 means the commit landed and nothing
-    else does. A non-zero status with a recognised line gets that line's
-    handling; a non-zero status with no recognised line is reported as an
-    unrecognised failure, quoted whole, with no claim either way — the
-    post-landing `not because of divergence` push failure also exits 1, so
-    "non-zero" alone does not mean unlanded.
+    subcommand, every exit before the merge commit at :325 is non-zero, and
+    every exit 0 is below it; so status 0 means the commit landed. A non-zero
+    status claims nothing by itself: the post-landing
+    `not because of divergence` push failure exits 1, and so does an errexit
+    abort on the post-landing `update-ref -d`, state-file cleanup or tier
+    bookkeeping, with git's text alone. A non-zero status with a recognised line
+    gets that line's handling; a non-zero status with no recognised line is
+    reported as an unrecognised failure, quoted whole, with no claim either way.
+  - One recognised non-zero line is post-landing:
+    `gitlore: memory merge prepared`. The continuation prints it when a `live`
+    push after the merge commit is refused as divergence and it prepares a fresh
+    merge (`scripts/resolve.sh:360`, `:381`); nothing before the merge commit
+    prints it, since the memory gate skips the sentinel commit. It means the
+    merge landed and a new one waits.
   - `agents/memory-merger.md`:
     - Step 6's index rules add "no two bullets naming the same path".
     - Turn 2's `approved` branch reports the continuation's exit status, and
@@ -470,6 +477,9 @@ would also trip, so the reported line is the new one.
       - non-zero with the message-file, build or refused-commit line → quote it
         with git's reason printed above it, say the merge is unlanded and stays
         prepared, and stop without re-running the continuation.
+      - non-zero with `gitlore: memory merge prepared` → the merge landed and a
+        fresh one is prepared. Quote the directive and every other `gitlore:`
+        line, say both, and stop; the parent handles the new merge.
       - any other non-zero → quote everything the continuation printed on both
         streams, name the exit status, and say the outcome is unrecognised and
         the merge's fate unknown. Do not re-run it.
@@ -480,7 +490,10 @@ would also trip, so the reported line is the new one.
       message-file, build or refused-commit line gets no `rejected:` and no
       **Loop** (a rerun re-emits the same directive and meets the same refusal);
       go to **Summarize**. An unrecognised non-zero report goes to **Summarize**
-      the same way.
+      the same way. A report of `gitlore: memory merge prepared` goes to
+      **Loop**, as now: `resolve.sh` re-emits that directive for the fresh
+      merge, and routing it to **Summarize** would strand the merge the
+      triggering git operation needs.
     - Summarize section (:82-87): a merged-index refusal is re-synthesized, as
       now. A message-file, build or refused-commit line is relayed with git's
       reason: the merge stays prepared, and the remedy is to fix that reason and
