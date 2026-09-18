@@ -24,7 +24,10 @@ Take the questions in order and stop at the first that settles it. The verdicts
 are **discard**, **relocate**, **merge**, or **save as written**. A discard
 that leaves a real gap in the tooling files the missing sentence where it
 belongs before dropping the fact: the fact was wrong as a memory, but the gap
-it exposed is real and nothing else records it.
+it exposed is real and nothing else records it. A relocated fact leaves the
+store in the same change that lands it in its owner — file and index line
+together. A copy held until the owner ships is a second home with a deadline
+nobody tracks.
 
 1. **Is there an incident?** No incident, no entry. A rule or anti-pattern for
    a failure nobody has seen dilutes the real entries and costs context on every
