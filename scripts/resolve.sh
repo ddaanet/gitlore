@@ -306,12 +306,18 @@ if [ $# -ge 1 ]; then
       # Via a file, not a pipe: the sentinel has to be in the environment of
       # `git commit` itself, and `VAR=1 printf … | git commit` exports it to
       # the wrong end of the pipeline.
-      merge_msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-merge-msg.XXXXXX")
-      # A refused commit or a failed message build keeps MERGE_HEAD and the
-      # merge state, so a rerun lands it; only the message file is this run's
-      # to remove. Removal comes first in each `||` group below: errexit stays
-      # armed on its right-hand side, so a failing write to stderr there would
-      # skip whatever follows it and leave the scratch file behind.
+      merge_msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-merge-msg.XXXXXX") \
+        || {
+          echo "gitlore: the merge message file could not be created, so the merge was not committed; the merge stays prepared." >&2
+          exit 1
+        }
+      # A refused commit, a failed message build, or the failed mktemp above
+      # keeps MERGE_HEAD and the merge state, so a rerun lands it; only the
+      # message file is this run's to remove, and mktemp's own failure leaves
+      # none to remove. Removal comes first in each `||` group below that has a
+      # file: errexit stays armed on its right-hand side, so a failing write to
+      # stderr there would skip whatever follows it and leave the scratch file
+      # behind.
       gitlore_merge_commit_message "$memroot" "$mempath" > "$merge_msgfile" \
         || {
           rm -f "$merge_msgfile"
