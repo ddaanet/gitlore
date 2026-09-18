@@ -181,30 +181,47 @@ gains exactly one newline.
 
 ## Phase 4: continuation pre-landing exits (tdd, then prose), item 15
 
-**Harness** (`scripts/resolve.sh:310-315`). The new lines are descriptive only,
+**Harness** (`scripts/resolve.sh:309-326`). The new lines are descriptive only,
 with no directive:
+- A failed `mktemp` for the message file prints
+  `gitlore: the merge message file could not be created, so the merge was not committed; the merge stays prepared.`
+  before `exit 1`. `mktemp` failed, so there is no scratch file to remove first.
 - A failed message build prints
   `gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared.`
   before `exit 1`.
 - A refused merge commit prints
   `gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared.`
   after git's own reason.
-- Both share the phrase `the merge was not committed` with the merged-index
+- All three share the phrase `the merge was not committed` with the merged-index
   gate's line.
 
-**Prose.**
-- `agents/memory-merger.md:39`: any line with `the merge was not committed`
-  means the merge is unlanded.
+**Prose.** The readers use an **allow-list**, not the shared phrase as a
+deny-list: an exit that carries no `gitlore:` line at all — an errexit abort on
+`jq` over a malformed state file, a failed staging command — would otherwise
+fall through and be reported as a landed merge.
+- The landed signal is **exit status 0**. `continue-after-merge` is the only
+  subcommand, every exit before the merge commit is non-zero, and every exit 0
+  is below it. A non-zero status with a recognised line gets that line's
+  handling; a non-zero status with no recognised line is reported as an
+  unrecognised failure with no landing claim, because the post-landing
+  `not because of divergence` push failure also exits 1.
+- `agents/memory-merger.md:39`: turn 2's `approved` branch reports the exit
+  status and branches on it first.
+  - Exit 0: the merge landed; quote every `gitlore:` line as post-landing
+    information.
   - The merged-index line keeps its current handling: quote the problem lines,
     stop, and wait for `rejected:`.
-  - The build or commit line: quote it together with git's reason above it, say
-    the merge is unlanded, and stop.
-  - The "otherwise" branch stays post-landing.
+  - The message-file, build or commit line: quote it together with git's reason
+    above it, say the merge is unlanded, and stop.
+  - Any other non-zero: quote both streams whole, name the status, and say the
+    outcome is unrecognised. Nothing falls through to a landing claim.
 - `skills/resolve/SKILL.md:83-86` makes the same split.
   - A merged-index refusal is re-synthesized.
-  - A build or commit refusal is relayed with git's reason: the merge stays
-    prepared, and the remedy is to fix that reason and rerun `/gitlore:resolve`.
-    There is no rejection cycle.
+  - A message-file, build or commit refusal is relayed with git's reason: the
+    merge stays prepared, and the remedy is to fix that reason and rerun
+    `/gitlore:resolve`. There is no rejection cycle.
+  - An unrecognised non-zero outcome is relayed verbatim with its status, as a
+    state to inspect. Only an exit 0 is summarized as a landed merge.
 
 **Residual:** a staging failure inside `compose_merged_indexes` aborts under
 `errexit` with git's own text and no `gitlore:` line. The comment at
@@ -220,6 +237,10 @@ would suspend `errexit` across the function.
 - A message-build failure gets the same assertions, if a fixture can make
   `gitlore_merge_commit_message` fail. Otherwise the executor states why the
   case is untested.
+- A failed `mktemp` for the message file gets the same assertions, forced by a
+  `mktemp` stub keyed on the `gitlore-merge-msg.XXXXXX` template. `TMPDIR`
+  cannot be pointed at a missing directory: `gitlore_git` and the composition
+  helpers take `mktemp` under the same `TMPDIR` earlier in the run.
 
 ## Phase 5: test specificity (general, test-only), items 9–13
 
