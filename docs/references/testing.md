@@ -32,3 +32,32 @@ work, and cutting per-case work is the lever, not raising `--jobs`. `bats -T`
 reports per-test timings, so the breakdown that would direct that work comes
 free on the next full run. The input-hash sentinel caches a green result, so the
 full cost is paid precisely when a change is in flight.
+
+`format-docs` hard-wraps `docs/` and `plans/` apart from `plans/*/reports/`. A
+report records a run that has finished, so wrapping it rewrites a file its
+author is no longer there to read, and nothing is lost by leaving it: the
+`oversized-file` cap `check-docs-links.py` enforces covers `docs/` only.
+
+## What a sentinel vouches for
+
+`lint`, `test-unit`, `test-integration` and `check-distribution` each write one
+file under `git rev-parse --git-path gitlore/gates`, which resolves per
+worktree, so a linked worktree keeps verdicts of its own. The file holds a
+`cksum` over that recipe's declared inputs — each path's name and contents, plus
+the versions of the unpinned tools the run leans on — and a gate is valid
+exactly when re-hashing those inputs reproduces it. No timestamp is consulted,
+so a commit that leaves the tree unchanged leaves a pass standing.
+
+The hash is taken before the checks start and again before the pass is recorded.
+A recipe that finds the two different says so and exits non-zero instead of
+recording: a peer session editing an input during a nine-minute run would
+otherwise seal in a pass for a tree nothing checked.
+
+`test-unit` subtracts `tests/integration_*` from the set it shares with `lint`
+and `test-integration`, so editing an integration suite leaves the unit verdict
+standing.
+
+`format-docs`, `check-memory-hygiene.py`, `check-docs-links.py` and
+`check-version` run uncached and write no gate file, so four fresh gates are not
+the same thing as a green `precommit`. `GITLORE_GATE_FORCE=1` runs a gate
+whatever its sentinel says.
