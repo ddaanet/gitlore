@@ -263,6 +263,19 @@ and lingers in the carrier — reported, never silently destroyed. One `git show
 against a commit git already holds, and no reconciliation state that can outlive
 what it describes.
 
+**A path that arrived from upstream reaches `HEAD` only with the recompose that
+took it.** The up projection writes root's block from the merged carrier as an
+ordinary working-tree write, and what commits it is the take's own bookkeeping,
+which an explicit take records on a store that was clean before it (D49, in
+[merge-and-resolve.md](merge-and-resolve.md)); a take on a dirty store stages
+the pair instead, and a landed merge's compose leaves its write for the next
+FR11 commit. Until one of those lands, the arrived path is absent from root at
+`HEAD`, so the lookup reads it as one nobody authored in root — removing the
+line from the root index propagates nothing, and the carrier's copy goes in the
+same change or stays, reported as in the tier but not in the root index, and
+travels to every consumer of that tier. Root at `HEAD` is therefore what says
+whether a pointer removal is one edit or two.
+
 **Root with no line at all for an active tier states nothing about it**, so both
 halves defer: the down projection skips the tier entirely, and the layout adopts
 its carrier. That single rule covers a freshly mounted tier (the augmentation a
