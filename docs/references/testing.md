@@ -19,6 +19,13 @@ the harness already uses, so an agent-side flake stays distinguishable from a
 regression. Edge cases do not go in an eval; an eval's value is proving the
 whole chain fits together.
 
+The bats tier assumes bash >= 4.1, where a failing `[[ ]]` anywhere in a test
+body fails the test; under the bash 3.2 macOS ships, only the final command's
+status is read and every non-final assertion passes silently. A macOS run
+therefore drives bats with a modern bash, and the BSD behaviour the system tools
+would have contributed comes from the stubs `tests/bsd_portability.bats`
+installs instead.
+
 ## The gate's cost (NFR10)
 
 `just precommit` — `format-docs`, `check-distribution`, then `check-version`,

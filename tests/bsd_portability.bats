@@ -3,6 +3,14 @@
 # the bats wrapper have to run there too. Each test shadows one tool with a stub
 # that enforces the BSD contract (tests/helpers/bsd-stubs.bash), so a GNU-ism
 # the Linux run would accept fails here instead of on the next Mac.
+#
+# The tools under test are the 3.2-era ones; the assertions checking them are
+# not. They assume bash >= 4.1, where a failing `[[ ]]` anywhere in a test body
+# fails the test — under 3.2 only the final command's status is read, so every
+# non-final assertion here passes silently and the suite reports green on a Mac
+# it never checked. A macOS run therefore drives bats with a modern bash
+# (Homebrew's), and the stubs supply the BSD behaviour the system tools would
+# have contributed.
 # $status/$output are populated by bats `run`; shellcheck cannot see them.
 # shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
