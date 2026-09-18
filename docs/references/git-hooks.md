@@ -153,13 +153,13 @@ approved summary already covered, never new content.
 committing past one destroys or publishes.** A `gitlore_compose_check` refusal
 withholds a projection and destroys nothing, so what committing past it risks is
 publishing the problem, and only a file the commit changes can do that. A
-duplicate, interleaved or welded line in root's `MEMORY.md` or in a tier carrier
-with uncommitted changes aborts: the output lists every changed index file with
-a problem, the approval is restamped, and the agent is told to edit the named
-lines and retry, the summary needing approval again. Compose rc 1 writes
-nothing, so what reads as changed is the same before and after it. The same
-problem in a file with no uncommitted changes — a tier dirty only outside its
-carrier included — is not what this commit carries, and the manifest and
+duplicate, interleaved or welded line in an index file with uncommitted changes
+— root's `MEMORY.md` or a tier carrier — aborts: the output lists every changed
+index file with a problem, the approval is restamped, and the agent is told to
+edit the named lines and retry, the summary needing approval again. Compose rc 1
+writes nothing, so what reads as changed is the same before and after it. The
+same problem in a file with no uncommitted changes — a tier dirty only outside
+its carrier included — is not what this commit carries, and the manifest and
 leftover-prefix rules name no index file; all of those are reported and the
 commit goes ahead. The line this draws is the one D52
 ([tier-arrival-repair.md](tier-arrival-repair.md)) builds on: the wording of an

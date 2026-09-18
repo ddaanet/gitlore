@@ -54,12 +54,12 @@ it can force a standalone memory commit.
 **Both IPC files are removed only on a complete commit.** A locked repo and an
 in-flight merge are expected transients, so on any failure the trigger *and* the
 message file stay put and the next batch retries — no lost approval, and for a
-transient no agent action. A refusal that needs an edit is retried the same way
-but lands only once the edit is made: a problem in an index file the commit
-changes (D50, in [git-hooks.md](git-hooks.md)) or an off-pin tier. Its reason
-names the fix, and the hook's message to the agent defers to it. A trigger with
-no approved summary is likewise kept, so the commit completes on its own the
-moment the summary lands.
+transient no agent action. A refusal that needs the agent to act is retried the
+same way but lands only once it is done: an edit, for a problem in an index file
+the commit changes (D50, in [git-hooks.md](git-hooks.md)), or a checkout or
+take, for an off-pin tier. Its reason names the fix, and the hook's message to
+the agent defers to it. A trigger with no approved summary is likewise kept, so
+the commit completes on its own the moment the summary lands.
 
 ## Decisions — D4, D12, D19, D22
 

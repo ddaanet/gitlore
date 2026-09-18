@@ -94,7 +94,14 @@ The division of labour is D7's: the script decides, the agent writes prose.
    any reason but divergence exits 1 once an unadopted tier is rested
    ([tier-stores.md](tier-stores.md)). It finds the prepared merge by walking
    the stores rather than assuming memory, and refuses outright if two are
-   prepared at once.
+   prepared at once. Only its exit 0 means the merge landed: every exit before
+   the merge commit is non-zero. A message file that cannot be created, a
+   message that cannot be built and a refused merge commit each print
+   `… so the merge was not committed; the merge stays prepared.` after the
+   failing command's own text, and a rerun once that cause is fixed lands the
+   merge. The sub-agent and the skill route those lines, the merged-index
+   refusal and a fresh `gitlore: memory merge prepared` by name, and report any
+   other non-zero outcome as unrecognised rather than landed.
 5. **The skill loops** until `resolve.sh` exits 0 (a second flavor can be
    waiting; the script gates every tier before memory, the order publishing
    keeps, so memory's pointer never goes out ahead of a tier it records), then
