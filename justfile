@@ -78,6 +78,11 @@ check-distribution:
 # sentinel: a full pass is ~0.4s, less than the bookkeeping would cost. rumdl
 # comes from uv.lock via `uv sync`, on PATH through `.envrc`; the pin check
 # turns a stale `.venv` into a message instead of a differently wrapped tree.
+#
+# `plans/*/reports/` is out: a report is a record of a run that has finished,
+# so wrapping it rewrites a file its author is no longer there to read, and it
+# escapes no check by staying unwrapped — the line cap `check-docs-links.py`
+# enforces covers `docs/` only.
 format-docs:
     #!{{ bash_prolog }}
     have=$({{ rumdl }} --version) || { echo "format-docs: rumdl not on PATH — run 'uv sync' and let direnv load .envrc" >&2; exit 1; }
@@ -88,7 +93,7 @@ format-docs:
     # rest of `precommit`. Only its own summary line survives a clean exit; a
     # real failure (rc 2 — bad path, bad config) still prints in full, so
     # nothing that would change the outcome is filtered.
-    out=$({{ rumdl }} fmt --no-cache docs plans 2>&1) && rc=0 || rc=$?
+    out=$({{ rumdl }} fmt --no-cache --exclude 'plans/*/reports' docs plans 2>&1) && rc=0 || rc=$?
     if [ "$rc" -ne 0 ]; then
         [ -n "$out" ] && printf '%s\n' "$out" >&2
         exit "$rc"
@@ -116,9 +121,10 @@ prerelease: precommit
 # the shell variables `sentinel` and `gate_inputs` that `record-sentinel`
 # reads back, so a second gate in the same script would clobber the first's.
 #
-# All three share `precommit_inputs`: `scripts/lint-shell.sh` discovers every
-# tracked shell file, and both bats halves source `scripts/` and `hooks/`.
-# Narrowing `test-unit` to exclude `tests/integration_*` is a later step.
+# All three start from `precommit_inputs`: `scripts/lint-shell.sh` discovers
+# every tracked shell file, and both bats halves source `scripts/` and
+# `hooks/`. `test-unit` narrows from there, since it runs none of the
+# integration suites.
 
 # shellcheck over every tracked shell file, discovered by extension or shebang.
 lint:
@@ -131,7 +137,12 @@ test: test-unit test-integration
 
 test-unit:
     #!{{ bash_prolog }}
-    sentinel-guard test-unit {{ precommit_inputs }}
+    # The integration suites are subtracted from the shared set: this recipe
+    # never runs one, so editing one must not send the unit half through a
+    # re-run. A git exclude pathspec, quoted — the interpolation beside it is
+    # word-split on purpose, and an unquoted pathspec would reach the shell's
+    # own globbing on the way past.
+    sentinel-guard test-unit {{ precommit_inputs }} ':(exclude)tests/integration_*'
     # A glob, never a hand list: a list drifted once and orphaned five suites,
     # including the memory gate's.
     shopt -s nullglob
@@ -171,11 +182,16 @@ check-sentinel () {
     mkdir -p "$sentinel_dir"
     sentinel="$sentinel_dir/$1"; shift
     gate_inputs=("$@")
+    # Taken before the checks run, and on every path — a forced run and a
+    # first run reach `record-sentinel` too. It is what `record-sentinel`
+    # compares against, so a pass describes the tree the checks read rather
+    # than whatever the tree became while they ran. Empty means unhashable.
+    guard_hash=$(gate-inputs-hash) || guard_hash=""
     [ -z "${GITLORE_GATE_FORCE:-}" ] || return 1
     [ -f "$sentinel" ] || return 1
+    [ -n "$guard_hash" ] || return 1
     recorded=$(cat "$sentinel")
-    current=$(gate-inputs-hash) || return 1
-    [ "$recorded" = "$current" ]
+    [ "$recorded" = "$guard_hash" ]
 }
 
 # Recipe name, then input pathspecs. The recipe name is the gate name: it
@@ -194,13 +210,25 @@ sentinel-guard () {
 # on the next run if the failure is deterministic, skipping a tree nothing
 # checked. Say so loudly; a cache that quietly stopped caching is the failure
 # nobody hears about.
+#
+# The pass is recorded only against the hash `check-sentinel` took before the
+# checks started. A peer session editing an input mid-run moves the hash, and
+# recording the new one would seal in a pass for a tree nothing checked; the
+# gate leaves no sentinel and fails, because a caller that saw the recipe exit
+# 0 would read it as green.
 record-sentinel () {
-    if hash=$(gate-inputs-hash); then
-        printf '%s\n' "$hash" > "$sentinel"
-    else
+    hash=$(gate-inputs-hash) || hash=""
+    if [ -z "$hash" ] || [ -z "${guard_hash:-}" ]; then
         rm -f "$sentinel"
         echo "gate: could not hash inputs; the pass was NOT recorded" >&2
+        return
     fi
+    if [ "$hash" != "$guard_hash" ]; then
+        rm -f "$sentinel"
+        echo "gate: inputs changed while the checks ran; the pass was NOT recorded" >&2
+        exit 1
+    fi
+    printf '%s\n' "$hash" > "$sentinel"
 }
 
 # Names as well as contents, so a rename or deletion counts; tool versions

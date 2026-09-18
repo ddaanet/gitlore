@@ -58,20 +58,27 @@ from the script the node names.
   10-minute foreground wait, so from an agent run it with
   `run_in_background: true` — a background task has no duration cap and runs
   across turns in the main session; the completion notification carries the
-  verdict.
+  verdict, and `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1` in
+  `.claude/settings.local.json` is what keeps it from being reaped mid-run.
   In a subagent that notification may never arrive, and the run is still fine:
-  read the verdict from the gates instead — `.git/gitlore/gates/{lint,test-unit,test-integration,check-distribution}`,
-  each written on that recipe's pass, valid for the tree when its mtime
-  postdates the last edit to any gated input. Neither `ps` nor stdout settles
-  it: a fresh Bash call cannot see another background task's processes, and
-  `scripts/run-bats.sh` buffers the whole suite into a log file.
-  Only if the run dies, fall back to `just lint`, `just test-integration` and
-  `just test-unit` as separate sequential calls (the box will not take two
-  suites at once); each records its own sentinel — a killed run keeps whatever
-  recipes finished, so only the missing ones need re-running. `just evals`
+  read the verdict from the gates instead — `lint`, `test-unit`,
+  `test-integration` and `check-distribution` each write one under
+  `$(git rev-parse --git-path gitlore/gates)`, which resolves per worktree. A
+  gate file holds a content hash of that recipe's declared inputs, so it is
+  valid when re-hashing them reproduces it; mtime settles nothing, and an input
+  edited mid-run fails the recipe rather than recording a pass. `format-docs`,
+  `check-memory-hygiene.py`, `check-docs-links.py` and `check-version` run
+  uncached and write no gate file, so four fresh gates are not a green
+  `precommit`. Neither `ps` nor stdout settles a run either: a fresh Bash call
+  cannot see another background task's processes, and `scripts/run-bats.sh`
+  buffers the whole suite into a log file.
+  Only if the run dies, fall back to `just lint`, `just check-distribution`,
+  `just test-integration` and `just test-unit` as separate sequential calls;
+  each records its own sentinel — a killed run keeps whatever recipes
+  finished, so only the missing ones need re-running. `just evals`
   drives the real claude CLI and costs time and money — run it explicitly, not
   as part of a release. `just release` depends on `prerelease`, which is just
-  `precommit`.
+  `precommit`. Mechanism in `docs/references/testing.md`.
 - macOS is a target: bash 3.2 and BSD `sed`/`mktemp`/`grep`/`find`/`stat`.
   `tests/helpers/bsd-stubs.bash` shadows a tool with its BSD-strict contract so
   a GNU-ism fails on Linux; `tests/bsd_portability.bats` holds the lock-ins.

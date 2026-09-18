@@ -79,6 +79,42 @@ gate_record() {
   in_gate_repo "check-sentinel g $1 || true; record-sentinel"
 }
 
+# A gate's `sentinel-guard` line as its shell receives it, rebuilt from just's
+# own dump so the assertion reads the shipped recipe rather than a copy of it.
+# Body segments come back as literal strings and as interpolations naming a
+# variable; `just --evaluate` supplies the latter. No segment here spans a
+# newline, which is what lets the two kinds travel as one line each.
+guard_line() {
+  local segments seg rendered=""
+  segments=$(
+    just_here --dump --dump-format json | jq -r --arg r "$1" '
+      .recipes[$r].body[]
+      | select((.[0] | type) == "string" and (.[0] | startswith("sentinel-guard ")))
+      | .[]
+      | if type == "string" then "L" + . else "V" + .[1] end
+    '
+  )
+  while IFS= read -r seg || [ -n "$seg" ]; do
+    case "$seg" in
+      L*) rendered="$rendered${seg#L}" ;;
+      V*) rendered="$rendered$(just_here --evaluate "${seg#V}")" ;;
+    esac
+  done <<< "$segments"
+  printf '%s\n' "$rendered"
+}
+
+# The paths a gate's declared inputs actually enumerate, in this repo.
+guard_input_files() {
+  local line
+  line=$(guard_line "$1") || return 1
+  # The recipe's own quoting decides the word boundaries, so the shell that
+  # splits them has to be the shell — the gate's arguments carry an exclude
+  # pathspec whose parentheses and glob are protected by quotes in the justfile.
+  eval "set -- $line"
+  shift 2
+  git -C "$PLUGIN_ROOT" ls-files --cached --others --exclude-standard -- "$@"
+}
+
 # Every .bats file the repo has, tracked or merely written — the same set the
 # recipes' globs see, so a brand-new suite counts before it is added.
 all_suites() {
@@ -259,6 +295,27 @@ discovered_suites() {
   done
 }
 
+@test "the unit gate's inputs leave the integration suites out, the integration gate's keep them" {
+  # The two halves share `precommit_inputs`, so without the narrowing an edit to
+  # an integration suite re-runs the unit half for nothing. Asserted on the
+  # files the declared inputs enumerate, not on the declaration's text: a
+  # pathspec that stopped excluding would still read correctly.
+  run guard_input_files test-unit
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"tests/integration_"* ]]
+  # The narrowing must take only the integration suites with it.
+  [[ "$output" == *"tests/justfile_gates.bats"* ]]
+  [[ "$output" == *"scripts/run-bats.sh"* ]]
+
+  run guard_input_files test-integration
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tests/integration_"* ]]
+
+  run guard_input_files lint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tests/integration_"* ]]
+}
+
 @test "the evals input set is a superset of precommit's, and adds the shipped plugin content" {
   # The two sets exist because the evals drive the real CLI against the
   # installed plugin: an edit to what the plugin ships must invalidate them.
@@ -320,13 +377,55 @@ EOF
 
   run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION='$pin' RUMDL_STUB_ARGS='$STUB_DIR/args' just rumdl='$STUB_DIR/rumdl' format-docs"
   [ "$status" -eq 0 ]
-  [ "$(cat "$STUB_DIR/args")" = $'fmt\n--no-cache\ndocs\nplans' ]
+  [ "$(cat "$STUB_DIR/args")" = $'fmt\n--no-cache\n--exclude\nplans/*/reports\ndocs\nplans' ]
 
   rm -f "$STUB_DIR/args"
   run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION=0.0.1 RUMDL_STUB_ARGS='$STUB_DIR/args' just rumdl='$STUB_DIR/rumdl' format-docs"
   [ "$status" -ne 0 ]
   [[ "$output" == *"pins $pin"* ]]
   [ ! -e "$STUB_DIR/args" ]
+}
+
+@test "the wrap set spares plans/*/reports/ and nothing else under plans/" {
+  # A report is written once and read once, by an agent that has already left;
+  # wrapping it rewrites a file nobody is going to read again, and the line cap
+  # `check-docs-links.py` enforces covers `docs/` only, so an unwrapped report
+  # escapes no check. The recipe's own argument list is replayed through the
+  # real rumdl against a fixture tree: a stub would only prove the flag was
+  # passed, not that the pattern matches what it is meant to.
+  command -v rumdl > /dev/null || {
+    echo "rumdl is not on PATH; run 'uv sync' and let direnv load .envrc" >&2
+    return 1
+  }
+  cat > "$STUB_DIR/rumdl" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  --version) echo "rumdl $RUMDL_STUB_VERSION" ;;
+  *) printf '%s\n' "$@" > "$RUMDL_STUB_ARGS" ;;
+esac
+EOF
+  chmod +x "$STUB_DIR/rumdl"
+  pin=$(sed -n 's/.*"rumdl==\([0-9.]*\)".*/\1/p' "$PLUGIN_ROOT/pyproject.toml")
+  run bash -c "cd '$PLUGIN_ROOT' && RUMDL_STUB_VERSION='$pin' RUMDL_STUB_ARGS='$STUB_DIR/args' just rumdl='$STUB_DIR/rumdl' format-docs"
+  [ "$status" -eq 0 ]
+  args=()
+  while IFS= read -r arg || [ -n "$arg" ]; do
+    args+=("$arg")
+  done < "$STUB_DIR/args"
+
+  # The repo's own config, so the fixture is wrapped by the rules the tree is.
+  WRAP_TREE="$STUB_DIR/tree"
+  mkdir -p "$WRAP_TREE/docs" "$WRAP_TREE/plans/job/reports"
+  cp "$PLUGIN_ROOT/.rumdl.toml" "$WRAP_TREE/.rumdl.toml"
+  long='One deliberately long line of prose, written to run past the eighty column boundary that MD013 reflow wraps at.'
+  for f in docs/d.md plans/job/p.md plans/job/reports/r.md; do
+    printf '# H\n\n%s\n' "$long" > "$WRAP_TREE/$f"
+  done
+
+  ( cd "$WRAP_TREE" && rumdl "${args[@]}" > /dev/null 2>&1 ) || true
+  [ "$(wc -l < "$WRAP_TREE/docs/d.md")" -gt 3 ]
+  [ "$(wc -l < "$WRAP_TREE/plans/job/p.md")" -gt 3 ]
+  [ "$(wc -l < "$WRAP_TREE/plans/job/reports/r.md")" -eq 3 ]
 }
 
 @test "format-docs prints only rumdl's summary when it succeeds, all of it when it fails" {
@@ -442,6 +541,43 @@ EOF
     "cd '$GATE_REPO' && . '$PROLOG' && if check-sentinel g src; then echo skip; else echo run; fi"
   [ "$status" -eq 0 ]
   [ "$output" = run ]
+}
+
+@test "an input edited while the checks ran is not recorded as a pass" {
+  # The window a hash taken only at the end leaves open: a peer session's edit
+  # during a long run would be sealed in as a pass for a tree nothing checked.
+  # The gate must leave no sentinel and must fail, so the caller is never told
+  # the tree is green.
+  setup_gate_repo
+  gate_record src
+  run in_gate_repo "check-sentinel g src || true
+    printf 'edited\n' > src/a.txt
+    record-sentinel
+    echo after-record"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"NOT recorded"* ]]
+  [[ "$output" != *after-record* ]]
+  [ ! -e "$GATE_REPO/.git/gitlore/gates/g" ]
+
+  run gate_verdict src
+  [ "$status" -eq 0 ]
+  [ "$output" = run ]
+}
+
+@test "an edit outside the declared inputs during a run still records the pass" {
+  # The complement: the comparison is scoped to what the gate reads, so an
+  # unrelated edit mid-run must not cost a nine-minute re-run.
+  setup_gate_repo
+  run in_gate_repo "check-sentinel g src || true
+    printf 'moved\n' > other/c.txt
+    record-sentinel
+    echo after-record"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *after-record* ]]
+
+  run gate_verdict src
+  [ "$status" -eq 0 ]
+  [ "$output" = skip ]
 }
 
 @test "an unhashable input set records nothing, says so, and never skips" {
