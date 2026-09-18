@@ -18,30 +18,32 @@ this builds on are in [tier-stores.md](tier-stores.md); the check's rules are in
 that fails the check does not land**
 
 A carrier that arrives with a duplicate pointer, a non-bullet line inside the
-pointer block or a welded line fails `gitlore_compose_check`, so the take walks
-back with the arrival in `live`. Every later take refuses the same way, and
-every push retakes and fails. Nothing local reaches it: the worktree carrier the
-refusal names is clean, a take refuses a dirty tier, the pin guard refuses a
-tier checked out at `live`, and a hand commit on `live` bypasses the approval
-gate. D50's abort ([git-hooks.md](git-hooks.md)) stops a gitlore commit
-publishing such a defect in an index file it changes; a hand push or an older
-gitlore still can. So the take repairs what arrives, and what this repo authors
-— a commit, a merge synthesis — is refused and re-authored.
+pointer block or a welded line fails `gitlore_compose_check`. Left unrepaired,
+it wedges the tier: the take walks back with the arrival in `live`, every later
+take refuses the same way, and every push retakes and fails. Nothing local
+reaches it: the worktree carrier the refusal names is clean, a take refuses a
+dirty tier, the pin guard refuses a tier checked out at `live`, and a hand
+commit on `live` bypasses the approval gate. D50's abort
+([git-hooks.md](git-hooks.md)) stops a gitlore commit publishing such a defect
+in an index file it changes; a hand push or an older gitlore still can. So the
+take repairs what arrives, and what this repo authors — a commit, a merge
+synthesis — is refused and re-authored.
 
 **The repair is a plain commit on top of the arrival.** When a problem the
 refusal prints names the arriving carrier — by the exact `<file>: ` prefix,
 against the memory path the check was given (`gitlore_compose_problems_in`) —
-`gitlore_adopt_repair_arrival` repairs a scratch copy of the carrier inside the
-tier's gitdir and rechecks it. It builds the commit from a temporary index with
-`commit-tree`, the arrival as its only parent, subject
-`Repair the MEMORY.md structure <tier> received` and one body line per edit. It
-advances the tier's local `live` with an ff-checked `push .`, checks the tier
-out at `live`, and retries the up projection. History stays linear (D6), nothing
-yields, and no merge machinery runs, so the entry-wise index pass never touches
-a line the rules do not name. The commit is unprompted under D49: it adds no
-text to lines that already passed an approval gate. Once `live` holds it, the
-take prints `gitlore: repaired <t>'s arrival: <edit>` for each edit, naming each
-dropped line verbatim.
+`gitlore_adopt_repair_arrival` repairs a scratch copy of the carrier outside the
+repository, in a `mktemp -d` directory under `$TMPDIR`, and rechecks it. It
+builds the commit from a temporary index with `commit-tree`, the arrival as its
+only parent, subject `Repair the MEMORY.md structure <tier> received` and one
+body line per edit. It advances the tier's local `live` with an ff-checked
+`push .`, checks the tier out at `live`, and retries the up projection. History
+stays linear (D6), nothing yields, and no merge machinery runs, so the
+entry-wise index pass never touches a line the rules do not name. The commit is
+unprompted under D49: it adds no text to lines that already passed an approval
+gate. Once `live` holds it, the take prints
+`gitlore: repaired <t>'s arrival: <edit>` for each edit, naming each dropped
+line verbatim.
 
 **The worktree never holds the repair uncommitted**, because a carrier written
 there first would strand a killed take: `submodule update` cannot check the pin
@@ -53,6 +55,16 @@ take repairs again or adopts the repair. The repair is deterministic, so losing
 one costs nothing, and `commit-tree` runs no hook, so no sentinel is needed. A
 refused `live` update leaves the commit unreachable, the tier on its pin and
 `live` on the arrival, and the take exits 1 with git's message.
+
+**A failed repair walks back and says what `live` holds.** Each step that can
+fail — the scratch directory, the arrival and pin reads, the rewrite, the commit
+build, the `live` advance, the checkout that follows it — prints its own failure
+line, then the full refusal under
+`gitlore: the root index could not take tier '<t>''s lines:`, and walks the tier
+back to its pin. The walk-back names what the tier's local `live` keeps:
+`what arrived`, or `the repair` once the advance has put it there. These
+failures are transient, so the remedy is `Run /gitlore:merge again.`: the next
+take repairs from scratch.
 
 **The repair restructures and never rewords.** `gitlore_repair_index` applies
 three rules, in this order:
@@ -82,18 +94,24 @@ repair in `live`, reporting those problems as what adoption waits on, and the
 next take or push adopts the repair with no second one. With no problem naming
 the carrier nothing is repaired. When the recheck still fails — a weld whose
 second path names no file in the tier — nothing is committed, the report
-attributes the problems to `live:MEMORY.md` rather than the clean worktree
-carrier, and it closes
-`Once the index is fixed where it was published, run /gitlore:merge again.` That
-tier stays wedged, every take walking back and every push failing, until
+attributes the carrier's problems to `live:MEMORY.md` rather than the clean
+worktree carrier, and it closes
+`Once the index is fixed where it was published, run /gitlore:merge again.` Any
+refusal line naming another index follows under the root-index header, and the
+remedy then names both fixes:
+`Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again.`
+That tier stays wedged, every take walking back and every push failing, until
 upstream edits the line. Tiers are taken one at a time and the first failure
 stops the pass, so several defective arrivals are repaired in turn.
 
 **A repair publishes the way its take does.** A take inside a push publishes it
-in that push, ahead of memory's push recording its gitlink (D42): both push arms
-reach the take — `live` ahead of `HEAD`, and a tier push refused as `behind`,
-which pushes the tier again when the take left `live` ahead of `origin/live`.
-That take prints
+in that push, ahead of memory's push recording its gitlink (D42). Two places in
+the tier loop run the take — `live` ahead of `HEAD`, and a tier push refused as
+`behind`, which pushes that tier again when the take left `live` ahead of
+`origin/live`. Either can repair a tier other than the one being pushed. After
+the tier loop, before memory's push, one pass pushes every tier whose `live` is
+not an ancestor of its `origin/live`, so a repair to a tier whose own iteration
+already finished goes out too. That take prints
 `gitlore: tier '<t>' — the repair is committed in its local 'live', and this push publishes it.`;
 under `/gitlore:merge` the line ends `; /gitlore:push publishes it.` A repair
 resting on local problems publishes nothing until they are fixed. A consumer

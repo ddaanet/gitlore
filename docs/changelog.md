@@ -6,6 +6,14 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-18 — Repair and continuation failures say what they left](changelog/2026-09-18-repair-and-continuation-failures-say-what-they-left.md)
+  — a failed repair now prints the whole refusal, a remedy that fits its arm and
+  what the tier's `live` keeps; its scratch copy moves out of the repository; a
+  repair a mid-loop take makes to an already-pushed tier is published by a pass
+  after the tier loop; the repair no longer strips the newline from a line it
+  leaves last; every pre-landing exit of a merge continuation that has a message
+  says the merge was not committed, and the merger and the resolve skill treat
+  only exit 0 as a landed merge
 - [2026-09-15 — An arrival the root index cannot adopt is repaired](changelog/2026-09-15-an-arrival-the-root-index-cannot-adopt-is-repaired.md)
   — a tier carrier arriving with a duplicate pointer, a stray line or a welded
   line left every take refusing and every push failing, with no local remedy;
@@ -13,8 +21,8 @@ Newest first.
   (D50), a take repairs the arrival with a plain commit that restructures and
   never rewords and publishes it the way the take does (D52), a merge
   continuation keeps a merged index that fails the check unlanded, a push
-  refused for any other reason rests the tier only when its `live` holds the
-  merge, and `/gitlore:resolve` gates tiers before memory
+  refused for any reason but divergence rests the tier only when its `live`
+  holds the merge, and `/gitlore:resolve` gates tiers before memory
 - [2026-09-13 — The relay is one file per report](changelog/2026-09-13-the-relay-is-one-file-per-report.md)
   — hooks matching one event run in parallel, so the per-agent marker the two
   `PostToolBatch` reporters merged into lost a report to the race and the drain

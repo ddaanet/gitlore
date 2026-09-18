@@ -175,9 +175,11 @@ next take retries the whole adoption once the refusal is fixed. The checkout
 loses nothing: a take refuses a dirty tier, and the up projection writes no
 carrier. A refusal in which a problem names the arriving carrier is repaired
 before it walks anything back (D52). The tier walks back only when no problem
-names the carrier, when the repair cannot be built or cannot fix the carrier, or
-when the retry still refuses on what this repo holds, and in that last case
-`live` keeps the repair rather than the arrival.
+names the carrier, when the repair cannot be built or cannot fix the carrier,
+when `live` cannot take it or the worktree cannot follow, or when the retry
+still refuses on what this repo holds. The walk-back names what the tier's local
+`live` keeps: the repair, once it is there — after a refused retry, or a
+checkout that could not follow the advance — and otherwise what arrived.
 
 **A tier merge the root index cannot adopt still lands, and the root records
 none of it.** A merged carrier that fails the check never gets here: that merge
@@ -189,10 +191,10 @@ continuation commits the merge in the tier, clears the merge state and advances
 commit for the reason above. Once nothing is left to yield on, it checks the
 tier out at the pin the memory store's index holds, the merge kept in `live`. It
 exits 0 when its pushes went through, because the merge landed, and exits 1
-after resting the tier when a push is refused for any reason but divergence. The
-remedy is printed instead — fix the store and run `/gitlore:merge` — and the
-next `/gitlore:resolve` run refuses the tier's `live` ahead of `HEAD` with the
-same one.
+after resting the tier when a push is refused for any reason but divergence. It
+prints the remedy — fix the store and run `/gitlore:merge` — and the next
+`/gitlore:resolve` run refuses the tier's `live` ahead of `HEAD` with the same
+one.
 
 Three cases leave the tier off its pin. A yield leaves it alone, because the
 merge it prepares sits at `HEAD` and that merge's own continuation retries the

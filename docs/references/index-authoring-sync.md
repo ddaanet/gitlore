@@ -2,7 +2,7 @@
 
 The authoring surface: what an agent edits when it writes a memory, how the
 index line and the file's frontmatter are kept in step, and where the guidance
-for writing a fact and curating the index lives and is invoked. One of the four
+for writing a fact and curating the index lives and is invoked. One of the five
 nodes of the tiered-memory subsystem (FR15), whose entry point is
 [tiered-memory.md](tiered-memory.md).
 
