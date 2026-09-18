@@ -111,24 +111,27 @@ store's **index** rather than its `HEAD`, because the index is what
 move into (D43) — a landed merge is not a defect for as long as the memory
 commit recording it is pending. A tier that is mid-merge gets the remedy its own
 state needs, `/gitlore:resolve`, rather than the return-to-the-pin checkout,
-which would unlink `MERGE_HEAD` and destroy the prepared merge. A mounted tier
-*absent* from the manifest is not an error, only inactive; the asymmetry is
-deliberate — listed-but-absent = broken, present-but-unlisted = dormant. In the
-continuation, a problem in the merged index itself blocks the landing — in the
-tier's carrier for a tier merge, and a duplicate, interleaved or welded line in
-root's `MEMORY.md` for a memory-root merge. Nothing is committed, the merge
-stays prepared, and the merger re-synthesizes with the problem lines in hand:
-the defect is in text this repo is authoring, and an edit to the named lines
-clears it (D52, in [tier-arrival-repair.md](tier-arrival-repair.md)). Any other
-refusal is reported and does not block, because the merge is synthesized and
-approved by then, and stranding it over a problem outside what it merged is the
-worse outcome. A memory-root merge then commits uncomposed and says so; a tier
-merge lands in the tier, which rests on its pin unadopted (D43). A store with no
-root `MEMORY.md` runs no check, so nothing blocks there. Composition spans the
-whole memory tree, so from the continuation it can also write a store *other*
-than the one being committed — the root index when a tier merged, a carrier when
-memory did. Those writes stay dirty and ride the next FR11 commit, the same
-float the `SessionStart` recompose produces.
+which would unlink `MERGE_HEAD` and destroy the prepared merge. A tier merely
+ahead of its pin — clean, its local `live` holding every commit its `HEAD` does
+— is checked out at the pin and sent to `/gitlore:merge`, which adopts from
+`live` ([git-hooks.md](git-hooks.md)). A mounted tier *absent* from the manifest
+is not an error, only inactive; the asymmetry is deliberate —
+listed-but-absent = broken, present-but-unlisted = dormant. In the continuation,
+a problem in the merged index itself blocks the landing — in the tier's carrier
+for a tier merge, and a duplicate, interleaved or welded line in root's
+`MEMORY.md` for a memory-root merge. Nothing is committed, the merge stays
+prepared, and the merger re-synthesizes with the problem lines in hand: the
+defect is in text this repo is authoring, and an edit to the named lines clears
+it (D52, in [tier-arrival-repair.md](tier-arrival-repair.md)). Any other refusal
+is reported and does not block, because the merge is synthesized and approved by
+then, and stranding it over a problem outside what it merged is the worse
+outcome. A memory-root merge then commits uncomposed and says so; a tier merge
+lands in the tier, which rests on its pin unadopted (D43). A store with no root
+`MEMORY.md` runs no check, so nothing blocks there. Composition spans the whole
+memory tree, so from the continuation it can also write a store *other* than the
+one being committed — the root index when a tier merged, a carrier when memory
+did. Those writes stay dirty and ride the next FR11 commit, the same float the
+`SessionStart` recompose produces.
 
 **The `Bash` arm is measured, not assumed**. Watching `Bash` widens the
 `PreToolUse` matcher from calls that name a memory file to every shell call, so

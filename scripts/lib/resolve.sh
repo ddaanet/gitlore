@@ -1072,14 +1072,12 @@ $pin_problems"
       # The agent arm names no remedy of its own. Every branch of
       # gitlore_compose_check_pins already printed the one its cause takes —
       # /gitlore:resolve mid-merge, the return-to-the-pin checkout sideways or
-      # diverged, inspect-and-stage for a tier ahead of its pin — and
+      # diverged, /gitlore:merge for a tier ahead of its pin, from the pin the
+      # guard put it back on or once its commits reach its local `live` — and
       # $pin_problems can carry several tiers with different causes in one
       # abort, so no single remedy named here is right for all of them, and
       # choosing per tier would re-derive a cause that function already
-      # decided. /gitlore:merge in particular sent the reader in a circle: it
-      # takes upstream through gitlore_adopt_advanced_live, which fires only
-      # when `live` is ahead of HEAD, so for a tier ahead of its own pin the
-      # remote is contained in HEAD and the take reports nothing to take.
+      # decided.
       gitlore_say_for_agent_or_user \
         "$pin_header
 gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit. Every remedy writes into the memory store, so the summary has to be approved again before the retry." \
@@ -1119,7 +1117,8 @@ $compose_result"
         if printf '%s\n' "$compose_result" \
           | gitlore_compose_problems_in "$mempath/MEMORY.md" >/dev/null; then
           index_status=$(git -C "$mempath" status --porcelain -- MEMORY.md) \
-            || { touch "$msgfile"; return 1; }
+            || { gitlore_say_unreadable_index_status "$mempath/MEMORY.md" "$refusal"
+                 touch "$msgfile"; return 1; }
           [ -z "$index_status" ] || abort_files="$mempath/MEMORY.md"
         fi
         while IFS= read -r tier; do
@@ -1129,7 +1128,8 @@ $compose_result"
             | gitlore_compose_problems_in "$mempath/$tier/MEMORY.md" >/dev/null \
             || continue
           index_status=$(git -C "$mempath/$tier" status --porcelain -- MEMORY.md) \
-            || { touch "$msgfile"; return 1; }
+            || { gitlore_say_unreadable_index_status "$mempath/$tier/MEMORY.md" "$refusal"
+                 touch "$msgfile"; return 1; }
           [ -z "$index_status" ] \
             || abort_files="${abort_files:+$abort_files
 }$mempath/$tier/MEMORY.md"
@@ -1251,6 +1251,23 @@ $push_err" >&2
   fi
 
   return 0
+}
+
+# Report the abort an unreadable index status forces, on both channels. That
+# read decides whether a composition problem is in a file this commit changes,
+# i.e. whether committing would publish it, so a failure there leaves the
+# question open and the commit stops on it — with the compose refusal that sent
+# the run to the read, which is the list a retry has to fix. The approval is
+# restamped by the caller, as after every failure that prepared no merge, so the
+# retry reuses the summary as it stands.
+# Args: $1 = the index file whose status could not be read, $2 = that refusal.
+gitlore_say_unreadable_index_status() {
+  local file="$1" refusal="$2"
+  gitlore_say_for_agent_or_user \
+    "$refusal
+gitlore: the commit was aborted because git could not read the status of $file, so whether this commit changes that index is unknown. Establish why \`git status\` fails in the store holding it, then retry the commit — the approved summary is still in place." \
+    "$refusal
+gitlore: the commit was aborted because git could not read the status of $file. Open this project in Claude Code and ask it to repair the memory store, then retry the commit." >&2
 }
 
 # Stage the gitlink of each tier whose HEAD is the commit gitlore_sync_tiers_to_live
