@@ -573,6 +573,33 @@ EOF
   [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
 }
 
+@test "an interleaved line in the merged root index keeps the merge unlanded" {
+  make_parent_with_memory
+  # The duplicate path is load-bearing, not incidental: a clean entry-wise
+  # index merge rebuilds the bullet block path-by-path and drops any line that
+  # carries no path, so a lone stray line never reaches the merged file. A
+  # side with an internal duplicate is unmergeable (gitlore_index_merge bails),
+  # which leaves git's own line-wise merge result standing — stray line intact
+  # — for gitlore_compose_check_index to find.
+  diverge_memory_with_index '# Memory Index
+
+- [P](p.md) — one
+- [P again](p.md) — two
+Stray line
+- [Q](q.md) — three'
+
+  run bash "$PRE_COMMIT"
+  [ "$status" -ne 0 ]
+  mem_before=$(git -C memory rev-parse HEAD)
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"was not committed"* ]]
+  [[ "$stderr" == *"memory/MEMORY.md: interleaved non-bullet line"* ]]
+  [ -f "$(gitlore_merge_state_file memory)" ]
+  [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
+}
+
 @test "a memory-root merge with only a leftover root prefix commits uncomposed" {
   make_parent_with_memory
   diverge_memory_with_index '# Memory Index
