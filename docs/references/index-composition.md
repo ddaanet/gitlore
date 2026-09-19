@@ -126,12 +126,26 @@ it (D52, in [tier-arrival-repair.md](tier-arrival-repair.md)). Any other refusal
 is reported and does not block, because the merge is synthesized and approved by
 then, and stranding it over a problem outside what it merged is the worse
 outcome. A memory-root merge then commits uncomposed and says so; a tier merge
-lands in the tier, which rests on its pin unadopted (D43). A store with no root
-`MEMORY.md` runs no check, so nothing blocks there. Composition spans the whole
-memory tree, so from the continuation it can also write a store *other* than the
-one being committed — the root index when a tier merged, a carrier when memory
-did. Those writes stay dirty and ride the next FR11 commit, the same float the
-`SessionStart` recompose produces.
+lands in the tier, which rests on its pin unadopted (D43).
+
+**A store with no root `MEMORY.md` composes nothing and is checked by nothing,
+and says so once an episode.** Every pass keys on that file, so its absence
+turns off the projection, the four validations, the weld rule and the merged
+index gate at once, and Claude Code loads no memory index either — all of it
+silently. `SessionStart` writes the `# Memory Index` scaffold back, so a store
+reaching a batch without one lost the file inside the session;
+`index-compose.sh` reports it on both channels in place of composing, keyed by
+session like the byte-budget and plugin-upgrade notices, and re-armed at
+`SessionStart` and `PreCompact` by `nudge-reset.sh`. The notice reports and
+never repairs: a file the hook wrote would enter the store outside the approval
+gate that accounts for everything else in it. Install owes the same scaffold —
+including to an auto-memory dir migrated with facts and no index
+([installation.md](installation.md)).
+
+Composition spans the whole memory tree, so from the continuation it can also
+write a store *other* than the one being committed — the root index when a tier
+merged, a carrier when memory did. Those writes stay dirty and ride the next
+FR11 commit, the same float the `SessionStart` recompose produces.
 
 **The `Bash` arm is measured, not assumed**. Watching `Bash` widens the
 `PreToolUse` matcher from calls that name a memory file to every shell call, so

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # SessionStart + PreCompact: drop the once-per-episode nudge markers (index byte
-# budget, mid-session plugin upgrade).
+# budget, mid-session plugin upgrade, missing root index).
 #
 # A marker says "this session has already been told". That claim is only valid
 # for as long as the context that holds the telling, and two events end it:
@@ -35,4 +35,5 @@ mempath=$(gitlore_memory_path)
 session=$(jq -r '.session_id // ""' <<<"$payload")
 gitlore_index_budget_nudge_reset "$mempath" "$session"
 gitlore_upgrade_nudge_reset "$mempath" "$session"
+gitlore_rootless_nudge_reset "$mempath" "$session"
 exit 0

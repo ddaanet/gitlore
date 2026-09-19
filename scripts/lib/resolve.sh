@@ -630,17 +630,34 @@ gitlore_write_merge_state() {
 # permission to skip a gate in general. The agent name stays plugin-qualified;
 # a bare `memory-merger` fails discovery with `Agent type not found`.
 # This is the shape for every gitlore directive that names a sub-agent.
+#
+# `index_problems` rides along whenever the state file carries it. The merged
+# index gate prints its lines to whoever ran the continuation, and that reader
+# may be gone by the time the merge is met again — a `/clear`, a compaction, a
+# fresh session. The directive is the whole briefing the next sub-agent gets,
+# so the lines it must clear travel with it rather than with the session that
+# first saw them.
 gitlore_emit_merge_directive() {
   local statefile="$1" flavor="$2" cont="$3"
   local root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
-  local repo store
+  local repo store problems
   repo=$(git rev-parse --show-toplevel)
   store=$(jq -r '.store // "?"' "$statefile")
+  problems=$(jq -r '(.index_problems // [])[]' "$statefile") || problems=""
   cat >&2 <<EOF
 gitlore: memory merge prepared (flavor=$flavor) in store:
 gitlore:   $store
 gitlore: dispatch sub-agent gitlore:memory-merger with state file:
 gitlore:   $statefile
+EOF
+  if [ -n "$problems" ]; then
+    cat >&2 <<EOF
+gitlore: the synthesis this merge holds fails the merged-index check. Brief the
+gitlore: sub-agent to clear these lines, each in the file it names:
+EOF
+    printf '%s\n' "$problems" | sed 's/^/gitlore:   /' >&2
+  fi
+  cat >&2 <<EOF
 gitlore: that dispatch is a required step of the git operation that triggered
 gitlore: this merge, not an option: the request for that operation is the
 gitlore: request for this dispatch, so make it now without asking first. Review
@@ -649,6 +666,37 @@ gitlore: passed an approval gate, so do not prompt the user (D49).
 gitlore: on approval of its synthesis, the sub-agent must run:
 gitlore:   cd "$repo" && bash "$root/scripts/resolve.sh" $cont
 EOF
+}
+
+# Record what the merged-index check last said about the store's prepared merge,
+# so every later directive can emit it. Called with the check's whole output on
+# every run of the gate, empty output included: the field describes the
+# synthesis the gate just read, and a merge kept prepared for some other reason
+# — a refused commit, a message that would not build — must not brief the next
+# sub-agent to fix text nobody objects to.
+#
+# Edited into the existing file rather than folded into gitlore_write_merge_state:
+# the gate runs long after the preparation, and rewriting the state file there
+# would recompute a briefing from a store the merger has since rewritten.
+# Written through a temp file, as every other write of this file is: a truncated
+# state file blocks every later commit in the store.
+# Args: $1 = store worktree path, $2 = the check's problem lines (may be empty).
+# Returns 1 if the file could not be updated.
+gitlore_record_merge_index_problems() {
+  local store="$1" problems="$2" statefile json
+  statefile=$(gitlore_merge_state_file "$store")
+  [ -f "$statefile" ] || return 1
+  if [ -n "$problems" ]; then
+    # One JSON string per line, so a line holding a space, a quote or a leading
+    # `-` reaches the emitter as the bytes the check printed. `jq -R` reads its
+    # lines from stdin, where nothing is an option.
+    json=$(printf '%s\n' "$problems" | jq -R . | jq -s .) || return 1
+  else
+    json='[]'
+  fi
+  jq --argjson problems "$json" '.index_problems = $problems' "$statefile" \
+    > "$statefile.tmp" || { rm -f "$statefile.tmp"; return 1; }
+  mv "$statefile.tmp" "$statefile" || { rm -f "$statefile.tmp"; return 1; }
 }
 
 # Prepare a merge of the pending commit into the more authoritative side. One

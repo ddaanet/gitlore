@@ -127,14 +127,19 @@ index — the tier's carrier for a tier merge, a duplicate, interleaved or welde
 line in root's `MEMORY.md` for a memory-root merge — printing
 `gitlore: the merged index fails the check, so the merge was not committed; the merge stays prepared for a new synthesis:`
 and only those problems. The merge state, `MERGE_HEAD`, the pending ref and the
-merger's staging stay, every later gate re-emits the directive, and the resolve
-skill answers with `rejected:` and the problem lines. Every such problem is in
-the named file's own text, inside the merger's store, so one edit clears it. A
-problem outside the merged index lets the merge land: a tier merge rests the
-tier (D43, in [tier-stores.md](tier-stores.md)), and a memory-root merge commits
-uncomposed. A defect arriving across a divergence therefore reaches the
-synthesis, never the repair. A store with no root `MEMORY.md` runs no index
-check, so none of the abort, the repair or this gate applies to it.
+merger's staging stay, and the resolve skill answers with `rejected:` and the
+problem lines. Those lines are recorded in the merge state, so every later gate
+re-emits them with the directive and a session that never saw the refusal briefs
+its sub-agent on them ([merge-state-recovery.md](merge-state-recovery.md)).
+Every such problem is in the named file's own text, inside the merger's store,
+so one edit clears it. A problem outside the merged index lets the merge land: a
+tier merge rests the tier (D43, in [tier-stores.md](tier-stores.md)), and a
+memory-root merge commits uncomposed. A defect arriving across a divergence
+therefore reaches the synthesis, never the repair. A store with no root
+`MEMORY.md` runs no index check, so none of the abort, the repair or this gate
+applies to it — which the composition hook reports once an episode rather than
+leaving silent
+([index-composition.md](index-composition.md)).
 
 **A landed merge rests its tier only onto a `live` that holds it.** The
 continuation's pushes return a status rather than exit, so a push refused for

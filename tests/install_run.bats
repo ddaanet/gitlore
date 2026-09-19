@@ -239,6 +239,28 @@ teardown() { teardown_tmp_repo; }
   grep -q 'migrated in-tree by `/gitlore:install`' "$src/MEMORY.md"
 }
 
+@test "install scaffolds the root index when the migrated auto-memory carried none" {
+  # An auto-memory dir holding facts but no MEMORY.md — a session interrupted
+  # before Claude Code wrote the index, or a dir whose index was deleted. The
+  # emptiness guard passes it to the copy, and the copy brings no index: every
+  # later compose, check and merge path keys on a file that would not be there.
+  fake_home="$TMP_REPO/.fake-home"
+  encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  src="$fake_home/.claude/projects/$encoded/memory"
+  mkdir -p "$src"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
+  printf 'fact\n' > "$src/user_role.md"
+
+  run env HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -eq 0 ]
+  # The facts migrated, and the announcement still fires: this is the migration
+  # branch with a scaffold added, not a fall-through to the scaffold branch.
+  [[ "$output" == *"migrated auto-memory from"* ]]
+  [ -f memory/user_role.md ]
+  grep -qx '# Memory Index' memory/MEMORY.md
+  git -C memory cat-file -e HEAD:MEMORY.md
+}
+
 @test "install migration stub is idempotent across re-runs" {
   fake_home="$TMP_REPO/.fake-home"
   encoded=$(printf '%s' "$TMP_REPO" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')

@@ -21,6 +21,18 @@ merger sub-agent reads and the one no marker can carry; wherever a state file is
 about to reach that sub-agent, `gitlore_complete_merge_state` fills a marker in
 from the merge the store already holds.
 
+**The file also carries the merged-index gate's verdict on the synthesis in
+hand.** `gitlore_record_merge_index_problems` writes the check's problem lines
+into `index_problems` on every run of that gate, the empty answer included, and
+`gitlore_emit_merge_directive` emits them under every directive that names the
+sub-agent. The gate's own lines reach only whoever ran the continuation, and a
+merge kept prepared is routinely met again by a session that never saw them — a
+`/clear`, a compaction, a fresh terminal — where the directive is the whole
+briefing the next sub-agent gets. Recording the empty answer is what keeps a
+merge held back for some other reason, a refused commit or a message that would
+not build, from briefing against an objection a later synthesis already cleared.
+A file written before the field existed reads as carrying none.
+
 With `MERGE_HEAD` present the store sits exactly where `gitlore_prepare_merge`
 leaves one, so the directive is the ordinary `continue-after-merge` and the
 merge is handed back to the sub-agent:

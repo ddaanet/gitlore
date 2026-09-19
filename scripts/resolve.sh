@@ -129,14 +129,25 @@ compose_merged_indexes() {
   fi
 
   composed=$(gitlore_compose_up "$memroot" "$merged_tier") || rc=$?
+  index_problems=""
   if [ "$rc" -eq 1 ]; then
     merged_index="$memroot/MEMORY.md"
     [ -n "$merged_tier" ] && merged_index="$memroot/$merged_tier/MEMORY.md"
-    if index_problems=$(gitlore_compose_problems_in "$merged_index" <<<"$composed"); then
-      echo "gitlore: the merged index fails the check, so the merge was not committed; the merge stays prepared for a new synthesis:" >&2
-      printf '%s\n' "$index_problems" | sed 's/^/gitlore:   /' >&2
-      exit 1
-    fi
+    index_problems=$(gitlore_compose_problems_in "$merged_index" <<<"$composed") \
+      || index_problems=""
+  fi
+  # What the gate just read, into the merge state, on every run of it — the
+  # empty answer included. The lines below reach only whoever ran this
+  # continuation, and a merge is routinely met again by a session that never saw
+  # them; recorded, every later directive emits them. Recording the empty answer
+  # is what keeps a merge kept prepared for some other reason from briefing the
+  # next sub-agent against an objection a synthesis has already cleared.
+  gitlore_record_merge_index_problems "$store" "$index_problems" \
+    || echo "gitlore: the merged-index check could not be written into the merge state in $store, so a directive emitted for this merge later will not carry its lines. Read them below instead." >&2
+  if [ -n "$index_problems" ]; then
+    echo "gitlore: the merged index fails the check, so the merge was not committed; the merge stays prepared for a new synthesis:" >&2
+    printf '%s\n' "$index_problems" | sed 's/^/gitlore:   /' >&2
+    exit 1
   fi
   if [ "$rc" -eq 0 ]; then
     [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2

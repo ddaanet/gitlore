@@ -39,25 +39,32 @@ if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
   # 1. Plain init at the target path.
   git init -q "$mempath"
 
-  # 2. Seed content (auto-memory migration, else scaffold).
+  # 2. Seed content: migrate an auto-memory dir, then scaffold the root index
+  #    if what landed has none.
   #    Skip the copy when $src holds nothing to migrate: an empty dir, or the
-  #    migration stub a prior install/run left. Copying nothing would seed a
-  #    store with no root index, which every later compose and merge path
-  #    assumes exists; seeding the stub would carry "Do not add memory here".
+  #    migration stub a prior install/run left, which would carry
+  #    "Do not add memory here" into the store.
   src=$(gitlore_cc_memory_dir "$parent_root")
   if [ -d "$src" ] && [ -n "$(find "$src" -mindepth 1 -print -quit)" ] \
      && ! gitlore_is_migration_stub "$src"; then
     cp -R "$src"/. "$mempath/"
     # Announced so the install command can run the migrated facts past the
     # authoring discipline: they were written under CC's generic memory
-    # instructions, with no review gate and no index cap. The scaffold branch
-    # below has nothing to review, so only this branch reports.
+    # instructions, with no review gate and no index cap. A scaffolded store has
+    # nothing to review, so only a migration reports.
     echo "gitlore: migrated auto-memory from $src into $mempath" >&2
     # Replace the migrated source with a stub recording the move in-tree, so a
     # session later launched without the shim (writing to this default dir) finds
     # a breadcrumb rather than silently re-seeding stranded memory.
     gitlore_mark_migrated "$src"
-  else
+  fi
+  # Every later compose, index check and merge path keys on the root index, and
+  # each is silent about it being absent. An auto-memory dir can hold facts and
+  # no `MEMORY.md` — a session interrupted before Claude Code wrote one, or one
+  # whose index was deleted — so the scaffold is owed to a migrated store as
+  # much as to one with nothing to migrate. The migrated facts keep their own
+  # index when they brought one.
+  if [ ! -f "$mempath/MEMORY.md" ]; then
     cat > "$mempath/MEMORY.md" <<'EOF'
 # Memory Index
 

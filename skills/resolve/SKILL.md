@@ -43,13 +43,23 @@ gitlore:   cd "<parent-repo>" && bash "<abs-path-to-resolve.sh>" <continuation-s
 
 Extract the state-file path and the full continuation command (the entire `cd ... && bash ... <subcommand>` line, absolute paths intact — the sub-agent runs it verbatim).
 
+A merge whose last synthesis failed the merged-index check carries its problem lines too, between the state-file path and the dispatch paragraph:
+
+```
+gitlore: the synthesis this merge holds fails the merged-index check. Brief the
+gitlore: sub-agent to clear these lines, each in the file it names:
+gitlore:   <problem line>
+```
+
+Extract them verbatim and pass them in the dispatch prompt. They are the objection a previous synthesis drew, against a merge this session may never have seen, and clearing them is what lets the continuation land it.
+
 The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip. Your own review still governs the merge the sub-agent proposes, below — but not the user's: both sides of the merge already passed an approval gate, so the whole resolution runs without prompting them (D49).
 
 The store line names which repository diverged: the project memory store, or a tier mounted inside it. One merge policy covers every level, so the flow below is identical either way — but say which store you merged when you summarize, because a tier is shared with other repositories and the project store is not.
 
 ## Dispatch memory-merger sub-agent (turn 1 — synthesis)
 
-Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass both the state-file path and the continuation command in the prompt. The sub-agent synthesizes, runs `git add -A` in the memory worktree, and returns a prose summary. Capture the `agentId`.
+Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass the state-file path, the continuation command, and any problem lines the directive carried. The sub-agent synthesizes, runs `git add -A` in the memory worktree, and returns a prose summary. Capture the `agentId`.
 
 ## Approve or reject (turn 2 — resume)
 
@@ -65,7 +75,7 @@ Do not escalate to the user: a merge is automated from their perspective, becaus
 
 On approval, the sub-agent runs the continuation command. The merge commit's message is canned — the continuation writes it; the summary is for your review and your report to the user, not for the commit.
 
-If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed`, the merge did not land and stays prepared. Resume the **same** sub-agent with `rejected:` followed by the problem lines it quoted, and evaluate the new synthesis as before. Do not go to **Loop** for this: `resolve.sh` re-emits a directive without the problem lines, and a fresh sub-agent can honestly answer `No conflict.` into the same refusal. If a re-synthesis draws the same problem line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
+If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed`, the merge did not land and stays prepared. Resume the sub-agent with `rejected:` followed by the problem lines it quoted, and evaluate the new synthesis as before. If a re-synthesis draws the same problem line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
 
 The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
 - `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
