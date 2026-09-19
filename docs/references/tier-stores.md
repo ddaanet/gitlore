@@ -268,13 +268,21 @@ either adds it), resolves text against the base, and emits a diff3 chunk only
 for a path both sides moved apart. It runs on **every** index in the merge, not
 only the ones git flagged, since the duplicate arises from a merge git considers
 clean; a side that already names one path twice is *declined* rather than
-collapsed, leaving the malformed index for `gitlore_compose_check` to report.
-Because the pass resolves an index in the worktree without staging it,
-`conflicted_files` in the state file is the union of git's unmerged entries and
-`gitlore_conflicted_indexes`. Its chunks carry **git's own labels** — `HEAD` for
-the authoritative side (checked out detached by the prepare) and the incoming
-commit's sha — rather than a vocabulary of gitlore's own, so one merge never
-presents the sub-agent with two namings of the same two sides. That is one
+collapsed, leaving the malformed index for `gitlore_compose_check` to report. A
+side carrying a non-blank non-bullet line inside its pointer block is declined
+for the same reason: the merged block is rebuilt from the merged path list, so a
+line carrying no path has nowhere to land, and merging it away would exit 0 on
+the defect rule 4 of `gitlore_compose_check_index` exists to refuse — leaving
+the merged-index gate (D52, in [tier-arrival-repair.md](tier-arrival-repair.md))
+nothing to find. Declined, git's line-wise result stands with the line in it. A
+*blank* line there is not that: composition rebuilds every bullet region from
+its bullets alone, so the pass normalizes one away exactly as the rest of the
+system does. Because the pass resolves an index in the worktree without staging
+it, `conflicted_files` in the state file is the union of git's unmerged entries
+and `gitlore_conflicted_indexes`. Its chunks carry **git's own labels** — `HEAD`
+for the authoritative side (checked out detached by the prepare) and the
+incoming commit's sha — rather than a vocabulary of gitlore's own, so one merge
+never presents the sub-agent with two namings of the same two sides. That is one
 argument at the call site, against a sentence in `agents/memory-merger.md`
 reconciling the two: a configuration that removes the need for agent-facing
 prose beats the prose.

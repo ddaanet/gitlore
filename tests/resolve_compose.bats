@@ -639,16 +639,14 @@ EOF
 
 @test "an interleaved line in the merged root index keeps the merge unlanded" {
   make_parent_with_memory
-  # The duplicate p.md is what gets the stray line to the check. When the
-  # entry-wise index merge succeeds it rebuilds the bullet block from paths,
-  # and a line carrying no path is lost without a report — a gap of its own,
-  # not the behaviour this test covers. A side naming one path twice makes
-  # gitlore_index_merge decline, so git's line-wise result stands, stray line
+  # The stray line is what reaches the check, and it reaches it because
+  # gitlore_index_merge declines a side that carries one: the entry-wise pass
+  # rebuilds the bullet block from paths, so a line carrying no path has
+  # nowhere to land. Declined, git's line-wise result stands with the line
   # intact, for gitlore_compose_check_index to find.
   diverge_memory_with_index '# Memory Index
 
 - [P](p.md) — one
-- [P again](p.md) — two
 Stray line
 - [Q](q.md) — three'
 

@@ -98,6 +98,19 @@ _gitlore_index_merge_bullets() {
   return 0
 }
 
+# Return 0 when $1 — one side's bullet region — carries a non-blank line that is
+# not a pointer bullet. The region's own first and last lines are bullets, so
+# every line it holds is a candidate; blanks are excluded, exactly as in
+# gitlore_compose_check_index's rule 4.
+_gitlore_index_merge_has_stray() {
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "${line//[[:space:]]/}" ] || continue
+    gitlore_bullet_path "$line" >/dev/null || return 0
+  done < "$1"
+  return 1
+}
+
 # Three-way merge one index file. Prints the merged content on stdout.
 # Returns 0 when it merged clean, 1 when the output carries conflict markers,
 # 2 when the merge could not be attempted at all.
@@ -119,9 +132,21 @@ gitlore_index_merge() {
   # the path would collapse the pair and silently drop whichever line lost. That
   # index is malformed before the merge, and `gitlore_compose_check` is what
   # reports it; declining to merge leaves it intact for that check to find.
+  #
+  # A non-blank non-bullet line inside a side's pointer block is the same class
+  # of malformed input, and the same refusal. The merged block is rebuilt from
+  # the merged PATH list, so a line carrying no path has nowhere to land: it
+  # would vanish with the merge exiting 0, and the merged-root gate — whose
+  # whole job is to keep such a line from landing — would find nothing left to
+  # refuse. Declining leaves git's line-wise result standing with the line in
+  # it, for gitlore_compose_check_index's rule 4 to name. A BLANK line inside
+  # the block is not that: composition already rebuilds every bullet region
+  # from its bullets alone, so dropping one here is the normalization the rest
+  # of the system performs.
   local side
   for side in base ours theirs; do
     if [ -n "$(sort "$tmpd/$side.paths" | uniq -d)" ]; then rm -rf "$tmpd"; return 2; fi
+    if _gitlore_index_merge_has_stray "$tmpd/$side.bullets"; then rm -rf "$tmpd"; return 2; fi
   done
 
   # Prose halves, through git's own three-way. merge-file reports the CONFLICT

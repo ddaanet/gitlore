@@ -243,3 +243,35 @@ merge() { gitlore_index_merge base ours theirs "MINE" "BASE" "THEIRS"; }
   # Nothing was printed, so the caller has nothing to write over git's own result.
   [ -z "$output" ]
 }
+
+# The merged block is rebuilt from the merged PATH list, so a line carrying no
+# path has nowhere to land: merging it away would exit 0 on a defect rule 4 of
+# gitlore_compose_check_index exists to refuse, and the merged-root gate would
+# then never see it.
+
+@test "a side with a stray non-bullet line inside its pointer block is declined" {
+  idx base '- [A](a.md) — hook' '- [B](b.md) — hook'
+  idx ours '- [A](a.md) — hook' '- [B](b.md) — hook'
+  idx theirs '- [A](a.md) — hook' 'Stray line' '- [B](b.md) — hook'
+  run merge
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+}
+
+@test "a stray line every side inherited from the base is declined too" {
+  idx base '- [A](a.md) — hook' 'Stray line' '- [B](b.md) — hook'
+  idx ours '- [A](a.md) — hook' 'Stray line' '- [B](b.md) — hook' '- [C](c.md) — mine'
+  idx theirs '- [A](a.md) — hook' 'Stray line' '- [B](b.md) — hook'
+  run merge
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+}
+
+@test "a blank line between bullets is normalized away, not declined" {
+  idx base '- [A](a.md) — hook' '- [B](b.md) — hook'
+  idx ours '- [A](a.md) — hook' '' '- [B](b.md) — hook'
+  idx theirs '- [A](a.md) — hook' '- [B](b.md) — hook'
+  run merge
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'- [A](a.md) — hook\n- [B](b.md) — hook'* ]]
+}
