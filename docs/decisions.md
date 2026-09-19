@@ -53,7 +53,8 @@ operation, and the pointer invariant that rests on them.
 - **D50** — the commit path composes a dirty store before it commits; a pin
   refusal aborts, a compose problem in an index file the commit changes aborts,
   and every other compose refusal reports; a tier merely ahead of its pin is put
-  back on it for `/gitlore:merge` to adopt
+  back on it for `/gitlore:merge` to adopt, and a retry that skips that take
+  commits — the residual is accepted, costing one later merge and no fact
 - **D53** — the stale-merge guard's report-only arms do not restamp the
   approval, because the guard does not say which arm failed
 - **D54** — a failure-time restamp that blesses a concurrent write is an
@@ -66,7 +67,8 @@ right after its commit · composing a clean store · reporting a non-empty
 commit-path compose · leaving a tier whose adoption failed ahead of an unstaged
 pin · a per-arm return code from `gitlore_guard_stale_merge_state` · a
 `touch -r` snapshot of the approval's mtime · a blanket refusal for every tier
-ahead of its pin · adopting inside the pin guard rather than directing to
+ahead of its pin · refusing the commit while a tier's local `live` is ahead of
+its pin · adopting inside the pin guard rather than directing to
 `/gitlore:merge`.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push

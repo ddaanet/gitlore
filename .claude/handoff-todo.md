@@ -1,7 +1,3 @@
-## Open decisions
-
-- Pin guard residual (D50): after the guard returns a clean tier to its pin, a retry that skips `/gitlore:merge` composes and commits normally with the commits still held only in the tier's local `live`; a later tier commit then meets a non-fast-forward `HEAD:live` push from `gitlore_sync_tiers_to_live`. Nothing is lost and the message names the take. Decide whether the commit path should refuse while a tier's local `live` is ahead of its pin, or whether the residual is accepted and recorded in `docs/references/git-hooks.md`.
-
 ## Remaining
 
 - Run `/deliverable-review plans/tier-arrival-review-minors` (opus, fresh session).
@@ -11,7 +7,6 @@
 - Confirm a repair take end to end on macOS (bash 3.2); nothing on this box exercises the bash < 4.4 hazards. The same run settles the one unmeasured claim in `tests/bsd_portability.bats`' header: that a failing non-final `[[ ]]` does not fail a bats test under bash 3.2.
 - `resolve.sh`'s "remote has no live branch. Pushing." step pushes memory's `live` before any tier gate on a never-published memory remote; unprobed.
 - Check whether a tier whose local `live` failed to advance after its commit, for a non-divergence reason, ever advances. `gitlore_sync_tiers_to_live` pushes `HEAD:live` only for dirty tiers, so the retry that stages the landed commit skips the push.
-- `scripts/mutate-and-run.sh`'s EXIT trap and its post-restore `git diff --quiet` verification are killed by no test: no current line can reach either failure. Accept and say so in the script's header, or find an induction.
 - Triage `inbox/brief-add-tier-index-budget-advisory.md`, `inbox/brief-index-audit-preamble-and-merge-unlanded.md`, `inbox/brief-session-start-protocol-context-wording.md` and `plans/brief-codex-native-memory-integration.md`; each brief's recommendation is input, and the choice is my human partner's. `inbox/brief-conventions-file-oversize-false-positive.md` is settled: the "over the 4KB recall limit … rewrite it to under 2.8KB" error is Claude Code's own (its text is in the 2.1.276 binary and nowhere in gitlore or a ddaanet plugin), so gitlore cannot exempt the file, the conventions file stays inside the memory directory because it travels as a tier, and the exemption line in the conventions file is the remedy — move that brief out of `inbox/`.
 - Split the oversized token-keyed facts so recall reaches them: `hook-output-channels` (23% reachable), `bats-shellcheck-gotchas` (40%), `stale-plugin-code` (45%), `design-doc-writing` (over 4KB).
 - Extend the memory-writing skill's index-line guidance to both axes.

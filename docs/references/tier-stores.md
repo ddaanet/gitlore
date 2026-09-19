@@ -300,7 +300,7 @@ next one. **`No conflict.` is an explicit valid answer** for the sub-agent:
 divergence is a git fact, not a semantic one, and a merge whose two sides say
 compatible things is the common case. It is a finding to check, not an admission
 that the work was skipped — the agent still reads both diffs and the changed
-files, still runs `git add -A`, and still stops for approval.
+files, still stages them by explicit path, and still stops for approval.
 
 ## Rejected alternatives
 

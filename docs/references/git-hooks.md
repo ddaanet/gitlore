@@ -202,6 +202,18 @@ non-fast-forward is a divergence for `/gitlore:resolve`. A checkout that fails
 leaves the tier untouched and reports git's own words with the command that
 finishes the return.
 
+**A retry that skips the take commits, and that residual is accepted.** Once the
+guard has returned a tier to its pin nothing refuses: the tier is clean and on
+the commit the store records, so a retried commit that does not run
+`/gitlore:merge` first composes and commits normally while the arrival stays in
+the tier's local `live` alone. Nothing is lost — `live` holds every arrived
+commit and the guard's message names the take as the next command. The cost
+lands later: the next commit to that tier is made on the pin, its `HEAD:live`
+push from `gitlore_sync_tiers_to_live` is refused as a non-fast-forward, and the
+refusal classifies as divergence, so a `head-vs-live` merge is prepared and
+`/gitlore:resolve` lands it. A skipped take therefore costs one merge later,
+never a fact.
+
 **A failure keeps the approval, unless it prepared a merge.** What the run
 writes into the store — a composed carrier, a recovered merge's up projection —
 projects lines the summary already approved, yet reads newer than the commit-msg
@@ -369,6 +381,13 @@ together with its failure handling: the walk-back, the arrival repair (D52), the
 canned bookkeeping commit (D49). What the guard does instead is the one move
 that writes no index and needs no approval — a checkout to the commit the store
 already records (D50).
+
+**Refusing the commit while a tier's local `live` is ahead of its pin.** Would
+close the skipped-take residual by making the take mandatory before any memory
+commit. But `live` ahead of a clean, on-pin tier is also the resting state
+between an arrival and its take, and a refusal there blocks an approved commit
+over work that commit does not touch, for a cost the divergence path already
+absorbs with nothing lost (D50).
 
 **Leaving a tier whose adoption failed ahead of an unstaged pin.** Nothing is
 staged, so the root index is not composed over, but the pin guard then refuses
