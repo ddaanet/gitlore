@@ -1371,7 +1371,7 @@ gitlore_stage_landed_tiers() {
 # ordering guarantee below cannot drift between the two entry points.
 # Args: $1 = memory worktree path.
 gitlore_push_stores() {
-  local mempath="$1" remote_url tier tierpath tier_err push_err origin_live
+  local mempath="$1" remote_url tier tierpath tier_err push_err
 
   # Never publish on top of a half-finished merge, at any level.
   gitlore_guard_stale_merge_state "$mempath" || return 1
@@ -1512,10 +1512,7 @@ gitlore_push_stores() {
     tierpath="$mempath/$tier"
     [ -e "$tierpath/.git" ] || continue
     git -C "$tierpath" rev-parse -q --verify live >/dev/null || continue
-    # No local `origin/live` to compare against is the same as `live` not
-    # being its ancestor: push rather than assume nothing changed.
-    origin_live=$(git -C "$tierpath" rev-parse -q --verify refs/remotes/origin/live) || origin_live=""
-    if [ -z "$origin_live" ] || ! git -C "$tierpath" merge-base --is-ancestor live "$origin_live"; then
+    if ! git -C "$tierpath" merge-base --is-ancestor live origin/live; then
       if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
         gitlore_report_tier_push_failure "$tier" "$tier_err"
         return 1
@@ -2046,8 +2043,7 @@ gitlore_adopt_repair_arrival() {
       done <<<"$composed"
     )
     if [ -n "$other_lines" ]; then
-      printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
-      printf '%s\n' "$other_lines" | sed 's/^/gitlore:   /' >&2
+      gitlore_adopt_print_root_refusal "$label" "$other_lines"
       remedy="Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again."
     else
       remedy="Once the index is fixed where it was published, run /gitlore:merge again."
@@ -2127,10 +2123,21 @@ gitlore_adopt_commit_repair() {
 gitlore_adopt_report_refusal_and_walk_back() {
   local mempath="$1" tier="$2" old_gitlink="$3" label="$4" composed="$5" remedy="${6:-}"
   local live_holds="${7:-}"
-  printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
-  printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
+  gitlore_adopt_print_root_refusal "$label" "$composed"
   gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" "$live_holds" || :
   return 1
+}
+
+# Print the root-index-could-not-take header and the refused lines, each
+# prefixed for the reader, to stderr. Shared by the unrepairable arm's own
+# lines and the refusal-and-walk-back path's composed lines — one spelling of
+# the same user-visible message.
+# Args: $1 = "tier '<name>'" or whatever else names the arrival, $2 = the
+#       refused lines, one per line.
+gitlore_adopt_print_root_refusal() {
+  local label="$1" lines="$2"
+  printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
+  printf '%s\n' "$lines" | sed 's/^/gitlore:   /' >&2
 }
 
 # Return the tier to the commit the memory store records, after a refusal left

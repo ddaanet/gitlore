@@ -6,6 +6,11 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-19 — A landed merge whose push fails is reported as landed](changelog/2026-09-19-a-landed-merge-whose-push-fails-is-reported-as-landed.md)
+  — the merger and the resolve skill recognise a post-landing push failure as a
+  landed merge with its remedy still to run; the post-loop publication pass
+  drops an unreachable missing-`origin/live` arm; the root-index refusal has one
+  printer; and the scratch copy's two rejected alternatives are recorded (D52)
 - [2026-09-19 — A tier ahead of its pin returns to it, and a stray line reaches the check](changelog/2026-09-19-a-tier-ahead-of-its-pin-returns-to-it-and-a-stray-line-reaches-the-check.md)
   — the pin guard returns a clean tier whose `live` holds its commits to the pin
   and directs to `/gitlore:merge`, and the remaining ahead-of-pin refusal no

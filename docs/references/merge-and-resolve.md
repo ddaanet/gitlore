@@ -79,8 +79,8 @@ The division of labour is D7's: the script decides, the agent writes prose.
    sub-agent, which the directive's own text authorizes rather than offers
    (D24). The sub-agent gets fresh context (D9), the two side diffs and the file
    tree (D44), synthesizes holistically whether or not git flagged a conflict,
-   runs `git add -A`, and returns a prose summary. `No conflict.` is a valid
-   answer.
+   stages by explicit path in the store the state file names, and returns a
+   prose summary. `No conflict.` is a valid answer.
 3. **The parent reviews** the summary against the two side diffs and resumes the
    sub-agent via `SendMessage`. A rejection re-synthesizes. The user is never
    prompted: both sides of the merge already passed an approval gate, so the
@@ -100,8 +100,12 @@ The division of labour is D7's: the script decides, the agent writes prose.
    `… so the merge was not committed; the merge stays prepared.` after the
    failing command's own text, and a rerun once that cause is fixed lands the
    merge. The sub-agent and the skill route those lines, the merged-index
-   refusal and a fresh `gitlore: memory merge prepared` by name, and report any
-   other non-zero outcome as unrecognised rather than landed.
+   refusal, a fresh `gitlore: memory merge prepared` and a post-landing
+   `gitlore: pushing '…' failed, and not because of divergence` by name, and
+   report any other non-zero outcome as unrecognised rather than landed. The
+   last two both follow a landed merge: the fresh directive goes back through
+   the loop, while the push failure ends in the summary, with any rest remedy it
+   printed still to run.
 5. **The skill loops** until `resolve.sh` exits 0 (a second flavor can be
    waiting; the script gates every tier before memory, the order publishing
    keeps, so memory's pointer never goes out ahead of a tier it records), then

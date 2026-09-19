@@ -1022,7 +1022,7 @@ push_tier_files() {
   [[ "$all" != *"line $((weld_line_n - 1)) welds"* ]]
   # Nothing here names the carrier: every problem in this refusal is the
   # carrier's own, already listed above in its live:MEMORY.md form.
-  run ! grep -Eq '^gitlore:   .*ddaanet/MEMORY\.md: ' <<<"$stderr"
+  ! grep -Eq '^gitlore:   .*ddaanet/MEMORY\.md: ' <<<"$stderr" || false
   # The closing remedy points upstream too, never at this store's clean carrier.
   [[ "$all" == *"its local 'live' keeps what arrived. Once the index is fixed where it was published, run /gitlore:merge again."* ]]
   [[ "$all" != *"Fix the store"* ]]
