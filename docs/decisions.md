@@ -162,8 +162,9 @@ the pair atomically (tier-stores.md) · a message fix alone for an unadoptable
 arrival · a push that tolerates the defect · a `--no-ff` merge of the arrival
 onto the pin · an agent-driven repair through the memory-merger · a mechanical
 repair of a merge synthesis · repairing only when every problem names the
-carrier · a continuation that commits a defective merged index uncomposed
-(tier-arrival-repair.md).
+carrier · a continuation that commits a defective merged index uncomposed · a
+scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
+directories on the next repair (tier-arrival-repair.md).
 
 ---
 

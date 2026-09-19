@@ -16,7 +16,8 @@ header and, when there are any, names both fixes. The walk-back says `live`
 keeps the repair once it does.
 
 The scratch copy of the carrier moves from the tier's gitdir to a `mktemp -d`
-directory under `$TMPDIR`, so a killed take leaves nothing in a repository.
+directory under `$TMPDIR` — or `/tmp` where that is unset — so a killed take
+leaves nothing in a repository.
 
 A take run mid-loop in `gitlore_push_stores` could repair a tier whose own
 iteration had already pushed, and memory's push then recorded a gitlink that
@@ -25,10 +26,10 @@ pushes every tier whose `live` is not an ancestor of its `origin/live`. A tier
 push that fails is reported by one reporter, which keeps the moved-remote
 wording for a divergence refusal and says `not because of divergence` otherwise.
 
-`gitlore_repair_index` leaves its output unterminated only when the input's own
-unterminated last line is still last. Dropping an unterminated last line, or
-moving strays after an unterminated last bullet, used to print the line that
-became last without the newline it had.
+`gitlore_repair_index` leaves its output unterminated only when what is last is
+the input's own unterminated last line, or that line's tail after a weld split.
+Dropping an unterminated last line, or moving strays after an unterminated last
+bullet, used to print the line that became last without the newline it had.
 
 A merge continuation's exits before its merge commit now say what they leave: a
 message file that cannot be created, a message that cannot be built and a

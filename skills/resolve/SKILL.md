@@ -79,7 +79,8 @@ If the sub-agent reports that the continuation exited 1 with `gitlore: the merge
 
 The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
 - `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
-- `gitlore: memory merge prepared` — the merge landed and a `live` push after it prepared a fresh one. Go to **Loop**, which picks the new merge up; stopping here would strand the merge the triggering git operation needs.
+- `gitlore: memory merge prepared` — the merge landed and the local `live` advance after it, or the push of `live` to `origin`, prepared a fresh one. Go to **Loop**, which picks the new merge up; stopping here would strand the merge the triggering git operation needs.
+- `gitlore: pushing '` … `failed, and not because of divergence` — the merge landed, but `live` was not advanced or not published. Send no `rejected:` and do not go to **Loop**: a rerun meets the same refusal, which no merge fixes. Go to **Summarize**, skipping **Resume commit**.
 - The continuation call was denied before it ran — no exit status, no `gitlore:` output. Nothing moved and the merge stays prepared with its synthesis staged. Do not run the continuation yourself and do not re-dispatch: a refusal is the user's to lift. Go to **Summarize**, skipping **Resume commit**.
 - Anything else with a non-zero status — the outcome is unrecognised. Go to **Summarize**, skipping **Resume commit**.
 
@@ -99,6 +100,9 @@ Only a continuation that exited 0 is summarized as a landed merge. The other out
 - A message-file, message-build or refused-commit line: relay it with whatever the
   failing command printed above it. The merge stays prepared; the remedy is to fix
   that cause and run `/gitlore:resolve` again.
+- A `pushing '…' failed, and not because of divergence` line: report the merge as
+  landed and the push as failed, with git's reason under it. Any remedy printed
+  below it is still to run.
 - A denied continuation: say the synthesis is approved and staged and the merge is
   unlanded, and hand over the continuation command verbatim. The user lands it
   either by running it with a `!` prefix or by asking for it by name, after which
@@ -115,5 +119,6 @@ index, index pointers naming files that are not there, a refused push with its
 remedy — came after the merge commit landed; relay it, because it is a problem only
 you can fix.
 A printed remedy (`gitlore: tier '<t>' stays on the merge commit … Run:` and the
-command lines under it) is still to run even when the **Loop**'s `resolve.sh`
-then reports the state healthy: run those lines, or relay them as not yet run.
+command lines under it) is outstanding whenever it was printed — on an outcome
+that never reaches **Loop** as much as on one where the **Loop**'s `resolve.sh`
+then reports the state healthy. Run those lines, or relay them as not yet run.

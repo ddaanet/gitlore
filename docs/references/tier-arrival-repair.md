@@ -2,7 +2,7 @@
 
 What a take does with an arriving tier index the root cannot adopt, and what a
 merge continuation does with a merged index that fails the same check. One of
-the nodes of the tiered-memory subsystem, whose entry point is
+the five nodes of the tiered-memory subsystem (FR15), whose entry point is
 [tiered-memory.md](tiered-memory.md). The take, the pin and the resting state
 this builds on are in [tier-stores.md](tier-stores.md); the check's rules are in
 [index-composition.md](index-composition.md).
@@ -33,17 +33,17 @@ synthesis — is refused and re-authored.
 refusal prints names the arriving carrier — by the exact `<file>: ` prefix,
 against the memory path the check was given (`gitlore_compose_problems_in`) —
 `gitlore_adopt_repair_arrival` repairs a scratch copy of the carrier outside the
-repository, in a `mktemp -d` directory under `$TMPDIR`, and rechecks it. It
-builds the commit from a temporary index with `commit-tree`, the arrival as its
-only parent, subject `Repair the MEMORY.md structure <tier> received` and one
-body line per edit. It advances the tier's local `live` with an ff-checked
-`push .`, checks the tier out at `live`, and retries the up projection. History
-stays linear (D6), nothing yields, and no merge machinery runs, so the
-entry-wise index pass never touches a line the rules do not name. The commit is
-unprompted under D49: it adds no text to lines that already passed an approval
-gate. Once `live` holds it, the take prints
-`gitlore: repaired <t>'s arrival: <edit>` for each edit, naming each dropped
-line verbatim.
+repository, in a `mktemp -d` directory under `$TMPDIR` or, where that is unset,
+`/tmp`, and rechecks it. It builds the commit from a temporary index with
+`commit-tree`, the arrival as its only parent, subject
+`Repair the MEMORY.md structure <tier> received` and one body line per edit. It
+advances the tier's local `live` with an ff-checked `push .`, checks the tier
+out at `live`, and retries the up projection. History stays linear (D6), nothing
+yields, and no merge machinery runs, so the entry-wise index pass never touches
+a line the rules do not name. The commit is unprompted under D49: it adds no
+text to lines that already passed an approval gate. Once `live` holds it, the
+take prints `gitlore: repaired <t>'s arrival: <edit>` for each edit, naming each
+dropped line verbatim.
 
 **The worktree never holds the repair uncommitted**, because a carrier written
 there first would strand a killed take: `submodule update` cannot check the pin
@@ -52,19 +52,18 @@ the take refuses the dirty tier. As built, a take killed before root is written
 leaves the tier clean — on the arrival, the repair or its pin — with `live` on
 the arrival or the repair; `SessionStart` returns it to the pin, and the next
 take repairs again or adopts the repair. The repair is deterministic, so losing
-one costs nothing, and `commit-tree` runs no hook, so no sentinel is needed. A
-refused `live` update leaves the commit unreachable, the tier on its pin and
-`live` on the arrival, and the take exits 1 with git's message.
+one costs nothing, and `commit-tree` runs no hook, so no sentinel is needed.
 
 **A failed repair walks back and says what `live` holds.** Each step that can
 fail — the scratch directory, the arrival and pin reads, the rewrite, the commit
 build, the `live` advance, the checkout that follows it — prints its own failure
 line, then the full refusal under
 `gitlore: the root index could not take tier '<t>''s lines:`, and walks the tier
-back to its pin. The walk-back names what the tier's local `live` keeps:
-`what arrived`, or `the repair` once the advance has put it there. These
-failures are transient, so the remedy is `Run /gitlore:merge again.`: the next
-take repairs from scratch.
+back to its pin; the take exits 1. The walk-back names what the tier's local
+`live` keeps: `what arrived`, or `the repair` once the advance has put it there
+— so a refused advance leaves the repair commit unreachable, the tier on its pin
+and `live` on the arrival. These failures are transient, so the remedy is
+`Run /gitlore:merge again.`: the next take repairs from scratch.
 
 **The repair restructures and never rewords.** `gitlore_repair_index` applies
 three rules, in this order:
@@ -90,12 +89,14 @@ the up projection cannot adopt is the take's to repair.
 
 **The carrier's lines are the repair's; everything else is this repo's.** A
 retry refused on root, the manifest or another tier walks the tier back with the
-repair in `live`, reporting those problems as what adoption waits on, and the
-next take or push adopts the repair with no second one. With no problem naming
-the carrier nothing is repaired. When the recheck still fails — a weld whose
-second path names no file in the tier — nothing is committed, the report
-attributes the carrier's problems to `live:MEMORY.md` rather than the clean
-worktree carrier, and it closes
+repair in `live`, reporting those problems as what adoption waits on and closing
+with the walk-back's default remedy,
+`Fix the store, then run /gitlore:merge again.` — the store is what needs fixing
+here, unlike the transient arms above. The next take or push adopts the repair
+with no second one. With no problem naming the carrier nothing is repaired. When
+the recheck still fails — a weld whose second path names no file in the tier —
+nothing is committed, the report attributes the carrier's problems to
+`live:MEMORY.md` rather than the clean worktree carrier, and it closes
 `Once the index is fixed where it was published, run /gitlore:merge again.` Any
 refusal line naming another index follows under the root-index header, and the
 remedy then names both fixes:
@@ -185,3 +186,16 @@ leave the take refusing on the carrier. Repairing first rests the repair in
 defect this repo authored, and a publishing merge sends it to every consumer,
 whose takes then repair it one by one. Refusing costs one edit to the synthesis
 (D52).
+
+**A scratch directory in the tier's gitdir.** It keeps the scratch copy inside a
+repository, which is exactly what a killed take then leaves behind, and cleaning
+it up needs a library-level `trap` that clobbers whatever trap the caller
+installed. `${TMPDIR:-/tmp}` puts the copy where nothing in a repo can be
+stranded by it (D52).
+
+**A sweep of stale `gitlore-repair.*` directories on the next repair.** It races
+a concurrent take: the directories carry no owner, so a sweep cannot tell a
+leftover from the scratch copy another take is repairing in right now, and
+removing that one loses its work mid-repair. A killed take's leftover is a few
+kilobytes under the system temporary directory, which the system reclaims on its
+own schedule (D52).
