@@ -59,7 +59,7 @@ The store line names which repository diverged: the project memory store, or a t
 
 ## Dispatch memory-merger sub-agent (turn 1 — synthesis)
 
-Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass the state-file path, the continuation command, and any problem lines the directive carried. The sub-agent synthesizes, runs `git add -A` in the memory worktree, and returns a prose summary. Capture the `agentId`.
+Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass the state-file path, the continuation command, and any problem lines the directive carried. The sub-agent synthesizes, stages the paths it merged in the store, and returns a prose summary. Capture the `agentId`.
 
 ## Approve or reject (turn 2 — resume)
 
@@ -80,6 +80,7 @@ If the sub-agent reports that the continuation exited 1 with `gitlore: the merge
 The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
 - `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
 - `gitlore: memory merge prepared` — the merge landed and a `live` push after it prepared a fresh one. Go to **Loop**, which picks the new merge up; stopping here would strand the merge the triggering git operation needs.
+- The continuation call was denied before it ran — no exit status, no `gitlore:` output. Nothing moved and the merge stays prepared with its synthesis staged. Do not run the continuation yourself and do not re-dispatch: a refusal is the user's to lift. Go to **Summarize**, skipping **Resume commit**.
 - Anything else with a non-zero status — the outcome is unrecognised. Go to **Summarize**, skipping **Resume commit**.
 
 ## Loop
@@ -98,6 +99,11 @@ Only a continuation that exited 0 is summarized as a landed merge. The other out
 - A message-file, message-build or refused-commit line: relay it with whatever the
   failing command printed above it. The merge stays prepared; the remedy is to fix
   that cause and run `/gitlore:resolve` again.
+- A denied continuation: say the synthesis is approved and staged and the merge is
+  unlanded, and hand over the continuation command verbatim. The user lands it
+  either by running it with a `!` prefix or by asking for it by name, after which
+  this session runs it; continue from its output as from the sub-agent's report
+  — **Loop**, then **Resume commit**.
 - An unrecognised non-zero outcome: relay the output verbatim with its exit status,
   as a state to inspect, not a landing to report.
 

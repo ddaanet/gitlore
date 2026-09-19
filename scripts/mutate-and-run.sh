@@ -28,6 +28,13 @@ set -euo pipefail
 # is verified against the index. The backup lives under the gitdir — never
 # under $TMPDIR, which is unset when the sandbox is off, and never beside the
 # subject, where a suite's own discovery would reach it.
+#
+# Two lines here are pinned by no test, knowingly: the EXIT trap and the
+# post-restore `git diff --quiet` verification. Every exit taken once the
+# subject is mutated passes through the explicit restore or the signal trap
+# first, which leaves the EXIT trap nothing to do, and no input makes `cat` hand back different bytes, so the verification cannot be
+# made to fail. Both guard against a fault nothing in the suite can induce; a
+# mutation that removes either survives, and that is accepted.
 
 unset CDPATH
 
