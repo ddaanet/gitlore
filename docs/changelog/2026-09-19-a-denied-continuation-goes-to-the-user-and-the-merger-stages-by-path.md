@@ -27,3 +27,15 @@ ahead of its pin is recorded as rejected.
 
 `scripts/mutate-and-run.sh`'s header states that its EXIT trap and post-restore
 verification are pinned by no test, and why that is accepted.
+
+A take killed between `gitlore_compose_up`'s root write and the staged pair is
+reproduced in `tests/killed_take_repro.bats` and accepted as a residual under
+D43 in `references/tier-stores.md`. The next `SessionStart` pins the tier back
+and its compose writes root's line into the carrier for a file the tier no
+longer holds; a later take refuses the dirty tier. The commit path recovers it:
+the line is committed on the pin, the tier's `HEAD:live` push is refused because
+`live` still holds the arrival, and the `head-vs-live` merge joins the line to
+its file. The dangling report does not block that commit — it reports and never
+refuses. A down projection that skips a root line whose file the tier does not
+hold, and writing root and staging the pair atomically, are recorded as
+rejected.
