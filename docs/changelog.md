@@ -6,6 +6,20 @@ design is [design.md](design.md).
 
 Newest first.
 
+- [2026-09-19 — A tier ahead of its pin returns to it, and a stray line reaches the check](changelog/2026-09-19-a-tier-ahead-of-its-pin-returns-to-it-and-a-stray-line-reaches-the-check.md)
+  — the pin guard returns a clean tier whose `live` holds its commits to the pin
+  and directs to `/gitlore:merge`, and the remaining ahead-of-pin refusal no
+  longer prescribes a hand rebuild of root's block (D50); the entry-wise index
+  merge declines a side with a stray non-bullet line in its pointer block
+  instead of dropping it, so the merged-index gate's interleaved rule is
+  reachable (D44); the gate's problem lines are recorded in the merge state and
+  re-emitted with the directive; a store with no root `MEMORY.md` says once per
+  session that composition and the index checks are off, and install always
+  scaffolds one; the commit path's unreadable-index-status aborts say why; a
+  gate records a pass only for the tree its checks read, `test-unit` ignores the
+  integration suites and `plans/*/reports/` is out of the wrap set; and the
+  merge skill reports a repair's three outcomes and carries the
+  correcting-what-arrived procedure
 - [2026-09-18 — Repair and continuation failures say what they left](changelog/2026-09-18-repair-and-continuation-failures-say-what-they-left.md)
   — a failed repair now prints the whole refusal, a remedy that fits its arm and
   what the tier's `live` keeps; its scratch copy moves out of the repository; a
