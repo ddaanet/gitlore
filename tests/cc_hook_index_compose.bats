@@ -658,6 +658,75 @@ EOF
   [[ "$output" != *"$GITLORE_T_TRIAGE_MARK"* ]]
 }
 
+# --- a store with no root index ---
+
+@test "a store with no root index says composition and the index checks are off" {
+  # SessionStart writes the scaffold back, so reaching here means the file went
+  # away inside the session. Until it returns, nothing places a tier's pointer
+  # lines, no validation guards what is written, and Claude Code loads no index
+  # at all — and every one of those failures is silent.
+  rm memory/MEMORY.md
+  run feed
+  [ "$status" -eq 0 ]
+  json="$output"
+  run jq -r '.systemMessage' <<<"$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no root MEMORY.md"* ]]
+  [[ "$output" == *"# Memory Index"* ]]
+  run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
+  [ "$status" -eq 0 ]
+  # The file to write, named from the project root the hooks and the agent
+  # share — the same spelling every sibling notice uses.
+  [[ "$output" == *"memory/MEMORY.md"* ]]
+  [[ "$output" == *"# Memory Index"* ]]
+  # Reported, never repaired here: writing the store is the approval gate's,
+  # and a file this hook created would arrive with no commit accounting for it.
+  [ ! -e memory/MEMORY.md ]
+}
+
+@test "the no-root-index notice fires once per session" {
+  # It answers a store-level condition, not a batch: unguarded it would repeat
+  # on every batch of the session, and each repeat costs the user's channel and
+  # the agent's context.
+  rm memory/MEMORY.md
+  run feed
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no root MEMORY.md"* ]]
+
+  run feed
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "a compaction re-arms the no-root-index notice" {
+  # What survives a compaction is a summary, so a notice this session was
+  # already given may no longer be in the context it was given to.
+  rm memory/MEMORY.md
+  feed >/dev/null
+  run feed
+  [ -z "$output" ]
+
+  printf '{"hook_event_name":"PreCompact","session_id":"test-session"}' \
+    | bash "$PLUGIN_ROOT/scripts/cc-hooks/nudge-reset.sh"
+
+  run feed
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no root MEMORY.md"* ]]
+}
+
+@test "a subagent's no-root-index notice is staged for the parent" {
+  # A hook's output inside a subagent reaches that subagent alone (D51), and
+  # the marker is keyed by session: without the relay the one notice the
+  # session gets would be spent where nobody else reads it.
+  rm memory/MEMORY.md
+  run feed a1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no root MEMORY.md"* ]]
+  marker=$(relay_marker_for memory a1)
+  [ -f "$marker" ]
+  grep -qF 'no root MEMORY.md' "$marker"
+}
+
 @test "no-op outside a gitlore repo" {
   local outside="$BATS_TEST_TMPDIR/outside"
   mkdir -p "$outside"

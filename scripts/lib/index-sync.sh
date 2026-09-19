@@ -406,6 +406,16 @@ gitlore_upgrade_nudge_file() { _gitlore_nudge_file "$1" "$2" upgrade; }
 # is a summary, and the session is still running the old plugin root.
 gitlore_upgrade_nudge_reset() { _gitlore_nudge_reset "$1" "$2" upgrade; }
 
+# Has the missing-root-index notice already fired this episode? The condition is
+# a property of the store rather than of a batch, so nothing about it changes
+# between two batches — one telling per episode is the whole of what there is to
+# say.
+# Args: $1 = memory worktree path; $2 = session id.
+gitlore_rootless_nudge_file() { _gitlore_nudge_file "$1" "$2" rootless; }
+
+# Re-arm the missing-root-index notice. Args as above.
+gitlore_rootless_nudge_reset() { _gitlore_nudge_reset "$1" "$2" rootless; }
+
 # Return 0 when $1 carries at least one LITERAL token — the kind of thing a
 # future query actually contains: a backticked span, a flag, a path, a dotfile,
 # a filename, $VAR, a key=value, a version, snake_case, camelCase, an acronym.

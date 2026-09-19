@@ -513,6 +513,80 @@ pinned_store_with_tier() {
   [[ "$output" != *"it is back on the pin"* ]]
 }
 
+# The two cases below re-root $TMP_REPO under a path holding a space. The
+# branch reaches its tier through the relative `$mempath` it was called with,
+# so the space enters at the one place it resolves an absolute path: the `abs`
+# the printed command carries. The first case is the whole branch running under
+# such a root, the second is that command.
+reroot_spaced() {
+  teardown_tmp_repo
+  TMP_REPO="$(mktemp -d "${TMPDIR:-/tmp}/gitlore test.XXXXXX")"
+  export TMP_REPO
+  cd "$TMP_REPO" || return 1
+  git init -q -b main
+  git config user.email "test@example.com"
+  git config user.name "Test"
+}
+
+@test "a tier ahead of its pin is returned to it under a project path holding a space" {
+  reroot_spaced
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin_into_live ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  abs=$(cd memory/ddaanet && pwd)
+  # The fixture really is spaced, asserted rather than assumed.
+  [[ "$abs" == *" "* ]]
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  # The act, unchanged by the space: HEAD on the pin, the commits kept in
+  # `live`, and the worktree carrier following HEAD rather than a ref move
+  # alone.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pinned" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$moved" ]
+  git -C memory/ddaanet show "$pinned:MEMORY.md" > "$BATS_TEST_TMPDIR/pinned-carrier.md"
+  cmp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/pinned-carrier.md"
+  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"it is back on the pin"* ]]
+  [[ "$tierline" == *"/gitlore:merge"* ]]
+}
+
+@test "a spaced tier that cannot be returned to its pin prints a command that runs verbatim" {
+  # The arm of the same branch that hands the return to a human. Its command
+  # carries the one absolute path the branch builds, so it is where a lost or
+  # split space becomes a command that silently operates on the wrong tree.
+  reroot_spaced
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin_into_live ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  # The `unset -f` below is what leaves shellcheck reading the body as dead.
+  # shellcheck disable=SC2317
+  git() {
+    if [ "$1" = -C ] && [ "$3" = checkout ]; then
+      echo "fatal: simulated checkout failure" >&2
+      return 128
+    fi
+    command git "$@"
+  }
+
+  run gitlore_compose memory
+  [ "$status" -eq 1 ]
+  # Dropped before the emitted command runs: the point is that the command
+  # works, not that the stub lets it.
+  unset -f git
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  cmd=${tierline#*\`}
+  cmd=${cmd%%\`*}
+  [[ "$cmd" == *"gitlore test."* ]]
+  # Verbatim, from an unrelated directory: what the reader does with it.
+  (cd / && eval "$cmd")
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pinned" ]
+}
+
 @test "a moved tier holding MERGE_HEAD is sent to /gitlore:resolve instead" {
   # This is also Item 1.3 slice 2's branch-ORDER case ("a tier that is both
   # mid-merge and ahead takes the mid-merge branch"): move_tier_off_pin leaves

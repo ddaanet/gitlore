@@ -210,6 +210,70 @@ prepare_tier_merge_head_vs_live() {
   [[ "$stderr" == *"continue-after-merge"* ]]
 }
 
+@test "a re-emitted directive carries the merged-index problem lines" {
+  # The refusal prints its problem lines once, to whoever ran the continuation.
+  # A session that clears or compacts before the re-synthesis lands meets the
+  # merge again through a gate, and the directive that gate emits is the whole
+  # briefing the next sub-agent gets — so the lines travel in the state file.
+  prepare_tier_merge_with_new_lines
+  duplicate_tier_carrier
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md: duplicate pointer path t.md"* ]]
+
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"continue-after-merge"* ]]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md: duplicate pointer path t.md"* ]]
+}
+
+@test "a problem line holding spaces, quotes and a leading dash re-emits byte for byte" {
+  # A pointer path is whatever an upstream author wrote, and the problem line
+  # quotes it. Carried through the state file it passes a JSON encode and a
+  # shell capture, either of which can split it, requote it or eat a leading
+  # `-`.
+  prepare_tier_merge_with_new_lines
+  dup='- [odd](-a "q" b.md) — theirs'
+  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n%s\n%s\n' \
+    "$dup" "$dup" > memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet add -A
+  problem='memory/ddaanet/MEMORY.md: duplicate pointer path -a "q" b.md'
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"$problem"* ]]
+
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$stderr" | grep -qxF -- "gitlore:   $problem"
+}
+
+@test "a merged index that passes the check re-emits without the lines an earlier run recorded" {
+  # The lines describe the synthesis the gate last read. Once one passes the
+  # check, a merge still prepared for some other reason must not brief the next
+  # sub-agent to fix text nobody objects to.
+  prepare_tier_merge_with_new_lines
+  duplicate_tier_carrier
+  run bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+
+  hook="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/hooks/commit-msg"
+  printf '#!/bin/sh\necho "commit refused by hook" >&2\nexit 1\n' > "$hook"
+  chmod +x "$hook"
+  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [their fact](t.md) — theirs\n' \
+    > memory/ddaanet/MEMORY.md
+  git -C memory/ddaanet add -A
+
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"the merge commit was refused"* ]]
+
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"continue-after-merge"* ]]
+  [[ "$stderr" != *"duplicate pointer path t.md"* ]]
+}
+
 @test "a fixed merged carrier lands" {
   prepare_tier_merge_with_new_lines
   duplicate_tier_carrier

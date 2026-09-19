@@ -44,10 +44,14 @@ has no `.git` (registered but not checked out).
    tree.
 7. Seed memory content inside the submodule worktree:
    - If existing auto-memory exists at `~/.claude/projects/<hash>/memory/` and
-     holds anything, copy it in.
-   - Otherwise — no dir, an empty one, or a migration stub — scaffold a
-     `MEMORY.md` index file. A store with no root index composes nothing and
-     cannot be merged into, so the scaffold is never skipped.
+     holds anything, copy it in. No dir, an empty one, or a migration stub
+     copies nothing, the last because the stub's own text says not to add memory
+     where it sits.
+   - Then scaffold a `MEMORY.md` index file if the store has none — as owed to a
+     migration that carried facts but no index as to a store with nothing to
+     migrate. A store with no root index composes nothing, no index check guards
+     it, and Claude Code loads no memory from it; the scaffold is never skipped,
+     and a migrated index is never written over.
 8. `git -C <memory-path> add -A && git -C <memory-path> commit -m "Initial memory"`
    — non-empty initial commit; install is git-atomic.
 9. Create the `live` branch at the initial commit and check the worktree out
@@ -66,9 +70,9 @@ has no `.git` (registered but not checked out).
     file.
 15. Leave tracked changes staged for the user to commit.
 16. When step 7 migrated real facts — announced as
-    `gitlore: migrated auto-memory from <src> into <path>`, and not printed by
-    the scaffold branch — the command holds the migrated store against the
-    `memory-writing` skill and applies what it finds (D48). Those edits are
+    `gitlore: migrated auto-memory from <src> into <path>`, which a store that
+    only scaffolds does not print — the command holds the migrated store against
+    the `memory-writing` skill and applies what it finds (D48). Those edits are
     memory content, so they stay uncommitted and reach the user through FR11 on
     the first parent commit.
 
