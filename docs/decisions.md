@@ -156,12 +156,14 @@ paired guard plugin (index-composition.md) · frontmatter `description` as the
 source of truth for the index one-liner · scoring an index hook against its
 body, tf-idf style (index-authoring-sync.md) · an append-only constraint on
 shared-tier indexes · a `merge` driver plus `.gitattributes` ·
-`**/MEMORY.md merge=union` plus a dedup-by-path pass (tier-stores.md) · a
-message fix alone for an unadoptable arrival · a push that tolerates the defect
-· a `--no-ff` merge of the arrival onto the pin · an agent-driven repair through
-the memory-merger · a mechanical repair of a merge synthesis · repairing only
-when every problem names the carrier · a continuation that commits a defective
-merged index uncomposed (tier-arrival-repair.md).
+`**/MEMORY.md merge=union` plus a dedup-by-path pass · a down projection that
+skips a root line whose file the tier does not hold · writing root and staging
+the pair atomically (tier-stores.md) · a message fix alone for an unadoptable
+arrival · a push that tolerates the defect · a `--no-ff` merge of the arrival
+onto the pin · an agent-driven repair through the memory-merger · a mechanical
+repair of a merge synthesis · repairing only when every problem names the
+carrier · a continuation that commits a defective merged index uncomposed
+(tier-arrival-repair.md).
 
 ---
 

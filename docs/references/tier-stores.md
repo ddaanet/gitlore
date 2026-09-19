@@ -181,6 +181,23 @@ still refuses on what this repo holds. The walk-back names what the tier's local
 `live` keeps: the repair, once it is there — after a refused retry, or a
 checkout that could not follow the advance — and otherwise what arrived.
 
+**A take killed between the root write and the staged pair is an accepted
+residual.** `gitlore_compose_up` writes root's `MEMORY.md` as an ordinary
+working-tree write, and `gitlore_adopt_stage_pair_and_commit` stages the pair
+afterwards, so a kill between the two leaves root describing the arrival over a
+gitlink that never moved. A take retried at once finds nothing to take. The next
+`SessionStart` pins the tier back, the pin guard then has nothing to refuse, and
+the down projection writes root's line into the carrier for a file the tier no
+longer holds; the dangling report names root's line and nothing names the
+carrier. A take after that refuses the dirty tier. What recovers it is the
+commit path: the carrier line is committed on the pin, its `HEAD:live` push is
+refused as a non-fast-forward because `live` still holds the arrival, the
+refusal classifies as divergence, and the `head-vs-live` merge
+`/gitlore:resolve` lands joins the line to its file and stages the pair. Nothing
+is lost at any step, and the cost is one merger dispatch and a redundant commit
+in the tier's history, for a failure that takes a kill inside one function.
+`tests/killed_take_repro.bats` pins the whole sequence.
+
 **A tier merge the root index cannot adopt still lands, and the root records
 none of it.** A merged carrier that fails the check never gets here: that merge
 commits nothing and stays prepared for a new synthesis (D52). What reaches this
@@ -303,6 +320,16 @@ that the work was skipped — the agent still reads both diffs and the changed
 files, still stages them by explicit path, and still stops for approval.
 
 ## Rejected alternatives
+
+**A down projection that skips a root line whose file the tier does not hold.**
+Would keep the carrier clean after a killed take, so the next take re-adopts
+unaided. But it changes the down pass's contract for every tier to cover one
+kill window, and the divergence path already recovers the state with nothing
+lost (D43).
+
+**Writing root and staging the pair atomically.** Closes the killed-take window
+itself, at the cost of `gitlore_compose_write`'s contract with every other
+caller, which would keep the same window unless each took the same change (D43).
 
 **An append-only constraint on shared-tier indexes.** Unnecessary. Concurrent
 insertions merge through the same semantic path as any memory divergence, and
