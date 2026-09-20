@@ -54,9 +54,31 @@ all_suites() {
 # What `just test` would hand to bats, with bats stubbed out. Filtered to
 # *.bats lines: the recipes also pass `--jobs <n>`, which the stub echoes
 # like any other arg but which isn't a suite. Forced, because the runners are
-# gates: a recorded pass would skip discovery and hand back nothing.
+# gates: a recorded pass would skip discovery and hand back nothing. The
+# sentinels go to a scratch directory: this runs the real recipes in the real
+# repo, and a stubbed pass recorded there would overwrite the verdicts of the
+# very gate this suite is running under.
 discovered_suites() {
-  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" GITLORE_GATE_FORCE=1 just test-unit test-integration ) | grep '\.bats$'
+  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" GITLORE_GATE_FORCE=1 GITLORE_GATE_DIR="$STUB_DIR/gates" just test-unit test-integration ) | grep '\.bats$'
+}
+
+@test "the stubbed discovery run records its sentinels in a scratch directory, not this repo's" {
+  run discovered_suites
+  [ "$status" -eq 0 ]
+  [ -f "$STUB_DIR/gates/test-unit" ]
+  [ -f "$STUB_DIR/gates/test-integration" ]
+}
+
+@test "GITLORE_GATE_DIR moves the sentinel out of the gitdir" {
+  setup_gate_repo
+  run in_gate_repo "export GITLORE_GATE_DIR='$GATE_REPO/elsewhere'; check-sentinel g src || true; record-sentinel"
+  [ "$status" -eq 0 ]
+  [ -f "$GATE_REPO/elsewhere/g" ]
+  [ ! -e "$GATE_REPO/.git/gitlore/gates/g" ]
+
+  run in_gate_repo "export GITLORE_GATE_DIR='$GATE_REPO/elsewhere'; sentinel-guard g src; echo ran"
+  [ "$status" -eq 0 ]
+  [ "$output" = "g: cached (inputs unchanged)" ]
 }
 
 @test "every suite under tests/ is run by one of the test recipes" {

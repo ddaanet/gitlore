@@ -32,10 +32,35 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *SC2164* ]]
 }
 
-@test "lint-shell: ignores untracked shell files" {
+@test "lint-shell: lints an untracked shell file, as the gate hash already counts it" {
+  # `gate-inputs-hash` enumerates `--others --exclude-standard`, so a brand-new
+  # file moves the hash; a discovery that skipped it would record a lint pass
+  # over a file nothing linted.
   printf '#!/usr/bin/env bash\necho clean\n' > good.sh
   git add good.sh
   printf '#!/usr/bin/env bash\nfoo=$(echo hi)\necho $foo\n' > untracked.sh
   run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *untracked.sh* ]]
+  [[ "$output" == *SC2086* ]]
+}
+
+@test "lint-shell: discovers an untracked extensionless script by shebang" {
+  mkdir -p hooks
+  printf '#!/usr/bin/env bash\ncd /tmp\n' > hooks/pre-push
+  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *SC2164* ]]
+}
+
+@test "lint-shell: leaves ignored shell files alone" {
+  printf '#!/usr/bin/env bash\necho clean\n' > good.sh
+  printf 'scratch/\n' > .gitignore
+  git add good.sh .gitignore
+  mkdir scratch
+  printf '#!/usr/bin/env bash\nfoo=$(echo hi)\necho $foo\n' > scratch/ignored.sh
+  printf '#!/usr/bin/env bash\ncd /tmp\n' > scratch/ignored-hook
+  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
   [ "$status" -eq 0 ]
+  [[ "$output" == *"1 files clean"* ]]
 }
