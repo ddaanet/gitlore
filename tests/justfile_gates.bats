@@ -57,9 +57,11 @@ all_suites() {
 # gates: a recorded pass would skip discovery and hand back nothing. The
 # sentinels go to a scratch directory: this runs the real recipes in the real
 # repo, and a stubbed pass recorded there would overwrite the verdicts of the
-# very gate this suite is running under.
+# very gate this suite is running under. `2>&1` ahead of the filter: the stub
+# writes no junit report, `run-bats-cached.sh` says so on stderr, and bats'
+# `run` would fold that line into `$output` beside the suite names.
 discovered_suites() {
-  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" GITLORE_GATE_FORCE=1 GITLORE_GATE_DIR="$STUB_DIR/gates" just test-unit test-integration ) | grep '\.bats$'
+  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" GITLORE_GATE_FORCE=1 GITLORE_GATE_DIR="$STUB_DIR/gates" just test-unit test-integration ) 2>&1 | grep '\.bats$'
 }
 
 @test "the stubbed discovery run records its sentinels in a scratch directory, not this repo's" {
@@ -211,7 +213,8 @@ discovered_suites() {
   for gate in lint test-unit test-integration; do
     case "$gate" in
       lint) runner="scripts/lint-shell.sh" ;;
-      *) runner="scripts/run-bats.sh" ;;
+      # The two bats gates reach theirs through the prolog's `run-suites`.
+      *) runner="run-suites" ;;
     esac
     run jq -r --arg r "$gate" '.recipes[$r].body[] | .[0] | select(type == "string")' <<<"$dump"
     [ "$status" -eq 0 ]
@@ -220,6 +223,29 @@ discovered_suites() {
     after_runner="${body#*"$runner"}"
     [[ "$after_runner" == *"record-sentinel"* ]]
   done
+
+  # `run-suites` is prolog text, which the dump above does not hold.
+  run just_here --evaluate bash_prolog
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"scripts/run-bats-cached.sh"* ]]
+}
+
+# A literal `*.bats` glob in a suite's code is what iterating over sibling
+# suites looks like; sourcing a suite's own helpers through
+# `BATS_TEST_DIRNAME` is not. No suite matches, so `reads_all_suites` is empty
+# and this is a tripwire for one added without being declared.
+@test "a suite that globs sibling .bats files for their contents is declared --reads-all" {
+  run just_here --evaluate reads_all_suites
+  [ "$status" -eq 0 ]
+  declared=" $output "
+  while IFS= read -r suite; do
+    [ -n "$suite" ] || continue
+    hits="$(grep -n '\*\.bats' "$PLUGIN_ROOT/$suite" | grep -v '^[0-9]*:[[:blank:]]*#' || true)"
+    [ -z "$hits" ] || [[ "$declared" == *" $suite "* ]] || {
+      echo "$suite globs sibling .bats files but is not in reads_all_suites: $hits" >&2
+      return 1
+    }
+  done < <(all_suites)
 }
 
 @test "the Makefile is gone, so nothing can quietly still run make" {

@@ -1,0 +1,32 @@
+diff --git a/scripts/git-hooks/pre-commit b/scripts/git-hooks/pre-commit
+index 227ae7d..1a16107 100755
+--- a/scripts/git-hooks/pre-commit
++++ b/scripts/git-hooks/pre-commit
+@@ -28,13 +28,22 @@ saved_index="${GIT_INDEX_FILE-}"
+ # Resolved BEFORE the unset below, for the same reason as the index: replay
+ # state is per-worktree, and `--git-path` reads the env git set for this repo.
+ replay_op=""
+-for marker in rebase-merge:rebase rebase-apply:rebase \
+-              CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert; do
+-  if [ -e "$(git rev-parse --git-path "${marker%%:*}")" ]; then
+-    replay_op="${marker##*:}"
++# `git rev-parse --git-path a --git-path b ...` prints one resolved path per
++# occurrence, in argument order (verified against git's own docs and
++# behaviour) — one process answers all four markers instead of four. The ops
++# array below is positional, matched 1:1 against that argument order; read
++# with `|| [ -n "$path" ]` so a final unterminated line (rev-parse always
++# newline-terminates each, but the guard is free) is not silently dropped.
++replay_ops=(rebase rebase cherry-pick revert)
++i=0
++while IFS= read -r path || [ -n "$path" ]; do
++  if [ -e "$path" ]; then
++    replay_op="${replay_ops[$i]}"
+     break
+   fi
+-done
++  i=$((i + 1))
++done < <(git rev-parse --git-path rebase-merge --git-path rebase-apply \
++                        --git-path CHERRY_PICK_HEAD --git-path REVERT_HEAD)
+ # shellcheck disable=SC2046  # intentional word-splitting of the var-name list
+ unset $(git rev-parse --local-env-vars)
+ 

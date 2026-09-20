@@ -86,6 +86,27 @@ which is the discovery walk; editing one suite adds under a second.
 `GITLORE_GATE_FORCE=1` lints every file regardless, and
 `scripts/lint-cache-keys.py` holds the key's argument.
 
+`test-unit` and `test-integration` keep the same kind of cache beneath their
+sentinels, through the prolog's `run-suites` and `scripts/run-bats-cached.sh`:
+one key per suite, in `<gate>.suites` beside the gate files. A key covers a
+shared hash — the gate's own input hash with the suite files left out — the
+names of every suite the gate runs, and the suite's path and contents. So an
+edit to one suite reruns that suite (the integration half: 68 s cold, 9 s after
+touching one suite, most of it the three whole-tree hashes); adding, renaming or
+deleting a suite reruns all of them, since a suite may enumerate its siblings;
+and an edit under `scripts/`, `hooks/` or `tests/helpers/` reruns all of them,
+because nothing records which scripts a suite exercises. A suite that read other
+suites' *contents* would need every suite in its key; the justfile's
+`reads_all_suites` names such suites, none exists, and `justfile_gates.bats`
+fails when one appears undeclared.
+
+A suite's pass is recorded only if it ran and passed in this run and its key is
+the same after the run as before. The verdict per suite comes from bats' junit
+report, matched to the suites by position and cross-checked by name; a report
+that is missing, short, or out of order records nothing, and the suites run
+again. A failing suite does not keep the passing ones beside it from being
+recorded. `GITLORE_GATE_FORCE=1` runs every suite.
+
 `GITLORE_GATE_DIR` names another directory for the gate files. It is for a
 caller that runs a recipe without meaning its verdict:
 `tests/justfile_gates.bats` drives the real `test-unit` and `test-integration`
