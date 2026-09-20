@@ -171,15 +171,6 @@ if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
     "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
   exit 1
 fi
-# Captured rather than piped into `grep -q`: this script runs with `set -o
-# pipefail`, where an early-exiting consumer can leave `ls-remote` writing into
-# a closed pipe and turn a healthy remote into a SIGPIPE failure.
-if [ -z "$(git -C "$mempath" ls-remote origin live)" ]; then
-  echo "gitlore: remote has no live branch. Pushing." >&2
-  gitlore_git -C "$mempath" push origin live
-  # Fall through, same reason: the gates below re-check memory as a no-op and
-  # then walk every tier.
-fi
 
 # Both gates for one store: local `live` first (cheaper, local-only), then the
 # remote's. No branch guard is needed at either level — every store is checked

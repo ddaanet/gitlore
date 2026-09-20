@@ -7,6 +7,16 @@ set -euo pipefail
 # `cd` echoes its resolved target on stdout and the capture takes two lines.
 unset CDPATH
 
+# A macOS check drives bats with a modern bash while the scripts under test
+# have to meet the system's 3.2. A directory holding the `bash` of the caller's
+# choosing goes first on PATH, so every `#!/usr/bin/env bash` and `bash "$CMD"`
+# a test execs resolves there, and the test body keeps the bash bats started
+# with. Libraries sourced below still run in the test's own bash.
+if [ -n "${GITLORE_TEST_BASH_DIR:-}" ]; then
+  PATH="$GITLORE_TEST_BASH_DIR:$PATH"
+  export PATH
+fi
+
 PLUGIN_ROOT="${BATS_TEST_DIRNAME}/.."
 export PLUGIN_ROOT
 

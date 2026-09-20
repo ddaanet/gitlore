@@ -20,15 +20,6 @@ publish_memory() {
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
 }
 
-# A tier in the state SessionStart leaves it in: local `live` created from the
-# remote, worktree detached at `live`.
-mount_tier_at_live() {
-  local tier="${1:-ddaanet}"
-  make_tier_in_memory "$tier"
-  git -C "memory/$tier" fetch -q origin "live:live"
-  git -C "memory/$tier" checkout -q --detach live
-}
-
 # Advance a tier past its own remote with a plain commit that adds no index
 # line — the ordinary shape of a local advance, before the push that would
 # publish it. Leaves both HEAD and local `live` on the new commit (not

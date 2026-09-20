@@ -13,15 +13,6 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
-
-mount_tier_at_live() {
-  local tier="${1:-ddaanet}"
-  make_tier_in_memory "$tier"
-  git -C "memory/$tier" fetch -q origin "live:live"
-  git -C "memory/$tier" checkout -q --detach live
-}
-
 # Commit $1 as the root index on the detached memory HEAD, then move `live`
 # sideways — the head-vs-live shape, carrying the index the merge must compose.
 diverge_memory_with_index() {
