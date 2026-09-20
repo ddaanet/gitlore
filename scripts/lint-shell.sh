@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Lint every tracked shell script with shellcheck at default severity.
+# Lint every shell script in the working tree with shellcheck at default
+# severity.
 #
-# Discovery: tracked files with a shell extension (.sh/.bash/.bats), plus any
-# tracked extensionless file whose first line is a shell shebang (git hooks,
-# the launcher shim). memory/ is a submodule (its own repo, linted there) and
-# docs/ holds markdown with fenced shell examples — both are excluded.
+# Discovery: tracked files and untracked, non-ignored ones — the set
+# `gate-inputs-hash` in the justfile enumerates, so a brand-new file that moves
+# the `lint` gate's hash is also a file this linted. Of those, the ones with a
+# shell extension (.sh/.bash/.bats), plus any extensionless file whose first
+# line is a shell shebang (git hooks, the launcher shim). memory/ is a
+# submodule (its own repo, linted there) and docs/ holds markdown with fenced
+# shell examples — both are excluded.
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
@@ -17,23 +21,17 @@ is_shell_shebang() {
   head -1 "$1" | grep -qE '^#!.*(/|[[:blank:]])(ba)?sh([[:blank:]]|$)'
 }
 
+# NUL-delimited, so no filename can split a record. `sort -zu` because an
+# unmerged path is listed once per index stage.
 files=()
-while IFS= read -r f; do
+while IFS= read -r -d '' f; do
+  case "$f" in
+    memory/*|docs/*) continue ;;
+    *.sh|*.bash|*.bats) ;;
+    *) { [ -f "$f" ] && is_shell_shebang "$f"; } || continue ;;
+  esac
   files+=("$f")
-done < <(
-  {
-    git ls-files -- '*.sh' '*.bash' '*.bats'
-    git ls-files | while IFS= read -r f; do
-      case "$f" in
-        *.sh|*.bash|*.bats) continue ;;
-        memory/*|docs/*) continue ;;
-      esac
-      if [ -f "$f" ] && is_shell_shebang "$f"; then
-        printf '%s\n' "$f"
-      fi
-    done
-  } | grep -Ev '^(memory|docs)/' | sort -u
-)
+done < <(git ls-files -z --cached --others --exclude-standard | sort -zu)
 
 if [ "${#files[@]}" -eq 0 ]; then
   echo "lint-shell: no shell files discovered" >&2

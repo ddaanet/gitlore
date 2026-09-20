@@ -122,11 +122,12 @@ prerelease: precommit
 # reads back, so a second gate in the same script would clobber the first's.
 #
 # All three start from `precommit_inputs`: `scripts/lint-shell.sh` discovers
-# every tracked shell file, and both bats halves source `scripts/` and
+# every shell file under them, and both bats halves source `scripts/` and
 # `hooks/`. `test-unit` narrows from there, since it runs none of the
 # integration suites.
 
-# shellcheck over every tracked shell file, discovered by extension or shebang.
+# shellcheck over every shell file the gate hash counts — tracked, or untracked
+# and not ignored — discovered by extension or shebang.
 lint:
     #!{{ bash_prolog }}
     sentinel-guard lint {{ precommit_inputs }}
@@ -177,8 +178,13 @@ bash_prolog := "/usr/bin/env bash\n" + \
 # The sentinel lives under the gitdir, not the working tree: bookkeeping that
 # showed up in `git status` — or in its own input hash — would invalidate the
 # gate on every run.
+#
+# `GITLORE_GATE_DIR` puts it somewhere else, for a caller that runs a recipe
+# without meaning its verdict: the `justfile_gates` suite drives the real
+# recipes in this repo with `bats` stubbed out, and a pass recorded from that
+# would overwrite the real one.
 check-sentinel () {
-    sentinel_dir=$(git rev-parse --git-path gitlore/gates)
+    sentinel_dir=${GITLORE_GATE_DIR:-$(git rev-parse --git-path gitlore/gates)}
     mkdir -p "$sentinel_dir"
     sentinel="$sentinel_dir/$1"; shift
     gate_inputs=("$@")

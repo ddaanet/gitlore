@@ -6,6 +6,10 @@
 # functions set that script's globals (mempath, memroot, statefile, flavor,
 # publish, merged_tier, tier_unadopted) and exit on its behalf.
 # Part of scripts/resolve.sh; source that, not this file.
+#
+# File-wide: flavor, publish and tier_unadopted are read by scripts/resolve.sh,
+# which shellcheck cannot see from here.
+# shellcheck disable=SC2034
 
 # Load shared continuation state: require an installed submodule and exactly one
 # prepared merge, then set mempath/statefile/flavor/publish for the caller.

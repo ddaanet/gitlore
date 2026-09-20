@@ -69,6 +69,17 @@ standing.
 the same thing as a green `precommit`. `GITLORE_GATE_FORCE=1` runs a gate
 whatever its sentinel says.
 
+`scripts/lint-shell.sh` discovers from the set the hash enumerates — tracked
+files plus untracked, non-ignored ones — so a brand-new script that moves the
+`lint` hash is a script the recorded pass linted.
+
+`GITLORE_GATE_DIR` names another directory for the gate files. It is for a
+caller that runs a recipe without meaning its verdict:
+`tests/justfile_gates.bats` drives the real `test-unit` and `test-integration`
+in this repository with `bats` stubbed out to list what they would run, and
+points the variable at a scratch directory so that stubbed pass never replaces a
+real one.
+
 ## Proving a test discriminates
 
 A test written against code that already behaves gets its evidence from a

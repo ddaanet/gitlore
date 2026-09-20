@@ -54,11 +54,12 @@ setup_gate_repo() {
 # sets errexit, so a snippet must consume a helper's non-zero status itself.
 # `GITLORE_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an
 # ambient value would reach every gate under test and make the skip cases
-# silently unprovable.
+# silently unprovable. `GITLORE_GATE_DIR` likewise: an ambient one would move
+# every sentinel the suites look for under the throwaway gitdir.
 in_gate_repo() {
   (
     cd "$GATE_REPO" || return 1
-    unset GITLORE_GATE_FORCE
+    unset GITLORE_GATE_FORCE GITLORE_GATE_DIR
     # shellcheck source=/dev/null
     . "$PROLOG"
     eval "$1"
