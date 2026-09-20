@@ -1,6 +1,5 @@
 ## Remaining
 
-- Give `lint` a per-file shellcheck cache: key each file on its own content plus the files it sources, shellcheck only the misses, so a one-file edit stops paying the ~64s repo-wide pass; record what a cached pass vouches for in `docs/references/testing.md`.
 - Pull per-suite timings from a full bats run and decide between building fixtures once per file in `setup_file` and per-suite gate sentinels; the second changes what a recorded pass vouches for and needs its argument written before code.
 - Run `discovered_suites` once per file in `tests/justfile_gates.bats` (`setup_file`) and share the output: three tests now each run the two real recipes forced, hashing the input tree twice per run.
 - Split the three files still over 400 lines, which pure moves cannot split: `scripts/check-docs-links.py` (577), `scripts/cc-hooks/session-start.sh` (429), `scripts/check-memory-hygiene.py` (405); the Python ones need module restructuring and the hook is one sequential flow, so each needs a design first.

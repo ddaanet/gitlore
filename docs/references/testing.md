@@ -73,6 +73,19 @@ whatever its sentinel says.
 files plus untracked, non-ignored ones — so a brand-new script that moves the
 `lint` hash is a script the recorded pass linted.
 
+Inside a `lint` run that the sentinel did not skip, `lint-shell.sh` keeps a
+finer cache of its own at `git rev-parse --git-path gitlore/lint-cache`: one key
+per shell file, recorded only when shellcheck passed it. A key covers the
+shellcheck version, the file, and the closure of every discovered file whose
+basename the file mentions — shellcheck follows a `source` only through a
+literal path or a `# shellcheck source=` directive, and both spell that
+basename, so the closure over-approximates what `-x` reads and an edit to a
+library relints everything that reaches it. A file sourced from outside the
+discovered set is in no key. The full pass is ~65 s and an unchanged tree ~4 s,
+which is the discovery walk; editing one suite adds under a second.
+`GITLORE_GATE_FORCE=1` lints every file regardless, and
+`scripts/lint-cache-keys.py` holds the key's argument.
+
 `GITLORE_GATE_DIR` names another directory for the gate files. It is for a
 caller that runs a recipe without meaning its verdict:
 `tests/justfile_gates.bats` drives the real `test-unit` and `test-integration`
