@@ -20,7 +20,7 @@
 
 # The post-mount triage nudge's marker (D17). Pinned by "a manifest-touching
 # batch emits a triage directive naming the active tier's scope" in
-# tests/cc_hook_index_compose.bats.
+# tests/cc_hook_index_compose_notices.bats.
 GITLORE_T_TRIAGE_MARK='active-tier'
 
 # Git's own advice when a nested repository is staged as a plain tree instead of
@@ -30,9 +30,10 @@ GITLORE_T_TRIAGE_MARK='active-tier'
 # message gitlore exists to avoid producing.
 GITLORE_T_EMBEDDED_REPO='embedded git repository'
 
-# The dangling-pointer report's wording (scripts/lib/index-compose.sh). Pinned by
-# "a dangling pointer names the file and the index that carries it" in
-# tests/index_compose.bats; refuted where compose has nothing dangling to say.
+# The dangling-pointer report's wording (scripts/lib/index-compose-project.sh).
+# Pinned by "a dangling pointer names the file and the index that carries it" in
+# tests/index_compose_dangling.bats; refuted where compose has nothing dangling
+# to say.
 GITLORE_T_DANGLING='names no file'
 
 # The submodule url install writes before a real remote exists

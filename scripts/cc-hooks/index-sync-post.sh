@@ -41,7 +41,7 @@ index="$mempath/MEMORY.md"
 # never `agent_type`: only the first is subagent-only, while the second also
 # appears on the main thread of an `--agent` session, so keying on it would
 # send a parent batch looking for a name only a subagent's pre-hook ever
-# writes. Pinned by the agent_type decoy in tests/index_sync.bats.
+# writes. Pinned by the agent_type decoy in tests/index_sync_propagation.bats.
 stashfile=$(gitlore_index_preimage_file "$mempath" "$agent_id")   # absolute
 
 [ -f "$stashfile" ] || exit 0   # no baseline → no watched call, nothing to diff

@@ -5,7 +5,7 @@
 # diverged, a merge can fix this" apart from "the server said no, a merge
 # cannot":
 #
-#   scripts/lib/resolve.sh      push . HEAD:live        (head-vs-live)
+#   scripts/lib/resolve-sync-memory.sh  push . HEAD:live  (head-vs-live)
 #   scripts/git-hooks/pre-push  push origin live        (head-vs-remote)
 #   scripts/cc-hooks/session-start.sh  fetch origin live:live  (tier ff-only)
 #
@@ -260,14 +260,16 @@ HOOK
   #
   # pre-push and session-start are NOT in this list, and their absence is
   # asserted below rather than assumed: since D20 pre-push discriminates nothing
-  # itself, it calls gitlore_push_stores in scripts/lib/resolve.sh (already
+  # itself, it calls gitlore_push_stores in scripts/lib/resolve-push.sh (already
   # covered here) so the standalone push entry point cannot diverge from the
   # hook; and a pinned tier's fetch is read-only, so nothing there is ever
   # refused for divergence. Dropping a site from this loop would otherwise be
   # indistinguishable from losing its coverage.
   for site in \
-    scripts/lib/resolve.sh \
-    scripts/resolve.sh
+    scripts/lib/resolve-sync-tiers.sh \
+    scripts/lib/resolve-sync-memory.sh \
+    scripts/lib/resolve-push.sh \
+    scripts/lib/continuation.sh
   do
     run grep -c -e '"(fetch first)"\*|\*"(non-fast-forward)"' \
                 -e '\*non-fast-forward\*|\*"fetch first"\*' \
