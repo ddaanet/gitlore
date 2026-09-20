@@ -6,6 +6,8 @@ bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures
 load helpers/gh-mock
+load helpers/tier-fixtures
+load helpers/tier-divergence
 
 RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
 
@@ -70,6 +72,33 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
   remote_live=$(git --git-dir="$bare" rev-parse live 2>/dev/null || echo MISSING)
   [ "$remote_live" != "MISSING" ]
+}
+
+@test "resolve: a tier gate that refuses stops memory's remote-less live from publishing early" {
+  # Memory's remote has no `live` yet, and a mounted tier's own gate is about to
+  # refuse (its local `live` diverged from its remote's). D17: memory's commit
+  # records the tier's gitlink, so memory's `live` must not reach the remote
+  # ahead of a tier gate that then fails; the pointer it would publish names a
+  # tier commit the tier's own remote cannot resolve.
+  make_parent_with_memory
+  bare="$TMP_REPO/.recover-remote.git"
+  git init -q --bare "$bare"
+  git -C memory remote remove origin 2>/dev/null || true
+  git -C memory remote add origin "$bare"
+  mount_tier_at_live ddaanet
+  diverge_tier_from_remote ddaanet
+
+  # Premise: memory's remote truly has no `live` yet, and the tier's remote
+  # truly does not carry the commit memory's gitlink now names.
+  [ -z "$(git -C memory ls-remote origin live)" ]
+  gitlink=$(git -C memory rev-parse HEAD:ddaanet)
+  run git --git-dir="$TMP_REPO/.bare-ddaanet.git" cat-file -e "$gitlink"
+  [ "$status" -ne 0 ]
+
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"flavor=head-vs-remote"* ]]
+  [ -z "$(git -C memory ls-remote origin live)" ]
 }
 
 @test "resolve: the merge state file parses when the store path holds a quote" {

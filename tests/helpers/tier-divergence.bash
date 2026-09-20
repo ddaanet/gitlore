@@ -14,15 +14,6 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
-
-mount_tier_at_live() {
-  local tier="${1:-ddaanet}"
-  make_tier_in_memory "$tier"
-  git -C "memory/$tier" fetch -q origin "live:live"
-  git -C "memory/$tier" checkout -q --detach live
-}
-
 # Commit a tier fact locally after someone else advanced the tier remote, which
 # is the shape every remote-divergence case below needs.
 diverge_tier_from_remote() {

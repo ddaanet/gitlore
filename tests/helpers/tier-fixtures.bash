@@ -83,6 +83,19 @@ make_tier_in_memory() {
   done < <(git -C "$mempath" for-each-ref --format='%(refname:short)' refs/heads)
 }
 
+# Mount a tier and bring it to the state SessionStart leaves it in: local
+# `live` created from the remote, worktree detached at `live`.
+mount_tier_at_live() {
+  local tier="${1:-ddaanet}"
+  make_tier_in_memory "$tier"
+  git -C "memory/$tier" fetch -q origin "live:live"
+  git -C "memory/$tier" checkout -q --detach live
+}
+
+# Write $1 as the memory episode's approval summary, the shape
+# `commit-memory.sh` reads back as the commit message.
+approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
+
 # Push a new commit onto a tier remote's `live` branch and echo its SHA.
 # Args: $1 = tier name (default "ddaanet"), $2 = line to append to MEMORY.md
 push_tier_fact() {

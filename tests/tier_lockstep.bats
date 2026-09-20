@@ -30,17 +30,6 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-# Mount a tier and bring it to the state SessionStart leaves it in: local `live`
-# created from the remote, worktree detached at `live`.
-mount_tier_at_live() {
-  local tier="${1:-ddaanet}"
-  make_tier_in_memory "$tier"
-  git -C "memory/$tier" fetch -q origin "live:live"
-  git -C "memory/$tier" checkout -q --detach live
-}
-
-approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
-
 # --- commit lockstep ---
 
 @test "a fact authored in a tier is committed with the tier" {

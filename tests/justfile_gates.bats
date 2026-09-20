@@ -60,15 +60,48 @@ all_suites() {
 # very gate this suite is running under. `2>&1` ahead of the filter: the stub
 # writes no junit report, `run-bats-cached.sh` says so on stderr, and bats'
 # `run` would fold that line into `$output` beside the suite names.
-discovered_suites() {
-  ( cd "$PLUGIN_ROOT" && PATH="$STUB_DIR:$PATH" GITLORE_GATE_FORCE=1 GITLORE_GATE_DIR="$STUB_DIR/gates" just test-unit test-integration ) 2>&1 | grep '\.bats$'
+#
+# Run once per file, not once per test: the run hashes the whole input tree,
+# and three tests below all want the same discovery output. Its own stub dir
+# (separate from the per-test one `helpers/justfile-gates.bash`'s `setup()`
+# still makes for the other tests in this file) and its result live under
+# `$BATS_FILE_TMPDIR`, since `setup_file` and the tests it precedes run in
+# separate processes and share no variables — only files.
+setup_file() {
+  command -v just > /dev/null || {
+    echo "just is not on PATH; the gate recipes cannot be inspected" >&2
+    return 1
+  }
+  local stub_dir status
+  stub_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-justfile-stub.XXXXXX")"
+  cat > "$stub_dir/bats" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@"
+EOF
+  chmod +x "$stub_dir/bats"
+  printf '%s\n' "$stub_dir" > "$BATS_FILE_TMPDIR/discovered_suites.stub_dir"
+
+  if ( cd "$PLUGIN_ROOT" && PATH="$stub_dir:$PATH" GITLORE_GATE_FORCE=1 GITLORE_GATE_DIR="$stub_dir/gates" just test-unit test-integration ) \
+      > "$BATS_FILE_TMPDIR/discovered_suites.raw" 2>&1
+  then status=0
+  else status=$?
+  fi
+  printf '%s\n' "$status" > "$BATS_FILE_TMPDIR/discovered_suites.status"
+  grep '\.bats$' "$BATS_FILE_TMPDIR/discovered_suites.raw" > "$BATS_FILE_TMPDIR/discovered_suites.out" || true
+}
+
+teardown_file() {
+  # Absent when `setup_file` stopped at its `just` guard.
+  [ -f "$BATS_FILE_TMPDIR/discovered_suites.stub_dir" ] || return 0
+  rm -rf "$(cat "$BATS_FILE_TMPDIR/discovered_suites.stub_dir")"
 }
 
 @test "the stubbed discovery run records its sentinels in a scratch directory, not this repo's" {
-  run discovered_suites
-  [ "$status" -eq 0 ]
-  [ -f "$STUB_DIR/gates/test-unit" ]
-  [ -f "$STUB_DIR/gates/test-integration" ]
+  [ "$(cat "$BATS_FILE_TMPDIR/discovered_suites.status")" -eq 0 ]
+  local stub_dir
+  stub_dir="$(cat "$BATS_FILE_TMPDIR/discovered_suites.stub_dir")"
+  [ -f "$stub_dir/gates/test-unit" ]
+  [ -f "$stub_dir/gates/test-integration" ]
 }
 
 @test "GITLORE_GATE_DIR moves the sentinel out of the gitdir" {
@@ -87,16 +120,14 @@ discovered_suites() {
   # The regression this exists for: `make test` once hand-listed its suites and
   # five of them (21 tests) drifted off the list, including the FR11 memory-gate
   # cover. Nothing was red — they simply never ran.
-  run discovered_suites
-  [ "$status" -eq 0 ]
-  discovered="$(printf '%s\n' "$output" | sort)"
+  [ "$(cat "$BATS_FILE_TMPDIR/discovered_suites.status")" -eq 0 ]
+  discovered="$(sort "$BATS_FILE_TMPDIR/discovered_suites.out")"
   [ "$discovered" = "$(all_suites)" ]
 }
 
 @test "no suite is run twice" {
-  run discovered_suites
-  [ "$status" -eq 0 ]
-  dupes="$(printf '%s\n' "$output" | sort | uniq -d)"
+  [ "$(cat "$BATS_FILE_TMPDIR/discovered_suites.status")" -eq 0 ]
+  dupes="$(sort "$BATS_FILE_TMPDIR/discovered_suites.out" | uniq -d)"
   [ -z "$dupes" ]
 }
 
