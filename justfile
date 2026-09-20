@@ -41,6 +41,12 @@ evals_inputs := precommit_inputs + " agents commands skills"
 # later cannot silently uncover this suite's assertions.
 distribution_inputs := ".gitmodules agents commands hooks scripts skills tests/helpers tests/plugin_distribution.bats"
 
+# Suites that read other suites' contents — one that greps or sources a
+# sibling `.bats` file, rather than merely listing names. Its per-suite key in
+# `run-bats-cached.sh` has to cover every suite, not only itself. None does;
+# the `justfile_gates` suite fails when one appears without being named here.
+reads_all_suites := ""
+
 # Fast, frequent. `lint`, `test-unit` and `test-integration` each guard their
 # own sentinel, so a red integration run does not un-cache a green lint;
 # `check-version` stays uncached beside the two doc checks below — cheap, and
@@ -153,7 +159,7 @@ test-unit:
         suites+=("$suite")
     done
     [ "${#suites[@]}" -gt 0 ] || { echo "test-unit: no suites matched tests/*.bats" >&2; exit 1; }
-    scripts/run-bats.sh --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "${suites[@]}"
+    run-suites test-unit {{ reads_all_suites }} -- "${suites[@]}"
     record-sentinel
 
 test-integration:
@@ -162,7 +168,7 @@ test-integration:
     shopt -s nullglob
     suites=(tests/integration_*.bats tests/evals/lib/*.bats)
     [ "${#suites[@]}" -gt 0 ] || { echo "test-integration: no suites matched" >&2; exit 1; }
-    scripts/run-bats.sh --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "${suites[@]}"
+    run-suites test-integration {{ reads_all_suites }} -- "${suites[@]}"
     record-sentinel
 
 # A gate is a pure function of its declared inputs, so re-running it over an
@@ -235,6 +241,29 @@ record-sentinel () {
         exit 1
     fi
     printf '%s\n' "$hash" > "$sentinel"
+}
+
+# Gate name, the suites that read other suites' contents, `--`, the suites.
+# Between a gate's guard and its record: the whole-tree sentinel skips an
+# untouched tree, and beneath it `run-bats-cached.sh` keeps one key per suite,
+# so an edit under `tests/` reruns the suites it touched. The shared hash it is
+# handed leaves the suite files out — each is its own suite's key component —
+# and is taken in a subshell, so `gate_inputs` stays what `check-sentinel` set
+# for `record-sentinel`. Empty means unhashable: everything runs, and no suite
+# is recorded.
+run-suites () {
+    local gate="$1" shared_hash reads_all=()
+    shift
+    while [ "$1" != "--" ]; do
+        reads_all+=(--reads-all "$1")
+        shift
+    done
+    shift
+    shared_hash=$(gate_inputs=("${gate_inputs[@]}" ':(exclude)tests/*.bats' ':(exclude)tests/evals/lib/*.bats'); gate-inputs-hash) || shared_hash=""
+    # `${a[@]+…}`: an empty array is unbound to `set -u` before bash 4.4.
+    scripts/run-bats-cached.sh "$sentinel_dir/$gate.suites" "$shared_hash" \
+        ${reads_all[@]+"${reads_all[@]}"} \
+        -- --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "$@"
 }
 
 # Names as well as contents, so a rename or deletion counts; tool versions

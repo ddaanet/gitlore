@@ -20,7 +20,7 @@ make_parent_with_memory() {
     return
   fi
 
-  local template old_root new_root f
+  local template old_root new_root f old_esc new_esc
   template="$(_gitlore_ensure_parent_with_memory_template)" || return 1
   old_root="$(cd "$template" && pwd -P)"
   new_root="$(pwd -P)"
@@ -28,30 +28,75 @@ make_parent_with_memory() {
   cp -a "$template/." "$TMP_REPO/" \
     || { echo "make_parent_with_memory: failed to copy the fixture template" >&2; return 1; }
 
+  # Escaped once per call: every candidate file below shares the same
+  # old/new pair.
+  _gitlore_escape_sed_pattern "$old_root"; old_esc="$reply"
+  _gitlore_escape_sed_replacement "$new_root"; new_esc="$reply"
+
   # The template's own absolute path is baked into whichever of these ended
   # up storing it (git's relative-vs-absolute submodule URL resolution isn't
-  # worth relying on from memory); rewrite unconditionally, it's a no-op on
-  # a file that doesn't contain it.
+  # worth relying on from memory); every candidate is offered, and one that
+  # doesn't contain it is left alone.
   for f in .gitmodules .git/config .git/modules/gitlore-memory/config "$subpath/.git"; do
     [ -f "$TMP_REPO/$f" ] || continue
-    _gitlore_sed_replace_path "$old_root" "$new_root" "$TMP_REPO/$f"
+    _gitlore_sed_replace_path "$old_root" "$old_esc" "$new_esc" "$TMP_REPO/$f"
   done
 
-  git submodule status >/dev/null \
-    || { echo "make_parent_with_memory: template copy broke submodule status" >&2; return 1; }
+  # What the copy can get wrong is the race the template builder guards
+  # against: `$subpath` present but empty. `rev-parse HEAD` alone does not
+  # catch that — with no `.git` file inside it, `git -C "$subpath"` walks up
+  # and resolves the *parent* repo's HEAD. The gitlink file is the signal: a
+  # real submodule checkout always has a non-empty `$subpath/.git`. Not
+  # `git submodule status`: it exits 0 for a clean, an out-of-sync and an
+  # uninitialized submodule alike.
+  [ -s "$TMP_REPO/$subpath/.git" ] \
+    || { echo "make_parent_with_memory: template copy left $subpath without a submodule gitlink" >&2; return 1; }
   git -C "$subpath" rev-parse HEAD >/dev/null \
     || { echo "make_parent_with_memory: template copy broke the memory submodule's HEAD" >&2; return 1; }
 }
 
-# Literal path substitution in $3 (not a general regex tool — old and new are
-# both plain filesystem paths). Escapes sed's regex/replacement metacharacters
-# so a path segment like a dot or an ampersand can't corrupt the match.
+# Escapes for use as the *search* side of `_gitlore_sed_replace_path`'s sed
+# expression (a literal path, not a general regex tool). Sets $reply rather
+# than echoing: a command substitution forks even around a builtin, and a
+# fork is what this path is counted in.
+# Backslash first, then the rest of what's special in sed's own regex syntax.
+_gitlore_escape_sed_pattern() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//./\\.}"
+  s="${s//\[/\\[}"
+  s="${s//\*/\\*}"
+  s="${s//^/\\^}"
+  s="${s//\$/\\$}"
+  s="${s//\//\\/}"
+  s="${s//&/\\&}"
+  reply="$s"
+}
+
+# Escapes for the *replacement* side: only backslash, `/` and `&` are special
+# there. See _gitlore_escape_sed_pattern for the $reply convention.
+_gitlore_escape_sed_replacement() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\//\\/}"
+  s="${s//&/\\&}"
+  reply="$s"
+}
+
+# Literal path substitution in $file (not a general regex tool — old is a
+# plain filesystem path). $old_esc/$new_esc are old/new already escaped by
+# the caller. A file that doesn't carry $old is left alone without forking
+# `sed` and `mv` — the submodule's gitlink, which git writes as a relative
+# path. `$(<file)` rather than `cat`: no exec.
 # Temp file + mv rather than `sed -i`: BSD sed takes the backup extension as a
 # separate argument and GNU sed attached, so no -i spelling runs on both.
 _gitlore_sed_replace_path() {
-  local old="$1" new="$2" file="$3" old_esc new_esc
-  old_esc="$(printf '%s' "$old" | sed -e 's/[.[\*^$\/&]/\\&/g')"
-  new_esc="$(printf '%s' "$new" | sed -e 's/[\/&]/\\&/g')"
+  local old="$1" old_esc="$2" new_esc="$3" file="$4" content
+  content="$(<"$file")"
+  case "$content" in
+    *"$old"*) ;;
+    *) return 0 ;;
+  esac
   sed "s/${old_esc}/${new_esc}/g" "$file" > "$file.tmp" && mv -f "$file.tmp" "$file"
 }
 
