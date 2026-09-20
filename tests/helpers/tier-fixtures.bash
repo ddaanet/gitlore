@@ -122,7 +122,10 @@ seed_tier_bullet() {
 # Commit the memory store's current tree. The down projection reads root at HEAD
 # to tell a line root DELETED from one it never carried, so a test about a
 # deletion has to establish that HEAD first. The blessed sentinel carries the
-# commit past the FR11 gate. Args: $1 = commit subject (optional).
+# commit past the FR11 gate. Args: $1 = commit subject (optional, hence most
+# callers below invoke it bare — scoped disable, since SC2119 fires at each
+# call site and SC2120 at the definition).
+# shellcheck disable=SC2119,SC2120
 commit_memory_state() {
   git -C memory add -A || return 1
   GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "${1:-memory: checkpoint}"
@@ -213,4 +216,78 @@ half_landed_tier_fixture() {
   # shellcheck disable=SC2016  # $0 is the generated hook's own, not this shell's
   printf '#!/bin/sh\n: > "%s"\nrm -f "$0"\n' "$lock" > "$hook" || return 1
   chmod +x "$hook"
+}
+
+# Advance a mounted tier one commit past the gitlink the memory store's index
+# records for it — the shape a hand-run `git -C memory/<tier> reset --hard
+# origin/live` leaves behind. The carrier gains a line the root has never seen,
+# which is exactly the text a down pass would overwrite.
+move_tier_off_pin() {
+  local tier="${1:-ddaanet}"
+  seed_tier_bullet "$tier" upstream.md "arrived in another repo"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge"
+}
+
+# The same advance with the tier's local `live` following HEAD — a tier commit
+# moves both refs together, and this is the state left when the memory side
+# then loses the moved gitlink. Nothing the tier carries lives in HEAD alone,
+# which is what makes returning HEAD to the pin lose nothing. The mount leaves
+# no local `live` behind (tests/helpers/tier-fixtures.bash), so move_tier_off_pin
+# above stands for the tier whose commits HEAD alone holds.
+move_tier_off_pin_into_live() {
+  local tier="${1:-ddaanet}"
+  move_tier_off_pin "$tier" || return 1
+  git -C "memory/$tier" push -q . HEAD:refs/heads/live
+}
+
+# Move a tier's HEAD SIDEWAYS onto UNRELATED history: an orphan branch's first
+# commit shares nothing with anything already in the tier, the pin included, so
+# `merge-base --is-ancestor "$pinned" "$head"` reads false — the predicate Item
+# 1.3 slice 2 keys its ahead/sideways branch on. The extreme end of sideways;
+# move_tier_diverged_off_pin below is the everyday end, and the two are kept
+# apart because a branch keyed on "is there shared history at all" rather than
+# on ancestry tells them apart and gets one of them wrong.
+move_tier_sideways_off_pin() {
+  local tier="${1:-ddaanet}"
+  git -C "memory/$tier" checkout -q --orphan gitlore-sideways-test
+  seed_tier_bullet "$tier" upstream.md "arrived sideways, not forward"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier replaced by unrelated history"
+}
+
+# Move a tier's HEAD onto a SIBLING of the pin: shared history, but the pin is
+# not contained in HEAD — what a hand-run `reset --hard origin/live` leaves
+# after the remote's history was rewritten, and the sideways shape the guard
+# actually meets. `merge-base "$pinned" "$head"` SUCCEEDS here and fails for the
+# orphan, while `merge-base --is-ancestor "$pinned" "$head"` is false for both
+# (measured: git 2.47, rc 1 and silent in both cases) — so only this fixture
+# fails an implementation that reads shared history as containment.
+#
+# pinned_store_with_tier leaves the tier on its root commit, and a root commit
+# has no sibling. So this advances the tier once and re-pins there — the gitlink
+# move every advancing path stages as its last act (D43) — which gives the pin a
+# parent, then commits a second child of that parent.
+move_tier_diverged_off_pin() {
+  local tier="${1:-ddaanet}" base
+  base=$(git -C "memory/$tier" rev-parse HEAD) || return 1
+  seed_tier_bullet "$tier" upstream.md "arrived in another repo"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge" || return 1
+  git -C memory add -- "$tier" || return 1
+  git -C "memory/$tier" checkout -q --detach "$base" || return 1
+  seed_tier_bullet "$tier" rewritten.md "the same history, re-authored"
+  git -C "memory/$tier" add -A || return 1
+  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier rebuilt on rewritten history"
+}
+
+# The store every test in this section starts from: one composed, committed tier
+# line, so the pin is recorded and root and carrier agree before anything moves.
+pinned_store_with_tier() {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  gitlore_compose memory >/dev/null
+  commit_memory_state
 }

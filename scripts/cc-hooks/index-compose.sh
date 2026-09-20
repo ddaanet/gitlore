@@ -6,7 +6,7 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
-# gitlore_active_tier_scopes (util.sh) calls gitlore_get_frontmatter_description,
+# gitlore_active_tier_scopes (util-config.sh) calls gitlore_get_frontmatter_description,
 # defined here — needed for the post-mount triage nudge below.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
@@ -32,7 +32,7 @@ manifest="$mempath/.gitlore-tiers"
 # also appears on the main thread of an --agent session — a fallback there
 # would key a parent batch's stamp under its own agent id and strand it. The
 # contract index-sync-post.sh states at length; pinned here by the agent_type
-# decoy every payload in tests/cc_hook_index_compose.bats carries.
+# decoy every payload built by tests/helpers/cc-hook-index-compose.bash carries.
 #
 # Non-fatal deliberately: the stamp is what drives this hook, so an unparseable
 # payload must not be what stops it. A jq aborting under errexit would leave the

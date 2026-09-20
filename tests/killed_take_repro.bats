@@ -8,12 +8,13 @@
 # those two acts leaves root describing the tier at its arrived commit while
 # the memory store's INDEX still pins the tier at its old commit.
 #
-# Real take shape (scripts/lib/resolve.sh): gitlore_adopt_advanced_live starts
+# Real take shape (scripts/lib/resolve-adopt.sh): gitlore_adopt_advanced_live starts
 # from a CLEAN tier ON its pin whose LOCAL `live` is ahead of HEAD, checks the
 # tier out at `live`, then gitlore_adopt_tier_into_root runs gitlore_compose_up
 # and stages the pair. `strand_live_ahead_of_pin` (tests/helpers/tier-fixtures.bash,
-# reused by the same-shaped tests in tests/merge_memory.bats) builds exactly
-# that starting state, and the take is driven through its real entry point,
+# reused by the same-shaped tests in tests/merge_memory_tiers.bats and
+# tests/merge_memory_repair_arrivals.bats) builds exactly that starting state,
+# and the take is driven through its real entry point,
 # scripts/merge-memory.sh — the same script /gitlore:merge invokes.
 #
 # The kill is induced with a PATH-shadowed `git`: it delegates
@@ -38,8 +39,9 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-# Copied from tests/merge_memory.bats (not exported by any helpers/*.bash): the
-# memory store's own remote, wired the way every take test in that file needs.
+# Copied from tests/helpers/merge-memory.bash (not exported by any
+# helpers/*.bash): the memory store's own remote, wired the way every take
+# test in the merge_memory* suites needs.
 wire_memory_remote() {
   git init -q --bare "$MEMORY_REMOTE"
   make_parent_with_memory
@@ -70,7 +72,8 @@ EOF
   printf '%s\n' "$bin"
 }
 
-# The fixture every gitlore_adopt_advanced_live test in tests/merge_memory.bats
+# The fixture every gitlore_adopt_advanced_live test in
+# tests/merge_memory_tiers.bats and tests/merge_memory_repair_arrivals.bats
 # starts from: a clean tier ON its pin, local `live` one commit ahead — exactly
 # what gitlore_adopt_advanced_live is written to adopt.
 _tier_live_ahead_of_pin() {
@@ -96,7 +99,7 @@ _tier_live_ahead_of_pin() {
   # --- Drive the real take, killed inside the pair-staging window. ---
   PATH="$bin:$PATH" run --separate-stderr bash "$CMD"
   # BENIGN: the take's own staging call is best-effort
-  # (gitlore_adopt_stage_pair_and_commit in scripts/lib/resolve.sh reports and
+  # (gitlore_adopt_stage_pair_and_commit in scripts/lib/resolve-adopt-report.sh reports and
   # continues on a failed `add`), so the take script itself does not fail even
   # though nothing was staged, and it prints the exact hand-recovery command.
   [ "$status" -eq 0 ]
@@ -140,8 +143,9 @@ _tier_live_ahead_of_pin() {
   # equals the index's own (unmoved) gitlink, so nothing looks off-pin — and
   # SessionStart's own compose pass runs the down projection anyway, which
   # takes root's carried-over line unconditionally (gitlore_compose_down,
-  # scripts/lib/index-compose.sh) and writes it into the reset-back tier's own
-  # MEMORY.md, for a fact that tier's own working tree does not hold.
+  # scripts/lib/index-compose-project.sh) and writes it into the reset-back
+  # tier's own MEMORY.md, for a fact that tier's own working tree does not
+  # hold.
   grep -qxF -- '- [local](local.md) — committed here, never recorded' memory/ddaanet/MEMORY.md
   [ -n "$(git -C memory/ddaanet status --porcelain)" ]
   # And this half — the TIER's own carrier having just been dirtied — is what
