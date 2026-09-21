@@ -17,8 +17,9 @@
 # bash, and often GNU sed, grep, find and coreutils, ahead of the system's.
 # Every run here therefore gets a PATH of the system directories alone, plus a
 # directory of symlinks to exactly the tools the platform lacks — bats, and
-# git or jq where /usr/bin has none. EXTRA_TOOLS="a b" adds to that list when a
-# suite dies on a missing command; the report names each one borrowed.
+# git, jq or shellcheck where /usr/bin has none. EXTRA_TOOLS="a b" adds to that
+# list when a suite dies on a missing command; the report names each one
+# borrowed.
 #
 # Its own shebang may resolve to any bash, so it is written for 3.2.
 # The `bash -c '…$BASH_VERSION…'` probes expand in the bash they name, not here.
@@ -78,7 +79,7 @@ make_shims() {
   local tool extra
   IFS=' ' read -r -a extra <<< "${EXTRA_TOOLS:-}"
   # `${a[@]+…}`: an empty array is unbound to `set -u` before bash 4.4.
-  for tool in git jq ${extra[@]+"${extra[@]}"}; do borrow "$tool" optional; done
+  for tool in git jq shellcheck ${extra[@]+"${extra[@]}"}; do borrow "$tool" optional; done
 }
 
 # borrow <tool> <required|optional> — link a tool the system directories lack
