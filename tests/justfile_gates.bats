@@ -19,13 +19,20 @@ guard_line() {
       .recipes[$r].body[]
       | select((.[0] | type) == "string" and (.[0] | startswith("sentinel-guard ")))
       | .[]
-      | if type == "string" then "L" + . else "V" + .[1] end
+      | if type == "string" then "L" + .
+        # An interpolation is `["variable", name]` up to just 1.45 and
+        # `[["variable", name]]` from 1.46.
+        elif (.[0] | type) == "array" then "V" + .[0][1]
+        else "V" + .[1] end
     '
-  )
+  ) || return 1
   while IFS= read -r seg || [ -n "$seg" ]; do
     case "$seg" in
       L*) rendered="$rendered${seg#L}" ;;
-      V*) rendered="$rendered$(just_here --evaluate "${seg#V}")" ;;
+      # A name that does not evaluate would render as nothing, and a guard line
+      # with no pathspec enumerates the whole tree — every assertion on it
+      # would then pass or fail for the wrong reason.
+      V*) rendered="$rendered$(just_here --evaluate "${seg#V}")" || return 1 ;;
     esac
   done <<< "$segments"
   printf '%s\n' "$rendered"
@@ -323,6 +330,26 @@ teardown_file() {
   [[ "$output" == *"tests/integration_"* ]]
 }
 
+@test "the lint gate's inputs cover the shell scripts under plans/, and only those" {
+  # `lint-shell.sh` discovers every tracked shell file, `plans/` included, but a
+  # gate whose hash leaves them out reports cached on the commit that edits one.
+  # The plans' prose stays out: a plan edit must not cost a lint run, and the
+  # bats gates read nothing under `plans/` at all.
+  run guard_input_files lint
+  [ "$status" -eq 0 ]
+  lint_files="$output"
+  planned=$(git -C "$PLUGIN_ROOT" ls-files -- 'plans/*.sh' 'plans/*.bash')
+  [ -n "$planned" ]
+  while IFS= read -r f; do
+    grep -Fxq -- "$f" <<< "$lint_files"
+  done <<< "$planned"
+  run ! grep -E '^plans/.*\.md$' <<< "$lint_files"
+
+  run guard_input_files test-unit
+  [ "$status" -eq 0 ]
+  run ! grep '^plans/' <<< "$output"
+}
+
 @test "the evals input set is a superset of precommit's, and adds the shipped plugin content" {
   # The two sets exist because the evals drive the real CLI against the
   # installed plugin: an edit to what the plugin ships must invalidate them.
@@ -354,7 +381,8 @@ teardown_file() {
   declared=" $output "
   # Excluded on purpose: no check reads them, and including them would re-run
   # the whole suite on a memory-only or prose-only commit. `docs`, `plans` and
-  # the rumdl pin/config are read by `format-docs`, which has no sentinel.
+  # the rumdl pin/config are read by `format-docs`, which has no sentinel; the
+  # shell scripts under `plans` reach the `lint` gate by pathspec instead.
   excluded=" memory docs plans inbox README.md CLAUDE.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml "
   while IFS= read -r entry; do
     [[ "$declared" == *" $entry "* ]] || [[ "$excluded" == *" $entry "* ]] || {

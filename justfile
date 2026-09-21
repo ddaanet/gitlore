@@ -134,9 +134,14 @@ prerelease: precommit
 
 # shellcheck over every shell file the gate hash counts — tracked, or untracked
 # and not ignored — discovered by extension or shebang.
+#
+# `lint-shell.sh` walks the whole tree, so the hash widens to the shell files
+# under `plans/`: left out, the commit that edits one reports a cached pass.
+# By extension only — a plan's prose must not cost a lint run, so an
+# extensionless script under `plans/` is linted but never moves the hash.
 lint:
     #!{{ bash_prolog }}
-    sentinel-guard lint {{ precommit_inputs }}
+    sentinel-guard lint {{ precommit_inputs }} 'plans/*.sh' 'plans/*.bash' 'plans/*.bats'
     scripts/lint-shell.sh
     record-sentinel
 

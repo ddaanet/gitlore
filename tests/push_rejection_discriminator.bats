@@ -291,9 +291,13 @@ HOOK
   # moves no local ref, so git refuses nothing and there is no message to key
   # on; re-introducing a refspec fetch there would make the pattern relevant
   # again — and would also unpin the tier.
-  grep -qF 'merge-base --is-ancestor' "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
-  run grep -c -e '"(fetch first)"\*|\*"(non-fast-forward)"' \
-              -e '\*non-fast-forward\*|\*"fetch first"\*' \
-              "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
-  [ "$status" -ne 0 ]
+  # The tier stage is `scripts/lib/session-tiers.sh`; the hook itself is held
+  # to the same absence, so the pattern cannot return through either file.
+  grep -qF 'merge-base --is-ancestor' "$PLUGIN_ROOT/scripts/lib/session-tiers.sh"
+  for site in scripts/lib/session-tiers.sh scripts/cc-hooks/session-start.sh; do
+    run grep -c -e '"(fetch first)"\*|\*"(non-fast-forward)"' \
+                -e '\*non-fast-forward\*|\*"fetch first"\*' \
+                "$PLUGIN_ROOT/$site"
+    [ "$status" -ne 0 ]
+  done
 }

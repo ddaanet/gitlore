@@ -8,3 +8,6 @@
 /.claude/gitlore-add-tier
 /.venv/
 /.claude/autodrive
+# Bytecode from the checkers importing their sibling modules; under `scripts/`,
+# a gate input, it would move every hash.
+__pycache__/

@@ -1,3 +1,3 @@
 ## Current task
 
-The todo sweep is finished: the gates suite shares one discovery run, the tier test helpers are deduplicated, `resolve.sh` publishes memory's `live` to a never-published remote only after every tier gate, and `plans/macos-check/run.sh` confirmed a repair take on macOS under bash 3.2 and turned up the symlinked-temp-dir fixture bug, now fixed. Nothing is in flight; the todo list is what is left.
+The todo sweep's follow-ups landed: `check_store_gates` skips the fetch on memory's first publish, the `lint` gate hash covers the shell scripts under `plans/`, `tests/justfile_gates.bats` reads just 1.46's dump format, every script is under the 400-line cap, and `scripts/test-macos.sh` is the standing macOS run, not yet run on a Mac. Nothing is in flight; the todo list is what is left.

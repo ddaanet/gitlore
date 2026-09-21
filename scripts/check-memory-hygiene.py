@@ -25,10 +25,11 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import subprocess
 import sys
 
 import yaml
+
+from check_common import CODE_SPAN, FENCE, SUPPRESS, git_toplevel, read_text
 
 # The literal has to appear somewhere for the check to exist at all; this file
 # is not a memory file, so it is the right place for it to live.
@@ -59,8 +60,6 @@ REFERENCE_SCAN_ROOTS = (
 # conventions file. Both are written in an instructional voice that the prose
 # checks would fight, and neither carries frontmatter.
 NON_FACT_BASENAMES = ("MEMORY.md", "shared-claude.md")
-
-SUPPRESS = "<!-- hygiene-ok"
 
 # `my own` is matched in any casing — it opens sentences as often as it sits
 # mid-one. The bare pronoun stays case-sensitive: a case-folded `\bi\b` claims
@@ -112,10 +111,6 @@ HEX_WORDS = frozenset(
     """.split()
 )
 
-FENCE = re.compile(r"^\s*(```|~~~)")
-
-CODE_SPAN = re.compile(r"`[^`]*`")
-
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -153,17 +148,6 @@ def main() -> int:
     return report(findings, len(facts), len(ref_files), warnings=args.warnings)
 
 
-def git_toplevel() -> str | None:
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    return out.stdout.strip() or None
-
-
 def under(path: str, directory: str) -> bool:
     return os.path.commonpath([os.path.abspath(path), os.path.abspath(directory)]) == \
         os.path.abspath(directory)
@@ -197,21 +181,6 @@ def discover_reference_files(root: str) -> list[str]:
                 if os.path.isfile(path) and not os.path.islink(path):
                     found.append(path)
     return sorted(set(found))
-
-
-def read_text(path: str) -> str | None:
-    """Return the file's text, or None when it is not text at all."""
-    try:
-        with open(path, "rb") as fh:
-            raw = fh.read()
-    except OSError:
-        return None
-    if b"\0" in raw:
-        return None
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
 
 
 def strip_code(text: str) -> list[str]:
