@@ -1,3 +1,3 @@
 ## Current task
 
-A sweep of the todo list: the gates suite shares one discovery run, `approve()` and `mount_tier_at_live()` live once in `tests/helpers/tier-fixtures.bash`, and `resolve.sh` publishes memory's `live` to a never-published remote only through `check_store_gates`, after every tier gate. The stranded-tier-`live` question was probed and self-heals through `gitlore_repair_stranded_live`. A macOS check script, `plans/macos-check/run.sh`, waits for my human partner to run it on a Mac and hand back `plans/macos-check/out/report.txt`; nothing else is in flight.
+The todo sweep is finished: the gates suite shares one discovery run, the tier test helpers are deduplicated, `resolve.sh` publishes memory's `live` to a never-published remote only after every tier gate, and `plans/macos-check/run.sh` confirmed a repair take on macOS under bash 3.2 and turned up the symlinked-temp-dir fixture bug, now fixed. Nothing is in flight; the todo list is what is left.
