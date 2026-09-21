@@ -68,10 +68,13 @@ teardown() { teardown_tmp_repo; }
   git init -q --bare "$bare"
   git -C memory remote remove origin 2>/dev/null || true
   git -C memory remote add origin "$bare"
-  run bash "$RESOLVE"
+  run --separate-stderr bash "$RESOLVE"
   [ "$status" -eq 0 ]
   remote_live=$(git --git-dir="$bare" rev-parse live 2>/dev/null || echo MISSING)
   [ "$remote_live" != "MISSING" ]
+  # A first publish has no remote `live` to fetch, and git's complaint about
+  # that is not the user's to read. `case`, not `[[ ]]`: non-final here.
+  case "$output$stderr" in *"couldn't find remote ref"*) false ;; esac
 }
 
 @test "resolve: a tier gate that refuses stops memory's remote-less live from publishing early" {

@@ -23,12 +23,17 @@ The bats tier assumes bash >= 4.1, where a failing `[[ ]]` anywhere in a test
 body fails the test; under the bash 3.2 macOS ships, a failing non-final `[[ ]]`
 passes silently, while a failing `[ ]` or plain command still fails the test
 (measured with bats 1.14.0 on bash 3.2.57). A macOS run therefore drives bats
-with a modern bash. `plans/macos-check/run.sh` is that run: it narrows `PATH` to
+with a modern bash. `scripts/test-macos.sh` is that run: it narrows `PATH` to
 the system directories plus the tools the platform lacks, and sets
 `GITLORE_TEST_BASH_DIR`, which `setup_tmp_repo` puts first on `PATH` so the
-scripts a test execs meet the system's 3.2 while the assertions stay real. On
-Linux the BSD behaviour the system tools would have contributed comes from the
-stubs `tests/bsd_portability.bats` installs instead.
+scripts a test execs meet the system's 3.2 while the assertions stay real. It
+runs every unit suite by default, exits with bats' status, and records no gate
+sentinel, since `test-unit`'s hash does not know which bash ran the scripts. It
+is run by hand on a Mac; no CI job runs it. `plans/macos-check/run.sh` is the
+one-shot diagnostic it grew out of, with the assertion probe and the
+baseline/mixed/all-old comparison. On Linux the BSD behaviour the system tools
+would have contributed comes from the stubs `tests/bsd_portability.bats`
+installs instead.
 
 ## The gate's cost (NFR10)
 
@@ -75,7 +80,10 @@ whatever its sentinel says.
 
 `scripts/lint-shell.sh` discovers from the set the hash enumerates — tracked
 files plus untracked, non-ignored ones — so a brand-new script that moves the
-`lint` hash is a script the recorded pass linted.
+`lint` hash is a script the recorded pass linted. The `lint` hash adds the shell
+files under `plans/` by extension (`plans/*.sh`, `*.bash`, `*.bats`), since
+`lint-shell.sh` walks the whole tree while the shared inputs leave `plans/` out;
+an extensionless script there is linted without moving the hash.
 
 Inside a `lint` run that the sentinel did not skip, `lint-shell.sh` keeps a
 finer cache of its own at `git rev-parse --git-path gitlore/lint-cache`: one key

@@ -165,12 +165,19 @@ if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
   # Fall through rather than exiting: a repair to memory says nothing about the
   # tiers, and stopping here would leave a diverged tier undetected.
 fi
-if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
+if ! remote_refs=$(git -C "$mempath" ls-remote origin 2>/dev/null); then
   gitlore_say_for_agent_or_user \
     "gitlore: memory remote unreachable. Check network or 'gh auth status'." \
     "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
   exit 1
 fi
+# The reachability probe already listed the remote's refs, so whether memory's
+# `live` has ever been published costs no further round trip. Matched as a
+# whole line, so `refs/heads/live-anything` does not count.
+memory_first_publish=yes
+case "$remote_refs"$'\n' in
+  *$'\trefs/heads/live\n'*) memory_first_publish="" ;;
+esac
 
 # Both gates for one store: local `live` first (cheaper, local-only), then the
 # remote's. No branch guard is needed at either level — every store is checked
@@ -182,8 +189,15 @@ check_store_gates() {
   # `tier` is the store's tier name, empty for the memory root: the head-vs-live
   # gate's remedy differs by store kind, because a tier is pinned at the gitlink
   # the memory store records (D43) and the root is not.
-  local store="$1" tier="${2-}" rc
-  gitlore_git -C "$store" fetch -q origin live || true
+  # `first_publish`, when non-empty, is the caller's word that the remote has no
+  # `live` yet: there is nothing to fetch, and asking anyway prints git's
+  # `couldn't find remote ref live` at the user. Only a caller that already
+  # holds the remote's ref list passes it — the memory root, from its
+  # reachability probe. A tier's first publish still fetches and still prints
+  # the line; finding out beforehand would cost every resolve run a round trip
+  # per tier.
+  local store="$1" tier="${2-}" first_publish="${3-}" rc
+  [ -n "$first_publish" ] || gitlore_git -C "$store" fetch -q origin live || true
   rc=0; push_or_report "$store" . HEAD:live || rc=$?
   if [ "$rc" -eq 2 ]; then
     exit 1
@@ -252,7 +266,7 @@ while IFS= read -r store; do
   check_store_gates "$store" "${store##*/}"
 done < <(gitlore_memory_stores "$mempath")
 
-check_store_gates "$mempath"
+check_store_gates "$mempath" "" "$memory_first_publish"
 
 echo "gitlore: state is healthy. Nothing to do." >&2
 exit 0
