@@ -1,3 +1,3 @@
 ## Current task
 
-The todo sweep's follow-ups landed: `check_store_gates` skips the fetch on memory's first publish, the `lint` gate hash covers the shell scripts under `plans/`, `tests/justfile_gates.bats` reads just 1.46's dump format, every script is under the 400-line cap, and `scripts/test-macos.sh` is the standing macOS run, not yet run on a Mac. Nothing is in flight; the todo list is what is left.
+A release is next: the suite now refuses a bats run under bash below 4.1 instead of converting its `[[ ]]` glob assertions, the `hook-output-channels` retirement is handed to plugin-craft through the brief in its inbox, and the recall log analysis is rerun with native recall counted. The sequence my human partner asked for is a preflight run by an opus agent, then `/gitlore:push`, then `just release` only if both are clean; a preflight finding stops the sequence and gets reported rather than worked around.

@@ -9,7 +9,8 @@
 # fails the test. Under 3.2 a failing non-final `[[ ]]` passes silently, while
 # a failing `[ ]` or plain command still fails the test (measured with bats
 # 1.14.0 on bash 3.2.57 by `plans/macos-check/run.sh`), so a suite asserting
-# with `[[ ]]` reports green on a Mac it never checked. A macOS run therefore
+# with `[[ ]]` reports green on a Mac it never checked. `helpers/setup.bash`
+# refuses such a bash when a suite loads it. A macOS run therefore
 # drives bats with a modern bash (Homebrew's) and points what the tests exec at
 # the system's through `GITLORE_TEST_BASH_DIR`; on Linux the stubs supply the
 # BSD behaviour the system tools would have contributed.
@@ -20,6 +21,7 @@ bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures
 load helpers/bsd-stubs
+load helpers/run-asserts
 
 setup()    { setup_tmp_repo; BSD="$TMP_REPO/.bsdtools"; }
 teardown() { teardown_tmp_repo; }
@@ -74,4 +76,21 @@ teardown() { teardown_tmp_repo; }
   GITLORE_TEST_BASH_DIR="$TMP_REPO/.chosen" use_test_bash
   run bash -c 'echo system-bash'
   [ "$output" = "chosen-bash" ]
+}
+
+@test "a bash whose failing non-final [[ ]] passes silently is refused at load" {
+  # The suite asserts with `[[ … == *glob* ]]` throughout, which `[ ]` cannot
+  # express, so the version is what gets checked rather than each assertion.
+  run require_assertion_bash 3 2
+  assert_fails "bash 3.2" "[[ ]]" "scripts/test-macos.sh"
+  run require_assertion_bash 4 0
+  assert_fails "bash 4.0"
+  run require_assertion_bash 4 1
+  assert_ok
+  run require_assertion_bash 5 2
+  assert_ok
+  # The guard runs when a suite loads the helper, on the bash running the test.
+  # shellcheck disable=SC2016 # the literal source line is what is matched
+  assert_grep -qxF 'require_assertion_bash "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"' \
+    "$PLUGIN_ROOT/tests/helpers/setup.bash"
 }

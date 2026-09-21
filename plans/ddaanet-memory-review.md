@@ -25,7 +25,7 @@ grown by addition, not by drift, and are not re-opened.
 
 | # | Bytes | Fact | Verdict | Decided |
 |---|-------|------|---------|---------|
-| 5 | 810 | `hook-output-channels` | | merged from `hook-cannot-inject-tool-calls` 2026-09-01; not yet rubric-reviewed |
+| 5 | 810 | `hook-output-channels` | retire — owned by plugin-craft | 2026-09-21: mechanics already in `plugin-craft:hook-authoring`, wording in `craft:directive-writing`; the ANSI-rendering remainder and the retirement itself are briefed to plugin-craft, the plugin incorporating the fact |
 | 6 | 550 | `hook-input-schema` | | |
 | 7 | 529 | `design-doc-writing` | | |
 | 8 | 501 | `skill-bundled-scripts` | | |
