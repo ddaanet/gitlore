@@ -7,6 +7,19 @@ set -euo pipefail
 # `cd` echoes its resolved target on stdout and the capture takes two lines.
 unset CDPATH
 
+# The suites assert with `[[ … == *glob* ]]`, and under bash < 4.1 a failing
+# non-final `[[ ]]` does not fail a bats test, so a run there reports green for
+# assertions it never checked. Refused here, where every suite loads, rather
+# than converted: `[ ]` has no glob match to convert them to.
+require_assertion_bash() {
+  local major="$1" minor="$2"
+  if [ "$major" -gt 4 ] || { [ "$major" -eq 4 ] && [ "$minor" -ge 1 ]; }; then return 0; fi
+  echo "gitlore tests: bats is running under bash $major.$minor, where a failing non-final [[ ]] passes silently." >&2
+  echo "Run bats with bash >= 4.1; on macOS, scripts/test-macos.sh does that while the scripts under test still meet the system's 3.2." >&2
+  return 1
+}
+require_assertion_bash "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"
+
 PLUGIN_ROOT="${BATS_TEST_DIRNAME}/.."
 export PLUGIN_ROOT
 

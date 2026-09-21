@@ -22,9 +22,13 @@ whole chain fits together.
 The bats tier assumes bash >= 4.1, where a failing `[[ ]]` anywhere in a test
 body fails the test; under the bash 3.2 macOS ships, a failing non-final `[[ ]]`
 passes silently, while a failing `[ ]` or plain command still fails the test
-(measured with bats 1.14.0 on bash 3.2.57). A macOS run therefore drives bats
-with a modern bash. `scripts/test-macos.sh` is that run: it narrows `PATH` to
-the system directories plus the tools the platform lacks, and sets
+(measured with bats 1.14.0 on bash 3.2.57). The assertions stay `[[ ]]`: nearly
+all of them are `[[ "$output" == *"…"* ]]` glob matches, which `[ ]` cannot
+express. `tests/helpers/setup.bash`, which every suite loads, instead refuses a
+bash below 4.1 at load time (`require_assertion_bash`), so a run there fails
+every suite with the remedy rather than reporting green. A macOS run therefore
+drives bats with a modern bash. `scripts/test-macos.sh` is that run: it narrows
+`PATH` to the system directories plus the tools the platform lacks, and sets
 `GITLORE_TEST_BASH_DIR`, which `setup_tmp_repo` puts first on `PATH` so the
 scripts a test execs meet the system's 3.2 while the assertions stay real. It
 runs every unit suite by default, exits with bats' status, and records no gate
