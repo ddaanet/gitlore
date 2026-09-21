@@ -13,7 +13,14 @@
 # Suites named on the command line replace the default list, relative to the
 # repo root. MODERN_BASH=/path/to/bash (>= 4.4) overrides the Homebrew lookup.
 #
-# Written for bash 3.2 itself, since `env bash` may resolve to it.
+# The caller's PATH says nothing about the platform: Homebrew puts its own
+# bash, and often GNU sed, grep, find and coreutils, ahead of the system's.
+# Every run here therefore gets a PATH of the system directories alone, plus a
+# directory of symlinks to exactly the tools the platform lacks — bats, and
+# git or jq where /usr/bin has none. EXTRA_TOOLS="a b" adds to that list when a
+# suite dies on a missing command; the report names each one borrowed.
+#
+# Its own shebang may resolve to any bash, so it is written for 3.2.
 # The `bash -c '…$BASH_VERSION…'` probes expand in the bash they name, not here.
 # shellcheck disable=SC2016
 set -uo pipefail
@@ -32,6 +39,9 @@ main() {
   if [ "$#" -gt 0 ]; then suites=("$@"); else suites=("${default_suites[@]}"); fi
   find_bashes
   make_shims
+  # From here on a bare name resolves as it would on a Mac with no Homebrew.
+  PATH="$work/tools:$system_path"
+  export PATH
   {
     environment
     probe_assertions
@@ -56,15 +66,33 @@ find_bashes() {
     done
   fi
   [ -n "$new_bash" ] || new_bash="$(command -v bash)"
-  command -v bats >/dev/null || { echo "macos-check: bats not on PATH (brew install bats-core)" >&2; exit 1; }
 }
 
 # A directory holding only `bash`, to put first on PATH: `#!/usr/bin/env bash`
 # then resolves to the one chosen, for bats and for the scripts alike.
 make_shims() {
-  mkdir -p "$work/old" "$work/new"
+  mkdir -p "$work/old" "$work/new" "$work/tools"
   ln -s "$old_bash" "$work/old/bash"
   ln -s "$new_bash" "$work/new/bash"
+  borrow bats required
+  local tool extra
+  IFS=' ' read -r -a extra <<< "${EXTRA_TOOLS:-}"
+  # `${a[@]+…}`: an empty array is unbound to `set -u` before bash 4.4.
+  for tool in git jq ${extra[@]+"${extra[@]}"}; do borrow "$tool" optional; done
+}
+
+# borrow <tool> <required|optional> — link a tool the system directories lack
+# from wherever the caller's PATH has it. Runs before PATH is narrowed.
+borrow() {
+  local tool="$1" found
+  if PATH="$system_path" command -v "$tool" >/dev/null; then return 0; fi
+  if found="$(command -v "$tool")"; then
+    ln -s "$found" "$work/tools/$tool"
+    borrowed="$borrowed $tool=$found"
+  elif [ "$2" = required ]; then
+    echo "macos-check: $tool not found (brew install bats-core)" >&2
+    exit 1
+  fi
 }
 
 environment() {
@@ -73,7 +101,13 @@ environment() {
   echo "old bash:    $old_bash — $("$old_bash" -c 'echo "$BASH_VERSION"')"
   echo "modern bash: $new_bash — $("$new_bash" -c 'echo "$BASH_VERSION"')"
   echo "bats:        $(command -v bats) — $(bats --version)"
-  echo "git:         $(git --version)"
+  echo "git:         $(command -v git) — $(git --version)"
+  echo "PATH:        $PATH"
+  echo "borrowed:   ${borrowed:- none}"
+  local tool
+  for tool in sed grep find mktemp stat awk cksum jq python3; do
+    echo "  $tool -> $(command -v "$tool" || echo MISSING)"
+  done
   echo "HEAD:        $(git rev-parse --short HEAD) $(git status --porcelain | wc -l | tr -d ' ') dirty paths"
   # BSD sed rejects `--version`; provoking that error is the detection.
   if sed --version >/dev/null 2>&1; then echo "sed:         GNU (not the BSD tool this check is for)"; else echo "sed:         BSD"; fi
@@ -112,12 +146,14 @@ EOF
 }
 
 # Proves the mixed run is mixed: the test body's bash and the bash a test execs.
+# Expected under `mixed`: test body modern, exec'd bash 3.2.
 probe_override() {
   section "probe: GITLORE_TEST_BASH_DIR reaches exec'd scripts only"
   mkdir -p "$work/probe"
   ln -s "$repo/tests/helpers" "$work/probe/helpers"
   cat > "$work/probe/override.bats" <<'EOF'
 load helpers/setup
+setup() { use_test_bash; }
 @test "versions" {
   echo "# test body: $BASH_VERSION" >&3
   echo "# exec'd bash: $(bash -c 'echo "$BASH_VERSION"')" >&3
@@ -169,6 +205,9 @@ how_to_read() {
   echo "mixed: the verdict on the repair take under 3.2. baseline separates a"
   echo "  macOS/BSD failure from a 3.2 one. all-old: trust only its failures."
 }
+
+system_path=/usr/bin:/bin:/usr/sbin:/sbin
+borrowed=""
 
 section() { printf '\n=== %s\n' "$1"; }
 

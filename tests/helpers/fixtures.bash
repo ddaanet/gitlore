@@ -157,6 +157,10 @@ _gitlore_build_parent_with_memory() {
   mkdir -p "$repo"
   (
     cd "$repo" || exit 1
+    # Every path baked into the fixture is the physical one: a copy is
+    # repointed by searching for the template's `pwd -P` form, which a root
+    # reached through a symlink (macOS's /var) would not otherwise match.
+    repo="$(pwd -P)"
     git init -q -b main
     git config user.email "test@example.com"
     git config user.name  "Test"

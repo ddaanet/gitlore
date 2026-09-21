@@ -20,11 +20,15 @@ regression. Edge cases do not go in an eval; an eval's value is proving the
 whole chain fits together.
 
 The bats tier assumes bash >= 4.1, where a failing `[[ ]]` anywhere in a test
-body fails the test; under the bash 3.2 macOS ships, only the final command's
-status is read and every non-final assertion passes silently. A macOS run
-therefore drives bats with a modern bash, and the BSD behaviour the system tools
-would have contributed comes from the stubs `tests/bsd_portability.bats`
-installs instead.
+body fails the test; under the bash 3.2 macOS ships, a failing non-final `[[ ]]`
+passes silently, while a failing `[ ]` or plain command still fails the test
+(measured with bats 1.14.0 on bash 3.2.57). A macOS run therefore drives bats
+with a modern bash. `plans/macos-check/run.sh` is that run: it narrows `PATH` to
+the system directories plus the tools the platform lacks, and sets
+`GITLORE_TEST_BASH_DIR`, which `setup_tmp_repo` puts first on `PATH` so the
+scripts a test execs meet the system's 3.2 while the assertions stay real. On
+Linux the BSD behaviour the system tools would have contributed comes from the
+stubs `tests/bsd_portability.bats` installs instead.
 
 ## The gate's cost (NFR10)
 
