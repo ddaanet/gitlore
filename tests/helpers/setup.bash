@@ -7,16 +7,6 @@ set -euo pipefail
 # `cd` echoes its resolved target on stdout and the capture takes two lines.
 unset CDPATH
 
-# A macOS check drives bats with a modern bash while the scripts under test
-# have to meet the system's 3.2. A directory holding the `bash` of the caller's
-# choosing goes first on PATH, so every `#!/usr/bin/env bash` and `bash "$CMD"`
-# a test execs resolves there, and the test body keeps the bash bats started
-# with. Libraries sourced below still run in the test's own bash.
-if [ -n "${GITLORE_TEST_BASH_DIR:-}" ]; then
-  PATH="$GITLORE_TEST_BASH_DIR:$PATH"
-  export PATH
-fi
-
 PLUGIN_ROOT="${BATS_TEST_DIRNAME}/.."
 export PLUGIN_ROOT
 
@@ -34,12 +24,26 @@ setup_tmp_repo() {
   # setup and the test in one process, so it does not leak to the next test. A
   # test that means to feed a payload still pipes one, which overrides this.
   exec 0</dev/null
+  use_test_bash
   TMP_REPO="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-test.XXXXXX")"
   export TMP_REPO
   cd "$TMP_REPO"
   git init -q -b main
   git config user.email "test@example.com"
   git config user.name  "Test"
+}
+
+# A macOS check drives bats with a modern bash while the scripts under test
+# have to meet the system's 3.2. A directory holding the `bash` of the caller's
+# choosing goes first on PATH, so every `#!/usr/bin/env bash` and `bash "$CMD"`
+# a test execs resolves there. Called from `setup`, never at load time: bats
+# sources a suite before it spawns each test through `env bash`, and a PATH
+# exported that early puts the test body itself under the chosen bash.
+# Libraries sourced below still run in the test's own bash.
+use_test_bash() {
+  [ -n "${GITLORE_TEST_BASH_DIR:-}" ] || return 0
+  PATH="$GITLORE_TEST_BASH_DIR:$PATH"
+  export PATH
 }
 
 teardown_tmp_repo() {

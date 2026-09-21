@@ -6,11 +6,13 @@
 #
 # The tools under test are the 3.2-era ones; the assertions checking them are
 # not. They assume bash >= 4.1, where a failing `[[ ]]` anywhere in a test body
-# fails the test — under 3.2 only the final command's status is read, so every
-# non-final assertion here passes silently and the suite reports green on a Mac
-# it never checked. A macOS run therefore drives bats with a modern bash
-# (Homebrew's), and the stubs supply the BSD behaviour the system tools would
-# have contributed.
+# fails the test. Under 3.2 a failing non-final `[[ ]]` passes silently, while
+# a failing `[ ]` or plain command still fails the test (measured with bats
+# 1.14.0 on bash 3.2.57 by `plans/macos-check/run.sh`), so a suite asserting
+# with `[[ ]]` reports green on a Mac it never checked. A macOS run therefore
+# drives bats with a modern bash (Homebrew's) and points what the tests exec at
+# the system's through `GITLORE_TEST_BASH_DIR`; on Linux the stubs supply the
+# BSD behaviour the system tools would have contributed.
 # $status/$output are populated by bats `run`; shellcheck cannot see them.
 # shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
@@ -29,6 +31,18 @@ teardown() { teardown_tmp_repo; }
   # template path left behind would resolve the worktree elsewhere.
   [ "$(git -C memory rev-parse --show-toplevel)" = "$(pwd -P)/memory" ]
   run ! grep -rqF "$(_gitlore_fixture_cache_dir)" .gitmodules .git/config .git/modules/gitlore-memory/config memory/.git
+}
+
+@test "fixture path rewrite survives a temp dir reached through a symlink" {
+  # macOS: `$TMPDIR` is /var/folders/…, and /var is a symlink to /private/var.
+  # The template's path is baked in as the builder was handed it, the rewrite
+  # searches for its `pwd -P` form, and a copy whose rewrite misses keeps the
+  # template's bare remote as its origin — shared with every other test.
+  mkdir "$TMP_REPO/.real-run"
+  ln -s "$TMP_REPO/.real-run" "$TMP_REPO/.linked-run"
+  BATS_RUN_TMPDIR="$TMP_REPO/.linked-run" make_parent_with_memory
+  [ "$(git -C memory config --get remote.origin.url)" = "$(pwd -P)/.bare-memory.git" ]
+  run ! grep -rqF -e "$TMP_REPO/.linked-run" -e "$TMP_REPO/.real-run" .gitmodules .git/config .git/modules/gitlore-memory/config memory/.git
 }
 
 @test "lint-shell.sh shebang discovery survives BSD grep (no \\b word boundary)" {
@@ -51,4 +65,13 @@ teardown() { teardown_tmp_repo; }
   PATH="$BSD:$PATH" TMPDIR="$TMP_REPO" run "$PLUGIN_ROOT/scripts/run-bats.sh" one.bats
   [ "$status" -eq 0 ]
   [[ "$output" == *"1 passed, 0 failed"* ]]
+}
+
+@test "GITLORE_TEST_BASH_DIR puts the chosen bash ahead for what a test execs" {
+  mkdir "$TMP_REPO/.chosen"
+  printf '#!/bin/sh\necho chosen-bash\n' > "$TMP_REPO/.chosen/bash"
+  chmod +x "$TMP_REPO/.chosen/bash"
+  GITLORE_TEST_BASH_DIR="$TMP_REPO/.chosen" use_test_bash
+  run bash -c 'echo system-bash'
+  [ "$output" = "chosen-bash" ]
 }
