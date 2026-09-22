@@ -114,6 +114,17 @@ The division of labour is D7's: the script decides, the agent writes prose.
    remedy the continuation printed is relayed as still to run: the loop can
    reach a healthy exit before it has run.
 
+**Memory's `live` reaches its remote only from memory's own gate, which runs
+last.** `check_store_gates` ends by pushing `live` to `origin`, and
+`scripts/resolve.sh` calls it for every mounted tier before calling it for the
+memory root, so a tier gate that refuses stops the run with memory unpublished:
+the memory remote never holds a gitlink a tier's remote cannot resolve, which is
+what D17 orders the gates to prevent. A memory remote that has never held `live`
+is no exception. The run learns that from the `ls-remote` its reachability probe
+already pays for, and spends it only on skipping the `fetch origin live` that
+would otherwise print git's `couldn't find remote ref live`; the publication
+itself still waits for the gate.
+
 A crashed merge leaves a state file behind, and every gate guards on it —
 classifying what survives and repairing, which may mean carrying straight on.
 The state machine (marker vs full state file, `MERGE_HEAD` present, cleared by a

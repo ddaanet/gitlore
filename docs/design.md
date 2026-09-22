@@ -107,11 +107,17 @@ the mechanism it argues. Plans and specs live in `plans/`.
    driven through the real agent, because the seam between the agent and the
    shell is invisible to bats. The split and the `pass^k` shape are in
    [testing.md](references/testing.md).
-10. **The gate is cheap enough to run on every commit.** Not currently met:
-    `just precommit` runs ~530 s and is barely parallel, so cutting per-case
-    work is the lever, not `--jobs`; the input-hash sentinel makes the full cost
-    fall precisely on a change in flight. Measurement in
-    [testing.md](references/testing.md).
+10. **The gate is cheap enough to run on every commit.** Not met for a full run,
+    which is barely parallel — cutting per-case work is the lever, not `--jobs`.
+    The cost is narrowed in two steps rather than one. Four per-recipe gates
+    (`lint`, `test-unit`, `test-integration`, `check-distribution`) skip
+    outright when their declared inputs are unchanged; beneath them two
+    sub-caches — per shell file in `scripts/lint-shell.sh`, per suite in
+    `scripts/run-bats-cached.sh` — narrow a run that does happen to what the
+    change reaches, so an edit to one suite or one script costs a fraction of
+    the pass. An edit under `scripts/`, `hooks/` or `tests/helpers/` still pays
+    the full one, and no full-run measurement postdating the sub-caches is
+    recorded. Measurement in [testing.md](references/testing.md).
 11. **Overrides.** Confirmation gates described here are defaults; project or
     user instructions (`CLAUDE.md` and equivalents) can relax them, so a user
     who wants auto-commit or auto-push can document the override.

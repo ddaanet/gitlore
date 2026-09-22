@@ -50,8 +50,8 @@ that). `user + sys` came to 566 s against 530 s wall, so the suite is barely
 parallel and more cores would not divide the number. Making it faster is open
 work, and cutting per-case work is the lever, not raising `--jobs`. `bats -T`
 reports per-test timings, so the breakdown that would direct that work comes
-free on the next full run. The input-hash sentinel caches a green result, so the
-full cost is paid precisely when a change is in flight.
+free on the next full run. The sentinels and the two sub-caches below them
+narrow that cost to what a change reaches; the figure above predates both.
 
 `format-docs` hard-wraps `docs/` and `plans/` apart from `plans/*/reports/`. A
 report records a run that has finished, so wrapping it rewrites a file its

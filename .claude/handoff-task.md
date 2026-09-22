@@ -1,3 +1,3 @@
 ## Current task
 
-A release is next: the suite now refuses a bats run under bash below 4.1 instead of converting its `[[ ]]` glob assertions, the `hook-output-channels` retirement is handed to plugin-craft through the brief in its inbox, and the recall log analysis is rerun with native recall counted. The sequence my human partner asked for is a preflight run by an opus agent, then `/gitlore:push`, then `just release` only if both are clean; a preflight finding stops the sequence and gets reported rather than worked around.
+v0.8.0 is released and both repos are level with their remotes. The preflight that cleared it left a documentation batch unwritten — the release shipped with a README, design hub and changelog that lag the code — and that batch is the next piece of work; its items are in the todo list. The preflight report that itemizes them, with file:line citations, is at `/tmp/claude/preflight-report.md` while that tmp dir survives.

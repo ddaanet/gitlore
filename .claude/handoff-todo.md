@@ -1,5 +1,11 @@
+## Open decisions
+
+- Whether the 400-line cap on shell scripts and bats suites (applied across 19 files in 559dddb) gets a decision record and a checker — `check-docs-links.py`'s `oversized-file` covers `docs/` only, so nothing notices when a script crosses it again.
+
 ## Remaining
 
+- Write the post-release documentation batch: README.md fixes (`bash ≥ 3.2` holds for shipped scripts but running bats needs ≥ 4.1 and `scripts/test-macos.sh`; `plans/*.sh|bash|bats` are lint inputs since d6707dc; `prerelease` does not skip outright because format-docs, the two check scripts and check-version run uncached; the `distribution_inputs` and `reads_all_suites` variables; `/gitlore:push`, `/gitlore:merge`, `/gitlore:recall` are undocumented), `docs/design.md:112-114` (a single sentinel making the full cost fall on a change in flight is false since the per-file shellcheck and per-suite bats caches; the ~530 s figure predates them), and changelog entries for 654cf4f (resolve publishes memory's `live` only after every tier gate — stated in no `docs/` file), d6707dc, 5ead65d, 559dddb, b5bcfc7, 7214315, 73d06b1. Prose is an opus dispatch.
+- Make `tests/lint_shell.bats` and `tests/run_bats_cached.bats` unset `GITLORE_GATE_FORCE` the way `tests/helpers/justfile-gates.bash:62` does; with it set, 5 cache-behaviour tests fail (717, 718, 930, 931, 934).
 - Run `scripts/test-macos.sh` on a Mac and patch what it turns up; the narrowed PATH has never met the full unit suite, and a missing tool (PyYAML for the hook-manager wiring suite is the likely one) goes through `EXTRA_TOOLS` or a fix. A `macos-latest` GitHub Actions job is free on this public repo and deliberately not set up yet.
 - Close the batch-retry approval gap: on the PostToolBatch path the retry reuses the preserved summary, so the edit fixing an aborting index commits under the old approval although the abort text says the summary needs approval again; needs a status protocol between `commit-memory.sh` and the batch hook, designed before it is coded.
 - Triage `inbox/brief-add-tier-index-budget-advisory.md`, `inbox/brief-index-audit-preamble-and-merge-unlanded.md`, `inbox/brief-session-start-protocol-context-wording.md` and `plans/brief-codex-native-memory-integration.md`, once the rest of the list is cleared; each brief's recommendation is input, and the choice is my human partner's.

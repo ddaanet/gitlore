@@ -5,7 +5,10 @@
 
 load helpers/setup
 
-setup()    { setup_tmp_repo; MARK="$TMP_REPO/marks"; mkdir -p "$MARK"; KEYS="$TMP_REPO/keys"; }
+# `GITLORE_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an
+# ambient value would reach the script under test and make the cache-hit
+# cases silently unprovable.
+setup()    { unset GITLORE_GATE_FORCE; setup_tmp_repo; MARK="$TMP_REPO/marks"; mkdir -p "$MARK"; KEYS="$TMP_REPO/keys"; }
 teardown() { teardown_tmp_repo; }
 
 # A suite that touches "$MARK/<name>.ran" and then passes or fails.

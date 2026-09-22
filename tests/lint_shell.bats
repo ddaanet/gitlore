@@ -12,7 +12,10 @@
 
 load helpers/setup
 
-setup()    { setup_tmp_repo; }
+# `GITLORE_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an
+# ambient value would reach the script under test and make the cache-hit
+# cases silently unprovable.
+setup()    { unset GITLORE_GATE_FORCE; setup_tmp_repo; }
 teardown() { teardown_tmp_repo; }
 
 @test "lint-shell: catches a shellcheck violation in a tracked .sh file" {
