@@ -136,6 +136,29 @@ load helpers/check-docs-links
   [ "$status" -eq 0 ]
 }
 
+@test "oversized file: a script one line past the cap blocks, outside docs/" {
+  plant_decisions 'See [a](references/a.md).'
+  plant_ref "a.md" '# A'
+  mkdir -p scripts/lib
+  { printf '#!/usr/bin/env bash\n'; for _ in $(seq 400); do printf ': filler\n'; done; } \
+    > scripts/lib/big.sh
+  run "$CHECKER"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"oversized-file"* ]]
+  [[ "$output" == *"scripts/lib/big.sh"* ]]
+  [[ "$output" == *"401 lines"* ]]
+}
+
+@test "oversized file: a bats suite exactly at the cap passes" {
+  plant_decisions 'See [a](references/a.md).'
+  plant_ref "a.md" '# A'
+  mkdir -p tests
+  { printf '#!/usr/bin/env bats\n'; for _ in $(seq 399); do printf '# filler\n'; done; } \
+    > tests/big.bats
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+}
+
 @test "clean tree: the gate signs off with the checks it ran" {
   plant_ref "a.md" '# A — decisions D9' '' '**D9 — First**' '' 'Argument.'
   plant_decisions 'See [a](references/a.md).' '' '- **D9** — first'

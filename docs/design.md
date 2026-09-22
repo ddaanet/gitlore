@@ -121,6 +121,13 @@ the mechanism it argues. Plans and specs live in `plans/`.
 11. **Overrides.** Confirmation gates described here are defaults; project or
     user instructions (`CLAUDE.md` and equivalents) can relax them, so a user
     who wants auto-commit or auto-push can document the override.
+12. **Bounded artifacts.** Every artifact a reader takes in at one go stays
+    under 400 lines — a `docs/` node, a script, a hook, a bats suite alike —
+    because the cap rations a context window rather than tidying documentation,
+    and `scripts/check-docs-links.py` blocks past it. What the count stands in
+    for where no formatter wraps a script, the need-time seam a split follows,
+    and why the rule outside `docs/` needed a gate (D55) in
+    [artifact size](references/artifact-size.md).
 
 ---
 

@@ -166,6 +166,17 @@ carrier · a continuation that commits a defective merged index uncomposed · a
 scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
 directories on the next repair (tier-arrival-repair.md).
 
+**Artifact size** — the 400-line cap over everything a reader takes in at one
+go, and the check that gates it.
+[artifact-size.md](references/artifact-size.md)
+
+- **D55** — the 400-line cap is a context budget, so it binds scripts, hooks and
+  suites as well as `docs/`
+
+*Rejected:* raising the cap · gating tokens instead of lines · leaving the rule
+outside `docs/` a convention with no checker · a separate checker script for the
+source tree · counting only shell files, not python.
+
 ---
 
 ## Rejected Alternatives

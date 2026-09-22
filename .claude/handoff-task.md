@@ -1,3 +1,3 @@
 ## Current task
 
-v0.8.0 is released and both repos are level with their remotes. The preflight that cleared it left a documentation batch unwritten — the release shipped with a README, design hub and changelog that lag the code — and that batch is the next piece of work; its items are in the todo list. The preflight report that itemizes them, with file:line citations, is at `/tmp/claude/preflight-report.md` while that tmp dir survives.
+Nothing is in flight. The v0.8.0 post-release documentation batch and the D55 line-cap gate (the checker now covers scripts, hooks and suites) have both landed; the next piece of work is whichever item of the todo list my human partner picks.

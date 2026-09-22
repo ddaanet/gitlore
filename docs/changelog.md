@@ -7,6 +7,11 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-09-22 — The 400-line cap is a context budget, so the checker gates scripts, hooks and suites too](changelog/2026-09-22-the-line-cap-is-a-context-budget-and-gates-code-too.md)
+  — the cap rations a context window rather than tidying documentation, so
+  `check-docs-links.py` walks `scripts/`, `hooks/` and `tests/` as well as
+  `docs/`; recorded as D55, the first decision the index carries for a hygiene
+  rule
 - [2026-09-22 — The changelog index splits at the layout boundary](changelog/2026-09-22-the-changelog-index-splits-at-the-layout-boundary.md)
   — seven post-release entries do not fit under the 400-line cap at any wording;
   entries before the `docs/` + `plans/` layout move to a sibling archive index

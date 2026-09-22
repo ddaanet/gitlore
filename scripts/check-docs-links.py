@@ -24,9 +24,11 @@ Nine checks. Eight are blocking, because each has a single legitimate reading:
 - `undefined-decision`  a `D<n>` citation with no decision behind it
 - `enumeration-drift`   a node's heading and its bodies disagree
 - `delegation-drift`    the index delegates a number to a node that does not conclude it
-- `oversized-file`      a file past the line cap a node has to read in one go
+- `oversized-file`      a file past the line cap a reader takes in at one go
 
-The line cap is 400. Tokens are not gated: counting them calls the API, and the
+The line cap is 400, and it covers the scripts, hooks and test suites as well as
+`docs/`: the cap is a context budget, and an agent reads a script whole the same
+way it reads a node. Tokens are not gated: counting them calls the API, and the
 80-column hard wrap `format-docs` applies bounds a line at roughly 23 tokens,
 so 400 lines is under 10k tokens and the line count is the binding limit.
 
@@ -124,6 +126,8 @@ def main() -> int:
     for path in docs:
         findings += check_links(path, root)
         findings += check_size(path, root)
+    for path in discover_sources(root):
+        findings += check_size(path, root)
 
     conclusions, stubs, findings_index = collect_conclusions(decisions, root)
     findings += findings_index
@@ -154,6 +158,23 @@ def discover(docs_dir: str) -> list[str]:
     return sorted(found)
 
 
+def discover_sources(root: str) -> list[str]:
+    """The files the line cap covers outside `docs/`: every script, hook and
+    suite the lint gate reads, plus the python checkers beside them."""
+    found = []
+    for top in SOURCE_DIRS:
+        for dirpath, dirnames, filenames in os.walk(os.path.join(root, top)):
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+            for name in filenames:
+                if name.endswith(SOURCE_SUFFIXES):
+                    found.append(os.path.join(dirpath, name))
+    return sorted(found)
+
+
+SOURCE_DIRS = ("scripts", "hooks", "tests")
+SOURCE_SUFFIXES = (".sh", ".bash", ".bats", ".py")
+
+
 def check_links(path: str, root: str) -> list[tuple]:
     rel = os.path.relpath(path, root)
     base = os.path.dirname(path)
@@ -181,9 +202,10 @@ def link_targets(line: str) -> list[str]:
 
 
 def check_size(path: str, root: str) -> list[tuple]:
-    """A file long enough that reading it costs a node's whole budget. Split it
-    along a need-time seam rather than raising the cap: the graph is only
-    cheaper than one document while each node is readable on its own."""
+    """A file long enough that reading it costs a reader's whole budget. Split
+    it along a need-time seam rather than raising the cap: the graph is only
+    cheaper than one document while each node is readable on its own, and a
+    script whose neighbours stop telling you anything is past the same seam."""
     text = read_text(path)
     if text is None:
         return []
