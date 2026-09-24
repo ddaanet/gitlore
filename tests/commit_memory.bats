@@ -52,6 +52,58 @@ load helpers/commit-memory
   [ -n "$(git -C memory status --porcelain)" ]   # still dirty, nothing committed
 }
 
+@test "bare invocation commits on a fresh approval file and consumes it" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  msgfile=$(gitlore_commit_msg_file memory)
+  mkdir -p "$(dirname "$msgfile")"
+  printf 'memory: add notes\n' > "$msgfile"
+  head_before=$(git -C memory rev-parse HEAD)
+
+  run bash "$CMD"
+  [ "$status" -eq 0 ]
+
+  # A clean tree and HEAD = live are also what discarding the edit would leave,
+  # so HEAD has to have moved; the subject is what ties the commit made to the
+  # approval file on disk rather than to any summary the run composed itself.
+  [ -z "$(git -C memory status --porcelain)" ]
+  wt=$(git -C memory rev-parse HEAD)
+  live=$(git -C memory rev-parse live)
+  [ "$wt" != "$head_before" ]
+  [ "$wt" = "$live" ]
+  [ "$(git -C memory log -1 --pretty=%s)" = "memory: add notes" ]
+  [ ! -f "$msgfile" ]
+}
+
+@test "bare invocation refuses a stale approval file and leaves it" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  msgfile=$(gitlore_commit_msg_file memory)
+  mkdir -p "$(dirname "$msgfile")"
+  printf 'memory: add notes\n' > "$msgfile"
+  # BSD-portable backdate; mtime is second-granular and the freshness compare
+  # is `>=`, so backdating is what makes the approval strictly older.
+  touch -t 200001010000 "$msgfile"
+  cp "$msgfile" "$BATS_TEST_TMPDIR/approval.before"
+  head_before=$(git -C memory rev-parse HEAD)
+  # Whole-second mtimes: the marker sits a second before the run, so a restamp
+  # of the approval — the minting this bare mode must not do — leaves it newer.
+  : > "$TMP_REPO/before-run"
+  sleep 1
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"no approved commit summary"* ]]
+  # The usage-era refusal's own operand, and not a bare `-m`: the sync's refusal
+  # names $msgfile, whose basename `gitlore-memory-message` contains `-m`.
+  [[ "${output}${stderr}" != *"Pass it with -m"* ]]
+  [ -n "$(git -C memory status --porcelain)" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ -f "$msgfile" ]
+  cmp -s "$msgfile" "$BATS_TEST_TMPDIR/approval.before"
+  [ ! "$msgfile" -nt "$TMP_REPO/before-run" ]
+}
+
 @test "-m commits dirty memory and advances live without a parent commit" {
   make_parent_with_memory
   parent_head_before=$(git rev-parse HEAD)

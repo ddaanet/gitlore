@@ -6,6 +6,8 @@ set -euo pipefail
 #   commit-memory.sh -m "<summary>"     # inline
 #   commit-memory.sh -F <file>          # read summary from a file
 #   commit-memory.sh -F -               # read summary from stdin (heredoc)
+#   commit-memory.sh                    # bare: commit on the approval already
+#                                        # on disk, judged by freshness
 # Activation is the gitlore-memory submodule registration (FR12), same gate as
 # pre-commit. Discover this script via `git config gitlore.commitCommand`.
 
@@ -48,19 +50,23 @@ mempath=$(gitlore_memory_path) || mempath=""
 # Session-less worktree: memory worktree not materialized → nothing to do.
 [ ! -e "$mempath/.git" ] && exit 0
 
-# Arg-driven approval: when memory is dirty we need a summary to write into the
-# commit-msg IPC file, which satisfies gitlore_sync_memory_to_live's freshness
-# gate by construction (written immediately before the commit).
+# Arg-driven approval: when memory is dirty and a summary arrived with the
+# call, write it into the commit-msg IPC file, which satisfies
+# gitlore_sync_memory_to_live's freshness gate by construction (written
+# immediately before the commit). Bare (no summary) leaves the file as it
+# stands and lets that freshness gate judge the approval already on disk —
+# refusing up front only when there is none to judge.
 if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
-  if [ "$have_summary" = "0" ]; then
+  msgfile=$(gitlore_commit_msg_file "$mempath")
+  if [ "$have_summary" = "1" ]; then
+    mkdir -p "$(dirname "$msgfile")"   # .claude/ may not exist yet in a fresh tree
+    printf '%s\n' "$summary" > "$msgfile"
+  elif [ ! -e "$msgfile" ]; then
     gitlore_say_for_agent_or_user \
       "gitlore: memory is dirty; commit-memory needs an approved summary. Pass it with -m <summary> or -F - (heredoc)." \
       "gitlore: memory has uncommitted changes; run this from Claude Code with an approved summary." >&2
     exit 1
   fi
-  msgfile=$(gitlore_commit_msg_file "$mempath")
-  mkdir -p "$(dirname "$msgfile")"   # .claude/ may not exist yet in a fresh tree
-  printf '%s\n' "$summary" > "$msgfile"
 fi
 
 gitlore_sync_memory_to_live "$mempath"
