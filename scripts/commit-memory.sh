@@ -7,7 +7,7 @@ set -euo pipefail
 #   commit-memory.sh -F <file>          # read summary from a file
 #   commit-memory.sh -F -               # read summary from stdin (heredoc)
 #   commit-memory.sh                    # bare: commit on the approval already
-#                                        # on disk, judged by freshness
+#                                       # on disk, judged by freshness
 # Activation is the gitlore-memory submodule registration (FR12), same gate as
 # pre-commit. Discover this script via `git config gitlore.commitCommand`.
 
@@ -61,7 +61,9 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
   if [ "$have_summary" = "1" ]; then
     mkdir -p "$(dirname "$msgfile")"   # .claude/ may not exist yet in a fresh tree
     printf '%s\n' "$summary" > "$msgfile"
-  elif [ ! -e "$msgfile" ]; then
+  elif [ ! -s "$msgfile" ]; then
+    # -s, not -e: an empty file carries no approval, and passing it on reaches
+    # `git commit -F` with an empty message, whose abort restamps the file.
     gitlore_say_for_agent_or_user \
       "gitlore: memory is dirty; commit-memory needs an approved summary. Pass it with -m <summary> or -F - (heredoc)." \
       "gitlore: memory has uncommitted changes; run this from Claude Code with an approved summary." >&2

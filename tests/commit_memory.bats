@@ -104,6 +104,24 @@ load helpers/commit-memory
   [ ! "$msgfile" -nt "$TMP_REPO/before-run" ]
 }
 
+@test "bare invocation refuses an empty approval file as no approval at all" {
+  # An empty file is fresh by mtime, so only the entry point's own screen keeps
+  # it from reaching `git commit -F` and git's own empty-message abort.
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  msgfile=$(gitlore_commit_msg_file memory)
+  mkdir -p "$(dirname "$msgfile")"
+  : > "$msgfile"
+  head_before=$(git -C memory rev-parse HEAD)
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"Pass it with -m"* ]]
+  [[ "${output}${stderr}" != *"empty commit message"* ]]
+  [ -n "$(git -C memory status --porcelain)" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+}
+
 @test "-m commits dirty memory and advances live without a parent commit" {
   make_parent_with_memory
   parent_head_before=$(git rev-parse HEAD)
