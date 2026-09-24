@@ -81,7 +81,12 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
   exit 0
 fi
 
-if [ ! -s "$msgfile" ]; then
+if [ ! -s "$msgfile" ] || ! grep -q '[^[:space:]]' "$msgfile"; then
+  # An all-whitespace file is no approval either, and it must be caught here
+  # rather than passed on: `git commit -F` rejects it as an empty message and
+  # that arm restamps $msgfile, so the run below would fail identically on every
+  # later batch. commit-memory.sh screens with this same predicate.
+  #
   # Keep the trigger: the moment the approved summary lands, the next
   # PostToolBatch commits transparently — the agent need not re-trigger.
   # The clause is a multi-line block and goes last in each message; emit() builds
@@ -98,16 +103,12 @@ fi
 
 # commit-memory.sh runs bare: the approval already on disk is judged by its own
 # freshness and only a fresh one commits. It never makes a parent commit (D16),
-# and a failure consumes neither IPC file — that is what lets the next
-# PostToolBatch retry.
+# and a failure before the commit consumes neither IPC file — that is what lets
+# the next PostToolBatch retry.
 #
-# Freshness also picks the failure message, and only `no` takes the re-approval
-# branch. `yes` — a locked repo, an in-flight merge, a refusal naming an edit
-# the agent has not made yet — keeps the deferred message and the script's
-# reason. `absent` belongs with it rather than with `no`: a run that committed
-# and then failed to advance `live` has already consumed the message file, so
-# its reason is the only thing left to hand over and there is no summary to
-# re-present. Any value but `no` therefore lands on the arm that carries $out.
+# Which failure message goes out is read off the store and the IPC file the run
+# left behind, never off a status the run reports about itself (D53). Three
+# states, in the order tested below.
 if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" 2>&1); then
   rm -f "$trigger"
   # The agent's own next move, handed to it: this is the value 62 of 68 landings
@@ -116,18 +117,35 @@ if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" 2>&1); then
   emit "gitlore: memory committed and local live advanced." \
     "gitlore: the memory commit you requested has landed. Memory HEAD is now $memhead, local live is advanced, and both IPC files have been removed. This is the authoritative outcome — do not run git status, git log, or ls to confirm it."
 else
-  # Defaulted, not left to errexit: a hook that dies here emits nothing, and the
-  # agent learns nothing about a commit it asked for.
-  fresh=$(gitlore_commit_msg_freshness "$mempath") || fresh=absent
-  if [ "$fresh" != "no" ]; then
-    emit "gitlore: memory commit deferred, will retry automatically. $out" \
-      "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved, and re-triggering will not help. When the reason below names a fix, make it and the retry picks it up; otherwise no action is needed from you. Reason: $out"
-  else
+  # The summary was there and non-blank before the run, so its absence now means
+  # the commit landed and a step after it failed — the `HEAD:live` fast-forward,
+  # which removes $msgfile before it runs. Nothing is waiting on approval and no
+  # later batch repeats the failed step, so the reason is the whole message; it
+  # carries the prepared-merge directive on the divergence arm.
+  if [ ! -s "$msgfile" ]; then
+    emit "gitlore: memory committed, but the step after it did not finish. $out" \
+      "gitlore: the memory commit landed, and its approved summary has been consumed — nothing is waiting on approval and the commit will not be made again. Act on the reason below. Reason: $out"
+  # Something newer than the approval is in the store: the agent's own edit, a
+  # checkout, a take, a resolved merge. The summary on disk is the text to amend
+  # and re-present. The script's reason is dropped — it is the sync's "no
+  # approved commit summary", which reads wrong next to a file that exists.
+  #
+  # Substituted inside the test rather than assigned: an assignment whose last
+  # command returns non-zero aborts the hook under `set -e` and emits nothing at
+  # all, while here the test's own status governs, so an unreadable freshness
+  # falls through to the deferred arm and still hands over $out.
+  elif [ "$(gitlore_commit_msg_freshness "$mempath")" = "no" ]; then
     clause=$(gitlore_memory_approval_clause)
     emit "gitlore: memory commit deferred — the approved summary no longer covers the store, approval needed again" \
       "$(printf '%s\n\n%s\n' \
           "gitlore: the approved summary at $msgfile no longer covers the memory store. Present it to the user again as a markdown blockquote (\`> …\`) rather than a code fence, amended for what changed, and once they approve write it to $msgfile — the commit then completes on its own." \
           "$clause")"
+  # The approval still covers the store: a locked repo, an in-flight merge, a
+  # refusal naming an edit the agent has not made yet. Both IPC files stand and
+  # the next batch retries on its own.
+  else
+    emit "gitlore: memory commit deferred, will retry automatically. $out" \
+      "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved, and re-triggering will not help. When the reason below names a fix, make it and the retry picks it up; otherwise no action is needed from you. Reason: $out"
   fi
 fi
 exit 0

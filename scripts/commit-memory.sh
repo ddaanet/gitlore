@@ -54,16 +54,20 @@ mempath=$(gitlore_memory_path) || mempath=""
 # call, write it into the commit-msg IPC file, which satisfies
 # gitlore_sync_memory_to_live's freshness gate by construction (written
 # immediately before the commit). Bare (no summary) leaves the file as it
-# stands and lets that freshness gate judge the approval already on disk —
-# refusing up front only when there is none to judge.
+# stands and lets that freshness gate judge the approval already on disk.
 if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
   msgfile=$(gitlore_commit_msg_file "$mempath")
   if [ "$have_summary" = "1" ]; then
     mkdir -p "$(dirname "$msgfile")"   # .claude/ may not exist yet in a fresh tree
     printf '%s\n' "$summary" > "$msgfile"
-  elif [ ! -s "$msgfile" ]; then
-    # -s, not -e: an empty file carries no approval, and passing it on reaches
-    # `git commit -F` with an empty message, whose abort restamps the file.
+  fi
+  # Screened on both arms, after the write, because an all-whitespace summary is
+  # no approval: `git commit -F` rejects it as an empty message, the arm carrying
+  # that failure restamps $msgfile, and the batch path then repeats the identical
+  # refusal on every later batch. `-m ""` and `-F -` over empty stdin both reach
+  # here. `-s` short-circuits so grep is never handed a missing file;
+  # memory-commit-batch.sh screens with this same predicate.
+  if [ ! -s "$msgfile" ] || ! grep -q '[^[:space:]]' "$msgfile"; then
     gitlore_say_for_agent_or_user \
       "gitlore: memory is dirty; commit-memory needs an approved summary. Pass it with -m <summary> or -F - (heredoc)." \
       "gitlore: memory has uncommitted changes; run this from Claude Code with an approved summary." >&2

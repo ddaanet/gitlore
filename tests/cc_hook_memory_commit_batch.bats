@@ -141,8 +141,8 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
 
 @test "a commit that landed but could not advance live hands over the merge directive, not a re-approval" {
   # The commit consumes the approval before the `HEAD:live` fast-forward is
-  # refused, so freshness reads `absent` here — and there is no summary left to
-  # re-present, only the prepared merge to act on.
+  # refused, so there is no summary left to re-present, only the prepared merge
+  # to act on — and nothing for a later batch to retry, since the commit is made.
   make_parent_with_memory
   advance_branch_with_file memory live LIVE.md live-only "Diverging commit on live"
   echo dirty > memory/notes.md
@@ -156,8 +156,38 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [[ "$agent" == *"Reason:"* ]]
   [[ "$agent" == *"memory merge prepared"* ]]
   [[ "$agent" != *"no longer covers"* ]]
+  # Neither of the other two branches' claims: this commit DID run, its approval
+  # is NOT preserved, and no retry will repeat it. Without these the arm is
+  # indistinguishable from the transient-retry one, which asserts all three.
+  [[ "$agent" == *"the memory commit landed"* ]]
+  [[ "$agent" != *"retries by itself"* ]]
+  [[ "$agent" != *"approved summary preserved"* ]]
   [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
   [ ! -f "$(gitlore_commit_msg_file memory)" ]
+  [ -f "$(gitlore_commit_trigger_file memory)" ]
+}
+
+@test "a blank approval file is no approval and does not become a per-batch retry loop" {
+  # An all-whitespace file is non-empty, so `-s` admits it, and `git commit -F`
+  # then rejects it as an empty message on an arm that restamps the approval —
+  # every later batch reproducing the identical refusal under "no action is
+  # needed from you". Screened at the hook, so the run is never reached.
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  msgfile="$(gitlore_commit_msg_file memory)"
+  printf '\n' > "$msgfile"
+  : > "$(gitlore_commit_trigger_file memory)"
+  head_before=$(git -C memory rev-parse HEAD)
+
+  CLAUDECODE=1 run run_batch
+  [ "$status" -eq 0 ]
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"no approved summary exists yet"* ]]
+  # git's own words are what the unscreened path emits, on a branch that tells
+  # the agent to sit still; the discriminating negative for this fix.
+  [[ "$agent" != *"empty commit message"* ]]
+  [[ "$agent" != *"no action is needed from you"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ -f "$(gitlore_commit_trigger_file memory)" ]
 }
 
