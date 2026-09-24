@@ -12,7 +12,8 @@ no parent operation in flight are in
   presence is the approval signal · **D12** a submodule-side commit gate backs
   FR11 as defense in depth · **D19** one canonical approval clause, discovered
   externally via a git-config key · **D22** the memory-hygiene checker is a
-  repo-local gate, not shipped surface
+  repo-local gate, not shipped surface · **D56** the batch retry is judged by
+  the approval's freshness, not by a status the run reports
 
 ---
 
@@ -44,28 +45,48 @@ auto-mode classifier, neither of which lets the agent do this work itself.
 The standalone commit is the `handoff` plugin's path, not the general one (D16).
 The agent writes the approved summary (`.claude/gitlore-memory-message`) and the
 trigger (`.claude/gitlore-commit-memory`); `memory-commit-batch.sh` runs
-`commit-memory.sh -F <msgfile>`, which commits with the blessed sentinel and
-advances local `live` without a parent commit. The trigger is deliberately kept
-out of the general agent-facing instructions — the SessionStart orientation, the
-nudge, and the gate's block message all describe only the message-file plus
+`commit-memory.sh` bare, which commits with the blessed sentinel and advances
+local `live` without a parent commit. The trigger is deliberately kept out of
+the general agent-facing instructions — the SessionStart orientation, the nudge,
+and the gate's block message all describe only the message-file plus
 parent-commit path — so an agent not running the handoff skill is never taught
 it can force a standalone memory commit.
 
-**Both IPC files are removed only on a complete commit.** A locked repo and an
-in-flight merge are expected transients, so on any failure the trigger *and* the
-message file stay put and the next batch retries — no lost approval, and for a
-transient no agent action. A refusal that needs the agent to act is retried the
-same way but lands only once it is done: an edit, for a problem in an index file
-the commit changes (D50, in [git-hooks.md](git-hooks.md)), or a checkout or
-take, for an off-pin tier. Its reason names the fix, and the hook's message to
-the agent defers to it. A trigger with no approved summary is likewise kept, so
-the commit completes on its own the moment the summary lands.
+**Both IPC files are removed only on a complete commit.** Because the hook runs
+`commit-memory.sh` bare, the approval on disk is judged by its mtime freshness
+against the store — the same gate the parent `pre-commit` path runs, so a retry
+commits only what the summary still covers (D56). On any failure before the
+commit, the trigger *and* the message file stay put and the next batch retries:
+no lost approval.
 
-## Decisions — D4, D12, D19, D22
+**Which message the hook emits is read off the store and the IPC file the run
+left behind, never off a status the run reports about itself** (D53, in
+[git-hooks.md](git-hooks.md)). Three states, in the order tested. The message
+file **consumed** means the commit landed and the `HEAD:live` step after it
+failed; nothing waits on approval and no batch repeats that step, so the
+script's reason is the whole message — on divergence, the prepared-merge
+directive. Freshness **`no`** means something newer than the approval is in the
+store — the agent's own fix, a checkout, a take, a resolved merge — so the
+summary at the message file is presented again, amended for what changed, and
+approved again; both files stay, and the stale file is the text to re-present.
+Freshness **`yes`** means the approval still covers the store: a transient such
+as a locked repo or an in-flight merge, which needs no agent action, or a
+refusal whose reason names a fix the agent has not made yet — an edit, for a
+problem in an index file the commit changes (D50), or a checkout or take, for an
+off-pin tier. The retry is silent on that arm and lands once the fix is made.
+
+A trigger with no approved summary is kept, so the commit completes on its own
+the moment the summary lands. **No summary** means absent *or* blank, on both
+entry points: an all-whitespace file is fresh by mtime and `git commit -F`
+rejects it as an empty message, so each screens it with one predicate ahead of
+the run rather than letting that failure restamp the approval and repeat
+verbatim on every later batch.
+
+## Decisions — D4, D12, D19, D22, D56
 
 Why approval has this shape: how the summary reaches the hook, why the submodule
-holds a gate of its own, the wording that carries the approval, and why the
-hygiene checker stays repo-local.
+holds a gate of its own, the wording that carries the approval, why the hygiene
+checker stays repo-local, and what decides that a retry's approval still holds.
 
 **D4 — Commit message via file handshake**
 
@@ -247,6 +268,47 @@ positives, with the all-digit exclusion missing roughly 4% of seven-character
 shas as the stated residual. One generalizable check does not carry a runtime
 dependency into every consumer. Several would reopen this.
 
+**D56 — The batch retry is judged by the approval's freshness**
+
+`commit-memory.sh` handed the message file as its own `-F` operand rewrites that
+file from its own contents on every retry, minting a fresh approval whatever has
+happened to the store since the user gave it. The mtime gate then always passes,
+so an edit made between two batches — the index fix a D50 abort asks for —
+commits under a summary that never saw it, while the abort text says the summary
+needs approval again. The bare invocation closes that: the file is read as it
+stands and `gitlore_sync_memory_to_live` decides, which is the same gate on the
+batch path as on the parent `pre-commit` path. `-m` and `-F` keep writing the
+file, because a summary arriving with the call was approved immediately before
+it (D16, in [memory-entry-points.md](memory-entry-points.md)).
+
+**Freshness is the store's own answer, not a classification the run makes of its
+own failure.** D53 refused a per-arm return code from the stale-merge guard on
+the asymmetry of what each mistake costs — a misclassified arm marks an approval
+fresh over content no summary covers, the FR11 boundary breached silently inside
+the one gate that holds it — and that reasoning carries over whole. A status
+line or exit code from `commit-memory.sh` would put the same judgement in the
+same place, and would have to stay true across every failure arm added later,
+each defaulting to whatever its author picks rather than to the safe answer.
+Mtime order off the store needs no new state and no new return code, and the
+restamp arms in `resolve-sync-memory.sh` then do on the batch path exactly what
+they do on the pre-commit path: a failure that wrote only projections of
+approved lines keeps the approval, a merge preparation does not (D53), and the
+agent's own write to the store always invalidates it.
+
+**The blank screen sits on both entry points, not in the sync.** An
+all-whitespace approval is fresh by mtime, so it reaches `git commit -F`, which
+rejects it as an empty message on an arm that restamps the file — a refusal that
+would repeat identically on every later batch. Both `commit-memory.sh` (after
+its own `-m`/`-F` write, so the arg path is covered too) and
+`memory-commit-batch.sh` carry the same predicate, which is what makes
+*no summary* mean the same thing on the two paths.
+
+Freshness is mtime order, so an agent that writes a memory file after the
+message file inside one batch gets one visible re-approval request rather than a
+lost commit — the same edge the pre-commit path carries. The handoff flow writes
+memory first and the summary only after the user's approval turn, so it does not
+meet it.
+
 ## Rejected alternatives
 
 **A `Stop` hook to generate the commit message.** Fires on every response turn
@@ -270,3 +332,24 @@ with real scoping complexity at the CC level. The drift it anticipated did
 happen — a direct submodule commit bypassed FR11 — and the fix was a
 submodule-side `pre-commit` gate, consistent with the rest of the hook
 architecture rather than layered on top of it (D12).
+
+**An exit-code or status-line protocol from `commit-memory.sh`.** The hook would
+act on the run's classification of its own failure, which D53 refused for the
+stale-merge guard on the cost asymmetry: a misclassified arm keeps an approval
+over content no summary covers. Freshness is the store's own answer. (D56)
+
+**Parsing the refusal text for "needs approval again".** Prose as protocol, and
+the contradiction between the refusal's wording and what the retry does is
+exactly what parsing would have to keep in sync. (D56)
+
+**Deleting the message file on a fix-needed refusal.** Needs the classification
+rejected above, and destroys the text the agent would re-present. (D56)
+
+**An `-ef` guard inside `-F`, skipping the rewrite when the operand is the
+message file.** Makes the entry point behave differently on one path value,
+invisible from its usage line. (D56)
+
+**Freshness checked in the hook before the run, the script unchanged.** Leaves
+the entry point minting an approval for any caller that passes it the message
+file, so the gate would live in the caller rather than in the script that
+commits (D7). (D56)

@@ -7,6 +7,12 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-09-24 — The batch retry is judged by the approval's freshness](changelog/2026-09-24-the-batch-retry-is-judged-by-the-approval-freshness.md)
+  — the batch hook passed the commit-message file back as `commit-memory.sh`'s
+  own `-F` operand, so each retry restamped the approval and committed the index
+  fix it had just asked for under a summary that never saw it; the bare
+  invocation leaves that file to the mtime gate, and the hook reads its three
+  failure states off the store and the IPC file rather than off the run (D56)
 - [2026-09-22 — The 400-line cap is a context budget, so the checker gates scripts, hooks and suites too](changelog/2026-09-22-the-line-cap-is-a-context-budget-and-gates-code-too.md)
   — the cap rations a context window rather than tidying documentation, so
   `check-docs-links.py` walks `scripts/`, `hooks/` and `tests/` as well as

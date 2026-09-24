@@ -25,10 +25,13 @@ non-interactive parent commit never trips it. See D16.
 
 Arg-driven, `git commit`-style: `-m <summary>`, `-F <file>`, or `-F -`
 (stdin/heredoc). It resolves the memory path, writes the summary to the
-commit-msg file, then calls the shared `gitlore_sync_memory_to_live`. Guards
-(exit 0): not a gitlore repo / no `gitlore-memory` submodule / submodule
-worktree absent / memory clean-and-synced. Dirty with no summary supplied → exit
-1 with a caller-facing message.
+commit-msg file, then calls the shared `gitlore_sync_memory_to_live`. Invoked
+**bare**, it writes nothing and commits on the approval already on disk, judged
+by that shared body's freshness gate — the form `memory-commit-batch.sh` uses
+(D56, in [commit-gate.md](commit-gate.md)). Guards (exit 0): not a gitlore repo
+/ no `gitlore-memory` submodule / submodule worktree absent / memory
+clean-and-synced. Dirty with the approval absent or blank → exit 1 with a
+caller-facing message; dirty with a stale one → the sync's own refusal.
 
 **Discovery.** `gitlore.commitCommand` resolves to
 `$PLUGIN_ROOT/scripts/commit-memory.sh`, so a caller finds the script with one
@@ -158,13 +161,18 @@ the commit-msg file itself. The message file stays purely the hook↔commit IPC
 handshake (D4) rather than becoming the caller's contract, which keeps callers
 from reconstructing gitlore-internal paths. The freshness gate stays *inside*
 the shared body because `pre-commit` still needs it to refuse un-approved
-commits; on the script's path it is satisfied by construction (the summary is
-written immediately before the commit, so the mtime check always passes). The
-per-commit FR11 approval therefore rests on the *caller's* contract here — the
-interactive caller obtains explicit user approval before invoking — while the
-mtime gate continues to protect the non-interactive parent path. A blessed
-interactive entry point trusting its caller's approval is the intended split,
-not a hole.
+commits; on the script's arg path it is satisfied by construction (the summary
+is written immediately before the commit, so the mtime check always passes). A
+**bare** invocation supplies no summary and writes nothing, so the same gate
+judges the approval file as it stands: fresh commits, stale refuses, and absent
+or blank refuses ahead of the sync with this entry point's own directive. That
+is the form a gitlore-internal caller retrying a deferred commit uses, because
+an approval it did not just obtain is not one it can bless (D56, in
+[commit-gate.md](commit-gate.md)). The per-commit FR11 approval on the arg path
+therefore rests on the *caller's* contract — the interactive caller obtains
+explicit user approval before invoking — while the mtime gate continues to
+protect the non-interactive parent path. A blessed interactive entry point
+trusting its caller's approval is the intended split, not a hole.
 
 **Discovery via `gitlore.commitCommand`.** Seeded at install in
 `write-settings.sh` and re-pinned to `$PLUGIN_ROOT/scripts/commit-memory.sh`

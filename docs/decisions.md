@@ -39,11 +39,17 @@ conflict resolution · single-agent resolve with a post-hoc context refresh.
 - **D12** — a submodule-side commit gate backs FR11 as defense in depth
 - **D19** — one canonical approval clause, discovered via a git-config key
 - **D22** — the memory-hygiene checker is a repo-local gate, not shipped surface
+- **D56** — the batch retry is judged by the approval's freshness, read off the
+  store, rather than by a status the run reports about its own failure
 
 *Rejected:* a `Stop` hook to generate the commit message · `PostToolUse` on
 every memory `Write`/`Edit` · an interactive prompt inside the `pre-commit` hook
 · an in-session diff dump for commit review · a `PreToolUse` hook constraining
-the agent's git operations.
+the agent's git operations · an exit-code or status-line protocol from
+`commit-memory.sh` · parsing the refusal text for "needs approval again" ·
+deleting the message file on a fix-needed refusal · an `-ef` guard inside `-F`
+skipping the rewrite when the operand is the message file · freshness checked in
+the hook before the run, the script unchanged.
 
 **Git hooks** — what `pre-commit` and `pre-push` do inside a parent git
 operation, and the pointer invariant that rests on them.
