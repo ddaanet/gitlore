@@ -11,7 +11,7 @@ set -euo pipefail
 # agent-runs-git for the standalone/handoff memory commit (which must land before
 # any parent commit, whether or not the agent stops).
 #
-# The trigger file IS the signal, so the batch payload is unused.
+# The trigger file IS the signal; the batch payload carries no request.
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 # shellcheck disable=SC1091
@@ -96,19 +96,18 @@ if [ ! -s "$msgfile" ]; then
   exit 0
 fi
 
-# commit-memory.sh runs bare: it judges the approval already on disk by
-# freshness (mtime against the newest file in the store) and commits only when
-# that holds. It never makes a parent commit (D16) and, on any failure, leaves
-# both IPC files untouched — consuming neither is what lets the next
+# commit-memory.sh runs bare: the approval already on disk is judged by its own
+# freshness and only a fresh one commits. It never makes a parent commit (D16),
+# and a failure consumes neither IPC file — that is what lets the next
 # PostToolBatch retry.
 #
-# On failure, which message we hand the agent is the same freshness question,
-# asked again: `yes` means nothing in the store outdates the approval — a
-# locked repo, an in-flight merge, a refusal that names an edit not yet made —
-# so the deferred message stands and the retry is transparent. `no` means a
-# write since the approval (the agent's own fix, a checkout, a take, a
-# resolved merge) no longer reads as covered, and the approval needs to be
-# presented again rather than relied on as-is.
+# Freshness also picks the failure message, and only `no` takes the re-approval
+# branch. `yes` — a locked repo, an in-flight merge, a refusal naming an edit
+# the agent has not made yet — keeps the deferred message and the script's
+# reason. `absent` belongs with it rather than with `no`: a run that committed
+# and then failed to advance `live` has already consumed the message file, so
+# its reason is the only thing left to hand over and there is no summary to
+# re-present. Any value but `no` therefore lands on the arm that carries $out.
 if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" 2>&1); then
   rm -f "$trigger"
   # The agent's own next move, handed to it: this is the value 62 of 68 landings
@@ -117,8 +116,10 @@ if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" 2>&1); then
   emit "gitlore: memory committed and local live advanced." \
     "gitlore: the memory commit you requested has landed. Memory HEAD is now $memhead, local live is advanced, and both IPC files have been removed. This is the authoritative outcome — do not run git status, git log, or ls to confirm it."
 else
-  fresh=$(gitlore_commit_msg_freshness "$mempath")
-  if [ "$fresh" = "yes" ]; then
+  # Defaulted, not left to errexit: a hook that dies here emits nothing, and the
+  # agent learns nothing about a commit it asked for.
+  fresh=$(gitlore_commit_msg_freshness "$mempath") || fresh=absent
+  if [ "$fresh" != "no" ]; then
     emit "gitlore: memory commit deferred, will retry automatically. $out" \
       "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved, and re-triggering will not help. When the reason below names a fix, make it and the retry picks it up; otherwise no action is needed from you. Reason: $out"
   else

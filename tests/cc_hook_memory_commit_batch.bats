@@ -2,6 +2,7 @@
 
 load helpers/setup
 load helpers/fixtures
+load helpers/divergence-fixtures
 
 BATCH="$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh"
 
@@ -136,6 +137,28 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [ -n "$(git -C memory status --porcelain)" ]
   [ -f "$(gitlore_commit_trigger_file memory)" ]
   [ -f "$(gitlore_commit_msg_file memory)" ]
+}
+
+@test "a commit that landed but could not advance live hands over the merge directive, not a re-approval" {
+  # The commit consumes the approval before the `HEAD:live` fast-forward is
+  # refused, so freshness reads `absent` here — and there is no summary left to
+  # re-present, only the prepared merge to act on.
+  make_parent_with_memory
+  advance_branch_with_file memory live LIVE.md live-only "Diverging commit on live"
+  echo dirty > memory/notes.md
+  printf 'memory: record notes\n' > "$(gitlore_commit_msg_file memory)"
+  : > "$(gitlore_commit_trigger_file memory)"
+  head_before=$(git -C memory rev-parse HEAD)
+
+  CLAUDECODE=1 run run_batch
+  [ "$status" -eq 0 ]
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"Reason:"* ]]
+  [[ "$agent" == *"memory merge prepared"* ]]
+  [[ "$agent" != *"no longer covers"* ]]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [ ! -f "$(gitlore_commit_msg_file memory)" ]
+  [ -f "$(gitlore_commit_trigger_file memory)" ]
 }
 
 @test "a refusal that needs a fix keeps both IPC files and hands the agent the fix" {
