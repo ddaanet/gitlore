@@ -159,6 +159,73 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [ -f "$(gitlore_commit_msg_file memory)" ]
 }
 
+@test "a fix after an aborting index does not commit under the old approval" {
+  # The welded-index abort restamps the approval to "now" (D50). If the retry
+  # then reads that restamp as fresh, an edit that only fixes the weld commits
+  # under a summary that never saw the fix — the defect this slice closes.
+  make_parent_with_memory
+  printf -- '- [A](a.md) — a- [B](b.md) — b\n' >> memory/MEMORY.md
+  msgfile="$(gitlore_commit_msg_file memory)"
+  printf 'memory: record a and b\n' > "$msgfile"
+  : > "$(gitlore_commit_trigger_file memory)"
+  head_before=$(git -C memory rev-parse HEAD)
+
+  # First batch: the existing fix-needed abort, reused here as setup.
+  CLAUDECODE=1 run run_batch
+  [ "$status" -eq 0 ]
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"aborted"* ]]
+  [[ "$agent" == *"welds two pointer bullets"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+
+  # The agent repairs the weld: the two bullets on separate lines. That write
+  # lands in the store and must outdate the approval — so the approval is
+  # backdated first, since the abort above just restamped it to now.
+  touch -t 200001010000 "$msgfile"
+  printf '# memory\n- [A](a.md) — a\n- [B](b.md) — b\n' > memory/MEMORY.md
+  cp "$msgfile" "$BATS_TEST_TMPDIR/approval.before"
+  # Whole-second mtimes: the marker sits a second before the run, so a restamp
+  # of the approval leaves it newer. The abort arms restamp with `touch
+  # "$msgfile"` (D50); this branch must not, because a restamp re-mints the
+  # approval and the batch after this one commits under the old summary — the
+  # defect itself, and invisible to the third batch below, which rewrites the
+  # file first. The bytes are asserted too: the stale file is the text the agent
+  # re-presents.
+  : > "$TMP_REPO/before-second-batch"
+  sleep 1
+
+  # Second batch: the fix landed, but the approval no longer covers what is
+  # now in the store — the retry must not commit under it.
+  CLAUDECODE=1 run run_batch
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ -n "$(git -C memory status --porcelain)" ]   # and the fix was not discarded
+  [ -f "$(gitlore_commit_trigger_file memory)" ]
+  [ -f "$msgfile" ]
+  cmp -s "$msgfile" "$BATS_TEST_TMPDIR/approval.before"
+  [ ! "$msgfile" -nt "$TMP_REPO/before-second-batch" ]
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"no longer covers"* ]]
+  clause=$(cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt")
+  [[ "$agent" == *"$clause"* ]]
+  # Not the transient-retry branch's own phrase (freshness `yes`) — `deferred`
+  # alone doesn't discriminate, since this branch's systemMessage carries it too.
+  [[ "$agent" != *"retries by itself"* ]]
+  user="$(echo "$output" | jq -r '.systemMessage // ""')"
+  [ "$user" = "gitlore: memory commit deferred — the approved summary no longer covers the store, approval needed again" ]
+
+  # Once re-approved, the next batch commits normally. The subject is asserted
+  # against the rewritten text: HEAD moving alone is also what a commit under
+  # the *original* approval looks like.
+  printf 'memory: record a and b (fixed)\n' > "$msgfile"
+  CLAUDECODE=1 run run_batch
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [ "$(git -C memory log -1 --pretty=%s)" = "memory: record a and b (fixed)" ]
+  [ ! -f "$(gitlore_commit_trigger_file memory)" ]
+  [ ! -f "$msgfile" ]
+}
+
 @test "trigger on clean memory reports nothing to commit and consumes the trigger" {
   make_parent_with_memory
   : > "$(gitlore_commit_trigger_file memory)"

@@ -96,18 +96,20 @@ if [ ! -s "$msgfile" ]; then
   exit 0
 fi
 
-# commit-memory.sh reads the summary from the message file, commits the memory
-# submodule with the blessed sentinel, advances local `live`, and consumes the
-# message file — all ONLY on success. It never makes a parent commit (D16).
+# commit-memory.sh runs bare: it judges the approval already on disk by
+# freshness (mtime against the newest file in the store) and commits only when
+# that holds. It never makes a parent commit (D16) and, on any failure, leaves
+# both IPC files untouched — consuming neither is what lets the next
+# PostToolBatch retry.
 #
-# Remove the trigger only when the commit is COMPLETE. A locked repo (index.lock,
-# or `live` checked out by another session) and an in-flight merge are expected
-# transient conditions: on failure we leave the trigger AND the message file in
-# place, so the next PostToolBatch retries transparently — no agent action, no
-# lost approval. A refusal that needs an edit (an index problem the commit would
-# publish, an off-pin tier) retries on the same files; its reason names the fix,
-# so the agent message defers to it rather than promising no action.
-if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile" 2>&1); then
+# On failure, which message we hand the agent is the same freshness question,
+# asked again: `yes` means nothing in the store outdates the approval — a
+# locked repo, an in-flight merge, a refusal that names an edit not yet made —
+# so the deferred message stands and the retry is transparent. `no` means a
+# write since the approval (the agent's own fix, a checkout, a take, a
+# resolved merge) no longer reads as covered, and the approval needs to be
+# presented again rather than relied on as-is.
+if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" 2>&1); then
   rm -f "$trigger"
   # The agent's own next move, handed to it: this is the value 62 of 68 landings
   # went and fetched with `git -C memory log --oneline -1`.
@@ -115,7 +117,16 @@ if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile" 2>&1); then
   emit "gitlore: memory committed and local live advanced." \
     "gitlore: the memory commit you requested has landed. Memory HEAD is now $memhead, local live is advanced, and both IPC files have been removed. This is the authoritative outcome — do not run git status, git log, or ls to confirm it."
 else
-  emit "gitlore: memory commit deferred, will retry automatically. $out" \
-    "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved, and re-triggering will not help. When the reason below names a fix, make it and the retry picks it up; otherwise no action is needed from you. Reason: $out"
+  fresh=$(gitlore_commit_msg_freshness "$mempath")
+  if [ "$fresh" = "yes" ]; then
+    emit "gitlore: memory commit deferred, will retry automatically. $out" \
+      "gitlore: the memory commit did not run and has been deferred; it retries by itself on a later tool batch, with the approved summary preserved, and re-triggering will not help. When the reason below names a fix, make it and the retry picks it up; otherwise no action is needed from you. Reason: $out"
+  else
+    clause=$(gitlore_memory_approval_clause)
+    emit "gitlore: memory commit deferred — the approved summary no longer covers the store, approval needed again" \
+      "$(printf '%s\n\n%s\n' \
+          "gitlore: the approved summary at $msgfile no longer covers the memory store. Present it to the user again as a markdown blockquote (\`> …\`) rather than a code fence, amended for what changed, and once they approve write it to $msgfile — the commit then completes on its own." \
+          "$clause")"
+  fi
 fi
 exit 0
