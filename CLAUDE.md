@@ -60,8 +60,8 @@ from the script the node names.
   across turns in the main session; the completion notification carries the
   verdict, and `CLAUDE_CODE_DISABLE_BG_SHELL_PRESSURE_REAP=1` in
   `.claude/settings.local.json` is what keeps it from being reaped mid-run.
-  In a subagent that notification may never arrive, and the run is still fine:
-  read the verdict from the gates instead — `lint`, `test-unit`,
+  A subagent receives that notification too; one that idles on a watcher of
+  its own has the verdict readable from the gates — `lint`, `test-unit`,
   `test-integration` and `check-distribution` each write one under
   `$(git rev-parse --git-path gitlore/gates)`, which resolves per worktree. A
   gate file holds a content hash of that recipe's declared inputs, so it is
