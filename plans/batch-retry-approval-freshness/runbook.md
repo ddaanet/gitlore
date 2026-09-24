@@ -23,9 +23,11 @@ Design: `design.md` in this directory. Recall: `recall-artifact.md`.
      memory, approval file backdated with `touch -t 200001010000` (BSD-portable;
      mtime is second-granular and the compare is `>=`, so backdating is what
      makes it strictly older), exit 1, output+stderr contains
-     `no approved commit summary` (the sync's refusal) and does not contain `-m`
-     (the usage-era refusal — the discriminating negative), memory still dirty,
-     HEAD unchanged, the approval file still present with its content unchanged.
+     `no approved commit summary` (the sync's refusal) and does not contain
+     `Pass it with -m` (the usage-era refusal's own operand phrase — a bare
+     `-m` is unsatisfiable, since the sync's refusal names
+     `gitlore-memory-message`), memory still dirty, HEAD unchanged, the
+     approval file still present, byte-identical and not restamped.
      The existing `refuses dirty memory with no summary` test stays.
   2. `tests/cc_hook_memory_commit_batch.bats` — the hook.
      `a fix after an aborting index does not commit under the old approval`:

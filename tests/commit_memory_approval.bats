@@ -16,8 +16,10 @@ load helpers/commit-memory
   echo dirty > memory/notes.md
   CLAUDECODE=1 run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [[ "${output}${stderr}" == *"approved summary"* ]] || \
-    [[ "${output}${stderr}" == *"-m"* ]]
+  # The entry point's own directive, not the sync's refusal the bare path routes
+  # a present file to — that one also names `gitlore-memory-message`.
+  [[ "${output}${stderr}" == *"Pass it with -m"* ]]
+  [[ "${output}${stderr}" != *"no approved commit summary"* ]]
   [ -n "$(git -C memory status --porcelain)" ]   # still dirty, nothing committed
 }
 
