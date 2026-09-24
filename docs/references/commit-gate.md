@@ -52,12 +52,13 @@ and the gate's block message all describe only the message-file plus
 parent-commit path — so an agent not running the handoff skill is never taught
 it can force a standalone memory commit.
 
-**Both IPC files are removed only on a complete commit.** Because the hook runs
+**Nothing is consumed before the commit it approves.** Because the hook runs
 `commit-memory.sh` bare, the approval on disk is judged by its mtime freshness
 against the store — the same gate the parent `pre-commit` path runs, so a retry
 commits only what the summary still covers (D56). On any failure before the
 commit, the trigger *and* the message file stay put and the next batch retries:
-no lost approval.
+no lost approval. The blessed commit consumes the message file; the trigger goes
+only once the whole run succeeds, the `HEAD:live` fast-forward included.
 
 **Which message the hook emits is read off the store and the IPC file the run
 left behind, never off a status the run reports about itself** (D53, in
@@ -73,7 +74,9 @@ Freshness **`yes`** means the approval still covers the store: a transient such
 as a locked repo or an in-flight merge, which needs no agent action, or a
 refusal whose reason names a fix the agent has not made yet — an edit, for a
 problem in an index file the commit changes (D50), or a checkout or take, for an
-off-pin tier. The retry is silent on that arm and lands once the fix is made.
+off-pin tier. The retry is silent on that arm; making the fix is itself a write
+to the store, so the batch that follows it reads freshness `no` and asks for the
+summary again.
 
 A trigger with no approved summary is kept, so the commit completes on its own
 the moment the summary lands. **No summary** means absent *or* blank, on both
@@ -270,16 +273,17 @@ dependency into every consumer. Several would reopen this.
 
 **D56 — The batch retry is judged by the approval's freshness**
 
-`commit-memory.sh` handed the message file as its own `-F` operand rewrites that
-file from its own contents on every retry, minting a fresh approval whatever has
-happened to the store since the user gave it. The mtime gate then always passes,
-so an edit made between two batches — the index fix a D50 abort asks for —
-commits under a summary that never saw it, while the abort text says the summary
-needs approval again. The bare invocation closes that: the file is read as it
-stands and `gitlore_sync_memory_to_live` decides, which is the same gate on the
-batch path as on the parent `pre-commit` path. `-m` and `-F` keep writing the
-file, because a summary arriving with the call was approved immediately before
-it (D16, in [memory-entry-points.md](memory-entry-points.md)).
+Handed the message file as its own `-F` operand, `commit-memory.sh` rewrites
+that file from its own contents on every retry, minting a fresh approval
+whatever has happened to the store since the user gave it. The mtime gate then
+always passes, so an edit made between two batches — the index fix a D50 abort
+asks for — commits under a summary that never saw it, while the abort text says
+the summary needs approval again. The bare invocation closes that: the file is
+read as it stands and `gitlore_sync_memory_to_live` decides, which is the same
+gate on the batch path as on the parent `pre-commit` path. `-m` and `-F` keep
+writing the file, because a summary arriving with the call was approved
+immediately before it (D16, in
+[memory-entry-points.md](memory-entry-points.md)).
 
 **Freshness is the store's own answer, not a classification the run makes of its
 own failure.** D53 refused a per-arm return code from the stale-merge guard on

@@ -27,14 +27,16 @@ from you". One predicate, carried in both scripts, now screens absent and blank
 alike — in `commit-memory.sh` after its own write, so `-m ""` and `-F -` over
 empty stdin meet the entry point's own directive instead of git's abort.
 
-The checkpoint review found the third failure state mis-routed. A commit that
-lands and then fails to fast-forward `HEAD:live` has already consumed the
-message file; taking that to the stale-summary arm asked for a re-approval
-nothing was waiting on, and dropped the prepared-merge directive the divergence
-arm carries in the script's reason. It is now its own arm, tested first — the
-summary was present and non-blank before the run, so its absence after it is the
-fact — which leaves the freshness call downstream of it able to answer only
-`yes` or `no`.
+The third failure state took two passes to place. A commit that lands and then
+fails to fast-forward `HEAD:live` has already consumed the message file, and the
+first two-arm split sent it to the stale-summary arm: a re-approval nothing was
+waiting on, with the prepared-merge directive the divergence arm carries in the
+script's reason dropped. Routing it to the deferred arm recovered that reason
+and left the wording false — the commit did run, the approved summary is not
+preserved, and no later batch repeats the step. The checkpoint review gave it an
+arm of its own, tested first: the summary was present and non-blank before the
+run, so its absence after it is the fact, which leaves the freshness call
+downstream of it able to answer only `yes` or `no`.
 
 Two pre-existing defects were found and left in place. After the
 landed-then-failed merge arm, the next batch finds memory dirty and the message

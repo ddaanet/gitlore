@@ -67,6 +67,20 @@ status the script reports.** Three changes.
    script's reason is dropped on this branch — it is the sync's "no approved
    commit summary", which reads wrong next to a file that exists.
 
+   A third state is read off the IPC file rather than freshness: the message
+   file was present and non-blank before the run and is gone after it. The
+   commit landed and consumed it, and the step after — the `HEAD:live`
+   fast-forward — failed; nothing waits on approval and no batch repeats the
+   commit, so the script's reason is the whole message (on the divergence arm it
+   is the prepared-merge directive). Tested first, ahead of freshness, so
+   freshness only ever answers `yes` or `no` here.
+
+   "No summary" means absent or blank, on both entry points: an all-whitespace
+   file is fresh by mtime, `git commit -F` rejects it as an empty message, and
+   the arm carrying that failure restamps the file, which would repeat the
+   identical refusal on every batch. The hook screens it ahead of the run and
+   `commit-memory.sh` after its own write, with one predicate.
+
 The restamp arms in `resolve-sync-memory.sh` now do on the batch path exactly
 what they do on the pre-commit path: a failure that wrote only projections of
 approved lines keeps the approval; a merge preparation does not (D53); the
