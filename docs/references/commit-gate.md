@@ -62,28 +62,44 @@ only once the whole run succeeds, the `HEAD:live` fast-forward included.
 
 **Which message the hook emits is read off the store and the IPC file the run
 left behind, never off a status the run reports about itself** (D53, in
-[git-hooks.md](git-hooks.md)). Three states, in the order tested. The message
-file **consumed** means the commit landed and the `HEAD:live` step after it
-failed; nothing waits on approval and no batch repeats that step, so the
-script's reason is the whole message — on divergence, the prepared-merge
-directive. Freshness **`no`** means something newer than the approval is in the
-store — the agent's own fix, a checkout, a take, a resolved merge — so the
-summary at the message file is presented again, amended for what changed, and
-approved again; both files stay, and the stale file is the text to re-present.
-Freshness **`yes`** means the approval still covers the store: a transient such
-as a locked repo or an in-flight merge, which needs no agent action, or a
-refusal whose reason names a fix the agent has not made yet — an edit, for a
-problem in an index file the commit changes (D50), or a checkout or take, for an
-off-pin tier. The retry is silent on that arm; making the fix is itself a write
-to the store, so the batch that follows it reads freshness `no` and asks for the
-summary again.
+[git-hooks.md](git-hooks.md)). Four states, in the order tested. The message
+file **consumed** — present and non-blank before the run, gone after — means the
+commit landed and the `HEAD:live` step after it failed; nothing waits on
+approval and no batch repeats that step, so the script's reason is the whole
+message — on divergence, the prepared-merge directive. A store **mid-merge**
+means the run refused to commit on top of a merge, so the guard's directive is
+the whole message: nothing was committed, no approval was consumed, and
+re-approval follows the merge rather than preceding it, because landing it
+writes content no summary has covered. Freshness **`no`** means something newer
+than the approval is in the store — the agent's own fix, a checkout, a take, a
+resolved merge — so the summary at the message file is presented again, amended
+for what changed, and approved again; both files stay, and the stale file is the
+text to re-present. Freshness **`yes`** means the approval still covers the
+store: a transient such as a locked repo or an in-flight merge, which needs no
+agent action, or a refusal whose reason names a fix the agent has not made yet —
+an edit, for a problem in an index file the commit changes (D50), or a checkout
+or take, for an off-pin tier. The retry is silent on that arm; making the fix is
+itself a write to the store, so the batch that follows it reads freshness `no`
+and asks for the summary again.
 
 A trigger with no approved summary is kept, so the commit completes on its own
 the moment the summary lands. **No summary** means absent *or* blank, on both
 entry points: an all-whitespace file is fresh by mtime and `git commit -F`
-rejects it as an empty message, so each screens it with one predicate ahead of
-the run rather than letting that failure restamp the approval and repeat
-verbatim on every later batch.
+rejects it as an empty message, so each screens it with
+`gitlore_approval_present` ahead of the run rather than letting that failure
+restamp the approval and repeat verbatim on every later batch.
+
+**A prepared merge outranks that screen**, on both entry points. A merge state
+makes the store dirty by construction — its checkout moved the worktree — and
+the landed-then-failed arm above consumes the approval before preparing one, so
+the very next batch arrives dirty with nothing approved: the screen's own shape.
+Answering it would put in front of the user a merge both of whose sides they
+already approved (D49) as a summary to draft, and the summary would not help,
+because the guard refuses on the merge either way. Ordered behind the guard, the
+directive `/gitlore:resolve` acts on reaches the agent instead. A trigger on a
+**clean** store takes both IPC files, not just the trigger: a summary left
+behind covers a store with nothing pending, and the next dirty episode needs its
+own approval regardless.
 
 ## Decisions — D4, D12, D19, D22, D56
 
@@ -304,8 +320,10 @@ all-whitespace approval is fresh by mtime, so it reaches `git commit -F`, which
 rejects it as an empty message on an arm that restamps the file — a refusal that
 would repeat identically on every later batch. Both `commit-memory.sh` (after
 its own `-m`/`-F` write, so the arg path is covered too) and
-`memory-commit-batch.sh` carry the same predicate, which is what makes
-*no summary* mean the same thing on the two paths.
+`memory-commit-batch.sh` call `gitlore_approval_present`, one predicate in
+`util.sh`, which is what makes *no summary* mean the same thing on the two
+paths. Each orders its screen behind the store's stale-merge guard, for the
+reason above.
 
 Freshness is mtime order, so an agent that writes a memory file after the
 message file inside one batch gets one visible re-approval request rather than a

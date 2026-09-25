@@ -64,7 +64,12 @@ NON_FACT_BASENAMES = ("MEMORY.md", "shared-claude.md")
 # `my own` is matched in any casing — it opens sentences as often as it sits
 # mid-one. The bare pronoun stays case-sensitive: a case-folded `\bi\b` claims
 # every `i.e.` in the store.
-FIRST_PERSON = re.compile(r"\bI\b|\b(?i:my own)\b")
+#
+# `(?<![-\w])` keeps a command-line flag out, the same guard DEICTIC carries for
+# compounds. `strip_code` matches an inline span within one line, so a span a
+# hard-wrapping formatter broke across two leaves its tail unstripped — and a
+# trailing `-I` in a `grep` invocation then reads as the pronoun.
+FIRST_PERSON = re.compile(r"(?<![-\w])I(?![-\w])|\b(?i:my own)\b")
 
 # `(?<![-\w])` and `(?![-\w])` keep the compounds out: `now-trivial`,
 # `most-recently-modified`, `here-doc` are ordinary English, not a vantage

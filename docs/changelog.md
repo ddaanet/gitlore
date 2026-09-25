@@ -7,6 +7,12 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-09-25 — A prepared merge outranks the summary screen](changelog/2026-09-25-a-prepared-merge-outranks-the-summary-screen.md)
+  — the batch after a landed-then-failed commit met a prepared merge with a
+  request to draft and approve a summary, because the no-summary screen sat
+  ahead of the stale-merge guard on both entry points; the clean-store branch
+  now really does consume both IPC files, and one `gitlore_approval_present`
+  replaces the predicate each entry point spelled out for itself
 - [2026-09-24 — The first full macOS run, and the launcher shim that hung it](changelog/2026-09-24-the-first-full-macos-run-and-what-it-found.md)
   — the shim compared raw `PATH` spellings when stripping its own directory, so
   a `//` (which macOS `$TMPDIR` puts in every path built from it) left it on

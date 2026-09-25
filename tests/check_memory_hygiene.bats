@@ -94,6 +94,18 @@ plant_fact() {
   [ "$status" -eq 0 ]
 }
 
+@test "first person: a -I flag left bare by a wrapped code span is not a pronoun" {
+  # `strip_code` blanks an inline span within one line, so a span a hard-wrapping
+  # formatter broke across two leaves its tail in the prose the checks read.
+  plant_fact "ddaanet/a-fact.md" "a-fact" 'It runs `grep -G --hidden -I
+--exclude-dir=.git` and nothing else.'
+  run "$CHECKER"
+  [ "$status" -eq 0 ]
+  # The tally names every check, passing ones included, so the negative has to
+  # be the finding line rather than the check's name.
+  [[ "$output" != *"BLOCK first-person"* ]]
+}
+
 @test "first person: an embedded capital I does not trip the word boundary" {
   plant_fact "ddaanet/a-fact.md" "a-fact" "The API and the CLI agree."
   run "$CHECKER"

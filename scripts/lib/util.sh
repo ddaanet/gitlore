@@ -253,6 +253,19 @@ gitlore_clear_merge_state() {
   done
 }
 
+# Exit 0 when a store holds an unfinished merge — a merge-state file, a
+# MERGE_HEAD, or both. This is gitlore_detect_stale_merge_state's "clean"
+# outcome inverted, without its classification of the other three: a caller that
+# only needs to order a merge ahead of its own work lives outside resolve.sh
+# (memory-commit-batch.sh, and index-compose-check.sh, which resolve.sh sources)
+# and cannot reach that function. Args: $1 = store worktree path.
+gitlore_store_mid_merge() {
+  local store="$1"
+  [ -f "$(gitlore_merge_state_file "$store")" ] && return 0
+  # `-q --verify` is silent on the expected miss: no merge in progress.
+  git -C "$store" rev-parse -q --verify MERGE_HEAD >/dev/null
+}
+
 # Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
 # callers should compare with `[ "$(gitlore_memory_dirty PATH)" = "1" ]`.
 gitlore_memory_dirty() {
@@ -301,6 +314,17 @@ gitlore_commit_msg_freshness() {
   msgmtime=$(_gitlore_mtime "$msgfile")
   awk -v a="$msgmtime" -v b="${newest:-0}" \
       'BEGIN { print (a+0 >= b+0) ? "yes" : "no" }'
+}
+
+# Exit 0 when an approved commit summary is present and says something. An
+# all-whitespace file is no approval: it is non-empty and fresh by mtime, so it
+# reaches `git commit -F`, which rejects it as an empty message on an arm that
+# restamps the file — a refusal every later batch would then reproduce
+# verbatim. Both entry points screen with this before the run, which is what
+# makes "no summary" mean the same thing on either. `-s` leads so grep is never
+# handed a missing file. Args: $1 = the commit-message IPC file.
+gitlore_approval_present() {
+  [ -s "$1" ] && grep -q '[^[:space:]]' "$1"
 }
 
 # Exit 0 if $1 is a writable directory, 1 otherwise. Used to detect a sandboxed

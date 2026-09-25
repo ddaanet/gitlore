@@ -167,6 +167,40 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [ -f "$(gitlore_commit_trigger_file memory)" ]
 }
 
+@test "the batch after that one re-emits the merge directive instead of asking for a summary" {
+  # That commit consumed the approval and its fast-forward left a prepared merge,
+  # whose checkout makes the store dirty again — so the next batch arrives with a
+  # trigger, a dirty store and nothing approved: exactly the shape the
+  # missing-summary screen answers. Answering it would put a merge both of whose
+  # sides are already approved (D49) in front of the user as a summary to draft,
+  # and the summary would not help — the guard refuses on the merge regardless.
+  make_parent_with_memory
+  advance_branch_with_file memory live LIVE.md live-only "Diverging commit on live"
+  echo dirty > memory/notes.md
+  printf 'memory: record notes\n' > "$(gitlore_commit_msg_file memory)"
+  : > "$(gitlore_commit_trigger_file memory)"
+
+  CLAUDECODE=1 run run_batch            # setup: the landed-then-failed arm above
+  [ "$status" -eq 0 ]
+  [ ! -f "$(gitlore_commit_msg_file memory)" ]
+  [ -f "$(gitlore_merge_state_file memory)" ]   # the store is mid-merge
+  [ -n "$(git -C memory status --porcelain)" ]
+
+  CLAUDECODE=1 run run_batch
+  [ "$status" -eq 0 ]
+  agent="$(echo "$output" | ctx)"
+  [[ "$agent" == *"memory merge prepared"* ]]
+  [[ "$agent" == *"prepared merge"* ]]
+  # The screen this batch must not reach, and its two giveaways.
+  [[ "$agent" != *"no approved summary exists yet"* ]]
+  [[ "$agent" != *blockquote* ]]
+  # Nothing consumed and nothing minted: the guard's report-only arms leave both
+  # the store and the (absent) approval as they stand, and the trigger is what
+  # lets the batch after the merge lands commit without a re-trigger.
+  [ -f "$(gitlore_commit_trigger_file memory)" ]
+  [ ! -f "$(gitlore_commit_msg_file memory)" ]
+}
+
 @test "a blank approval file is no approval and does not become a per-batch retry loop" {
   # An all-whitespace file is non-empty, so `-s` admits it, and `git commit -F`
   # then rejects it as an empty message on an arm that restamps the approval —
@@ -279,8 +313,12 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [ ! -f "$msgfile" ]
 }
 
-@test "trigger on clean memory reports nothing to commit and consumes the trigger" {
+@test "trigger on clean memory reports nothing to commit and consumes both IPC files" {
+  # The summary goes with the trigger: it covers a store with nothing pending,
+  # the next dirty episode needs its own approval, and the message stands the
+  # agent down from looking — which it can only do if both files are really gone.
   make_parent_with_memory
+  printf 'memory: record notes\n' > "$(gitlore_commit_msg_file memory)"
   : > "$(gitlore_commit_trigger_file memory)"
 
   run run_batch
@@ -288,7 +326,9 @@ ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }
   [[ "$output" == *"already clean"* ]]
   agent="$(echo "$output" | ctx)"
   [[ "$agent" == *"nothing to commit"* ]]
+  [[ "$agent" == *"both IPC files have been removed"* ]]
   [ ! -f "$(gitlore_commit_trigger_file memory)" ]
+  [ ! -f "$(gitlore_commit_msg_file memory)" ]
 }
 
 @test "a trigger written against another root is reported, not silently skipped" {

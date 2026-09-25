@@ -74,14 +74,30 @@ if [ ! -f "$trigger" ]; then
 fi
 
 if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
-  # Nothing to commit: the request is satisfied (or was spurious). Clear it.
-  rm -f "$trigger"
+  # Nothing to commit: the request is satisfied (or was spurious). Both IPC files
+  # go, which is what makes the message below true — a summary left behind covers
+  # a store with nothing pending, and the next dirty episode needs its own
+  # approval anyway, so keeping it only leaves the agent something to find.
+  rm -f "$trigger" "$msgfile"
   emit "gitlore: commit-memory trigger cleared — memory was already clean, nothing to commit." \
-    "gitlore: memory was already clean, so there was nothing to commit; the trigger file has been removed. Both IPC files are gone. Do not check for them and do not re-trigger."
+    "gitlore: memory was already clean, so there was nothing to commit; both IPC files have been removed. Do not check for them and do not re-trigger."
   exit 0
 fi
 
-if [ ! -s "$msgfile" ] || ! grep -q '[^[:space:]]' "$msgfile"; then
+# A prepared merge outranks the approval screen below. The landed-then-failed
+# arm at the foot of this file leaves one, with the approval already consumed by
+# the commit that did land, and the merge's checkout makes memory dirty by
+# construction — so the very next batch arrives here with nothing approved.
+# Asking for a summary then puts in front of the user a merge both of whose sides
+# they already approved (D49), in place of the directive /gitlore:resolve acts
+# on. Skipping the screen lets the run below re-emit that directive from the
+# store, where the same guard reads it.
+mid_merge=0
+if gitlore_store_mid_merge "$mempath"; then mid_merge=1; fi
+approved_before=0
+if gitlore_approval_present "$msgfile"; then approved_before=1; fi
+
+if [ "$approved_before" = "0" ] && [ "$mid_merge" = "0" ]; then
   # An all-whitespace file is no approval either, and it must be caught here
   # rather than passed on: `git commit -F` rejects it as an empty message and
   # that arm restamps $msgfile, so the run below would fail identically on every
@@ -107,7 +123,7 @@ fi
 # the next PostToolBatch retry.
 #
 # Which failure message goes out is read off the store and the IPC file the run
-# left behind, never off a status the run reports about itself (D53). Three
+# left behind, never off a status the run reports about itself (D53). Four
 # states, in the order tested below.
 if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" 2>&1); then
   rm -f "$trigger"
@@ -117,14 +133,25 @@ if out=$(bash "$PLUGIN_ROOT/scripts/commit-memory.sh" 2>&1); then
   emit "gitlore: memory committed and local live advanced." \
     "gitlore: the memory commit you requested has landed. Memory HEAD is now $memhead, local live is advanced, and both IPC files have been removed. This is the authoritative outcome — do not run git status, git log, or ls to confirm it."
 else
-  # The summary was there and non-blank before the run, so its absence now means
+  # An approval that was there and non-blank before the run and is gone now means
   # the commit landed and a step after it failed — the `HEAD:live` fast-forward,
   # which removes $msgfile before it runs. Nothing is waiting on approval and no
   # later batch repeats the failed step, so the reason is the whole message; it
-  # carries the prepared-merge directive on the divergence arm.
-  if [ ! -s "$msgfile" ]; then
+  # carries the prepared-merge directive on the divergence arm. The pre-run state
+  # is what makes the absence mean this: the screen above admits a run with no
+  # approval at all when the store is mid-merge.
+  if [ "$approved_before" = "1" ] && ! gitlore_approval_present "$msgfile"; then
     emit "gitlore: memory committed, but the step after it did not finish. $out" \
       "gitlore: the memory commit landed, and its approved summary has been consumed — nothing is waiting on approval and the commit will not be made again. Act on the reason below. Reason: $out"
+  # The store still holds the merge the run refused to commit on top of, so the
+  # guard's directive IS the message — the freshness arm below would drop it and
+  # ask for a summary instead, which is the ask D49 keeps off a merge. Nothing was
+  # committed and no approval was consumed: the report-only guard arms do not
+  # restamp (D53). Re-approval follows the merge rather than preceding it, because
+  # landing it writes content into the store no summary has covered.
+  elif gitlore_store_mid_merge "$mempath"; then
+    emit "gitlore: memory commit deferred — the memory store holds a prepared merge. $out" \
+      "gitlore: the memory commit did not run: the memory store holds a prepared merge, which is answered before any commit. Nothing was committed and no approved summary was consumed. Act on the directive below; once the merge is landed the commit retries by itself on a later tool batch, and asks for approval then, because landing the merge writes content into the store no summary has covered. Reason: $out"
   # Something newer than the approval is in the store: the agent's own edit, a
   # checkout, a take, a resolved merge. The summary on disk is the text to amend
   # and re-present. The script's reason is dropped — it is the sync's "no

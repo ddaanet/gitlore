@@ -225,3 +225,31 @@ EOF
   [[ "$output" == *index.lock* ]]
   [ "$(cat "$TMP_REPO/git-calls")" = "4" ]    # 1 initial + 3 retries
 }
+
+@test "gitlore_approval_present accepts a summary and refuses absent, empty and blank" {
+  msgfile="$TMP_REPO/approval"
+  run ! gitlore_approval_present "$msgfile"        # absent
+  : > "$msgfile"
+  run ! gitlore_approval_present "$msgfile"        # empty
+  # Non-empty, so `-s` alone admits it: this is the case that reaches
+  # `git commit -F` and comes back as "empty commit message".
+  printf '\n  \n\t\n' > "$msgfile"
+  run ! gitlore_approval_present "$msgfile"
+  printf 'memory: record notes\n' > "$msgfile"
+  run gitlore_approval_present "$msgfile"
+  [ "$status" -eq 0 ]
+}
+
+@test "gitlore_store_mid_merge reads a state file, a MERGE_HEAD, or neither" {
+  git commit -q --allow-empty -m base
+  run ! gitlore_store_mid_merge "$TMP_REPO"
+  # Either half alone is enough: a preparation interrupted before it recorded
+  # its state leaves the second, and one whose MERGE_HEAD was lost the first.
+  : > "$(gitlore_merge_state_file "$TMP_REPO")"
+  run gitlore_store_mid_merge "$TMP_REPO"
+  [ "$status" -eq 0 ]
+  rm -f "$(gitlore_merge_state_file "$TMP_REPO")"
+  git rev-parse HEAD > "$(git rev-parse --git-path MERGE_HEAD)"
+  run gitlore_store_mid_merge "$TMP_REPO"
+  [ "$status" -eq 0 ]
+}

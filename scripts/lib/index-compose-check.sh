@@ -211,12 +211,8 @@ gitlore_compose_check_pins() {
     head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
     [ "$head" = "$pinned" ] && continue
     # Mid-merge takes a different remedy: the return-to-the-pin checkout below
-    # unlinks MERGE_HEAD and destroys the prepared merge. The predicate is
-    # gitlore_detect_stale_merge_state's own "not clean" — state file or
-    # MERGE_HEAD — spelled out rather than called, because that function lives in
-    # resolve.sh and resolve.sh sources this file.
-    if [ -f "$(gitlore_merge_state_file "$tierpath")" ] \
-       || git -C "$tierpath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    # unlinks MERGE_HEAD and destroys the prepared merge.
+    if gitlore_store_mid_merge "$tierpath"; then
       problems="${problems}tier '$tier' is mid-merge and sits off the commit the memory store records for it; run /gitlore:resolve to land the merge before the indexes can be composed
 "
       continue

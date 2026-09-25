@@ -61,13 +61,18 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
     mkdir -p "$(dirname "$msgfile")"   # .claude/ may not exist yet in a fresh tree
     printf '%s\n' "$summary" > "$msgfile"
   fi
-  # Screened on both arms, after the write, because an all-whitespace summary is
-  # no approval: `git commit -F` rejects it as an empty message, the arm carrying
-  # that failure restamps $msgfile, and the batch path then repeats the identical
-  # refusal on every later batch. `-m ""` and `-F -` over empty stdin both reach
-  # here. `-s` short-circuits so grep is never handed a missing file;
-  # memory-commit-batch.sh screens with this same predicate.
-  if [ ! -s "$msgfile" ] || ! grep -q '[^[:space:]]' "$msgfile"; then
+  # A prepared merge outranks the screen below. A merge state makes memory dirty
+  # by construction — its checkout moved the worktree — so a store mid-merge
+  # arrives here with nothing approved and would be answered by a request to
+  # summarize, putting in front of the user a merge both of whose sides they
+  # already approved (D49) in place of the directive /gitlore:resolve acts on.
+  # The sync runs this same guard first; a state this call passes is clean by the
+  # time it runs, so the second one costs a rev-parse and a stat. It goes after
+  # the `-m`/`-F` write so an approval passed with the call is kept for the retry.
+  gitlore_guard_stale_merge_state "$mempath" || exit 1
+  # Screened on both arms, after the write, because `-m ""` and `-F -` over empty
+  # stdin both reach here; memory-commit-batch.sh screens with the same predicate.
+  if ! gitlore_approval_present "$msgfile"; then
     gitlore_say_for_agent_or_user \
       "gitlore: memory is dirty; commit-memory needs an approved summary. Pass it with -m <summary> or -F - (heredoc)." \
       "gitlore: memory has uncommitted changes; run this from Claude Code with an approved summary." >&2

@@ -5,6 +5,7 @@ bats_require_minimum_version 1.5.0
 
 load helpers/setup
 load helpers/fixtures
+load helpers/divergence-fixtures
 load helpers/commit-memory
 
 # What counts as an approval at commit-memory.sh's entry point: the summary a
@@ -110,6 +111,30 @@ load helpers/commit-memory
   [[ "${output}${stderr}" != *"empty commit message"* ]]
   [ -n "$(git -C memory status --porcelain)" ]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+}
+
+@test "a store mid-merge is answered with the merge directive, not a summary request" {
+  # A prepared merge makes the store dirty by construction and consumed whatever
+  # approval preceded it, so the no-summary screen is what this shape reaches
+  # first — and it would put a merge both of whose sides are already approved
+  # (D49) in front of the user as a summary to draft. The dirty file added after
+  # the preparation is what keeps the screen in play: without it the sync's own
+  # guard would speak whether or not the screen is ordered behind one.
+  make_parent_with_memory
+  advance_branch_with_file memory live LIVE.md live-only "Diverging commit on live"
+  echo dirty > memory/notes.md
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: add notes"
+  [ "$status" -eq 1 ]
+  [ -f "$(gitlore_merge_state_file memory)" ]   # the store is mid-merge
+  echo more > memory/notes2.md
+  head_before=$(git -C memory rev-parse HEAD)
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"memory merge prepared"* ]]
+  [[ "${output}${stderr}" != *"Pass it with -m"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ ! -f "$(gitlore_commit_msg_file memory)" ]
 }
 
 @test "-m with a blank summary refuses instead of dying on git's empty message" {
