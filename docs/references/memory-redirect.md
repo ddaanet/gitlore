@@ -23,9 +23,20 @@ it lands on `PATH` differs. It is `#!/usr/bin/env sh`:
 
 ```sh
 #!/usr/bin/env sh
-# real claude = next `claude` on PATH after stripping my own dir
-self=$(cd "$(dirname "$0")" && pwd)
-newpath=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$self" | paste -sd:)
+# real claude = next `claude` on PATH after stripping my own dir. Each entry is
+# resolved to the physical form $self is already in: a `//`, a trailing `/`, a
+# `..` or a symlink spells one directory two ways, a strip matching raw
+# spellings leaves the shim on PATH, and the exec below then re-enters it with
+# no exit. macOS `$TMPDIR` ends in `/`, so paths built from it carry the first.
+self=$(cd "$(dirname "$0")" && pwd -P)
+newpath=
+oldifs=$IFS
+IFS=:
+for d in $PATH; do
+  if [ -d "$d" ]; then n=$(cd "$d" && pwd -P); else n=$d; fi
+  [ "$n" = "$self" ] || newpath="${newpath:+$newpath:}$d"
+done
+IFS=$oldifs
 real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not found" >&2; exit 127; }
 
 # already injected upstream? pass through (composability, anti-double-inject, anti-recursion)

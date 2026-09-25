@@ -3,6 +3,10 @@
 # pass/fail, and each suite's own marker file says whether IT actually ran —
 # the junit report is the plumbing, not the thing asserted on.
 
+# `run` here takes flags (`!`, `--separate-stderr`), which bats honours
+# only once the suite declares the version that introduced them.
+bats_require_minimum_version 1.5.0
+
 load helpers/setup
 
 # `GITLORE_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an

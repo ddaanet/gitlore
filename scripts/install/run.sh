@@ -16,9 +16,12 @@ export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 
-# Must be at repo root.
+# Must be at repo root. `pwd -P`, not `$PWD`: git reports the toplevel with its
+# symlinks resolved, and a caller standing at the root through a symlinked path
+# — macOS `$TMPDIR` is one, and a symlinked home or checkout is another — would
+# otherwise be told to go to the directory it is already in.
 toplevel=$(git rev-parse --show-toplevel)
-[ "$PWD" = "$toplevel" ] || { echo "Run /gitlore:install from the repo root ($toplevel)." >&2; exit 1; }
+[ "$(pwd -P)" = "$toplevel" ] || { echo "Run /gitlore:install from the repo root ($toplevel)." >&2; exit 1; }
 
 # Must be the main worktree. In a linked worktree the memory submodule is
 # usually unchecked-out, and every `git -C memory` op below would silently walk

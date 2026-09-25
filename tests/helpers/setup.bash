@@ -38,7 +38,11 @@ setup_tmp_repo() {
   # test that means to feed a payload still pipes one, which overrides this.
   exec 0</dev/null
   use_test_bash
-  TMP_REPO="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-test.XXXXXX")"
+  # `pwd -P`, not the raw mktemp output: on macOS `$TMPDIR` is a symlinked
+  # `/var/folders/…` path, and git and the scripts under test report the
+  # physical `/private/var/…` one. A fixture that keeps the logical form makes
+  # every `== *"$TMP_REPO"/…*` assertion compare two spellings of one path.
+  TMP_REPO="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/gitlore-test.XXXXXX")" && pwd -P)"
   export TMP_REPO
   cd "$TMP_REPO"
   git init -q -b main
@@ -57,6 +61,12 @@ use_test_bash() {
   [ -n "${GITLORE_TEST_BASH_DIR:-}" ] || return 0
   PATH="$GITLORE_TEST_BASH_DIR:$PATH"
   export PATH
+}
+
+# A file's permission bits in octal. The GNU form is tried first and its
+# failure is the probe: BSD/macOS stat spells the same field `-f '%Lp'`.
+file_mode() {
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
 }
 
 teardown_tmp_repo() {

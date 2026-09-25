@@ -32,6 +32,49 @@ just_here() {
   ( cd "$PLUGIN_ROOT" && just "$@" )
 }
 
+# A gate's `sentinel-guard` line as its shell receives it, rebuilt from just's
+# own dump so the assertion reads the shipped recipe rather than a copy of it.
+# Body segments come back as literal strings and as interpolations naming a
+# variable; `just --evaluate` supplies the latter. No segment here spans a
+# newline, which is what lets the two kinds travel as one line each.
+guard_line() {
+  local segments seg rendered=""
+  segments=$(
+    just_here --dump --dump-format json | jq -r --arg r "$1" '
+      .recipes[$r].body[]
+      | select((.[0] | type) == "string" and (.[0] | startswith("sentinel-guard ")))
+      | .[]
+      | if type == "string" then "L" + .
+        # An interpolation is `["variable", name]` up to just 1.45 and
+        # `[["variable", name]]` from 1.46.
+        elif (.[0] | type) == "array" then "V" + .[0][1]
+        else "V" + .[1] end
+    '
+  ) || return 1
+  while IFS= read -r seg || [ -n "$seg" ]; do
+    case "$seg" in
+      L*) rendered="$rendered${seg#L}" ;;
+      # A name that does not evaluate would render as nothing, and a guard line
+      # with no pathspec enumerates the whole tree — every assertion on it
+      # would then pass or fail for the wrong reason.
+      V*) rendered="$rendered$(just_here --evaluate "${seg#V}")" || return 1 ;;
+    esac
+  done <<< "$segments"
+  printf '%s\n' "$rendered"
+}
+
+# The paths a gate's declared inputs actually enumerate, in this repo.
+guard_input_files() {
+  local line
+  line=$(guard_line "$1") || return 1
+  # The recipe's own quoting decides the word boundaries, so the shell that
+  # splits them has to be the shell — the gate's arguments carry an exclude
+  # pathspec whose parentheses and glob are protected by quotes in the justfile.
+  eval "set -- $line"
+  shift 2
+  git -C "$PLUGIN_ROOT" ls-files --cached --others --exclude-standard -- "$@"
+}
+
 # A throwaway repo plus the gate helpers as the recipes actually get them:
 # `just --evaluate` hands back the exact prolog text every shebang expands to,
 # so these exercise the shipped code rather than a transcription of it.

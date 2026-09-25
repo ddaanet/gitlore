@@ -37,7 +37,9 @@ post() { printf '%s' "$1" | bash "$POST"; }
 states() {
   local dir="$TMPDIR/gitlore-edit-weld"
   [ -d "$dir" ] || { printf '0\n'; return 0; }
-  find "$dir" -maxdepth 1 -type f -name '[0-9]*' | wc -l
+  # BSD `wc` pads its count with leading blanks and the callers compare with
+  # `=`, so the padding is stripped rather than left for each assertion.
+  find "$dir" -maxdepth 1 -type f -name '[0-9]*' | wc -l | tr -d '[:space:]'
 }
 
 ctx() { jq -r '.hookSpecificOutput.additionalContext // ""'; }

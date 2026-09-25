@@ -4,51 +4,12 @@
 # inspect gitlore's real files rather than a fixture: the failure they exist to
 # catch is a suite that no longer runs, and a fixture cannot show that.
 
+# `run` here takes flags (`!`, `--separate-stderr`), which bats honours
+# only once the suite declares the version that introduced them.
+bats_require_minimum_version 1.5.0
+
 load helpers/setup
 load helpers/justfile-gates
-
-# A gate's `sentinel-guard` line as its shell receives it, rebuilt from just's
-# own dump so the assertion reads the shipped recipe rather than a copy of it.
-# Body segments come back as literal strings and as interpolations naming a
-# variable; `just --evaluate` supplies the latter. No segment here spans a
-# newline, which is what lets the two kinds travel as one line each.
-guard_line() {
-  local segments seg rendered=""
-  segments=$(
-    just_here --dump --dump-format json | jq -r --arg r "$1" '
-      .recipes[$r].body[]
-      | select((.[0] | type) == "string" and (.[0] | startswith("sentinel-guard ")))
-      | .[]
-      | if type == "string" then "L" + .
-        # An interpolation is `["variable", name]` up to just 1.45 and
-        # `[["variable", name]]` from 1.46.
-        elif (.[0] | type) == "array" then "V" + .[0][1]
-        else "V" + .[1] end
-    '
-  ) || return 1
-  while IFS= read -r seg || [ -n "$seg" ]; do
-    case "$seg" in
-      L*) rendered="$rendered${seg#L}" ;;
-      # A name that does not evaluate would render as nothing, and a guard line
-      # with no pathspec enumerates the whole tree — every assertion on it
-      # would then pass or fail for the wrong reason.
-      V*) rendered="$rendered$(just_here --evaluate "${seg#V}")" || return 1 ;;
-    esac
-  done <<< "$segments"
-  printf '%s\n' "$rendered"
-}
-
-# The paths a gate's declared inputs actually enumerate, in this repo.
-guard_input_files() {
-  local line
-  line=$(guard_line "$1") || return 1
-  # The recipe's own quoting decides the word boundaries, so the shell that
-  # splits them has to be the shell — the gate's arguments carry an exclude
-  # pathspec whose parentheses and glob are protected by quotes in the justfile.
-  eval "set -- $line"
-  shift 2
-  git -C "$PLUGIN_ROOT" ls-files --cached --others --exclude-standard -- "$@"
-}
 
 # Every .bats file the repo has, tracked or merely written — the same set the
 # recipes' globs see, so a brand-new suite counts before it is added.
@@ -140,12 +101,17 @@ teardown_file() {
 
 @test "the test recipes discover by glob, never by a hand-written list" {
   # A list is what drifts. Any literal suite name in the justfile is one --
-  # except check-distribution's, which names one suite on purpose: it gates a
-  # fixed set of assertions rather than a discovered set. That name cannot
-  # drift silently, because `distribution_inputs` declares the same path and
-  # the declared-inputs test below fails the moment it stops existing.
+  # except two that name suites on purpose and cannot drift silently.
+  # check-distribution gates a fixed set of assertions rather than a discovered
+  # set, and `distribution_inputs` declares the same path, so
+  # justfile_gate_inputs.bats fails the moment it stops existing.
+  # `reads_all_suites` is an exception list no glob can produce; the
+  # globs-siblings test below fails when a suite belongs on it and is missing,
+  # and checks that every name on it is a suite that exists.
   literals="$(grep -n '[A-Za-z_]\.bats' "$PLUGIN_ROOT/justfile" || true)"
-  stray="$(printf '%s\n' "$literals" | grep -v 'tests/plugin_distribution\.bats' || true)"
+  stray="$(printf '%s\n' "$literals" \
+    | grep -v 'tests/plugin_distribution\.bats' \
+    | grep -v '^[0-9]*:reads_all_suites :=' || true)"
   [ -z "$stray" ]
 }
 
@@ -270,12 +236,21 @@ teardown_file() {
 
 # A literal `*.bats` glob in a suite's code is what iterating over sibling
 # suites looks like; sourcing a suite's own helpers through
-# `BATS_TEST_DIRNAME` is not. No suite matches, so `reads_all_suites` is empty
-# and this is a tripwire for one added without being declared.
+# `BATS_TEST_DIRNAME` is not. `bsd_portability` is the one that matches and is
+# declared; this is the tripwire for the next one added without being.
 @test "a suite that globs sibling .bats files for their contents is declared --reads-all" {
   run just_here --evaluate reads_all_suites
   [ "$status" -eq 0 ]
   declared=" $output "
+  # The list is hand-written, so a name that no longer resolves would silently
+  # declare nothing. The recipes would still run, on a key covering one suite
+  # fewer than the declaration claims.
+  for name in $output; do
+    [ -f "$PLUGIN_ROOT/$name" ] || {
+      echo "reads_all_suites names $name, which is not a suite" >&2
+      return 1
+    }
+  done
   while IFS= read -r suite; do
     [ -n "$suite" ] || continue
     hits="$(grep -n '\*\.bats' "$PLUGIN_ROOT/$suite" | grep -v '^[0-9]*:[[:blank:]]*#' || true)"
@@ -295,100 +270,3 @@ teardown_file() {
   [ ! -e "$PLUGIN_ROOT/GNUmakefile" ]
   [ ! -e "$PLUGIN_ROOT/makefile" ]
 }
-
-@test "every declared gate input exists in the repo" {
-  # An input path that no longer exists contributes nothing to the hash and says
-  # nothing about it: `git ls-files` does not complain about a pathspec that
-  # matches nothing, so a stale entry here silently narrows what the gate covers.
-  for var in precommit_inputs evals_inputs distribution_inputs; do
-    run just_here --evaluate "$var"
-    [ "$status" -eq 0 ]
-    for path in $output; do
-      [ -e "$PLUGIN_ROOT/$path" ]
-    done
-  done
-}
-
-@test "the unit gate's inputs leave the integration suites out, the integration gate's keep them" {
-  # The two halves share `precommit_inputs`, so without the narrowing an edit to
-  # an integration suite re-runs the unit half for nothing. Asserted on the
-  # files the declared inputs enumerate, not on the declaration's text: a
-  # pathspec that stopped excluding would still read correctly.
-  run guard_input_files test-unit
-  [ "$status" -eq 0 ]
-  [[ "$output" != *"tests/integration_"* ]]
-  # The narrowing must take only the integration suites with it.
-  [[ "$output" == *"tests/justfile_gates.bats"* ]]
-  [[ "$output" == *"scripts/run-bats.sh"* ]]
-
-  run guard_input_files test-integration
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"tests/integration_"* ]]
-
-  run guard_input_files lint
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"tests/integration_"* ]]
-}
-
-@test "the lint gate's inputs cover the shell scripts under plans/, and only those" {
-  # `lint-shell.sh` discovers every tracked shell file, `plans/` included, but a
-  # gate whose hash leaves them out reports cached on the commit that edits one.
-  # The plans' prose stays out: a plan edit must not cost a lint run, and the
-  # bats gates read nothing under `plans/` at all.
-  run guard_input_files lint
-  [ "$status" -eq 0 ]
-  lint_files="$output"
-  planned=$(git -C "$PLUGIN_ROOT" ls-files -- 'plans/*.sh' 'plans/*.bash')
-  [ -n "$planned" ]
-  while IFS= read -r f; do
-    grep -Fxq -- "$f" <<< "$lint_files"
-  done <<< "$planned"
-  run ! grep -E '^plans/.*\.md$' <<< "$lint_files"
-
-  run guard_input_files test-unit
-  [ "$status" -eq 0 ]
-  run ! grep '^plans/' <<< "$output"
-}
-
-@test "the evals input set is a superset of precommit's, and adds the shipped plugin content" {
-  # The two sets exist because the evals drive the real CLI against the
-  # installed plugin: an edit to what the plugin ships must invalidate them.
-  # Nothing the precommit gate reads may be missing from the wider set, or a
-  # green evals run would be resting on a tree its own checks never saw.
-  run just_here --evaluate precommit_inputs
-  [ "$status" -eq 0 ]
-  narrow="$output"
-  run just_here --evaluate evals_inputs
-  [ "$status" -eq 0 ]
-  wide=" $output "
-  for path in $narrow; do
-    [[ "$wide" == *" $path "* ]]
-  done
-  for path in agents commands skills; do
-    [[ "$wide" == *" $path "* ]]
-    [[ " $narrow " != *" $path "* ]]
-  done
-}
-
-@test "every top-level entry is either a gate input or a deliberate exclusion" {
-  # The complement of the test above: the declaration is an allow-list, so a new
-  # top-level directory holding scripts or fixtures is invisible to the hash
-  # until someone names it here. Checked against the wider set — a path may be
-  # deliberately absent from precommit's, but absent from both means no gate
-  # sees it at all.
-  run just_here --evaluate evals_inputs
-  [ "$status" -eq 0 ]
-  declared=" $output "
-  # Excluded on purpose: no check reads them, and including them would re-run
-  # the whole suite on a memory-only or prose-only commit. `docs`, `plans` and
-  # the rumdl pin/config are read by `format-docs`, which has no sentinel; the
-  # shell scripts under `plans` reach the `lint` gate by pathspec instead.
-  excluded=" memory docs plans inbox README.md CLAUDE.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml "
-  while IFS= read -r entry; do
-    [[ "$declared" == *" $entry "* ]] || [[ "$excluded" == *" $entry "* ]] || {
-      echo "top-level entry '$entry' is neither a declared gate input nor a deliberate exclusion" >&2
-      return 1
-    }
-  done < <(git -C "$PLUGIN_ROOT" ls-files | sed 's#/.*##' | sort -u)
-}
-

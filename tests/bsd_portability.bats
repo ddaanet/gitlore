@@ -69,6 +69,24 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *"1 passed, 0 failed"* ]]
 }
 
+@test "a file reaching for GNU stat also carries the BSD spelling" {
+  # `stat -c` is GNU-only — BSD spells the same fields `-f '%Lp'` / `-f '%m'` —
+  # and no stub reaches the calls that live in test bodies rather than in a
+  # script a test execs, so a Linux run cannot fail on the GNU-ism. Checked per
+  # file rather than per line: the portable wrappers (`file_mode`,
+  # `gitlore_file_mtime`) probe with a bare `stat -c` on a line of their own.
+  cd "$PLUGIN_ROOT"
+  gnu=$(grep -rl -e 'stat -c' -e 'stat --format' \
+        --include='*.sh' --include='*.bats' --include='*.bash' scripts tests)
+  while IFS= read -r f || [ -n "$f" ]; do
+    [ -n "$f" ] || continue
+    grep -q 'stat -f' "$f" || {
+      echo "GNU-only stat with no BSD spelling in $f" >&2
+      return 1
+    }
+  done <<< "$gnu"
+}
+
 @test "GITLORE_TEST_BASH_DIR puts the chosen bash ahead for what a test execs" {
   mkdir "$TMP_REPO/.chosen"
   printf '#!/bin/sh\necho chosen-bash\n' > "$TMP_REPO/.chosen/bash"

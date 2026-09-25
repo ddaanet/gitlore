@@ -308,9 +308,3 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "dropped a duplicate pointer line: - [A](a.md) — x" ]
   [ "$(file_mode file.md)" = 640 ]
 }
-
-# A file's permission bits in octal. The GNU form is tried first and its
-# failure is the probe: BSD/macOS stat spells the same field `-f '%Lp'`.
-file_mode() {
-  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
-}

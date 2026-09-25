@@ -7,6 +7,12 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-09-24 — The first full macOS run, and the launcher shim that hung it](changelog/2026-09-24-the-first-full-macos-run-and-what-it-found.md)
+  — the shim compared raw `PATH` spellings when stripping its own directory, so
+  a `//` (which macOS `$TMPDIR` puts in every path built from it) left it on
+  `PATH` and its `exec` re-entered it forever; the rest was a symlinked
+  `$TMPDIR` the fixtures kept in logical form, two GNU-isms in test bodies, and
+  a narrowed `PATH` that dropped `rumdl` and a `python3` carrying PyYAML
 - [2026-09-24 — The batch retry is judged by the approval's freshness](changelog/2026-09-24-the-batch-retry-is-judged-by-the-approval-freshness.md)
   — the batch hook passed the commit-message file back as `commit-memory.sh`'s
   own `-F` operand, so each retry restamped the approval and committed the index

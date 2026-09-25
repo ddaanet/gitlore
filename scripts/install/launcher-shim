@@ -5,9 +5,27 @@
 
 # real claude = next `claude` on PATH after stripping my own dir
 unset CDPATH   # else `cd` may echo the target, corrupting the capture below
-self=$(cd "$(dirname "$0")" && pwd)
-# explicit `-` operand: BSD paste has no implicit stdin, unlike GNU
-newpath=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$self" | paste -sd: -)
+self=$(cd "$(dirname "$0")" && pwd -P)
+# Every entry is resolved to the same physical form as $self before the
+# comparison, because a strip that matches raw spellings leaves my own
+# directory on PATH and the exec below then re-enters this script with no exit.
+# A `//`, a trailing `/`, a `..` and a symlinked duplicate all spell one
+# directory two ways, and macOS `$TMPDIR` ends in `/`, so every path built from
+# it carries the first of those. `[ -d ]` first: a PATH entry naming a
+# directory that does not exist is ordinary, and `cd` would report it.
+newpath=
+oldifs=$IFS
+IFS=:
+for d in $PATH; do
+  if [ -d "$d" ]; then n=$(cd "$d" && pwd -P); else n=$d; fi
+  [ "$n" = "$self" ] || newpath="${newpath:+$newpath:}$d"
+done
+IFS=$oldifs
+# Residual: a SECOND copy of this shim, in a directory of its own, is not
+# something the strip can see, and exec'ing it loops forever. The installer
+# places one, and no sentinel distinguishes that re-entry from an ordinary
+# nested `claude` inside a session, so it is left uncovered rather than
+# half-covered.
 real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not found" >&2; exit 127; }
 
 # already injected upstream? pass through (composability, anti-double-inject, anti-recursion)

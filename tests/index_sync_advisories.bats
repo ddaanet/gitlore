@@ -3,6 +3,10 @@
 # Routing-key advisories: the literal-token heuristic, frontmatter type
 # lookup, the index size budget, and the post hook's advisory channel.
 
+# `run` here takes flags (`!`, `--separate-stderr`), which bats honours
+# only once the suite declares the version that introduced them.
+bats_require_minimum_version 1.5.0
+
 load helpers/setup
 load helpers/fixtures
 load helpers/index-sync

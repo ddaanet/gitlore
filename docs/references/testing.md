@@ -39,6 +39,25 @@ baseline/mixed/all-old comparison. On Linux the BSD behaviour the system tools
 would have contributed comes from the stubs `tests/bsd_portability.bats`
 installs instead.
 
+The narrowing is about the platform, not the toolchain, so the dev tools the
+gate itself needs are borrowed back: `bats`, `git`, `jq`, `shellcheck`, `just`
+and `rumdl`, plus whatever `EXTRA_TOOLS` names. `python3` is borrowed on a
+capability rather than on presence — a Mac has `/usr/bin/python3` and it carries
+no PyYAML, which the hygiene gate and the `wire-*` scripts both need, so the
+probe is `import yaml` and the venv's interpreter is what satisfies it. Without
+one the header says so, because the alternative is forty-odd suite failures with
+no stated cause.
+
+Two path shapes belong to the same platform and are handled in the fixtures.
+macOS `$TMPDIR` is a `/var/folders/…` path reached through a symlink, and git
+and the scripts under test report the physical `/private/var/…` form, so
+`setup_tmp_repo` resolves `$TMP_REPO` with `pwd -P` rather than letting every
+assertion compare two spellings of one directory. That `$TMPDIR` also ends in
+`/`, so anything built from it carries a `//`; `scripts/install/launcher-shim`
+resolves each `PATH` entry before stripping its own directory, since a strip
+that matches raw spellings leaves the shim on `PATH` and its `exec` then
+re-enters it with no exit.
+
 ## The gate's cost (NFR10)
 
 `just precommit` — `format-docs`, `check-distribution`, then `check-version`,
@@ -114,8 +133,9 @@ deleting a suite reruns all of them, since a suite may enumerate its siblings;
 and an edit under `scripts/`, `hooks/` or `tests/helpers/` reruns all of them,
 because nothing records which scripts a suite exercises. A suite that read other
 suites' *contents* would need every suite in its key; the justfile's
-`reads_all_suites` names such suites, none exists, and `justfile_gates.bats`
-fails when one appears undeclared.
+`reads_all_suites` names such suites — `tests/bsd_portability.bats`, which
+sweeps the tree for GNU-only `stat` spellings — and `justfile_gates.bats` fails
+when another appears undeclared, or when a declared name stops resolving.
 
 A suite's pass is recorded only if it ran and passed in this run and its key is
 the same after the run as before. The verdict per suite comes from bats' junit

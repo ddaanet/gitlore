@@ -92,7 +92,24 @@ make_shims() {
   local tool extra
   IFS=' ' read -r -a extra <<< "${EXTRA_TOOLS:-}"
   # `${a[@]+…}`: an empty array is unbound to `set -u` before bash 4.4.
-  for tool in git jq shellcheck just ${extra[@]+"${extra[@]}"}; do borrow "$tool" optional; done
+  for tool in git jq shellcheck just rumdl ${extra[@]+"${extra[@]}"}; do borrow "$tool" optional; done
+  borrow_python
+}
+
+# python3 is not a presence question: a Mac has /usr/bin/python3 and the
+# hygiene gate and the `wire-*` scripts need one that can `import yaml`, which
+# the repo declares in its dev group. Borrow the caller's when the system one
+# cannot — the venv on PATH under direnv is the one that carries it.
+borrow_python() {
+  # The ImportError is the probe, so its message is the expected output here.
+  if PATH="$system_path" python3 -c 'import yaml' 2>/dev/null; then return 0; fi
+  local found
+  if found="$(command -v python3)" && "$found" -c 'import yaml' 2>/dev/null; then
+    ln -s "$found" "$work/tools/python3"
+    borrowed="$borrowed python3=$found"
+  else
+    python_note="  python3:     no PyYAML on the system python3 and none on PATH — run 'uv sync' (the hygiene and hook-wiring suites need it)"
+  fi
 }
 
 # borrow <tool> <required|optional> — link a tool the system directories lack
@@ -115,11 +132,13 @@ environment() {
   echo "  modern bash: $new_bash — $("$new_bash" -c 'echo "$BASH_VERSION"')"
   echo "  bats:        $(command -v bats) — $(bats --version)"
   echo "  borrowed:   ${borrowed:- none}"
+  [ -n "$python_note" ] && echo "$python_note"
   # BSD sed rejects `--version`; provoking that error is the detection.
   if sed --version >/dev/null 2>&1; then echo "  sed:         GNU (not the BSD tool this check is for)"; else echo "  sed:         BSD"; fi
 }
 
 system_path=/usr/bin:/bin:/usr/sbin:/sbin
 borrowed=""
+python_note=""
 
 main "$@"

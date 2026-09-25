@@ -29,6 +29,33 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "REAL:hello" ]
 }
 
+# The shim strips its own directory from PATH to find the real claude, and a
+# strip that misses re-execs the shim forever. A `//` is how that arrives in
+# practice: macOS `$TMPDIR` ends in `/`, so every path built from it carries
+# one. The call is bounded because the regression is a hang — an unbounded
+# `run` would take the suite down with it instead of failing here.
+bounded() {
+  local secs="$1" pid dog st
+  shift
+  "$@" &
+  pid=$!
+  # The kill is expected to find nothing on the happy path; that is the point.
+  ( sleep "$secs"; kill -9 "$pid" 2>/dev/null ) &
+  dog=$!
+  wait "$pid"; st=$?
+  kill "$dog" 2>/dev/null
+  return "$st"
+}
+
+@test "finds the real claude however PATH spells the shim's own directory" {
+  local spelling
+  for spelling in "$SHIMDIR/" "${SHIMDIR%/*}//${SHIMDIR##*/}"; do
+    PATH="$spelling:$STUBDIR:$PATH" run bounded 10 "$SHIMDIR/claude" hello
+    [ "$status" -eq 0 ]
+    [ "$output" = "REAL:hello" ]
+  done
+}
+
 @test "passthrough when GITLORE_LAUNCHED already set (anti-double-inject)" {
   make_parent_with_memory
   mkdir -p .claude; printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
@@ -92,28 +119,10 @@ teardown() { teardown_tmp_repo; }
   [ "$output" = "REAL:hi" ]
 }
 
-@test "PATH stripping survives BSD paste (no implicit stdin)" {
-  # macOS/BSD paste errors out when given no file operand; GNU defaults to
-  # stdin. Shadow paste with a BSD-strict wrapper to catch the GNU-ism.
-  real_paste=$(command -v paste)
-  bsd="$TMP_REPO/.bsdtools"; mkdir -p "$bsd"
-  cat > "$bsd/paste" <<EOF
-#!/bin/sh
-ok=0
-for a in "\$@"; do case "\$a" in -) ok=1 ;; -*) ;; *) ok=1 ;; esac; done
-[ "\$ok" -eq 1 ] || { echo 'usage: paste [-s] [-d delimiters] file ...' >&2; exit 1; }
-exec "$real_paste" "\$@"
-EOF
-  chmod 755 "$bsd/paste"
-  PATH="$bsd:$PATH" run "$SHIMDIR/claude" hello
-  [ "$status" -eq 0 ]
-  [ "$output" = "REAL:hello" ]
-}
-
 @test "exit 127 when no real claude is reachable" {
   # PATH = shim dir + a minimal toolbox (the utilities the shim needs) but no claude.
   tools="$TMP_REPO/.tools"; mkdir -p "$tools"
-  for t in sh tr grep paste git jq dirname env; do ln -s "$(command -v "$t")" "$tools/$t"; done
+  for t in sh git jq dirname env; do ln -s "$(command -v "$t")" "$tools/$t"; done
   run -127 env -i HOME="$HOME" PATH="$SHIMDIR:$tools" "$SHIMDIR/claude"
   [ "$status" -eq 127 ]
 }

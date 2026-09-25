@@ -4,6 +4,10 @@
 # hooks' end-to-end wiring, and the per-agent race the post hook must not
 # resolve onto the wrong baseline. Continues from tests/index_sync_post.bats.
 
+# `run` here takes flags (`!`, `--separate-stderr`), which bats honours
+# only once the suite declares the version that introduced them.
+bats_require_minimum_version 1.5.0
+
 load helpers/setup
 load helpers/fixtures
 load helpers/index-sync

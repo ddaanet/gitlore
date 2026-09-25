@@ -167,7 +167,7 @@ B
   gitlore_weld_plan f $'\nX' > state
   printf 'AB\n' > f
   gitlore_weld_repair state f
-  run stat -c '%a' f
+  run file_mode f
   [ "$output" = 640 ]
   run find . -name '*gitlore-weld*'
   [ -z "$output" ]

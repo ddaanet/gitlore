@@ -151,6 +151,21 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
 }
 
+@test "install runs from a repo root reached through a symlink" {
+  # git reports the toplevel with its symlinks resolved. A root-check against
+  # the shell's logical `$PWD` refuses a caller standing exactly where it is
+  # telling them to stand — macOS `$TMPDIR` is such a path, and so is a
+  # symlinked home or checkout.
+  link="$TMP_REPO.link"
+  ln -s "$TMP_REPO" "$link"
+  cd "$link"
+  run bash "$RUN_INSTALL" memory "echo precommit"
+  [ "$status" -eq 0 ]
+  [ -d memory ]
+  cd "$TMP_REPO"
+  rm -f "$link"
+}
+
 @test "install refuses to run from a linked worktree" {
   git commit -q --allow-empty -m "base"
   wt="$TMP_REPO.wt"

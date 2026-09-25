@@ -43,9 +43,12 @@ distribution_inputs := ".gitmodules agents commands hooks scripts skills tests/h
 
 # Suites that read other suites' contents — one that greps or sources a
 # sibling `.bats` file, rather than merely listing names. Its per-suite key in
-# `run-bats-cached.sh` has to cover every suite, not only itself. None does;
-# the `justfile_gates` suite fails when one appears without being named here.
-reads_all_suites := ""
+# `run-bats-cached.sh` has to cover every suite, not only itself, so a cached
+# pass is not held across an edit it would have caught. `bsd_portability`
+# sweeps the tree for GNU-only `stat` spellings, which live in test bodies as
+# readily as in scripts. The `justfile_gates` suite fails when a suite starts
+# globbing siblings without being named here.
+reads_all_suites := "tests/bsd_portability.bats"
 
 # Fast, frequent. `lint`, `test-unit` and `test-integration` each guard their
 # own sentinel, so a red integration run does not un-cache a green lint;
