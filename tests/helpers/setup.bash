@@ -16,9 +16,33 @@ require_assertion_bash() {
   if [ "$major" -gt 4 ] || { [ "$major" -eq 4 ] && [ "$minor" -ge 1 ]; }; then return 0; fi
   echo "gitlore tests: bats is running under bash $major.$minor, where a failing non-final [[ ]] passes silently." >&2
   echo "Run bats with bash >= 4.1; on macOS, scripts/test-macos.sh does that while the scripts under test still meet the system's 3.2." >&2
-  return 1
+  # `exit`, not `return`: bats acts on what a `load`ed file returns only from
+  # 1.13 — under 1.11 a returned refusal prints its reason to stderr and every
+  # test still reports ok. A guard that enforces a floor cannot be enforceable
+  # only above it, so it exits, which fails the load on every bats.
+  exit 1
 }
 require_assertion_bash "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"
+
+# Before 1.13, a merged `run` leaves `$stderr` holding whatever an earlier
+# `run --separate-stderr` captured; from 1.13 it unsets the pair. A suite that
+# asserts on `$stderr` after a merged `run` therefore reads a stale capture and
+# passes under the older bats, and dies on an unbound variable under the newer.
+# Refused rather than accommodated: the repo pins no tool versions, so the floor
+# is what keeps one machine's green from being another's red. Debian's package
+# is 1.11 and cannot satisfy this — `brew install bats-core` or `npm i -g bats`.
+require_bats_version() {
+  local version="$1" major minor
+  major="${version%%.*}"
+  minor="${version#*.}"; minor="${minor%%.*}"
+  case "$major$minor" in *[!0-9]*|'') major=0; minor=0 ;; esac
+  if [ "$major" -gt 1 ] || { [ "$major" -eq 1 ] && [ "$minor" -ge 13 ]; }; then return 0; fi
+  echo "gitlore tests: bats reports version '$version'; the suites need >= 1.13." >&2
+  echo "Below it a merged \`run\` leaves \$stderr set from an earlier --separate-stderr run, so an assertion on it passes against a stale capture." >&2
+  echo "brew install bats-core, or npm i -g bats (Debian's package is 1.11)." >&2
+  exit 1   # see require_assertion_bash: a `return` refuses nothing under 1.11
+}
+require_bats_version "${BATS_VERSION:-}"
 
 PLUGIN_ROOT="${BATS_TEST_DIRNAME}/.."
 export PLUGIN_ROOT

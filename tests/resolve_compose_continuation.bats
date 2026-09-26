@@ -30,7 +30,10 @@ load helpers/resolve-compose
 
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  [[ "$stderr" == *"gone/x.md"* ]]
+  # Held across the `run`s below: bats >= 1.13 unsets `$stderr` on a merged
+  # one, so a later assertion reads an unbound variable, not this capture.
+  err="$stderr"
+  [[ "$err" == *"gone/x.md"* ]]
   # The merge landed and was published...
   merged=$(git -C memory/ddaanet rev-parse live)
   [ "$(git -C memory/ddaanet rev-list --count --merges "$merged" -1)" = "1" ]
@@ -43,8 +46,8 @@ load helpers/resolve-compose
   # ...and the tier is back on its pin, so no compose can project over it.
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
   # Editing MEMORY.md retriggers nothing that adopts a tier; the take does.
-  [[ "$stderr" == *"/gitlore:merge"* ]]
-  [[ "$stderr" != *"edit MEMORY.md"* ]]
+  [[ "$err" == *"/gitlore:merge"* ]]
+  [[ "$err" != *"edit MEMORY.md"* ]]
 
   # The printed remedy: fix the store, take again.
   sed -i.bak '/gone\/x\.md/d' memory/MEMORY.md

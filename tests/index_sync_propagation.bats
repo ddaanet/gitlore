@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
-# shellcheck disable=SC2030,SC2031
+# $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
+# shellcheck disable=SC2030,SC2031,SC2154
 # Propagation guards (unchanged/added/self-reference/traversal), the two
 # hooks' end-to-end wiring, and the per-agent race the post hook must not
 # resolve onto the wrong baseline. Continues from tests/index_sync_post.bats.
@@ -116,10 +117,13 @@ teardown() { teardown_tmp_repo; }
   run --separate-stderr post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
   chmod 755 memory/locked   # restore so teardown can clean up
   [ "$status" -eq 0 ]                              # PostToolUse: never non-zero here
+  # Held before the next `run`: bats >= 1.13 unsets `$stderr` on a merged one,
+  # so an assertion placed after it reads an unbound variable, not the capture.
+  err="$stderr"
   run jq -e '.systemMessage' <<<"$output"
   [ "$status" -eq 0 ]                              # stdout is valid JSON with the field
   [[ "$output" == *"locked/a.md"* ]]
-  [[ "$stderr" == *"locked/a.md"* ]]                # also echoed to stderr (debug log)
+  [[ "$err" == *"locked/a.md"* ]]                   # also echoed to stderr (debug log)
   run grep '^description:' memory/b.md
   [ "$output" = 'description: "new b"' ]            # second target still synced
   [ ! -f "$stash" ]                                 # stash still removed
@@ -154,9 +158,10 @@ teardown() { teardown_tmp_repo; }
   run --separate-stderr pre_stdin "$payload"
   chmod 755 "$stashdir"   # restore so teardown can clean up
   [ "$status" -eq 0 ]                              # PreToolUse: only exit 2 blocks; never used
+  err="$stderr"                                    # the merged `run` below clears it
   run jq -e '.systemMessage' <<<"$output"
   [ "$status" -eq 0 ]
-  [ -n "$stderr" ]
+  [ -n "$err" ]
   [ ! -f "$stash" ]
 }
 

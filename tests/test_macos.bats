@@ -13,7 +13,12 @@ load helpers/setup
 setup() {
   setup_tmp_repo
   OLD_LOG="$TMP_REPO/old-bash.log"
-  real_bash="$(command -v bash)"
+  # `$BASH`, not `command -v bash`: this suite hands the modern bash back as
+  # MODERN_BASH, and under the macOS harness `setup_tmp_repo` has already put
+  # the stand-in for /bin/bash first on PATH — a lookup there names bash 3.2,
+  # which the nested run then refuses as older than 4.4. The bash running the
+  # test body is the modern one by construction.
+  real_bash="$BASH"
   cat > "$TMP_REPO/old-bash" <<EOF
 #!/bin/sh
 echo started >> "$OLD_LOG"

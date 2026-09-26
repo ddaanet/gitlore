@@ -26,15 +26,25 @@ passes silently, while a failing `[ ]` or plain command still fails the test
 all of them are `[[ "$output" == *"…"* ]]` glob matches, which `[ ]` cannot
 express. `tests/helpers/setup.bash`, which every suite loads, instead refuses a
 bash below 4.1 at load time (`require_assertion_bash`), so a run there fails
-every suite with the remedy rather than reporting green. A macOS run therefore
-drives bats with a modern bash. `scripts/test-macos.sh` is that run: it narrows
-`PATH` to the system directories plus the tools the platform lacks, and sets
-`GITLORE_TEST_BASH_DIR`, which `setup_tmp_repo` puts first on `PATH` so the
-scripts a test execs meet the system's 3.2 while the assertions stay real. It
-runs every unit suite by default, exits with bats' status, and records no gate
-sentinel, since `test-unit`'s hash does not know which bash ran the scripts. It
-is run by hand on a Mac; no CI job runs it. `plans/macos-check/run.sh` is the
-one-shot diagnostic it grew out of, with the assertion probe and the
+every suite with the remedy rather than reporting green. Beside it,
+`require_bats_version` refuses bats below 1.13, where a merged `run` leaves
+`$stderr` holding an earlier `run --separate-stderr` capture instead of
+unsetting it — a suite asserting on it there passes against stale text. Both
+guards `exit` rather than `return`: bats acts on a `load`ed file's return value
+only from 1.13, so under 1.11 a returned refusal prints its remedy and every
+test still reports `ok`. Neither floor is a pin. `gate-inputs-hash` folds
+`bats --version`, `shellcheck --version`, `jq --version` and `python3 --version`
+into every gate hash because this repo pins no tool versions; the floors say
+what a version has to do, and the hash makes a change of one invalidate the
+gates. A macOS run therefore drives bats with a modern bash.
+`scripts/test-macos.sh` is that run: it narrows `PATH` to the system directories
+plus the tools the platform lacks, and sets `GITLORE_TEST_BASH_DIR`, which
+`setup_tmp_repo` puts first on `PATH` so the scripts a test execs meet the
+system's 3.2 while the assertions stay real. It runs every unit suite by
+default, exits with bats' status, and records no gate sentinel, since
+`test-unit`'s hash does not know which bash ran the scripts. It is run by hand
+on a Mac; no CI job runs it. `plans/macos-check/run.sh` is the one-shot
+diagnostic it grew out of, with the assertion probe and the
 baseline/mixed/all-old comparison. On Linux the BSD behaviour the system tools
 would have contributed comes from the stubs `tests/bsd_portability.bats`
 installs instead.

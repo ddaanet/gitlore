@@ -112,3 +112,45 @@ teardown() { teardown_tmp_repo; }
   assert_grep -qxF 'require_assertion_bash "${BASH_VERSINFO[0]}" "${BASH_VERSINFO[1]}"' \
     "$PLUGIN_ROOT/tests/helpers/setup.bash"
 }
+
+@test "a bats that leaves \$stderr set across a merged run is refused at load" {
+  # Below 1.13 a merged `run` leaves `$stderr` holding an earlier
+  # `--separate-stderr` capture, so a suite asserting on it there passes
+  # against stale text and fails wherever bats is current.
+  run require_bats_version 1.11.1
+  assert_fails "1.11.1" ">= 1.13"
+  run require_bats_version 1.12.0
+  assert_fails "1.12.0"
+  run require_bats_version 1.13.0
+  assert_ok
+  run require_bats_version 2.0.0
+  assert_ok
+  # An unreadable version is refused, not waved through as "probably fine".
+  run require_bats_version ""
+  assert_fails ">= 1.13"
+  # shellcheck disable=SC2016 # the literal source line is what is matched
+  assert_grep -qxF 'require_bats_version "${BATS_VERSION:-}"' \
+    "$PLUGIN_ROOT/tests/helpers/setup.bash"
+}
+
+@test "a load-time refusal fails the run, rather than printing and reporting green" {
+  # What makes the two guards above worth their wording: a refusal that only
+  # prints is a refusal the run walks past, which is what bats 1.11 did with a
+  # returned one. The assertion is the run's status, not the message. It cannot
+  # discriminate `exit` from `return` here — from 1.13 bats acts on both — so
+  # the reason each guard exits is stated where it exits, not pinned here.
+  # The real helper, refusing through a real bats load: a planted suite loads
+  # it and calls the guard with a version below the floor at file scope, which
+  # is where bats gathers tests. `helpers` is linked beside the suite because
+  # `setup.bash` finds its siblings relative to the suite that loads it.
+  mkdir -p "$TMP_REPO/t"
+  ln -s "$PLUGIN_ROOT/tests/helpers" "$TMP_REPO/t/helpers"
+  # `@``test` split: bats rewrites every line of this file that opens with its
+  # own keyword, so the planted suite is assembled rather than quoted.
+  printf '%s\n' 'load helpers/setup' 'require_bats_version 1.11.1' \
+    "@""test \"never runs\" { true; }" > "$TMP_REPO/t/planted.bats"
+  # `$BASH` ahead of PATH: under scripts/test-macos.sh a bare `bash` is the
+  # system's 3.2, and this nested bats should meet the one driving this test.
+  run env PATH="$(dirname "$BASH"):$PATH" bats "$TMP_REPO/t/planted.bats"
+  assert_fails "1.11.1" ">= 1.13"
+}

@@ -100,16 +100,28 @@ make_shims() {
 # hygiene gate and the `wire-*` scripts need one that can `import yaml`, which
 # the repo declares in its dev group. Borrow the caller's when the system one
 # cannot — the venv on PATH under direnv is the one that carries it.
+#
+# A symlink will not do, the way it does for the other tools. A venv
+# interpreter locates its `pyvenv.cfg`, and through it its site-packages,
+# beside the path it was invoked as; reached through a link in another
+# directory it resolves to the base interpreter instead and `import yaml`
+# fails. An `exec` of the absolute path keeps the venv. The probe then runs
+# through the shim rather than past it: probing `$found` direct is what let a
+# borrow the suites could not use read as a successful borrow.
 borrow_python() {
   # The ImportError is the probe, so its message is the expected output here.
   if PATH="$system_path" python3 -c 'import yaml' 2>/dev/null; then return 0; fi
   local found
-  if found="$(command -v python3)" && "$found" -c 'import yaml' 2>/dev/null; then
-    ln -s "$found" "$work/tools/python3"
-    borrowed="$borrowed python3=$found"
-  else
-    python_note="  python3:     no PyYAML on the system python3 and none on PATH — run 'uv sync' (the hygiene and hook-wiring suites need it)"
+  if found="$(command -v python3)"; then
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$found" > "$work/tools/python3"
+    chmod +x "$work/tools/python3"
+    if PATH="$work/tools:$system_path" python3 -c 'import yaml' 2>/dev/null; then
+      borrowed="$borrowed python3=$found"
+      return 0
+    fi
+    rm -f "$work/tools/python3"
   fi
+  python_note="  python3:     no PyYAML on the system python3 and none on PATH — run 'uv sync' (the hygiene and hook-wiring suites need it)"
 }
 
 # borrow <tool> <required|optional> — link a tool the system directories lack

@@ -72,7 +72,11 @@ Dependencies:
   while the scripts a test execs meet the system's 3.2 on a system-only `PATH`.
 - `git` ≥ 2.13 (for `git submodule absorbgitdirs`; install also uses manual gitdir absorption that works on older versions)
 - `jq`
-- `bats-core` ≥ 1.10 (`brew install bats-core` or `npm i -g bats`)
+- `bats-core` ≥ 1.13 (`brew install bats-core` or `npm i -g bats`). Debian's
+  packaged `bats` is 1.11 and does not satisfy this: below 1.13 a merged `run`
+  leaves `$stderr` holding an earlier `run --separate-stderr` capture, so a
+  suite asserting on it passes against stale text. `require_bats_version` in
+  `tests/helpers/setup.bash` refuses the run rather than let it report green.
 - `uv` and direnv for the dev gate: `uv sync` once materializes `.venv/bin` from `uv.lock` (rumdl for `format-docs`, PyYAML for the wiring suite) and `.envrc` puts it on `PATH`
 - `mikefarah/yq` v4 OR `python3` with PyYAML — required for `wire-lefthook.sh` and `wire-overcommit.sh` to safely merge user YAML configs without clobbering existing keys. Note: yq-based wiring will strip pre-existing YAML comments from `lefthook.yml` / `.overcommit.yml` (the gitlore marker is preserved, user comments are not).
 

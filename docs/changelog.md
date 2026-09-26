@@ -7,6 +7,15 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-09-25 — The macOS tail, a venv python behind a symlink, and a floor under bats](changelog/2026-09-25-the-macos-tail-and-the-floor-under-bats.md)
+  — the tail of the unit suite ran on a Mac for the first time and failed 50 of
+  1016: a borrowed venv `python3` reached through a symlink resolves to the base
+  interpreter, so the probe passed and the suites had no PyYAML; the macOS
+  check's own suite read `command -v bash` after the 3.2 stand-in was on `PATH`;
+  and three cases asserted on a `$stderr` that bats unsets from 1.13, so the
+  README floor rises to 1.13 with `require_bats_version` enforcing it — which
+  exposed `require_assertion_bash` refusing by `return`, a refusal bats 1.11
+  walks past
 - [2026-09-25 — A prepared merge outranks the summary screen](changelog/2026-09-25-a-prepared-merge-outranks-the-summary-screen.md)
   — the batch after a landed-then-failed commit met a prepared merge with a
   request to draft and approve a summary, because the no-summary screen sat
