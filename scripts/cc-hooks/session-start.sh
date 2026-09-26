@@ -67,7 +67,13 @@ exec 3>&1 1>&2
 # output if a direct commit is blocked, and by /gitlore:resolve on divergence. Here we
 # keep only the prohibition plus the one-line seamless happy path (commit the parent;
 # the hook does the rest), which defuses over-worry rather than feeding it.
-protocol_ctx="gitlore: memory in this repo lives in a git submodule guarded by a per-commit approval gate (FR11). NEVER commit inside the memory submodule directly — do not run 'git -C <mempath> commit' or 'cd <mempath> && git commit' (the submodule has a pre-commit hook that will block you). Persisting memory is seamless: writing a memory file is an ordinary edit, and committing the PARENT repo is all you need — its pre-commit hook records, gates, and pushes memory for you."
+# Both halves are stated as acts, carrying no mechanism: what the gate is, which hook
+# blocks, and what it records are things the agent cannot act on, and the gate emits
+# its own instructions at the moment it fires. The prohibition forbids by role rather
+# than naming the two command forms — spelling out `git -C <mempath> commit` invites
+# reasoning about the forms not named — and nothing here cites an FR id, which resolves
+# to nothing in the consumer repos this context lands in.
+protocol_ctx="gitlore: never commit inside the memory submodule. Writing a memory file is an ordinary edit, and committing the parent repo is all it needs."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook

@@ -118,6 +118,106 @@ write_intent() {
   grep -q '(ddaanet/x.md)' memory/MEMORY.md
 }
 
+# --- the mount-time size advisory ------------------------------------------
+# A mount is the one operation that adds tens of KB of index in one step, and
+# the only index-growing path that is not a PostToolBatch pass over an index the
+# agent edited — so index-sync-post.sh's advisory never fires for it. The three
+# tests below drive both thresholds through their env overrides rather than
+# building a 25KB fixture, exactly what those overrides exist for.
+
+@test "add-tier hook: a mount well under the thresholds says nothing about size" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  push_tier_fact ddaanet >/dev/null
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  run run_batch
+  [ "$status" -eq 0 ]
+  # Silence is the whole assertion: the advisory is ambient information, so a
+  # mount that changes nothing about the store's reachability adds no line.
+  [[ "$output" != *"after the mount"* ]]
+}
+
+@test "add-tier hook: a mount past the loader cutoff names the cutoff, not a percentage" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  push_tier_fact ddaanet >/dev/null
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  # Any mount clears a 10-byte cutoff. The budget stays at its default, so a
+  # percentage would be available to print — and must not be printed: at 97.6%
+  # of budget the index is already truncating, so the percentage is the
+  # reassuring number and the cutoff is the true one.
+  export GITLORE_INDEX_LOADER_CUTOFF_BYTES=10
+  run run_batch
+  [ "$status" -eq 0 ]
+
+  sys=$(jq -r '.systemMessage' <<<"$output")
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
+  bytes=$(wc -c < memory/MEMORY.md); bytes=$((bytes))   # BSD wc pads its count
+  # The measurement is of the COMPOSED index — taken after this hook's own
+  # compose spliced the tier's block in, never of the file add-tier.sh left.
+  [ "$bytes" -gt 10 ]
+  grep -q '(ddaanet/x.md)' memory/MEMORY.md
+  for channel in "$sys" "$ctx"; do
+    [[ "$channel" == *"is $bytes bytes after the mount"* ]]
+    [[ "$channel" == *"~10-byte loader cutoff"* ]]
+    [[ "$channel" == *"/gitlore:index-audit"* ]]
+    [[ "$channel" != *"% of the"* ]]
+    # It reports; it never asks for the mount to be undone.
+    [[ "$channel" != *"nothing to act on"* ]]
+  done
+  # The mount itself still stands, and its own report still leads.
+  [ "$(cat memory/.gitlore-tiers)" = "ddaanet" ]
+  [[ "$sys" == *"mounted at memory/ddaanet"* ]]
+}
+
+@test "add-tier hook: a mount between the warn fraction and the cutoff reports a percentage" {
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  push_tier_fact ddaanet >/dev/null
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  # A 10-byte budget puts any composed index over the 80% warn fraction whatever
+  # its exact size — the fixture's is a few dozen bytes — while the cutoff stays
+  # far above it, so this is the quiet arm and not the loud one.
+  export GITLORE_INDEX_BUDGET_BYTES=10
+  export GITLORE_INDEX_LOADER_CUTOFF_BYTES=100000
+  run run_batch
+  [ "$status" -eq 0 ]
+
+  sys=$(jq -r '.systemMessage' <<<"$output")
+  bytes=$(wc -c < memory/MEMORY.md); bytes=$((bytes))   # BSD wc pads its count
+  # The percentage is computed here rather than hardcoded, so the arithmetic is
+  # pinned without the assertion depending on the fixture index's exact size.
+  [[ "$sys" == *"is $bytes bytes after the mount, $(( bytes * 100 / 10 ))% of the 10-byte always-loaded budget"* ]]
+  [[ "$sys" == *"under the ~100000-byte loader cutoff"* ]]
+  [[ "$sys" == *"nothing to act on"* ]]
+  [[ "$sys" != *"loader cutoff — the tail"* ]]   # not the truncation wording
+}
+
+@test "add-tier hook: the mount advisory leaves the edit-time advisory armed" {
+  # The two advisories must not suppress each other. The edit-time one is gated
+  # on a once-per-episode marker of kind `budget`; the mount writes no marker at
+  # all — it is one-shot because the intent file is consumed — so a session that
+  # mounts and then edits the index still hears the second advisory.
+  make_parent_with_memory
+  bare=$(make_tier_remote ddaanet)
+  push_tier_fact ddaanet >/dev/null
+  write_intent "mode=mount" "name=ddaanet" "url=$bare"
+
+  export GITLORE_INDEX_LOADER_CUTOFF_BYTES=10
+  run run_batch
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"after the mount"* ]]           # the loud arm did fire...
+
+  # ...and left no marker behind for any session id, so nothing is pre-suppressed.
+  marker_dir=$(git -C memory rev-parse --absolute-git-dir)
+  run find "$marker_dir" -maxdepth 1 -name 'gitlore-budget-nudged-*'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 # The compose-baseline drop this hook does after a successful mount
 # (add-tier-batch.sh, the `rm -f "$(gitlore_compose_stamp_file …)"` right
 # after activation) must target the SAME keyed name index-compose.sh itself

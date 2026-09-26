@@ -1,4 +1,4 @@
-# Index composition — decisions D29–D31, D34–D37
+# Index composition — decisions D29–D31, D34–D37, D57
 
 How a repo's root memory index comes to hold every active tier's pointer lines
 alongside its own, and what keeps the two surfaces from fighting. One of the
@@ -9,7 +9,8 @@ five nodes of the tiered-memory subsystem (FR15), whose entry point is
   **D30** the tier manifest is the activation and precedence surface · **D31**
   compose triggers and validation · **D34** the index is authoritative over a
   pointer line's presence · **D35** the welded-line refusal · **D36**
-  composition is two projections · **D37** index order is a merge input
+  composition is two projections · **D37** index order is a merge input ·
+  **D57** the mount reports its composed size against the loader cutoff
 
 ---
 
@@ -322,6 +323,38 @@ has there rather than collecting at the end. Ordering authority stops at the
 tier block: composition still hoists each active tier's block above the
 project's own lines, in manifest order.
 
+---
+
+**D57 — The mount reports its composed index size, measured against the loader
+cutoff and keyed by nothing**
+
+Mounting is the only operation that adds tens of KB of index in a single step,
+and the only index-growing path that is not a `PostToolBatch` pass over an index
+the agent edited — so D39's byte-budget advisory, which keys on that pass's
+pre-image, never fires for it. Measured 2026-09-03: mounting `ddaanet` (91
+facts) into a repo whose own index was the 48-byte scaffold produced a
+25,846-byte `MEMORY.md`, past the loader cutoff, and the mount reported the
+submodule, the tier's scopes, the import line, the activation and the
+recomposition with no size line at all — that session learned its index was
+truncating by measuring it by hand.
+
+`gitlore_index_mount_size_line` closes it, and three things about it are the
+decision. The measurement is taken **after** the mount hook's own compose, never
+inside `add-tier.sh`: the mount appends a submodule and a manifest line, and it
+is composition that splices the tier's pointer block into the root index, so a
+count taken any earlier describes a file the session never loads. The loud arm
+names the **cutoff, never the percentage** — the advisory budget (25,600) sits
+*above* the cutoff (~24,985), so 100% of budget is already truncating and 97% of
+it can be, which makes a percentage the reassuring number in the one case where
+the mount has cost the repo its most specific memory. And the line is
+**keyed by nothing**: the intent file is consumed, so a mount reports once by
+construction, and writing no `budget` marker leaves a later edit-time advisory
+in the same session free to fire.
+
+A mount past the cutoff is still a correct mount. This reports, never refuses —
+an over-budget tier is its owner's to fix, not the consuming repo's — and the
+one act it names is `/gitlore:index-audit`.
+
 ## Rejected alternatives
 
 **Propagating the root index down into the carriers during the merge
@@ -352,3 +385,16 @@ each repo carrying the set its own work needs, so a tier mount is no evidence
 about which guards that repo should have. The warning would also make gitlore
 the enforcement point for a second plugin's installation, reading
 `enabledPlugins` — a record of what the user chose — as a defect report.
+
+**Reporting the mount's size as a percentage of the advisory budget,** reusing
+`gitlore_index_budget_pct` as the edit-time advisory does. The budget is the
+wrong denominator on the one path that can cross the cutoff in a single step: it
+sits above the cutoff, so the arm that must be loudest would print a figure
+under 100% while the index truncates. The quiet arm keeps the percentage, where
+nothing is broken (D57).
+
+**Sharing D39's `budget` marker kind with the mount advisory,** or giving the
+mount a marker kind of its own. Sharing makes the mount advisory eat the
+edit-time one for the rest of the session — the session most likely to edit the
+index next; a separate kind spends marker machinery on an emission already
+one-shot, the intent file being consumed when it fires (D57).

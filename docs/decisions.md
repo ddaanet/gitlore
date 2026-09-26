@@ -144,12 +144,12 @@ agent that each reporting hook merges into · a drain inside each reporting hook
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
-[tiered-memory.md](references/tiered-memory.md), composition (D29–D31, D34–D37)
-in [index-composition.md](references/index-composition.md), the authoring-time
-sync and the authoring guidance with its invocation (D38–D40, D47, D48) in
-[index-authoring-sync.md](references/index-authoring-sync.md), the tier stores
-and merges (D42–D44) in [tier-stores.md](references/tier-stores.md), and the
-repair of an arriving index and the merged-index gate (D52) in
+[tiered-memory.md](references/tiered-memory.md), composition (D29–D31, D34–D37,
+D57) in [index-composition.md](references/index-composition.md), the
+authoring-time sync and the authoring guidance with its invocation (D38–D40,
+D47, D48) in [index-authoring-sync.md](references/index-authoring-sync.md), the
+tier stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md),
+and the repair of an arriving index and the merged-index gate (D52) in
 [tier-arrival-repair.md](references/tier-arrival-repair.md).
 
 - **D17** — FR15: nested tier submodules plus a structurally composed root index
@@ -158,9 +158,11 @@ repair of an arriving index and the merged-index gate (D52) in
 new fact (tiered-memory.md) · propagating the root index down into the carriers
 · recompose owning index-line presence · deleting a memory file when its pointer
 line is removed · a `SessionStart` warning when a tier is mounted without a
-paired guard plugin (index-composition.md) · frontmatter `description` as the
-source of truth for the index one-liner · scoring an index hook against its
-body, tf-idf style (index-authoring-sync.md) · an append-only constraint on
+paired guard plugin · the mount's size as a percentage of the advisory budget ·
+sharing the edit-time advisory's marker kind with the mount, or giving the mount
+one of its own (index-composition.md) · frontmatter `description` as the source
+of truth for the index one-liner · scoring an index hook against its body,
+tf-idf style (index-authoring-sync.md) · an append-only constraint on
 shared-tier indexes · a `merge` driver plus `.gitattributes` ·
 `**/MEMORY.md merge=union` plus a dedup-by-path pass · a down projection that
 skips a root line whose file the tier does not hold · writing root and staging

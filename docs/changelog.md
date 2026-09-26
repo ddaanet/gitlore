@@ -7,6 +7,14 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-09-26 — Three briefs triaged, and the mount learns its own size](changelog/2026-09-26-three-briefs-triaged-and-the-mount-learns-its-size.md)
+  — the `SessionStart` commit-protocol context drops its dangling FR id, the two
+  command forms it spelled out and the machinery an agent cannot act on, keeping
+  the prohibition by role and the one-line happy path; `/gitlore:index-audit`
+  gains a step over the preamble, which routes nothing and is paid for by the
+  loader anyway; and a tier mount reports the size of the index its compose
+  produced, against the loader cutoff rather than the advisory budget that sits
+  above it (D57)
 - [2026-09-25 — The macOS tail, a venv python behind a symlink, and a floor under bats](changelog/2026-09-25-the-macos-tail-and-the-floor-under-bats.md)
   — the tail of the unit suite ran on a Mac for the first time and failed 50 of
   1016: a borrowed venv `python3` reached through a symlink resolves to the base

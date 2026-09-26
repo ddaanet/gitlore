@@ -87,6 +87,11 @@ if [ "$rc" -eq 0 ]; then
   # output is a deterministic function of the root index and the carriers. So
   # the cost of the assumption failing is one duplicate systemMessage.
   rm -f "$(gitlore_compose_stamp_file "$mempath" "$agent_id")"
+  # Measured AFTER the compose above, never inside add-tier.sh: the mount's own
+  # step appends a submodule and a manifest line, and it is composition that
+  # pulls the tier's pointer block into the root index. A count taken before it
+  # would report the size of an index the session never loads.
+  size_line=$(gitlore_index_mount_size_line "$mempath/MEMORY.md") || size_line=""
   sysmsg="$out"
   ctx="$out
 
@@ -97,6 +102,17 @@ $GITLORE_COMPOSE_SYSMSG"
     ctx="$ctx
 
 $GITLORE_COMPOSE_CTX"
+  fi
+  # Last on both channels: the mount and its compose are what the agent acts on,
+  # and the size is ambient. On systemMessage because a mount past the cutoff is
+  # the user's call to make — theirs is the store — and on additionalContext so
+  # the agent does not re-measure a file the report already measured.
+  if [ -n "$size_line" ]; then
+    sysmsg="$sysmsg
+$size_line"
+    ctx="$ctx
+
+$size_line"
   fi
   emit "$sysmsg" "$ctx"
 else

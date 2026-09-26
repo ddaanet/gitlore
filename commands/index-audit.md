@@ -26,6 +26,23 @@ Cost is bytes, not lines. The longest entries are where curation pays: five
 paragraph-length lines can be a fifth of the blob while every terse line
 together is a rounding error.
 
+Then read what sits ahead of the first pointer bullet:
+
+```
+awk '/^- \[/ { exit } { print NR": "$0 }' memory/MEMORY.md
+```
+
+That span is preamble. Composition keeps it verbatim, never mirrors it into a
+tier carrier and never checks it for a dead path, so it routes nothing — while
+the loader pays for every byte of it. Past the scaffold's `# Memory Index`
+heading it is waste; cut it. The costly case is a would-be entry that landed
+there — a bullet not opening with its link — which reads as an index line,
+spends its bytes, routes nothing, and is invisible to any pointer count such as
+`grep -c '^- \['`, so that count undercounts the file the loader truncates.
+Convert it to pointer form or move it out. A non-bullet line *inside* the block
+needs no eye: `index-compose.sh` already reports `interleaved non-bullet line N
+inside the pointer block`.
+
 ## 2. Choose the lever
 
 Three levers buy real headroom; two things that look like levers are not.

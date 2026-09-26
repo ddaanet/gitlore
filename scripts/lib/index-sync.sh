@@ -176,6 +176,14 @@ gitlore_compose_stamp_get() {
 : "${GITLORE_INDEX_BUDGET_BYTES:=25600}"
 : "${GITLORE_INDEX_BUDGET_WARN_PCT:=80}"
 
+# Claude Code's own loader cutoff, which sits BELOW the advisory budget: the
+# index is truncated from 100% of budget down to about 97.6% of it. Empirical,
+# and only to one decimal — the loader reports `MEMORY.md is 25.8KB (limit:
+# 24.4KB) — Only part of it was loaded`, so 24.4 KiB is all that display
+# settles and the true cutoff lies somewhere near it. Treat as approximate and
+# never as a refusal threshold. Overridable so a test drives it.
+: "${GITLORE_INDEX_LOADER_CUTOFF_BYTES:=24985}"
+
 # Percent of that budget the index occupies, floored. BYTES, not lines: the
 # blob is loaded verbatim, so a handful of paragraph-length lines costs more
 # than fifty terse ones.
@@ -183,6 +191,31 @@ gitlore_index_budget_pct() {
   local bytes
   bytes=$(wc -c < "$1") || return 1
   printf '%s\n' "$(( bytes * 100 / GITLORE_INDEX_BUDGET_BYTES ))"
+}
+
+# One size line for a *mount*, or nothing. Mounting is the one operation that
+# adds tens of KB of index in a single step, and the only one whose report is
+# not a `PostToolBatch` pass over an index the agent edited — so it never
+# reaches the advisory in index-sync-post.sh, and a mount that lands past the
+# cutoff is otherwise silent. It needs no once-per-episode marker: the intent
+# file is consumed, so the mount reports once by construction, and writing no
+# `budget` marker leaves a later edit-time advisory in the same session free to
+# fire. Past the cutoff the percentage is the wrong number to print — 97% of
+# budget is already truncating — so the cutoff, not the budget, is what the
+# loud arm names. Args: $1 = index path. Silent below the warn fraction.
+gitlore_index_mount_size_line() {
+  local index="$1" bytes pct
+  bytes=$(wc -c < "$index") || return 1
+  bytes=$((bytes))   # strip the leading whitespace BSD wc pads its count with
+  if [ "$bytes" -gt "$GITLORE_INDEX_LOADER_CUTOFF_BYTES" ]; then
+    printf 'gitlore: memory/MEMORY.md is %s bytes after the mount, past Claude Code'\''s ~%s-byte loader cutoff — the tail of the index is dropped from every session, silently, and the tail is this repo'\''s own most specific memory. Curating it store-wide is /gitlore:index-audit; a tier that is over budget on its own is the tier owner'\''s to fix, not this repo'\''s.\n' \
+      "$bytes" "$GITLORE_INDEX_LOADER_CUTOFF_BYTES"
+    return 0
+  fi
+  pct=$(( bytes * 100 / GITLORE_INDEX_BUDGET_BYTES ))
+  [ "$pct" -ge "$GITLORE_INDEX_BUDGET_WARN_PCT" ] || return 0
+  printf 'gitlore: memory/MEMORY.md is %s bytes after the mount, %s%% of the %s-byte always-loaded budget and under the ~%s-byte loader cutoff — a size notice, nothing to act on.\n' \
+    "$bytes" "$pct" "$GITLORE_INDEX_BUDGET_BYTES" "$GITLORE_INDEX_LOADER_CUTOFF_BYTES"
 }
 
 # Once-per-episode markers. A nudge that fires on every batch is noise, so each

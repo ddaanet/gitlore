@@ -177,22 +177,27 @@ Two complementary mechanisms close it:
 
 - **Orientation (removes the friction of hitting the hard gate).**
   `SessionStart` emits a standing `additionalContext` every gitlore session
-  carrying the **prohibition** — memory is a gitlore-guarded submodule; never
-  commit inside it directly — plus the one-line seamless happy path: writing a
-  memory file is an ordinary edit, and committing the *parent* repo is all you
-  need, its pre-commit hook recording, gating and pushing memory. The base
-  Claude Code memory instructions describe generic "edit files, save facts"
-  memory with no review gate, so the agent's default is actively wrong in a
-  gitlore repo. The prohibition corrects the model **before** the agent acts,
-  and must be front-loaded: it guards an action the agent would otherwise take
-  unprompted, so nothing downstream would disclose it in time. The four-step
-  persist *procedure* (summarize → approval → write the magic file → commit the
-  parent) is deliberately **not** preloaded — a front-loaded recipe reads as a
-  process you must run and induces ceremony, such as pausing for approval before
-  even writing a memory file, when persistence is meant to be seamless. It
-  surfaces just-in-time instead: from `memory-pre-commit`'s own
-  `$CLAUDECODE`-branched output when a direct commit is blocked, and from
-  `/gitlore:resolve` on divergence.
+  carrying the **prohibition** — never commit inside the memory submodule — plus
+  the one-line seamless happy path: writing a memory file is an ordinary edit,
+  and committing the *parent* repo is all it needs. Both halves are acts and
+  nothing else. The gate, the hook that blocks, and what it records are
+  mechanism the agent cannot act on, and the gate states them itself at the
+  moment it fires; the prohibition forbids by role, because naming
+  `git -C <mempath> commit` invites reasoning about the forms left unnamed; and
+  no FR id appears, since it resolves to nothing in the consumer repos this
+  context reaches. Pinned by the absence assertions in
+  `tests/cc_hook_session_start.bats`. The base Claude Code memory instructions
+  describe generic "edit files, save facts" memory with no review gate, so the
+  agent's default is actively wrong in a gitlore repo. The prohibition corrects
+  the model **before** the agent acts, and must be front-loaded: it guards an
+  action the agent would otherwise take unprompted, so nothing downstream would
+  disclose it in time. The four-step persist *procedure* (summarize → approval →
+  write the magic file → commit the parent) is deliberately **not** preloaded —
+  a front-loaded recipe reads as a process you must run and induces ceremony,
+  such as pausing for approval before even writing a memory file, when
+  persistence is meant to be seamless. It surfaces just-in-time instead: from
+  `memory-pre-commit`'s own `$CLAUDECODE`-branched output when a direct commit
+  is blocked, and from `/gitlore:resolve` on divergence.
 
 This is a cleaner variant of the rejected PreToolUse alternative — a submodule
 hook consistent with the existing hook architecture, with none of the CC-level
