@@ -145,7 +145,14 @@ there.
 
 **Recall delivers the first 4096 bytes of a file and stops**, so a merged file
 has a ceiling and crosses it silently — the index line still points at
-something that looks complete. Measure with `wc -c` before adding a section.
+something that looks complete. Measure with `wc -c` before adding a section,
+and measure the whole file: the `description:` frontmatter is synced from the
+index line (§7), so a line that routes well is charged twice, once in the
+capped index and again inside the fact's own 4096 bytes. A 670-character line
+leaves a frontmatter block of about 800 bytes — a fifth of the budget spent
+before a word of body. Since §7 forbids trimming a
+line to hit a byte target, the budget the body actually has is what argues for
+splitting early — never for a line that routes worse.
 Past the cap the file becomes a hub plus siblings: the hub keeps the trigger
 and the map, now symptom → file, and each section moves to its own file beside
 it, reachable by path once the hub is read. Splitting for size is not the split

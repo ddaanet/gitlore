@@ -60,6 +60,26 @@ Three levers buy real headroom; two things that look like levers are not.
   two skills built on them were live. A retirement inverts the audit in §4:
   the literals are supposed to fall to zero, so the question is whether one
   falls to a single occurrence on an unrelated line.
+
+  **Retiring a fact into a skill consumers install** is an extraction, and a
+  `[[wikilink]]` / `memory/`-path check does not finish it: two classes survive
+  that check and dangle for every consumer. *Internal requirement, decision and
+  plan ids* (`FR5a`, `(D14)`, `NFR1`, `Plan 04 Step 6`) read as precision and
+  resolve to nothing outside the repo whose spec defines them — drop the id and
+  keep the date and the observation, which grounds the claim on its own. *Paths
+  in another repository* — a test helper, a design doc, a `~/code/<repo>` path —
+  keep the rule and the measurement and generalize the illustration: naming the
+  *project* a finding came from is still evidence, naming a file the reader
+  cannot open is not. So grep separately for
+  `\b(FR[0-9]+[a-z]?|NFR[0-9]+|D[0-9]{1,2})\b`, for `/Users/` and `~/code/`, and
+  for source extensions outside the shipping repo's own tree. `my human partner`
+  is **not** in this set and ships as written; rewrite such a line only where it
+  is separately an imperative-form violation, and then for that reason. Route
+  the extracted files through a reviewer one rung above the extractor: diff the
+  date tokens source-vs-output, where a frontmatter `modified:` stamp is the
+  only one that should disappear, and leave identifier reachability to the
+  reader — the mechanical check was green, once, while an Opus review returned
+  two unresolvable internal ids as its only critical findings.
 - **Merge for routing** — two entries competing on one trigger hand an agent
   half a rule. Never for headroom: the merged line must still carry both
   entries' literals, so three merges measured 39 B net and one left the index
