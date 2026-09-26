@@ -7,6 +7,7 @@ load helpers/setup
 load helpers/fixtures
 load helpers/divergence-fixtures
 load helpers/commit-memory
+load helpers/tier-fixtures
 
 # What counts as an approval at commit-memory.sh's entry point: the summary a
 # caller passes, and the one already on disk that a bare invocation is judged
@@ -153,3 +154,43 @@ load helpers/commit-memory
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
 }
 
+@test "a tier mid-merge is answered with the merge directive, not a summary request" {
+  # The sibling of the root-store case above, with a tier's own divergence in
+  # place of root's: commit-memory.sh's own stale-merge guard only checks the
+  # root store, so a tier holding a prepared merge with nothing on disk to
+  # approve reaches the "Pass it with -m" screen instead of the merge
+  # directive — asking for a summary that would not help, since the guard
+  # refuses on the merge regardless.
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  git -C memory/ddaanet fetch -q origin "live:live"
+  git -C memory/ddaanet checkout -q --detach live
+  advance_branch_with_file "memory/ddaanet" live other.md body "sideways" live
+  echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: add notes"
+  [ "$status" -eq 1 ]
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]   # the tier is mid-merge
+  # The `-m` above leaves its approval file on disk, unconsumed (the root
+  # commit that would remove it never ran); dropped here so the run under test
+  # meets a tier mid-merge with no approval file, the shape the defect names.
+  rm -f "$(gitlore_commit_msg_file memory)"
+  echo more > memory/notes2.md
+  head_before=$(git -C memory rev-parse HEAD)
+
+  CLAUDECODE=1 run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "${output}${stderr}" == *"memory merge prepared"* ]]
+  [[ "${output}${stderr}" != *"Pass it with -m"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+}
+
+@test "the usage line names the bare invocation" {
+  # Bare (no -m/-F) is a documented first-class mode — the shape the batch
+  # hook always calls — and the usage string only ever lists the arg-driven
+  # forms.
+  CLAUDECODE=1 run --separate-stderr bash "$CMD" -x
+  [ "$status" -eq 2 ]
+  [[ "${output}${stderr}" == *bare* ]]
+}

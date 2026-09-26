@@ -7,6 +7,10 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-09-26 — A tier's prepared merge outranks the screens too](changelog/2026-09-26-a-tiers-prepared-merge-outranks-the-screens-too.md)
+  — `gitlore_store_mid_merge` read the root store only, so a tier's own
+  head-vs-live merge missed every screen it was meant to outrank;
+  `gitlore_any_store_mid_merge` composes the check over every mounted tier
 - [2026-09-26 — Three briefs triaged, and the mount learns its own size](changelog/2026-09-26-three-briefs-triaged-and-the-mount-learns-its-size.md)
   — the `SessionStart` commit-protocol context drops its dangling FR id, the two
   command forms it spelled out and the machinery an agent cannot act on, keeping

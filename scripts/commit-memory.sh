@@ -25,7 +25,7 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
-usage() { echo "usage: commit-memory.sh [-m <summary> | -F <file> | -F -]" >&2; exit 2; }
+usage() { echo "usage: commit-memory.sh [-m <summary> | -F <file> | -F - | bare]" >&2; exit 2; }
 summary=""
 have_summary=0
 while [ $# -gt 0 ]; do
@@ -70,6 +70,15 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
   # time it runs, so the second one costs a rev-parse and a stat. It goes after
   # the `-m`/`-F` write so an approval passed with the call is kept for the retry.
   gitlore_guard_stale_merge_state "$mempath" || exit 1
+  # Every mounted tier gets the same guard: gitlore_sync_tiers_to_live prepares a
+  # head-vs-live merge inside the tier's own gitdir, not the root's, so a tier
+  # mid-merge with nothing approved must hand over that guard's directive too,
+  # rather than fall through to the no-approval screen below.
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -e "$mempath/$tier/.git" ] || continue
+    gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
+  done < <(gitlore_tier_paths "$mempath")
   # Screened on both arms, after the write, because `-m ""` and `-F -` over empty
   # stdin both reach here; memory-commit-batch.sh screens with the same predicate.
   if ! gitlore_approval_present "$msgfile"; then

@@ -32,8 +32,8 @@ by that shared body's freshness gate — the form `memory-commit-batch.sh` uses
 / no `gitlore-memory` submodule / submodule worktree absent / memory
 clean-and-synced. Dirty with the approval absent or blank → exit 1 with a
 caller-facing message; dirty with a stale one → the sync's own refusal; dirty
-with the store mid-merge → the stale-merge guard's directive, which runs ahead
-of both (see [commit-gate.md](commit-gate.md)).
+with the store or any mounted tier mid-merge → the stale-merge guard's
+directive, which runs ahead of both (see [commit-gate.md](commit-gate.md)).
 
 **Discovery.** `gitlore.commitCommand` resolves to
 `$PLUGIN_ROOT/scripts/commit-memory.sh`, so a caller finds the script with one

@@ -93,7 +93,7 @@ fi
 # on. Skipping the screen lets the run below re-emit that directive from the
 # store, where the same guard reads it.
 mid_merge=0
-if gitlore_store_mid_merge "$mempath"; then mid_merge=1; fi
+if gitlore_any_store_mid_merge "$mempath"; then mid_merge=1; fi
 approved_before=0
 if gitlore_approval_present "$msgfile"; then approved_before=1; fi
 
@@ -149,9 +149,9 @@ else
   # committed and no approval was consumed: the report-only guard arms do not
   # restamp (D53). Re-approval follows the merge rather than preceding it, because
   # landing it writes content into the store no summary has covered.
-  elif gitlore_store_mid_merge "$mempath"; then
-    emit "gitlore: memory commit deferred — the memory store holds a prepared merge. $out" \
-      "gitlore: the memory commit did not run: the memory store holds a prepared merge, which is answered before any commit. Nothing was committed and no approved summary was consumed. Act on the directive below; once the merge is landed the commit retries by itself on a later tool batch, and asks for approval then, because landing the merge writes content into the store no summary has covered. Reason: $out"
+  elif gitlore_any_store_mid_merge "$mempath"; then
+    emit "gitlore: memory commit deferred — the memory store or a mounted tier holds a prepared merge. $out" \
+      "gitlore: the memory commit did not run: the memory store or a mounted tier holds a prepared merge, which is answered before any commit. Nothing was committed and no approved summary was consumed. Act on the directive below; once the merge is landed the commit retries by itself on a later tool batch, and asks for approval then, because landing the merge writes content into the store no summary has covered. Reason: $out"
   # Something newer than the approval is in the store: the agent's own edit, a
   # checkout, a take, a resolved merge. The summary on disk is the text to amend
   # and re-present. The script's reason is dropped — it is the sync's "no

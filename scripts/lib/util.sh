@@ -266,6 +266,20 @@ gitlore_store_mid_merge() {
   git -C "$store" rev-parse -q --verify MERGE_HEAD >/dev/null
 }
 
+# Exit 0 when the memory store or any mounted tier holds an unfinished merge —
+# a tier's merge lives in the tier's own gitdir, not the root's. Skips an
+# unmaterialized tier, where `git -C` answers for the enclosing repo instead.
+gitlore_any_store_mid_merge() {
+  local mempath="$1" tier
+  gitlore_store_mid_merge "$mempath" && return 0
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -e "$mempath/$tier/.git" ] || continue
+    gitlore_store_mid_merge "$mempath/$tier" && return 0
+  done < <(gitlore_tier_paths "$mempath")
+  return 1
+}
+
 # Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
 # callers should compare with `[ "$(gitlore_memory_dirty PATH)" = "1" ]`.
 gitlore_memory_dirty() {
