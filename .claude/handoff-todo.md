@@ -4,7 +4,7 @@
 
 ## Remaining
 
-- Re-run `scripts/test-macos.sh` on a Mac to verify the four fixes. Cases 678–1016 have now executed there once; the 50 failures that run reported are diagnosed and patched, and the patches themselves are unverified on the platform.
+- Correct `skills/memory-writing/SKILL.md` §4: the recall cap is measured against the file, but the `description:` frontmatter is synced from the index line and so spends those bytes twice — 877 B of one 4096 B budget. The section tells the reader to `wc -c` before adding a section without saying the line they must not trim is itself eating the budget.
+- Re-run `scripts/test-macos.sh` on a Mac to verify the four fixes. Cases 678–1016 have executed there once; the 50 failures that run reported are diagnosed and patched, and the patches are unverified on the platform.
 - `/deliverable-review plans/batch-retry-approval-freshness` in a fresh opus session.
-- Triage `inbox/brief-add-tier-index-budget-advisory.md`, `inbox/brief-index-audit-preamble-and-merge-unlanded.md`, `inbox/brief-session-start-protocol-context-wording.md` and `plans/brief-codex-native-memory-integration.md`, once the rest of the list is cleared; each brief's recommendation is input, and the choice is my human partner's.
-- Continue the ddaanet review pass from `plans/ddaanet-memory-review.md` (entry 6, `hook-input-schema`).
+- Triage `inbox/brief-add-tier-index-budget-advisory.md`, `inbox/brief-index-audit-preamble-and-merge-unlanded.md`, `inbox/brief-session-start-protocol-context-wording.md` and `plans/brief-codex-native-memory-integration.md`; each brief's recommendation is input, and the choice is my human partner's.
