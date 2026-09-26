@@ -6,6 +6,7 @@
 # shellcheck disable=SC2016
 
 load helpers/setup
+load helpers/run-asserts
 
 MUT="$PLUGIN_ROOT/scripts/mutate-and-run.sh"
 
@@ -49,38 +50,32 @@ assert_subject_restored() {
   [ "$status" -eq 0 ]
   [[ "$output" == 100755* ]]
   run git -C "$PLUGIN_ROOT" ls-files -- '*.sh'
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"scripts/mutate-and-run.sh"* ]]
+  assert_status 0 "scripts/mutate-and-run.sh"
 }
 
 @test "a mutation the suite catches is reported KILLED, with the failing test named" {
   run "$MUT" prod.sh 's/one/two/' subject.bats
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"KILLED"* ]]
-  [[ "$output" != *"SURVIVED"* ]]
   # The reviewer needs the test that died, not just the verdict.
-  [[ "$output" == *"not ok 1 prod says one"* ]]
+  assert_status 0 "KILLED" "not ok 1 prod says one"
+  [[ "$output" != *"SURVIVED"* ]]
   assert_subject_restored
 }
 
 @test "a mutation no test discriminates is reported SURVIVED" {
   # Behaviour-preserving: the subject changes, every assertion still holds.
   run "$MUT" prod.sh 's|/usr/bin/env bash|/bin/bash|' subject.bats
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"SURVIVED"* ]]
+  assert_status 1 "SURVIVED"
   [[ "$output" != *"KILLED"* ]]
   assert_subject_restored
 }
 
 @test "a filter narrows the run, and one that selects no test is refused" {
   run "$MUT" prod.sh 's/one/two/' subject.bats 'says one'
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"1 test(s) ran"* ]]
+  assert_status 0 "1 test(s) ran"
   assert_subject_restored
 
   run "$MUT" prod.sh 's/one/two/' subject.bats 'no such test'
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"selected no test"* ]]
+  assert_status 2 "selected no test"
   assert_subject_restored
 }
 
@@ -88,15 +83,13 @@ assert_subject_restored() {
   printf 'echo extra\n' >> prod.sh
   dirty="$(cat prod.sh)"
   run "$MUT" prod.sh 's/one/two/' subject.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"uncommitted changes"* ]]
+  assert_status 2 "uncommitted changes"
   [ "$(cat prod.sh)" = "$dirty" ]
   [ ! -e "$(backup_path)" ]
 
   git add prod.sh
   run "$MUT" prod.sh 's/one/two/' subject.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"uncommitted changes"* ]]
+  assert_status 2 "uncommitted changes"
   [ "$(cat prod.sh)" = "$dirty" ]
   [ ! -e "$(backup_path)" ]
 }
@@ -104,23 +97,20 @@ assert_subject_restored() {
 @test "an untracked subject is refused, because the restore could not be verified" {
   printf '#!/usr/bin/env bash\necho one\n' > loose.sh
   run "$MUT" loose.sh 's/one/two/' subject.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"not tracked"* ]]
+  assert_status 2 "not tracked"
   [ "$(cat loose.sh)" = "$(printf '#!/usr/bin/env bash\necho one')" ]
 }
 
 @test "a mutation that changes nothing is refused as empty" {
   run "$MUT" prod.sh 's/never-appears/two/' subject.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"unchanged"* ]]
+  assert_status 2 "unchanged"
   [[ "$output" != *"SURVIVED"* ]]
   assert_subject_restored
 }
 
 @test "a sed script that will not parse is refused" {
   run "$MUT" prod.sh 's/[unclosed/two/' subject.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"sed script failed"* ]]
+  assert_status 2 "sed script failed"
   assert_subject_restored
 }
 
@@ -133,10 +123,7 @@ assert_subject_restored() {
   printf '#!/usr/bin/env bash\necho two\n' > prod.sh
 
   run "$MUT" prod.sh 's/one/three/' subject.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"previous run left a backup"* ]]
-  [[ "$output" == *"$work/subject.bak"* ]]
-  [[ "$output" == *"$TMP_REPO/prod.sh"* ]]
+  assert_status 2 "previous run left a backup" "$work/subject.bak" "$TMP_REPO/prod.sh"
   # The refusal is inert: the backup and the crashed run's mutant both stand.
   [ -f "$work/subject.bak" ]
   [ "$(cat prod.sh)" = "$(printf '#!/usr/bin/env bash\necho two')" ]
@@ -178,18 +165,14 @@ EOF
 
 @test "a wrong argument count and a missing path are usage errors" {
   run "$MUT" prod.sh 's/one/two/'
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"usage: mutate-and-run.sh"* ]]
+  assert_status 2 "usage: mutate-and-run.sh"
 
   run "$MUT" prod.sh 's/one/two/' subject.bats 'filter' 'extra'
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"usage: mutate-and-run.sh"* ]]
+  assert_status 2 "usage: mutate-and-run.sh"
 
   run "$MUT" absent.sh 's/one/two/' subject.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"no such file"* ]]
+  assert_status 2 "no such file"
 
   run "$MUT" prod.sh 's/one/two/' absent.bats
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"no such suite"* ]]
+  assert_status 2 "no such suite"
 }
