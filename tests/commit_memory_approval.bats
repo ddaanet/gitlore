@@ -156,11 +156,11 @@ load helpers/tier-fixtures
 
 @test "a tier mid-merge is answered with the merge directive, not a summary request" {
   # The sibling of the root-store case above, with a tier's own divergence in
-  # place of root's: commit-memory.sh's own stale-merge guard only checks the
-  # root store, so a tier holding a prepared merge with nothing on disk to
-  # approve reaches the "Pass it with -m" screen instead of the merge
-  # directive — asking for a summary that would not help, since the guard
-  # refuses on the merge regardless.
+  # place of root's. commit-memory.sh guards every mounted tier as well as the
+  # root, ahead of the "Pass it with -m" screen: a tier holding a prepared merge
+  # with nothing on disk to approve is owed that guard's directive, not a
+  # request for a summary that would not help, since the guard refuses on the
+  # merge regardless.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet

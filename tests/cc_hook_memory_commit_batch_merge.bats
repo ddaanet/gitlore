@@ -73,13 +73,12 @@ load helpers/cc-hook-memory-commit-batch
 
 @test "a tier's prepared merge hands over the merge directive, not a re-approval request" {
   # A tier diverged from its own live prepares a head-vs-live merge in the
-  # tier's gitdir, not the root store's — gitlore_store_mid_merge only reads the
-  # root, so this batch's post-run screen reads mid_merge false and falls
-  # through to the freshness arm, whose checkout of the merge result into the
-  # tier's worktree is what then reads the leftover approval as stale. That arm
-  # drops $out and re-presents a summary for a merge both of whose sides are
-  # already approved (D49), discarding the merge directive the guard already
-  # produced.
+  # tier's gitdir, not the root store's, so the post-run screen reads both. A
+  # root-only read answers false here, and the merge's checkout into the tier's
+  # worktree outdates the leftover approval, so the batch takes the freshness
+  # arm instead — which drops $out, withholding the directive the guard produced
+  # and returning a merge both of whose sides are already approved (D49) as a
+  # summary to re-present.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -110,9 +109,10 @@ load helpers/cc-hook-memory-commit-batch
 
 @test "a tier mid-merge with no approval is not met with a request for a summary" {
   # Same divergence as above, but with the approval gone before the batch that
-  # matters: the pre-run screen's own "no approval yet" arm checks mid_merge
-  # against the root store too, misses the tier's merge, and asks the user to
-  # draft a summary for content both sides of the merge already approved.
+  # matters, which is the shape the pre-run "no approval yet" screen answers. It
+  # reads the tiers for the same reason: against the root alone it misses the
+  # tier's merge and asks the user to draft a summary for content both sides of
+  # that merge already approved.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet

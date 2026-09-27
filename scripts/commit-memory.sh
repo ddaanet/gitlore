@@ -70,18 +70,24 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
   # time it runs, so the second one costs a rev-parse and a stat. It goes after
   # the `-m`/`-F` write so an approval passed with the call is kept for the retry.
   gitlore_guard_stale_merge_state "$mempath" || exit 1
-  # Every mounted tier gets the same guard: gitlore_sync_tiers_to_live prepares a
-  # head-vs-live merge inside the tier's own gitdir, not the root's, so a tier
-  # mid-merge with nothing approved must hand over that guard's directive too,
-  # rather than fall through to the no-approval screen below.
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -e "$mempath/$tier/.git" ] || continue
-    gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
-  done < <(gitlore_tier_paths "$mempath")
   # Screened on both arms, after the write, because `-m ""` and `-F -` over empty
   # stdin both reach here; memory-commit-batch.sh screens with the same predicate.
   if ! gitlore_approval_present "$msgfile"; then
+    # Every mounted tier gets the same guard before that refusal speaks:
+    # gitlore_sync_tiers_to_live prepares a head-vs-live merge inside the tier's
+    # own gitdir, not the root's, so a tier mid-merge with nothing approved hands
+    # over that guard's directive instead of a request for a summary.
+    # Inside this arm rather than ahead of it, the placement resolve-sync-memory.sh
+    # gives its own refusal-side loop, and for the same reason: the guard's
+    # stale-no-merge-head arm REPAIRS, writing into the tier, so running it over a
+    # summary just passed with `-m` would make that approval stale by mtime and
+    # refuse it one step later. The approved path keeps the sync's own per-tier
+    # guard, which runs after the freshness read this one would invalidate.
+    while IFS= read -r tier; do
+      [ -n "$tier" ] || continue
+      [ -e "$mempath/$tier/.git" ] || continue
+      gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
+    done < <(gitlore_tier_paths "$mempath")
     gitlore_say_for_agent_or_user \
       "gitlore: memory is dirty; commit-memory needs an approved summary. Pass it with -m <summary> or -F - (heredoc)." \
       "gitlore: memory has uncommitted changes; run this from Claude Code with an approved summary." >&2

@@ -2,9 +2,7 @@
 
 load helpers/setup
 load helpers/fixtures
-load helpers/divergence-fixtures
 load helpers/cc-hook-memory-commit-batch
-
 
 @test "no-op (exit 0, silent) when gitlore is not configured" {
   # The commit fixture minus exactly the memory submodule: an approved summary
