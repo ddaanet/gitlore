@@ -64,10 +64,10 @@ load helpers/resolve-recovery
 #
 # What the predicate cannot be: "the superproject carries a root MEMORY.md AND
 # the store's path is in `gitlore_tier_paths "$super"`". `gitlore_tier_paths`
-# (scripts/lib/util.sh:360) prints every submodule path a repo registers, with
-# no notion of a tier beyond enclosure, so the memory store satisfies the second
-# condition inside its OWN host — and this fixture's host satisfies the first.
-# The discriminating clause is the third: the store's path must not be the
+# (scripts/lib/util-config.sh) prints every submodule path a repo registers,
+# with no notion of a tier beyond enclosure, so the memory store satisfies the
+# second condition inside its OWN host — and this fixture's host satisfies the
+# first. The discriminating clause is the third: the store's path must not be the
 # superproject's own `submodule.gitlore-memory.path`.
 #
 # MUTATION PROOF, for code review — drop that third clause, leaving the
@@ -77,7 +77,7 @@ load helpers/resolve-recovery
 # case is what isolates the exclusion.
 #
 # The guard runs from a cwd OUTSIDE the superproject on purpose:
-# `gitlore_memory_path` (scripts/lib/util.sh:83) reads `.gitmodules` from the
+# `gitlore_memory_path` (scripts/lib/util.sh) reads `.gitmodules` from the
 # CURRENT DIRECTORY, not from a repo it is handed, so a GREEN that reaches for
 # it instead of `git config --file "$super/.gitmodules" …` finds no
 # registration, skips the exclusion and stages. Run from $TMP_REPO that bug is

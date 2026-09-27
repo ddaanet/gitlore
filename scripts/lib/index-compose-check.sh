@@ -171,8 +171,9 @@ gitlore_compose_problems_in() {
 
 # Rule 7 — every ACTIVE tier sits at the commit the memory store records for it.
 # Print one problem per moved tier and return 1; print nothing and return 0
-# otherwise. Depends on gitlore_active_tiers and gitlore_merge_state_file
-# (util.sh); callers already source it.
+# otherwise. Depends on gitlore_active_tiers (util-config.sh) and
+# gitlore_merge_state_file (util-merge-state.sh); callers source util.sh,
+# which pulls in both.
 #
 # The down projection is safe only because a pinned tier cannot have moved on
 # its own, which is what leaves one projection to move between passes (D36). A

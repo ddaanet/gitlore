@@ -4,6 +4,10 @@
 # (checkout, merge --no-commit, entry-wise index merge), and emit the
 # structured directive that dispatches gitlore:memory-merger.
 # Part of lib/resolve.sh; source that, not this file.
+#
+# Where that state lives and whether a store holds one — the gitdir paths, their
+# remover, and the mid-merge predicates — is util-merge-state.sh instead, so a
+# caller that never sources resolve.sh can still order its work behind a merge.
 
 # Write the merge-state file a preparation records BEFORE it starts, so no
 # window inside gitlore_prepare_merge can leave a merge no gate can see. It

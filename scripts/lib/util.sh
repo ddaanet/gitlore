@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Shared shell utilities. Source; do not exec.
 #
-# Tier and remote/publishing config helpers live in util-config.sh, sourced
-# below. It is function-only (safe to source twice, unlike this file), so
-# definition order between the two files does not matter.
+# Tier and remote/publishing config helpers live in util-config.sh, and the
+# merge-state paths and mid-merge predicates in util-merge-state.sh, both
+# sourced below. Each is function-only (safe to source twice, unlike this file),
+# so definition order among the three files does not matter.
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/util-config.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/util-merge-state.sh"
 
 # The canonical submodule name regardless of working-tree path.
 GITLORE_SUBMODULE_NAME="gitlore-memory"
@@ -215,14 +218,6 @@ warning for how to activate it.
 EOF
 }
 
-# Print abs path to the memory submodule's merge-state file.
-# Resolves through the submodule's gitdir correctly.
-# Args: $1 = memory path (working tree).
-gitlore_merge_state_file() {
-  local mempath="$1"
-  git -C "$mempath" rev-parse --git-path gitlore-merge-state
-}
-
 # Print abs path to a tier's landing record: the commit the tier sat on when the
 # commit path last began a commit inside it (gitlore_sync_tiers_to_live), read
 # back by gitlore_stage_landed_tiers. Lives in the tier's gitdir, so it is
@@ -230,54 +225,6 @@ gitlore_merge_state_file() {
 # Args: $1 = tier worktree path.
 gitlore_tier_landing_file() {
   git -C "$1" rev-parse --git-path gitlore-tier-landing
-}
-
-# Print abs path to one of the merge's read-only briefing artifacts — the two
-# side diffs and the store's file tree, written at prepare time for the merger
-# sub-agent. They live beside the state file in the gitdir, so they are invisible
-# to `git status` and need no `.gitignore` entry, and they are named in the state
-# file rather than reconstructed: the sub-agent runs no git of its own beyond
-# `add`. Args: $1 = memory path, $2 = artifact suffix (mine.diff, theirs.diff, tree).
-gitlore_merge_artifact_file() {
-  git -C "$1" rev-parse --git-path "gitlore-merge-$2"
-}
-
-# Remove the merge state file and every artifact that was written with it.
-# One remover, so a continuation cannot drop the state and leave the briefing
-# behind for the next merge to be read against. Args: $1 = memory path.
-gitlore_clear_merge_state() {
-  local mempath="$1" name
-  rm -f "$(gitlore_merge_state_file "$mempath")"
-  for name in mine.diff theirs.diff tree; do
-    rm -f "$(gitlore_merge_artifact_file "$mempath" "$name")"
-  done
-}
-
-# Exit 0 when a store holds an unfinished merge — a merge-state file, a
-# MERGE_HEAD, or both. This is gitlore_detect_stale_merge_state's "clean"
-# outcome inverted, without its classification of the other three: a caller that
-# only needs to order a merge ahead of its own work lives outside resolve.sh
-# (memory-commit-batch.sh, and index-compose-check.sh, which resolve.sh sources)
-# and cannot reach that function. Args: $1 = store worktree path.
-gitlore_store_mid_merge() {
-  local store="$1"
-  [ -f "$(gitlore_merge_state_file "$store")" ] && return 0
-  # `-q --verify` is silent on the expected miss: no merge in progress.
-  git -C "$store" rev-parse -q --verify MERGE_HEAD >/dev/null
-}
-
-# Exit 0 when the memory store or any mounted tier holds an unfinished merge —
-# a tier's merge lives in the tier's own gitdir, not the root's. Skips an
-# unmaterialized tier, where `git -C` answers for the enclosing repo instead.
-gitlore_any_store_mid_merge() {
-  local mempath="$1" tier
-  gitlore_store_mid_merge "$mempath" && return 0
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -e "$mempath/$tier/.git" ] || continue
-    gitlore_store_mid_merge "$mempath/$tier" && return 0
-  done < <(gitlore_tier_paths "$mempath")
-  return 1
 }
 
 # Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
