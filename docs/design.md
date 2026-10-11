@@ -182,9 +182,8 @@ Claude Code's native auto-memory writes to
 in an honored settings tier. Project settings are *not* honored (D10), so the
 only per-project, non-global mechanism is the `--settings` flag at launch,
 injected by a thin `claude` shim — the user keeps typing `claude`, and memory
-lands in the submodule. Shim body, its two placements, the `GITLORE_LAUNCHED`
-sentinel that stops them double-injecting, and the
-`GITLORE_AUTO_CLAUDE_PLUGIN_DIR` opt-in:
+lands in the submodule. Shim body, its two placements and the `GITLORE_LAUNCHED`
+sentinel that stops them double-injecting:
 [memory-redirect.md](references/memory-redirect.md).
 
 ### Components

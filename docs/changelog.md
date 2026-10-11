@@ -7,6 +7,11 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-11 — The launcher stops loading the checkout](changelog/2026-10-11-the-launcher-stops-loading-the-checkout.md)
+  — `GITLORE_AUTO_CLAUDE_PLUGIN_DIR` leaves the launcher shim and is now
+  ignored: `--plugin-dir .` made the repository root an inline plugin root,
+  under which Claude Code holds every edit; gitlore dogfoods through the
+  toolkit's shim and its `dist/plugin/` copy instead
 - [2026-09-26 — A tier's prepared merge outranks the screens too](changelog/2026-09-26-a-tiers-prepared-merge-outranks-the-screens-too.md)
   — `gitlore_store_mid_merge` read the root store only, so a tier's own
   head-vs-live merge missed every screen it was meant to outrank;

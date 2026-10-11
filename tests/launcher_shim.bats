@@ -9,11 +9,10 @@ SHIM_SRC="$PLUGIN_ROOT/scripts/install/launcher-shim"
 setup() {
   setup_tmp_repo
   # Clean baseline: the suite may be run from inside a gitlore-launched session
-  # (GITLORE_LAUNCHED=1 in the ambient env), which would make the inject test
+  # (GITLORE_LAUNCHED=1 in the ambient env), which would make the inject tests
   # see the anti-double-inject sentinel and pass through. The one test that
   # needs the sentinel sets it inline.
   unset GITLORE_LAUNCHED
-  unset GITLORE_AUTO_CLAUDE_PLUGIN_DIR
   SHIMDIR="$TMP_REPO/.shimdir"; STUBDIR="$TMP_REPO/.stubdir"
   mkdir -p "$SHIMDIR" "$STUBDIR"
   cp "$SHIM_SRC" "$SHIMDIR/claude"; chmod 755 "$SHIMDIR/claude"
@@ -79,44 +78,6 @@ bounded() {
   [[ "$output" == *"autoMemoryDirectory"* ]]
   [[ "$output" == *"$TMP_REPO/memory"* ]]
   [[ "$output" == *"hi"* ]]
-}
-
-@test "no --plugin-dir by default, even in a plugin checkout" {
-  mkdir -p .claude-plugin; printf '{"name":"x"}\n' > .claude-plugin/plugin.json
-  run "$SHIMDIR/claude" hi
-  [ "$status" -eq 0 ]
-  [ "$output" = "REAL:hi" ]
-}
-
-@test "no --plugin-dir when opted in but no plugin.json" {
-  GITLORE_AUTO_CLAUDE_PLUGIN_DIR=1 run "$SHIMDIR/claude" hi
-  [ "$status" -eq 0 ]
-  [ "$output" = "REAL:hi" ]
-}
-
-@test "injects --plugin-dir . when opted in inside a plugin checkout" {
-  mkdir -p .claude-plugin; printf '{"name":"x"}\n' > .claude-plugin/plugin.json
-  GITLORE_AUTO_CLAUDE_PLUGIN_DIR=1 run "$SHIMDIR/claude" hi
-  [ "$status" -eq 0 ]
-  [ "$output" = "REAL:--plugin-dir . hi" ]
-}
-
-@test "--plugin-dir composes with the autoMemoryDirectory injection" {
-  make_parent_with_memory
-  mkdir -p .claude; printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  mkdir -p .claude-plugin; printf '{"name":"x"}\n' > .claude-plugin/plugin.json
-  GITLORE_AUTO_CLAUDE_PLUGIN_DIR=1 run "$SHIMDIR/claude" hi
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"--settings"* ]]
-  [[ "$output" == *"autoMemoryDirectory"* ]]
-  [[ "$output" == *"--plugin-dir . hi"* ]]
-}
-
-@test "GITLORE_LAUNCHED suppresses --plugin-dir (anti-double-inject)" {
-  mkdir -p .claude-plugin; printf '{"name":"x"}\n' > .claude-plugin/plugin.json
-  GITLORE_LAUNCHED=1 GITLORE_AUTO_CLAUDE_PLUGIN_DIR=1 run "$SHIMDIR/claude" hi
-  [ "$status" -eq 0 ]
-  [ "$output" = "REAL:hi" ]
 }
 
 @test "exit 127 when no real claude is reachable" {
