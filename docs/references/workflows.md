@@ -15,9 +15,9 @@ each component runs in.
    changes in prose and presents the summary. The user reviews the full diff in
    their own git tooling if they wish, then gives explicit confirmation.
 3. Claude runs `commit-memory.sh` through the `gitlore.commitCommand` key with
-   the confirmed summary (`-m`), or writes the summary and the trigger file and
-   lets the `PostToolBatch` hook run it. The preceding confirmation covers the
-   commit itself.
+   the confirmed summary on stdin (`-F -`), or writes the summary and the
+   trigger file and lets the `PostToolBatch` hook run it. The preceding
+   confirmation covers the commit itself.
 4. The script commits every dirty tier and advances each tier's `live`, then
    commits memory with the summary, deletes the message file, and ff-pushes
    `HEAD` → `live`.
@@ -59,11 +59,14 @@ bound for project memory.
 
 **Take without publishing**
 
-1. The user runs `/gitlore:merge`, or a session start named a tier whose remote
-   is ahead.
+1. The user runs `/gitlore:merge`, or a session start reported commits on `live`
+   not checked out here, upstream memory commits, or a tier whose remote is
+   ahead.
 2. The skill runs `merge-memory.sh` through the `gitlore.mergeCommand` key.
-3. Memory's own remote is taken first, then each tier's — the mirror of the
-   publish order (D49 in [merge-and-resolve.md](merge-and-resolve.md)).
+3. Memory's own store is taken first, then each tier's — the mirror of the
+   publish order (D49 in [merge-and-resolve.md](merge-and-resolve.md)). For
+   memory's own store a local `live` ahead of `HEAD` is taken first: a clean
+   store is checked out at `live`, a dirty one is reported and left (D59).
 4. A tier take commits the moved gitlink and recomposed root index under the
    canned bookkeeping message, leaving the store clean; a root store holding
    unapproved work keeps the pair staged instead, and the run says which.
@@ -91,17 +94,18 @@ Code and run `/gitlore:resolve`. The primary path resumes from there.
 **Clone**
 
 `git clone --recurse-submodules <repo>` → the first `SessionStart` configures
-settings, detaches memory at `live`, and replays the hook-manager sentinel.
+settings, detaches memory at `live`, reports where memory stands, and replays
+the hook-manager sentinel.
 
 Without `--recurse-submodules`: `SessionStart` detects the uninitialized
 submodule and runs `git submodule update --init`. That leaves the memory
 submodule at a **detached HEAD** on the recorded gitlink SHA with only the
 remote-tracking `origin/live` — no local branches. Since the branch-model logic
-references `live` as a *local* ref (checkout source and ff-merge target),
-`SessionStart` first materializes a local `live` from `origin/live` (falling
-back to the checked-out `HEAD` when memory has no remote), then proceeds as
-above. Without it the first post-clone session dies on
-`fatal: 'live' is not a commit`.
+references `live` as a *local* ref (the detach target and the report's
+comparison point), `SessionStart` first materializes a local `live` from the
+checked-out `HEAD` — the gitlink commit, whether or not `origin/live` exists and
+never `origin/live`, which may be ahead of it (D59) — then proceeds as above.
+Without it the first post-clone session dies on `fatal: 'live' is not a commit`.
 
 **Worktree creation** — `SessionStart` in the new worktree initializes the
 memory submodule worktree, detached at `live`. Uniform across

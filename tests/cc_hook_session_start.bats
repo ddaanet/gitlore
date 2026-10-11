@@ -211,65 +211,6 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.systemMessage | test("memory ready")'
 }
 
-@test "ff-merges detached memory HEAD to live when clean" {
-  make_parent_with_memory
-  # Advance live ahead of the detached HEAD.
-  advance_branch_with_file memory live EXTRA.md extra "Advance live"
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  bash "$SESSION_START"
-  # After SessionStart, the detached HEAD should sit at the live tip.
-  [ "$(git -C memory rev-parse live)" = "$(git -C memory rev-parse HEAD)" ]
-}
-
-@test "warns and skips ff when memory is dirty via systemMessage (D14)" {
-  make_parent_with_memory
-  echo dirty > memory/scratch.md
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("uncommitted")'
-}
-
-@test "diverged memory reports via systemMessage, exit 0 (D14)" {
-  make_parent_with_memory
-  make_diverged_head_vs_live
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("diverged")'
-  echo "$output" | jq -e '.systemMessage | test("resolve")'
-}
-
-@test "a ff-only merge failure that is NOT divergence reports git's own reason, not a guessed 'diverged'" {
-  # Regression for the blanket `2>&1` this hook used to carry on the ff-only
-  # merge: a lock, a corrupt object, or an unwritable worktree all refuse
-  # --ff-only the same way a genuine divergence does, and sending the user to
-  # /gitlore:resolve for any of them replaces git's own explanation with a
-  # guess. Force a real, non-divergence failure: HEAD is strictly BEHIND live
-  # (an ordinary fast-forward would succeed) but a stranded index.lock in
-  # memory's own gitdir blocks the merge from writing.
-  export GITLORE_GIT_RETRY_SCHEDULE="0 0 0 0 0 0 0"
-  make_parent_with_memory
-  advance_branch_with_file memory live EXTRA.md extra "Advance live"
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-
-  mem_gitdir=$(git -C memory rev-parse --git-dir)
-  : > "$mem_gitdir/index.lock"
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  rm -f "$mem_gitdir/index.lock"
-
-  [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("could not be fast-forwarded")'
-  run bash -c "echo \"\$1\" | jq -e '.systemMessage | test(\"diverged\")'" _ "$output"
-  [ "$status" -ne 0 ]
-  # HEAD never advanced — the merge genuinely did not happen.
-  [ "$(git -C memory rev-parse live)" != "$(git -C memory rev-parse HEAD)" ]
-}
-
 @test "dangling index pointers: one capped systemMessage + a capped additionalContext (D14)" {
   make_parent_with_memory
   # Seven root pointers whose target files do not exist — a dangling report

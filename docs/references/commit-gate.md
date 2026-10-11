@@ -25,12 +25,12 @@ its sibling on the mount side. The shape is deliberate and shared: the agent
 writes a file, a hook does the git — sidestepping both the command sandbox and
 the auto-mode classifier, neither of which lets the agent do this work itself.
 
-The agent's own call of `commit-memory.sh -m "<approved summary>"` is the direct
-route (the SessionStart orientation and the submodule gate's block message both
-teach it); the intent file is the same commit by the other route, for a moment
-when a denial would strand the approved summary (D16, D58). The agent writes the
-approved summary (`.claude/gitlore-memory-message`) and the trigger
-(`.claude/gitlore-commit-memory`); `memory-commit-batch.sh` runs
+The agent's own call of `commit-memory.sh -F -`, the approved summary on stdin,
+is the direct route (the SessionStart orientation and the submodule gate's block
+message both teach it); the intent file is the same commit by the other route,
+for a moment when a denial would strand the approved summary (D16, D58). The
+agent writes the approved summary (`.claude/gitlore-memory-message`) and the
+trigger (`.claude/gitlore-commit-memory`); `memory-commit-batch.sh` runs
 `commit-memory.sh` bare, which commits with the blessed sentinel, advances local
 `live` and stages the pointer in the parent index.
 
@@ -159,16 +159,18 @@ Two complementary mechanisms close it:
   `SessionStart` emits a standing `additionalContext` every gitlore session
   carrying the commit as an act: writing a memory file is an ordinary edit; to
   commit memory, summarize the pending changes, get the user's explicit
-  approval, then run
-  `bash "$(git config gitlore.commitCommand)" -m "<approved summary>"` from the
-  repo root; never run `git commit` inside the memory submodule. The
-  `$(git config …)` reaches the agent as literal text. The text is acts and
-  nothing else: the gate, the hook that blocks, and what it records are
-  mechanism the agent cannot act on, and the gate states them itself at the
-  moment it fires; the prohibition forbids by role, because naming
-  `git -C <mempath> commit` invites reasoning about the forms left unnamed; and
-  no FR id appears, since it resolves to nothing in the consumer repos this
-  context reaches. Pinned by the assertions in
+  approval, then run `bash "$(git config gitlore.commitCommand)" -F -` from the
+  repo root with the approved summary on stdin, through a quoted heredoc; never
+  run `git commit` inside the memory submodule. The `$(git config …)` reaches
+  the agent as literal text. The summary travels on stdin and not as a `-m`
+  argument because it is prose derived from memory content: templated into a
+  double-quoted argument, a backtick or `$(…)` in it would be run by the agent's
+  shell. The text is acts and nothing else: the gate, the hook that blocks, and
+  what it records are mechanism the agent cannot act on, and the gate states
+  them itself at the moment it fires; the prohibition forbids by role, because
+  naming `git -C <mempath> commit` invites reasoning about the forms left
+  unnamed; and no FR id appears, since it resolves to nothing in the consumer
+  repos this context reaches. Pinned by the assertions in
   `tests/cc_hook_session_start.bats`. The base Claude Code memory instructions
   describe generic "edit files, save facts" memory with no review gate, so the
   agent's default is actively wrong in a gitlore repo. The orientation corrects

@@ -70,9 +70,9 @@ observed confirming it fires for a single call.
 A frontmatter-only edit is left untouched; this hook never writes the index, and
 it deploys globally through the plugin hooks. It is
 **complementary to, not a substitute for, the structural recompose**: the sync
-sees only in-session tool edits, so propagation arriving via `SessionStart` ff,
-merges or `/gitlore:resolve` is invisible to it — precisely what the structural
-pass covers.
+sees only in-session tool edits, so propagation arriving via a `/gitlore:merge`
+take, merges or `/gitlore:resolve` is invisible to it — precisely what the
+structural pass covers.
 
 **Both hooks are non-blocking but never silent**. Neither may ever `exit 2` —
 the one code that blocks, and only at `PreToolUse`; at `PostToolUse` nothing can

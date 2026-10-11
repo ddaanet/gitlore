@@ -25,11 +25,12 @@ file is what you need while running or changing a merge.
 
 ### What each phase does with `live`
 
-- **Session start.** SessionStart detaches in place, then fast-forwards HEAD
-  onto `live` when the store is clean. Uncommitted changes skip the fast-forward
-  with a user-visible notice — memory is never moved out from under pending
-  work. A store that arrives on a named branch (an install predating this model)
-  is migrated by the same in-place detach.
+- **Session start.** SessionStart detaches in place and then reports where HEAD
+  stands against `live` and `origin/live`; it moves nothing (D59, with the
+  report in [session.md](session.md)). A local `live` ahead of HEAD is named,
+  and `/gitlore:merge` is what checks HEAD out at it. A store that arrives on a
+  named branch (an install predating this model) is migrated by the same
+  in-place detach.
 - **After commit.** The commit path advances `live` immediately
   (`push . HEAD:live`, fast-forward only), so `live` holds every commit the
   moment it exists and memory is repo-global rather than branch-scoped.
@@ -135,9 +136,19 @@ checkout, landed, staged, dead) is in
 
 Take what every store's remote holds, and publish nothing. A skill for the same
 reasons `push` is: `/gitlore:merge` is the front door, but a session start that
-named an upstream-ahead tier has to be able to reach it from context. The body
-makes one call — `bash "$(git config gitlore.mergeCommand)"` — and reads the
-exit the same way.
+reported commits on `live` not checked out here, upstream memory commits or an
+upstream-ahead tier has to be able to reach it from context. The body makes one
+call — `bash "$(git config gitlore.mergeCommand)"` — and reads the exit the same
+way.
+
+For the memory root only, the take opens with the local half: a `live` that
+strictly contains HEAD — commits another checkout of the store made — is checked
+out detached when the store is clean, and the run says HEAD was fast-forwarded
+onto its local `live`. A dirty store is reported and left where it is (exit 0),
+and the remote comparison below then withholds its "already holds everything"
+line, which would claim finished a store that is not; commit memory and run
+`/gitlore:merge` again. A tier's local `live` ahead of its pin is adopted by the
+tier loop instead (D43).
 
 Per store, an already-contained remote is nothing to do, a strictly-ahead remote
 is a fast-forward followed by the tier adoption, and a diverged one prepares a
@@ -356,13 +367,13 @@ body, so a fast-forward take — which creates no tier commit — is still recor
 The line between committing and not is **intention**. An explicit operation —
 `/gitlore:merge`, `/gitlore:push`, a resolve continuation servicing an explicit
 commit or push — leaves a clean store, committing the pair and advancing `live`;
-the implicit SessionStart fast-forward commits nothing, as before. One guard
-survives: a root store that held unapproved work before the take keeps the
-staged-pair discipline (D43), because a canned `commit` may only ever carry what
-the take itself staged. And push takes upstream under the same decision —
-attempt → take → attempt again — so only a genuine divergence yields to
-`/gitlore:resolve`, and the report credits only tips the store held before the
-run: a take is not a publication.
+SessionStart takes nothing and commits nothing (D59). One guard survives: a root
+store that held unapproved work before the take keeps the staged-pair discipline
+(D43), because a canned `commit` may only ever carry what the take itself
+staged. And push takes upstream under the same decision — attempt → take →
+attempt again — so only a genuine divergence yields to `/gitlore:resolve`, and
+the report credits only tips the store held before the run: a take is not a
+publication.
 
 ## Rejected alternatives
 

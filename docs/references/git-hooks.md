@@ -52,15 +52,15 @@ or `live` itself.** `commit-memory.sh` makes it `live` itself: after a commit
 that moved memory's HEAD it stages the commit it just advanced `live` to
 (skipped during a rebase, cherry-pick or revert, where a replayed commit keeps
 the pointer it recorded). Every other path that advances memory — the
-`SessionStart` fast-forward, `/gitlore:merge`, a resolved merge — moves `live`
-forward and leaves the gitlink behind as an ancestor; a `head-vs-remote` merge
-in particular keeps the pending commit reachable as its second parent (D6). A
-gitlink behind memory's HEAD is therefore the resting state — ` M memory` in the
-parent's porcelain — not drift: it floats between parent commits, the next one
-records the move, and nothing walks memory back to it. `SessionStart` runs
-`submodule update` on memory only when its worktree is absent; the
-pin-to-the-gitlink discipline (D43) is for tiers inside memory, not for memory
-in the parent.
+`/gitlore:merge` (its local move of `HEAD` onto `live` included), a resolved
+merge — moves `live` forward and leaves the gitlink behind as an ancestor; a
+`head-vs-remote` merge in particular keeps the pending commit reachable as its
+second parent (D6). A gitlink behind memory's HEAD is therefore the resting
+state — ` M memory` in the parent's porcelain — not drift: it floats between
+parent commits, the next one records the move, and nothing walks memory back to
+it. `SessionStart` runs `submodule update` on memory only when its worktree is
+absent; the pin-to-the-gitlink discipline (D43) is for tiers inside memory, not
+for memory in the parent.
 
 The invariant is what NFR5 rests on, and it survives any number of merge rounds.
 A push of `live` publishes every ancestor, so `origin/live` contains the gitlink

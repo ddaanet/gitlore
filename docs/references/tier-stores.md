@@ -130,13 +130,13 @@ one tier, for the reason the behind-tier branch gives: it goes root-first, and a
 tier's bookkeeping commit would otherwise meet an equally-behind root's upstream
 one as a divergence.
 
-The memory root is excluded from that adoption. It has no pin above it —
-SessionStart checks it out at `live` and the parent's gitlink is allowed to lag
-(D46) — so there a `live` ahead of `HEAD` is answered by the checkout the
-session would make anyway, which is what the gate names for the root and only
-the root. A `HEAD` and `live` that have each moved since they last agreed are
-reported and left untouched at every level, because which one was intended is
-not recoverable from the refs.
+The memory root is excluded from that adoption. It has no pin above it — the
+parent's gitlink is allowed to lag (D46) — so there a `live` ahead of `HEAD` is
+answered by checking `HEAD` out at `live`, the move `/gitlore:merge` makes for
+the root (D59) and the one the gate names for the root and only the root. A
+`HEAD` and `live` that have each moved since they last agreed are reported and
+left untouched at every level, because which one was intended is not recoverable
+from the refs.
 
 The tier fetch stays, **read-only**: `fetch origin live` with no refspec moves
 no local branch, and its only job is to let SessionStart *name* a tier whose

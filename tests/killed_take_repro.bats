@@ -131,7 +131,7 @@ _tier_live_ahead_of_pin() {
   # BENIGN on its own: `submodule update` reads the gitlink from memory's
   # INDEX (still $pin, since the take's staging never moved it) and resets the
   # tier's worktree to it — the ordinary, correct "return an off-pin tier to
-  # its recorded commit" behavior (scripts/cc-hooks/session-start.sh:289).
+  # its recorded commit" behavior (the tier-pin step of scripts/cc-hooks/session-start.sh).
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
   # Reported: root's index is flagged as dangling, because ddaanet/local.md
   # genuinely names no file in the (now reset-back) memory store. This is
@@ -151,8 +151,14 @@ _tier_live_ahead_of_pin() {
   # And this half — the TIER's own carrier having just been dirtied — is what
   # goes unreported: nothing in the output names ddaanet's carrier as changed
   # or dirty, only root's pre-existing dangling pointer.
-  [[ "$output$stderr" != *"ddaanet"*"dirty"* ]]
-  [[ "$output$stderr" != *"ddaanet"*"uncommitted"* ]]
+  # Per line, on both channels: root's own dirty line (D59) reaches
+  # additionalContext and names no tier, so only a line naming ddaanet as dirty
+  # or uncommitted is the defect. A whole-output glob would pair the dangling
+  # "ddaanet" in systemMessage with root's "uncommitted" in additionalContext.
+  channels=$(printf '%s\n%s\n%s' "$(printf '%s' "$output" | jq -r '.systemMessage // ""')" \
+    "$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext // ""')" "$stderr")
+  run grep -E 'ddaanet.*(dirty|uncommitted)' <<<"$channels"
+  [ "$status" -ne 0 ]
 
   # --- A later take, run again after SessionStart's reset+recompose. ---
   PATH="$bin:$PATH" run --separate-stderr bash "$CMD"

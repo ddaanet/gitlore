@@ -4,9 +4,14 @@
 # Part of lib/resolve.sh; source that, not this file.
 
 # Take whatever each store's remote is holding, without publishing anything:
-# every tier first, then memory. The counterpart of gitlore_push_stores, and the
+# memory first, then every tier. The counterpart of gitlore_push_stores, and the
 # only path by which a pinned tier advances (D17) — SessionStart names an
 # upstream-ahead tier, this is what acts on it.
+#
+# The memory root alone also takes its own local `live` (D59): one that strictly
+# contains HEAD — commits another checkout of the store made — is checked out
+# detached when the store is clean, and reported and left alone when it is dirty.
+# That move comes before the remote comparison below, which reads HEAD.
 #
 # Three outcomes per store, decided by ancestry against the fetched `origin/live`:
 #
@@ -19,9 +24,9 @@
 #   - neither contains the other → prepare a merge and yield, exactly as a
 #     refused push does, but marked not-to-publish.
 #
-# A dirty store is refused rather than checked out over: the working tree may
-# hold this session's uncommitted facts, and a fast-forward would either fail
-# mid-way or carry them onto a commit nobody approved them against.
+# A dirty store is refused rather than checked out over: the working tree may hold this
+# session's uncommitted facts, and a fast-forward would either fail mid-way or
+# carry them onto a commit nobody approved them against.
 #
 # Returns 0 when every store is reconciled (nothing-to-take included), 1 after
 # emitting a message otherwise — including the prepared-merge directive.
@@ -60,7 +65,7 @@ gitlore_merge_stores() {
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
   local label remote_url fetched=0 fetch_err="" remote="" live head adopt_rc=0
-  local root_dirty_before
+  local live_ahead_dirty=0 n unit ff_err root_dirty_before
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
@@ -85,6 +90,32 @@ gitlore_merge_one_store() {
   live=$(git -C "$store" rev-parse -q --verify live) || live=""
   if [ -z "$remote" ] || [ -z "$live" ] || ! git -C "$store" merge-base --is-ancestor "$live" "$remote"; then
     gitlore_adopt_advanced_live "$mempath" "$store" "$tier" || adopt_rc=1
+  fi
+
+  # The memory root only (D59): a local `live` that strictly contains HEAD is
+  # what HEAD catches up to before the remote take reads it. A clean store is
+  # moved onto it and says so; a dirty one is left where it is and says why. The
+  # remote take then skips its "already holds everything" line, which would
+  # claim a store finished that is not.
+  live_ahead_dirty=0
+  if [ -z "$tier" ] && gitlore_live_ahead_of_head "$store"; then
+    if [ "$(gitlore_memory_dirty "$store")" = "1" ]; then
+      n=$(git -C "$store" rev-list --count HEAD..live)
+      if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
+      printf 'gitlore: memory has uncommitted changes, so HEAD was not moved onto live (%s %s ahead) — commit memory, then run /gitlore:merge again.\n' "$n" "$unit"
+      live_ahead_dirty=1
+    else
+      if ! ff_err=$(gitlore_git -C "$store" checkout -q --detach live 2>&1); then
+        gitlore_say_for_agent_or_user \
+          "gitlore: $label — its local 'live' is ahead of HEAD, but HEAD could not be moved onto it. git said:
+$ff_err" \
+          "gitlore: $label — its local 'live' is ahead of HEAD, but HEAD could not be moved onto it. git said:
+$ff_err" >&2
+        return 1
+      fi
+      printf 'gitlore: %s — fast-forwarded HEAD onto its local live, to %s.\n' \
+        "$label" "$(git -C "$store" rev-parse --short HEAD)"
+    fi
   fi
 
   if [ -z "$remote_url" ]; then
@@ -116,6 +147,9 @@ $fetch_err" >&2
   head=$(git -C "$store" rev-parse HEAD) || return 1
 
   if git -C "$store" merge-base --is-ancestor "$remote" "$head"; then
+    # A dirty store whose live is ahead was reported above; nothing moved, so
+    # there is nothing to reassure about.
+    if [ "$live_ahead_dirty" -eq 1 ]; then return 0; fi
     # Nothing to take, which is not the same as nothing to do: this test reads
     # HEAD, and the ref a push sends is `live`. A store whose `live` was left
     # behind reaches exactly here and would otherwise be told it is finished.
@@ -151,7 +185,6 @@ $fetch_err" >&2
   # Fast-forward: advance the local `live` (created here when the store never had
   # one), then move the working tree onto it. `push .` is ff-checked, so a race
   # that advanced `live` underneath us is refused rather than overwritten.
-  local ff_err
   if ! ff_err=$(gitlore_git -C "$store" push -q . "$remote:refs/heads/live" 2>&1); then
     gitlore_say_for_agent_or_user \
       "gitlore: $label — its local 'live' could not be advanced. git said:

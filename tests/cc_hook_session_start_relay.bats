@@ -147,28 +147,21 @@ run_session_start_with_session() {
 }
 
 # A third case — "a stranded marker is the only thing SessionStart has to
-# say" — is in the runbook item (emit_session_json omits systemMessage
+# say" — is not given a case here (emit_session_json omits systemMessage
 # entirely when $sysmsg is empty, so a fold placed after that decision, or one
 # appending to the wrong variable, would leave the relay unemitted on exactly
 # the session where it is the only news). No fixture reaches emit_session_json
-# with $sysmsg empty: every branch of the `gitlore_memory_dirty` if/elif/else
-# at session-start.sh:193-212 calls add_sysmsg before falling through (or
-# before its own early emit_session_json + exit 0) — "memory ready", "…
-# uncommitted changes…", "diverged", or "could not be fast-forwarded" — and
-# every path that reaches the bottom of the script passed through exactly one
-# of those branches. A guard-failure fixture (no settings.json, disabled,
-# unregistered submodule) exits before mempath is even resolved and emits no
-# JSON at all (assert_session_start_did_nothing), not an empty-systemMessage
-# JSON. So $sysmsg is unconditionally non-empty at every emit_session_json
-# call site this hook has today, and a case asserting the relay alone drives
-# systemMessage would be vacuous by construction — not a red, a tautology.
-# Measured, not read: an instrumented emit_session_json driven by every fixture
-# in this suite and the nine others that run the hook logged 52 emits across
-# all three call sites, none with $sysmsg empty.
+# with $sysmsg empty: report_memory_position adds a line for every position a
+# store can be in — dirty, aligned, `live` ahead, HEAD ahead, diverged. A
+# guard-failure fixture (no settings.json, disabled, unregistered submodule)
+# exits before mempath is resolved and emits no JSON at all
+# (assert_session_start_did_nothing), not an empty-systemMessage JSON. So a case
+# asserting the relay alone drives systemMessage would be vacuous by
+# construction — not a red, a tautology.
 #
 # The case is also not NEEDED for the two bugs it was specified to catch. A
 # fold placed after emit_session_json, and one appending to the wrong variable,
 # each red the positive above on its first assertion. What no case here pins —
 # and what today's code cannot tell apart from correct — is a fold nested
-# inside an `[ -n "$sysmsg" ]` guard: behaviour-identical while all four dirty
-# branches report, and silently dropping the relay the day one stops.
+# inside an `[ -n "$sysmsg" ]` guard: behaviour-identical while every position
+# reports, and silently dropping the relay the day one stops.

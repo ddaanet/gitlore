@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+bats_require_minimum_version 1.5.0
 # FR7: after `git clone`, the first SessionStart restores working state
 # automatically — no second `/gitlore:install`. Exercises the fresh-clone
 # branch of session-start.sh (`git submodule update --init`), which the
@@ -57,8 +58,7 @@ teardown() {
   [ ! -e "$CLONE/memory/.git" ]
 
   # First SessionStart in the clone — the only thing we run. No /gitlore:install.
-  export CLAUDE_PROJECT_DIR="$CLONE"
-  run bash "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
+  CLAUDE_PROJECT_DIR="$CLONE" run bash "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
   [ "$status" -eq 0 ]
 
   # Working state restored: submodule populated and content present.
@@ -70,4 +70,38 @@ teardown() {
   [ "$status" -ne 0 ]
   [ "$(git -C "$CLONE/memory" rev-parse HEAD)" = "$(git -C "$CLONE/memory" rev-parse live)" ]
 
+}
+
+@test "fresh clone: live equals the recorded gitlink, and a newer origin/live is reported, not taken (D59)" {
+  ORIGIN="$TMP_REPO"
+
+  # Publish a memory commit AFTER the install commit recorded its gitlink, so
+  # origin/live in a clone is one commit ahead of what the clone checks out.
+  work="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-remote-work.XXXXXX")"
+  git clone -q -b live "$GH_MOCK_REMOTE_URL" "$work"
+  printf 'later\n' > "$work/LATER.md"
+  git -C "$work" add -A
+  git -C "$work" -c user.email=t@t -c user.name=t commit -q -m "later fact"
+  git -C "$work" push -q origin live
+  later=$(git -C "$work" rev-parse HEAD)
+  rm -rf "$work"
+
+  CLONE="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-clone.XXXXXX")"
+  git clone -q "$ORIGIN" "$CLONE"
+  cd "$CLONE"
+  git config user.email "test@example.com"
+  git config user.name  "Test"
+  gitlink=$(git rev-parse HEAD:memory)
+  [ "$gitlink" != "$later" ]
+
+  CLAUDE_PROJECT_DIR="$CLONE" GITLORE_LAUNCHED=1 run --separate-stderr bash "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
+  [ "$status" -eq 0 ]
+
+  # live is the checked-out gitlink commit, not the newer remote tip.
+  [ "$(git -C "$CLONE/memory" rev-parse live)" = "$gitlink" ]
+  [ "$(git -C "$CLONE/memory" rev-parse HEAD)" = "$gitlink" ]
+  [ ! -e "$CLONE/memory/LATER.md" ]
+  # The commit waiting upstream is reported, with its count, on both channels.
+  echo "$output" | jq -e '.systemMessage | test("1 upstream.*/gitlore:merge")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("1 upstream.*/gitlore:merge")'
 }

@@ -120,12 +120,20 @@ what SessionStart says to whom.
 - **D5** — wrapper scripts live in the git common dir, untracked
 - **D11** — wrapper paths anchor at the git common dir, so linked worktrees work
 - **D14** — user-facing SessionStart output goes on `systemMessage`
-- **D21** — a mid-session plugin upgrade is a notice, not a self-healing config
+- **D59** — SessionStart moves memory nowhere; every advance is an explicit take
+  or push
 
 *Rejected:* tracked hook scripts in the repo · a literal `.git/gitlore-<hook>`
-wrapper path · a per-worktree wrapper anchor · a `WorktreeCreate` hook · a
-version-less plugin pointer resolved at hook runtime · wrappers self-healing
-from `CLAUDE_PLUGIN_ROOT`.
+wrapper path · a per-worktree wrapper anchor · a `WorktreeCreate` hook · the
+clean-only fast-forward at session start.
+
+**The plugin-upgrade notice** — what a session does when the plugin moves under
+it. [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md)
+
+- **D21** — a mid-session plugin upgrade is a notice, not a self-healing config
+
+*Rejected:* a version-less plugin pointer resolved at hook runtime · wrappers
+self-healing from `CLAUDE_PLUGIN_ROOT`.
 
 **Claude Code platform workarounds** — harness behaviours, each carrying the
 empirical work that established it, which is why they stay whole.

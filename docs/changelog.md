@@ -7,6 +7,11 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-11 — SessionStart reports and never moves memory](changelog/2026-10-11-session-start-reports-and-never-moves-memory.md)
+  — the clean-only fast-forward is retired (D59): in a single checkout HEAD
+  equals `live` by construction, so it never had work; SessionStart reports
+  where memory stands and what the remote holds, and `/gitlore:merge` takes the
+  local move; the commit instruction carries its summary on stdin
 - [2026-10-11 — A memory commit is the agent's own act](changelog/2026-10-11-a-memory-commit-is-the-agents-own-act.md)
   — the parent `pre-commit` hook, its wiring and the commit nudge are retired
   (D58): `commit-memory.sh` is the one commit path and stages the moved gitlink;

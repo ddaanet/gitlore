@@ -6,6 +6,7 @@ bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
+load helpers/divergence-fixtures
 load helpers/merge-memory
 
 # Store-level takes: fast-forward, no-op, stranded/diverged refs, the
@@ -60,6 +61,43 @@ strand_live_behind_head() {
   # And the remote did not move: taking is not publishing.
   [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$remote_sha" ]
   [ "$before" != "$remote_sha" ]
+}
+
+@test "fast-forwards HEAD onto a local 'live' that strictly contains it, clean store, no remote change (D59)" {
+  wire_memory_remote
+  advance_branch_with_file memory live EXTRA.md extra "Advance live"
+  live_sha=$(git -C memory rev-parse live)
+  remote_before=$(git --git-dir="$MEMORY_REMOTE" rev-parse live)
+  [ "$(git -C memory rev-parse HEAD)" != "$live_sha" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" = "$live_sha" ]
+  [ -f memory/EXTRA.md ]
+  [[ "$output$stderr" =~ fast-forwarded|moved|advanced ]]
+  # Detached, and taking still publishes nothing.
+  run git -C memory symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$remote_before" ]
+}
+
+@test "a dirty store whose 'live' is ahead of HEAD is reported and nothing moves (D59)" {
+  wire_memory_remote
+  advance_branch_with_file memory live EXTRA.md extra "Advance live"
+  live_sha=$(git -C memory rev-parse live)
+  head_before=$(git -C memory rev-parse HEAD)
+  echo dirty > memory/scratch.md
+
+  run --separate-stderr bash "$CMD"
+  # The report says why HEAD stayed behind a `live` it does not contain, and
+  # does not claim the store is finished: it is not.
+  [[ "$output$stderr" == *"uncommitted"* ]]
+  [[ "$output$stderr" == *"live"* ]]
+  [[ "$output$stderr" != *"already holds everything"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(git -C memory rev-parse live)" = "$live_sha" ]
+  [ -f memory/scratch.md ]
+  [ ! -e memory/EXTRA.md ]
 }
 
 @test "says so when a store already holds everything its remote does" {

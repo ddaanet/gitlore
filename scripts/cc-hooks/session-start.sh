@@ -71,7 +71,7 @@ exec 3>&1 1>&2
 # about the forms not named — and nothing here cites an FR id, which resolves to
 # nothing in the consumer repos this context lands in.
 # The `$(git config …)` is literal text for the agent to run, so it is escaped here.
-protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then run bash \"\$(git config gitlore.commitCommand)\" -m \"<approved summary>\" from the repo root. Never run git commit inside the memory submodule."
+protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then run bash \"\$(git config gitlore.commitCommand)\" -F - from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook
@@ -93,6 +93,75 @@ emit_session_json() {
       '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
   fi
   exec 3>&- 1>&2
+}
+# A report line (D59) rides both channels: the user's systemMessage (D14) and
+# the agent's additionalContext, the way tier lines are added.
+add_report() {
+  add_sysmsg "$1"
+  protocol_ctx="$protocol_ctx
+
+$1"
+}
+# Reports where memory stands against local `live` and its remote (D59). Reads
+# only: nothing here moves HEAD, the worktree or any ref. Every position adds a
+# line, so the systemMessage is never empty; a clean store that is aligned with
+# `live` or ahead of it, and in step with its remote, adds only the user's
+# "memory ready" confirmation, with nothing for the agent.
+# Args: $1 = memory worktree path.
+report_memory_position() {
+  local mempath="$1" dirty head live n unit remote_url fetch_err remote
+  dirty=$(gitlore_memory_dirty "$mempath")
+  head=$(git -C "$mempath" rev-parse HEAD)
+  live=$(git -C "$mempath" rev-parse -q --verify live)
+  if [ "$dirty" = "1" ]; then
+    add_report "gitlore: memory — uncommitted changes present."
+  fi
+  if [ "$head" = "$live" ]; then
+    [ "$dirty" = "1" ] || add_sysmsg "gitlore: memory ready (detached at live)."
+  elif gitlore_live_ahead_of_head "$mempath"; then
+    # Clean only: a dirty store is reported above, and /gitlore:merge is what
+    # moves HEAD onto live once it is clean.
+    if [ "$dirty" = "0" ]; then
+      n=$(git -C "$mempath" rev-list --count HEAD..live)
+      if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
+      add_report "gitlore: $n $unit on live not checked out here — run /gitlore:merge."
+    fi
+  elif git -C "$mempath" merge-base --is-ancestor live HEAD; then
+    # HEAD is ahead of live: nothing for this session to take. Said to the user
+    # only, so every state adds a line and the systemMessage is never empty.
+    [ "$dirty" = "1" ] || add_sysmsg "gitlore: memory ready."
+  else
+    add_report "gitlore: memory diverged from live. Run /gitlore:resolve, then start a fresh session."
+  fi
+
+  # Remote: a read-only fetch of `live`, and only for a real remote. The
+  # placeholder (or no origin at all) is a local-only install with nothing to
+  # ask. A remote that has no `live` yet is silent — there is nothing upstream
+  # to take — and any other fetch failure is named, with git's own reason.
+  remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
+  if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
+    return 0
+  fi
+  if ! fetch_err=$(git -C "$mempath" fetch -q origin live 2>&1); then
+    case "$fetch_err" in
+      *"couldn't find remote ref"*) return 0 ;;
+    esac
+    add_report "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')"
+    return 0
+  fi
+  remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) || return 0
+  live=$(git -C "$mempath" rev-parse -q --verify live) || return 0
+  if [ "$remote" = "$live" ]; then
+    return 0
+  elif git -C "$mempath" merge-base --is-ancestor "$live" "$remote"; then
+    n=$(git -C "$mempath" rev-list --count live.."$remote")
+    if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
+    add_report "gitlore: $n upstream memory $unit — run /gitlore:merge."
+  elif git -C "$mempath" merge-base --is-ancestor "$remote" "$live"; then
+    return 0 # local live is ahead of the remote: a push's business
+  else
+    add_report "gitlore: upstream memory has diverged from live — run /gitlore:merge to reconcile it."
+  fi
 }
 
 # Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's
@@ -148,7 +217,7 @@ if [ -f "$SENTINEL" ]; then
   esac
 fi
 
-# Branch model: submodule init, detach at live, ff-merge.
+# Branch model: submodule init, detach at live, report where it stands.
 # Memory working tree missing in this worktree. Two cases:
 #  - submodule never initialized (main worktree, fresh clone) → submodule update;
 #  - submodule initialized in the main repo but this is a *linked* worktree whose
@@ -170,28 +239,24 @@ if [ ! -e "$mempath/.git" ]; then
 fi
 
 # Fresh clone (FR7): `git submodule update --init` checks out the recorded
-# gitlink SHA as a detached HEAD and creates no local branches — only
-# `origin/live` exists. The branch-model logic below references `live` as a
-# *local* ref (detach target and ff-merge source), so materialize it first.
-# Prefer origin/live; fall back to the checked-out gitlink commit (HEAD) when
-# the memory has no remote (degenerate, never-pushed case). No-op once live
-# exists (install, normal sessions, linked worktrees).
+# gitlink SHA as a detached HEAD and creates no local branches. The report
+# below reads `live` as a *local* ref, so materialize it first, from HEAD: the
+# gitlink commit is what a clone has checked out, whether or not `origin/live`
+# exists (D59). Never from `origin/live`, which may be ahead of it. No-op once
+# live exists (install, normal sessions, linked worktrees).
 if ! git -C "$mempath" show-ref --verify --quiet refs/heads/live; then
-  if git -C "$mempath" show-ref --verify --quiet refs/remotes/origin/live; then
-    gitlore_git -C "$mempath" branch live origin/live >&2
-  else
-    gitlore_git -C "$mempath" branch live HEAD >&2
-  fi
+  gitlore_git -C "$mempath" branch live HEAD >&2
 fi
 
 # Branch model (D17): memory is checked out DETACHED — `live` is the sole
 # travelling ref and is never checked out as a branch, so one memory gitdir
 # serves any number of parent worktrees and every commit path reduces to
 # "pending HEAD vs live". Detaching is done *in place* (no ref argument), which
-# keeps the current commit and any uncommitted work; the ff-merge below is what
-# advances HEAD onto live. A session that predates this model arrives on a named
-# branch and is migrated here, losing nothing — the old model advanced `live` on
-# every commit, so the branch never held anything `live` did not.
+# keeps the current commit and any uncommitted work. Nothing at session start
+# advances HEAD onto live: /gitlore:merge does that. A session that predates
+# this model arrives on a named branch and is migrated here, losing nothing —
+# the old model advanced `live` on every commit, so the branch never held
+# anything `live` did not.
 if git -C "$mempath" symbolic-ref -q HEAD >/dev/null; then
   gitlore_git -C "$mempath" checkout -q --detach
 fi
@@ -201,26 +266,7 @@ fi
 # submodule's gitlore.hooksDir to the live plugin each session.
 bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
 
-if [ "$(gitlore_memory_dirty "$mempath")" = "0" ]; then
-  if merge_err=$(gitlore_git -C "$mempath" merge --ff-only live 2>&1); then
-    add_sysmsg "gitlore: memory ready (detached at live)."
-  elif [ "$(gitlore_classify_refusal "$mempath" HEAD live)" = "diverged" ]; then
-    # Only a genuine divergence between HEAD and live is something
-    # /gitlore:resolve can fix — a lock, a corrupt object or an unwritable
-    # worktree all refuse --ff-only too, and sending the user to resolve for
-    # those would be a guess replacing git's own explanation (never do that).
-    add_sysmsg "gitlore: memory diverged from live. Run /gitlore:resolve, then start a fresh session."
-    emit_session_json
-    exit 0
-  else
-    add_sysmsg "gitlore: memory could not be fast-forwarded onto live. git said:
-$merge_err"
-    emit_session_json
-    exit 0
-  fi
-else
-  add_sysmsg "gitlore: memory ready (detached at live); uncommitted changes present, skipped live sync."
-fi
+report_memory_position "$mempath"
 
 # Root index repair. A store can arrive with no `MEMORY.md` at all: an install
 # seeded from an auto-memory dir that existed but held nothing committed an
@@ -230,8 +276,8 @@ fi
 # report below cannot notice, since it reads pointers out of a file that is not
 # there. Write the scaffold back as an ordinary dirty file: it joins the next
 # FR11 commit under review, never a commit of its own, and it runs AFTER the
-# fast-forward so a clean store syncs first rather than being marked dirty by
-# the repair. Never fatal — an unwritable store is reported, not aborted on.
+# report so the report reads the store as it arrived, not marked dirty by the
+# repair. Never fatal — an unwritable store is reported, not aborted on.
 if [ ! -f "$mempath/MEMORY.md" ]; then
   if printf '# Memory Index\n\n(populated by Claude over time)\n' > "$mempath/MEMORY.md"; then
     add_sysmsg "gitlore: the memory store had no root MEMORY.md, so nothing could compose into it or be recalled from it. The '# Memory Index' scaffold was written as an uncommitted file; it lands with the next memory commit."
@@ -309,13 +355,10 @@ fi
 # it describes is gone — so it is left for the sweep below rather than folded
 # into a stranger's session.
 #
-# Placed before the FINAL emit below and after the diverged and ff-failure
-# early exits above: on those, a store the user must repair with
-# /gitlore:resolve is not the moment to surface a subagent's report. The
-# markers are left where they are — a resume or a compaction of this same
-# session still collects them here, since both keep the session id, and a
-# fresh session after the repair is a stranger to them and leaves them to the
-# sweep, exactly as it would for any other session's report.
+# Placed before the FINAL emit below. A report addressed to a session that
+# ended is a stranger to this one and is left to the sweep, exactly as for any
+# other session's report; a resume or a compaction of the same session
+# collects its own here, since both keep the session id.
 #
 # Then sweep: remove every gitlore-relay-* file older than 7 days, temps
 # included, regardless of session. A report addressed to a session that ended
@@ -329,11 +372,11 @@ fi
 # nothing here for this file's `set -e` to trip on.
 #
 # Guarded on $GITLORE_RELAY_SYSMSG, deliberately NOT nested inside
-# `[ -n "$sysmsg" ]`: every dirty branch above calls add_sysmsg
-# unconditionally, so $sysmsg is never empty by the time we reach here today —
-# but that is an accident of the branches above, not a contract this fold may
-# lean on. Conditioning on it would be behaviour-identical now and would
-# silently drop the relay the day one of those branches stops reporting.
+# `[ -n "$sysmsg" ]`: report_memory_position adds a line for every position a
+# store can be in, so $sysmsg is never empty by the time we reach here today —
+# but that is an accident of that function, not a contract this fold may lean
+# on. Conditioning on it would be behaviour-identical now and would silently
+# drop the relay the day a position stops reporting.
 # Non-fatal: the relay is a backstop, never a reason a session fails to start.
 # jq has already parsed .claude/settings.json above — the hook exits when it
 # cannot — so the only failure left here is a malformed payload, and it costs
@@ -349,5 +392,5 @@ $GITLORE_RELAY_CTX"
 fi
 
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus
-# any accumulated user-facing systemMessage (success/dirty/launcher — D14).
+# any accumulated user-facing systemMessage (position report, launcher — D14).
 emit_session_json

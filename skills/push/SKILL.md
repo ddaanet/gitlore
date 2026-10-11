@@ -70,7 +70,8 @@ summary and a memory commit, then this skill again.
 
 Getting that commit does not mean creating a parent commit whose only content
 is the memory pointer. Commit memory with the approved summary through
-`bash "$(git config gitlore.commitCommand)" -m "<summary>"`, which stages the
+`bash "$(git config gitlore.commitCommand)" -F -`, the summary on stdin through
+a quoted heredoc (`<<'EOF'`) so the shell expands nothing in it, which stages the
 pointer in the parent index; the next parent commit records it. Bundle the
 pointer with the source change it corresponds to, not with whatever happens to
 be unpushed: if the memory content documents the commit just made, amend it in

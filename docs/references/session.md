@@ -1,15 +1,17 @@
-# Session and hook wiring — decisions D5, D11, D14, D21
+# Session and hook wiring — decisions D5, D11, D14, D59
 
 The hook wrapper files gitlore writes into the git common dir, and what every
 `SessionStart` does — followed by the decisions that argue for that shape (D5,
-D11, D14, D21). The install command that puts them there is in
+D11, D14, D59). The mid-session plugin-upgrade notice (D21) has its own node,
+[plugin-upgrade-notice.md](plugin-upgrade-notice.md). The install command that
+puts them there is in
 [installation.md](installation.md).
 
 - Wrappers and the session — **D5** wrapper scripts live in the git common dir,
   untracked · **D11** wrapper paths are gitlink-aware, anchored at the common
   dir, for linked worktrees · **D14** user-facing SessionStart output goes on
-  `systemMessage` · **D21** a mid-session plugin upgrade is a notice, not a
-  self-healing config
+  `systemMessage` · **D59** SessionStart moves memory nowhere; every advance is
+  an explicit take or push
 
 ---
 
@@ -78,16 +80,14 @@ has no `gitlore-memory` entry, no-op.
    are matched as literals and nothing else is run, D45 — see Hook Manager
    Support above).
 5. **Materialize the store.** Initialize the submodule if needed; add a memory
-   worktree for a linked parent worktree; create local `live` from `origin/live`
-   (or from the checked-out gitlink when there is no remote) after a clone
-   without `--recurse-submodules`, since the branch model references `live` as a
-   local ref.
-6. **Detach at `live` and fast-forward**, or skip the fast-forward with a notice
-   when memory is dirty. A refused fast-forward that classifies as divergence
-   reports it and routes to `/gitlore:resolve`; any other refusal reports git's
-   own words instead, since a lock, a corrupt object or an unwritable worktree
-   refuse `--ff-only` too and routing them to resolve would be a guess. Both
-   arms end the pass there.
+   worktree for a linked parent worktree; create local `live` from the
+   checked-out gitlink (HEAD) after a clone without `--recurse-submodules`,
+   since the branch model references `live` as a local ref — never from
+   `origin/live`, which may be ahead of the gitlink (D59).
+6. **Detach in place and report where memory stands.** HEAD is detached without
+   moving, and `report_memory_position` states where it sits against local
+   `live` and against the remote's `live` (D59, below). It moves nothing and is
+   never fatal; the pass continues whatever it reports.
 7. **Repair a missing root index.** A store with no `MEMORY.md` — an install
    seeded from an auto-memory dir that existed but held nothing committed an
    empty tree — gets the `# Memory Index` scaffold written back as an
@@ -117,10 +117,8 @@ has no `gitlore-memory` entry, no-op.
    batch. The sweep then removes every relay file older than seven days
    regardless of session, temps included: a report addressed to a session that
    ended is undeliverable, so it goes by age rather than into a stranger's
-   session. The early exits above — divergence, a failed fast-forward — return
-   before both, so a resume or compaction of the same session still collects
-   what is waiting, while a fresh session after the repair leaves it to the
-   sweep.
+   session. No earlier step ends the pass, so a resume or compaction of the same
+   session always collects what is waiting.
 11. **Emit the standing orientation** on `additionalContext`: the FR11
    prohibition (D12) and the active tiers' own routing descriptions (D28).
 
@@ -150,15 +148,12 @@ linked worktree: a literal `.git/gitlore-*` aborts `emit-wrappers` under
 `set -e` before step 5 runs, and blocks committing in the worktree outright.
 
 > **Why not a `WorktreeCreate` hook.** Verified against CC 2.1.150
-> (`claude-code-guide`, 2026-05-25): `WorktreeCreate` is an **override** hook —
-> it fires *before* the worktree exists, the script is expected to *create* it
-> and print only its absolute path on stdout, and any extra stdout makes CC hang
-> (#27467). Its stdin carries `{hook_event_name, cwd, name}` — **no** worktree
-> path and **no** branch (CC defaults the branch to `worktree-<name>`);
-> `hookSpecificOutput.worktreePath` is an HTTP-hooks-only *output* field. It
-> also does not fire for Desktop-created worktrees, and there is no
-> post-creation hook (#27744). Registering it would mean hijacking worktree
-> placement for zero benefit over the `SessionStart` path.
+> (`claude-code-guide`, 2026-05-25): it is an **override** hook that fires
+> *before* the worktree exists and must create it, printing only its path (extra
+> stdout hangs CC, #27467). Its stdin carries no worktree path and no branch, it
+> does not fire for Desktop-created worktrees, and there is no post-creation
+> hook (#27744). Registering it would hijack worktree placement for zero benefit
+> over the `SessionStart` path.
 
 **`WorktreeRemove`** (advisory — cannot block). Input provides `worktree_path`
 only (verified CC 2.1.150 — no branch field). A non-zero exit logs a warning but
@@ -180,22 +175,23 @@ entry.
 **`PostToolBatch` — the plugin-upgrade notice.** `plugin-upgrade-batch.sh`
 compares the plugin root this session froze at against what the install record
 says is installed for this repo, and reports a mid-session upgrade once per
-episode. It reports and never repairs; see D21.
+episode. It reports and never repairs; see D21 in
+[plugin-upgrade-notice.md](plugin-upgrade-notice.md).
 
 **`SessionStart` and `PreCompact` — the nudge reset.** `nudge-reset.sh` re-arms
 the once-per-episode notices (index byte budget, plugin upgrade, missing root
 index). Each marker claims "this session has already been told", and both events
-end the context that claim rests on; see D21.
+end the context that claim rests on; see D21 in
+[plugin-upgrade-notice.md](plugin-upgrade-notice.md).
 
 **`PostToolUse(EnterWorktree|ExitWorktree)` — the drift guard.**
 `worktree-drift.sh` warns when an in-process worktree switch has moved the
 session's cwd away from the repo whose memory is redirected. See D15.
 
-## Decisions — D5, D11, D14, D21
+## Decisions — D5, D11, D14, D59
 
 Why the wiring above has this shape: where the wrappers live and how they are
-anchored, what SessionStart says to whom, and why a mid-session plugin upgrade
-is a notice rather than a repair.
+anchored, what SessionStart says to whom, and why it moves memory nowhere.
 
 **D5 — Wrapper scripts in the git common dir, not tracked**
 
@@ -226,11 +222,11 @@ transient/stale-config condition.
 
 **The refresh is `claude -c`, not a cold session.** Any process start re-pins
 the five keys — `SessionStart` fires on a resume as it does on a startup, with
-`source=resume` (D21) — so a resume closes the staleness window while keeping
-the conversation that hit it. A cold session closes the same window and throws
-the context away. This is the same remedy the upgrade notice names, for the same
-reason: what went stale was frozen at process start, and only a new process
-re-reads it.
+`source=resume` (D21, [plugin-upgrade-notice.md](plugin-upgrade-notice.md)) — so
+a resume closes the staleness window while keeping the conversation that hit it.
+A cold session closes the same window and throws the context away. This is the
+same remedy the upgrade notice names, for the same reason: what went stale was
+frozen at process start, and only a new process re-reads it.
 
 **D11 — Gitlink-aware wrapper paths (common-dir anchor) for linked-worktree
 support**
@@ -282,14 +278,12 @@ puts the model on the hot path against NFR1/D7.
 Every user-facing SessionStart notice rides `systemMessage`, accumulated into
 the single SessionStart JSON the hook writes to fd 3:
 
-- **Divergence** error → `systemMessage` + `exit 0`. Exit 0 because stdout JSON
-  is parsed only on exit 0, so a non-zero exit would discard the very message it
-  was meant to signal, and because SessionStart's exit code is non-blocking and
-  consumed by nothing. The script still halts there, before the tier propagation
-  pass.
-- **Dirty-skip** notice → `systemMessage`, informational.
-- **Clean success** → a brief confirmation (`memory ready (detached at live)`),
-  per the chosen always-confirm behaviour.
+- **Position reports** (D59) → `systemMessage`, and `additionalContext` too for
+  the ones that name an act. The hook exits 0 throughout: stdout JSON is parsed
+  only on exit 0, so a non-zero exit would discard the very message it was meant
+  to signal, and SessionStart's exit code is consumed by nothing.
+- **Clean success** → a brief confirmation (`memory ready`), per the chosen
+  always-confirm behaviour.
 - **Launcher-not-redirected** warning → `systemMessage`; when present it leads
   the message and the state line follows.
 
@@ -299,66 +293,51 @@ exists only for the git hook (`pre-push`, `memory-pre-commit`) and the commit
 and push scripts, which run where `CLAUDECODE` may be unset; SessionStart always
 runs in-session, so its notices are written directly for the user.
 
-**D21 — A mid-session plugin upgrade is a notice, not a self-healing config**
+**D59 — SessionStart moves memory nowhere; every advance is an explicit take or
+push**
 
-`CLAUDE_PLUGIN_ROOT` is resolved once, at process start, from
-`~/.claude/plugins/installed_plugins.json`. That record keeps moving while a
-session runs: another repo's session installs, or the user runs
-`/plugin update`. Everything this session froze at start then belongs to the
-*old* version — hook event registration, skill bodies, agent definitions, and
-the five `gitlore.*` keys that point into the plugin root (D5). The
-`PostToolBatch` hook `plugin-upgrade-batch.sh` notices the disagreement and
-names the remedy, once per episode.
+The hook used to fast-forward a clean HEAD onto `live`. A single checkout never
+has work for it: the store is sized for one clone per project, HEAD and `live`
+agree by construction there (a commit advances both, D41), and a fresh clone
+makes `live` from the gitlink HEAD. The one case it served is a separately
+launched linked worktree, whose HEAD lags a `live` another checkout advanced —
+and a move the user did not see changes the checkout under their edits without a
+word. So the hook reports and `/gitlore:merge` takes (the local move is in
+[merge-and-resolve.md](merge-and-resolve.md)); a parent push still takes a
+behind remote (D49).
 
-**Everything frozen at process start is re-read on a resume, so `claude -c` is
-the entire remedy.** Verified 2026-07-31 by a two-run `--plugin-dir` probe whose
-`SessionStart` hook logged its root and the payload's `source`, with
-`hooks.json` rewritten between runs: the second run fired `SessionStart` with
-`source=resume` and ran the **new** command, under the **same** `session_id`.
-The transcript records no plugin path or version, so a resumed process has no
-stale root to restore — it re-resolves the root from the install record, re-pins
-the five keys, re-emits the wrappers and re-wires the memory gate exactly as a
-cold start does, and the conversation survives. Nothing available inside a live
-session substitutes for it.
+**The report.** Each position is one line, on `systemMessage` and, where it
+names an act, on `additionalContext` (`add_report`):
 
-**Why reporting is the whole fix.** Both ways of making a live session adopt the
-upgrade produce a *split-version* session, strictly worse than uniform
-staleness: the git-config keys would point into the new version while CC-side
-hook registration, skill bodies and agent definitions stayed on the old one.
-Uniform staleness has one failure mode and one remedy; a split has neither.
+- *Dirty* — uncommitted changes present.
+- *`live` strictly ahead of HEAD, clean* — N commits on `live` not checked out
+  here, run `/gitlore:merge`. A dirty store says only the dirty line, because
+  merge will not move a dirty HEAD.
+- *HEAD and `live` diverged* — run `/gitlore:resolve`, then start a fresh
+  session.
+- *HEAD at `live`, clean* — `memory ready (detached at live).`, user channel
+  only.
+- *HEAD ahead of `live`, clean* — `memory ready.`, user channel only: nothing
+  for this session to take, yet a state a store legitimately rests in, and
+  saying nothing would leave the `systemMessage` empty.
 
-**Detection.** The hook compares the frozen root against the entries the record
-holds for this plugin — the user-scoped one, plus any entry pinned to this
-project — and fires only when that set is non-empty and holds no entry equal to
-the frozen root. A repo deliberately pinned behind the user-scoped version is
-therefore silent, which is the point: installs are pinned per scope, not
-globally, and repos routinely sit at different versions. The family is
-identified by the frozen root's parent directory rather than a `gitlore@ddaanet`
-literal, so a fork or a renamed marketplace works unchanged. Three guards
-precede it: no `CLAUDE_PLUGIN_ROOT`, no `gitlore-memory` submodule, and a frozen
-root outside the plugin cache — the last because a `--plugin-dir` checkout is
-never stale, and its parent is an ordinary source directory whose neighbours the
-record may name for some *other* locally-installed plugin. There is no `grep -F`
-short-circuit ahead of the record query: the frozen root can appear in the
-record under a different `projectPath`, where a bare match would read as
-"installed here" and suppress a real notice.
-
-**Both channels, and the user-facing one carries the instruction.** D14's house
-style keeps `systemMessage` curt and free of actionable phrases, leaving
-remedies to `additionalContext`. This is the deliberate exception, on D7
-grounds: only the user can exit and relaunch, and a hot-path notice routed
-through the agent is model-dependent. So the user's line names the remedy
-directly. The agent's line is mostly a prohibition — `/plugin`,
-`/reload-plugins` and rewriting the `gitlore.*` keys are all dead ends, none of
-them re-fires `SessionStart`.
-
-**Once per episode, re-armed by a compaction.** A marker in the memory store's
-gitdir, keyed by session and swept after seven days, mirrors the index
-byte-budget nudge; `nudge-reset.sh` clears both at `SessionStart` and
-`PreCompact`. A compaction re-arms the notice deliberately: what survives is a
-summary, and the session is still running the old root.
+**The remote.** For a real remote (not the install placeholder, not none) the
+hook then runs `fetch origin live` — read-only, with no refspec, so it moves no
+local branch and updates only `origin/live`. `origin/live` strictly ahead
+reports N upstream commits, run `/gitlore:merge`; diverged from `live` reports
+that upstream has diverged, run `/gitlore:merge` to reconcile; equal, or `live`
+ahead (a push's business), is silent. A remote that has no `live` ref is silent:
+there is nothing upstream to take, and the report would otherwise fire in every
+store that was never published. Any other fetch failure is named with git's own
+message, because an unreachable remote looks exactly like one with nothing to
+say.
 
 ## Rejected alternatives
+
+**The clean-only fast-forward at session start.** It does no work in a single
+checkout, where HEAD equals `live` already. In the multi-checkout case a take
+the user sees beats a move they cannot: the report names the commits and the
+command, and the checkout changes when they run it (D59).
 
 **Tracked hook scripts in the repo.** Commit churn on every plugin update, and
 it couples the repo's history to the plugin's versioning.
@@ -377,17 +356,3 @@ hook — it fires before the worktree exists, must create it, and must print onl
 its path (extra stdout hangs CC, #27467) — carries no branch in stdin, and never
 fires for Desktop-created worktrees. `SessionStart` in the new worktree covers
 every case with none of that (verified CC 2.1.150).
-
-**A version-less plugin pointer, resolved at hook runtime.** Pointing the five
-`gitlore.*` keys at a symlink refreshed per lookup would let git-side hooks
-follow an upgrade mid-session while CC-side hook registration, skill bodies and
-agent definitions stayed on the version the process froze at — a split-version
-session, worse than uniform staleness, which has one failure mode and one remedy
-(D21). The premise is also wrong: installs are pinned per scope and per project,
-not globally, so "the newest directory in the cache" is not what a given repo
-loads.
-
-**Wrappers self-healing from `CLAUDE_PLUGIN_ROOT`.** That variable is exported
-to Claude Code hooks only. A git hook fires from agent Bash, where it is unset,
-so the wrapper has nothing to heal from — and the split-version objection above
-stands regardless (D21).

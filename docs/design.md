@@ -159,7 +159,7 @@ The gitlink a parent commit records is always an ancestor of memory's `live`, or
 the next parent commit, so a push refused by divergence is resolved and pushed
 again, and no parent commit is ever rewritten to re-pin memory (D46).
 
-The session-start detach and fast-forward, the advance after a commit, the two
+The session-start detach and its report, the advance after a commit, the two
 divergence gates that reduce to one shape (D6, D41), and why the parent's ref
 layout is no concern of memory's are in
 [merge-and-resolve.md](references/merge-and-resolve.md); the gitlink invariant
@@ -232,10 +232,11 @@ git and decides (D7).
   own output reaches nobody else (D51), and
   `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
   drift (D15); `SessionStart` and `PreCompact` re-arm the once-per-episode
-  notices. [session.md](references/session.md); the intent-file commit in
-  [commit-gate.md](references/commit-gate.md), the index pair in
-  [index-composition.md](references/index-composition.md), the per-agent keying
-  and the relay in
+  notices. [session.md](references/session.md),
+  [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md); the
+  intent-file commit in [commit-gate.md](references/commit-gate.md), the index
+  pair in [index-composition.md](references/index-composition.md), the per-agent
+  keying and the relay in
   [index-authoring-sync.md](references/index-authoring-sync.md), D51 in
   [cc-platform.md](references/cc-platform.md).
 - **Git hook and entry points** — `pre-push` publishes each tier's `live` and

@@ -1,6 +1,6 @@
 ---
 name: merge
-description: Take the memory facts other repos have published — each mounted tier's remote, then memory's own — without publishing anything of this repo's. Use when the user runs /gitlore:merge, asks to take, pull, sync or catch up on shared memory, or when a session start reported that a tier has upstream facts waiting. Not for publishing — that is /gitlore:push — and not a substitute for `git pull` of project code.
+description: Take the memory facts other repos have published — each mounted tier's remote, then memory's own — without publishing anything of this repo's. Use when the user runs /gitlore:merge, asks to take, pull, sync or catch up on shared memory, or when a session start reported commits on live not checked out here, upstream memory commits, or a tier with upstream facts waiting. Not for publishing — that is /gitlore:push — and not a substitute for `git pull` of project code.
 allowed-tools: ["Bash", "Skill"]
 ---
 
@@ -8,9 +8,11 @@ allowed-tools: ["Bash", "Skill"]
 
 You are taking published memory in, and sending nothing out.
 
-A tier is checked out at the commit the memory tree records for it and nothing
-advances it on its own, so facts another repo published sit on the tier's remote
-until this runs. `/gitlore:push` also takes them, but only on its way to
+Nothing advances memory on its own, a session start included. A tier is checked
+out at the commit the memory tree records for it, so facts another repo
+published sit on the tier's remote until this runs; the memory store's own
+`live` can hold commits HEAD is not checked out at (another checkout of the
+same store committed them), and its remote can hold more. `/gitlore:push` also takes them, but only on its way to
 publishing this repo's; this skill is the half that discloses nothing.
 
 ## Reconcile
@@ -55,7 +57,11 @@ fast-forward, which is what makes this different from `/gitlore:push`.
 
 ## Report
 
-Say which stores took what. A tier take records its own bookkeeping commit —
+Say which stores took what. For the memory store, a line saying HEAD was
+fast-forwarded onto its local `live` is that local move; a line saying memory
+has uncommitted changes, so HEAD was not moved, means nothing moved — relay it
+and tell the user to commit memory (summary, approval) and run
+`/gitlore:merge` again. A tier take records its own bookkeeping commit —
 the moved tier pointer and the recomposed root index — and leaves the memory
 store clean; the run says so when it happens, and says when the pair was only
 staged instead because the store held uncommitted work. Say plainly that
