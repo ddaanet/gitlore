@@ -2,24 +2,28 @@
 # Install or re-wire the claude-plugin-dev toolkit in the current
 # Claude Code plugin repository.
 #
-# First-time install (toolkit not yet vendored):
+# First-time install (toolkit not yet vendored). A dist- tag's root tree
+# IS toolkit/, so the tag being vendored also serves this file:
 #
-#     git clone --depth 1 -b vX.Y.Z \
-#         git@github.com:ddaanet/claude-plugin-dev.git /tmp/cpd
+#     repo=ddaanet/claude-plugin-dev
 #     cd /path/to/plugin
-#     bash /tmp/cpd/toolkit/install.sh [dist-vX.Y.Z]
+#     tag=$(git ls-remote --tags --refs --sort=-v:refname \
+#             "https://github.com/$repo.git" 'dist-v*' \
+#             | head -1 | sed 's|.*/||')
+#     curl -fsSL "https://raw.githubusercontent.com/$repo/$tag/install.sh" \
+#         | bash -s -- "$tag"
 #
-# With no ref, the newest dist- tag on the remote is resolved and
-# vendored. Clone the SOURCE tag (vX.Y.Z) to get the script; vendor the
-# DIST tag (dist-vX.Y.Z), whose root tree is only the consumer-facing
-# files. A subtree add of the source tag would copy this repo's whole
-# working environment into the plugin -- see docs/design.md "Consumers
-# vendor a split dist ref".
+# Passing the resolved tag pins fetched script and vendored tree to one
+# release; with no ref, the newest dist- tag is resolved here instead.
+# Only the DIST tag (dist-vX.Y.Z) is vendorable -- a subtree add of the
+# SOURCE tag (vX.Y.Z) copies this repo's whole working environment into
+# the plugin. See the toolkit repo's docs/references/distribution.md,
+# "Consumers vendor a split dist ref".
 #
 # The script will:
 #   1. git subtree add the toolkit at plugin-dev/ (skipped if present)
 #   2. add 'import "plugin-dev/release.just"' to justfile
-#   3. wire the version-guard hook into .claude/settings.json
+#   3. wire the version-guard and dogfood hooks into .claude/settings.json
 #
 # Re-run (after the toolkit is already vendored):
 #
@@ -44,7 +48,12 @@ fi
 changed=()
 settings=".claude/settings.json"
 # shellcheck disable=SC2016  # ${CLAUDE_PROJECT_DIR} is for Claude Code to expand at hook-fire time, not bash now.
-hook_cmd='bash ${CLAUDE_PROJECT_DIR}/plugin-dev/version-guard.sh'
+hook_cmd='bash "${CLAUDE_PROJECT_DIR}/plugin-dev/version-guard.sh"'
+# The spelling earlier releases wrote, unquoted: a project path holding a blank
+# split into two words and the guard failed open. Kept only so add_hook can
+# find it and migrate it; nothing writes it.
+# shellcheck disable=SC2016  # same: matched literally, never expanded here.
+legacy_hook_cmd='bash ${CLAUDE_PROJECT_DIR}/plugin-dev/version-guard.sh'
 
 # Pre-flight: validate any existing settings.json BEFORE the slow subtree
 # add, so a malformed file fails fast instead of leaving a half-installed
@@ -119,52 +128,109 @@ EOF
     changed+=("justfile (created)")
 fi
 
-# 3. .claude/settings.json hook block. Append the hook only if not already
+# 3. .claude/settings.json hook block. Append each hook only if not already
 # present, and write only if that changed something.
 #
-# The two cases are separate branches, not a jq failure falling through to a
-# fallback: the fallback writes a document holding nothing but this hook, so
-# reaching it with an existing settings.json replaces the consumer's whole
-# configuration. `.matcher == null` is what used to get there — a PreToolUse
-# entry with no matcher is legal and matches every tool, but `null | test(...)`
-# aborts jq with exit 5.
+# An existing file and a missing one run the same pipeline, the missing one
+# seeded with {}, so a failure in any stage takes the one error branch: there
+# is no fallback that writes a stub of just the toolkit's hooks, which over an
+# existing settings.json would replace the consumer's whole configuration.
+#
+# A hook counts as present when any entry under its event carries its command,
+# whatever that entry's matcher, a missing one included: the consumer may have
+# rescoped it, and a second copy beside it would run the command twice wherever
+# the two matchers overlap. An empty matcher argument omits the key, which is
+# how SessionStart is wired.
+#
+# The optional fourth argument is a legacy spelling of the command, which
+# presence is blind to: it is an exact match, so the new spelling appended
+# beside an old one would run the guard twice. With it:
+#   - the command present: any legacy entry is removed, and an entry left with
+#     no hooks is dropped;
+#   - else the legacy present: its command is rewritten in place, so a matcher
+#     the consumer rescoped it to survives;
+#   - neither: appended as without it.
+add_hook() {
+    jq --arg event "$1" --arg matcher "$2" --arg cmd "$3" --arg legacy "${4:-}" '
+      def has_cmd($c): any(.hooks[$event][]?; any(.hooks[]?; .command == $c));
+      if has_cmd($cmd)
+      then if $legacy != "" and has_cmd($legacy)
+           then .hooks[$event] |= [
+                  .[] | if any(.hooks[]?; .command == $legacy)
+                        then (.hooks |= map(select(.command != $legacy)))
+                             | select(.hooks | length > 0)
+                        else . end
+                ]
+           else . end
+      elif $legacy != "" and has_cmd($legacy)
+      then .hooks[$event] |= map(
+             if any(.hooks[]?; .command == $legacy)
+             then .hooks |= map(if .command == $legacy then .command = $cmd else . end)
+             else . end)
+      else .hooks //= {} |
+           .hooks[$event] //= [] |
+           .hooks[$event] += [
+             (if $matcher == "" then {} else {matcher: $matcher} end)
+             + {hooks: [{type: "command", command: $cmd}]}
+           ]
+      end
+    '
+}
+
+# shellcheck disable=SC2016  # ${CLAUDE_PROJECT_DIR} is for Claude Code to expand at hook-fire time, not bash now.
+pretool_cmd='bash "${CLAUDE_PROJECT_DIR}/plugin-dev/dogfood.sh" pre-tool'
+# shellcheck disable=SC2016  # same: expanded by Claude Code at hook-fire time.
+session_cmd='bash "${CLAUDE_PROJECT_DIR}/plugin-dev/dogfood.sh" session-start'
+
 mkdir -p .claude
 tmp="$(mktemp)"
-if [ -f "$settings" ]; then
-    jq --arg cmd "$hook_cmd" '
-      if ([.hooks.PreToolUse[]?
-           | select(.matcher == null or (.matcher | test("Write|Edit")))
-           | .hooks[]? | select(.command == $cmd)] | length > 0)
-      then .
-      else .hooks //= {} |
-           .hooks.PreToolUse //= [] |
-           .hooks.PreToolUse += [{
-             matcher: "Write|Edit",
-             hooks: [{type: "command", command: $cmd}]
-           }]
-      end
-    ' "$settings" > "$tmp" || {
-        rm -f "$tmp"
-        echo "error: could not rewrite $settings — left unchanged." >&2
-        exit 1
-    }
-else
-    jq --arg cmd "$hook_cmd" -n '
-      {hooks: {PreToolUse: [{matcher: "Write|Edit",
-                             hooks: [{type: "command", command: $cmd}]}]}}
-    ' > "$tmp"
+{ if [ -f "$settings" ]; then cat "$settings"; else echo '{}'; fi \
+    | add_hook PreToolUse 'Write|Edit' "$hook_cmd" "$legacy_hook_cmd" \
+    | add_hook PreToolUse 'Write|Edit|NotebookEdit' "$pretool_cmd" \
+    | add_hook SessionStart '' "$session_cmd" > "$tmp"; } || {
+    rm -f "$tmp"
+    echo "error: could not wire the hooks into $settings — nothing written." >&2
+    exit 1
+}
+
+# Read before the write, from the file as the consumer left it: whether the
+# legacy spelling is there decides what the run reports.
+requoted=0
+if [ -f "$settings" ] && jq -e --arg l "$legacy_hook_cmd" \
+    '[.hooks.PreToolUse[]? | .hooks[]? | select(.command == $l)] | length > 0' \
+    "$settings" > /dev/null; then
+    requoted=1
 fi
+
+# Every distinct command wired anywhere in a settings file, one per line, empty
+# for a missing file. Residual bound: a command holding a newline reads as two.
+settings_cmds() {
+    if [ -f "$1" ]; then
+        jq -r '[.hooks[]?[]? | .hooks[]? | .command // empty] | unique[]' "$1"
+    fi
+}
 
 if [ -f "$settings" ] && cmp -s "$settings" "$tmp"; then
     rm -f "$tmp"
 else
+    # Commands the file did not carry before. The version-guard's quoted one
+    # does not count when it replaced the legacy entry: that is the requote.
+    added="$(comm -13 <(settings_cmds "$settings") <(settings_cmds "$tmp"))"
+    if [ "$requoted" -eq 1 ]; then
+        added="$(grep -vxF -- "$hook_cmd" <<<"$added" || true)"
+    fi
     # Write through the destination rather than `mv`-ing the mktemp file over
     # it: mktemp creates 0600, and mv carries that mode onto the consumer's
     # settings file. Redirection keeps an existing file's mode, ownership and
     # ACL, and creates a new one at the umask like any other tool would.
     cat "$tmp" > "$settings"
     rm -f "$tmp"
-    changed+=("$settings (added version-guard hook)")
+    if [ "$requoted" -eq 1 ]; then
+        changed+=("$settings (version-guard hook requoted)")
+    fi
+    if [ -n "$added" ] || [ "$requoted" -eq 0 ]; then
+        changed+=("$settings (wired the version-guard and dogfood hooks)")
+    fi
 fi
 
 if [ "${#changed[@]}" -eq 0 ]; then
@@ -180,4 +246,10 @@ else
     echo "  2. Commit the changes:"
     echo "     git add $TOOLKIT_PREFIX justfile .claude/settings.json"
     echo "     git commit -m 'add claude-plugin-dev toolkit'"
+    echo "  3. Set up the dogfood launcher: $TOOLKIT_PREFIX/README.md, section"
+    echo "     Dogfooding, subsection Setup. Until then the SessionStart check"
+    echo "     warns on every session."
+    echo "  4. Create the copy the session loads, then launch claude from the"
+    echo "     repo root; without the copy the session starts without the plugin:"
+    echo "     just dogfood"
 fi
