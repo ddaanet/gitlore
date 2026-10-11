@@ -19,7 +19,7 @@ setup() {
 teardown() { teardown_tmp_repo; }
 
 @test "install creates gitlore-memory submodule at requested path" {
-  run bash "$RUN_INSTALL" memory "echo precommit"
+  run bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   [ -d memory ]
   run git config --file .gitmodules submodule.gitlore-memory.path
@@ -30,7 +30,7 @@ teardown() { teardown_tmp_repo; }
   # The gitfile's "gitdir:" target is relative to the gitfile's own location, so
   # it depends on how many path components mempath has — a fixed one-component
   # "../" breaks for a nested path.
-  run bash "$RUN_INSTALL" .claude/memory "echo precommit"
+  run bash "$RUN_INSTALL" .claude/memory
   [ "$status" -eq 0 ]
   [ -f .claude/memory/.git ]
   [[ "$(cat .claude/memory/.git)" == "gitdir: ../../.git/modules/gitlore-memory" ]]
@@ -40,7 +40,7 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "install creates the live trunk and leaves memory detached at it" {
-  bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
   run git -C memory branch --list live
   [[ "$output" == *live* ]]
   # Branch model (D17): no per-parent-branch working branch is created, and HEAD
@@ -51,20 +51,33 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "install writes settings.json keys" {
-  bash "$RUN_INSTALL" memory "lefthook run pre-commit"
+  bash "$RUN_INSTALL" memory
   [ "$(jq -r '.gitlore.enabled' .claude/settings.json)" = "true" ]
-  [ "$(jq -r '.gitlore.precommitCommand' .claude/settings.json)" = "lefthook run pre-commit" ]
+  # D58: no precommit command is recorded, so only `enabled` is written; a memory commit is the agent's act.
+  [ "$(jq -c '.gitlore | keys' .claude/settings.json)" = '["enabled"]' ]
 }
 
-@test "install writes wrappers and sentinel" {
-  bash "$RUN_INSTALL" memory "echo precommit"
+@test "install takes no precommit-command argument: the second argument is the remote mode" {
+  # The old second argument was the precommit command; remote mode and url
+  # moved down one place. "local" in second position is the local-only mode.
+  log="$TMP_REPO/gh-calls.log"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory local
+  url=$(git config --file .gitmodules submodule.gitlore-memory.url)
+  [[ "$url" == *"gitlore-placeholder"* ]]
+}
+
+@test "install wires pre-push only: no pre-commit hook is written" {
+  bash "$RUN_INSTALL" memory
+  [ -x .git/gitlore-pre-push ]
+  [ -x .git/hooks/pre-push ]
+  # The stub stays for a consumer's tracked hook-manager config that names it.
   [ -x .git/gitlore-pre-commit ]
-  [ -f .claude/gitlore-hook-setup ]
+  [ ! -e .git/hooks/pre-commit ]
 }
 
 @test "install refuses when memory path exists with content" {
   mkdir memory && touch memory/unrelated.txt
-  run bash "$RUN_INSTALL" memory "echo precommit"
+  run bash "$RUN_INSTALL" memory
   [ "$status" -ne 0 ]
 }
 
@@ -74,9 +87,9 @@ teardown() { teardown_tmp_repo; }
   # non-empty path like "mem.ry" is misread as "already our submodule" and the
   # non-empty-path refusal is skipped — the confusing "not checked out here"
   # error fires instead of the correct one.
-  bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
   mkdir -p "mem.ry" && echo unrelated > "mem.ry/file.txt"
-  run bash "$RUN_INSTALL" "mem.ry" "echo precommit"
+  run bash "$RUN_INSTALL" "mem.ry"
   [ "$status" -ne 0 ]
   [[ "$output" == *"exists and is not empty"* ]]
   [[ "$output" != *"not checked out here"* ]]
@@ -99,14 +112,14 @@ teardown() { teardown_tmp_repo; }
   git config -f .git/modules/gitlore-memory/config core.worktree "../../../memory"
   # .gitmodules intentionally absent — this is the partial-install state
 
-  run bash "$RUN_INSTALL" memory "echo precommit"
+  run bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   [ -f .gitmodules ]
   git config --file .gitmodules submodule.gitlore-memory.path | grep -qx memory
 }
 
 @test "install stages all artifacts it claims to leave staged" {
-  bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
   staged=$(git diff --cached --name-only)
   [[ "$staged" == *".gitmodules"* ]]
   [[ "$staged" == *"memory"* ]]
@@ -119,7 +132,7 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "install stages memory as gitlink (mode 160000)" {
-  bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
   run git ls-files --stage memory
   [[ "$output" == 160000\ * ]]
 }
@@ -141,13 +154,13 @@ teardown() { teardown_tmp_repo; }
   git rm -q --cached -rf nested   # -f: the repo has no HEAD to compare against
   rm -rf nested
 
-  output=$(bash "$RUN_INSTALL" memory "echo precommit" 2>&1)
+  output=$(bash "$RUN_INSTALL" memory 2>&1)
   [[ "$output" != *"$GITLORE_T_EMBEDDED_REPO"* ]]
 }
 
 @test "install is idempotent" {
-  bash "$RUN_INSTALL" memory "echo precommit"
-  run bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
+  run bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
 }
 
@@ -159,7 +172,7 @@ teardown() { teardown_tmp_repo; }
   link="$TMP_REPO.link"
   ln -s "$TMP_REPO" "$link"
   cd "$link"
-  run bash "$RUN_INSTALL" memory "echo precommit"
+  run bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   [ -d memory ]
   cd "$TMP_REPO"
@@ -171,7 +184,7 @@ teardown() { teardown_tmp_repo; }
   wt="$TMP_REPO.wt"
   git worktree add -q "$wt"
   cd "$wt"
-  run bash "$RUN_INSTALL" memory "echo precommit"
+  run bash "$RUN_INSTALL" memory
   [ "$status" -ne 0 ]
   [[ "$output" == *"linked worktree"* ]]
   cd "$TMP_REPO"
@@ -179,7 +192,7 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "init-submodule refuses an unchecked-out registered submodule" {
-  bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
   git commit --no-verify -q -m "install gitlore"
   # Registered in .gitmodules but not checked out here: empty dir, no .git.
   # Without the guard, git -C memory ops escape up to the parent repo.
@@ -200,7 +213,7 @@ teardown() { teardown_tmp_repo; }
   printf 'User is a senior engineer working on distributed systems.\n' > "$fake_home/.claude/projects/$encoded/memory/MEMORY.md"
   printf 'fact\n' > "$fake_home/.claude/projects/$encoded/memory/user_role.md"
 
-  run env HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  run env HOME="$fake_home" bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   # The announcement commands/install.md keys its review step on: without it,
   # an install that seeded real facts is indistinguishable from a scaffold.
@@ -226,7 +239,7 @@ teardown() { teardown_tmp_repo; }
 
   # No ~/.claude/projects/<encoded>/memory exists. Install must NOT fabricate a
   # stub dir under the user's real home — there was nothing to migrate.
-  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  HOME="$fake_home" bash "$RUN_INSTALL" memory
   [ ! -d "$fake_home/.claude/projects/$encoded/memory" ]
 }
 
@@ -241,7 +254,7 @@ teardown() { teardown_tmp_repo; }
   mkdir -p "$src"
   printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
 
-  run env HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  run env HOME="$fake_home" bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   # Scaffolded, so there is nothing for the review step to hold against the
   # skill — and no announcement to trigger it.
@@ -266,7 +279,7 @@ teardown() { teardown_tmp_repo; }
   printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
   printf 'fact\n' > "$src/user_role.md"
 
-  run env HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  run env HOME="$fake_home" bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   # The facts migrated, and the announcement still fires: this is the migration
   # branch with a scaffold added, not a fall-through to the scaffold branch.
@@ -285,12 +298,12 @@ teardown() { teardown_tmp_repo; }
   printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$fake_home/.gitconfig"
   printf 'some migrated fact\n' > "$stub"
 
-  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  HOME="$fake_home" bash "$RUN_INSTALL" memory
   # backticks are literal text in the stub; single quotes are intentional.
   # shellcheck disable=SC2016
   grep -q 'migrated in-tree by `/gitlore:install`' "$stub"
   mtime1=$(stat -c '%Y' "$stub" 2>/dev/null || stat -f '%m' "$stub")
-  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  HOME="$fake_home" bash "$RUN_INSTALL" memory
   mtime2=$(stat -c '%Y' "$stub" 2>/dev/null || stat -f '%m' "$stub")
   # second run recognizes the existing stub and leaves it untouched
   [ "$mtime1" = "$mtime2" ]
@@ -314,7 +327,7 @@ lives in the `gitlore-memory` submodule, versioned in git alongside the code.
 Do not add memory here.
 EOF
 
-  HOME="$fake_home" bash "$RUN_INSTALL" memory "echo precommit"
+  HOME="$fake_home" bash "$RUN_INSTALL" memory
   [ -f memory/MEMORY.md ]
   grep -q '# Memory Index' memory/MEMORY.md
   run grep -q 'migrated in-tree' memory/MEMORY.md
@@ -327,7 +340,7 @@ EOF
   printf '.bash_profile\n.gitmodules\n.mcp.json\n' > .gitignore
   git add .gitignore
   git commit -q -m "Ignore sandbox artifacts"
-  run bash "$RUN_INSTALL" memory "echo precommit"
+  run bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   run grep -qx '\.gitmodules' .gitignore
   [ "$status" -ne 0 ]
@@ -338,7 +351,7 @@ EOF
 
 @test "run.sh self-locates CLAUDE_PLUGIN_ROOT when unset in env" {
   unset CLAUDE_PLUGIN_ROOT
-  run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  run --separate-stderr bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   [ -f .claude/settings.json ]
   [ -d memory ]
@@ -363,7 +376,7 @@ EOF
 
 @test "install does not leave a stray blank line in .gitignore" {
   printf 'node_modules\n' > .gitignore
-  bash "$RUN_INSTALL" memory "echo pc"
+  bash "$RUN_INSTALL" memory
   # Verify the entries we expect are present
   grep -qx '.claude/settings.local.json' .gitignore
   grep -qx 'node_modules' .gitignore
@@ -375,7 +388,7 @@ EOF
 @test "run.sh fails loudly with a paste-able command when repo root is unwritable" {
   # Make the git common dir unwritable so the probe trips before any mutation.
   chmod 555 .git
-  run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  run --separate-stderr bash "$RUN_INSTALL" memory
   chmod 755 .git   # restore for teardown
   [ "$status" -ne 0 ]
   [[ "$stderr" == *"sandbox"* ]]

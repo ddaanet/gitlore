@@ -13,5 +13,12 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # is reachable and executable from every worktree (D11).
 common_dir=$(git rev-parse --git-common-dir)
 
-gitlore_emit_hook_wrapper "$common_dir/gitlore-pre-commit" pre-commit
 gitlore_emit_hook_wrapper "$common_dir/gitlore-pre-push" pre-push
+
+# Stub, not a wrapper: a tracked hook-manager config may still name this file.
+cat > "$common_dir/gitlore-pre-commit" <<'EOF'
+#!/usr/bin/env sh
+# Kept so hook-manager configs that still name this file keep working; it does nothing.
+exit 0
+EOF
+chmod +x "$common_dir/gitlore-pre-commit"

@@ -3,9 +3,8 @@ set -euo pipefail
 unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) captures below
 
 mempath="${1:-memory}"
-precommit_cmd="${2:-}"
-remote_mode="${3:-auto}"
-remote_url="${4:-}"
+remote_mode="${2:-auto}"
+remote_url="${3:-}"
 
 # Self-locate so we work under the Claude Code Bash tool, where
 # CLAUDE_PLUGIN_ROOT is injected for hooks but NOT for Bash commands.
@@ -47,7 +46,7 @@ for probe_dir in "$toplevel" "$common_dir_abs"; do
     {
       echo "gitlore: cannot write to '$probe_dir' — the command sandbox is blocking install."
       echo "gitlore: re-run with the sandbox disabled:"
-      echo "  CLAUDE_PLUGIN_ROOT='$PLUGIN_ROOT' bash '${BASH_SOURCE[0]}' '$mempath' '$precommit_cmd'"
+      echo "  CLAUDE_PLUGIN_ROOT='$PLUGIN_ROOT' bash '${BASH_SOURCE[0]}' '$mempath'"
     } >&2
     exit 3
   fi
@@ -74,7 +73,7 @@ fi
 
 bash "$PLUGIN_ROOT/scripts/install/init-submodule.sh" "$mempath"
 bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath" "$remote_mode" "$remote_url"
-bash "$PLUGIN_ROOT/scripts/install/write-settings.sh" "$precommit_cmd"
+bash "$PLUGIN_ROOT/scripts/install/write-settings.sh"
 bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 

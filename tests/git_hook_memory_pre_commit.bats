@@ -22,7 +22,7 @@ teardown() { teardown_tmp_repo; }
   CLAUDECODE=1 run --separate-stderr bash "$GATE"
   [ "$status" -eq 1 ]
   [[ "${output}${stderr}" == *"bypass"* ]]
-  [[ "${output}${stderr}" == *"commit the PARENT"* ]]
+  [[ "${output}${stderr}" == *"commit-memory.sh"* ]]
 }
 
 @test "gate blocks (exit 1) with user hint when sentinel unset and CLAUDECODE unset" {

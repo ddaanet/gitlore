@@ -325,7 +325,7 @@ itself seeded has nothing to hold against the skill. Those facts were written
 under CC's generic memory instructions — no review gate, no index cap — and this
 is the one moment they are all in hand. The review's edits sit uncommitted on
 top of the installer's `Initial memory` commit and reach the user through FR11
-on their first parent commit, which is the intended path rather than a gap:
+when memory is next committed, which is the intended path rather than a gap:
 install is git-atomic for *wiring*, and a fact change is content.
 
 **The mount's trigger goes in the nudge, not only in the command.** The

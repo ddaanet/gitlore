@@ -14,9 +14,8 @@ if [ -f .overcommit.yml ] || [ -f .git/hooks/overcommit-hook ]; then
 fi
 case "${#detected[@]}" in
   # No recognized hook manager → direct wiring into the shared .git/hooks dir,
-  # which is available in every git repo. wire-direct appends to a hand-rolled
-  # pre-commit (coexisting) or creates a fresh stub, so the double-commit
-  # guarantee works out of the box without any manual setup. `manual` is no
+  # which is available in every git repo. wire-direct appends the pre-push stub
+  # to a hand-rolled pre-push (coexisting) or creates a fresh one. `manual` is no
   # longer auto-detected — it remains a valid sentinel a user can set by hand,
   # and is still emitted for the ambiguous multi-manager case below.
   0) printf 'direct\n' ;;

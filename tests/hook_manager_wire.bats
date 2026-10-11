@@ -19,7 +19,7 @@ teardown() { teardown_tmp_repo; }
 # lefthook tests — each seeds lefthook.yml before calling the script
 # ---------------------------------------------------------------------------
 
-@test "wire-lefthook adds gitlore command under pre-commit and pre-push" {
+@test "wire-lefthook adds the gitlore command under pre-push only" {
   cat > lefthook.yml <<'EOF'
 pre-commit:
   commands:
@@ -30,8 +30,8 @@ EOF
   [ "$status" -eq 0 ]
   grep -q '# gitlore: managed' lefthook.yml
   grep -qF 'git rev-parse --git-common-dir' lefthook.yml
-  grep -q 'gitlore-pre-commit' lefthook.yml
   grep -q 'gitlore-pre-push' lefthook.yml
+  run ! grep -q 'gitlore-pre-commit' lefthook.yml
 }
 
 @test "wire-lefthook is idempotent (marker present → no change)" {
@@ -69,7 +69,8 @@ pre-commit:
 EOF
   bash "$WIRE_LEFTHOOK"
   grep -q 'eslint' lefthook.yml
-  grep -q 'gitlore-pre-commit' lefthook.yml
+  run ! grep -q 'gitlore-pre-commit' lefthook.yml
+  grep -q 'gitlore-pre-push' lefthook.yml
 }
 
 @test "wire-lefthook works with .lefthook.yml filename" {
@@ -93,33 +94,32 @@ EOF
 # husky tests — start from clean state (no lefthook.yml)
 # ---------------------------------------------------------------------------
 
-@test "wire-husky appends guarded exec lines to .husky/pre-commit and pre-push" {
+@test "wire-husky appends the guarded exec line to .husky/pre-push only" {
   mkdir .husky
   : > .husky/pre-commit
   : > .husky/pre-push
   run bash "$WIRE_HUSKY"
   [ "$status" -eq 0 ]
-  grep -q '# gitlore: managed' .husky/pre-commit
-  grep -qF 'git rev-parse --git-common-dir' .husky/pre-commit
-  grep -q 'gitlore-pre-commit' .husky/pre-commit
+  [ ! -s .husky/pre-commit ]
   grep -q '# gitlore: managed' .husky/pre-push
   grep -qF 'git rev-parse --git-common-dir' .husky/pre-push
   grep -q 'gitlore-pre-push' .husky/pre-push
 }
 
-@test "wire-husky creates missing pre-* files" {
+@test "wire-husky creates a missing pre-push file and no pre-commit file" {
   mkdir .husky
   bash "$WIRE_HUSKY"
-  [ -f .husky/pre-commit ]
   [ -f .husky/pre-push ]
+  [ ! -e .husky/pre-commit ]
 }
 
 @test "wire-husky is idempotent" {
   mkdir .husky
   bash "$WIRE_HUSKY"
-  cp .husky/pre-commit .husky/pre-commit.before
+  [ -f .husky/pre-push ]
+  cp .husky/pre-push .husky/pre-push.before
   bash "$WIRE_HUSKY"
-  diff .husky/pre-commit .husky/pre-commit.before
+  diff .husky/pre-push .husky/pre-push.before
 }
 
 @test "wire-husky writes sentinel" {
@@ -134,7 +134,7 @@ EOF
 
 WIRE_OVERCOMMIT="$PLUGIN_ROOT/scripts/hook-manager/wire-overcommit.sh"
 
-@test "wire-overcommit adds gitlore PreCommit and PrePush entries" {
+@test "wire-overcommit adds the gitlore PrePush entry and no PreCommit one" {
   cat > .overcommit.yml <<'EOF'
 PreCommit:
   RuboCop:
@@ -143,7 +143,7 @@ EOF
   run bash "$WIRE_OVERCOMMIT"
   [ "$status" -eq 0 ]
   grep -q '# gitlore: managed' .overcommit.yml
-  grep -q 'gitlore-pre-commit' .overcommit.yml
+  run ! grep -q 'gitlore-pre-commit' .overcommit.yml
   grep -q 'gitlore-pre-push' .overcommit.yml
   grep -qF 'git rev-parse --git-common-dir' .overcommit.yml
   [ "$(cat .claude/gitlore-hook-setup)" = "overcommit --install" ]
@@ -168,8 +168,8 @@ EOF
   run python3 - "$cap" <<'PY'
 import sys, subprocess, yaml
 cap = sys.argv[1]
-cmd = yaml.safe_load(open('.overcommit.yml'))['PreCommit']['gitlore']['command']
-cmd = [c.replace('"$(git rev-parse --git-common-dir)/gitlore-pre-commit"', '"%s"' % cap) for c in cmd]
+cmd = yaml.safe_load(open('.overcommit.yml'))['PrePush']['gitlore']['command']
+cmd = [c.replace('"$(git rev-parse --git-common-dir)/gitlore-pre-push"', '"%s"' % cap) for c in cmd]
 out = subprocess.run(cmd + ['a.rb', 'b c.rb'], capture_output=True, text=True)
 sys.stdout.write(out.stdout)
 PY
@@ -185,39 +185,77 @@ PY
 WIRE_DIRECT="$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
 EMIT="$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
-@test "wire-direct installs .git/hooks/pre-commit and pre-push stubs" {
+@test "wire-direct installs the .git/hooks/pre-push stub and no pre-commit hook" {
   run bash "$WIRE_DIRECT"
   [ "$status" -eq 0 ]
-  [ -x .git/hooks/pre-commit ]
   [ -x .git/hooks/pre-push ]
-  grep -qF 'git rev-parse --git-common-dir' .git/hooks/pre-commit
-  grep -q 'gitlore-pre-commit' .git/hooks/pre-commit
-  grep -q '# gitlore: managed' .git/hooks/pre-commit
+  [ ! -e .git/hooks/pre-commit ]
+  grep -qF 'git rev-parse --git-common-dir' .git/hooks/pre-push
+  grep -q 'gitlore-pre-push' .git/hooks/pre-push
+  grep -q '# gitlore: managed' .git/hooks/pre-push
   [ "$(cat .claude/gitlore-hook-setup)" = "direct" ]
 }
 
-@test "wire-direct is idempotent and preserves existing user hooks" {
+# The shim wire-direct used to write for pre-commit, byte for byte. .git/hooks
+# is not a published boundary, so the one this tool wrote is removed.
+@test "wire-direct removes a .git/hooks/pre-commit shim byte-identical to the one it used to write" {
+  # shellcheck disable=SC2016  # the shim text is literal; git expands it at hook time
+  printf '#!/usr/bin/env sh\n# gitlore: managed\nexec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"\n' > .git/hooks/pre-commit
+  chmod +x .git/hooks/pre-commit
+  run bash "$WIRE_DIRECT"
+  [ "$status" -eq 0 ]
+  [ ! -e .git/hooks/pre-commit ]
+  [ -x .git/hooks/pre-push ]
+}
+
+@test "wire-direct leaves a user's own pre-commit hook untouched" {
   printf '#!/bin/sh\necho user hook\n' > .git/hooks/pre-commit
   chmod +x .git/hooks/pre-commit
-  bash "$WIRE_DIRECT"
-  grep -q 'echo user hook' .git/hooks/pre-commit
-  grep -q 'gitlore-pre-commit' .git/hooks/pre-commit
-  # Second run: no duplicate lines.
   cp .git/hooks/pre-commit .git/hooks/pre-commit.before
   bash "$WIRE_DIRECT"
   diff .git/hooks/pre-commit .git/hooks/pre-commit.before
+  [ -x .git/hooks/pre-push ]
+}
+
+# What the old wire-direct appended to an existing hook, byte for byte:
+# "\n# gitlore: managed\nexec \"$(git rev-parse --git-common-dir)/gitlore-pre-commit\" \"$@\"\n".
+# .git/hooks is not a published boundary, so the block it wrote goes; the user's
+# own lines stay.
+@test "wire-direct strips the block the old version appended to a user's pre-commit hook" {
+  printf '#!/bin/sh\necho user hook\n' > .git/hooks/pre-commit
+  # shellcheck disable=SC2016  # the block text is literal; git expands it at hook time
+  printf '\n# gitlore: managed\nexec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"\n' >> .git/hooks/pre-commit
+  chmod +x .git/hooks/pre-commit
+  run bash "$WIRE_DIRECT"
+  [ "$status" -eq 0 ]
+  [ -x .git/hooks/pre-commit ]
+  grep -q 'echo user hook' .git/hooks/pre-commit
+  run ! grep -q 'gitlore-pre-commit' .git/hooks/pre-commit
+  run ! grep -q 'gitlore: managed' .git/hooks/pre-commit
+}
+
+@test "wire-direct is idempotent and preserves existing user hooks" {
+  printf '#!/bin/sh\necho user hook\n' > .git/hooks/pre-push
+  chmod +x .git/hooks/pre-push
+  bash "$WIRE_DIRECT"
+  grep -q 'echo user hook' .git/hooks/pre-push
+  grep -q 'gitlore-pre-push' .git/hooks/pre-push
+  # Second run: no duplicate lines.
+  cp .git/hooks/pre-push .git/hooks/pre-push.before
+  bash "$WIRE_DIRECT"
+  diff .git/hooks/pre-push .git/hooks/pre-push.before
 }
 
 @test "wire-direct refuses to append after an existing hook body that execs" {
-  printf '#!/bin/sh\nexec just precommit\n' > .git/hooks/pre-commit
-  chmod +x .git/hooks/pre-commit
-  cp .git/hooks/pre-commit .git/hooks/pre-commit.before
+  printf '#!/bin/sh\nexec just prepush\n' > .git/hooks/pre-push
+  chmod +x .git/hooks/pre-push
+  cp .git/hooks/pre-push .git/hooks/pre-push.before
   run --separate-stderr bash "$WIRE_DIRECT"
   [ "$status" -ne 0 ]
   # File untouched: no unreachable append landed.
-  diff .git/hooks/pre-commit .git/hooks/pre-commit.before
+  diff .git/hooks/pre-push .git/hooks/pre-push.before
   [[ "$stderr" == *"exec"* ]]
-  [[ "$stderr" == *"pre-commit"* ]]
+  [[ "$stderr" == *"pre-push"* ]]
 }
 
 @test "wire-direct stub resolves the wrapper from a linked worktree (D11)" {
@@ -230,11 +268,11 @@ EMIT="$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
   # A fake "real hook" the wrapper will exec, proving the whole chain resolves.
   fake="$WT/fakehooks" && mkdir -p "$fake"
-  printf '#!/usr/bin/env sh\necho real-hook-ran\n' > "$fake/pre-commit"
-  chmod +x "$fake/pre-commit"
+  printf '#!/usr/bin/env sh\necho real-hook-ran\n' > "$fake/pre-push"
+  chmod +x "$fake/pre-push"
   git config gitlore.hooksDir "$fake"
 
-  hookfile=$(git rev-parse --git-path hooks/pre-commit)
+  hookfile=$(git rev-parse --git-path hooks/pre-push)
   run "$hookfile"
   [ "$status" -eq 0 ]
   [[ "$output" == *"real-hook-ran"* ]]
@@ -268,4 +306,6 @@ WIRE_MANUAL="$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh"
   run --separate-stderr bash "$WIRE_MANUAL"
   [ "$status" -eq 0 ]
   [[ "$stderr" == *"git rev-parse --git-common-dir"* ]]
+  [[ "$stderr" == *"gitlore-pre-push"* ]]
+  [[ "$stderr" != *"gitlore-pre-commit"* ]]
 }

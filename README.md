@@ -14,9 +14,9 @@ Then, in your project repo with Claude Code running:
 
     /gitlore:install
 
-You'll be asked for a memory subpath (default `memory`) and your project's
-pre-commit command (e.g. `lefthook run pre-commit`). A memory remote is created
-only if the parent repo has a remote, and that step uses `gh` when available.
+You'll be asked for a memory subpath (default `memory`). A memory remote is
+created only if the parent repo has a remote, and that step uses `gh` when
+available.
 
 After `/gitlore:install`, the launcher in `.gitlore/bin/claude` is activated
 automatically: direnv is approved if available, otherwise a global shim is installed

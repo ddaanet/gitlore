@@ -58,22 +58,20 @@ exec 3>&1 1>&2
 # Standing commit-protocol orientation (Fix B / FR11). The base Claude Code memory
 # instructions describe generic "edit files, save facts" memory with no review gate;
 # in a gitlore repo that mental model is wrong and leads to direct submodule commits
-# that bypass the gate. Emit the *prohibition* every session, before the agent acts —
-# it guards an action the agent would otherwise take unprompted, so it cannot be
-# deferred. The four-step persist *procedure* is NOT preloaded: front-loading a recipe
-# reads as "a process you must run" and makes the agent run ceremony (pausing for
-# approval before even writing a memory file) when persistence is meant to be seamless.
-# The procedure is surfaced just-in-time instead — by the memory-pre-commit hook's own
-# output if a direct commit is blocked, and by /gitlore:resolve on divergence. Here we
-# keep only the prohibition plus the one-line seamless happy path (commit the parent;
-# the hook does the rest), which defuses over-worry rather than feeding it.
-# Both halves are stated as acts, carrying no mechanism: what the gate is, which hook
-# blocks, and what it records are things the agent cannot act on, and the gate emits
-# its own instructions at the moment it fires. The prohibition forbids by role rather
-# than naming the two command forms — spelling out `git -C <mempath> commit` invites
-# reasoning about the forms not named — and nothing here cites an FR id, which resolves
-# to nothing in the consumer repos this context lands in.
-protocol_ctx="gitlore: never commit inside the memory submodule. Writing a memory file is an ordinary edit, and committing the parent repo is all it needs."
+# that bypass the gate. Emit it every session, before the agent acts: the prohibition
+# guards an action the agent would otherwise take unprompted, so it cannot be
+# deferred, and the commit command is front-loaded because no hook surfaces it any
+# more — a parent commit does not commit memory (D58), so the agent that holds the
+# user's approval runs commit-memory.sh itself. Writing stays seamless: an ordinary
+# edit, with no approval step before it, so the text does not induce ceremony.
+# The text is acts, carrying no mechanism: what the gate is, which hook blocks, and
+# what it records are things the agent cannot act on, and the gate emits its own
+# instructions at the moment it fires. The prohibition forbids by role rather than
+# naming the command forms — spelling out `git -C <mempath> commit` invites reasoning
+# about the forms not named — and nothing here cites an FR id, which resolves to
+# nothing in the consumer repos this context lands in.
+# The `$(git config …)` is literal text for the agent to run, so it is escaped here.
+protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then run bash \"\$(git config gitlore.commitCommand)\" -m \"<approved summary>\" from the repo root. Never run git commit inside the memory submodule."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook

@@ -41,13 +41,6 @@ GITLORE_T_DANGLING='names no file'
 # and never calls gh" in tests/install_remote.bats.
 GITLORE_T_PLACEHOLDER_URL='./.git/gitlore-placeholder'
 
-# Git's own error when a hook runs with the parent's GIT_DIR still exported.
-# Not gitlore's wording — pinned by provoking it directly with the same leaked
-# environment in "ignores parent GIT_DIR/GIT_INDEX_FILE leaked by 'git commit'"
-# (tests/git_hook_pre_commit.bats), which is the only way to show the message is
-# still live in this git and that this fixture reaches the producer at all.
-GITLORE_T_LEAKED_GITDIR='index file open failed'
-
 # scripts/install/global-shim.sh's `${CLAUDE_PLUGIN_ROOT:?…}` bail. Pinned by
 # "the shim refuses without CLAUDE_PLUGIN_ROOT" in tests/global_shim.bats;
 # refuted in tests/resolve.bats, where resolve.sh must derive its own root

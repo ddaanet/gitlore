@@ -70,7 +70,8 @@ gitlore_sync_memory_to_live() {
     # projection of index lines the summary already approved, never new content,
     # yet it is newer than $msgfile, so gitlore_commit_msg_freshness would read
     # the approval stale on the retry and refuse it. Only commit-memory.sh
-    # rewrites the file; the pre-commit path retries on it as it stands. A merge
+    # rewrites the file; a bare `commit-memory.sh` retry and
+    # `memory-commit-batch.sh` act on it as it stands. A merge
     # preparation is the exception: it checks merged content out into the
     # worktree, which the summary never covered, so a stale approval is the
     # right answer after it — the merge yields inside gitlore_sync_tiers_to_live
@@ -146,8 +147,8 @@ gitlore: composing would have overwritten what that tier holds. Open this projec
         local refusal="gitlore: tier composition refused — the memory indexes were left untouched:
 $compose_result"
         # A status read that fails aborts rather than reading as a clean index:
-        # the pre-commit hook's `|| exit $?` suspends errexit here, so an
-        # unchecked failure would publish the problem. Every changed file with
+        # a caller that tests this function's status (`if`, `||`) suspends
+        # errexit here, so an unchecked failure would publish the problem. Every changed file with
         # a problem is collected, so one abort names all of them.
         local abort_files="" index_status
         if printf '%s\n' "$compose_result" \
@@ -222,12 +223,13 @@ gitlore: the commit was aborted rather than commit a memory store in an unknown 
     esac
     # Tiers first: a tier commit moves its gitlink, and the `add -A` below is what
     # records that move in the memory commit. Reversing the order would pin the
-    # pre-commit tier SHA — the same one-behind lag the parent's gitlink staging
+    # tier SHA from before the tier commit — the same one-behind lag the parent's gitlink staging
     # exists to prevent.
     # Restamps its own non-merge failures (see above the tier loop).
     gitlore_sync_tiers_to_live "$mempath" "$msgfile" || return 1
-    # Checked explicitly, for the same reason as the tier loop above: called
-    # via `|| exit $?` at the pre-commit call site, errexit is off here, and an
+    # Checked explicitly, for the same reason as the tier loop above: a
+    # caller that tests this function's status (`if`, `||`) suspends errexit here
+    # (commit-memory.sh calls it bare, but the contract is a status return), and an
     # unchecked failure would delete the approved $msgfile below and let the
     # no-op push report success.
     gitlore_git -C "$mempath" add -A || { touch "$msgfile"; return 1; }
@@ -243,9 +245,6 @@ gitlore: the commit was aborted rather than commit a memory store in an unknown 
     GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile" \
       || { touch "$msgfile"; return 1; }
     rm -f "$msgfile"
-    # The dirty episode is over: clear the once-per-episode nudge marker so the
-    # next round of uncommitted memory can be surfaced again (post-tool-use.sh).
-    rm -f "$(gitlore_commit_notified_file "$mempath")"
   fi
 
   if [ -n "$live_sha" ]; then

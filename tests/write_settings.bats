@@ -49,7 +49,34 @@ teardown() { teardown_tmp_repo; }
   bash "$WRITE_SETTINGS" "just precommit"
   [ "$(find .claude/settings.json -perm 644)" = ".claude/settings.json" ]
   [ "$(jq -r .a .claude/settings.json)" = "1" ]
-  [ "$(jq -r .gitlore.precommitCommand .claude/settings.json)" = "just precommit" ]
+  [ "$(jq -r .gitlore.enabled .claude/settings.json)" = "true" ]
+}
+
+# D58: a memory commit is the agent's own act, so there is no precommit command
+# to nudge toward. The argument is passed anyway: a script that still accepts it
+# must not record it. The exact key set is asserted, so any stray key fails.
+@test "a fresh settings.json carries exactly the enabled key under gitlore" {
+  bash "$WRITE_SETTINGS" "just precommit"
+  [ "$(jq -c '.gitlore | keys' .claude/settings.json)" = '["enabled"]' ]
+  [ "$(jq -r .gitlore.enabled .claude/settings.json)" = "true" ]
+}
+
+@test "merging into an existing settings.json leaves exactly the enabled key under gitlore" {
+  mkdir -p .claude
+  printf '{"a":1}\n' > .claude/settings.json
+  bash "$WRITE_SETTINGS" "just precommit"
+  [ "$(jq -c '.gitlore | keys' .claude/settings.json)" = '["enabled"]' ]
+  [ "$(jq -r .a .claude/settings.json)" = "1" ]
+}
+
+@test "an existing settings.json holding a stale gitlore key loses it and keeps the others" {
+  mkdir -p .claude
+  printf '{"a":1,"gitlore":{"enabled":false,"%s":"just precommit","other":"kept"}}\n' "$(printf 'precommit%s' Command)" > .claude/settings.json
+  bash "$WRITE_SETTINGS" "just precommit"
+  [ "$(jq -c '.gitlore | keys' .claude/settings.json)" = '["enabled","other"]' ]
+  [ "$(jq -r .gitlore.enabled .claude/settings.json)" = "true" ]
+  [ "$(jq -r .gitlore.other .claude/settings.json)" = "kept" ]
+  [ "$(jq -r .a .claude/settings.json)" = "1" ]
 }
 
 @test "the .gitignore entry is matched literally, not as a regex" {

@@ -2,21 +2,18 @@
 set -euo pipefail
 unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
 
-precommit_cmd="$1"
-
 mkdir -p .claude
 
 # settings.json — tracked. Rewritten in place through a variable rather than
 # `mktemp` + `mv`: the temp file is created 0600 and mv would carry that mode
-# onto a file that was 0644.
+# onto a file that was 0644. The `del` drops a precommitCommand an earlier
+# version wrote (D58: the commit is the agent's act, no command is recorded).
 if [ -f .claude/settings.json ]; then
-  merged=$(jq --arg pc "$precommit_cmd" \
-     '.gitlore.enabled = true | .gitlore.precommitCommand = $pc' \
+  merged=$(jq '.gitlore.enabled = true | del(.gitlore.precommitCommand)' \
      .claude/settings.json)
   printf '%s\n' "$merged" > .claude/settings.json
 else
-  jq -n --arg pc "$precommit_cmd" \
-     '{gitlore: {enabled: true, precommitCommand: $pc}}' > .claude/settings.json
+  jq -n '{gitlore: {enabled: true}}' > .claude/settings.json
 fi
 
 # Make sure .claude/settings.local.json is gitignored.

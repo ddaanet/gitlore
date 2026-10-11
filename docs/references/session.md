@@ -18,8 +18,9 @@ D11, D14, D21). The install command that puts them there is in
 `SessionStart` writes two flat files into the repo's **git common dir** on every
 startup, resolved via `git rev-parse --git-common-dir`:
 
-- `<common-dir>/gitlore-pre-commit`
-- `<common-dir>/gitlore-pre-push`
+- `<common-dir>/gitlore-pre-push`, the wrapper below
+- `<common-dir>/gitlore-pre-commit`, an exit-0 stub kept for tracked
+  hook-manager configs that still name it (D58)
 
 The common dir is shared across all worktrees (`--git-common-dir` → `.git` in
 the main worktree, `<main>/.git` in a linked one), so one emission is reachable
@@ -28,10 +29,10 @@ ever run. Every producer (`emit-wrappers`) and every consumer (the wired stubs
 and manager configs) resolves the wrapper through `--git-common-dir`; none
 hardcode `.git/`, which is a gitlink *file* in a linked worktree. See D11.
 
-Each wrapper delegates to the current plugin via `git config gitlore.hooksDir`
+The wrapper delegates to the current plugin via `git config gitlore.hooksDir`
 (regular git config, shared across worktrees via the common config). Stable
 paths for hook manager configs; plugin updates are transparent. If
-`gitlore.hooksDir` is unset (a plain `git commit` outside any Claude session
+`gitlore.hooksDir` is unset (a plain `git push` outside any Claude session
 before SessionStart has fired), the wrapper exits 0 after emitting a stderr hint
 — `"gitlore skipped: hooks not installed"` plus instructions to install the
 marketplace, plugin, and start Claude.
@@ -44,12 +45,12 @@ if [ -z "$HOOKS_DIR" ]; then
   echo "Install the gitlore plugin from the Claude Code marketplace, then start Claude Code in this repo." >&2
   exit 0
 fi
-if [ ! -x "$HOOKS_DIR/pre-commit" ]; then
+if [ ! -x "$HOOKS_DIR/pre-push" ]; then
   echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
   echo "Relaunch Claude Code in this repo with 'claude -c' to refresh the hooks dir, then retry." >&2
   exit 0
 fi
-exec "$HOOKS_DIR/pre-commit" "$@"
+exec "$HOOKS_DIR/pre-push" "$@"
 ```
 
 ## The Session
@@ -69,9 +70,9 @@ has no `gitlore-memory` entry, no-op.
 2. **Re-pin the five plugin-path keys** — `gitlore.hooksDir`,
    `gitlore.commitCommand`, `gitlore.pushCommand`, `gitlore.mergeCommand`,
    `gitlore.memoryApprovalClauseFile` — so a plugin upgrade heals itself.
-3. **Emit the wrappers** `gitlore-pre-commit` and `gitlore-pre-push` into the
-   git common dir, and the FR11 commit gate into the memory store and each tier.
-   Idempotent and worktree-agnostic (D11, D12).
+3. **Emit the wrapper** `gitlore-pre-push` and the `gitlore-pre-commit` stub
+   into the git common dir, and the FR11 commit gate into the memory store and
+   each tier. Idempotent and worktree-agnostic (D11, D12).
 4. **Replay the hook-manager sentinel** to reinstate wiring after a clone or a
    new machine (`direct` and `manual` are keywords; the three manager commands
    are matched as literals and nothing else is run, D45 — see Hook Manager
@@ -182,9 +183,9 @@ says is installed for this repo, and reports a mid-session upgrade once per
 episode. It reports and never repairs; see D21.
 
 **`SessionStart` and `PreCompact` — the nudge reset.** `nudge-reset.sh` re-arms
-the once-per-episode notices (index byte budget, plugin upgrade). Both markers
-claim "this session has already been told", and both events end the context that
-claim rests on; see D21.
+the once-per-episode notices (index byte budget, plugin upgrade, missing root
+index). Each marker claims "this session has already been told", and both events
+end the context that claim rests on; see D21.
 
 **`PostToolUse(EnterWorktree|ExitWorktree)` — the drift guard.**
 `worktree-drift.sh` warns when an in-process worktree switch has moved the
@@ -200,12 +201,12 @@ is a notice rather than a repair.
 
 Tracking hook scripts in the repo would cause commit churn on every plugin
 update and couple the repo's history to the plugin's versioning. Storing flat
-wrappers in the git common dir (`<common-dir>/gitlore-pre-commit`,
-`<common-dir>/gitlore-pre-push`, resolved via `git rev-parse --git-common-dir`)
-keeps them untracked and local. `SessionStart` regenerates them on every
-startup, so they always reflect the current plugin version. The common dir
-(rather than a literal `.git/`) is what makes the wrappers reachable from linked
-worktrees, where `.git` is a gitlink file — see Hook wrappers above and **D11**.
+wrappers in the git common dir (`<common-dir>/gitlore-pre-push`, resolved via
+`git rev-parse --git-common-dir`) keeps them untracked and local. `SessionStart`
+regenerates them on every startup, so they always reflect the current plugin
+version. The common dir (rather than a literal `.git/`) is what makes the
+wrappers reachable from linked worktrees, where `.git` is a gitlink file — see
+Hook wrappers above and **D11**.
 
 Wrappers exec the real hook scripts via `$(git config gitlore.hooksDir)/<hook>`.
 The wrapper degrades to a clean skip (exit 0 + stderr hint) in **two** cases,
@@ -239,7 +240,7 @@ and in the hook-manager consumers works only where `.git` is a directory — the
 main worktree. In a linked worktree `.git` is a gitlink *file*, so the path
 fails on both sides: `cat > .git/gitlore-*` aborts SessionStart under `set -e`,
 and the shared wired hook (which lives in the common dir and therefore fires in
-*every* worktree) `exec`s the literal path and **blocks the commit**
+*every* worktree) `exec`s the literal path and **blocks the git operation**
 (`exec: … not found`). Both verified empirically against git 2.47.3.
 
 The wrapper is therefore anchored at
@@ -259,8 +260,8 @@ the opposite — one shared executable.)
 
 Corollary fix: once the wrapper *fires* in a linked worktree, the git-hook runs
 `git -C "$mempath" …` under `set -e`. If the memory submodule worktree was never
-created there (session-less worktree), this would abort and block the commit for
-a *new* reason. Both `pre-commit` and `pre-push` therefore guard with an early
+created there (session-less worktree), this would abort and block the push for a
+*new* reason. `pre-push` therefore guards with an early
 `[ -e "$mempath/.git" ] || exit 0` — nothing to sync, never block.
 
 **D14 — User-facing SessionStart output on `systemMessage`**
@@ -294,8 +295,8 @@ the single SessionStart JSON the hook writes to fd 3:
 
 `additionalContext` carries the standing commit-protocol orientation (D12) on
 every path. The agent-vs-user text branch (`gitlore_say_for_agent_or_user`)
-exists only for the git hooks (`pre-commit` / `pre-push` / `memory-pre-commit`),
-which run outside a session where `CLAUDECODE` may be unset; SessionStart always
+exists only for the git hook (`pre-push`, `memory-pre-commit`) and the commit
+and push scripts, which run where `CLAUDECODE` may be unset; SessionStart always
 runs in-session, so its notices are written directly for the user.
 
 **D21 — A mid-session plugin upgrade is a notice, not a self-healing config**
@@ -364,7 +365,7 @@ it couples the repo's history to the plugin's versioning.
 
 **A literal `.git/gitlore-<hook>` wrapper path.** Fails in a linked worktree,
 where `.git` is a gitlink file: the write aborts SessionStart and the exec
-blocks the commit. Replaced by the common-dir anchor (D11).
+blocks the git operation. Replaced by the common-dir anchor (D11).
 
 **A per-worktree wrapper anchor** (`--git-path gitlore-<hook>`). Reintroduces
 the commit-blocking gap in any worktree where no session has run, because the

@@ -1,11 +1,11 @@
 # The commit gate
 
-The FR11 approval gate: the nudge that opens an episode, the standalone commit
-it produces, and the decisions arguing for that shape. FR11 itself and the
-conclusions open the node below; this file is what you need while building or
-debugging approval. The git hooks that carry a commit or a push out are in
-[git-hooks.md](git-hooks.md), and the two callable scripts that do the same with
-no parent operation in flight are in
+The FR11 approval gate: the commit the agent makes once the user approves a
+summary, the intent-file route to the same commit, and the decisions arguing for
+that shape. FR11 itself and the conclusions open the node below; this file is
+what you need while building or debugging approval. The git hook that carries a
+push out is in [git-hooks.md](git-hooks.md), and the two callable scripts, the
+commit one among them (D58), are in
 [memory-entry-points.md](memory-entry-points.md).
 
 - Approval — **D4** the commit message travels by file handshake, and its
@@ -19,46 +19,28 @@ no parent operation in flight are in
 
 ## Mechanism
 
-**`PostToolUse(Bash)` — the commit nudge.** `post-tool-use.sh` watches for the
-project's own pre-commit check, configured as `gitlore.precommitCommand` and
-matched by command prefix. It fires when that command exited 0, memory is dirty,
-and the commit-message file is absent or stale (mtime against the newest memory
-file — a content hash is not worth the complexity; an edit that rewrites
-identical content re-triggers, which is acceptable noise). On trigger it emits
-`additionalContext` asking Claude to review the pending changes against the
-`memory-writing` skill (D48), summarize them, present the summary, and write it
-to the commit-message file **only** after explicit user approval. That ordering
-is FR11's gate: the file must not exist until approval exists.
+**`PostToolBatch` — the commit by intent file.** `memory-commit-batch.sh` acts
+on an intent file the agent wrote as an ordinary edit; `add-tier-batch.sh` is
+its sibling on the mount side. The shape is deliberate and shared: the agent
+writes a file, a hook does the git — sidestepping both the command sandbox and
+the auto-mode classifier, neither of which lets the agent do this work itself.
 
-The nudge fires once per dirty episode. A `gitlore-nudged` marker in the store's
-gitdir suppresses a repeat while memory is still dirty and unapproved, and
-`gitlore_sync_memory_to_live` clears it once memory is committed. The marker
-lives in the gitdir because the hook can write git internals and the agent
-cannot — nothing to gitignore.
-
-**`PostToolBatch` — the standalone commit.** `memory-commit-batch.sh` acts on an
-intent file the agent wrote as an ordinary edit; `add-tier-batch.sh` is its
-sibling on the mount side. The shape is deliberate and shared: the agent writes
-a file, a hook does the git — sidestepping both the command sandbox and the
-auto-mode classifier, neither of which lets the agent do this work itself.
-
-The standalone commit is the `handoff` plugin's path, not the general one (D16).
-The agent writes the approved summary (`.claude/gitlore-memory-message`) and the
-trigger (`.claude/gitlore-commit-memory`); `memory-commit-batch.sh` runs
-`commit-memory.sh` bare, which commits with the blessed sentinel and advances
-local `live` without a parent commit. The trigger is deliberately kept out of
-the general agent-facing instructions — the SessionStart orientation, the nudge,
-and the gate's block message all describe only the message-file plus
-parent-commit path — so an agent not running the handoff skill is never taught
-it can force a standalone memory commit.
+The agent's own call of `commit-memory.sh -m "<approved summary>"` is the direct
+route (the SessionStart orientation and the submodule gate's block message both
+teach it); the intent file is the same commit by the other route, for a moment
+when a denial would strand the approved summary (D16, D58). The agent writes the
+approved summary (`.claude/gitlore-memory-message`) and the trigger
+(`.claude/gitlore-commit-memory`); `memory-commit-batch.sh` runs
+`commit-memory.sh` bare, which commits with the blessed sentinel, advances local
+`live` and stages the pointer in the parent index.
 
 **Nothing is consumed before the commit it approves.** Because the hook runs
 `commit-memory.sh` bare, the approval on disk is judged by its mtime freshness
-against the store — the same gate the parent `pre-commit` path runs, so a retry
-commits only what the summary still covers (D56). On any failure before the
-commit, the trigger *and* the message file stay put and the next batch retries:
-no lost approval. The blessed commit consumes the message file; the trigger goes
-only once the whole run succeeds, the `HEAD:live` fast-forward included.
+against the store, so a retry commits only what the summary still covers (D56).
+On any failure before the commit, the trigger *and* the message file stay put
+and the next batch retries: no lost approval. The blessed commit consumes the
+message file; the trigger goes only once the whole run succeeds, the `HEAD:live`
+fast-forward included.
 
 **Which message the hook emits is read off the store and the IPC file the run
 left behind, never off a status the run reports about itself** (D53, in
@@ -110,7 +92,7 @@ checker stays repo-local, and what decides that a retry's approval still holds.
 **D4 — Commit message via file handshake**
 
 Claude writes a commit message file at the parent working tree's
-`.claude/gitlore-memory-message`; the commit hook reads, uses, and deletes it.
+`.claude/gitlore-memory-message`; the commit path reads, uses, and deletes it.
 Path is resolved by `gitlore_commit_msg_file`, via
 `git -C <memory-path> rev-parse --show-superproject-working-tree`, then
 `/.claude/gitlore-memory-message`. It sits in the parent working tree rather
@@ -119,7 +101,7 @@ write-blocked by the CC sandbox and the auto-mode classifier.
 
 Write timing: the file is created only after the user explicitly approves the
 commit summary Claude has presented. The file's presence is the signal that a
-memory commit has user approval; absence or staleness blocks pre-commit.
+memory commit has user approval; absence or staleness blocks the commit.
 
 Alternatives rejected:
 
@@ -128,20 +110,18 @@ Alternatives rejected:
   prompt.
 - **Force-write on memory edit:** PostToolUse on every `Write`/`Edit` would
   generate noise and couple commit preparation to individual edits rather than
-  commit intent. The chosen trigger (PostToolUse on the configured pre-commit
-  command) is a stronger signal of intent with cleaner timing.
+  commit intent.
 - **`claude --print`:** no session context, cannot ask user for confirmation, no
   memory of why edits were made.
 
 **D12 — Submodule-side commit gate (defense in depth for FR11)**
 
-A gate on the **parent** side alone leaves FR11 open on one flank. The parent
-`pre-commit` hook reads the magic commit-message file and, finding memory clean
-(or no fresh summary), commits or blocks — but the memory submodule is itself an
-ordinary git repo, so a commit made *directly inside it*
+A gate in `commit-memory.sh` alone leaves FR11 open on one flank. The script
+reads the commit-message file and commits or refuses — but the memory submodule
+is itself an ordinary git repo, so a commit made *directly inside it*
 (`git -C <mempath> commit`, a human `cd <mempath> && git commit`, a script)
 meets nothing: no summary, no approval, no handshake — and the parent then
-commits over an already-clean submodule.
+records an already-committed submodule.
 
 Two complementary mechanisms close it:
 
@@ -152,11 +132,11 @@ Two complementary mechanisms close it:
   parity). It admits a commit **only** when the env sentinel
   `GITLORE_MEMORY_COMMIT=1` is present, and blocks otherwise with a
   `$CLAUDECODE`-branched message. Every gitlore-internal commit path exports the
-  sentinel: the parent `pre-commit` blessed commit, both `/gitlore:resolve`
-  merge commits, and the install initial commit. A naked commit by an agent,
-  human, or script never sets it. This makes FR11 a shell-enforced invariant
-  (NFR1 "no AI on hot path"; D7 "scripts decide") on *every* commit path, not
-  just the parent route.
+  sentinel: `commit-memory.sh`'s blessed commit, both `/gitlore:resolve` merge
+  commits, and the install initial commit. A naked commit by an agent, human, or
+  script never sets it. This makes FR11 a shell-enforced invariant (NFR1 "no AI
+  on hot path"; D7 "scripts decide") on *every* commit path, not just the
+  script's.
 
   An env sentinel — not "fresh magic file present" — because resolve's merge
   commits use git's `MERGE_MSG`, not the magic file, so a file-presence gate
@@ -177,27 +157,29 @@ Two complementary mechanisms close it:
 
 - **Orientation (removes the friction of hitting the hard gate).**
   `SessionStart` emits a standing `additionalContext` every gitlore session
-  carrying the **prohibition** — never commit inside the memory submodule — plus
-  the one-line seamless happy path: writing a memory file is an ordinary edit,
-  and committing the *parent* repo is all it needs. Both halves are acts and
-  nothing else. The gate, the hook that blocks, and what it records are
+  carrying the commit as an act: writing a memory file is an ordinary edit; to
+  commit memory, summarize the pending changes, get the user's explicit
+  approval, then run
+  `bash "$(git config gitlore.commitCommand)" -m "<approved summary>"` from the
+  repo root; never run `git commit` inside the memory submodule. The
+  `$(git config …)` reaches the agent as literal text. The text is acts and
+  nothing else: the gate, the hook that blocks, and what it records are
   mechanism the agent cannot act on, and the gate states them itself at the
   moment it fires; the prohibition forbids by role, because naming
   `git -C <mempath> commit` invites reasoning about the forms left unnamed; and
   no FR id appears, since it resolves to nothing in the consumer repos this
-  context reaches. Pinned by the absence assertions in
+  context reaches. Pinned by the assertions in
   `tests/cc_hook_session_start.bats`. The base Claude Code memory instructions
   describe generic "edit files, save facts" memory with no review gate, so the
-  agent's default is actively wrong in a gitlore repo. The prohibition corrects
-  the model **before** the agent acts, and must be front-loaded: it guards an
-  action the agent would otherwise take unprompted, so nothing downstream would
-  disclose it in time. The four-step persist *procedure* (summarize → approval →
-  write the magic file → commit the parent) is deliberately **not** preloaded —
-  a front-loaded recipe reads as a process you must run and induces ceremony,
-  such as pausing for approval before even writing a memory file, when
-  persistence is meant to be seamless. It surfaces just-in-time instead: from
-  `memory-pre-commit`'s own `$CLAUDECODE`-branched output when a direct commit
-  is blocked, and from `/gitlore:resolve` on divergence.
+  agent's default is actively wrong in a gitlore repo. The orientation corrects
+  the model **before** the agent acts, and must be front-loaded: the prohibition
+  guards an action the agent would otherwise take unprompted, and the commit
+  command is the only way memory is committed, so no hook any longer surfaces it
+  just in time. Writing stays seamless — no step before an edit — and the
+  approval step attaches to the commit alone, so the text does not induce
+  ceremony around persistence. The gate's own `$CLAUDECODE`-branched output
+  remains the fallback when a direct commit is blocked, and `/gitlore:resolve`
+  surfaces on divergence.
 
 This is a cleaner variant of the rejected PreToolUse alternative — a submodule
 hook consistent with the existing hook architecture, with none of the CC-level
@@ -207,13 +189,13 @@ scoping complexity.
 a git-config key**
 
 The FR11 approval prompt — "summarize pending memory changes, present as a
-blockquote, get approval" — is needed at four call sites: three inside gitlore
-(`post-tool-use.sh`, `memory-commit-batch.sh`, `resolve.sh`'s
-`gitlore_sync_memory_to_live`) and a fourth in the `handoff` plugin's
+blockquote, get approval" — is needed at three call sites: two inside gitlore
+(`memory-commit-batch.sh`, `gitlore_sync_memory_to_live` in
+`resolve-sync-memory.sh`) and a third in the `handoff` plugin's
 `checkpoint_memory_directive`, a caller in the D16 sense that drives its own
 memory commit around gitlore's IPC files. Composed independently, they drift —
-the three internal ones did once (2026-07-16, "one prompt fix, three surfaces"),
-and a hand-synced copy in a different repo entirely can only drift further.
+the internal ones did once (2026-07-16, "one prompt fix, three surfaces"), and a
+hand-synced copy in a different repo entirely can only drift further.
 
 **The wording is a self-contained block, appended last.**
 `reference/memory-approval-clause.txt` holds two blocks. The first is the review
@@ -234,10 +216,9 @@ moved it. Shipping the template rather than describing the shape lets the agent
 copy a form instead of inferring one, and the bold prefix is what makes the body
 scannable in the approval blockquote. The multi-line clause also constrains
 emission: a hook that puts it in JSON must build that JSON with `jq --arg`,
-since a raw newline inside a hand-written string is invalid. The four sites keep
-their distinct framing — a `PostToolUse` nudge, a pending-trigger retry, a
-sync-guard refusal, `resolve.sh`'s divergence-path refusal — so what is shared
-is the block, not the messages.
+since a raw newline inside a hand-written string is invalid. The sites keep
+their distinct framing — a pending-trigger retry, a deferred commit, a
+sync-guard refusal — so what is shared is the block, not the messages.
 
 **Discovery mirrors D16's `gitlore.commitCommand`**, which already solved the
 identical problem of a caller outside gitlore's process needing a stable path
@@ -261,11 +242,12 @@ path fails loud instead of quietly dropping FR11's gate on the consumer side.
 **`resolve.sh` reaches the clause through its callers, never by sourcing
 `util.sh` itself.** `util.sh` declares `readonly` globals, so sourcing it twice
 fails; `resolve.sh` leaves that to the caller and says so in its own header
-comment. All four scripts that source `resolve.sh` (`commit-memory.sh`,
-`git-hooks/pre-push`, `git-hooks/pre-commit`, `cc-hooks/session-start.sh`)
-source `util.sh` first, so `gitlore_memory_approval_clause` is in scope at
-`resolve.sh`'s one call site; a defensive `source` line there would break every
-caller on a `readonly` redeclaration.
+comment. Every script that sources `resolve.sh` (`commit-memory.sh`,
+`push-memory.sh`, `merge-memory.sh`, `resolve.sh`, `git-hooks/pre-push`,
+`cc-hooks/session-start.sh`) sources `util.sh` first, so
+`gitlore_memory_approval_clause` is in scope at `resolve.sh`'s one call site; a
+defensive `source` line there would break every caller on a `readonly`
+redeclaration.
 
 **D22 — The memory-hygiene checker is a repo-local gate, not shipped surface**
 
@@ -300,10 +282,9 @@ whatever has happened to the store since the user gave it. The mtime gate then
 always passes, so an edit made between two batches — the index fix a D50 abort
 asks for — commits under a summary that never saw it, while the abort text says
 the summary needs approval again. The bare invocation closes that: the file is
-read as it stands and `gitlore_sync_memory_to_live` decides, which is the same
-gate on the batch path as on the parent `pre-commit` path. `-m` and `-F` keep
-writing the file, because a summary arriving with the call was approved
-immediately before it (D16, in
+read as it stands and `gitlore_sync_memory_to_live` decides, which is the one
+gate on the batch path. `-m` and `-F` keep writing the file, because a summary
+arriving with the call was approved immediately before it (D16, in
 [memory-entry-points.md](memory-entry-points.md)).
 
 **Freshness is the store's own answer, not a classification the run makes of its
@@ -315,10 +296,10 @@ line or exit code from `commit-memory.sh` would put the same judgement in the
 same place, and would have to stay true across every failure arm added later,
 each defaulting to whatever its author picks rather than to the safe answer.
 Mtime order off the store needs no new state and no new return code, and the
-restamp arms in `resolve-sync-memory.sh` then do on the batch path exactly what
-they do on the pre-commit path: a failure that wrote only projections of
-approved lines keeps the approval, a merge preparation does not (D53), and the
-agent's own write to the store always invalidates it.
+restamp arms in `resolve-sync-memory.sh` then do on the batch path what they do
+on a bare retry: a failure that wrote only projections of approved lines keeps
+the approval, a merge preparation does not (D53), and the agent's own write to
+the store always invalidates it.
 
 **The blank screen sits on both entry points, not in the sync.** An
 all-whitespace approval is fresh by mtime, so it reaches `git commit -F`, which
@@ -332,7 +313,7 @@ reason above.
 
 Freshness is mtime order, so an agent that writes a memory file after the
 message file inside one batch gets one visible re-approval request rather than a
-lost commit — the same edge the pre-commit path carries. The handoff flow writes
+lost commit — the same edge any bare retry carries. The handoff flow writes
 memory first and the summary only after the user's approval turn, so it does not
 meet it.
 
@@ -343,8 +324,7 @@ rather than at commit intent — noise, and the wrong timing for a confirmation
 gate.
 
 **`PostToolUse` on every memory `Write`/`Edit`.** Couples commit preparation to
-individual edits instead of to commit intent. The configured pre-commit command
-is a far stronger signal with cleaner timing. (D31's `PostToolBatch` composition
+individual edits instead of to commit intent. (D31's `PostToolBatch` composition
 is a different use of the same event: structural placement, no commit
 semantics.)
 

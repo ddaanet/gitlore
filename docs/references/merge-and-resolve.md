@@ -35,7 +35,7 @@ file is what you need while running or changing a merge.
   moment it exists and memory is repo-global rather than branch-scoped.
   Divergence blocks and routes to `/gitlore:resolve`.
 - **Two divergence gates, one shape.** A store's pending HEAD against its own
-  local `live` (`pre-commit`), and its local `live` against its own
+  local `live` (`commit-memory.sh`), and its local `live` against its own
   `origin/live` (`pre-push`). Both reduce to "my pending commit vs the
   authoritative side", which is why one merge machinery serves memory and tiers
   alike (D6, D41).
@@ -254,12 +254,12 @@ becomes a no-op. No other design changes needed.
 
 **D13 — Lock-contention retry wrapper for mutating memory git calls**
 
-SessionStart, `pre-commit`, `pre-push`, and `/gitlore:resolve` all run
+SessionStart, `commit-memory.sh`, `pre-push`, and `/gitlore:resolve` all run
 `git -C <mempath> …` against the memory submodule. Concurrent Claude sessions
 (or a session racing its own background work) can collide on the index/ref lock,
 and a transient `index.lock` / `cannot lock ref` failure would abort the
-operation — blocking a commit or stranding SessionStart under `set -e`. The fix
-is `gitlore_git` (`scripts/lib/util.sh`), a drop-in wrapper that retries
+operation — blocking a commit or push, or stranding SessionStart under `set -e`.
+The fix is `gitlore_git` (`scripts/lib/util.sh`), a drop-in wrapper that retries
 `git "$@"` on transient lock contention with exponential backoff. The default
 schedule (`0.1 0.2 0.4 0.8 1.6 3.2 3.7`) sums to exactly 10.0s wall-clock — the
 last term is the budget remainder, not a doubled value — and is overridable via

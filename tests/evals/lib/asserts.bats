@@ -21,7 +21,7 @@ setup() {
   EVAL_OUT_DIR="$BATS_TEST_TMPDIR/out"
   mkdir -p "$EVAL_REPO/.claude" "$EVAL_OUT_DIR"
   export EVAL_REPO EVAL_OUT_DIR PLUGIN_ROOT
-  export EVAL_RUBRIC="" EVAL_TRIGGER="ptu" LIB_DIR="$BATS_TEST_DIRNAME"
+  export EVAL_RUBRIC="" LIB_DIR="$BATS_TEST_DIRNAME"
   # Local bare remotes are the only kind an eval can reach; `submodule add`
   # refuses the file transport without this, and repo config does not reach the
   # clone that performs it.
@@ -229,8 +229,9 @@ EOF
 
 # The state the agent leaves behind once the user has approved: the fact in the
 # tier, the prefixed pointer in the root index, composition run, and the
-# approved summary on disk. Nothing is committed yet — which of the two FR11
-# finishes happens next is what the tests below vary.
+# approved summary on disk. Nothing is committed yet — which finish happens next
+# (the assertion running commit-memory.sh, or a commit already made) is what the
+# tests below vary.
 FACT=reference_sentry_dsn.md
 
 _make_tier_write_end_state() {
@@ -249,24 +250,12 @@ _make_tier_write_end_state() {
   printf 'memory: record the shared acme Sentry DSN and its rotation cost\n' \
     > "$EVAL_REPO/.claude/gitlore-memory-message"
 
-  # The stop path is finished by the parent's pre-commit hook, so the fixture
-  # needs it wired — _make_memory builds the submodule but no hooks, and without
-  # this the assertion's `git commit` is inert and every stop-path test fails
-  # for a reason that has nothing to do with what it grades.
-  ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
-    bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh" ) >/dev/null
-  # The wrapper resolves the real hook through this config key and exits 0 with
-  # a "hooks not installed" notice when it is unset — which is silent enough to
-  # look like a passing commit that simply did nothing.
-  git -C "$EVAL_REPO" config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
-  cat > "$EVAL_REPO/.git/hooks/pre-commit" <<'HOOK'
-#!/usr/bin/env bash
-exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"
-HOOK
-  chmod +x "$EVAL_REPO/.git/hooks/pre-commit"
+  _stub_judge
+}
 
-  # The judge is the last assertion and it shells out to `claude`. Stub it, or
-  # every test here would spend a real API call to grade a fixture.
+# The judge is the last assertion and it shells out to `claude`. Stub it, or
+# every test here would spend a real API call to grade a fixture.
+_stub_judge() {
   MOCK_BIN="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$MOCK_BIN"
   printf '#!/usr/bin/env bash\nprintf "pass fixture\\n"\n' > "$MOCK_BIN/claude"
@@ -275,9 +264,10 @@ HOOK
   export PATH
 }
 
-# The second FR11 finish: the agent wrote the trigger too, so the batch hook
-# committed before the assertion ever ran. commit-memory.sh IS what that hook
-# invokes, so calling it here reproduces the end state rather than imitating it.
+# The agent-side finish: the agent ran commit-memory.sh itself, or wrote the
+# trigger too and the batch hook ran it, so memory committed before the assertion
+# ever ran. commit-memory.sh IS what both invoke, so calling it here reproduces
+# the end state rather than imitating it.
 _commit_via_batch_path() {
   ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
     bash "$PLUGIN_ROOT/scripts/commit-memory.sh" \
@@ -288,6 +278,17 @@ _commit_via_batch_path() {
   _make_tier_write_end_state
   _run_assert tier-write
   assert_ok
+  # The assertion finished the commit itself, through commit-memory.sh.
+  [ "$(git -C "$EVAL_REPO/memory" rev-parse HEAD)" != "$(cat "$EVAL_OUT_DIR/memory-baseline")" ]
+  [ ! -f "$EVAL_REPO/.claude/gitlore-memory-message" ]
+}
+
+@test "tier-write: fails when the memory pointer is not staged in the parent" {
+  _make_tier_write_end_state
+  _commit_via_batch_path
+  git -C "$EVAL_REPO" reset -q -- memory
+  _run_assert tier-write
+  assert_fails "does not have 'memory' staged"
 }
 
 @test "tier-write: passes when the batch hook already committed (summary consumed)" {
@@ -341,10 +342,43 @@ _commit_via_batch_path() {
   assert_fails "no commit-msg file"
 }
 
-@test "memory-commit: on the precommit_failure path, a leftover commit-msg fails" {
+# A dirty memory store plus the approved summary: the state the agent leaves when
+# the user approved and the agent stopped before committing.
+_make_dirty_approved_memory() {
   _make_memory
-  export EVAL_TRIGGER=precommit_failure
-  printf 'summary\n' > "$EVAL_REPO/.claude/gitlore-memory-message"
+  printf -- '- [eval suite](project_evals.md) — we are building an eval suite\n' \
+    >> "$EVAL_REPO/memory/MEMORY.md"
+  printf 'memory: note that we are building an eval suite\n' \
+    > "$EVAL_REPO/.claude/gitlore-memory-message"
+  _stub_judge
+}
+
+@test "memory-commit: passes when the agent committed memory itself" {
+  _make_dirty_approved_memory
+  _commit_via_batch_path
   _run_assert memory-commit
-  assert_fails "did not retry the commit"
+  assert_ok
+}
+
+@test "memory-commit: passes when the agent stopped after writing the summary" {
+  _make_dirty_approved_memory
+  _run_assert memory-commit
+  assert_ok
+  # The assertion committed memory itself, through commit-memory.sh.
+  [ "$(git -C "$EVAL_REPO/memory" rev-parse HEAD)" != "$(cat "$EVAL_OUT_DIR/memory-baseline")" ]
+}
+
+@test "memory-commit: fails when the memory pointer is not staged in the parent" {
+  _make_dirty_approved_memory
+  _commit_via_batch_path
+  git -C "$EVAL_REPO" reset -q -- memory
+  _run_assert memory-commit
+  assert_fails "does not have 'memory' staged"
+}
+
+@test "memory-commit: fails when the commit message misses the rubric" {
+  _make_dirty_approved_memory
+  printf '#!/usr/bin/env bash\nprintf "fail generic message\\n"\n' > "$MOCK_BIN/claude"
+  _run_assert memory-commit
+  assert_fails "failed judge rubric"
 }

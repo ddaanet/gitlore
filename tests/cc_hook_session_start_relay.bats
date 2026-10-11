@@ -140,7 +140,7 @@ run_session_start_with_session() {
   # directory's permissions, not the target file's.
   [ -e "$marker" ] && chmod 0600 "$marker"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never commit"; "i")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("gitlore.commitCommand")'
   # The drain reached the marker: a drain enumerating nothing never opens it,
   # and the two assertions above hold with no drain at all.
   [ ! -e "$marker" ]

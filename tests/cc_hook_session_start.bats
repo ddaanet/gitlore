@@ -144,13 +144,18 @@ assert_session_start_did_nothing() {
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   # The prohibition (the one piece that must precede any action) is present...
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never commit"; "i")'
-  # ...along with the one-line happy path, as the two acts it asks for: write the
-  # file like any other edit, then commit the parent.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never run git commit inside the memory submodule"; "i")'
+  # ...along with the happy path, as the acts it asks for: write the file like
+  # any other edit, then commit memory through the config-pinned command. The
+  # command substitution reaches the agent as literal text, not expanded.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("parent repo"; "i")'
-  # ...but the four-step persist *procedure* is NOT front-loaded — it is surfaced
-  # just-in-time by the pre-commit hook / gitlore:resolve, not the always-on context.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("git config gitlore.commitCommand")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("$(git config gitlore.commitCommand)")'
+  # A parent commit no longer carries memory, so the text must not say it does.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("committing the parent repo"; "i") | not'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("all it needs"; "i") | not'
+  # ...but the persist *procedure* beyond that one command is NOT front-loaded —
+  # no message-file path, no gate mechanism; the gate states them when it fires.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("explicit user approval"; "i") | not'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("rev-parse --git-path gitlore-commit-msg"; "i") | not'
   # No mechanism the agent cannot act on, and no FR id: the gate describes itself
@@ -295,7 +300,8 @@ assert_session_start_did_nothing() {
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   printf 'direct\n' > .claude/gitlore-hook-setup
   bash "$SESSION_START"
-  grep -q '# gitlore: managed' .git/hooks/pre-commit
+  grep -q '# gitlore: managed' .git/hooks/pre-push
+  [ ! -e .git/hooks/pre-commit ]
 }
 
 @test "sentinel 'manual' emits a reminder to stderr" {

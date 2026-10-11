@@ -35,16 +35,16 @@ information. What the approval prompt owes the user is
 one bound for project memory, and that difference is the only part of the split
 that carried real content.
 
-*No recursing `pre-commit`/`pre-push` in the memory store.* Recursion is
-driver-side, exactly as the parent already drives memory: the parent's hooks
-call the sync function and push explicitly rather than relying on a hook one
-level down. A hook-side version would re-litigate the full `--local-env-vars`
-unset and the `GIT_INDEX_FILE` capture/restore at a level that needs neither,
-and would force the FR11 gate to share `memory-pre-commit` with the driver — the
-gate exits 0 on its first line under the blessed sentinel, so the two would
-diverge by sentinel inside one hook. `memory-pre-commit` stays a pure gate and
-is now *emitted into each tier as well*, since neither the parent's hooks nor
-memory's own gate reach a submodule-inside-a-submodule; each tier gets its own
+*No recursing hook in the memory store.* Recursion is driver-side, exactly as
+the parent already drives memory: `commit-memory.sh` calls the sync function and
+`pre-push` pushes explicitly, rather than relying on a hook one level down. A
+hook-side version would re-litigate the full `--local-env-vars` unset and the
+`GIT_INDEX_FILE` capture/restore at a level that needs neither, and would force
+the FR11 gate to share `memory-pre-commit` with the driver — the gate exits 0 on
+its first line under the blessed sentinel, so the two would diverge by sentinel
+inside one hook. `memory-pre-commit` stays a pure gate and is now
+*emitted into each tier as well*, since neither the parent's hooks nor memory's
+own gate reach a submodule-inside-a-submodule; each tier gets its own
 `gitlore.hooksDir` mirror because the wrapper's `git config` reads whichever
 store it fires in.
 
@@ -157,7 +157,8 @@ The recomposition that follows is **committed by the take itself** (D49, in
 recomposed root index land in a canned bookkeeping commit
 (`Update MEMORY.md for <tier> tier merge.`) that advances memory's local `live`,
 so an explicit take leaves the store clean. The parent-level gitlink still
-floats to the next parent commit, as every memory advance leaves it. One path
+floats to the next parent commit, as every memory advance leaves it (a commit
+through `commit-memory.sh` is the one advance that stages it). One path
 degrades: a root store that held unapproved work *before* the take gets no
 canned commit — the pair includes `MEMORY.md`, whose recompose folds in whatever
 unapproved index edits the episode already held — and falls back to the

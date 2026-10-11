@@ -14,9 +14,10 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-@test "install + edit memory + commit-msg + parent commit → memory committed and ff-pushed" {
-  # 1. Install.
-  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory "echo precommit"
+@test "install + edit memory + commit-memory + parent commit → memory committed, staged and recorded" {
+  # 1. Install, and a parent commit so the index starts clean.
+  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory
+  git commit -q -m "install gitlore"
 
   # 2. SessionStart fires (simulated).
   bash "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
@@ -24,23 +25,24 @@ teardown() { teardown_tmp_repo; }
   # 3. Claude edits memory.
   echo "added during session" >> memory/MEMORY.md
 
-  # 4. Claude runs the configured pre-commit command (echo precommit). PostToolUse fires.
-  payload='{"tool_name":"Bash","tool_input":{"command":"echo precommit"},"tool_response":{"exit_code":0}}'
-  out=$(printf '%s' "$payload" | bash "$PLUGIN_ROOT/scripts/cc-hooks/post-tool-use.sh")
-  [[ "$out" == *additionalContext* ]]
-
-  # 5. Claude writes the commit-msg file (simulating user approval).
-  msgfile=$(gitlore_commit_msg_file memory)
-  printf 'memory: record session edits\n' > "$msgfile"
-
-  # 6. Parent's pre-commit hook fires (driven by the wrapper).
-  bash .git/gitlore-pre-commit
-
-  # Assertions.
-  [ ! -f "$msgfile" ]
+  # 4. Claude commits memory with the approved summary (D58): its own act.
+  run bash "$(git config gitlore.commitCommand)" -m "memory: record session edits"
+  [ "$status" -eq 0 ]
   wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
   run git -C memory log --oneline
   [[ "$output" == *"record session edits"* ]]
+  [ ! -f "$(gitlore_commit_msg_file memory)" ]
+
+  # 5. The script staged the moved gitlink: the parent index is checked BEFORE
+  # any parent commit, because nothing else may do it for the script.
+  run git diff --cached --name-only
+  [[ "$output" == *memory* ]]
+
+  # 6. The next parent commit records it, with no hook involved.
+  echo change > tracked.txt
+  git add tracked.txt
+  git commit -q -m "parent change"
+  [ "$(git rev-parse HEAD:memory)" = "$wt" ]
 }

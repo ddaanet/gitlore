@@ -16,7 +16,7 @@ teardown() {
 }
 
 # The driver the approval cases share: gitlore_sync_memory_to_live called
-# the way the pre-commit hook calls it, on the summary file as it stands.
+# the way commit-memory.sh calls it, on the summary file as it stands.
 # $1 = optional shell text run after the libraries are sourced, to stand a
 # function in for a state no fixture reaches.
 write_sync_driver() {

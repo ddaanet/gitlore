@@ -19,8 +19,8 @@ set -euo pipefail
 # Exit 1 carries a message on stderr naming the next action — including a
 # prepared merge routed to /gitlore:resolve when a store has diverged.
 
-# Defensive: a caller's env may carry leaked repo-local GIT_* vars (see the
-# pre-commit prologue). Clear the full local-env-var set, not a hand-picked
+# Defensive: a caller's env may carry leaked repo-local GIT_* vars (see
+# `.claude/rules/shell.md` "Git hook env leak"). Clear the full local-env-var set, not a hand-picked
 # subset — GIT_COMMON_DIR/GIT_OBJECT_DIRECTORY can redirect submodule git ops.
 # shellcheck disable=SC2046  # intentional word-splitting of the var-name list
 unset $(git rev-parse --local-env-vars)

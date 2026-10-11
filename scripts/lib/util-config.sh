@@ -102,8 +102,8 @@ gitlore_memory_remote_name() {
 # END of its own message. It carries a literal template, so it is multi-line and
 # cannot be spliced into the middle of a sentence — a call site emitting JSON
 # must therefore build it with jq, never a hand-written string. One file so the
-# three call sites (post-tool-use.sh, memory-commit-batch.sh, resolve.sh) cannot
-# drift on what "approve" means — see docs/design.md D19.
+# call sites (memory-commit-batch.sh, resolve.sh) cannot drift on what "approve"
+# means — see docs/design.md D19.
 gitlore_memory_approval_clause() {
   cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
 }

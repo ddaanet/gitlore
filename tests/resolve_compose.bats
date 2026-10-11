@@ -34,7 +34,7 @@ load helpers/resolve-compose
 - [P](p.md) — project
 - [T](ddaanet/x.md) — org'
 
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
@@ -55,8 +55,7 @@ load helpers/resolve-compose
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
 
   run bash "$PRE_PUSH"
@@ -102,8 +101,7 @@ prepare_tier_merge_head_vs_live() {
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
-  bash "$PRE_COMMIT" && return 1
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact" && return 1
   return 0
 }
 
@@ -251,7 +249,7 @@ prepare_tier_merge_head_vs_live() {
   mem_before=$(git -C memory rev-parse HEAD)
   [ "$(gitlore_commit_msg_freshness memory)" != "yes" ]
 
-  run --separate-stderr bash "$PRE_COMMIT"
+  run --separate-stderr bash "$COMMIT_MEMORY"
   [ "$status" -eq 1 ]
   all="${output}${stderr}"
   [[ "$all" == *"memory merge prepared"* ]]
@@ -273,8 +271,7 @@ prepare_tier_merge_head_vs_live() {
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs- [their other](u.md) — also theirs" >/dev/null
   run bash "$PRE_PUSH"
   [ "$status" -eq 1 ]

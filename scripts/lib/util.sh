@@ -161,17 +161,6 @@ gitlore_add_tier_file() {
   printf '%s/gitlore-add-tier\n' "$(_gitlore_ipc_dir "$1")"
 }
 
-# Print the path to the "already nudged this dirty episode" marker. Kept in the
-# memory submodule's gitdir (like gitlore_merge_state_file), NOT the working
-# tree, so it never appears in `git status` and needs no `.gitignore` entry. Set
-# by the PostToolUse nudge (post-tool-use.sh, a hook that writes git internals
-# freely — unlike the agent, which cannot) so the summarize-memory direction
-# fires once per dirty episode; cleared by gitlore_sync_memory_to_live when
-# memory is committed (the episode ends). Args: $1 = memory worktree path.
-gitlore_commit_notified_file() {
-  git -C "$1" rev-parse --git-path gitlore-nudged
-}
-
 # Print the CC project-scoped auto-memory dir for a repo root.
 # CC encodes the project dir name by replacing every non-[A-Za-z0-9] byte with
 # `-` (verified empirically against ~/.claude/projects/ entries). The >200-char

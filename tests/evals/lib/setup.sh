@@ -45,10 +45,10 @@ setup_eval_repo() {
   # Suppress launcher warning: eval bypasses the shim intentionally
   export GITLORE_LAUNCHED=1
 
-  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory "true"
-  # Install detects no hook manager; wire directly so the pre-commit hook fires
-  # during the eval's parent git commit.
-  bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
+  # Install detects no hook manager and wires the direct pre-push stub itself,
+  # so the fixture carries the same git-hook wiring a real install does. The
+  # parent has no pre-commit hook: memory is committed by the agent's own act.
+  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory
 
   # Wire the CC hooks into settings.json, copied wholesale from the plugin's own
   # hooks/hooks.json with ${CLAUDE_PLUGIN_ROOT} resolved. This bypasses the plugin
@@ -58,9 +58,9 @@ setup_eval_repo() {
   #
   # Derived, never hand-listed: a hand-written subset is a registration the evals
   # never exercise, and the whole point of an eval is that it walks the wiring
-  # production ships ([[feedback_test_the_invocation_path]]). The subset here was
-  # PostToolUse alone, which would have left every PostToolBatch hook — composition,
-  # the commit gate, recall, add-tier — dark.
+  # production ships ([[feedback_test_the_invocation_path]]). A subset would leave
+  # hooks dark — the PostToolBatch ones (composition, the commit trigger, add-tier)
+  # among them.
   local tmp
   tmp=$(mktemp)
   jq --arg plugin_root "$PLUGIN_ROOT" --slurpfile hooks "$PLUGIN_ROOT/hooks/hooks.json" '

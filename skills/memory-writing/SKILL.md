@@ -229,9 +229,9 @@ counting an owner.
 
 Write the file under `memory/` (or the matching tier's directory) and add its
 line to the root `memory/MEMORY.md` — `- [Title](<tier>/<file>.md) — hook`;
-tier carriers and frontmatter follow from that edit. The fact's diff rides the
-commit carrying the change it documents, and the parent repo's pre-commit hook
-gates it.
+tier carriers and frontmatter follow from that edit. The fact is committed with the
+user's approved summary through `gitlore.commitCommand`, and its pointer rides
+the parent commit carrying the change it documents.
 
 ## 9. Arriving here at a gate, over facts already written
 

@@ -21,20 +21,20 @@ setup() {
 teardown() { teardown_tmp_repo; }
 
 @test "install configures memory submodule remote via gh repo create" {
-  bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
   url=$(git -C memory config --get remote.origin.url || true)
   [ -n "$url" ]
 }
 
 @test "install rewrites .gitmodules URL from placeholder to real remote" {
-  bash "$RUN_INSTALL" memory "echo precommit"
+  bash "$RUN_INSTALL" memory
   url=$(git config --file .gitmodules submodule.gitlore-memory.url)
   [[ "$url" != *"$GITLORE_T_PLACEHOLDER_URL"* ]]
 }
 
 @test "install records gh repo create with --private (no --source flag)" {
   log="$TMP_REPO/gh-calls.log"
-  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory
   grep -q 'repo create' "$log"
   grep -q -- '--private' "$log"
   # --source=. is intentionally omitted: gh's --source rejects gitfile-pointed
@@ -44,7 +44,7 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "install completes local-only when gh is unauthed (no abort)" {
-  GH_MOCK_EXIT_AUTH_STATUS=1 run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  GH_MOCK_EXIT_AUTH_STATUS=1 run --separate-stderr bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   [ -d memory ]
   [ -f .claude/settings.json ]
@@ -55,15 +55,15 @@ teardown() { teardown_tmp_repo; }
 @test "install aborts cleanly when gh repo create fails (name collision)" {
   GH_MOCK_EXIT_REPO_CREATE=1 \
     GH_MOCK_STDERR_REPO_CREATE="GraphQL: Name already exists on this account" \
-    run --separate-stderr bash "$RUN_INSTALL" memory "echo precommit"
+    run --separate-stderr bash "$RUN_INSTALL" memory
   [ "$status" -ne 0 ]
   [[ "$output$stderr" == *"/gitlore:resolve"* ]]
 }
 
 @test "install is idempotent (no second gh repo create call on re-run)" {
   log="$TMP_REPO/gh-calls.log"
-  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
-  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo precommit"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory
   count=$(grep -c 'repo create' "$log" || true)
   [ "$count" -eq 1 ]
 }
@@ -76,7 +76,7 @@ teardown() { teardown_tmp_repo; }
     bin=$(command -v "$tool") || { echo "no $tool on PATH to build the gh-less PATH from" >&2; return 1; }
     ln -sf "$bin" "$no_gh_bin/$tool"
   done
-  GITLORE_HOME="$TMP_REPO/.test-home" PATH="$no_gh_bin" run --separate-stderr bash "$RUN_INSTALL" memory "echo pc"
+  GITLORE_HOME="$TMP_REPO/.test-home" PATH="$no_gh_bin" run --separate-stderr bash "$RUN_INSTALL" memory
   [ "$status" -eq 0 ]
   [ -d memory ]
   [ -f .claude/settings.json ]
@@ -86,11 +86,12 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "url mode repoints a synced placeholder origin instead of reading it as wired" {
-  # `git submodule sync` on a local-only install copies the .gitmodules
-  # placeholder into the store's origin, absolutized. It names no repository, so
-  # the slot is still gitlore's to fill — and `remote add` would fail on it.
-  bash "$RUN_INSTALL" memory "echo pc" local
-  git -C memory remote add origin "$TMP_REPO/.git/gitlore-placeholder"
+  # The store's origin may already exist, holding the .gitmodules placeholder
+  # (absolutized) from an earlier sync. The placeholder names no repository, so
+  # the slot is still gitlore's to fill: `remote add` fails on an existing origin,
+  # while `config` repoints it either way.
+  bash "$RUN_INSTALL" memory local
+  git -C memory config remote.origin.url "$TMP_REPO/.git/gitlore-placeholder"
   local remote="$TMP_REPO/.existing-remote.git"
   git init -q --bare "$remote"
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" memory url "$remote"
@@ -103,7 +104,8 @@ teardown() { teardown_tmp_repo; }
 @test "url mode wires an existing remote and pushes live" {
   local remote="$TMP_REPO/.existing-remote.git"
   git init -q --bare "$remote"
-  bash "$RUN_INSTALL" memory "echo pc" url "$remote"
+  run bash "$RUN_INSTALL" memory url "$remote"
+  [ "$status" -eq 0 ]
   url=$(git -C memory config --get remote.origin.url)
   [ "$url" = "$remote" ]
   # live was pushed to the existing remote.
@@ -114,7 +116,7 @@ teardown() { teardown_tmp_repo; }
 
 @test "local mode keeps placeholder and never calls gh" {
   log="$TMP_REPO/gh-calls.log"
-  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo pc" local
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory local
   url=$(git config --file .gitmodules submodule.gitlore-memory.url)
   [[ "$url" == *"gitlore-placeholder"* ]]
   [ ! -f "$log" ] || ! grep -q 'repo create' "$log"
@@ -123,7 +125,7 @@ teardown() { teardown_tmp_repo; }
 @test "auto mode (gh available) names the remote <parent-base>-memory" {
   git remote add origin "https://github.com/acme/project.git"
   log="$TMP_REPO/gh-calls.log"
-  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo pc"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory
   grep -q 'repo create' "$log"
   grep -q 'project-memory' "$log"
 }
@@ -132,6 +134,6 @@ teardown() { teardown_tmp_repo; }
   git remote add origin "https://github.com/acme/project.git"
   export GH_MOCK_VISIBILITY="PUBLIC"
   log="$TMP_REPO/gh-calls.log"
-  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory "echo pc"
+  GH_MOCK_LOG="$log" bash "$RUN_INSTALL" memory
   grep -q -- '--public' "$log"
 }

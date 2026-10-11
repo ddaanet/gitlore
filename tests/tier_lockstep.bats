@@ -20,7 +20,7 @@ load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
 
-PRE_COMMIT="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
+COMMIT_MEMORY="$PLUGIN_ROOT/scripts/commit-memory.sh"
 PRE_PUSH="$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 EMIT_GATE="$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
 
@@ -36,9 +36,8 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   mount_tier_at_live ddaanet
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
 
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   [ "$status" -eq 0 ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   [[ "$(git -C memory/ddaanet show HEAD:MEMORY.md)" == *'org fact'* ]]
@@ -49,9 +48,8 @@ teardown() { teardown_tmp_repo; }
   mount_tier_at_live ddaanet
   before=$(git -C memory/ddaanet rev-parse HEAD)
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
 
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   head=$(git -C memory/ddaanet rev-parse HEAD)
   live=$(git -C memory/ddaanet rev-parse live)
   [ "$head" != "$before" ]
@@ -62,9 +60,8 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   mount_tier_at_live ddaanet
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
 
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   [ -z "$(git -C memory status --porcelain)" ]
   recorded=$(git -C memory rev-parse HEAD:ddaanet)
   actual=$(git -C memory/ddaanet rev-parse HEAD)
@@ -75,9 +72,8 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   mount_tier_at_live ddaanet
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
 
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   [ "$(git -C memory/ddaanet log -1 --pretty=%s)" = "memory: record the org fact" ]
   [ "$(git -C memory log -1 --pretty=%s)" = "memory: record the org fact" ]
   # Consumed exactly once, at the end of the episode.
@@ -89,9 +85,9 @@ teardown() { teardown_tmp_repo; }
   mount_tier_at_live ddaanet
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
 
-  CLAUDECODE=1 run --separate-stderr bash "$PRE_COMMIT"
+  CLAUDECODE=1 run --separate-stderr bash "$COMMIT_MEMORY"
   [ "$status" -eq 1 ]
-  [[ "${output}${stderr}" == *"approved commit summary"* ]]
+  [[ "${output}${stderr}" == *"approved summary"* ]]
   # Nothing committed anywhere.
   [ -n "$(git -C memory/ddaanet status --porcelain)" ]
 }
@@ -101,9 +97,8 @@ teardown() { teardown_tmp_repo; }
   mount_tier_at_live ddaanet
   [ ! -f memory/.gitlore-tiers ]   # no manifest at all → tier is dormant
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
 
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   [ "$status" -eq 0 ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 }
@@ -113,7 +108,7 @@ teardown() { teardown_tmp_repo; }
   mount_tier_at_live ddaanet
   before=$(git -C memory/ddaanet rev-parse HEAD)
 
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -eq 0 ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$before" ]
 }
@@ -125,9 +120,8 @@ teardown() { teardown_tmp_repo; }
   rm -rf memory/ddaanet
   mkdir memory/ddaanet
   echo dirty > memory/notes.md
-  approve "memory: add notes"
 
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY" -m "memory: add notes"
   [ "$status" -eq 0 ]
   [[ "$(git -C memory show HEAD:notes.md)" == *dirty* ]]
 }
@@ -139,8 +133,7 @@ teardown() { teardown_tmp_repo; }
   mount_tier_at_live ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
 
   run bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
@@ -157,8 +150,7 @@ teardown() { teardown_tmp_repo; }
   mount_tier_at_live ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   # Someone else advanced the tier remote in the meantime.
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
 
@@ -172,8 +164,7 @@ teardown() { teardown_tmp_repo; }
   make_parent_with_memory
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo dirty > memory/notes.md
-  approve "memory: add notes"
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: add notes"
 
   run bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
@@ -213,9 +204,8 @@ teardown() { teardown_tmp_repo; }
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   bash "$EMIT_GATE"
   echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
 
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   [ "$status" -eq 0 ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 }

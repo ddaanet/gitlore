@@ -1,12 +1,12 @@
 ---
 description: Install gitlore in this repository
-argument-hint: "[memory-path] [precommit-command]"
+argument-hint: "[memory-path]"
 allowed-tools: ["Bash", "Read", "Edit", "Write", "Skill(gitlore:memory-writing)"]
 ---
 
 # /gitlore:install
 
-1. **Gather inputs.** Use `$1` as the memory path if supplied, otherwise ask the user (default: `memory`). Use `$2` as the precommit command if supplied, otherwise ask the user (e.g. `lefthook run pre-commit`, `pre-commit run --all-files`).
+1. **Gather inputs.** Use `$1` as the memory path if supplied, otherwise ask the user (default: `memory`).
 
 2. **Choose the memory remote (D8 — explicit confirmation required).** Determine the proposed remote and confirm before any external action:
    - Run `git config --get remote.origin.url` in the repo. If it returns a URL and `gh auth status` succeeds, the default is **auto-create on GitHub**. Compute the proposed name as `<parent-repo-base>-memory` (the parent origin's repo name with `-memory` appended) and the visibility to match the parent (public parent → public, else private). Show the user the full proposal — owner, repository name, visibility — plus this notice:
@@ -16,14 +16,14 @@ allowed-tools: ["Bash", "Read", "Edit", "Write", "Skill(gitlore:memory-writing)"
    - If `gh` is unavailable/unauthed and the user has no URL, or the user declines remote creation, use **local-only mode** (memory works in-repo; a remote can be added later).
 
 3. **Run the installer** with the confirmed mode. This step writes `.gitmodules`, absorbs the memory submodule gitdir under `.git/`, and pushes a remote — all of which the Claude Code command sandbox blocks. Run it with the sandbox **disabled**.
-   - Auto-create (default): `"${CLAUDE_PLUGIN_ROOT}/scripts/install/run.sh" "<memory-path>" "<precommit-cmd>"`
-   - Existing URL: `"${CLAUDE_PLUGIN_ROOT}/scripts/install/run.sh" "<memory-path>" "<precommit-cmd>" url "<remote-url>"`
-   - Local-only: `"${CLAUDE_PLUGIN_ROOT}/scripts/install/run.sh" "<memory-path>" "<precommit-cmd>" local`
+   - Auto-create (default): `"${CLAUDE_PLUGIN_ROOT}/scripts/install/run.sh" "<memory-path>"`
+   - Existing URL: `"${CLAUDE_PLUGIN_ROOT}/scripts/install/run.sh" "<memory-path>" url "<remote-url>"`
+   - Local-only: `"${CLAUDE_PLUGIN_ROOT}/scripts/install/run.sh" "<memory-path>" local`
 
    If it exits non-zero with a "command sandbox is blocking install" message, re-run the exact command it prints (same invocation, sandbox disabled). Surface stderr verbatim on non-zero exit and stop. Relay stdout and stderr to the user on success.
 
 4. **Review the migrated facts.** Only when the installer reported `gitlore: migrated auto-memory from <src> into <path>`. That store came from Claude Code's own auto-memory, written under generic memory instructions with no review gate and no index cap; a scaffolded store has nothing to review, so skip this step when the line is absent.
 
-   Invoke the `gitlore:memory-writing` skill and hold every migrated fact against it — whether it should exist at all, whether another artifact owns it, whether the body survives the strip, and whether its index line carries the literal a future session arrives holding — then apply what it finds. The edits sit uncommitted on top of the installer's `Initial memory` commit and reach the user through the FR11 approval gate on their first parent commit, which is the intended path.
+   Invoke the `gitlore:memory-writing` skill and hold every migrated fact against it — whether it should exist at all, whether another artifact owns it, whether the body survives the strip, and whether its index line carries the literal a future session arrives holding — then apply what it finds. The edits sit uncommitted on top of the installer's `Initial memory` commit and reach the user through the FR11 approval gate when memory is next committed, which is the intended path.
 
    Report what changed. If `wc -c <memory-path>/MEMORY.md` is past ~24,985 bytes the index is over Claude Code's loader cap; say so and name `/gitlore:index-audit`, which owns the store-wide pass.

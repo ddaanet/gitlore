@@ -10,7 +10,7 @@ teardown() {
   teardown_tmp_repo
 }
 
-@test "emit-wrappers writes both wrapper files and makes them executable" {
+@test "emit-wrappers writes the pre-push wrapper and the pre-commit stub, both executable" {
   run bash "$EMIT"
   [ "$status" -eq 0 ]
   [ -x .git/gitlore-pre-commit ]
@@ -19,7 +19,7 @@ teardown() {
 
 @test "wrapper exits 0 with hint when gitlore.hooksDir unset" {
   bash "$EMIT"
-  run .git/gitlore-pre-commit
+  run .git/gitlore-pre-push
   [ "$status" -eq 0 ]
   [[ "$output" == *"gitlore skipped"* ]]
   # "gitlore skipped" alone is emitted by BOTH branches: drop the -z guard and
@@ -35,14 +35,14 @@ teardown() {
   bash "$EMIT"
   fake="$TMP_REPO/fakehooks"
   mkdir -p "$fake"
-  cat > "$fake/pre-commit" <<'EOF'
+  cat > "$fake/pre-push" <<'EOF'
 #!/usr/bin/env bash
 echo "real-hook-ran"
 exit 0
 EOF
-  chmod +x "$fake/pre-commit"
+  chmod +x "$fake/pre-push"
   git config gitlore.hooksDir "$fake"
-  run .git/gitlore-pre-commit
+  run .git/gitlore-pre-push
   [ "$status" -eq 0 ]
   [[ "$output" == *"real-hook-ran"* ]]
 }
@@ -52,7 +52,7 @@ EOF
   # Point hooksDir at a directory that does not contain the hook (simulates a
   # plugin upgrade that GC'd the old version's cache before SessionStart re-pins).
   git config gitlore.hooksDir "$TMP_REPO/gone-cache/scripts/git-hooks"
-  run .git/gitlore-pre-commit
+  run .git/gitlore-pre-push
   [ "$status" -eq 0 ]
   [[ "$output" == *"gitlore skipped"* ]]
   [[ "$output" == *"stale"* ]]
@@ -61,9 +61,9 @@ EOF
 
 @test "emit-wrappers is idempotent" {
   bash "$EMIT"
-  cp .git/gitlore-pre-commit .git/gitlore-pre-commit.before
+  cp .git/gitlore-pre-push .git/gitlore-pre-push.before
   bash "$EMIT"
-  diff .git/gitlore-pre-commit .git/gitlore-pre-commit.before
+  diff .git/gitlore-pre-push .git/gitlore-pre-push.before
 }
 
 @test "emit-wrappers in a linked worktree writes to the shared common dir, not the gitlink file" {
@@ -73,6 +73,27 @@ EOF
   ( cd "$WT" && bash "$EMIT" )
   # The wrapper must land in the shared common dir (= the main worktree's .git),
   # NOT next to the gitlink file (which would fail to write).
-  [ -x "$TMP_REPO/.git/gitlore-pre-commit" ]
   [ -x "$TMP_REPO/.git/gitlore-pre-push" ]
+}
+
+# A consumer's tracked Lefthook/Husky/Overcommit config may still name
+# `gitlore-pre-commit` (a published boundary, D58), so the file stays and does
+# nothing: no hint, no exec of a real hook, exit 0.
+@test "the gitlore-pre-commit stub exits 0 silently when hooksDir is unset" {
+  bash "$EMIT"
+  run .git/gitlore-pre-commit
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "the gitlore-pre-commit stub never execs a hook from gitlore.hooksDir" {
+  bash "$EMIT"
+  fake="$TMP_REPO/fakehooks"
+  mkdir -p "$fake"
+  printf '#!/usr/bin/env bash\necho real-hook-ran\nexit 1\n' > "$fake/pre-commit"
+  chmod +x "$fake/pre-commit"
+  git config gitlore.hooksDir "$fake"
+  run .git/gitlore-pre-commit
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"real-hook-ran"* ]]
 }

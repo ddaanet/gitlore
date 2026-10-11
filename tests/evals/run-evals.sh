@@ -60,9 +60,6 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
   # Optional: a scenario with no approval gate is a single turn.
   approval=$(jq -r '.approval_message // ""' "$scenario_file")
   rubric=$(jq -r '.rubric // ""' "$scenario_file")
-  # ptu: agent wrote commit-msg and stopped; commit-msg must exist before eval's git commit.
-  # precommit_failure: agent may have retried and consumed commit-msg; accept either state.
-  trigger=$(jq -r '.trigger // "ptu"' "$scenario_file")
   # Which flow this scenario grades. The memory-commit chain is one flow among
   # several now (tiers, recall, add-tier), each with its own end state, so the
   # assertions live per-flow in asserts/ rather than inline here.
@@ -125,12 +122,12 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     fi
 
     # Grade the flow. The assertion script owns everything after the turns —
-    # including firing the parent commit, where the flow has one — and reports a
-    # failure by exiting non-zero with the reason on stdout/stderr.
+    # including finishing a commit the agent left approved but unrun, where the
+    # flow has one — and reports a failure by exiting non-zero with the reason on stdout/stderr.
     if [ -z "$fail_reason" ]; then
       assert_out=$(
         EVAL_REPO="$EVAL_REPO" EVAL_OUT_DIR="$EVAL_OUT_DIR" \
-        EVAL_RUBRIC="$rubric" EVAL_TRIGGER="$trigger" \
+        EVAL_RUBRIC="$rubric" \
         PLUGIN_ROOT="$PLUGIN_ROOT" LIB_DIR="$LIB_DIR" \
         bash "$assert_script" 2>&1
       ) || fail_reason="${assert_out//$'\n'/ }"

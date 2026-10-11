@@ -2,11 +2,11 @@
 # Shared fixtures for the tier-divergence suites: the store-path constants,
 # the tier mount, and the divergence shape every remote-divergence case needs.
 
-PRE_COMMIT="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
+COMMIT_MEMORY="$PLUGIN_ROOT/scripts/commit-memory.sh"
 PRE_PUSH="$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
 SESSION_START="$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
-export PRE_COMMIT PRE_PUSH RESOLVE SESSION_START
+export COMMIT_MEMORY PRE_PUSH RESOLVE SESSION_START
 
 setup() {
   setup_tmp_repo
@@ -20,8 +20,7 @@ diverge_tier_from_remote() {
   local tier="${1:-ddaanet}"
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo "- [org fact](f.md) — ours" >> "memory/$tier/MEMORY.md"
-  approve "memory: record the org fact"
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   push_tier_fact "$tier" "- [their fact](t.md) — theirs" >/dev/null
 }
 

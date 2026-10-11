@@ -51,8 +51,8 @@ deleting the message file on a fix-needed refusal · an `-ef` guard inside `-F`
 skipping the rewrite when the operand is the message file · freshness checked in
 the hook before the run, the script unchanged.
 
-**Git hooks** — what `pre-commit` and `pre-push` do inside a parent git
-operation, and the pointer invariant that rests on them.
+**Git hooks** — what `pre-push` does inside a parent git operation, and the
+pointer invariant that rests on it.
 [git-hooks.md](references/git-hooks.md)
 
 - **D46** — a parent commit is never rewritten to re-pin memory
@@ -83,10 +83,14 @@ in flight.
 
 - **D16** — a standalone, arg-driven memory-commit entry point
 - **D20** — a push entry point the skill calls directly, with no trigger file
+- **D58** — a memory commit is the agent's own act, never a side effect of a
+  parent commit: `commit-memory.sh` is the one commit path and stages the moved
+  gitlink; the parent `pre-commit` hook and its nudge are retired
 
 *Rejected:* triggering a memory commit through a parent commit · reimplementing
 the sentinel, `push HEAD:live` and merge-state logic in a caller · a caller that
-pre-writes the commit-message file.
+pre-writes the commit-message file · the hook standing down on a missing
+approval.
 
 **Install and the memory remote** — what one-time setup does and refuses.
 [installation.md](references/installation.md)

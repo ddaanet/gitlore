@@ -113,7 +113,7 @@ load helpers/resolve-recovery
 # root's scope, not as the clause's pin.
 @test "recovery: the same recovery for the memory root stages nothing in the parent repo" {
   make_diverged_head_vs_live memory
-  run --separate-stderr bash "$PRE_COMMIT"
+  run --separate-stderr bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
 
   GITLORE_MEMORY_COMMIT=1 git -C memory commit -q --no-edit

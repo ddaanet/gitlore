@@ -8,11 +8,11 @@ set -euo pipefail
 #   commit-memory.sh -F -               # read summary from stdin (heredoc)
 #   commit-memory.sh                    # bare: commit on the approval already
 #                                       # on disk, judged by freshness
-# Activation is the gitlore-memory submodule registration (FR12), same gate as
-# pre-commit. Discover this script via `git config gitlore.commitCommand`.
+# Activation is the gitlore-memory submodule registration (FR12). Discover this
+# script via `git config gitlore.commitCommand`.
 
 # Defensive: a caller's env may carry leaked repo-local GIT_* vars (see
-# pre-commit prologue). Clear the full local-env-var set, not a hand-picked
+# `.claude/rules/shell.md` "Git hook env leak"). Clear the full local-env-var set, not a hand-picked
 # subset — GIT_COMMON_DIR/GIT_OBJECT_DIRECTORY can redirect submodule git ops.
 # shellcheck disable=SC2046  # intentional word-splitting of the var-name list
 unset $(git rev-parse --local-env-vars)
@@ -95,5 +95,37 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
   fi
 fi
 
+# Stage the memory gitlink into the superproject index (D58) when this run moved
+# memory HEAD. A no-op run stages nothing. The staging is skipped during a replay
+# (rebase, cherry-pick, revert): a replayed commit must keep the pointer it
+# recorded, and the memory worktree does not move when the parent's HEAD does.
+stage_memory_pointer() {
+  local mempath="$1" super top rel p name op err
+  super=$(git -C "$mempath" rev-parse --show-superproject-working-tree)
+  [ -n "$super" ] || return 0
+  top=$(git -C "$mempath" rev-parse --show-toplevel)
+  rel="${top#"$super"/}"
+  # Marker list: path:operation. A merge is deliberately absent — it is authored now.
+  for marker in rebase-merge:rebase rebase-apply:rebase \
+                CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert; do
+    name="${marker%%:*}"
+    p=$(git -C "$super" rev-parse --git-path "$name")
+    case "$p" in /*) ;; *) p="$super/$p" ;; esac
+    if [ -e "$p" ]; then
+      op="${marker##*:}"
+      echo "gitlore: $op in progress — skipping the staging of the memory pointer; stage it yourself once the $op is done." >&2
+      return 0
+    fi
+  done
+  if ! err=$(git -C "$super" add -- "$rel" 2>&1); then
+    echo "gitlore: memory was committed, but its pointer could not be staged in the parent (git: $err). The pointer floats until you stage it." >&2
+  fi
+}
+
+memory_before=$(git -C "$mempath" rev-parse HEAD)
 gitlore_sync_memory_to_live "$mempath"
-exit $?
+memory_after=$(git -C "$mempath" rev-parse HEAD)
+if [ "$memory_before" != "$memory_after" ]; then
+  stage_memory_pointer "$mempath"
+fi
+exit 0

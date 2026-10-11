@@ -16,7 +16,7 @@ load helpers/fixtures
 load helpers/divergence-fixtures
 load helpers/stub-synth
 
-PRE_COMMIT="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
+COMMIT_MEMORY="$PLUGIN_ROOT/scripts/commit-memory.sh"
 
 setup() {
   setup_tmp_repo
@@ -33,7 +33,7 @@ statefile() { git -C memory rev-parse --git-path gitlore-merge-state; }
 
 @test "the state file names all three briefing artifacts and they exist" {
   make_diverged_head_vs_live memory
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
 
   local sf; sf=$(statefile)
@@ -47,7 +47,7 @@ statefile() { git -C memory rev-parse --git-path gitlore-merge-state; }
 
 @test "MINE is the authority's diff and THEIRS the pending commit's" {
   make_diverged_head_vs_live memory
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
 
   # `live` is the authority (first parent), so MINE carries the live-side file
@@ -61,14 +61,14 @@ statefile() { git -C memory rev-parse --git-path gitlore-merge-state; }
 
 @test "the tree artifact lists the store's tracked files" {
   make_diverged_head_vs_live memory
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
   grep -qxF 'MEMORY.md' "$(artifact tree)"
 }
 
 @test "continue-after-merge removes the artifacts along with the state file" {
   make_diverged_head_vs_live memory
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
@@ -82,7 +82,7 @@ statefile() { git -C memory rev-parse --git-path gitlore-merge-state; }
 
 @test "one remover drops the state file and every artifact with it" {
   make_diverged_head_vs_live memory
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
   [ -f "$(statefile)" ]
 
@@ -97,7 +97,7 @@ statefile() { git -C memory rev-parse --git-path gitlore-merge-state; }
 
 @test "a re-prepared merge gets its own briefing, not the dead merge's" {
   make_diverged_head_vs_live memory
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
   printf 'stale marker\n' >> "$(artifact tree)"
 
@@ -107,7 +107,7 @@ statefile() { git -C memory rev-parse --git-path gitlore-merge-state; }
   # briefing, not that the files are gone.
   git -C memory merge --abort
 
-  run --separate-stderr bash "$PRE_COMMIT"
+  run --separate-stderr bash "$COMMIT_MEMORY"
   [ -f "$(statefile)" ]
   [ "$(jq -r .tree "$(statefile)")" = "$(artifact tree)" ]
   run ! grep -qF 'stale marker' "$(artifact tree)"
@@ -160,7 +160,7 @@ diverge_index_same_path_different_offsets() {
   # so if it named the same two sides differently the sub-agent would face two
   # vocabularies for one merge and the agent doc would have to reconcile them.
   diverge_index_same_path_different_offsets
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
 
   grep -q '^<<<<<<< HEAD$' memory/MEMORY.md
@@ -171,7 +171,7 @@ diverge_index_same_path_different_offsets() {
 
 @test "conflicted_files names an index only the entry-wise pass found" {
   diverge_index_same_path_different_offsets
-  run bash "$PRE_COMMIT"
+  run bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
 
   # Git itself merged it clean — no unmerged entry anywhere.

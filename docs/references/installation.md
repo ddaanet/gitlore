@@ -31,18 +31,16 @@ has no `.git` (registered but not checked out).
    enable it (required for sub-agent-based resolve).
 2. Prompt for memory path (default: `memory`). If the path exists with unrelated
    content, refuse and prompt for an alternative.
-3. Prompt for the project pre-commit command (stored as
-   `gitlore.precommitCommand`).
-4. Display install-time disclosure: proposed memory remote name, owner,
+3. Display install-time disclosure: proposed memory remote name, owner,
    visibility (inherited from parent), and notice that memory may contain
    session context. Await acknowledgement (informational, not a hard gate).
-5. Create the memory remote with explicit D8 confirmation — see Remote
+4. Create the memory remote with explicit D8 confirmation — see Remote
    Repository below. `gh repo create` (or provider-appropriate method) runs. If
    the parent has no remote, skip; memory stays local-only.
-6. `git submodule add <remote-url> <path>` (or a local path if no remote) —
+5. `git submodule add <remote-url> <path>` (or a local path if no remote) —
    registers the submodule in `.gitmodules` and initializes the empty working
    tree.
-7. Seed memory content inside the submodule worktree:
+6. Seed memory content inside the submodule worktree:
    - If existing auto-memory exists at `~/.claude/projects/<hash>/memory/` and
      holds anything, copy it in. No dir, an empty one, or a migration stub
      copies nothing, the last because the stub's own text says not to add memory
@@ -52,29 +50,29 @@ has no `.git` (registered but not checked out).
      migrate. A store with no root index composes nothing, no index check guards
      it, and Claude Code loads no memory from it; the scaffold is never skipped,
      and a migrated index is never written over.
-8. `git -C <memory-path> add -A && git -C <memory-path> commit -m "Initial memory"`
+7. `git -C <memory-path> add -A && git -C <memory-path> commit -m "Initial memory"`
    — non-empty initial commit; install is git-atomic.
-9. Create the `live` branch at the initial commit and check the worktree out
+8. Create the `live` branch at the initial commit and check the worktree out
    detached at it (the branch model — `live` is never checked out as a branch).
-10. If a remote was created, `git -C <memory-path> push origin live` so the
+9. If a remote was created, `git -C <memory-path> push origin live` so the
     parent's submodule pointer is reachable upstream.
-11. Write `gitlore.enabled: true` and `gitlore.precommitCommand` to
-    `.claude/settings.json`.
-12. Emit the memory redirect launcher — `.gitlore/bin/claude` plus the `.envrc`
+10. Write `gitlore.enabled: true` to `.claude/settings.json`; a
+    `gitlore.precommitCommand` left by an earlier install is deleted.
+11. Emit the memory redirect launcher — `.gitlore/bin/claude` plus the `.envrc`
     `PATH_add` line, both staged for commit — then activate it: `direnv allow`
     when direnv is available (non-fatal; a read-only direnv dir is not a
     blocker), otherwise `global-shim.sh`. Does **not** write
     `autoMemoryDirectory` to any settings file; that tier is ignored (D10).
-13. Write `gitlore.hooksDir` (abs path to plugin hooks) to local git config.
-14. Run hook-manager detection script → apply idempotent wiring, write sentinel
+12. Write `gitlore.hooksDir` (abs path to plugin hooks) to local git config.
+13. Run hook-manager detection script → apply idempotent wiring, write sentinel
     file.
-15. Leave tracked changes staged for the user to commit.
-16. When step 7 migrated real facts — announced as
+14. Leave tracked changes staged for the user to commit.
+15. When step 6 migrated real facts — announced as
     `gitlore: migrated auto-memory from <src> into <path>`, which a store that
     only scaffolds does not print — the command holds the migrated store against
     the `memory-writing` skill and applies what it finds (D48). Those edits are
-    memory content, so they stay uncommitted and reach the user through FR11 on
-    the first parent commit.
+    memory content, so they stay uncommitted and reach the user through FR11
+    when memory is next committed.
 
 Idempotency rules for re-runs: existing submodule → verify and skip creation;
 existing settings keys → overwrite only if value differs; migration → detect
@@ -104,7 +102,7 @@ warning listing all found managers):
 4. Otherwise → None (direct)
 
 The `direct` case is the default whenever no recognized manager is present —
-whether the repo has a hand-rolled `.git/hooks/pre-commit` (the direct installer
+whether the repo has a hand-rolled `.git/hooks/pre-push` (the direct installer
 appends, coexisting) or no hooks at all. The shared `.git/hooks` dir exists in
 every git repo, so direct wiring always works, and defaulting bare repos to it
 makes the double-commit guarantee (FR8) active out of the box rather than
@@ -112,37 +110,41 @@ waiting on a manual copy-paste step. `manual` is **not auto-detected**: it stays
 a valid sentinel a user can set by hand, and is emitted for the ambiguous
 multi-manager case.
 
-**Wiring** is applied symmetrically for `pre-commit` and `pre-push`. Every
-manager reaches the wrapper through
-`$(git rev-parse --git-common-dir)/gitlore-<hook>` rather than a literal path
-(D11), so what differs per manager is only how that command is spelled and
-whether a shell expands it.
+**Wiring** covers `pre-push` only: a memory commit is the agent's own act, so a
+parent commit has no gitlore hook (D58). Every manager reaches the wrapper
+through `$(git rev-parse --git-common-dir)/gitlore-pre-push` rather than a
+literal path (D11), so what differs per manager is only how that command is
+spelled and whether a shell expands it. The `gitlore-pre-commit` file in the
+common dir is an exit-0 stub, because tracked hook-manager configs written by an
+earlier install still name it and are a published boundary the installer does
+not rewrite; the direct wiring is not, and removes the `pre-commit` shim it once
+wrote, or strips the appended gitlore block from a hand-rolled one, leaving any
+other `pre-commit` hook byte-for-byte alone.
 
-*Lefthook* (`lefthook install`) — a `gitlore` command under `pre-commit` and
-`pre-push` in `lefthook.yml`,
-`run: '$(git rev-parse --git-common-dir)/gitlore-pre-commit'`. Lefthook runs
-`run` through a shell, so the substitution expands at hook time.
+*Lefthook* (`lefthook install`) — a `gitlore` command under `pre-push` in
+`lefthook.yml`, `run: '$(git rev-parse --git-common-dir)/gitlore-pre-push'`.
+Lefthook runs `run` through a shell, so the substitution expands at hook time.
 
 *Husky* (`npx husky`) — a guarded
-`exec "$(git rev-parse --git-common-dir)/gitlore-<hook>" "$@"` appended to
-`.husky/pre-commit` and `.husky/pre-push`, created if missing. Husky runs the
-script via `sh`, so the substitution expands.
+`exec "$(git rev-parse --git-common-dir)/gitlore-pre-push" "$@"` appended to
+`.husky/pre-push`, created if missing. Husky runs the script via `sh`, so the
+substitution expands.
 
-*Overcommit* (`overcommit --install`) — a custom `gitlore` hook under
-`PreCommit` and `PrePush` in `.overcommit.yml`. Overcommit's `command:` is an
-array exec'd **directly, with no shell**, so the wrapper has to be reached
-through an explicit one:
+*Overcommit* (`overcommit --install`) — a custom `gitlore` hook under `PrePush`
+in `.overcommit.yml`. Overcommit's `command:` is an array exec'd
+**directly, with no shell**, so the wrapper has to be reached through an
+explicit one:
 
 ```yaml
-command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"','gitlore']
+command: ['sh','-c','exec "$(git rev-parse --git-common-dir)/gitlore-pre-push" "$@"','gitlore']
 ```
 
 The trailing `'gitlore'` sets `$0`, and overcommit appends the applicable files
 as `$@`.
 
 *None, i.e. direct* (sentinel `direct`, a keyword SessionStart interprets rather
-than runs) — shell stubs at `git rev-parse --git-path hooks/<hook>` that exec
-the wrapper. The hooks path is resolved with `--git-path`, not a literal
+than runs) — a shell stub at `git rev-parse --git-path hooks/pre-push` that
+execs the wrapper. The hooks path is resolved with `--git-path`, not a literal
 `.git/hooks/…`, so the `[ -f ]` test and the `cat >` survive a sentinel replay
 in a linked worktree.
 

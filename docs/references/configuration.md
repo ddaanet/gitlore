@@ -12,9 +12,7 @@ the repo, git-config keys are per-clone and machine-local, and the IPC files are
 transient handshakes between the agent and the hooks.
 
 **Tracked — travels with the repo.** `.claude/settings.json` carries
-`gitlore.enabled: true` (the activation flag every hook guards on) and
-`gitlore.precommitCommand`, the project's own pre-commit check (e.g.
-`lefthook run pre-commit`) that the `PostToolUse` nudge watches for.
+`gitlore.enabled: true`, the activation flag every hook guards on.
 `.gitlore/bin/claude` is the launcher shim and `.envrc` puts it on `PATH`
 (`source_up_if_exists` plus `PATH_add .gitlore/bin`) — see Memory Redirect
 Launcher. `.claude/gitlore-hook-setup` is the hook-manager sentinel — the setup
@@ -40,13 +38,12 @@ sit in the parent working tree, gitignored. They live there rather than in a
 gitdir because a gitdir write is blocked by the CC sandbox and read as
 self-configuration by the auto-mode classifier — the agent can write an ordinary
 project file and nothing else. Hook-owned state that the agent must *not* write
-goes the other way, into the store's gitdir: the once-per-episode nudge marker
-`gitlore-nudged`, the once-per-session `gitlore-budget-nudged-<session>` and
-`gitlore-upgrade-nudged-<session>` markers, the merge-state file, the index
-pair's per-batch baselines `gitlore-index-preimage[-<agent>]` and
-`gitlore-compose-stamp[-<agent>]` (D31, suffixed by the agent id inside a
-subagent), a tier's `gitlore-tier-landing` record of the commit a tier commit
-started from (D50), and the relay reports
+goes the other way, into the store's gitdir: the once-per-session
+`gitlore-budget-nudged-<session>` and `gitlore-upgrade-nudged-<session>`
+markers, the merge-state file, the index pair's per-batch baselines
+`gitlore-index-preimage[-<agent>]` and `gitlore-compose-stamp[-<agent>]` (D31,
+suffixed by the agent id inside a subagent), a tier's `gitlore-tier-landing`
+record of the commit a tier commit started from (D50), and the relay reports
 `gitlore-relay-<session>-<agent>-<epoch>-<pid>-<tag>` — one per report a hook
 staged from inside a subagent, built at `<name>.tmp`, removed by the drain that
 delivers it to the parent (`relay-drain.sh`, or `SessionStart` folding it into
@@ -63,19 +60,21 @@ its own report) or by the seven-day sweep (D51).
 **Commit message file:** `.claude/gitlore-memory-message`, resolved by
 `gitlore_commit_msg_file` from the superproject working tree
 (`git -C <memory-path> rev-parse --show-superproject-working-tree`). Claude
-writes it once the user has confirmed the commit summary; the commit hook
-consumes and deletes it. Its presence is the signal that a memory commit carries
-approval (D4).
+writes it once the user has confirmed the commit summary; the commit
+(`commit-memory.sh`, directly or through the trigger file) consumes and deletes
+it. Its presence is the signal that a memory commit carries approval (D4).
 
 **Hook wrappers:** `SessionStart` writes `gitlore-pre-commit` and
-`gitlore-pre-push` into the repo's **git common dir** on every startup, and each
-delegates to the current plugin through `git config gitlore.hooksDir` — so
-hook-manager configs name a stable path and plugin updates are transparent.
-Resolving through `git rev-parse --git-common-dir` rather than a literal `.git/`
-is load-bearing (D11): the common dir is shared across worktrees, so one
-emission is reachable and executable from every worktree — including one where
-no Claude session has ever run — where `.git/` is a gitlink *file*. Every
-producer and every consumer resolves it that way; none hardcode it.
+`gitlore-pre-push` into the repo's **git common dir** on every startup.
+`gitlore-pre-push` delegates to the current plugin through
+`git config gitlore.hooksDir` — so hook-manager configs name a stable path and
+plugin updates are transparent. `gitlore-pre-commit` is an exit-0 stub, kept for
+tracked hook-manager configs that still name it (D58). Resolving through
+`git rev-parse --git-common-dir` rather than a literal `.git/` is load-bearing
+(D11): the common dir is shared across worktrees, so one emission is reachable
+and executable from every worktree — including one where no Claude session has
+ever run — where `.git/` is a gitlink *file*. Every producer and every consumer
+resolves it that way; none hardcode it.
 
 `autoMemoryDirectory` is deliberately absent from this inventory: Claude Code
 resolves it only from `policySettings`, `flagSettings` (the `--settings` flag)

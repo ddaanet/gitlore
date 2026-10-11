@@ -62,16 +62,6 @@ EOF
   [[ "$(gitlore_commit_trigger_file memory)" != *".git/"* ]]
 }
 
-@test "the nudge marker lives in the memory gitdir, not the working tree" {
-  make_parent_with_memory
-  # Hook-written (not agent-written), so it can stay in the gitdir where it never
-  # dirties git status — nothing to gitignore.
-  run gitlore_commit_notified_file memory
-  [ "$status" -eq 0 ]
-  [[ "$output" == *".git/"*gitlore-nudged ]]
-  [[ "$output" != "$TMP_REPO/.claude/"* ]]
-}
-
 @test "gitlore_probe_writable succeeds on a writable dir" {
   run gitlore_probe_writable "$TMP_REPO"
   [ "$status" -eq 0 ]

@@ -1,6 +1,6 @@
 ---
 name: resolve
-description: Resolve or repair a diverged gitlore memory store or tier. Use when a git commit or push fails with output containing "gitlore: memory merge prepared" — invoke it without waiting to be asked. Also use when the user runs /gitlore:resolve, reports that memory has stopped publishing, or hands back a divergence message from a push they ran in their own terminal.
+description: Resolve or repair a diverged gitlore memory store or tier. Use when a memory commit or a push fails with output containing "gitlore: memory merge prepared" — invoke it without waiting to be asked. Also use when the user runs /gitlore:resolve, reports that memory has stopped publishing, or hands back a divergence message from a push they ran in their own terminal.
 allowed-tools: ["Bash", "Task", "SendMessage"]
 ---
 
@@ -10,7 +10,7 @@ You are resolving a gitlore memory submodule from divergence.
 
 ## Entry mode
 
-**Commit-triggered**: A commit path already emitted a merge directive — the pre-commit hook, or the `PostToolBatch` hook that commits memory on the agent's behalf — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
+**Commit-triggered**: A commit path already emitted a merge directive — `commit-memory.sh`, run by the agent or by the `PostToolBatch` hook that commits memory on its behalf, or the `pre-push` hook — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
 
 **Standalone** (user ran `/gitlore:resolve` or state is unclear): Run the resolver:
 
@@ -90,7 +90,7 @@ After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again 
 
 ## Resume commit
 
-If this skill was triggered by a commit failure, retry the original git commit now that memory is resolved.
+If this skill was triggered by a commit failure, retry the original memory commit (the `commit-memory.sh` call) now that memory is resolved.
 
 ## Summarize
 

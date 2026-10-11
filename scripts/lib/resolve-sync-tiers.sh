@@ -21,7 +21,7 @@
 # would be data loss rather than dormancy.
 #
 # Recursion is driver-side by design; the memory store gets no recursing
-# pre-commit. The parent already drives memory exactly this way, and a
+# hook. The parent already drives memory exactly this way, and a
 # hook-side version would have to re-litigate the full local-env-var unset and
 # the GIT_INDEX_FILE capture/restore at a level that needs neither, while
 # forcing the FR11 gate to share a hook with the driver.
@@ -40,8 +40,8 @@ gitlore_sync_tiers_to_live() {
     # Same precheck memory gets: never commit on top of a half-finished merge.
     gitlore_guard_stale_merge_state "$tierpath" || return 1
     [ "$(gitlore_memory_dirty "$tierpath")" = "1" ] || continue
-    # Checked explicitly: this function is reached from the pre-commit hook's
-    # `gitlore_sync_memory_to_live "$mempath" || exit $?`, which suspends
+    # Checked explicitly: gitlore_sync_memory_to_live calls this function, and a
+    # caller that tests that function's status (`if`, `||`) suspends
     # errexit transitively (SC2310) for everything called from here — an
     # unchecked failure would fall through to the push below, which is a no-op
     # success because HEAD never moved.

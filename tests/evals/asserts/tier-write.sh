@@ -18,6 +18,9 @@ MEM="$EVAL_REPO/memory"
 TIERPATH="$MEM/$TIER"
 MSG_FILE="$EVAL_REPO/.claude/gitlore-memory-message"
 
+# shellcheck disable=SC1091  # dynamic path resolved at runtime
+source "$LIB_DIR/finish-commit.sh"
+
 [ -e "$TIERPATH/.git" ] || fail "tier '$TIER' is not checked out; the fixture did not hold"
 
 # 1. The fact landed in the TIER, not in project memory. Anything but MEMORY.md
@@ -55,45 +58,15 @@ grep -q "($new_file)" "$TIERPATH/MEMORY.md" || \
   fail "tier index $TIER/MEMORY.md has no line for $new_file; the compose pass did not mirror it down"
 
 # 4. The approval gate ran, and the approved summary is what commits both stores.
-#
-# FR11 gives the agent two correct ways to finish once the user approves, and
-# which one it picks is not what this scenario grades:
-#
-#   - write the summary and STOP — the user's next parent commit consumes it;
-#   - write the summary AND the commit trigger — the PostToolBatch hook commits
-#     on the spot, which is the standalone path memory-commit-batch.sh exists
-#     for and the one a session with no parent commit pending must take.
-#
-# Grading the stop-point instead of the outcome makes this scenario fail
-# whenever the agent picks the second, which is a defect in the assertion, not
-# in the flow: the fact is committed, the summary is the commit message, and the
-# tier travelled. So establish WHICH path ran, fire the parent commit only if
-# the flow is still waiting on one, and grade the same end state either way.
+#    Which finish the agent picked is not graded (see lib/finish-commit.sh); the
+#    end state is, so a stop-after-summary run is finished here by
+#    commit-memory.sh, the way the product commits an approved summary.
 baseline=""
 [ -f "$EVAL_OUT_DIR/memory-baseline" ] && baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
 [ -n "$baseline" ] || fail "no memory baseline captured; the harness did not record where the store started"
 
-if [ -f "$MSG_FILE" ]; then
-  # Stop path. The parent commit fires the pre-commit hook, which commits every
-  # mounted tier and fast-forwards each tier's live BEFORE memory's own `add -A`,
-  # so the gitlink memory records is never stale.
-  if ! commit_err=$( (cd "$EVAL_REPO" && git commit --allow-empty -m "chore: trigger eval flow") 2>&1 ); then
-    fail "parent git commit failed — ${commit_err//$'\n'/ }"
-  fi
-  path_taken="the agent stopped after writing the summary; the parent commit consumed it"
-else
-  # No summary on disk. Either the hook already consumed it — in which case
-  # memory has moved — or the agent never wrote one, which is a real failure and
-  # has two distinguishable causes worth naming separately.
-  mem_now=$(git -C "$MEM" rev-parse HEAD)
-  if [ "$mem_now" = "$baseline" ]; then
-    if [ -f "$EVAL_REPO/.claude/gitlore-commit-memory" ]; then
-      fail "no commit-msg file, but the commit trigger IS present — the agent asked for the commit without ever writing the approved summary, so the batch hook is parked waiting for it"
-    fi
-    fail "no commit-msg file and no trigger, and memory never moved — the agent did not write the approved summary after Turn 2"
-  fi
-  path_taken="the agent wrote the summary and the trigger; the batch hook committed"
-fi
+path_taken=""   # set by settle_commit_path
+settle_commit_path "$MEM" "$baseline" "$MSG_FILE"
 
 # 5. Memory advanced past where the trial started.
 mem_after=$(git -C "$MEM" rev-parse HEAD)
@@ -136,9 +109,12 @@ fi
 [ "$tier_after" = "$tier_live" ] || \
   fail "tier HEAD ($tier_after) is not at live ($tier_live); the tier commit did not fast-forward live"
 
-# 10. The commit-msg file is consumed by whichever hook used it. One approval is
+# 10. The commit-msg file is consumed by the commit that used it. One approval is
 #     spent once: a summary left on disk would be re-applied to the next commit.
 [ ! -f "$MSG_FILE" ] || fail "commit-msg file still present at $MSG_FILE ($path_taken)"
+
+# 10b. The memory pointer is staged in the parent index.
+check_memory_pointer_staged
 
 # 11. The rubric. The scenario grades whether the commit message describes the
 #     fact that was actually recorded, and the fact lives in the TIER commit —

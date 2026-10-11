@@ -24,10 +24,11 @@ the mechanism it argues. Plans and specs live in `plans/`.
 2. Memory is shared across Claude Code sessions on the same project.
 3. Every worktree shares one memory trunk (`live`); each checkout sits detached
    at it, so concurrent worktrees never compete for a branch.
-4. On the happy path, the agent drives memory commits: it runs the configured
-   pre-commit command, summarizes pending memory changes in prose, obtains
-   explicit user confirmation, writes the approved summary as the commit
-   message, then commits — approving the summary approves the commit.
+4. On the happy path, the agent drives memory commits: it summarizes pending
+   memory changes in prose, obtains explicit user confirmation, then commits
+   through `commit-memory.sh` with the approved summary — approving the summary
+   approves the commit. A parent commit never commits memory; it records the
+   pointer that script staged *(D58)*.
 5. When any divergence is detected (pending commit vs. trunk, or local trunk vs.
    remote), `/gitlore:resolve` performs a semantic merge: a sub-agent with fresh
    context synthesizes the merged content, reviewed by the parent agent — never
@@ -78,8 +79,8 @@ the mechanism it argues. Plans and specs live in `plans/`.
 
 ## Non-Functional Requirements
 
-1. **No AI on the hot path.** The hook execution chain (pre-commit, pre-push)
-   runs entirely in shell scripts; the agent is invoked out-of-band for
+1. **No AI on the hot path.** The hook execution chain (pre-push) and the commit
+   and push scripts run entirely in shell; the agent is invoked out-of-band for
    commit-summary preparation, conflict resolution, and user interaction.
 2. **Noisy failure with actionable instructions.** Hook failures exit 1 with a
    specific skill or command to run — never a generic error. Stderr branches on
@@ -91,9 +92,10 @@ the mechanism it argues. Plans and specs live in `plans/`.
    (hook manager, remote provider, merge state, divergence flavor) lives in
    shell scripts; the agent handles summarization, synthesis and user
    interaction.
-5. **Double-commit semantics.** Memory is committed and pushed before the parent
-   commit/push, so the parent remote always points to a memory SHA reachable on
-   the memory remote.
+5. **Double-commit semantics.** Memory is published before the parent push
+   (`pre-push`), so the parent remote always points to a memory SHA reachable on
+   the memory remote. The gitlink a parent commit records is an ancestor of
+   memory's `live`, and floats behind it between commits.
 6. **No tracked-file churn on plugin updates.** Hook scripts live in the plugin
    cache, not in the repo. Only stable wiring (hook manager config, sentinel
    file, `.claude/settings.json` flag) is committed.
@@ -189,8 +191,8 @@ sentinel that stops them double-injecting:
 ### Components
 
 The components divide by who invokes them: the user or the agent reach the
-commands and skills, git fires the two git hooks, Claude Code fires the rest,
-and the two entry points are callable by any of them. What they share is the
+commands and skills, git fires the one git hook, Claude Code fires the rest, and
+the two entry points are callable by any of them. What they share is the
 NFR1/NFR4 split — the agent writes prose or an intent file, a script does the
 git and decides (D7).
 
@@ -221,34 +223,34 @@ git and decides (D7).
   most work; it is also where a new worktree's memory worktree is created,
   lazily, so worktree support is uniform however the worktree came to be (no
   `WorktreeCreate` hook; `WorktreeRemove` tears it down, advisory only). The
-  rest are single-purpose: `PostToolUse(Bash)` nudges for a commit summary once
-  per dirty episode (the FR11 opening), `PostToolBatch` acts on the two intent
-  files and reports a mid-session plugin upgrade (D21), the
-  `PreToolUse`/`PostToolBatch` index pair keys on what changed rather than on
-  what the call declared (D31), per agent so a parent batch cannot consume a
-  subagent's baseline, a `PostToolBatch` relay drainer delivers — as
-  `SessionStart` does at a compaction or resume — the reports hooks write from
-  inside a subagent, whose own output reaches nobody else (D51), and
+  rest are single-purpose: `PostToolBatch` acts on the two intent files and
+  reports a mid-session plugin upgrade (D21), the `PreToolUse`/`PostToolBatch`
+  index pair keys on what changed rather than on what the call declared (D31),
+  per agent so a parent batch cannot consume a subagent's baseline, a
+  `PostToolBatch` relay drainer delivers — as `SessionStart` does at a
+  compaction or resume — the reports hooks write from inside a subagent, whose
+  own output reaches nobody else (D51), and
   `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
   drift (D15); `SessionStart` and `PreCompact` re-arm the once-per-episode
-  notices. [session.md](references/session.md); the nudge in
+  notices. [session.md](references/session.md); the intent-file commit in
   [commit-gate.md](references/commit-gate.md), the index pair in
   [index-composition.md](references/index-composition.md), the per-agent keying
   and the relay in
   [index-authoring-sync.md](references/index-authoring-sync.md), D51 in
   [cc-platform.md](references/cc-platform.md).
-- **Git hooks and entry points** — `pre-commit` commits every dirty tier, then
-  memory, advances each store's local `live`, and stages the memory gitlink into
-  the index git handed it, so the parent commit records the pointer its own hook
-  just created; `pre-push` publishes in the same order. Both stand down rather
-  than block a parent git operation, and divergence at either gate prepares a
-  merge and yields to `/gitlore:resolve`. `pre-commit` composes the store before
-  it commits, so the carrier a tier's remote receives matches the root index,
-  and aborts on a compose problem in an index file the commit changes, which
-  committing would publish (D50). `commit-memory.sh` and `push-memory.sh` do the
-  same work as callable scripts discovered through a git-config key (D5, D16,
-  D20); sharing a body with the hook keeps the tier-before-memory ordering from
-  drifting between the two paths (D42). The hook orderings and the gitlink
+- **Git hook and entry points** — `pre-push` publishes each tier's `live` and
+  then memory's; it stands down rather than block a parent git operation over an
+  absent store, and divergence prepares a merge and yields to
+  `/gitlore:resolve`. A parent commit touches no memory: `commit-memory.sh` is
+  the one commit path. It composes the store before it commits, so the carrier a
+  tier's remote receives matches the root index, and aborts on a compose problem
+  in an index file the commit changes, which committing would publish (D50); it
+  commits every dirty tier, then memory, advances each store's local `live`, and
+  stages the memory gitlink into the parent index, so the next parent commit
+  records the pointer with no hook (D58). `push-memory.sh` does the publish work
+  as a callable script, both scripts discovered through a git-config key (D5,
+  D16, D20); sharing a body with the hook keeps the tier-before-memory ordering
+  from drifting between the two paths (D42). The hook ordering and the gitlink
   contract are in [git-hooks.md](references/git-hooks.md); the two scripts, the
   `push` skill and the placeholder-remote marker are in
   [memory-entry-points.md](references/memory-entry-points.md).
@@ -268,15 +270,15 @@ disclosure text and the per-provider creation methods are in
 
 ### Workflows
 
-The step lists are in [workflows.md](references/workflows.md): commit (nudge,
-prose summary, approval, `pre-commit`); push (`pre-push`, tiers then memory);
-tier write (rides the commit flow, tier first, under one summary); publish
-without a parent push (`/gitlore:push` over `push-memory.sh`); take without
-publishing (`/gitlore:merge`, root store first, D49); resolve, primary when the
-agent reads a gate's stderr and resolves inline, fallback when a plain terminal
-sends the user to Claude Code; clone (the first `SessionStart` restores
-settings, `live` and wiring); worktree creation (`SessionStart` adds the memory
-worktree, detached).
+The step lists are in [workflows.md](references/workflows.md): commit (prose
+summary, approval, `commit-memory.sh`, then the parent commit); push
+(`pre-push`, tiers then memory); tier write (rides the commit flow, tier first,
+under one summary); publish without a parent push (`/gitlore:push` over
+`push-memory.sh`); take without publishing (`/gitlore:merge`, root store first,
+D49); resolve, primary when the agent reads a gate's stderr and resolves inline,
+fallback when a plain terminal sends the user to Claude Code; clone (the first
+`SessionStart` restores settings, `live` and wiring); worktree creation
+(`SessionStart` adds the memory worktree, detached).
 
 ---
 

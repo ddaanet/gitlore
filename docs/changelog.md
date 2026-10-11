@@ -7,6 +7,11 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-11 — A memory commit is the agent's own act](changelog/2026-10-11-a-memory-commit-is-the-agents-own-act.md)
+  — the parent `pre-commit` hook, its wiring and the commit nudge are retired
+  (D58): `commit-memory.sh` is the one commit path and stages the moved gitlink;
+  `gitlore-pre-commit` stays an exit-0 stub for tracked hook-manager configs;
+  D16 and D12's orientation invert
 - [2026-10-11 — The launcher stops loading the checkout](changelog/2026-10-11-the-launcher-stops-loading-the-checkout.md)
   — `GITLORE_AUTO_CLAUDE_PLUGIN_DIR` leaves the launcher shim and is now
   ignored: `--plugin-dir .` made the repository root an inline plugin root,

@@ -193,6 +193,19 @@ load helpers/setup
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh" ]
 }
 
+# D58: a memory commit is the agent's own act, so nothing watches Bash for a
+# commit command. The positive half pins that the hooks it sits beside are still
+# registered, so a hooks.json that lost every entry does not satisfy the absence.
+@test "distribution: hooks.json registers no PostToolUse(Bash) hook" {
+  run jq -r '[.hooks.PostToolUse[] | select(.matcher=="Bash")] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+  run jq -r '[.hooks.SessionStart[].hooks[].command | select(test("session-start|nudge-reset"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$output" = "2" ]
+  run jq -r '[.hooks.PreCompact[].hooks[].command | select(test("nudge-reset"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$output" = "1" ]
+}
+
 # D51: relay-drain.sh is the ONE drainer of the relay, so an entry
 # missing from hooks.json — or a duplicate one, which would relay every report
 # twice — silences or doubles every subagent report across every installed

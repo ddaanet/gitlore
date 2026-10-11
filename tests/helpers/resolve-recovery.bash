@@ -4,7 +4,7 @@
 
 # shellcheck disable=SC2034   # used by callers' @test bodies
 RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
-PRE_COMMIT="$PLUGIN_ROOT/scripts/git-hooks/pre-commit"
+COMMIT_MEMORY="$PLUGIN_ROOT/scripts/commit-memory.sh"
 
 setup() {
   setup_tmp_repo
@@ -39,7 +39,7 @@ tier_prepare_head_vs_live() {
   advance_branch_with_file "memory/$tier" live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> "memory/$tier/MEMORY.md"
   printf 'memory: record the org fact\n' > "$(gitlore_commit_msg_file memory)"
-  run --separate-stderr bash "$PRE_COMMIT"
+  run --separate-stderr bash "$COMMIT_MEMORY"
   [ "$status" -ne 0 ]
   [ -n "$(git -C "memory/$tier" rev-parse -q --verify MERGE_HEAD)" ]
 }

@@ -2,8 +2,8 @@
 # CLI-based eval runner for gitlore.
 #
 # Drives a Claude Code session with the eval repo's .claude/settings.json hooks
-# loaded (--setting-sources project), so the gitlore PostToolUse hook fires and
-# its additionalContext injects.
+# loaded (--setting-sources project), so the gitlore SessionStart hook injects
+# the commit protocol and the PostToolBatch hooks fire.
 #
 # Each turn is its own `claude --print` process; turn 2 replays the session by id
 # via --resume. The Agent SDK's query() worked the same way (stateless, one
@@ -11,9 +11,9 @@
 # See README for the measured cost/latency comparison.
 #
 # Two-turn flow:
-#   Turn 1 — agent edits memory, runs the precommit command, hook injects
-#            additionalContext, agent summarises pending changes and stops.
-#   Turn 2 — eval sends the approval message; agent writes the commit-msg file.
+#   Turn 1 — agent edits memory, summarises the pending changes and stops for
+#            approval, as the SessionStart commit protocol tells it to.
+#   Turn 2 — eval sends the approval message; agent commits memory.
 #
 # --approval is optional: a scenario with no approval gate (add-tier, recall) is
 # one turn, and inventing a second "ok" message for it would put the agent's
@@ -115,7 +115,7 @@ session_id=$(check_turn "turn 1" "$t1")
 save_turn 1 "$t1"
 [ -z "$OUT_DIR" ] || printf '%s\n' "$session_id" > "$OUT_DIR/session-id"
 
-# Turn 2: user approves; agent writes the commit-msg file. Scenarios with no
+# Turn 2: user approves; agent commits memory. Scenarios with no
 # approval gate stop here.
 if [ -z "$APPROVAL" ]; then
   save_transcript "$session_id"

@@ -1,30 +1,23 @@
 #!/usr/bin/env bats
-# While a rebase, cherry-pick or revert is replaying, the parent pre-commit hook
-# must leave memory alone entirely.
+# While a rebase, cherry-pick or revert is replaying in the superproject,
+# `commit-memory.sh` commits memory but does not stage the gitlink, and says so.
 #
-# The hook commits dirty memory and stages the resulting gitlink (see
-# integration_gitlink_staging.bats). That is right for a commit being authored
-# now and wrong for one being replayed: the memory worktree does not move when
-# the parent's HEAD does, so a replayed commit would be re-pinned to memory's
-# CURRENT SHA instead of the one it originally recorded, and today's memory
-# content would be attributed to a historical commit.
-#
-# The guard covers the whole sync, not just the staging. A replay that trips the
-# FR11 approval gate exits non-zero from pre-commit, which does not abort a
-# commit — it aborts the REBASE, mid-sequence, leaving a half-replayed history
-# to clean up by hand.
+# Staging is right for a commit being authored now and wrong for one being
+# replayed: the memory worktree does not move when the parent's HEAD does, so a
+# replayed commit would be re-pinned to memory's CURRENT SHA instead of the one
+# it originally recorded (D58).
 #
 # MERGE_HEAD is deliberately NOT a replay marker: a merge commit is authored now
-# and must pin current memory. Same for a plain `--amend` on the tip.
+# and must pin current memory, so a script run mid-merge stages the pointer.
 #
-# Driven through real git commands, not by invoking the hook directly: whether
-# the replay state directory exists at hook time is the behaviour under test.
+# The assertion that fails without the guard is the OUTPUT: the operation name
+# plus a word matching `*skip*`. Absence of staging alone would also hold for a
+# script that never stages. The wording is unspecified, so it is matched loosely.
 #
-# The rebase cases commit by hand at the conflict/edit stop rather than through
-# `git rebase --continue`, because `--continue` does not run pre-commit at all
-# (probed, git 2.47.3) — a `--continue`-driven test would pass without a guard
-# and assert nothing. Committing by hand at the stop is both the path that does
-# reach the hook and the one that motivated the guard.
+# The staged set is read straight after the script, before any parent commit, and
+# each replay case then commits by hand at the stop (`rebase --continue` does not
+# run pre-commit hooks, so it proves nothing about them). The gitlink the
+# replayed commit records must be the one it had.
 
 load helpers/setup
 load helpers/gh-mock
@@ -38,19 +31,18 @@ setup() {
   export GH_MOCK_STDOUT_API_USER="alice"
   export GH_MOCK_REMOTE_URL="$TMP_REPO/.fake-gh-remote.git"
   git init -q --bare "$GH_MOCK_REMOTE_URL"
-  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory "echo precommit"
+  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory
+  git commit -q -m "install gitlore"
   bash "$PLUGIN_ROOT/scripts/cc-hooks/session-start.sh"
 }
 teardown() { teardown_tmp_repo; }
 
-# Dirty memory plus an approved summary, so the hook WOULD commit it.
-arm_memory_commit() {
+commit_memory() {
   echo "fact from this session" >> memory/MEMORY.md
-  printf 'memory: record a fact\n' > "$(gitlore_commit_msg_file memory)"
+  bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: record a fact"
 }
 
-# Two branches whose tips conflict, so replaying one onto the other stops and
-# hands the resolution commit to the pre-commit hook.
+# Two branches whose tips conflict, so replaying one onto the other stops.
 setup_conflicting_history() {
   echo base > f.txt
   git add f.txt
@@ -68,93 +60,63 @@ resolve_conflict() {
   git add f.txt
 }
 
-# Stop an interactive rebase on the given commit, so the test can commit or
-# amend by hand while `.git/rebase-merge` exists. `rebase -i` replays what
-# comes AFTER its argument, so edit the target by rebasing from its parent.
-stop_rebase_editing() {
-  cat > "$TMP_REPO/seq-editor.sh" <<'EOF'
-#!/usr/bin/env bash
-todo="$1"
-sed '1s/^pick/edit/' "$todo" > "$todo.new"
-mv "$todo.new" "$todo"
-EOF
-  chmod +x "$TMP_REPO/seq-editor.sh"
-  GIT_SEQUENCE_EDITOR="$TMP_REPO/seq-editor.sh" git rebase -q -i "$1^"
+# The memory commit landed, the gitlink was left alone, and the output says why.
+assert_replay_skipped() {
+  local op="$1" before="$2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$op"* ]]
+  [[ "$output" == *skip* ]]
+  [ "$(git -C memory rev-parse HEAD)" != "$before" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$(git -C memory rev-parse live)" ]
+  run git diff --cached --name-only
+  [[ "$output" != *memory* ]]
 }
 
-@test "a commit made while a rebase is stopped leaves memory alone" {
+@test "a rebase stopped on a conflict: memory is committed, not staged, and the skip is reported" {
   setup_conflicting_history
   git checkout -q topic
   recorded_before=$(git rev-parse HEAD:memory)
   memory_before=$(git -C memory rev-parse HEAD)
 
   run git rebase main
-  arm_memory_commit
+  [ -d "$(git rev-parse --git-path rebase-merge)" ]
   resolve_conflict
+  run commit_memory
+  assert_replay_skipped rebase "$memory_before"
+
   git commit -q -m "replayed topic change"
-
-  [ "$(git -C memory rev-parse HEAD)" = "$memory_before" ]
   [ "$(git rev-parse HEAD:memory)" = "$recorded_before" ]
 }
 
-@test "an --amend while a rebase is stopped does not re-pin the gitlink" {
-  # The headline hazard: the edited commit recorded an OLDER memory SHA, and
-  # the memory worktree does not move when the parent's HEAD does. Amending
-  # must preserve what the commit recorded, not stamp memory's current SHA.
-  # A root commit first, so the commit being edited has a parent to rebase from.
-  echo seed > tracked.txt
-  git add tracked.txt
-  git commit -q -m "root"
-  echo first >> tracked.txt
-  git commit -q -a -m "first"
-  target=$(git rev-parse HEAD)
-  recorded_before=$(git rev-parse HEAD:memory)
-
-  # Move memory on a later commit, so current memory differs from what the
-  # commit being edited recorded.
-  arm_memory_commit
-  echo more >> tracked.txt
-  git commit -q -a -m "second"
-  memory_now=$(git -C memory rev-parse HEAD)
-  [ "$memory_now" != "$recorded_before" ]
-
-  stop_rebase_editing "$target"
-  arm_memory_commit
-  git commit -q --amend --no-edit
-
-  [ "$(git rev-parse HEAD:memory)" = "$recorded_before" ]
-  [ "$(git -C memory rev-parse HEAD)" = "$memory_now" ]
-}
-
-@test "a rebase in progress announces that the memory sync was skipped" {
+@test "a rebase using the apply backend reports the skip too" {
   setup_conflicting_history
   git checkout -q topic
-  run git rebase main
-  arm_memory_commit
-  resolve_conflict
+  memory_before=$(git -C memory rev-parse HEAD)
 
-  run git commit -m "replayed topic change"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"gitlore"* ]]
-  [[ "$output" == *"rebase"* ]]
+  run git rebase --apply main
+  [ -d "$(git rev-parse --git-path rebase-apply)" ]
+  resolve_conflict
+  run commit_memory
+  assert_replay_skipped rebase "$memory_before"
 }
 
-@test "a conflicted cherry-pick leaves memory uncommitted and the gitlink unmoved" {
+@test "a conflicted cherry-pick: memory is committed, not staged, and the skip is reported" {
   setup_conflicting_history
   recorded_before=$(git rev-parse HEAD:memory)
   memory_before=$(git -C memory rev-parse HEAD)
 
   run git cherry-pick topic
-  arm_memory_commit
+  [ -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" ]
   resolve_conflict
+  run commit_memory
+  assert_replay_skipped cherry-pick "$memory_before"
+
   run git cherry-pick --continue
   [ "$status" -eq 0 ]
-
-  [ "$(git -C memory rev-parse HEAD)" = "$memory_before" ]
   [ "$(git rev-parse HEAD:memory)" = "$recorded_before" ]
 }
 
-@test "a conflicted revert leaves memory uncommitted and the gitlink unmoved" {
+@test "a conflicted revert: memory is committed, not staged, and the skip is reported" {
   setup_conflicting_history
   echo later > f.txt
   git commit -q -a -m "later change"
@@ -162,32 +124,27 @@ EOF
   memory_before=$(git -C memory rev-parse HEAD)
 
   run git revert HEAD~1
-  arm_memory_commit
+  [ -e "$(git rev-parse --git-path REVERT_HEAD)" ]
   resolve_conflict
+  run commit_memory
+  assert_replay_skipped revert "$memory_before"
+
   run git revert --continue
   [ "$status" -eq 0 ]
-
-  [ "$(git -C memory rev-parse HEAD)" = "$memory_before" ]
   [ "$(git rev-parse HEAD:memory)" = "$recorded_before" ]
 }
 
-@test "a conflicted merge is authored now, so it still pins current memory" {
+@test "a conflicted merge is authored now, so the script stages the current pointer" {
   # MERGE_HEAD is present but this is not a replay: the commit is new.
   setup_conflicting_history
   run git merge topic
-  arm_memory_commit
   resolve_conflict
+  run commit_memory
+  [ "$status" -eq 0 ]
+  [[ "$output" != *skip* ]]
+  run git diff --cached --name-only
+  [[ "$output" == *memory* ]]
 
   git commit -q -m "merge topic"
-  [ "$(git rev-parse HEAD:memory)" = "$(git -C memory rev-parse HEAD)" ]
-}
-
-@test "a plain --amend on the tip still pins current memory" {
-  echo seed > tracked.txt
-  git add tracked.txt
-  git commit -q -m "seed"
-  arm_memory_commit
-
-  git commit -q --amend -m "seed, amended"
   [ "$(git rev-parse HEAD:memory)" = "$(git -C memory rev-parse HEAD)" ]
 }

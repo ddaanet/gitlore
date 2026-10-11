@@ -51,7 +51,7 @@ gitlore_compose memory >/dev/null
 #
 # Tier first, then memory: memory records the tier as a gitlink, so committing
 # memory first would pin a SHA the tier is about to move off. That ordering is
-# the same one the production pre-commit hook follows.
+# the same one commit-memory.sh follows.
 GITLORE_MEMORY_COMMIT=1 git -C memory/acme add -A
 if ! git -C memory/acme diff --cached --quiet; then
   GITLORE_MEMORY_COMMIT=1 git -C memory/acme commit -q -m "Compose acme tier index"

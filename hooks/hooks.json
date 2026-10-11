@@ -56,15 +56,6 @@
         ]
       },
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/post-tool-use.sh"
-          }
-        ]
-      },
-      {
         "matcher": "EnterWorktree|ExitWorktree",
         "hooks": [
           {

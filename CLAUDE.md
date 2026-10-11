@@ -21,16 +21,17 @@ from the script the node names.
 
 ## Memory and commits
 
-- `memory/` moves in lockstep with the parent: committed before the root commit,
-  pushed alongside every parent push. Lockstep is `live` vs `origin/live` — the
-  memory tree's `main` may legitimately sit ahead.
+- `memory/` moves in lockstep with the parent: committed through
+  `commit-memory.sh` with the approved summary before the root commit, which
+  then records the gitlink the script staged; pushed alongside every parent
+  push. Lockstep is `live` vs `origin/live` — the memory tree's `main` may
+  legitimately sit ahead.
 - Handoff files (`.claude/handoff-task.md`, `.claude/handoff.md`) are
   tooling-managed. Write them only through the handoff skill, and fold them into
   the same commit as the work they describe.
-- A memory approval summary takes no conventional-commit prefix. Don't prepare
-  that summary in advance: commit the parent, and the pre-commit hook emits the
-  format, the file to write it to, and the approval protocol at the moment it
-  blocks.
+- A memory approval summary takes no conventional-commit prefix. Its format is
+  the clause at `gitlore.memoryApprovalClauseFile`; get the user's approval of
+  the summary, then pass it to `commit-memory.sh`.
 
 ## Writing
 

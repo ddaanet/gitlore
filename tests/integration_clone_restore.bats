@@ -33,7 +33,7 @@ setup() {
   # Build the "origin" by running the real install, then commit the staged
   # artifacts so a clone receives the full committed wiring (.gitmodules,
   # gitlink, settings, sentinel).
-  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory "echo precommit"
+  bash "$PLUGIN_ROOT/scripts/install/run.sh" memory
   git commit -q -m "Install gitlore"
 }
 

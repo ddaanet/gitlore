@@ -11,20 +11,20 @@ each component runs in.
 **Commit (happy path, agent-driven)**
 
 1. Claude edits memory files during the session (ambiently, throughout).
-2. When preparing to commit, Claude runs the configured pre-commit command as
-   part of its workflow (via `Bash`).
-3. PostToolUse hook fires — memory is dirty, commit-msg absent or stale.
-4. Claude summarizes pending memory changes in prose and presents the summary.
-   The user reviews the full diff in their own git tooling if they wish, then
-   gives explicit confirmation.
-5. Claude writes the confirmed summary to the commit-msg file.
-6. Claude runs `git commit`. The preceding confirmation of the commit message
-   covers the commit itself.
-7. pre-commit hook: commits every dirty tier and advances each tier's `live`,
-   then commits memory with the commit-msg file, deletes the file, and ff-pushes
+2. When the work is ready to commit, Claude summarizes the pending memory
+   changes in prose and presents the summary. The user reviews the full diff in
+   their own git tooling if they wish, then gives explicit confirmation.
+3. Claude runs `commit-memory.sh` through the `gitlore.commitCommand` key with
+   the confirmed summary (`-m`), or writes the summary and the trigger file and
+   lets the `PostToolBatch` hook run it. The preceding confirmation covers the
+   commit itself.
+4. The script commits every dirty tier and advances each tier's `live`, then
+   commits memory with the summary, deletes the message file, and ff-pushes
    `HEAD` → `live`.
-8. The hook stages the memory gitlink, so the parent commit records the pointer
-   its own hook just created.
+5. The script stages the memory gitlink in the parent index (skipped, with a
+   notice, during a rebase, cherry-pick or revert).
+6. Claude commits the parent as usual. The commit touches no memory; it records
+   the pointer the script staged (D58).
 
 **Push (happy path)**
 
@@ -36,7 +36,7 @@ each component runs in.
 
 **Tier write**
 
-A portable fact authored into `memory/<tier>/` rides the ordinary commit flow:
+A portable fact authored into `memory/<tier>/` rides the ordinary memory commit:
 the tier is committed and its `live` advanced before memory's own `add -A`, so
 the memory commit records the moved gitlink rather than lagging it, and the tier
 is pushed before memory is. One approval summary covers the whole episode,
@@ -72,20 +72,21 @@ bound for project memory.
 
 **Resolve (on divergence) — primary path: agent-driven**
 
-Most divergence is detected while the agent is attempting commit or push. The
-agent sees the hook's exit-1 stderr (addressed to it via the `$CLAUDECODE`
-branch) and invokes `/gitlore:resolve` inline without user intervention; the
-skill's five steps are in [merge-and-resolve.md](merge-and-resolve.md). It ends
-by advancing `live` — and, for a remote-flavored merge, `origin/live` — leaving
-HEAD detached at the new `live`, refreshing the parent's context with the
-incoming diff (or directing the user to `/clear` when resolve ran at session
-start), and retrying the original commit or push.
+Most divergence is detected while the agent is attempting a memory commit or a
+push. The agent sees the exit-1 stderr of `commit-memory.sh` or the `pre-push`
+hook (addressed to it via the `$CLAUDECODE` branch) and invokes
+`/gitlore:resolve` inline without user intervention; the skill's five steps are
+in [merge-and-resolve.md](merge-and-resolve.md). It ends by advancing `live` —
+and, for a remote-flavored merge, `origin/live` — leaving HEAD detached at the
+new `live`, refreshing the parent's context with the incoming diff (or directing
+the user to `/clear` when resolve ran at session start), and retrying the
+original memory commit or push.
 
 **Resolve fallback: user-driven**
 
-If divergence surfaces outside a Claude session (`git commit` or `git push` run
-from a plain terminal), the hook's stderr directs the user to open this project
-in Claude Code and run `/gitlore:resolve`. The primary path resumes from there.
+If divergence surfaces outside a Claude session (`git push` run from a plain
+terminal), the hook's stderr directs the user to open this project in Claude
+Code and run `/gitlore:resolve`. The primary path resumes from there.
 
 **Clone**
 

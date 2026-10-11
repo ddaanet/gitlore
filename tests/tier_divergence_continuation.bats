@@ -141,8 +141,7 @@ load helpers/tier-divergence
   mount_tier_at_live ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
-  approve "memory: record the org fact"
-  bash "$PRE_COMMIT"
+  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
   bash "$PRE_PUSH"
 
   run --separate-stderr bash "$RESOLVE"

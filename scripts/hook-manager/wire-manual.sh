@@ -18,7 +18,6 @@ fi
 
 cat >&2 <<'EOF'
 
-  pre-commit → exec "$(git rev-parse --git-common-dir)/gitlore-pre-commit" "$@"
   pre-push   → exec "$(git rev-parse --git-common-dir)/gitlore-pre-push" "$@"
 
 (Resolve the wrapper through the git common dir so it works in linked worktrees.)

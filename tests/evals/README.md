@@ -4,7 +4,7 @@ End-to-end evaluation suite for the gitlore memory-commit flow. Runs real CC ses
 
 ## The harness
 
-`lib/claude-runner.sh` drives one `claude --print` process per turn; turn 2 replays the session by id via `--resume`. Hooks fire and `hookSpecificOutput.additionalContext` injects under `--print` (verified on 2.1.212), which is all these evals need from a harness.
+`lib/claude-runner.sh` drives one `claude --print` process per turn; turn 2 replays the session by id via `--resume`. Hooks fire and `hookSpecificOutput.additionalContext` injects under `--print` (verified on 2.1.212), which is all these evals need from a harness — the SessionStart orientation that teaches the commit protocol is one of them.
 
 This suite used the Claude Agent SDK until 2026-07-17. The SDK bought nothing: its `query()` is one-shot and stateless by design ("each query is independent, no conversation state"), spawning a subprocess per call and resuming by id — the same shape as `--print --resume`. Both re-prime the project context every turn. Measured on this repo (2026-07-17, trivial two-turn probe, warm cache, per two-turn trial):
 
@@ -26,7 +26,7 @@ The SDK's `max_turns=20` runaway guard has no CLI equivalent; the runner uses `-
 ## Running
 
 ```bash
-make evals
+just evals
 ```
 
 Or directly:
@@ -44,7 +44,7 @@ Each trial:
 2. Records where the memory store stands, before the agent touches anything
 3. **Turn 1** — eval runner: agent works the flow and stops
 4. **Turn 2** — eval runner resumes the session with the approval message, for scenarios that have an approval gate
-5. Runs the scenario's assertion script, which owns everything after the turns — including firing the parent `git commit`, where the flow has one
+5. Runs the scenario's assertion script, which owns everything after the turns — including finishing a commit the agent left approved but unrun, where the flow has one
 
 The eval repo's hooks are copied wholesale from the plugin's own `hooks/hooks.json`, with `${CLAUDE_PLUGIN_ROOT}` resolved. Derived, never hand-listed: a hand-written subset is a registration the evals never exercise, and an eval's whole point is to walk the wiring production ships. Skills and commands are copied in too, so the prompt contracts the agent reads are the real ones.
 
@@ -54,17 +54,16 @@ Fixtures reach no network — every remote in here is a local bare repo, and `GI
 
 | Scenario | Assertion | What only an eval sees |
 |---|---|---|
-| 01 basic memory commit | `memory-commit` | PostToolUse `additionalContext` → summary → approval → commit |
-| 02 dirty, no precommit | `memory-commit` | the pre-commit hook's exit-1 path as the fallback trigger |
+| 01 basic memory commit | `memory-commit` | SessionStart orientation → summary → approval → `commit-memory.sh` → memory pointer staged in the parent |
 | 03 add tier | `add-tier` | intent file → PostToolBatch hook mounts (agent runs no git) → manifest edit recomposes the root index |
 | 04 tier write | `tier-write` | routing a portable fact to the tier, the mirror-down, and one approved summary committing memory *and* the tier |
 | 05 active recall | `recall` | a probe surfaces the trigger mid-task → the agent Reads the body *after* it → the answer uses it |
 
-### Trigger paths
+### The memory-commit flow
 
-**PTU injection path** (precommit command scenario): agent runs the configured precommit command (`true`), PostToolUse hook fires and injects `additionalContext`, agent summarises and stops. Turn 2 approval → agent writes commit-msg file. The assertion's `git commit` fires the pre-commit hook which commits memory.
+The parent repo has no pre-commit hook: a parent `git commit` never commits memory. A memory commit is the agent's own act, taught by the SessionStart orientation. The agent edits memory and is asked to commit it, summarises the pending changes, and stops for approval. On approval (turn 2) it runs `bash "$(git config gitlore.commitCommand)" -m "<approved summary>"`, or writes the summary and trigger files for the PostToolBatch hook to act on.
 
-**Pre-commit failure path** (no precommit command scenario): agent runs `git commit` directly, pre-commit hook exits 1 with the `$CLAUDECODE`-addressed error message, agent summarises and stops. Turn 2 approval → agent writes commit-msg and retries `git commit`, which succeeds. The assertion's subsequent `git commit` is a no-op on the memory side (already clean).
+The assertions grade the end state, whichever finish the agent picked: memory advanced, `live` fast-forwarded, the approved summary consumed, the memory pointer staged in the parent index (`git diff --cached --name-only`), and the commit message passing the rubric. An agent that wrote the approved summary and stopped is finished by the assertion running `commit-memory.sh -F` on it (`lib/finish-commit.sh`), which is what the product does for a bare `commit-memory.sh -F <file>`.
 
 ## Adding scenarios
 
@@ -89,7 +88,7 @@ The runner processes all `*.json` files in scenarios/ alphabetically.
 
 ### Assertion scripts
 
-`asserts/<name>.sh` runs after the turns with `EVAL_REPO`, `EVAL_OUT_DIR`, `EVAL_RUBRIC`, `EVAL_TRIGGER`, `PLUGIN_ROOT` and `LIB_DIR` in the environment. Exit 0 to pass; exit non-zero with the reason on stdout to fail.
+`asserts/<name>.sh` runs after the turns with `EVAL_REPO`, `EVAL_OUT_DIR`, `EVAL_RUBRIC`, `PLUGIN_ROOT` and `LIB_DIR` in the environment. Exit 0 to pass; exit non-zero with the reason on stdout to fail.
 
 `EVAL_OUT_DIR` holds `turn1.txt` / `turn2.txt` (each turn's final text), `session-id`, `memory-baseline` (memory's HEAD before the agent ran), and `transcript.jsonl` — the session transcript, which is how an assertion sees which *tools* ran. Some contracts are only visible there: active recall is meant to fire on a trigger that surfaced mid-task, and Claude Code's own prompt-time recall leaves an identical repo and an identical answer — only the order of the tool calls tells them apart.
 
