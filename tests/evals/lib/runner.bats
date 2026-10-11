@@ -3,6 +3,8 @@
 
 # shellcheck source=tests/helpers/run-asserts.bash
 source "$BATS_TEST_DIRNAME/../../helpers/run-asserts.bash"
+# shellcheck source=tests/helpers/dogfood-shim.bash
+source "$BATS_TEST_DIRNAME/../../helpers/dogfood-shim.bash"
 
 # Consumed by the sourced setup.sh (`${EVAL_LIB_DIR:-…}`); export so it crosses.
 export EVAL_LIB_DIR="$BATS_TEST_DIRNAME"
@@ -216,4 +218,49 @@ MOCKEOF
       "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p" --out-dir "$out"
   assert_ok
   assert_grep -q transcript "$out/transcript.jsonl"
+}
+
+# The dogfood shim (plugin-dev/bin/claude) re-exports CLAUDE_CODE_PLUGIN_DIRS
+# and execs the next claude, so the eval repo's own settings.json hooks load a
+# second time. The runner must resolve the real claude past the shim; unsetting
+# the variable first is not enough, the shim sets it again.
+@test "claude-runner: a turn reaches the real claude with CLAUDE_CODE_PLUGIN_DIRS unset past a dogfood shim" {
+  dogfood_shim_install "$BATS_TEST_TMPDIR" '{"subtype":"success","session_id":"sid-1","result":"canned"}'
+  unset CLAUDE_CODE_PLUGIN_DIRS
+  run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p"
+  assert_ok
+  [ -f "$DOGFOOD_RECORD.env" ]
+  [ "$(cat "$DOGFOOD_RECORD.env")" = "unset" ]
+}
+
+@test "claude-runner: CLAUDE_CODE_PLUGIN_DIRS exported by the caller does not reach claude past a dogfood shim" {
+  dogfood_shim_install "$BATS_TEST_TMPDIR" '{"subtype":"success","session_id":"sid-1","result":"canned"}'
+  export CLAUDE_CODE_PLUGIN_DIRS="/caller/plugin dir"
+  run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p"
+  assert_ok
+  [ -f "$DOGFOOD_RECORD.env" ]
+  [ "$(cat "$DOGFOOD_RECORD.env")" = "unset" ]
+}
+
+# The gitlore launcher sits between the shim and claude and strips only its own
+# directory from PATH. Stepping past the shim once, with it still on PATH, lands
+# on the launcher, which finds the shim again: its directory has to be off PATH
+# for the child.
+@test "claude-runner: the shim's directory is off PATH for claude behind a chaining launcher" {
+  dogfood_shim_install "$BATS_TEST_TMPDIR" '{"subtype":"success","session_id":"sid-1","result":"canned"}' launcher
+  unset CLAUDE_CODE_PLUGIN_DIRS
+  run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p"
+  assert_ok
+  [ -f "$DOGFOOD_RECORD.launcher" ]
+  [ -f "$DOGFOOD_RECORD.env" ]
+  [ "$(cat "$DOGFOOD_RECORD.env")" = "unset" ]
+}
+
+@test "claude-runner: a dogfood shim spelled with a trailing slash on PATH is bypassed" {
+  dogfood_shim_install "$BATS_TEST_TMPDIR" '{"subtype":"success","session_id":"sid-1","result":"canned"}' slash
+  unset CLAUDE_CODE_PLUGIN_DIRS
+  run "$RUNNER" --cwd "$BATS_TEST_TMPDIR" --prompt "p"
+  assert_ok
+  [ -f "$DOGFOOD_RECORD.env" ]
+  [ "$(cat "$DOGFOOD_RECORD.env")" = "unset" ]
 }

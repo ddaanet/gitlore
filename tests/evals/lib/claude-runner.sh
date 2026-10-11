@@ -30,6 +30,9 @@
 #   claude-runner.sh --probe --cwd <path>   # connectivity check only
 set -euo pipefail
 
+# shellcheck disable=SC1091
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/real-claude.sh"
+
 CWD=""
 PROMPT=""
 APPROVAL=""
@@ -63,7 +66,7 @@ run_turn() {
               --max-budget-usd "$MAX_BUDGET_USD")
   [ -z "$session" ] || args+=(--resume "$session")
   # `< /dev/null`: claude -p waits 3s for piped stdin that never comes.
-  (cd "$CWD" && claude "${args[@]}" < /dev/null)
+  (cd "$CWD" && eval_claude "${args[@]}" < /dev/null)
 }
 
 # Echoes the result's session id; fails with a diagnostic when the turn did not

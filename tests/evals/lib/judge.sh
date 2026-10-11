@@ -5,6 +5,9 @@
 # verdict could not be parsed. Explanation goes to stderr in all cases.
 set -uo pipefail
 
+# shellcheck disable=SC1091
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/real-claude.sh"
+
 RUBRIC="$1"
 DIFF="$2"
 COMMIT_MSG="$3"
@@ -19,7 +22,7 @@ ${DIFF}
 COMMIT_MESSAGE:
 ${COMMIT_MSG}"
 
-result=$(claude --print "$PROMPT" 2>&1)
+result=$(eval_claude --print "$PROMPT" 2>&1)
 claude_exit=$?
 if [ "$claude_exit" -ne 0 ]; then
   printf 'judge invocation failed (exit %s): %s\n' "$claude_exit" "$result" >&2
