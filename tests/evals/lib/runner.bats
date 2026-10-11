@@ -148,6 +148,61 @@ EOF
   [ ! -f "$out/turn2.txt" ]
 }
 
+# The assertions grade "no memory commit before approval" from memory's HEAD
+# between the turns. The mock commits in memory on EVERY call, so a snapshot
+# taken before turn 1 or after turn 2 would not equal the repo's HEAD at the end
+# of turn 1.
+@test "claude-runner: --approval with --out-dir records memory's HEAD between the turns" {
+  local cwd="$BATS_TEST_TMPDIR/proj" out="$BATS_TEST_TMPDIR/out"
+  mkdir -p "$cwd/memory"
+  git -C "$cwd/memory" init -q
+  git -C "$cwd/memory" -c user.email=e@x.com -c user.name=E commit -q --allow-empty -m base
+  cat > "$MOCK_BIN/claude" <<'MOCKEOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$MOCK_BIN/argv.log"
+n=$(wc -l < "$MOCK_BIN/argv.log" | tr -d ' ')
+git -C memory -c user.email=e@x.com -c user.name=E commit -q --allow-empty -m "turn $n"
+# Where memory stood when this call ended, for the test to compare against.
+git -C memory rev-parse HEAD > "$MOCK_BIN/head-after-$n"
+printf '{"subtype":"success","session_id":"sid-%s","result":"canned"}\n' "$n"
+MOCKEOF
+  chmod +x "$MOCK_BIN/claude"
+
+  run "$RUNNER" --cwd "$cwd" --prompt "p" --approval "a" --out-dir "$out"
+  assert_ok
+  [ -f "$out/memory-after-turn1" ]
+  [ -s "$MOCK_BIN/head-after-1" ]
+  [ "$(cat "$out/memory-after-turn1")" = "$(cat "$MOCK_BIN/head-after-1")" ]
+  [ "$(cat "$MOCK_BIN/head-after-1")" != "$(cat "$MOCK_BIN/head-after-2")" ]
+}
+
+# `git -C <cwd>/memory` inside an unmounted memory/ resolves to the PARENT repo,
+# so a naive snapshot would record the parent's HEAD as memory's.
+@test "claude-runner: --approval with --out-dir where <cwd>/memory/.git is absent writes no memory-after-turn1 and exits 0" {
+  local cwd="$BATS_TEST_TMPDIR/proj" out="$BATS_TEST_TMPDIR/out"
+  mkdir -p "$cwd/memory"
+  git -C "$cwd" init -q
+  git -C "$cwd" -c user.email=e@x.com -c user.name=E commit -q --allow-empty -m base
+  _make_mock_claude success success
+  run "$RUNNER" --cwd "$cwd" --prompt "p" --approval "a" --out-dir "$out"
+  assert_ok
+  [ -f "$out/turn2.txt" ]
+  [ ! -e "$out/memory-after-turn1" ]
+}
+
+# A scenario with no approval gate has no "before approval" to snapshot.
+@test "claude-runner: a one-turn run writes no memory-after-turn1" {
+  local cwd="$BATS_TEST_TMPDIR/proj" out="$BATS_TEST_TMPDIR/out"
+  mkdir -p "$cwd/memory"
+  git -C "$cwd/memory" init -q
+  git -C "$cwd/memory" -c user.email=e@x.com -c user.name=E commit -q --allow-empty -m base
+  _make_mock_claude success
+  run "$RUNNER" --cwd "$cwd" --prompt "p" --out-dir "$out"
+  assert_ok
+  [ -f "$out/turn1.txt" ]
+  [ ! -e "$out/memory-after-turn1" ]
+}
+
 # The transcript is how an assertion sees which TOOLS ran. Located by session id
 # alone, because the projects/<dir> name is a mangling of cwd and deriving it
 # here would be a second place to get that encoding wrong.

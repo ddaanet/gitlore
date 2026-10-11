@@ -137,6 +137,32 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.systemMessage | test("detached at live")'
 }
 
+# Observed failure: asked to "add a note and commit it to memory", agents
+# committed in the same turn, reading the request as the approval. The protocol
+# carries one sentence that closes it; its two halves are pinned as literals
+# (case-sensitive), so a rewording that flips the meaning cannot satisfy them.
+@test "commit protocol says a request to commit is not approval of an unseen summary" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  # Positive anchor: the protocol context is present at all.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
+  echo "$output" | jq -e --arg s "A request to commit memory is not approval of a summary the user has not seen" '.hookSpecificOutput.additionalContext | contains($s)'
+}
+
+@test "commit protocol says to show the summary, end the turn, and commit after the reply approves" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  # Positive anchor: the protocol context is present at all.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
+  echo "$output" | jq -e --arg s "show the summary, end your turn, and commit only after the user's reply approves it" '.hookSpecificOutput.additionalContext | contains($s)'
+}
+
 @test "emits standing commit-protocol additionalContext every gitlore session" {
   make_parent_with_memory
   mkdir -p .claude

@@ -231,8 +231,8 @@ git and decides (D7).
   compaction or resume — the reports hooks write from inside a subagent, whose
   own output reaches nobody else (D51), and
   `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
-  drift (D15); `SessionStart` and `PreCompact` re-arm the once-per-episode
-  notices. [session.md](references/session.md),
+  drift (D15); `SessionStart(startup|clear|compact)` re-arms the
+  once-per-episode notices. [session.md](references/session.md),
   [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md); the
   intent-file commit in [commit-gate.md](references/commit-gate.md), the index
   pair in [index-composition.md](references/index-composition.md), the per-agent

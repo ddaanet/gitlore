@@ -137,10 +137,10 @@ silently. `SessionStart` writes the `# Memory Index` scaffold back, so a store
 reaching a batch without one lost the file inside the session;
 `index-compose.sh` reports it on both channels in place of composing, keyed by
 session like the byte-budget and plugin-upgrade notices, and re-armed at
-`SessionStart` and `PreCompact` by `nudge-reset.sh`. The notice reports and
-never repairs: a file the hook wrote would enter the store outside the approval
-gate that accounts for everything else in it. Install owes the same scaffold —
-including to an auto-memory dir migrated with facts and no index
+`SessionStart(startup|clear|compact)` by `nudge-reset.sh`. The notice reports
+and never repairs: a file the hook wrote would enter the store outside the
+approval gate that accounts for everything else in it. Install owes the same
+scaffold — including to an auto-memory dir migrated with facts and no index
 ([installation.md](installation.md)).
 
 Composition spans the whole memory tree, so from the continuation it can also

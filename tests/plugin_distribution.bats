@@ -200,10 +200,33 @@ load helpers/setup
   run jq -r '[.hooks.PostToolUse[] | select(.matcher=="Bash")] | length' "$PLUGIN_ROOT/hooks/hooks.json"
   [ "$status" -eq 0 ]
   [ "$output" = "0" ]
-  run jq -r '[.hooks.SessionStart[].hooks[].command | select(test("session-start|nudge-reset"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
-  [ "$output" = "2" ]
-  run jq -r '[.hooks.PreCompact[].hooks[].command | select(test("nudge-reset"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  run jq -r '[.hooks.SessionStart[] | select(.matcher=="*") | .hooks[].command | select(test("session-start"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
   [ "$output" = "1" ]
+}
+
+# The nudge markers are re-armed where the context they were given to is
+# replaced: a fresh session, /clear and a compaction, all SessionStart sources.
+# The `*` group also fires on resume, which keeps its context, so nudge-reset
+# sits in its own startup|clear|compact group and nowhere else. The PreCompact
+# half uses `(.hooks.PreCompact // [])` so a hooks.json with no such key counts
+# 0 rather than a jq error.
+@test "distribution: nudge-reset runs on SessionStart(startup|clear|compact) only" {
+  local hj="$PLUGIN_ROOT/hooks/hooks.json"
+  run jq -r '[.hooks.SessionStart[] | select(.matcher=="startup|clear|compact") | .hooks[].command | select(test("nudge-reset"))] | length' "$hj"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  run jq -r '[.hooks.SessionStart[] | select(.matcher!="startup|clear|compact") | .hooks[].command | select(test("nudge-reset"))] | length' "$hj"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+  # session-start.sh stays in the `*` group alone: in the new group it would
+  # run twice on startup, clear and compact.
+  run jq -r '[.hooks.SessionStart[] | select(.matcher!="*") | .hooks[].command | select(test("session-start"))] | length' "$hj"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+  run jq -r '[(.hooks.PreCompact // [])[].hooks[].command | select(test("nudge-reset"))] | length' "$hj"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
 }
 
 # D51: relay-drain.sh is the ONE drainer of the relay, so an entry

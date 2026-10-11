@@ -64,11 +64,18 @@ directly. The agent's line is mostly a prohibition — `/plugin`,
 `/reload-plugins` and rewriting the `gitlore.*` keys are all dead ends, none of
 them re-fires `SessionStart`.
 
-**Once per episode, re-armed by a compaction.** A marker in the memory store's
-gitdir, keyed by session and swept after seven days, mirrors the index
-byte-budget nudge; `nudge-reset.sh` clears both at `SessionStart` and
-`PreCompact`. A compaction re-arms the notice deliberately: what survives is a
-summary, and the session is still running the old root.
+**Once per episode, re-armed by a fresh or condensed context.** A marker in the
+memory store's gitdir, keyed by session and swept after seven days, mirrors the
+index byte-budget nudge; `nudge-reset.sh` clears both at
+`SessionStart(startup|clear|compact)`. `startup` and `clear` begin a fresh
+context; `compact` leaves a summary that may have dropped the notice, while the
+session is still running the old root. `resume` and `fork` keep the conversation
+history, so the notice the session was given is still in its context and the
+marker stays. A compaction is always followed by `SessionStart` with
+`source: "compact"`. The source filter is the matcher of the script's own
+`hooks.json` group, a list of exact alternatives matched against `source`:
+mechanical branching belongs in the harness, and the script never runs on
+`resume`, the one event where `SessionStart`'s cwd can be a foreign repo.
 
 ## Rejected alternatives
 
@@ -85,3 +92,11 @@ loads.
 to Claude Code hooks only. A git hook fires from agent Bash, where it is unset,
 so the wrapper has nothing to heal from — and the split-version objection above
 stands regardless (D21).
+
+**A `PreCompact` registration of the nudge reset.** `SessionStart(compact)`
+follows every compaction, so a second registration re-arms nothing the first has
+not (D21).
+
+**Re-arming on every `SessionStart` source.** `resume` and `fork` keep the
+conversation history, so the notices already given are still in context;
+re-arming would repeat them (D21).

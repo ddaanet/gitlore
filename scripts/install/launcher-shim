@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # gitlore launcher shim. Injects --settings '{"autoMemoryDirectory":…}' so CC's
 # native auto-memory lands in the gitlore submodule. Identical in both placements;
-# see docs/design.md "Memory Redirect Launcher" (D10).
+# see docs/references/memory-redirect.md in the gitlore repository.
 
 # real claude = next `claude` on PATH after stripping my own dir
 unset CDPATH   # else `cd` may echo the target, corrupting the capture below

@@ -133,7 +133,8 @@ it. [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md)
 - **D21** — a mid-session plugin upgrade is a notice, not a self-healing config
 
 *Rejected:* a version-less plugin pointer resolved at hook runtime · wrappers
-self-healing from `CLAUDE_PLUGIN_ROOT`.
+self-healing from `CLAUDE_PLUGIN_ROOT` · a `PreCompact` registration of the
+nudge reset · re-arming on every `SessionStart` source.
 
 **Claude Code platform workarounds** — harness behaviours, each carrying the
 empirical work that established it, which is why they stay whole.

@@ -74,7 +74,7 @@ exec 3>&1 1>&2
 # about the forms not named — and nothing here cites an FR id, which resolves to
 # nothing in the consumer repos this context lands in.
 # The `$(git config …)` is literal text for the agent to run, so it is escaped here.
-protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then run bash \"\$(git config gitlore.commitCommand)\" -F - from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule."
+protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then run bash \"\$(git config gitlore.commitCommand)\" -F - from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule. A request to commit memory is not approval of a summary the user has not seen: show the summary, end your turn, and commit only after the user's reply approves it."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook

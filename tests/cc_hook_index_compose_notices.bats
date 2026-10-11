@@ -103,7 +103,7 @@ load helpers/cc-hook-index-compose
   run feed
   [ -z "$output" ]
 
-  printf '{"hook_event_name":"PreCompact","session_id":"test-session"}' \
+  printf '{"hook_event_name":"SessionStart","source":"compact","session_id":"test-session"}' \
     | bash "$PLUGIN_ROOT/scripts/cc-hooks/nudge-reset.sh"
 
   run feed

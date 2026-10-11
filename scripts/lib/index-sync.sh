@@ -249,8 +249,9 @@ _gitlore_nudge_reset() {
 # Args: $1 = memory worktree path; $2 = session id.
 gitlore_index_budget_nudge_file() { _gitlore_nudge_file "$1" "$2" budget; }
 
-# Re-arm the byte-budget advisory. Called at SessionStart and PreCompact, the
-# two events that end the context a marker's "already told" claim rests on.
+# Re-arm the byte-budget advisory. Called on SessionStart for startup, clear and
+# compact, the sources that end the context a marker's "already told" claim
+# rests on.
 gitlore_index_budget_nudge_reset() { _gitlore_nudge_reset "$1" "$2" budget; }
 
 # Has the mid-session plugin-upgrade notice already fired this episode (D21)?

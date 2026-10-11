@@ -59,7 +59,7 @@ run_batch() {
     | bash "$BATCH"
 }
 run_reset() {
-  printf '{"hook_event_name":"PreCompact","session_id":"sess-1"}' | bash "$RESET"
+  printf '{"hook_event_name":"SessionStart","source":"compact","session_id":"sess-1"}' | bash "$RESET"
 }
 
 sys_of() { printf '%s' "$1" | jq -r '.systemMessage'; }

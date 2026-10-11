@@ -59,7 +59,7 @@ The store line names which repository diverged: the project memory store, or a t
 
 ## Dispatch memory-merger sub-agent (turn 1 — synthesis)
 
-Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass the state-file path, the continuation command, and any problem lines the directive carried. The sub-agent synthesizes, stages the paths it merged in the store, and returns a prose summary. Capture the `agentId`.
+Use the `Task` tool with `subagent_type: "gitlore:memory-merger"`. Pass the state-file path, the continuation command, and any problem lines the directive carried. The sub-agent synthesizes, stages the paths it merged in the store, and returns a prose summary. Leave the dispatch's `name` unset: an unnamed sub-agent returns once, as the tool result, while a named one becomes a teammate whose report and idle notices each arrive as a separate message. Capture the `agentId`.
 
 ## Approve or reject (turn 2 — resume)
 
@@ -90,7 +90,7 @@ After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again 
 
 ## Resume commit
 
-If this skill was triggered by a commit failure, retry the original memory commit (the `commit-memory.sh` call) now that memory is resolved.
+If this skill was triggered by a commit failure, retry the memory commit bare now that memory is resolved: the same `commit-memory.sh` call with no `-m` and no `-F`. Do not pass the original summary again. A summary passed with the call counts as approved at that moment, and the merge may have written content it never covered; bare, the script judges the approval already on disk. A commit that had landed before the merge leaves nothing to approve and the retry only advances `live`. If the retry refuses for want of an approved summary, follow its directive: present the summary again as it prints, amended for what the merge brought, and commit only once the user approves it.
 
 ## Summarize
 

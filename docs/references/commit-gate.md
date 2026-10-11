@@ -161,27 +161,34 @@ Two complementary mechanisms close it:
   commit memory, summarize the pending changes, get the user's explicit
   approval, then run `bash "$(git config gitlore.commitCommand)" -F -` from the
   repo root with the approved summary on stdin, through a quoted heredoc; never
-  run `git commit` inside the memory submodule. The `$(git config …)` reaches
-  the agent as literal text. The summary travels on stdin and not as a `-m`
-  argument because it is prose derived from memory content: templated into a
-  double-quoted argument, a backtick or `$(…)` in it would be run by the agent's
-  shell. The text is acts and nothing else: the gate, the hook that blocks, and
-  what it records are mechanism the agent cannot act on, and the gate states
-  them itself at the moment it fires; the prohibition forbids by role, because
-  naming `git -C <mempath> commit` invites reasoning about the forms left
-  unnamed; and no FR id appears, since it resolves to nothing in the consumer
-  repos this context reaches. Pinned by the assertions in
-  `tests/cc_hook_session_start.bats`. The base Claude Code memory instructions
-  describe generic "edit files, save facts" memory with no review gate, so the
-  agent's default is actively wrong in a gitlore repo. The orientation corrects
-  the model **before** the agent acts, and must be front-loaded: the prohibition
-  guards an action the agent would otherwise take unprompted, and the commit
-  command is the only way memory is committed, so no hook any longer surfaces it
-  just in time. Writing stays seamless — no step before an edit — and the
-  approval step attaches to the commit alone, so the text does not induce
-  ceremony around persistence. The gate's own `$CLAUDECODE`-branched output
-  remains the fallback when a direct commit is blocked, and `/gitlore:resolve`
-  surfaces on divergence.
+  run `git commit` inside the memory submodule. The text ends with the rule that
+  a request to commit memory is not approval of a summary the user has not seen:
+  show the summary, end the turn, commit only after the user's reply approves
+  it. Since D58 a memory commit is the agent's own act, and a summary passed
+  with the call counts as approved by construction, so this text is the only
+  gate between the agent and the commit; an eval run on 2026-10-11, asked to add
+  a note to `memory/MEMORY.md` and commit it, ran `commit-memory.sh -F -` in the
+  same turn in 4 of 5 runs, one stating it treated the request as the approval.
+  The `$(git config …)` reaches the agent as literal text. The summary travels
+  on stdin and not as a `-m` argument because it is prose derived from memory
+  content: templated into a double-quoted argument, a backtick or `$(…)` in it
+  would be run by the agent's shell. The text is acts and nothing else: the
+  gate, the hook that blocks, and what it records are mechanism the agent cannot
+  act on, and the gate states them itself at the moment it fires; the
+  prohibition forbids by role, because naming `git -C <mempath> commit` invites
+  reasoning about the forms left unnamed; and no FR id appears, since it
+  resolves to nothing in the consumer repos this context reaches. Pinned by the
+  assertions in `tests/cc_hook_session_start.bats`. The base Claude Code memory
+  instructions describe generic "edit files, save facts" memory with no review
+  gate, so the agent's default is actively wrong in a gitlore repo. The
+  orientation corrects the model **before** the agent acts, and must be
+  front-loaded: the prohibition guards an action the agent would otherwise take
+  unprompted, and the commit command is the only way memory is committed, so no
+  hook any longer surfaces it just in time. Writing stays seamless — no step
+  before an edit — and the approval step attaches to the commit alone, so the
+  text does not induce ceremony around persistence. The gate's own
+  `$CLAUDECODE`-branched output remains the fallback when a direct commit is
+  blocked, and `/gitlore:resolve` surfaces on divergence.
 
 This is a cleaner variant of the rejected PreToolUse alternative — a submodule
 hook consistent with the existing hook architecture, with none of the CC-level

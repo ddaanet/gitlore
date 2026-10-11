@@ -178,10 +178,12 @@ says is installed for this repo, and reports a mid-session upgrade once per
 episode. It reports and never repairs; see D21 in
 [plugin-upgrade-notice.md](plugin-upgrade-notice.md).
 
-**`SessionStart` and `PreCompact` — the nudge reset.** `nudge-reset.sh` re-arms
-the once-per-episode notices (index byte budget, plugin upgrade, missing root
-index). Each marker claims "this session has already been told", and both events
-end the context that claim rests on; see D21 in
+**`SessionStart(startup|clear|compact)` — the nudge reset.** `nudge-reset.sh`
+re-arms the once-per-episode notices (index byte budget, plugin upgrade, missing
+root index). Each marker claims "this session has already been told", and these
+three sources end or condense the context that claim rests on. It sits in its
+own matcher group of `hooks.json`, so the script never runs on `resume` or
+`fork`, which keep the conversation and the notices in it; see D21 in
 [plugin-upgrade-notice.md](plugin-upgrade-notice.md).
 
 **`PostToolUse(EnterWorktree|ExitWorktree)` — the drift guard.**

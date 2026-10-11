@@ -7,8 +7,9 @@
 # the reason on stdout to fail.
 #
 # The agent's own act commits memory (no parent hook does), so the assertion
-# grades the outcome: memory advanced, live fast-forwarded, the parent index has
-# the memory pointer staged, and the message passes the rubric.
+# grades the outcome: memory did not move before approval, memory advanced, live
+# fast-forwarded, the parent records the memory pointer, and the message passes
+# the rubric.
 set -uo pipefail
 
 fail() { printf '%s\n' "$1"; exit 1; }
@@ -25,6 +26,9 @@ MEM="$EVAL_REPO/memory"
 baseline=""
 [ -f "$EVAL_OUT_DIR/memory-baseline" ] && baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
 [ -n "$baseline" ] || fail "no memory baseline captured; the harness did not record where the store started"
+
+# Assertion 0a: memory did not move during turn 1, before the approval message.
+check_no_commit_before_approval "$baseline"
 
 path_taken=""   # set by settle_commit_path
 # Assertion 0: the approved summary was committed — by the agent, by the batch

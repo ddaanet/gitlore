@@ -21,7 +21,9 @@
 #
 # --out-dir captures each turn's final assistant text as turn<N>.txt, plus the
 # session id. An assertion that has to see what the agent SAID — that an injected
-# memory body actually reached context, say — has no other window onto it.
+# memory body actually reached context, say — has no other window onto it. With
+# --approval it also writes memory-after-turn1: memory's HEAD between the turns,
+# when <cwd>/memory is its own repo.
 #
 # Usage:
 #   claude-runner.sh --cwd <path> --prompt <text> [--approval <text>] [--out-dir <path>]
@@ -120,6 +122,12 @@ save_turn 1 "$t1"
 if [ -z "$APPROVAL" ]; then
   save_transcript "$session_id"
   exit 0
+fi
+# Memory's HEAD before the approval message, so an assertion can see a memory
+# commit the agent made before the user approved. `git -C` into a plain
+# directory answers for the enclosing repo, hence the guard.
+if [ -n "$OUT_DIR" ] && [ -e "$CWD/memory/.git" ]; then
+  git -C "$CWD/memory" rev-parse HEAD > "$OUT_DIR/memory-after-turn1"
 fi
 t2=$(run_turn "$APPROVAL" "$session_id") || die "eval: turn 2 yielded no result"
 check_turn "turn 2" "$t2" >/dev/null

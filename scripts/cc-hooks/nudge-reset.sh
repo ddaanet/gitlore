@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SessionStart + PreCompact: drop the once-per-episode nudge markers (index byte
-# budget, mid-session plugin upgrade, missing root index).
+# SessionStart(startup|clear|compact): drop the once-per-episode nudge markers
+# (index byte budget, mid-session plugin upgrade, missing root index). hooks.json
+# filters the sources by matcher.
 #
 # A marker says "this session has already been told". That claim is only valid
-# for as long as the context that holds the telling, and two events end it:
+# for as long as the context that holds the telling, and a source that starts a
+# fresh context ends it:
 #
-#  - SessionStart. A fresh context. `--resume` keeps the session id but not the
-#    context, so keying on the id alone is not enough — the reset must be
-#    explicit.
-#  - PreCompact. What survives a compaction is a summary, not the tool results,
-#    and re-injection after /compact is guaranteed only for the project-root
-#    CLAUDE.md. A notice the summarizer dropped would otherwise never be
-#    repeated, so the markers are re-armed wholesale: repeating a notice the
-#    session still holds costs a line, while withholding one it has lost is
-#    silent.
+#  - startup and clear start a fresh context.
+#  - compact. A compaction is followed by SessionStart(compact). What survives it
+#    is a summary, not the tool results, and re-injection after /compact is
+#    guaranteed only for the project-root CLAUDE.md. A notice the summarizer
+#    dropped would otherwise never be repeated, so the markers are re-armed
+#    wholesale: repeating a notice the session still holds costs a line, while
+#    withholding one it has lost is silent.
+#  - resume and fork keep the conversation history, so the notices the session
+#    was given are still in context and the markers are not re-armed.
 #
 # Never fatal. A nudge marker that fails to clear must not break a session.
 

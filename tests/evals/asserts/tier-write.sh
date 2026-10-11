@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Assertion: a portable fact was routed into the tier, mirrored, and committed
-# in lockstep with the memory store.
+# in lockstep with the memory store, and nothing reached memory before approval.
 #
 # Three mechanisms meet here and only an eval sees them meet: the SessionStart
 # routing guidance (does the agent put an org-wide fact in the tier instead of
@@ -64,6 +64,9 @@ grep -q "($new_file)" "$TIERPATH/MEMORY.md" || \
 baseline=""
 [ -f "$EVAL_OUT_DIR/memory-baseline" ] && baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
 [ -n "$baseline" ] || fail "no memory baseline captured; the harness did not record where the store started"
+
+# Memory did not move during turn 1, before the approval message.
+check_no_commit_before_approval "$baseline"
 
 path_taken=""   # set by settle_commit_path
 settle_commit_path "$MEM" "$baseline" "$MSG_FILE"

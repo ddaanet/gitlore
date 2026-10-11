@@ -7,16 +7,11 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/session-start.sh"
-          },
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/nudge-reset.sh"
           }
         ]
-      }
-    ],
-    "PreCompact": [
+      },
       {
+        "matcher": "startup|clear|compact",
         "hooks": [
           {
             "type": "command",

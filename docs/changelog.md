@@ -7,6 +7,11 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-11 — A commit request is not approval](changelog/2026-10-11-a-commit-request-is-not-approval.md)
+  — the standing commit orientation says a request to commit memory is not
+  approval of an unseen summary (D58 made the call the only gate); the nudge
+  reset runs on `SessionStart(startup|clear|compact)` only, with no `PreCompact`
+  registration (D21); eval scenarios fail a commit made before approval
 - [2026-10-11 — SessionStart reports and never moves memory](changelog/2026-10-11-session-start-reports-and-never-moves-memory.md)
   — the clean-only fast-forward is retired (D59): in a single checkout HEAD
   equals `live` by construction, so it never had work; SessionStart reports
