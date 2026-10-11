@@ -24,6 +24,9 @@ source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 # gitlore_sync_nested_tiers, the "Nested tiers" stage below.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/session-tiers.sh"
+# report_memory_position, the "where memory stands" stage below.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/session-memory.sh"
 
 # Guard 1: gitlore.enabled
 # Guard on the file rather than suppressing jq: "no settings.json" is the normal
@@ -93,75 +96,6 @@ emit_session_json() {
       '{hookSpecificOutput:{hookEventName:"SessionStart", additionalContext:$ctx}}' >&3
   fi
   exec 3>&- 1>&2
-}
-# A report line (D59) rides both channels: the user's systemMessage (D14) and
-# the agent's additionalContext, the way tier lines are added.
-add_report() {
-  add_sysmsg "$1"
-  protocol_ctx="$protocol_ctx
-
-$1"
-}
-# Reports where memory stands against local `live` and its remote (D59). Reads
-# only: nothing here moves HEAD, the worktree or any ref. Every position adds a
-# line, so the systemMessage is never empty; a clean store that is aligned with
-# `live` or ahead of it, and in step with its remote, adds only the user's
-# "memory ready" confirmation, with nothing for the agent.
-# Args: $1 = memory worktree path.
-report_memory_position() {
-  local mempath="$1" dirty head live n unit remote_url fetch_err remote
-  dirty=$(gitlore_memory_dirty "$mempath")
-  head=$(git -C "$mempath" rev-parse HEAD)
-  live=$(git -C "$mempath" rev-parse -q --verify live)
-  if [ "$dirty" = "1" ]; then
-    add_report "gitlore: memory — uncommitted changes present."
-  fi
-  if [ "$head" = "$live" ]; then
-    [ "$dirty" = "1" ] || add_sysmsg "gitlore: memory ready (detached at live)."
-  elif gitlore_live_ahead_of_head "$mempath"; then
-    # Clean only: a dirty store is reported above, and /gitlore:merge is what
-    # moves HEAD onto live once it is clean.
-    if [ "$dirty" = "0" ]; then
-      n=$(git -C "$mempath" rev-list --count HEAD..live)
-      if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
-      add_report "gitlore: $n $unit on live not checked out here — run /gitlore:merge."
-    fi
-  elif git -C "$mempath" merge-base --is-ancestor live HEAD; then
-    # HEAD is ahead of live: nothing for this session to take. Said to the user
-    # only, so every state adds a line and the systemMessage is never empty.
-    [ "$dirty" = "1" ] || add_sysmsg "gitlore: memory ready."
-  else
-    add_report "gitlore: memory diverged from live. Run /gitlore:resolve, then start a fresh session."
-  fi
-
-  # Remote: a read-only fetch of `live`, and only for a real remote. The
-  # placeholder (or no origin at all) is a local-only install with nothing to
-  # ask. A remote that has no `live` yet is silent — there is nothing upstream
-  # to take — and any other fetch failure is named, with git's own reason.
-  remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-  if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
-    return 0
-  fi
-  if ! fetch_err=$(git -C "$mempath" fetch -q origin live 2>&1); then
-    case "$fetch_err" in
-      *"couldn't find remote ref"*) return 0 ;;
-    esac
-    add_report "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')"
-    return 0
-  fi
-  remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) || return 0
-  live=$(git -C "$mempath" rev-parse -q --verify live) || return 0
-  if [ "$remote" = "$live" ]; then
-    return 0
-  elif git -C "$mempath" merge-base --is-ancestor "$live" "$remote"; then
-    n=$(git -C "$mempath" rev-list --count live.."$remote")
-    if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
-    add_report "gitlore: $n upstream memory $unit — run /gitlore:merge."
-  elif git -C "$mempath" merge-base --is-ancestor "$remote" "$live"; then
-    return 0 # local live is ahead of the remote: a push's business
-  else
-    add_report "gitlore: upstream memory has diverged from live — run /gitlore:merge to reconcile it."
-  fi
 }
 
 # Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's

@@ -328,9 +328,10 @@ reports N upstream commits, run `/gitlore:merge`; diverged from `live` reports
 that upstream has diverged, run `/gitlore:merge` to reconcile; equal, or `live`
 ahead (a push's business), is silent. A remote that has no `live` ref is silent:
 there is nothing upstream to take, and the report would otherwise fire in every
-store that was never published. Any other fetch failure is named with git's own
-message, because an unreachable remote looks exactly like one with nothing to
-say.
+store that was never published. Any other fetch failure is named, because an
+unreachable remote looks exactly like one with nothing to say. git's own message
+rides the user's channel only: its stderr can carry `remote:` lines the remote
+chose, and the agent's context gets a fixed sentence saying the user has it.
 
 ## Rejected alternatives
 

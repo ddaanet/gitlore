@@ -114,6 +114,10 @@ load helpers/cc-hook-session-start
   assert_report_on_both_channels '(?i)fetch'
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
+  # git's stderr can carry text the remote chose, so it is shown to the user and
+  # kept out of the agent's context.
+  echo "$output" | jq -e '.systemMessage | test("no-such-remote")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("no-such-remote") | not'
 }
 
 @test "a placeholder remote is not fetched; local live-ahead is still reported (D59)" {
