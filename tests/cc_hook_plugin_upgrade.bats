@@ -282,3 +282,48 @@ run_batch_without_tmpdir() { TMPDIR="$TMP_REPO/gone" run_batch; }
   [[ "$(trim "$sys")" == *"No such file or directory" ]]
   [[ "$(trim "$ctx")" == *"No such file or directory" ]]
 }
+
+# D60: the payload parse and the marker write cost only what they key. A payload
+# that is not JSON loses the session keying (the marker is then the shared
+# `nosession` one); a marker that cannot be written means the notice repeats on
+# the next batch. Neither withholds the notice or kills the hook.
+@test "an unparseable payload still emits the notice" {
+  make_parent_with_memory
+  write_record "$NEW_VER"
+
+  # shellcheck disable=SC2016  # $1 is for the inner bash -c, not this shell
+  run --separate-stderr bash -c 'printf "not json" | bash "$1"' _ "$BATCH"
+  [ "$status" -eq 0 ]
+  assert_one_object
+  [[ "$(sys_msg)" == *"$SYS_TRIGGER"* ]]
+  [[ "$(ctx_msg)" == *"$CTX_TRIGGER"* ]]
+  [[ "$(sys_msg)" != *"died with status"* ]]
+  [[ "$(ctx_msg)" != *"died with status"* ]]
+}
+
+# The marker's directory is the memory git dir; a restored backup or another
+# user's files can leave it unwritable. The stub stands in for that: every
+# `touch` fails, as it would there, and nothing else is affected.
+make_failing_touch() {
+  STUBS="$BATS_TEST_TMPDIR/stubs"
+  mkdir -p "$STUBS"
+  printf '#!/usr/bin/env bash\nprintf "touch: cannot touch: Permission denied\\n" >&2\nexit 1\n' > "$STUBS/touch"
+  chmod 755 "$STUBS/touch"
+}
+run_batch_failing_touch() { PATH="$STUBS:$PATH" run_batch; }
+
+@test "a marker that cannot be written does not withhold the notice, which repeats" {
+  make_parent_with_memory
+  write_record "$NEW_VER"
+  make_failing_touch
+
+  for _ in 1 2; do
+    run --separate-stderr run_batch_failing_touch
+    [ "$status" -eq 0 ]
+    assert_one_object
+    [[ "$(sys_msg)" == *"$SYS_TRIGGER"* ]]
+    [[ "$(ctx_msg)" == *"$CTX_TRIGGER"* ]]
+    [[ "$(sys_msg)" != *"died with status"* ]]
+    [[ "$(ctx_msg)" != *"died with status"* ]]
+  done
+}

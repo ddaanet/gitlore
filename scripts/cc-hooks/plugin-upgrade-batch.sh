@@ -53,7 +53,10 @@ esac
 
 [ -f "$record" ] || exit 0
 
-session=$(jq -r '.session_id // ""' <<<"$payload")
+# Non-fatal: a payload jq cannot parse costs only the session keying, so the
+# marker falls back to the shared `nosession` one and the notice still goes out.
+# jq's own diagnostic still reaches stderr.
+session=$(jq -r '.session_id // ""' <<<"$payload") || session=""
 marker=$(gitlore_upgrade_nudge_file "$mempath" "$session")
 if [ -f "$marker" ]; then exit 0; fi   # once per episode; nudge-reset.sh re-arms it
 
@@ -104,7 +107,10 @@ if [ -z "$new_ver" ]; then
 fi
 old_ver=$(basename -- "$frozen")
 
-touch "$marker"
+# An unwritable marker cannot carry the once-per-episode promise, so the notice
+# still goes out and the next batch repeats it: a repeated notice costs a line,
+# a withheld one costs the only telling there is.
+touch "$marker" || true
 
 # Both channels (D14). systemMessage is user-only and additionalContext is
 # model-only, and here each audience needs something the other cannot act on:
