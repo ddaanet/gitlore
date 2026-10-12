@@ -157,7 +157,9 @@ agent that each reporting hook merges into · a drain inside each reporting hook
 · claim-by-rename before reading · folding another session's stranded reports at
 `SessionStart` · relaying in place of the subagent's own emission · exit 1
 passthrough alone · a fixed message with no capture · per-site `|| exit 0` · a
-wrapper script in `hooks.json` · rewriting every non-zero status to 1.
+wrapper script in `hooks.json` · rewriting every non-zero status to 1 · a mount
+report with a line saying composition did not run, via
+`gitlore_compose_and_report` under `if !`.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in

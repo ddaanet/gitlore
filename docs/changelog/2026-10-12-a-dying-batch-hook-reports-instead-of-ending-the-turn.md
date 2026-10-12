@@ -24,6 +24,8 @@ The claimed file is removed on every exit.
 payload does not parse, and sends the notice when the marker cannot be written,
 repeating it next batch.
 
-Open: a failed recompose after a successful mount in `add-tier-batch.sh` is
-still a guard death report, not a mount report that says composition did not
-run, because `gitlore_compose_and_report` cannot return non-zero under `if !`.
+A report-builder step of `gitlore_compose_and_report` that dies after a
+successful mount takes `add-tier-batch.sh` with it, and the guard reports the
+death with add-tier's consequence instead of a mount report. That is left as it
+is: no state reached from a fixture produces it, and the report already points
+the agent at `.gitmodules`.
