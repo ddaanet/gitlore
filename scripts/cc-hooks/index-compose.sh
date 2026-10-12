@@ -74,6 +74,20 @@ else
   stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
   [ -f "$stamp" ] || exit 0   # no baseline → no watched call this batch, for THIS agent
 
+  # Claimed by rename before it is read, for the reason index-sync-post.sh gives: a
+  # second copy of this hook and index-sync-pre.sh see no stamp while this one reads
+  # it. A claim that finds the stamp already gone was won by another copy: quiet exit.
+  # A stamp still in place that will not move is a death the guard reports.
+  claimed="$stamp.$$"
+  if ! claim_err=$(mv -- "$stamp" "$claimed" 2>&1); then
+    [ -e "$stamp" ] || exit 0
+    printf '%s\n' "$claim_err" >&2
+    exit 1
+  fi
+  GITLORE_HOOK_OWNED="${GITLORE_HOOK_OWNED:+$GITLORE_HOOK_OWNED
+}$claimed"
+  stamp=$claimed
+
   # Did this batch change the root index or the activation manifest? Tracked
   # separately: the triage nudge below fires on a manifest change specifically
   # (the active-tier set may have changed), not on every memory-writing recompose.

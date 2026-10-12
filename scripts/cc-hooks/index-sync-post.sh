@@ -48,9 +48,23 @@ stashfile=$(gitlore_index_preimage_file "$mempath" "$agent_id")   # absolute
 
 [ -f "$stashfile" ] || exit 0   # no baseline → no watched call, nothing to diff
 
+# Claimed by rename before it is read: index-sync-pre.sh and a second copy of this
+# hook see no baseline while this one works on it. A claim that finds the baseline
+# already gone was won by another copy, and that is a quiet exit. A baseline still
+# in place that will not move is a death, and the guard reports mv's diagnostic.
+claimed="$stashfile.$$"
+if ! claim_err=$(mv -- "$stashfile" "$claimed" 2>&1); then
+  [ -e "$stashfile" ] || exit 0
+  printf '%s\n' "$claim_err" >&2
+  exit 1
+fi
+GITLORE_HOOK_OWNED="${GITLORE_HOOK_OWNED:+$GITLORE_HOOK_OWNED
+}$claimed"
+stashfile=$claimed
+
 if cmp -s "$stashfile" "$index"; then
   # The index survived this batch byte-identical, so there is nothing to
-  # propagate. Drop the stash regardless: one stranded by an interrupted batch
+  # propagate. Drop the claimed copy regardless: one stranded by an interrupted batch
   # would otherwise become the baseline for a later, unrelated edit and
   # over-propagate. This bounds a stale pre-image to a single batch of the
   # agent that owns it — the only agent that ever resolves this name. A keyed
