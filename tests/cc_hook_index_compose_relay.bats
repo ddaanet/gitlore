@@ -10,6 +10,7 @@ load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
 load helpers/cc-hook-index-compose
+load helpers/hook-guard
 
 # Per-agent compose/relay-drain behaviour: main-thread and subagent baselines
 # stay independent, the relay marker survives a keyed compose run, concurrent
@@ -352,3 +353,23 @@ EOF
   [ ! -e memory/gone.md ]
 }
 
+# D60: a PostToolBatch hook that dies reports instead of ending the turn. The
+# drain guards every step that can fail on a file; the one unguarded step is
+# the final `jq -n` emit, which runs after the markers are removed and is not
+# forced here because the argument-size limit that kills it differs between
+# Linux and macOS. The death forced is a tool spawned for each session id: `tr`
+# in `s=$(_gitlore_sanitize_id "$session")`, before any marker is read. A `tr`
+# that exits non-zero (a broken install, a full pipe) stands in for it.
+@test "relay-drain: a failing tool is reported on both channels and exits 0" {
+  gitlore_relay_write memory test-session a1 sync "relayed sysmsg" "relayed ctx"
+  gitdir=$(git -C memory rev-parse --absolute-git-dir)
+  [ -n "$(find "$gitdir" -maxdepth 1 -name 'gitlore-relay-test-session-*')" ]
+  stubs="$TMP_REPO/stubs"
+  mkdir -p "$stubs"
+  printf '%s\n' '#!/bin/sh' 'echo "tr: write error: simulated" >&2' 'exit 1' > "$stubs/tr"
+  chmod 755 "$stubs/tr"
+  drain_with_stub() { PATH="$stubs:$PATH" drain_feed; }
+
+  run --separate-stderr drain_with_stub
+  assert_hook_died relay-drain 1 "not delivered"
+}

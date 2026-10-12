@@ -10,6 +10,7 @@ load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
 load helpers/cc-hook-index-compose
+load helpers/hook-guard
 
 @test "the hook is executable and registered on PostToolBatch" {
   [ -x "$HOOK" ]
@@ -189,4 +190,20 @@ gitlore_relay_drain() {
   run feed
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+# D60: a PostToolBatch hook that dies reports instead of ending the turn. A
+# stamp the pre-hook left and a later umask, a restore or another user's run
+# made unreadable: `was=$(gitlore_compose_stamp_get "$key" < "$stamp")`)
+# fails its redirect with status 1, after `[ -f "$stamp" ]` passed.
+@test "an unreadable stamp is reported on both channels and exits 0" {
+  [ "$(id -u)" -ne 0 ] || skip "root reads a mode-000 file"
+  seed_tier_bullet ddaanet shared.md "a portable fact"
+  pre "$PWD/memory/MEMORY.md"
+  stamp=$(gitlore_compose_stamp_file memory)
+  [ -f "$stamp" ]
+  chmod 000 "$stamp"
+
+  run --separate-stderr feed
+  assert_hook_died index-compose 1 "not recomposed"
 }

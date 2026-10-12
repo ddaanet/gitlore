@@ -1,8 +1,11 @@
 #!/usr/bin/env bats
 
+bats_require_minimum_version 1.5.0
+
 load helpers/setup
 load helpers/fixtures
 load helpers/cc-hook-memory-commit-batch
+load helpers/hook-guard
 
 @test "no-op (exit 0, silent) when gitlore is not configured" {
   # The commit fixture minus exactly the memory submodule: an approved summary
@@ -112,6 +115,8 @@ load helpers/cc-hook-memory-commit-batch
   # Nothing committed, and BOTH files survive for the next attempt — no lost
   # approval, no agent action required.
   [ -n "$(git -C memory status --porcelain)" ]
+  # These document the consequence the report states; they hold on the
+  # untouched tree too and do not test the hook.
   [ -f "$(gitlore_commit_trigger_file memory)" ]
   [ -f "$(gitlore_commit_msg_file memory)" ]
 }
@@ -300,4 +305,23 @@ load helpers/cc-hook-memory-commit-batch
   run run_batch
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+# D60: a PostToolBatch hook that dies reports instead of ending the turn. The
+# IPC directory is read-only (files restored from a backup, another user's), so
+# on a clean store `rm -f "$trigger" "$msgfile"`) cannot remove
+# either: status 1, both files as found.
+@test "an IPC directory that cannot be written is reported on both channels, exit 0" {
+  [ "$(id -u)" -ne 0 ] || skip "root writes into a read-only directory"
+  make_parent_with_memory
+  mkdir -p .claude
+  printf 'memory: record notes\n' > "$(gitlore_commit_msg_file memory)"
+  : > "$(gitlore_commit_trigger_file memory)"
+  chmod 555 .claude
+
+  run --separate-stderr run_batch
+  chmod 755 .claude
+  assert_hook_died memory-commit-batch 1 "unknown" "IPC"
+  [ -f "$(gitlore_commit_trigger_file memory)" ]
+  [ -f "$(gitlore_commit_msg_file memory)" ]
 }

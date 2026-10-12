@@ -40,6 +40,8 @@ emit() {
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
+# From here a death reports to the user and the agent instead of ending the turn (D60).
+gitlore_batch_hook_guard "memory-commit-batch" "$mempath" "The outcome of the memory commit is unknown, and the two IPC files (the trigger and the summary) may still be in place: check the memory store's log and status before running the commit command again."
 [ -e "$mempath/.git" ] || exit 0          # session-less worktree: no memory to commit
 
 trigger=$(gitlore_commit_trigger_file "$mempath")

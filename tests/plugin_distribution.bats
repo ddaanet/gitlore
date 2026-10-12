@@ -286,3 +286,28 @@ load helpers/setup
 @test "distribution: the committed .gitlore/bin/claude is the current launcher-shim" {
   cmp "$PLUGIN_ROOT/.gitlore/bin/claude" "$PLUGIN_ROOT/scripts/install/launcher-shim"
 }
+
+# D60: a PostToolBatch hook that dies must report instead of ending the turn,
+# and the report is the shared guard. The list is read from hooks.json, so a
+# seventh hook is covered the day it is registered; the call must open a line
+# (command position), so neither a comment nor a quoted name satisfies it. The
+# bound: this proves the call opens a line of its own, not that the line runs
+# or runs early; each hook's death test is what proves that.
+@test "distribution: every PostToolBatch script calls gitlore_batch_hook_guard" {
+  count=0
+  missing=""
+  while IFS= read -r script || [ -n "$script" ]; do
+    count=$((count + 1))
+    [ -f "$script" ] || { missing="$missing${missing:+, }$script (absent)"; continue; }
+    if ! grep -Eq '^[[:space:]]*gitlore_batch_hook_guard([[:space:]]|$)' "$script"; then
+      missing="$missing${missing:+, }$script"
+    fi
+  done < <(jq -r --arg root "$PLUGIN_ROOT" \
+    '.hooks.PostToolBatch[].hooks[].command | sub("^\\$\\{CLAUDE_PLUGIN_ROOT\\}"; $root)' \
+    "$PLUGIN_ROOT/hooks/hooks.json")
+  [ "$count" -gt 0 ]
+  if [ -n "$missing" ]; then
+    echo "no gitlore_batch_hook_guard call in: $missing" >&2
+    return 1
+  fi
+}

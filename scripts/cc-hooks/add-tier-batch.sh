@@ -48,6 +48,8 @@ emit() {   # $1 = systemMessage, $2 = additionalContext
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
+# From here a death reports to the user and the agent instead of ending the turn (D60).
+gitlore_batch_hook_guard "add-tier-batch" "$mempath" "The outcome of the tier mount is unknown: check .gitmodules and the memory directory before running the add-tier request again."
 [ -e "$mempath/.git" ] || exit 0          # session-less worktree: nothing to mount into
 
 intent=$(gitlore_add_tier_file "$mempath")

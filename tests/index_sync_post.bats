@@ -9,6 +9,7 @@ bats_require_minimum_version 1.5.0   # `run --separate-stderr`
 load helpers/setup
 load helpers/fixtures
 load helpers/index-sync
+load helpers/hook-guard
 
 # shellcheck disable=SC1090
 setup() { setup_tmp_repo; . "$SRC"; }
@@ -331,4 +332,28 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *"MEMORY.md"* ]]     # alongside the terse success line
   run jq -r '.hookSpecificOutput.additionalContext' <<<"$json"
   [[ "$output" == *"stale b"* ]]       # the successful replacement, agent-side
+}
+
+# D60: a PostToolBatch hook that dies reports instead of ending the turn. The
+# state is a stash that was there for `[ -f ]` and is unreadable when read — an
+# interrupted run or another user's umask can leave one. cmp -s inside `if`
+# returns 2 without aborting, so `pre_pairs=$(gitlore_index_pairs "$stashfile")`
+# (awk's status 2 on the open) is what dies: exit 2, the turn-ending status, today.
+@test "post: an unreadable stash is reported on both channels and exits 0" {
+  [ "$(id -u)" -ne 0 ] || skip "root reads a mode-000 file"
+  make_parent_with_memory
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  printf -- '- [a](a.md) — before\n' > memory/MEMORY.md
+  run pre_stdin "$(jq -n --arg f "$PWD/memory/MEMORY.md" '{tool_name:"Edit",tool_input:{file_path:$f}}')"
+  [ "$status" -eq 0 ]
+  stash=$(git -C memory rev-parse --git-path gitlore-index-preimage)
+  [ -f "$stash" ]
+  printf -- '- [a](a.md) — after\n' > memory/MEMORY.md
+  chmod 000 "$stash"
+  # The premise: the hook's cmp is not what decides, and its status is 2.
+  run cmp -s "$stash" memory/MEMORY.md
+  [ "$status" -eq 2 ]
+
+  run --separate-stderr post_stdin "$(batch_payload "$PWD/memory/MEMORY.md")"
+  assert_hook_died index-sync-post 2 "not synced"
 }

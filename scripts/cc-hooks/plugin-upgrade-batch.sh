@@ -31,6 +31,8 @@ payload=$(cat)
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0     # the gitlore.* keys only exist in a gitlore repo
 mempath=$(gitlore_memory_path)
+# From here a death reports to the user and the agent instead of ending the turn (D60).
+gitlore_batch_hook_guard "plugin-upgrade-batch" "$mempath" ""
 [ -e "$mempath/.git" ] || exit 0
 
 # One override covers the record and the cache prefix derived from it, so the

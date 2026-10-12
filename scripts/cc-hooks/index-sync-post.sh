@@ -32,6 +32,8 @@ agent_id=$(jq -r '.agent_id // empty' <<<"$payload") || agent_id=""
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
+# From here a death reports to the user and the agent instead of ending the turn (D60).
+gitlore_batch_hook_guard "index-sync-post" "$mempath" "The index-to-frontmatter sync did not finish, so a description: line whose MEMORY.md hook changed this batch may be not synced: compare the memory files edited this batch against their index lines."
 index="$mempath/MEMORY.md"
 [ -e "$index" ] || exit 0
 

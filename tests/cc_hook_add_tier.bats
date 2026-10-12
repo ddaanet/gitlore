@@ -7,6 +7,7 @@ bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
+load helpers/hook-guard
 
 BATCH="$PLUGIN_ROOT/scripts/cc-hooks/add-tier-batch.sh"
 
@@ -329,4 +330,20 @@ write_intent() {
   # The intent lives in the PARENT's .claude/, which gitlore's own .gitignore
   # covers; assert the shipped ignore rule rather than the temp repo's.
   grep -qx '/.claude/gitlore-add-tier' "$PLUGIN_ROOT/.gitignore"
+}
+
+# D60: a PostToolBatch hook that dies reports instead of ending the turn. The
+# IPC directory is read-only (files copied in from another user, a restored
+# backup), so add-tier.sh runs and fails on its intent and
+# `rm -f "$intent"` then cannot remove the file: status 1, mount outcome
+# unknown to the hook that was to report it.
+@test "add-tier hook: an intent that cannot be removed is reported on both channels, exit 0" {
+  [ "$(id -u)" -ne 0 ] || skip "root writes into a read-only directory"
+  make_parent_with_memory
+  write_intent "mode=borrow" "name=ddaanet"
+  chmod 555 .claude
+
+  run --separate-stderr run_batch
+  chmod 755 .claude
+  assert_hook_died add-tier-batch 1 "unknown" ".gitmodules"
 }

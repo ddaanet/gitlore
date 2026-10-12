@@ -108,3 +108,23 @@ assert_death_report() {
     [[ "$msg" == *"$want_text"* ]]
   done
 }
+
+# What a real hook's death looks like from outside (D60). $1 = the hook's name
+# (its script's basename without `.sh`); $2 = the status it died with; the rest
+# = the stable tokens of the hook's consequence sentence. Exit 0, one object,
+# both channels naming the hook and the status, every token on additionalContext
+# and none on systemMessage, and no capture file left in the memory git dir.
+assert_hook_died() {
+  local name="$1" want="$2" token channel
+  shift 2
+  [ "$status" -eq 0 ]
+  assert_one_object
+  for channel in sys_msg ctx_msg; do
+    [[ "$("$channel")" == *"hook $name died with status $want"* ]]
+  done
+  for token in "$@"; do
+    [[ "$(ctx_msg)" == *"$token"* ]]
+    if [[ "$(sys_msg)" == *"$token"* ]]; then return 1; fi
+  done
+  [ -z "$(find "$(git -C memory rev-parse --absolute-git-dir)" -maxdepth 1 -name 'gitlore-hook-*')" ]
+}

@@ -25,6 +25,8 @@ payload=$(cat)   # the stamp is the trigger; the payload is read below for agent
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
+# From here a death reports to the user and the agent instead of ending the turn (D60).
+gitlore_batch_hook_guard "index-compose" "$mempath" "The memory indexes were not recomposed this batch, so a MEMORY.md edit made in it is not yet mirrored into its tier index."
 index="$mempath/MEMORY.md"
 manifest="$mempath/.gitlore-tiers"
 

@@ -6,8 +6,11 @@
 # is frozen at process start; the install record is not. When they disagree, the
 # hook says so once and names the only remedy.
 
+bats_require_minimum_version 1.5.0
+
 load helpers/setup
 load helpers/fixtures
+load helpers/hook-guard
 
 BATCH="$PLUGIN_ROOT/scripts/cc-hooks/plugin-upgrade-batch.sh"
 RESET="$PLUGIN_ROOT/scripts/cc-hooks/nudge-reset.sh"
@@ -253,4 +256,29 @@ EOF
   run run_batch
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+# D60: a PostToolBatch hook that dies reports instead of ending the turn. TMPDIR
+# names a directory that is gone (a cleaned tmpfs, a stale export):
+# `mktemp "${TMPDIR:-/tmp}/gitlore-upgrade.XXXXXX"`) fails with status 1 after
+# the stale record was found. The hook has no consequence sentence — nothing
+# depends on the notice — so additionalContext adds nothing after the death.
+# bats' own `run` plumbing uses TMPDIR, so only the hook gets the bad one.
+run_batch_without_tmpdir() { TMPDIR="$TMP_REPO/gone" run_batch; }
+
+@test "a missing TMPDIR is reported on both channels, exit 0, with no consequence" {
+  make_parent_with_memory
+  write_record "$NEW_VER"
+
+  run --separate-stderr run_batch_without_tmpdir
+  assert_hook_died plugin-upgrade-batch 1
+  sys=$(sys_msg)
+  ctx=$(ctx_msg)
+  # Whitespace-trimmed, since the join of description and empty sentence may
+  # leave a separator: the point is that no sentence follows the description.
+  trim() { printf '%s' "$1" | sed -e 's/[[:space:]]*$//'; }
+  [ "$(trim "$ctx")" = "$(trim "$sys")" ]
+  # And the description ends at the command's own stderr, on both channels.
+  [[ "$(trim "$sys")" == *"No such file or directory" ]]
+  [[ "$(trim "$ctx")" == *"No such file or directory" ]]
 }

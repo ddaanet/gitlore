@@ -42,6 +42,8 @@ agent_id=$(jq -r '.agent_id // empty' <<<"$payload") || exit 0
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
+# From here a death reports to the user and the agent instead of ending the turn (D60).
+gitlore_batch_hook_guard "relay-drain" "$mempath" "Subagent reports relayed to this session were not delivered this batch: any already read are lost, and unread ones stay staged for the next batch."
 
 gitlore_relay_drain "$mempath" "$session"
 if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
