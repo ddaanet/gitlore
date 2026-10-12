@@ -154,3 +154,76 @@ teardown() { teardown_tmp_repo; }
   run env PATH="$(dirname "$BASH"):$PATH" bats "$TMP_REPO/t/planted.bats"
   assert_fails "1.11.1" ">= 1.13"
 }
+
+# --- shell behaviour gitlore_batch_hook_guard depends on ---------------------
+# scripts/lib/hook-guard.sh is an ERR/EXIT trap pair around a stderr redirect.
+# These pin the three behaviours it leans on in the bash a Mac execs (3.2) and
+# in a modern one, each in a tiny script run by bare `bash` so that
+# GITLORE_TEST_BASH_DIR chooses which. They hold today; a failure here means
+# the guard's design no longer stands on this shell.
+
+@test "an exit inside an EXIT trap replaces the dying status" {
+  cat > "$TMP_REPO/remap.sh" <<'SCRIPT'
+set -e
+trap 'rc=$?; case $rc in 2) exit 1 ;; 5) exit 5 ;; *) exit 0 ;; esac' EXIT
+sh -c "exit $1"
+SCRIPT
+  run bash "$TMP_REPO/remap.sh" 7   # replaced by 0: the trap swallows the death
+  [ "$status" -eq 0 ]
+  run bash "$TMP_REPO/remap.sh" 2   # remapped
+  [ "$status" -eq 1 ]
+  run bash "$TMP_REPO/remap.sh" 5   # passed through
+  [ "$status" -eq 5 ]
+}
+
+@test "stderr sent to a file with exec 3>&2 2>file is restored inside the EXIT trap" {
+  cat > "$TMP_REPO/redirect.sh" <<'SCRIPT'
+set -e
+exec 3>&2 2>"$1"
+trap 'exec 2>&3 3>&-; echo trap-stderr >&2' EXIT
+sh -c 'echo child-err >&2; exit 5'
+SCRIPT
+  run --separate-stderr bash "$TMP_REPO/redirect.sh" "$TMP_REPO/captured"
+  [ "$status" -eq 5 ]
+  [ "$(cat "$TMP_REPO/captured")" = "child-err" ]   # the dying command's stderr, and only it
+  [ "$stderr" = "trap-stderr" ]                     # written after the restore: the real stderr
+}
+
+@test "an ERR trap under set -E hands BASH_COMMAND and LINENO to the EXIT trap" {
+  # BASH_COMMAND is the failing command's text on every bash, at top level and
+  # inside a function. LINENO is the failing command's own line for a simple
+  # command at top level everywhere. Inside a function it is the command's line
+  # on bash >= 4, and a line inside the function on 3.x (a GNU 3.2.57 build
+  # reports the line of the opening `check_it() {`; the guard needs only a line
+  # within the function), so there the expectation is that closed range.
+  cat > "$TMP_REPO/top.sh" <<'SCRIPT'
+set -eE
+trap 'cmd=$BASH_COMMAND; ln=$LINENO' ERR
+trap 'printf "%s|%s\n" "$cmd" "$ln"' EXIT
+cmp -s /nonexistent-a /nonexistent-b
+SCRIPT
+  run bash "$TMP_REPO/top.sh"
+  [ "$status" -eq 2 ]
+  [ "$output" = "cmp -s /nonexistent-a /nonexistent-b|4" ]
+
+  cat > "$TMP_REPO/func.sh" <<'SCRIPT'
+set -eE
+trap 'cmd=$BASH_COMMAND; ln=$LINENO' ERR
+trap 'printf "%s|%s\n" "$cmd" "$ln"' EXIT
+check_it() {
+  local note=1
+  [ -f /nonexistent-a ]
+}
+check_it
+SCRIPT
+  major=$(bash -c 'echo "${BASH_VERSINFO[0]}"')
+  run bash "$TMP_REPO/func.sh"
+  [ "$status" -eq 1 ]
+  [ "${output%|*}" = "[ -f /nonexistent-a ]" ]
+  reported=${output##*|}
+  if [ "$major" -ge 4 ]; then
+    [ "$reported" = 6 ]
+  else
+    [ "$reported" -ge 4 ] && [ "$reported" -le 6 ]
+  fi
+}

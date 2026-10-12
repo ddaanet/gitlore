@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Shared shell utilities. Source; do not exec.
 #
-# Tier and remote/publishing config helpers live in util-config.sh, and the
-# merge-state paths and mid-merge predicates in util-merge-state.sh, both
-# sourced below. Each is function-only (safe to source twice, unlike this file),
-# so definition order among the three files does not matter.
+# Tier and remote/publishing config helpers live in util-config.sh, the
+# merge-state paths and mid-merge predicates in util-merge-state.sh, and the
+# PostToolBatch death guard in hook-guard.sh, all sourced below. Each is
+# function-only (safe to source twice, unlike this file), so definition order
+# among the four files does not matter.
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/util-config.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/util-merge-state.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/hook-guard.sh"
 
 # The canonical submodule name regardless of working-tree path.
 GITLORE_SUBMODULE_NAME="gitlore-memory"

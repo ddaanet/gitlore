@@ -1,0 +1,1 @@
+{"hooks":{"PostToolBatch":[{"hooks":[{"type":"command","command":"/tmp/claude/probe-ptb/hook.sh"}]}]}}
