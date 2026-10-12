@@ -232,7 +232,11 @@ git and decides (D7).
   own output reaches nobody else (D51), and
   `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
   drift (D15); `SessionStart(startup|clear|compact)` re-arms the
-  once-per-episode notices. [session.md](references/session.md),
+  once-per-episode notices. Each `PostToolBatch` hook calls one shared guard
+  that turns its death into a report on both channels with exit 0, since exit 2
+  there ends the turn and exit 1 tells the agent nothing (D60, in
+  [cc-platform.md](references/cc-platform.md)).
+  [session.md](references/session.md),
   [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md); the
   intent-file commit in [commit-gate.md](references/commit-gate.md), the index
   pair in [index-composition.md](references/index-composition.md), the per-agent

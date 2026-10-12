@@ -74,21 +74,38 @@ sees only in-session tool edits, so propagation arriving via a `/gitlore:merge`
 take, merges or `/gitlore:resolve` is invisible to it — precisely what the
 structural pass covers.
 
-**Both hooks are non-blocking but never silent**. Neither may ever `exit 2` —
-the one code that blocks, and only at `PreToolUse`; at `PostToolUse` nothing can
-block because the tool has already run. But `exit 0` is not licence to swallow
+**Both hooks are non-blocking but never silent**. Neither may ever `exit 2`. For
+`index-sync-pre.sh` the reason is its event: `PreToolUse`, where exit 2 blocks
+the write. At `PostToolBatch` exit 2 ends the turn with an empty reply and shows
+the agent its stderr only on the next user turn, and exit 1 or 3 goes on with
+the agent seeing nothing (the measured table is in D60,
+[cc-platform.md](cc-platform.md)). But `exit 0` is not licence to swallow
 errors: a genuine failure (the stash `cp` fails; a frontmatter write fails)
 reports on `systemMessage`, the D14 channel. Here `exit 0` is
 *required for visibility rather than merely tolerated*, because
-**stdout JSON is parsed only on exit 0** — a non-zero exit would discard the
-`systemMessage` and make the error *less* visible. The post-hook checks each
-`gitlore_set_frontmatter_description` explicitly (an `if !` condition, which
-suspends `errexit`) so one bad target cannot abort the loop and strand the rest,
-and consumes the stash **unconditionally**: a surviving pre-image is a hazard,
-since a later silently-failed `cp` would leave the next post-hook diffing a
-fresh index against an ancient baseline and propagating wrong hooks. `|| true`
-and a bare `|| exit 0` on a fallible command are rejected as dishonest error
-paths.
+**stdout JSON is parsed only on exit 0** — a non-zero exit discards the
+`systemMessage` and reaches the user as a bare notice and the agent not at all.
+The post-hook checks each `gitlore_set_frontmatter_description` explicitly (an
+`if !` condition, which suspends `errexit`) so one bad target cannot abort the
+loop and strand the rest. A death the checks do not anticipate — `awk`, `cmp`
+and `grep` exit 2 on a file they cannot open — meets the guard every
+`PostToolBatch` hook calls once its memory path resolves
+(`gitlore_batch_hook_guard`, D60): it captures the hook's stderr and, on a
+non-zero exit, emits one object with the hook name, the status, the failing
+command with its line and the captured error on `systemMessage`, the same plus
+the hook's consequence sentence on `additionalContext`, and exits 0. Only a
+guard that cannot capture or encode replays the stderr and exits with the
+original status, 2 turned into 1.
+
+The post-hook claims its baseline by renaming the stash to `<name>.$$` before
+reading it, so `index-sync-pre.sh` and a second copy of the hook see no baseline
+while one works on it. A claim that finds the stash already gone was won by
+another copy and exits 0 quietly; a stash still in place that will not move is a
+death the guard reports. The claimed copy is consumed on every exit, the guard's
+trap removing it after a death too: a surviving pre-image is a hazard, since a
+later silently-failed `cp` would leave the next post-hook diffing a fresh index
+against an ancient baseline and propagating wrong hooks. `|| true` and a bare
+`|| exit 0` on a fallible command are rejected as dishonest error paths.
 
 **A routine sync reports on both channels, asymmetrically**. Propagation
 overwrites an authored `description:` — the agent writes considered prose and

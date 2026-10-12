@@ -7,6 +7,12 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-12 — A dying batch hook reports instead of ending the turn](changelog/2026-10-12-a-dying-batch-hook-reports-instead-of-ending-the-turn.md)
+  — a `PostToolBatch` hook that dies reports on `systemMessage` and
+  `additionalContext` and exits 0 (D60), where exit 2 ended the turn silently
+  and exit 1 told the agent nothing; the sync and compose hooks claim their
+  baseline by rename; the upgrade notice survives an unparseable payload and an
+  unwritable marker
 - [2026-10-11 — A commit request is not approval](changelog/2026-10-11-a-commit-request-is-not-approval.md)
   — the standing commit orientation says a request to commit memory is not
   approval of an unseen summary (D58 made the call the only gate); the nudge

@@ -147,13 +147,17 @@ empirical work that established it, which is why they stay whole.
 - **D51** — a hook's output inside a subagent reaches that subagent alone, so
   its report is a write-once file keyed by session and agent, drained by a
   dedicated `PostToolBatch` hook
+- **D60** — a `PostToolBatch` hook that dies reports on both channels and exits
+  0; when it cannot report, it exits non-zero but never 2
 
 *Rejected:* hook-side injection of the bodies from a request file the agent
 writes · a `PreToolUse` deny on the first durable write of an episode · leaving
 a subagent's hook report to the subagent's own narration · one shared marker per
 agent that each reporting hook merges into · a drain inside each reporting hook
 · claim-by-rename before reading · folding another session's stranded reports at
-`SessionStart` · relaying in place of the subagent's own emission.
+`SessionStart` · relaying in place of the subagent's own emission · exit 1
+passthrough alone · a fixed message with no capture · per-site `|| exit 0` · a
+wrapper script in `hooks.json` · rewriting every non-zero status to 1.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in

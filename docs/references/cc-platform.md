@@ -1,18 +1,20 @@
-# Claude Code platform workarounds — decisions D15, D18, D23, D51
+# Claude Code platform workarounds — decisions D15, D18, D23, D51, D60
 
-Four decisions whose subject is a Claude Code behaviour rather than gitlore's
+Five decisions whose subject is a Claude Code behaviour rather than gitlore's
 own design: the in-process worktree switch that strands memory, the absence of
-any hook field that can force a `Read`, the `Edit` weld defect, and the
-confinement of a hook's output to the subagent it fired in. Each carries the
-empirical work that established the platform behaviour, which is what makes them
-long and what makes them worth keeping whole.
+any hook field that can force a `Read`, the `Edit` weld defect, the confinement
+of a hook's output to the subagent it fired in, and what a `PostToolBatch`
+hook's exit status does to the turn. Each carries the empirical work that
+established the platform behaviour, which is what makes them long and what makes
+them worth keeping whole.
 
 - Harness workarounds — **D15** an in-process-worktree memory-drift guard ·
   **D18** active recall is a skill the agent runs itself, with no hook and no
   state · **D23** the `Edit` weld defect is contained by a pair that computes
   the intended result, repairs, and reports its own obsolescence · **D51** a
   hook's output inside a subagent reaches that subagent alone, so its report is
-  relayed through a file keyed by session and agent
+  relayed through a file keyed by session and agent · **D60** a `PostToolBatch`
+  hook that dies reports on both channels and exits 0, and never exits 2
 
 ---
 
@@ -206,6 +208,72 @@ its own copy — is in [index-authoring-sync.md](index-authoring-sync.md). The
 relay helpers cite this decision for the measurement, which itself lives outside
 anything the plugin ships.
 
+**D60 — A `PostToolBatch` hook that dies reports on both channels and exits 0;
+when it cannot report, it exits non-zero but never 2**
+
+Measured on CC 2.1.296 with a scratch `PostToolBatch` hook under `claude -p`
+(`plans/batch-hook-deaths/probe/run.sh <code>` is how the table was measured):
+
+| Hook exit               | Turn              | Agent sees                 | Transcript                  |
+| ----------------------- | ----------------- | -------------------------- | --------------------------- |
+| 0 + `additionalContext` | goes on           | the context                | `hook_additional_context`   |
+| 1 or 3                  | goes on           | nothing                    | `hook_non_blocking_error`, stderr |
+| 2                       | ends, empty reply | the stderr, next user turn | `hook_stopped_continuation` |
+
+Exit 2 therefore blocks at `PostToolBatch` too, and it ends the turn. `awk`,
+`cmp` and `grep` exit 2 on a file they cannot open, so under `set -e` a batch
+hook dies with 2 on a vanished file: the silent turn. Every other death is an
+exit 1-ish: the user gets a notice, the agent nothing, and inside a subagent
+(D51) nobody does. Not measured: how many stderr lines the interactive TUI
+renders.
+
+`gitlore_batch_hook_guard` (`scripts/lib/hook-guard.sh`) is called once by each
+of the six `PostToolBatch` hooks, after the memory path resolves and before the
+first fallible step, with the hook name, the memory worktree and a consequence
+sentence for the agent. It redirects the hook's stderr to a capture file in the
+memory store's git dir and records the failing command and its line in an `ERR`
+trap under `set -E`. The `EXIT` trap, on a non-zero status, emits one JSON
+object and exits 0: `systemMessage` carries the hook name, the status, the
+failing command with its line and the captured stderr; `additionalContext`
+carries the same plus the consequence sentence, which says what did not happen
+(an empty sentence for the upgrade notice, on which nothing depends). The
+failing command's text is exact; its line is the command's on bash 4 and later,
+and on bash 3.2 the first line of the enclosing function or compound command
+(measured on 3.2.57, a GNU build on Linux). A clean exit leaves stdout alone,
+replays the captured stderr and leaves no file. `GITLORE_HOOK_OWNED` is a
+newline-joined list of files the trap removes on every exit, a death included; a
+hook appends a baseline it has claimed by rename to it.
+
+When the git dir cannot be resolved or the capture file cannot be created, the
+guard takes no capture, and when `jq` cannot encode the report it replays the
+capture; in both cases a death is a plain non-zero exit with 2 turned into 1.
+Deaths before the call (sourcing, the `cd`) stay plain non-zero exits and none
+is an exit-2 path. A hook killed by a signal runs no trap and strands its
+capture file and any claimed baseline, one file per kill and never reused, since
+every reader tests the unclaimed name. A `jq` dying mid-emit is the stated
+residual: all six hooks write their stdout as their last act, so one object is
+emitted either way.
+
+The consequence differs by hook. A dying `relay-drain.sh` loses the reports it
+read this batch, because it can die at its final emit after the drain removed
+the markers it read; unread ones stay staged. `add-tier-batch.sh` leaves the
+mount outcome unknown, and `memory-commit-batch.sh` the commit outcome with both
+IPC files as found. The baseline hooks (`index-sync-post.sh`,
+`index-compose.sh`) claim by rename, so a copy that loses the race exits 0
+quietly rather than dying on a missing file; the mechanism is in
+[index-authoring-sync.md](index-authoring-sync.md). `plugin-upgrade-batch.sh`
+falls back to an empty session when the payload does not parse and sends the
+notice when its marker cannot be written, where a repeated notice costs a line
+and a withheld one the only telling there is.
+
+Outside the decision: `PreToolUse` hooks (`index-sync-pre.sh`,
+`edit-weld-pre.sh`), where exit 2 blocks the tool call and the guard's exit-0
+report would be the wrong default, are unaudited. Open: after a successful
+mount, `add-tier-batch.sh` cannot return non-zero from
+`gitlore_compose_and_report` under `if !`, so a failed recompose there is a
+guard death report with add-tier's consequence rather than a mount report that
+says composition did not run.
+
 ## Rejected alternatives
 
 **Hook-side injection of the bodies**, from a request file the agent writes:
@@ -263,3 +331,19 @@ what its hook found. A relay write that fails is also reported on that emission,
 where the subagent is asked to carry the report into its reply, so without it
 the failure reaches nobody. The relay is staged in addition to the emission
 (D51).
+
+**Exit 1 passthrough alone.** The user gets a notice and the agent nothing, and
+inside a subagent no one does (D60).
+
+**A fixed message with no capture.** It discards the failing tool's own error,
+which is the one thing that locates the death (D60).
+
+**Per-site `|| exit 0`.** Already rejected as a dishonest error path: it ends
+the hook with the failure unreported (D60).
+
+**A wrapper script in `hooks.json`.** Six extra process spawns per batch in
+every repo, for a mechanism a sourced function does in the hook's own process
+(D60).
+
+**Rewriting every non-zero status to 1.** It loses the status for nothing; only
+2 is remapped, because only 2 ends the turn (D60).
