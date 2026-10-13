@@ -48,6 +48,8 @@ Each trial:
 
 The eval repo's hooks are copied wholesale from the plugin's own `hooks/hooks.json`, with `${CLAUDE_PLUGIN_ROOT}` resolved. Derived, never hand-listed: a hand-written subset is a registration the evals never exercise, and an eval's whole point is to walk the wiring production ships. Skills and commands are copied in too, so the prompt contracts the agent reads are the real ones.
 
+The runner launches `claude` through `eval_claude` in `lib/real-claude.sh`, and so does `lib/judge.sh`. It drops every `plugin-dev/bin` entry from `PATH`, from any repository, and unsets `CLAUDE_CODE_PLUGIN_DIRS`, so a developer's dogfood shim never wraps the session. Without that, the shim would load the plugin a second time beside the hooks copied into the eval repo; with it, those copied hooks are the only gitlore wiring the session loads. The caller's own shell keeps its `PATH`, and the spellings of a shim directory the script does not recognise are bounded in its header.
+
 Fixtures reach no network — every remote in here is a local bare repo, and `GIT_CONFIG_*` loosens `protocol.file.allow` for the process tree so `git submodule add` can clone one.
 
 ### Flows covered
