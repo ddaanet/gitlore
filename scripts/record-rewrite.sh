@@ -91,10 +91,13 @@ if git -C "$store" rev-parse -q --verify refs/gitlore/rewrites >/dev/null; then
   if ! version=$(git -C "$store" show "$tip:version" 2>&1); then
     refuse "the record on origin has no readable version file: $(printf '%s' "$version" | tr '\n' ' ')"
   fi
-  [ "$version" = "1" ] || refuse "the record on origin is version '$version', and this script writes version 1 only."
+  [ "$version" = "1" ] || refuse "the record on $remote is not version 1, the only version this script writes."
   if ! git -C "$store" show "$tip:map" > "$tmpd/record" 2>"$tmpd/err"; then
     refuse "the record on origin has no readable map: $(tr '\n' ' ' < "$tmpd/err")"
   fi
+  # Remote content: a bad line is refused, never echoed.
+  ! grep -Evq '^[0-9a-f]{40} [0-9a-f]{40}$' "$tmpd/record" \
+    || refuse "the record on $remote has a map line that is not two 40-hex ids, so it cannot be appended to."
   [ -z "$(tail -c 1 "$tmpd/record")" ] \
     || refuse "the record's map does not end in a newline, so appending would join lines."
 fi

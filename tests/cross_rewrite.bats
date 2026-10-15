@@ -229,6 +229,19 @@ $RW_O2 $CX_Z"
   [ "$(rewrite_store_snapshot "$TIER")" = "$before" ]
 }
 
+@test "cross tier: a record line that is not two 40-hex ids refuses without echoing it" {
+  cx_tier_setup single
+  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
+deadbeef \$(touch PWNED)" append
+  cx_position "$TIER" "$RW_O2" "$RW_O2"
+  before=$(rewrite_store_snapshot "$TIER")
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$output$stderr" == *"gitlore/rewrites"* ]]
+  [[ "$output$stderr" != *"PWNED"* ]]
+  [ "$(rewrite_store_snapshot "$TIER")" = "$before" ]
+}
+
 @test "cross tier: a new tree that differs outside gitlinks refuses naming the ref and both ids" {
   tier_two_refs tree
   before=$(rewrite_store_snapshot "$TIER")

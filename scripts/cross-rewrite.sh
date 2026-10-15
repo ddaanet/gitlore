@@ -123,9 +123,14 @@ read_record() {
   if ! version=$(git -C "$repo" show refs/gitlore/rewrites:version 2>&1); then
     refuse "the rewrite record of $repo has no readable version file: $version"
   fi
-  [ "$version" = 1 ] || refuse "the rewrite record of $repo is version '$version', and this script reads version 1 only."
+  # The record is remote content and its ids reach printed commands, so
+  # neither the version nor a bad line is echoed back.
+  [ "$version" = 1 ] || refuse "the rewrite record gitlore/rewrites of $repo is not version 1, the only version this script reads."
   if ! map_err=$(git -C "$repo" show refs/gitlore/rewrites:map 2>&1 >"$out"); then
     refuse "the rewrite record of $repo has no readable map: $map_err"
+  fi
+  if grep -Evq '^[0-9a-f]{40} [0-9a-f]{40}$' "$out"; then
+    refuse "the rewrite record gitlore/rewrites of $repo has a map line that is not two 40-hex ids, so it cannot be trusted."
   fi
 }
 
