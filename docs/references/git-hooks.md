@@ -32,11 +32,11 @@ begins by clearing git's full local-env-var set
 (`git rev-parse --local-env-vars`). Git exports those variables scoped to the
 *parent*, and a `git -C <submodule>` that inherits them breaks submodule
 resolution or, in a linked worktree, silently redirects the submodule's refs and
-objects into the parent's store. It exits 0 when the repo has no
-`gitlore-memory` entry, and when the submodule worktree is absent (a
-session-less linked worktree) — never block a parent git operation over memory.
-Its refusals branch on `$CLAUDECODE`: agent-facing text naming the next action,
-user-facing text directing them to open the project in Claude Code.
+objects into the parent's store. It exits 0 when the repo has no memory
+submodule entry, and when the submodule worktree is absent (a session-less
+linked worktree) — never block a parent git operation over memory. Its refusals
+branch on `$CLAUDECODE`: agent-facing text naming the next action, user-facing
+text directing them to open the project in Claude Code.
 
 **`pre-push`** publishes in a before-and-alongside order: each tier's `live` to
 its own remote, then memory's. Failure is fatal — a tier that silently stops

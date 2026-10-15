@@ -53,9 +53,8 @@ the mechanism it argues. Plans and specs live in `plans/`.
     both sides already passed this gate *(D49)*. So is a take's repair of an
     arriving index, which restructures lines upstream already approved and adds
     no text *(D52)*.
-12. **Coexistence.** Repos without a `gitlore-memory` submodule are unaffected
-    when the plugin is present; every hook no-ops silently when it is not
-    registered.
+12. **Coexistence.** Repos without a memory submodule are unaffected when the
+    plugin is present; every hook no-ops silently when it is not registered.
 13. **Recovery.** If memory enters a broken state (missing `live`, partial
     merge, locked checkout), tooling surfaces a clear error with recovery
     instructions rather than blocking parent git operations silently.

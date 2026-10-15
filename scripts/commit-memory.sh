@@ -8,7 +8,7 @@ set -euo pipefail
 #   commit-memory.sh -F -               # read summary from stdin (heredoc)
 #   commit-memory.sh                    # bare: commit on the approval already
 #                                       # on disk, judged by freshness
-# Activation is the gitlore-memory submodule registration (FR12). Discover this
+# Activation is the memory submodule registration (FR12). Discover this
 # script via `git config gitlore.commitCommand`.
 
 # Defensive: a caller's env may carry leaked repo-local GIT_* vars (see
@@ -45,7 +45,7 @@ done
 
 mempath=$(gitlore_memory_path) || mempath=""
 
-# Activation: no gitlore-memory submodule → nothing to do.
+# Activation: no memory submodule → nothing to do.
 [ -z "$mempath" ] && exit 0
 # Session-less worktree: memory worktree not materialized → nothing to do.
 [ ! -e "$mempath/.git" ] && exit 0

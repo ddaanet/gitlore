@@ -26,7 +26,7 @@ from the script the node names.
   then records the gitlink the script staged; pushed alongside every parent
   push. Lockstep is `live` vs `origin/live` — the memory tree's `main` may
   legitimately sit ahead.
-- Handoff files (`.claude/handoff-task.md`, `.claude/handoff.md`) are
+- Handoff files (`TASK.md`, `TODO.md`) are
   tooling-managed. Write them only through the handoff skill, and fold them into
   the same commit as the work they describe.
 - A memory approval summary takes no conventional-commit prefix. Its format is

@@ -49,7 +49,7 @@ if ! enabled=$(jq -r '.gitlore.enabled // false' .claude/settings.json 2>&1); th
 fi
 [ "$enabled" = "true" ] || exit 0
 
-# Guard 2: gitlore-memory submodule registered
+# Guard 2: memory submodule registered
 gitlore_has_submodule || exit 0
 
 mempath=$(gitlore_memory_path)

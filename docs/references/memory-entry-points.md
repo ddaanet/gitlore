@@ -31,11 +31,11 @@ commit-msg file, then calls the shared `gitlore_sync_memory_to_live`. Invoked
 **bare**, it writes nothing and commits on the approval already on disk, judged
 by that shared body's freshness gate — the form `memory-commit-batch.sh` uses
 (D56, in [commit-gate.md](commit-gate.md)). Guards (exit 0): not a gitlore repo
-/ no `gitlore-memory` submodule / submodule worktree absent / memory
-clean-and-synced. Dirty with the approval absent or blank → exit 1 with a
-caller-facing message; dirty with a stale one → the sync's own refusal; dirty
-with the store or any mounted tier mid-merge → the stale-merge guard's
-directive, which runs ahead of both (see [commit-gate.md](commit-gate.md)).
+/ no memory submodule / submodule worktree absent / memory clean-and-synced.
+Dirty with the approval absent or blank → exit 1 with a caller-facing message;
+dirty with a stale one → the sync's own refusal; dirty with the store or any
+mounted tier mid-merge → the stale-merge guard's directive, which runs ahead of
+both (see [commit-gate.md](commit-gate.md)).
 
 **The pointer is staged by the commit.** After a run that moved memory's HEAD,
 the script stages the memory gitlink in the parent index, so the next parent
@@ -79,11 +79,10 @@ no parent commit is in flight. See D20.
 
 Takes no arguments — there is nothing to approve, because FR11 gated this
 content when it was committed and publishing an already-approved commit adds no
-disclosure decision. Guards (exit 0): not a gitlore repo / no `gitlore-memory`
-submodule / memory worktree absent / memory has no remote of its own once its
-tiers are out. Exit 1 carries a message on stderr naming the next action,
-including a prepared merge routed to `/gitlore:resolve` when a remote has
-diverged.
+disclosure decision. Guards (exit 0): not a gitlore repo / no memory submodule /
+memory worktree absent / memory has no remote of its own once its tiers are out.
+Exit 1 carries a message on stderr naming the next action, including a prepared
+merge routed to `/gitlore:resolve` when a remote has diverged.
 
 On success it reports what moved, per store — commits published and where
 `origin/live` now sits — from remote-tracking refs captured before the push.
@@ -204,10 +203,10 @@ every `SessionStart` — the self-healing re-pin that absorbs plugin-cache path
 changes exactly as `gitlore.hooksDir` does (D5) — so existing repos pick the key
 up on their next session, with no reinstall. The key is a
 *path pin, not an activation signal*: a caller decides whether gitlore manages
-memory here from the `gitlore-memory` submodule registration in `.gitmodules`
-(FR12 — the same gate `pre-push` uses, never stale), not from the presence of
-the key. It only answers *where* the script is, and a caller should still verify
-the resolved path is executable and degrade with a "restart your session" hint
+memory here from the memory submodule registration in `.gitmodules` (FR12 — the
+same gate `pre-push` uses, never stale), not from the presence of the key. It
+only answers *where* the script is, and a caller should still verify the
+resolved path is executable and degrade with a "restart your session" hint
 rather than exec a missing path (the D5 staleness window). Caller wiring is out
 of scope for the gitlore side: `handoff` consumes the key in its own work;
 `/commit-commands:commit` stays untouched until there is a second real caller.

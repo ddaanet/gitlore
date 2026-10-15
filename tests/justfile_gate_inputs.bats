@@ -98,9 +98,10 @@ load helpers/justfile-gates
   declared=" $output "
   # Excluded on purpose: no check reads them, and including them would re-run
   # the whole suite on a memory-only or prose-only commit. `docs`, `plans` and
-  # the rumdl pin/config are read by `format-docs`, which has no sentinel; the
+  # the rumdl pin/config are read by `format-docs`, which has no sentinel;
+  # `TASK.md` and `TODO.md` are the handoff task frame, like `.claude`; the
   # shell scripts under `plans` reach the `lint` gate by pathspec instead.
-  excluded=" memory docs plans inbox README.md CLAUDE.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml "
+  excluded=" memory docs plans inbox README.md CLAUDE.md TASK.md TODO.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml "
   while IFS= read -r entry; do
     [[ "$declared" == *" $entry "* ]] || [[ "$excluded" == *" $entry "* ]] || {
       echo "top-level entry '$entry' is neither a declared gate input nor a deliberate exclusion" >&2

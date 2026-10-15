@@ -47,9 +47,9 @@ therefore silent, which is the point: installs are pinned per scope, not
 globally, and repos routinely sit at different versions. The family is
 identified by the frozen root's parent directory rather than a `gitlore@ddaanet`
 literal, so a fork or a renamed marketplace works unchanged. Three guards
-precede it: no `CLAUDE_PLUGIN_ROOT`, no `gitlore-memory` submodule, and a frozen
-root outside the plugin cache — the last because a `--plugin-dir` checkout is
-never stale, and its parent is an ordinary source directory whose neighbours the
+precede it: no `CLAUDE_PLUGIN_ROOT`, no memory submodule, and a frozen root
+outside the plugin cache — the last because a `--plugin-dir` checkout is never
+stale, and its parent is an ordinary source directory whose neighbours the
 record may name for some *other* locally-installed plugin. There is no `grep -F`
 short-circuit ahead of the record query: the frozen root can appear in the
 record under a different `projectPath`, where a bare match would read as

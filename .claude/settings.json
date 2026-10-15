@@ -31,13 +31,7 @@
       }
     ]
   },
-  "enabledPlugins": {
-    "gitlore@ddaanet": true,
-    "onekeys@ddaanet": true,
-    "commit-commands@claude-plugins-official": true,
-    "plugin-dev@claude-plugins-official": true,
-    "handoff@ddaanet": true
-  },
+  "enabledPlugins": {},
   "extraKnownMarketplaces": {
     "ddaanet": {
       "source": {

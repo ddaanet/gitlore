@@ -15,7 +15,7 @@ worktree_path=$(printf '%s' "$input" | jq -r '.worktree_path // empty')
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
 
-# Guard: no-op unless this repo registers the gitlore-memory submodule.
+# Guard: no-op unless this repo registers the memory submodule.
 gitlore_has_submodule || exit 0
 mempath=$(gitlore_memory_path)
 

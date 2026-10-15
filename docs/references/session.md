@@ -62,7 +62,7 @@ every session, which is what makes a clone, a new machine and a plugin upgrade
 heal themselves.
 
 **`SessionStart`.** Guards: if `gitlore.enabled` is not `true`, or `.gitmodules`
-has no `gitlore-memory` entry, no-op.
+has no memory submodule entry, no-op.
 
 1. **Launcher guard.** If `GITLORE_LAUNCHED` is unset, the session was started
    with a plain `claude` — memory is *not* redirected and will strand in the
@@ -157,7 +157,7 @@ linked worktree: a literal `.git/gitlore-*` aborts `emit-wrappers` under
 
 **`WorktreeRemove`** (advisory — cannot block). Input provides `worktree_path`
 only (verified CC 2.1.150 — no branch field). A non-zero exit logs a warning but
-cannot stop the removal. Guard: no-op if `.gitmodules` has no `gitlore-memory`
+cannot stop the removal. Guard: no-op if `.gitmodules` has no memory submodule
 entry.
 
 1. Derive the memory submodule worktree path as

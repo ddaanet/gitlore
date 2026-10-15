@@ -6,9 +6,9 @@ memory submodule with the `GITLORE_MEMORY_COMMIT` sentinel and advances local
 of `pre-commit` into `gitlore_sync_memory_to_live` (`lib/resolve.sh`); both
 callers share it. Discovery via a `gitlore.commitCommand` git config key,
 re-pinned every `SessionStart` and seeded at install (`write-settings.sh`);
-activation gate stays the `gitlore-memory` submodule registration (FR12), not
-the key. Freshness gate kept inside the shared body (pre-commit still needs it;
-the script satisfies it by writing the summary first). Also dropped the
-long-dead `mempath` positional from `write-settings.sh`. Tests:
-`commit_memory.bats` (7) + a `cc_hook_session_start` key assertion + new
-`write_settings.bats` (2). 204 green.
+activation gate stays the memory submodule registration (FR12), not the key.
+Freshness gate kept inside the shared body (pre-commit still needs it; the
+script satisfies it by writing the summary first). Also dropped the long-dead
+`mempath` positional from `write-settings.sh`. Tests: `commit_memory.bats` (7) +
+a `cc_hook_session_start` key assertion + new `write_settings.bats` (2). 204
+green.

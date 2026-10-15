@@ -11,7 +11,7 @@ set -euo pipefail
 # it was committed, and publishing an already-approved commit adds no disclosure
 # decision. Discover this script via `git config gitlore.pushCommand`.
 #
-# Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no gitlore-memory
+# Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no memory
 # submodule, or a session-less worktree where memory was never checked out.
 # Exit 1 carries a message on stderr naming the next action — including a
 # prepared merge routed to /gitlore:resolve when a remote has diverged.
@@ -37,9 +37,9 @@ fi
 
 mempath=$(gitlore_memory_path) || mempath=""
 
-# Activation: no gitlore-memory submodule → nothing to publish.
+# Activation: no memory submodule → nothing to publish.
 if [ -z "$mempath" ]; then
-  printf 'gitlore: this repository has no gitlore-memory submodule; nothing to publish.\n'
+  printf 'gitlore: this repository has no memory submodule; nothing to publish.\n'
   exit 0
 fi
 # Session-less worktree: memory worktree not materialized → nothing to publish.

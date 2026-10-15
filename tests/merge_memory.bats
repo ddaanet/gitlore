@@ -27,7 +27,7 @@ strand_live_behind_head() {
 @test "exits 0 with a note when the repo has no gitlore-memory submodule" {
   run bash "$CMD"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"no gitlore-memory submodule"* ]]
+  [[ "$output" == *"no memory submodule"* ]]
 }
 
 @test "exits 0 in a session-less worktree where the memory worktree is absent" {

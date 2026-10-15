@@ -10,7 +10,7 @@ source "$(dirname "$0")/../lib/util.sh"
 mempath="$1"
 parent_root=$(git rev-parse --show-toplevel)
 
-# Append the gitlore-memory entry to .gitmodules unless it is already present.
+# Append the memory submodule entry to .gitmodules unless it is already present.
 # Plan 02 rewrites the placeholder URL to a real remote. Idempotent.
 register_in_gitmodules() {
   if [ -f .gitmodules ] && grep -q '\[submodule "gitlore-memory"\]' .gitmodules; then

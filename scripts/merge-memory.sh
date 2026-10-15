@@ -14,7 +14,7 @@ set -euo pipefail
 # commit discloses nothing. Discover this script via `git config
 # gitlore.mergeCommand`.
 #
-# Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no gitlore-memory
+# Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no memory
 # submodule, or a session-less worktree where memory was never checked out.
 # Exit 1 carries a message on stderr naming the next action — including a
 # prepared merge routed to /gitlore:resolve when a store has diverged.
@@ -41,7 +41,7 @@ fi
 mempath=$(gitlore_memory_path) || mempath=""
 
 if [ -z "$mempath" ]; then
-  printf 'gitlore: this repository has no gitlore-memory submodule; there is nothing to reconcile.\n'
+  printf 'gitlore: this repository has no memory submodule; there is nothing to reconcile.\n'
   exit 0
 fi
 if [ ! -e "$mempath/.git" ]; then

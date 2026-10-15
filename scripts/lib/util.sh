@@ -102,7 +102,7 @@ gitlore_memory_path() {
   printf '%s\n' "$path"
 }
 
-# Exit 0 if .gitmodules registers the gitlore-memory submodule, 1 otherwise.
+# Exit 0 if .gitmodules registers the memory submodule, 1 otherwise.
 gitlore_has_submodule() {
   # No stderr redirect: gitlore_memory_path is already silent on the expected
   # miss (its own comment above), so anything it sends to stderr here is the
@@ -201,7 +201,7 @@ gitlore_mark_migrated() {
 # Memory migrated in-tree
 
 This project's auto-memory was migrated in-tree by `/gitlore:install`. It now
-lives in the `gitlore-memory` submodule, versioned in git alongside the code.
+lives in the memory submodule, versioned in git alongside the code.
 
 Do not add memory here. Launch Claude Code through the gitlore `claude` shim so
 memory is redirected into the submodule. New files appearing in this directory

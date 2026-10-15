@@ -51,7 +51,7 @@ if [ -n "$mempath" ] && [ ! -e "$mempath/.git" ]; then
   exit 0
 fi
 
-# No gitlore-memory submodule registered (FR12 coexistence): never block a push.
+# No memory submodule registered (FR12 coexistence): never block a push.
 [ -n "$mempath" ] || exit 0
 
 # Everything from here on is shared with push-memory.sh, the standalone entry
