@@ -165,6 +165,11 @@ layout is no concern of memory's are in
 [merge-and-resolve.md](references/merge-and-resolve.md); the gitlink invariant
 is in [git-hooks.md](references/git-hooks.md).
 
+A store whose remote history was rewritten publishes a rewrite record beside
+`live`, and a clone still on the old history is refused at the divergence gate
+rather than merged back (D61, D62); the record, the detection and the manual
+crossing are in [history-rewrites.md](references/history-rewrites.md).
+
 ### Configuration
 
 Configuration splits three ways by what has to travel. Tracked state — the

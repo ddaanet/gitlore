@@ -159,6 +159,22 @@ load helpers/setup
   grep -qF 'git config gitlore.mergeCommand' "$skill"
 }
 
+# record-rewrite.sh is run by hand by a store's owner after a history rewrite
+# (D61), so nothing but its mode makes it reachable from an installed plugin.
+@test "distribution: record-rewrite.sh exists and is executable" {
+  [ -f "$PLUGIN_ROOT/scripts/record-rewrite.sh" ]
+  [ -x "$PLUGIN_ROOT/scripts/record-rewrite.sh" ]
+  [ "$(head -1 "$PLUGIN_ROOT/scripts/record-rewrite.sh")" = "#!/usr/bin/env bash" ]
+}
+
+# cross-rewrite.sh is run by hand to cross a store onto rewritten history (D62),
+# the script the refusal names, so nothing but its mode makes it reachable.
+@test "distribution: cross-rewrite.sh exists and is executable" {
+  [ -f "$PLUGIN_ROOT/scripts/cross-rewrite.sh" ]
+  [ -x "$PLUGIN_ROOT/scripts/cross-rewrite.sh" ]
+  [ "$(head -1 "$PLUGIN_ROOT/scripts/cross-rewrite.sh")" = "#!/usr/bin/env bash" ]
+}
+
 # recall's dominant entry is mid-task and mechanical: a tool result surfaces a
 # string the agent half-recognises. Only a skill description is matched against
 # context, and only if it names that moment -- a description written around the

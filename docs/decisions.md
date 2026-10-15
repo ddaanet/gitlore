@@ -32,6 +32,21 @@ there and every argument there a conclusion here.
 for the resolve merge · a temporary worktree for resolve · `claude --print` for
 conflict resolution · single-agent resolve with a post-hoc context refresh.
 
+**History rewrites** — what a rewritten store publishes, and what a clone on the
+old history does. [history-rewrites.md](references/history-rewrites.md)
+
+- **D61** — a rewritten store publishes a rewrite record: an append-only
+  `gitlore/rewrites` branch whose tree is a format version and one flat map of
+  every commit id the rewrites changed; the old history stays on an archive
+  branch gitlore never fetches
+- **D62** — a divergence whose local side holds a recorded old commit is
+  refused, naming the crossing script; nothing repairs it automatically
+
+*Rejected:* no guard · an automatic crossing at the yield · matching commits
+without a map · a path-keyed map · an external cache · a record force-pushed as
+a single commit · the old tip as a parent of the record · guarding the parent
+repository.
+
 **The commit gate** — FR11's approval machinery.
 [commit-gate.md](references/commit-gate.md)
 

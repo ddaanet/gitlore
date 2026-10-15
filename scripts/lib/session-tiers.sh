@@ -22,7 +22,7 @@
 # Args: $1 = mempath.
 gitlore_sync_nested_tiers() {
   local mempath="$1"
-  local tier tierpath fetch_err tier_head tier_remote
+  local tier tierpath fetch_err tier_head tier_remote rc out crossing
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -95,7 +95,16 @@ gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset
     elif git -C "$tierpath" merge-base --is-ancestor "$tier_head" "$tier_remote"; then
       add_sysmsg "gitlore: tier '$tier' has upstream facts waiting — its remote 'live' is ahead of the pinned commit. Run /gitlore:merge to take them, or /gitlore:push to take them and publish."
     else
-      add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:merge to reconcile them, or /gitlore:push to reconcile and publish."
+      rc=0
+      out=$(gitlore_rewrite_hit "$tierpath" "$tier_remote" HEAD) || rc=$?
+      case "$rc" in
+        0) add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:merge to reconcile them, or /gitlore:push to reconcile and publish." ;;
+        1)
+          crossing=$(gitlore_cross_rewrite_script "$tierpath")
+          add_sysmsg "gitlore: tier '$tier' holds commits its remote rewrote (record gitlore/rewrites: $out is superseded). Nothing was merged. Run $crossing to cross this tier." ;;
+        *)
+          add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live', and its rewrite record gitlore/rewrites could not be fetched, so it cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" ;;
+      esac
     fi
   done < <(gitlore_tier_paths "$mempath")
 }

@@ -7,6 +7,11 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-15 — A clone on rewritten history is refused, not merged back](changelog/2026-10-15-a-clone-on-rewritten-history-is-refused.md)
+  — a rewritten store publishes an append-only `gitlore/rewrites` record (D61);
+  a divergence whose local side holds a recorded old commit is refused at the
+  yield and named at SessionStart (D62); `record-rewrite.sh` writes the record
+  and `cross-rewrite.sh` crosses one store by hand
 - [2026-10-12 — A dying batch hook reports instead of ending the turn](changelog/2026-10-12-a-dying-batch-hook-reports-instead-of-ending-the-turn.md)
   — a `PostToolBatch` hook that dies reports on `systemMessage` and
   `additionalContext` and exits 0 (D60), where exit 2 ended the turn silently

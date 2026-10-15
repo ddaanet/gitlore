@@ -14,6 +14,7 @@
 #                            a checkout-cleared staged merge)
 #   resolve-merge-state.sh  merge-state file IO, merge preparation, and the
 #                            sub-agent directive
+#   rewrite-guard.sh        refuse a divergence on rewritten history (D62)
 #   resolve-sync-tiers.sh   commit dirty tiers and fast-forward their `live`
 #   resolve-sync-memory.sh  commit dirty memory itself (the FR11 commit path)
 #   resolve-push.sh         publish every store to its own remote
@@ -31,6 +32,8 @@ source "${BASH_SOURCE[0]%/*}/index-merge.sh"
 source "${BASH_SOURCE[0]%/*}/resolve-recovery.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-merge-state.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/rewrite-guard.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-sync-tiers.sh"
 # shellcheck disable=SC1091

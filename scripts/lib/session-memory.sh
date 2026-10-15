@@ -19,7 +19,7 @@ $1"
 # "memory ready" confirmation, with nothing for the agent.
 # Args: $1 = memory worktree path.
 report_memory_position() {
-  local mempath="$1" dirty head live n unit remote_url fetch_err remote
+  local mempath="$1" dirty head live n unit remote_url fetch_err remote rc out crossing
   dirty=$(gitlore_memory_dirty "$mempath")
   head=$(git -C "$mempath" rev-parse HEAD)
   live=$(git -C "$mempath" rev-parse -q --verify live)
@@ -75,6 +75,20 @@ gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; 
   elif git -C "$mempath" merge-base --is-ancestor "$remote" "$live"; then
     return 0 # local live is ahead of the remote: a push's business
   else
-    add_report "gitlore: upstream memory has diverged from live — run /gitlore:merge to reconcile it."
+    rc=0
+    out=$(gitlore_rewrite_hit "$mempath" origin/live live) || rc=$?
+    case "$rc" in
+      0) add_report "gitlore: upstream memory has diverged from live — run /gitlore:merge to reconcile it." ;;
+      1)
+        crossing=$(gitlore_cross_rewrite_script "$mempath")
+        add_report "gitlore: memory's live holds commits its remote rewrote (record gitlore/rewrites: $out is superseded), so merging upstream memory would re-import the old history. Nothing was merged. Run $crossing to cross this store." ;;
+      *)
+        # git's text can carry remote-chosen lines, so it goes to the user only.
+        add_sysmsg "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')"
+        protocol_ctx="$protocol_ctx
+
+gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live is unchecked; the user has git's message."
+        ;;
+    esac
   fi
 }

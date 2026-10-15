@@ -329,6 +329,9 @@ gitlore_prepare_merge() {
 gitlore_yield_merge() {
   local mempath="$1" authority="$2" flavor="$3" pending_ref="$4"
   local prep base pending statefile pending_sha
+  # Before anything is written: a refusal must leave no marker, state file or
+  # merge behind for the next gate to classify.
+  gitlore_refuse_rewritten "$mempath" "$authority" "$pending_ref" || return 1
   # The marker goes down BEFORE the preparation, so every window inside it
   # leaves a state file for the next gate to classify (D7): a merge that staged
   # is completed and continued, one that never ran is discarded and re-prepared.
