@@ -10,7 +10,6 @@
 ## Remaining
 
 - Release D61/D62; update the plugin here and on the laptop.
-- Run the rewrite suites under bash 3.2 on macOS (`plans/macos-check/run.sh`); nothing has run there yet.
 - Redo the option H rewrite on fresh mirrors, write both records, hand back archive, push and crossing commands.
 - `cross-rewrite.sh`: a few refusals give no next step (not checked out, unreadable version, child fetch); child records are fetched once per gitlink per ref.
 - Take the rewrite record's id length from the repository (`git rev-parse --show-object-format`: 40 or 64 hex) instead of hard-coding 40: the map-line and commit-map checks in `cross-rewrite.sh` and `record-rewrite.sh`, `ZEROS`, and "40-hex" in `docs/references/history-rewrites.md`; record version stays `1`. Not urgent while no store can be SHA-256 (not hosted on GitHub).
