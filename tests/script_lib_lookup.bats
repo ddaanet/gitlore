@@ -154,6 +154,9 @@ assert_own_libs() {
 @test "install/run.sh sources its own libraries when CLAUDE_PLUGIN_ROOT names another tree" {
   make_poisoned_cache "$BATS_TEST_TMPDIR/old"
 
+  # Once the script is its own tree's, this is a complete install, and without
+  # direnv it drops the global shim under $GITLORE_HOME: keep that off the real home.
+  export GITLORE_HOME="$BATS_TEST_TMPDIR/gitlore-home"
   CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/run.sh" memory local
   assert_own_libs
 }
@@ -176,4 +179,12 @@ assert_own_libs() {
   CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
   [ "$status" -eq 0 ]
   diff .gitlore/bin/claude "$PLUGIN_ROOT/scripts/install/launcher-shim"
+}
+
+@test "resolve.sh sources its own libraries when CLAUDE_PLUGIN_ROOT names another tree" {
+  make_parent_with_memory
+  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
+
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/resolve.sh"
+  assert_own_libs
 }

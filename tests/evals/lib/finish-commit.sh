@@ -24,8 +24,8 @@ settle_commit_path() {
     return 0
   fi
   if [ -f "$msgfile" ]; then
-    if ! commit_err=$( (cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
-          bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile") 2>&1 ); then
+    if ! commit_err=$( (cd "$EVAL_REPO" \
+          && bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile") 2>&1 ); then
       fail "commit-memory.sh failed on the approved summary — ${commit_err//$'\n'/ }"
     fi
     path_taken="the agent stopped after writing the summary; commit-memory.sh finished it"

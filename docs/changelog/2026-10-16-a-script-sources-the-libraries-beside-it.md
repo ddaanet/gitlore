@@ -16,12 +16,13 @@ agree whenever the wrapper ran it, and the wrappers keep resolving the hook
 itself through the pin (D5).
 
 **The scripts that preferred `CLAUDE_PLUGIN_ROOT` locate themselves too.**
-`add-tier.sh`, `emit-wrappers.sh` and the install scripts `run.sh`,
-`emit-launcher.sh`, `write-settings.sh` and `create-remote.sh` took
+`add-tier.sh`, `emit-wrappers.sh`, `resolve.sh` and the install scripts
+`run.sh`, `emit-launcher.sh`, `write-settings.sh` and `create-remote.sh` took
 `CLAUDE_PLUGIN_ROOT` ahead of their own path, so a session frozen at an older
-root could run a newer script against older libraries, or pin `gitlore.hooksDir`
-and the command keys into the wrong tree. They resolve from their own path now.
-`install/run.sh` still exports the result, because `install/global-shim.sh` is
-the one script that requires `CLAUDE_PLUGIN_ROOT` and is handed it by `run.sh`;
-the `cc-hooks` scripts take the variable the harness injects for them and are
-unchanged.
+root could run a newer script against older libraries, pin `gitlore.hooksDir`
+and the command keys into the wrong tree, or run the continuation of a prepared
+merge from a different tree than the script that prepared it. They resolve from
+their own path now. `install/run.sh` and `resolve.sh` still export the result,
+because `install/global-shim.sh` is the one script that requires
+`CLAUDE_PLUGIN_ROOT` and is handed it by `run.sh`; the `cc-hooks` scripts take
+the variable the harness injects for them and are unchanged.

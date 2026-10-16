@@ -47,7 +47,7 @@ for probe_dir in "$toplevel" "$common_dir_abs"; do
     {
       echo "gitlore: cannot write to '$probe_dir' — the command sandbox is blocking install."
       echo "gitlore: re-run with the sandbox disabled:"
-      echo "  CLAUDE_PLUGIN_ROOT='$PLUGIN_ROOT' bash '${BASH_SOURCE[0]}' '$mempath'"
+      echo "  bash '${BASH_SOURCE[0]}' '$mempath'"
     } >&2
     exit 3
   fi
