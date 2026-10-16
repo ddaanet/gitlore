@@ -115,6 +115,26 @@ local commits or not; one sharing none is refused. The preconditions of a
 rewrite — every clone publishes first — keep that case off the known clones; it
 exists for the ones nobody remembered.
 
+Every refusal ends in the act that resolves it. A dropped commit prints the move
+of the ref to the remote's tip for a ref with no local work, and the `git log`
+that lists the work to replay first for one with some. A ref on neither the
+remote's history nor a recorded commit prints the `git log` that compares it
+with the remote and says a person decides. A record that cannot be read, a
+mapped commit the clone lacks, trees differing outside gitlinks and a gitlink
+the child's record maps elsewhere are defects of the record, and the refusal
+prints its rebuild. The commit-map is the one input a crossing clone cannot
+have: only the rewritten mirror holds it, as `filter-repo/commit-map`. With
+`MIRROR` set to that mirror, the refusal prints two commands:
+`git -C "$MIRROR" push <origin url> --delete gitlore/rewrites`, which drops the
+damaged record, and
+`scripts/record-rewrite.sh "$MIRROR" "$MIRROR/filter-repo/commit-map" <origin url>`,
+run once per rewrite, oldest first. A remote with no record prints the second
+command alone. A version that is an integer above 1 says to update gitlore; any
+other version is a damaged record. A store that is not checked out prints the
+`git submodule update --init` that checks it out, run from the repository
+holding its gitlink. A git that cannot report the object format fails with its
+own message.
+
 The guard protects a clone only once that machine runs a gitlore release
 carrying it, so a rewrite's force-push follows the release and the plugin update
 on every machine that holds a clone.
