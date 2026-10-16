@@ -34,7 +34,9 @@ teardown() { teardown_tmp_repo; }
   # Directive emits the absolute resolve.sh path AND a cd to the parent repo
   # (so the sub-agent's shell needs neither CLAUDE_PLUGIN_ROOT nor a particular CWD).
   # Dogfood-driven fix.
-  [[ "$output$stderr" == *"cd \"$TMP_REPO\" && bash \"$PLUGIN_ROOT/scripts/resolve.sh\""* ]]
+  # The script names its own tree, canonical, not the `..`-bearing fixture path.
+  own_root=$(cd "$PLUGIN_ROOT" && pwd)
+  [[ "$output$stderr" == *"cd \"$TMP_REPO\" && bash \"$own_root/scripts/resolve.sh\""* ]]
   [[ "$output$stderr" != *'$CLAUDE_PLUGIN_ROOT'* ]]
   statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
   [ -f "$statefile" ]

@@ -8,7 +8,9 @@ set -euo pipefail
 # approval gate is unreachable for them. Block those; let the blessed paths pass.
 [ -n "${GITLORE_MEMORY_COMMIT:-}" ] && exit 0
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
+# The libraries shipped beside this hook, never the ones `gitlore.hooksDir` or
+# CLAUDE_PLUGIN_ROOT name: both can pin an older cache.
+PLUGIN_ROOT=$(CDPATH="" cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
 

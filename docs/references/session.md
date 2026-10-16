@@ -33,11 +33,13 @@ hardcode `.git/`, which is a gitlink *file* in a linked worktree. See D11.
 
 The wrapper delegates to the current plugin via `git config gitlore.hooksDir`
 (regular git config, shared across worktrees via the common config). Stable
-paths for hook manager configs; plugin updates are transparent. If
-`gitlore.hooksDir` is unset (a plain `git push` outside any Claude session
-before SessionStart has fired), the wrapper exits 0 after emitting a stderr hint
-— `"gitlore skipped: hooks not installed"` plus instructions to install the
-marketplace, plugin, and start Claude.
+paths for hook manager configs; plugin updates are transparent. The pin selects
+which hook script a wrapper runs; the script itself sources the libraries beside
+its own path, so a script and its libraries always come from one tree even when
+the pin lags. If `gitlore.hooksDir` is unset (a plain `git push` outside any
+Claude session before SessionStart has fired), the wrapper exits 0 after
+emitting a stderr hint — `"gitlore skipped: hooks not installed"` plus
+instructions to install the marketplace, plugin, and start Claude.
 
 ```sh
 #!/bin/sh
