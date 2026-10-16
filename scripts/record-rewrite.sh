@@ -11,9 +11,10 @@
 # record and never touches an archive branch.
 #
 # The record is a chain of commits, each holding `version` (1) and `map`
-# (`<old> <new>` lines). New lines go on top of the remote's tip, and the push is
-# plain, so the remote refuses anything that is not a fast-forward. A line the
-# record already holds byte for byte is skipped. An old id the record maps to a
+# (`<old> <new>` lines, ids as long as the store's object ids: 40 hex digits
+# for sha1, 64 for sha256). New lines go on top of the remote's tip, and the
+# push is plain, so the remote refuses anything that is not a fast-forward. A
+# line the record already holds byte for byte is skipped. An old id the record maps to a
 # different new id is refused: that is a second rewrite of the same history, from
 # another mirror, and nothing is recorded for it.
 #
@@ -41,6 +42,14 @@ refuse() {
 if ! gitdir_err=$(git -C "$store" rev-parse --git-dir 2>&1); then
   refuse "$store is not a git repository: $(printf '%s' "$gitdir_err" | tr '\n' ' ')"
 fi
+# The ids of a record are as long as the store's object ids: 40 hex digits for
+# sha1, 64 for sha256.
+format=$(git -C "$store" rev-parse --show-object-format)
+case "$format" in
+  sha1) idlen=40 ;;
+  sha256) idlen=64 ;;
+  *) refuse "$store reports the object format '$format', which has no known id length." ;;
+esac
 # Only the default is checked by name: an explicit remote is a name git resolves
 # or a URL it reads, and either failing is git's own message below.
 if [ $# -eq 2 ] && [ -z "$(git -C "$store" config --get remote.origin.url)" ]; then
@@ -50,10 +59,10 @@ fi
 tmpd=$(mktemp -d "${TMPDIR:-/tmp}/record-rewrite.XXXXXX")
 trap 'rm -rf "$tmpd"' EXIT
 
-# Every line must be a pair of 40-hex ids, except filter-repo's own header on
-# the first line. One bad line refuses the whole map: a partial record would
-# look complete.
-hex_pair='^[0-9a-f]{40} [0-9a-f]{40}$'
+# Every line must be a pair of ids, except filter-repo's own header on the
+# first line. One bad line refuses the whole map: a partial record would look
+# complete.
+hex_pair="^[0-9a-f]{$idlen} [0-9a-f]{$idlen}\$"
 header='^old[[:space:]]+new[[:space:]]*$'
 changed="$tmpd/changed"
 : > "$changed"
@@ -65,7 +74,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     continue
   fi
   [[ $line =~ $hex_pair ]] \
-    || refuse "commit-map line $lineno is not an '<old> <new>' pair of 40-hex ids: $line"
+    || refuse "commit-map line $lineno is not an '<old> <new>' pair of ${idlen}-hex ids: $line"
   # Unchanged commits have no line in the record; the rest keep their order.
   if [ "${line%% *}" != "${line#* }" ]; then
     printf '%s\n' "$line" >> "$changed"
@@ -89,15 +98,15 @@ tip=""
 if git -C "$store" rev-parse -q --verify refs/gitlore/rewrites >/dev/null; then
   tip=$(git -C "$store" rev-parse refs/gitlore/rewrites)
   if ! version=$(git -C "$store" show "$tip:version" 2>&1); then
-    refuse "the record on origin has no readable version file: $(printf '%s' "$version" | tr '\n' ' ')"
+    refuse "the record on $remote has no readable version file: $(printf '%s' "$version" | tr '\n' ' ')"
   fi
   [ "$version" = "1" ] || refuse "the record on $remote is not version 1, the only version this script writes."
   if ! git -C "$store" show "$tip:map" > "$tmpd/record" 2>"$tmpd/err"; then
-    refuse "the record on origin has no readable map: $(tr '\n' ' ' < "$tmpd/err")"
+    refuse "the record on $remote has no readable map: $(tr '\n' ' ' < "$tmpd/err")"
   fi
   # Remote content: a bad line is refused, never echoed.
-  ! grep -Evq '^[0-9a-f]{40} [0-9a-f]{40}$' "$tmpd/record" \
-    || refuse "the record on $remote has a map line that is not two 40-hex ids, so it cannot be appended to."
+  ! grep -Evq "$hex_pair" "$tmpd/record" \
+    || refuse "the record on $remote has a map line that is not two ${idlen}-hex ids, so it cannot be appended to."
   [ -z "$(tail -c 1 "$tmpd/record")" ] \
     || refuse "the record's map does not end in a newline, so appending would join lines."
 fi
@@ -113,7 +122,7 @@ if [ -n "$conflict" ]; then
   refuse "gitlore/rewrites already maps $old to $recorded, not to $proposed. That is a second rewrite of the same history, from another mirror."
 fi
 if [ ! -s "$tmpd/added" ]; then
-  echo "record-rewrite: gitlore/rewrites on origin already holds every changed line; nothing to add."
+  echo "record-rewrite: gitlore/rewrites on $remote already holds every changed line; nothing to add."
   exit 0
 fi
 

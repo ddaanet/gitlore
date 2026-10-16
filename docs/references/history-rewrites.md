@@ -1,4 +1,4 @@
-# History rewrites — decisions D61, D62
+# History rewrites — decisions D61, D62, D63
 
 What a store's remote publishes when its history is rewritten, and what a clone
 still on the old history does about it. Covers the memory store and every tier;
@@ -12,6 +12,9 @@ fix).
   branch gitlore never fetches
 - **D62** — a divergence whose local side holds a recorded old commit is
   refused, naming the crossing script; nothing repairs it automatically
+- **D63** — a damaged record is rebuilt from scratch from the commit-maps at
+  hand: the record branch is deleted on the remote and each commit-map is
+  recorded again, oldest rewrite first; nothing salvages it in place
 
 ---
 
@@ -37,9 +40,12 @@ from whoever did the rewrite, published where every clone already looks.
 `gitlore/rewrites` on the store's own remote. Its tree holds two files:
 
 - `version` — the format version, `1`.
-- `map` — one line per rewritten commit, `<old id> <new id>`, 40-hex each. A
-  commit whose id the rewrite left unchanged has no line; a commit the rewrite
-  dropped maps to forty zeros.
+- `map` — one line per rewritten commit, `<old id> <new id>`, each id as long as
+  the store's object ids: 40 hex digits for a sha1 store, 64 for sha256, read
+  from `git rev-parse --show-object-format`. A commit whose id the rewrite left
+  unchanged has no line; a commit the rewrite dropped maps to zeros of that
+  length. The format version stays `1`: the length is a property of the store,
+  not of the record.
 
 Each rewrite appends its lines to `map` in a new commit on top of the previous
 record, so the branch only ever fast-forwards and the record itself is never a
@@ -112,11 +118,85 @@ local commits or not; one sharing none is refused. The preconditions of a
 rewrite — every clone publishes first — keep that case off the known clones; it
 exists for the ones nobody remembered.
 
+Every refusal ends in the act that resolves it. A dropped commit prints the move
+of the ref to the remote's tip for a ref with no local work, and the `git log`
+that lists the work to replay first for one with some. A ref on neither the
+remote's history nor a recorded commit prints the `git log` that compares it
+with the remote and says a person decides, and so do trees that differ outside
+gitlinks (`git diff --stat`) and a gitlink the child's record maps elsewhere
+(`git diff-tree`): the record may be wrong, or the rewrite may have meant to
+change them. A mapped commit the clone lacks is fetched from the remote's `main`
+first, since it can be published there before `live` carries it; when it is
+still absent, the rewritten history has not reached the remote, and the refusal
+says to run the script again once the force-push has landed, since a run fetches
+`live` and `main` itself. It never prints a rebuild, because the record may be
+right.
+
+A record that cannot be read — no version file, a version that is not a number,
+no map, a map line that is not a pair of ids, a chain that does not end — prints
+the rebuild from scratch (D63): the `git push origin --delete gitlore/rewrites`
+that removes it, one `record-rewrite.sh` line for the commit-map, and the
+`git ls-remote` that shows the branch is back, with the store's absolute path
+and the absolute path of the script, so the lines run from any directory. The
+refusal says that a rewrite whose commit-map is no longer at hand drops out of
+the record, that each further commit-map takes one more `record-rewrite.sh`
+line, oldest rewrite first, and to run the crossing again once the branch is
+back. The commit-map is filter-repo's `filter-repo/commit-map` in the git dir of
+the clone that ran the rewrite: when the store being crossed holds one, its path
+is printed; otherwise the refusal says where the file is and `<commit-map>` is
+the one placeholder to replace. A remote with no record prints the first
+rewrite's `record-rewrite.sh` line instead: with `MIRROR` set to the rewritten
+mirror,
+`scripts/record-rewrite.sh "$MIRROR" "$MIRROR/filter-repo/commit-map" <origin url>`,
+with the origin's URL made absolute, since the command runs from another
+directory. A version that is an integer above 1 says to update gitlore. A store
+that is not checked out prints the `git submodule update --init` that checks it
+out, run from the repository holding its gitlink, with one step per path
+component that is not checked out, outermost first: a tier whose memory store is
+absent initializes the store before the tier. A git that cannot report the
+object format fails with its own message.
+
 The guard protects a clone only once that machine runs a gitlore release
 carrying it, so a rewrite's force-push follows the release and the plugin update
 on every machine that holds a clone.
 
+## Rebuilding a damaged record — D63
+
+**D63 — A damaged record is rebuilt from scratch from the commit-maps at hand**
+
+A record can be damaged: a version file that is missing or is not a number, a
+map that is missing, a line that is not a pair of ids, or a chain that does not
+end. Only `record-rewrite.sh` writes the record, so only a hand edit or a bug
+damages it, and the script refuses to append to a record it cannot read as it
+stands. Nothing salvages a damaged record in place.
+
+The record is rebuilt from the commit-maps of its rewrites. The record branch is
+deleted on the remote, and `record-rewrite.sh` runs once per commit-map still at
+hand, in rewrite order, oldest first. The first run finds no record and writes
+the first commit; each later run appends the lines its map changes, which a
+second rewrite's old ids chain onto the first's new ids without a collision. A
+rewrite whose commit-map is no longer at hand drops out of the record, and a
+clone still on the history that rewrite superseded is no longer recognised as
+such.
+
+Between the delete and the first `record-rewrite.sh` run the remote has no
+record, which the divergence check reads as the ordinary case of no rewrite
+(D62), so a clone that yields to the remote's `live` in that interval merges the
+old history back. The two commands run one after the other and nothing guards
+the interval; the owner runs them when no clone is publishing.
+
 ## Rejected alternatives
+
+**An in-place salvage of the damaged record (`record-rewrite.sh --rebuild`).**
+The flag kept every readable line of the remote's map, dropped the rest and
+reported their line numbers, wrote version 1, merged the commit-map and pushed
+one commit on the tip it read. It costs more than it buys for a record only
+`record-rewrite.sh` writes, which only a hand edit or a bug damages: a flag, a
+second reader of the record that tells damaged lines from sound ones, a
+chain-loop walk and a line-ending repair, all for a repair that runs rarely and
+still needs the commit-map of the rewrite being recorded. The one thing it
+bought is that the readable lines of a rewrite whose commit-map is gone survive;
+the from-scratch rebuild reuses the plain run and loses them.
 
 **No guard.** Rewrites are rare, and a careful owner crosses every clone by
 hand. But the failure is silent and propagates — the tooling merges and

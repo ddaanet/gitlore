@@ -7,6 +7,11 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-16 — The rewrite scripts name their remote and their next step](changelog/2026-10-16-the-rewrite-scripts-name-their-next-step.md)
+  — `record-rewrite.sh` names the remote it used; `cross-rewrite.sh` refusals
+  name the act that resolves them, fetch each child's record once, and read ids
+  at the store's object-format length (40 sha1, 64 sha256); a damaged record is
+  rebuilt from scratch from the commit-maps at hand (D63)
 - [2026-10-16 — A script sources the libraries shipped beside it](changelog/2026-10-16-a-script-sources-the-libraries-beside-it.md)
   — the memory entry points and the push and memory-commit hooks take their
   plugin root from their own path, not from `gitlore.hooksDir`, so a newer

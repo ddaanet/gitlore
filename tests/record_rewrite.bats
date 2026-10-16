@@ -118,6 +118,25 @@ remote_refs() { git --git-dir="$BARE" for-each-ref; }
   [ "$(git --git-dir="$BARE" show "$tip:map" | wc -l)" = "$nlines" ]
 }
 
+@test "record-rewrite: a no-op run on the default remote says origin" {
+  run --separate-stderr bash "$SCRIPT" memory "$MAP"
+  [ "$status" -eq 0 ]
+  run --separate-stderr bash "$SCRIPT" memory "$MAP"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already"* ]]
+  [[ "$output" == *"on origin"* ]]
+}
+
+@test "record-rewrite: a no-op run on a remote given as a URL names that URL, not origin" {
+  run --separate-stderr bash "$SCRIPT" memory "$MAP" "$BARE"
+  [ "$status" -eq 0 ]
+  run --separate-stderr bash "$SCRIPT" memory "$MAP" "$BARE"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already"* ]]
+  [[ "$output" == *"$BARE"* ]]
+  [[ "$output" != *"origin"* ]]
+}
+
 # --- refusals ---
 
 # Run the script expecting a refusal that pushes nothing.
@@ -159,6 +178,34 @@ assert_refused_untouched() {
   v2_tip=$(git --git-dir="$BARE" rev-parse refs/heads/gitlore/rewrites)
   assert_refused_untouched memory "$MAP"
   [ "$(git --git-dir="$BARE" rev-parse refs/heads/gitlore/rewrites)" = "$v2_tip" ]
+}
+
+# Replace the remote's record with one whose tree holds only the named file.
+# Args: $1=version|map
+record_with_only() {
+  local blob tree commit
+  blob=$(printf '1\n' | git --git-dir="$BARE" hash-object -w --stdin)
+  tree=$(printf '100644 blob %s\t%s\n' "$blob" "$1" | git --git-dir="$BARE" mktree)
+  commit=$(git --git-dir="$BARE" -c user.email=t@t -c user.name=t commit-tree "$tree" -m "partial record")
+  git --git-dir="$BARE" update-ref refs/heads/gitlore/rewrites "$commit"
+}
+
+@test "record-rewrite: a record with no version file is refused, naming the remote it was given" {
+  record_with_only map
+  run --separate-stderr bash "$SCRIPT" memory "$MAP" "$BARE"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"version"* ]]
+  [[ "$stderr" == *"$BARE"* ]]
+  [[ "$stderr" != *"origin"* ]]
+}
+
+@test "record-rewrite: a record with no map file is refused, naming the remote it was given" {
+  record_with_only version
+  run --separate-stderr bash "$SCRIPT" memory "$MAP" "$BARE"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"map"* ]]
+  [[ "$stderr" == *"$BARE"* ]]
+  [[ "$stderr" != *"origin"* ]]
 }
 
 @test "record-rewrite: a record that exists but cannot be fetched is refused, not replaced" {
