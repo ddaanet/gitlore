@@ -3,7 +3,7 @@
 `/gitlore:push` in a repo running 0.6.0 refused up front on its `ddaanet` tier:
 
 ```text
-gitlore: tier 'ddaanet''s HEAD is not at its local 'live' (HEAD ea39932, live 2800e0e),
+gitlore: tier 'ddaanet''s HEAD is not at its local 'live' (HEAD 5cd6cfd, live 6e456cf),
 so nothing was published. Put HEAD back on 'live':
 git -C ".../memory/ddaanet" checkout --detach live
 ```

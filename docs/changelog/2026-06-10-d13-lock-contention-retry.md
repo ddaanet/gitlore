@@ -1,6 +1,6 @@
 # 2026-06-10 — Documented D13 — lock-contention retry wrapper (`gitlore_git`)
 
-Shipped in `27042ce`: `scripts/lib/util.sh` gains `gitlore_git` (retry mutating
+Shipped in `dd7419d`: `scripts/lib/util.sh` gains `gitlore_git` (retry mutating
 `git` on transient lock contention, 10s exponential backoff,
 `GITLORE_GIT_RETRY_SCHEDULE`-overridable) and `gitlore_git_is_lock_error`
 (matches `index.lock`/`cannot lock ref`/… but fast-fails D3's

@@ -15,7 +15,7 @@ mocked `claude` (the Python runner had none).
 **Dogfooding found two live bugs the unit tests couldn't:** (1) the suite had
 been red since 2026-07-16 — its assertions resolved
 `git -C memory rev-parse --git-path gitlore-commit-msg`, a path production
-abandoned in `431faf7` when the IPC file moved to
+abandoned in `38868ca` when the IPC file moved to
 `.claude/gitlore-memory-message`; no harness could satisfy it, so the "2/2 SDK
 baseline" predated the breakage and was never valid. (2) `claude -p` stalled
 3s/turn on absent piped stdin → runner redirects `</dev/null`. Also: the API is
