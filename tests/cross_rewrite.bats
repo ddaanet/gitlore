@@ -348,3 +348,28 @@ tier_live_local_on_old() {
   [ "$(git -C "$TIER" show live:rw-local.md)" = "local" ]
   [ "$(git -C "$TIER" rev-parse live)" != "$RW_LOCAL" ]
 }
+
+# --- CDPATH ---
+# With CDPATH holding `.`, a bare `cd <relative>` echoes its target, so
+# `$(cd dir && pwd -P)` captures the path twice. CDPATH is set on the one `run`,
+# never exported into the fixture (helpers/setup unsets it).
+
+@test "cross: with CDPATH set, the script run by a relative path gets past startup and crosses" {
+  tier_old
+  # The documented form, scripts/cross-rewrite.sh from the project root: a
+  # relative $0, so the script's own directory is found by a relative cd.
+  ln -s "$(cd "$PLUGIN_ROOT/scripts" && pwd -P)" scripts
+  CDPATH=".:$TMP_REPO/memory" run --separate-stderr scripts/cross-rewrite.sh "$TIER"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" rev-parse HEAD)" = "$RW_N2" ]
+  [ "$(git -C "$TIER" rev-parse live)" = "$RW_N2" ]
+}
+
+@test "cross: with CDPATH set, the gitlink is staged in the parent under the store's relative path" {
+  tier_old
+  CDPATH=".:$TMP_REPO/memory" run --separate-stderr "$CROSS" "$TIER"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" rev-parse HEAD)" = "$RW_N2" ]
+  [[ "$output" == *"staged ddaanet in "* ]]
+  [ "$(git -C memory ls-files -s -- ddaanet)" = "160000 $RW_N2 0	ddaanet" ]
+}

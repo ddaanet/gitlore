@@ -21,6 +21,7 @@
 # the script prints `nothing to cross` and exits 0. Status, diff and listing
 # output is NUL-delimited, so a path with a space or a tab is compared as it is.
 set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
 
 # The crossing: checks, then the moves.
 main() {
@@ -186,7 +187,7 @@ load_child_record() {
     fi
     i=$((i + 1))
   done
-  [ -e "$child/.git" ] || refuse "$child is not checked out, so its rewrite record cannot be read. Check it out with: git -C \"$store\" submodule update --init -- \"$path\""
+  [ -e "$child/.git" ] || refuse "$child is not checked out, so its rewrite record cannot be read. Check it out with: git -C $(dq "$store") submodule update --init -- $(dq "$path")"
   CHILD_MAP="$tmpd/child.$CHILD_N.map"
   if ! err=$(git -C "$child" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
     case "$err" in
@@ -249,7 +250,7 @@ check_commit() {
     fi
   done 3< "$tmpd/diff"
   [ -z "$mismatch" ] || refuse "$name of $store: ${old:0:7} maps to ${new:0:7}, but their trees differ outside gitlinks. Nothing was moved. A person must decide whether this rewrite was meant to change them; this script crosses only a rewrite that keeps every tree. Inspect the difference with:
-  git -C \"$store\" diff --stat $old $new"
+  git -C $(dq "$store") diff --stat $old $new"
   git -C "$store" ls-tree -r -z --full-tree "$old_tree" > "$tmpd/links"
   while IFS= read -r -d '' -u 3 rec; do
     head=${rec%%$'\t'*}
@@ -271,7 +272,7 @@ check_gitlink() {
   chain_end "$CHILD_MAP" "$was" "$child"
   if [ "$CHAIN_END" != "$now" ]; then
     refuse "$name of $store: ${old:0:7} maps to ${new:0:7}, but its gitlink $path (${was:0:7}) maps to ${CHAIN_END:0:7} in the record of $child, not ${now:0:7}. Nothing was moved. A person must decide which of the two records is wrong. Inspect the pinned gitlinks with:
-  git -C \"$store\" diff-tree -r --no-renames $old $new"
+  git -C $(dq "$store") diff-tree -r --no-renames $old $new"
   fi
 }
 
@@ -291,24 +292,9 @@ check_children() {
     child_head=$(git -C "$child" rev-parse HEAD)
     load_child_record "$path"
     if [ -n "$(map_next "$CHILD_MAP" "$child_head")" ]; then
-      refuse "tier $child is still on recorded commit ${child_head:0:7}, so $store cannot cross yet. Cross the tier first: \"$script_dir/cross-rewrite.sh\" \"$child\""
+      refuse "tier $child is still on recorded commit ${child_head:0:7}, so $store cannot cross yet. Cross the tier first: $(dq "$script_dir/cross-rewrite.sh") $(dq "$child")"
     fi
   done 3< "$tmpd/links"
-}
-
-# Refuses a ref whose record chain ends in a dropped commit, printing the move
-# that fixes it. Args: $1=ref name, $2=the ref's commit.
-refuse_dropped() {
-  local name="$1" sha="$2" move
-  if [ "$name" = HEAD ]; then
-    move="git -C \"$store\" checkout --detach refs/remotes/origin/live"
-  else
-    move="git -C \"$store\" update-ref refs/heads/$name refs/remotes/origin/live"
-  fi
-  refuse "$name of $store is at ${sha:0:7}, and its record chain ends in a dropped commit ($ZEROS). Nothing was moved. With no local work to keep on $name, move it to the remote's tip, then run this again:
-  $move
-With local work to keep, list it, replay it onto the remote's tip, then run this again:
-  git -C \"$store\" log --oneline refs/remotes/origin/live..$sha"
 }
 
 # Sets PLAN_NEW to where the ref $1, at commit $2, moves to, or to `crossed`
@@ -319,7 +305,7 @@ classify_ref() {
     chain_end "$tmpd/map" "$sha" "$store"
     target="$CHAIN_END"
     if [ "$target" = "$ZEROS" ]; then
-      refuse_dropped "$name" "$sha"
+      refuse_dropped "$name" "$sha" "$sha"
     fi
     # check_commit follows child records, which overwrite CHAIN_END: keep target.
     check_commit "$name" "$sha" "$target"
@@ -336,14 +322,15 @@ classify_ref() {
   if [ -n "$base" ]; then
     chain_end "$tmpd/map" "$base" "$store"
     base_new="$CHAIN_END"
-    if [ "$base_new" != "$ZEROS" ]; then
-      move=""
-      [ "$name" = HEAD ] || move="
-  git -C \"$store\" update-ref refs/heads/$name HEAD"
-      refuse "$name of $store has local commits on top of $base, a recorded commit that maps to $base_new. Nothing was moved. Replay them onto the new history, then run this again:
-  git -C \"$store\" checkout --detach $base_new
-  git -C \"$store\" cherry-pick $base..$sha$move"
+    if [ "$base_new" = "$ZEROS" ]; then
+      refuse_dropped "$name" "$sha" "$base"
     fi
+    move=""
+    [ "$name" = HEAD ] || move="
+  git -C $(dq "$store") update-ref refs/heads/$name HEAD"
+    refuse "$name of $store has local commits on top of $base, a recorded commit that maps to $base_new. Nothing was moved. Replay them onto the new history, then run this again:
+  git -C $(dq "$store") checkout --detach $base_new
+  git -C $(dq "$store") cherry-pick $base..$sha$move"
   fi
   # No recorded commit under it but history shared with the remote: local
   # commits on the new history, which a crossing has nothing to do for.
@@ -352,7 +339,7 @@ classify_ref() {
     return 0
   fi
   refuse "$name of $store is at ${sha:0:7}, which is neither on the remote's history nor on a recorded commit. Nothing was moved. A person must decide what becomes of its commits. Inspect them against the remote with:
-  git -C \"$store\" log --oneline --graph $sha refs/remotes/origin/live"
+  git -C $(dq "$store") log --oneline --graph $sha refs/remotes/origin/live"
 }
 
 # Stages the store's gitlink in its parent repository, when it has one.

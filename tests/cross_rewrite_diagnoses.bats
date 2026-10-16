@@ -24,7 +24,10 @@ setup() {
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   BARE_TIER="$TMP_REPO/.bare-ddaanet.git"
 }
-teardown() { teardown_tmp_repo; }
+teardown() {
+  teardown_tmp_repo
+  [ -z "${OUTER_REPO:-}" ] || rm -rf "$OUTER_REPO"
+}
 
 # The refusal case: exit 1, prefixed, and nothing in the store moved.
 refused() {
@@ -127,7 +130,6 @@ $RW_N2 $CX_ZEROS" append
   refused
   [[ "$stderr" == *"dropped"* ]]
   [[ "$stderr" == *"no local work"* ]]
-  [[ "$stderr" == *"log --oneline"* ]]
   move=$(printf '%s\n' "$stderr" | grep '^  git .*update-ref')
   [ -n "$move" ]
   [ "$(git -C "$TIER" rev-parse live)" = "$RW_O2" ]
@@ -137,6 +139,57 @@ $RW_N2 $CX_ZEROS" append
   run --separate-stderr "$CROSS" "$TIER"
   [ "$status" -eq 0 ]
   [ "$(git -C "$TIER" rev-parse HEAD)" = "$RW_N1" ]
+}
+
+@test "cross tier: a ref exactly on a dropped commit prints the move and no listing of the old ancestry" {
+  cx_tier_setup single
+  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
+$RW_N2 $CX_ZEROS" append
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
+  cx_position "$TIER" "$RW_O1" "$RW_O2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"dropped"* ]]
+  [[ "$stderr" == *"update-ref refs/heads/live refs/remotes/origin/live"* ]]
+  # The ref is the dropped commit, so it holds no local work to list; the range
+  # from the remote's tip would list the whole pre-rewrite ancestry.
+  [[ "$stderr" != *"log --oneline refs/remotes/origin/live.."* ]]
+  [[ "$stderr" != *"refs/remotes/origin/live..$RW_O2"* ]]
+}
+
+@test "cross tier: a ref on local work above a recorded commit whose chain ends in a drop prints the replay listing" {
+  cx_tier_setup single
+  # O2 -> N2 -> zeros: the second rewrite dropped N2; the remote's live is on N1.
+  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
+$RW_N2 $CX_ZEROS" append
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
+  # HEAD and live on one local commit L above O2.
+  rewrite_position_clone "$TIER" old
+  before=$(rewrite_store_snapshot "$TIER")
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"dropped"* ]]
+  [[ "$stderr" == *"git -C \"$TIER\" log --oneline $RW_O2..$RW_LOCAL"* ]]
+  [[ "$stderr" != *"A person must decide"* ]]
+  [[ "$stderr" != *"neither on the remote's history"* ]]
+  [ "$(rewrite_store_snapshot "$TIER")" = "$before" ]
+}
+
+@test "cross tier: a dropped main prints a move to the remote's main, not its live" {
+  cx_tier_setup single
+  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
+$RW_N2 $CX_ZEROS" append
+  # The remote's live and main are on different commits.
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
+  git --git-dir="$BARE_TIER" update-ref refs/heads/main "$RW_P"
+  [ "$(git --git-dir="$BARE_TIER" rev-parse live)" != "$(git --git-dir="$BARE_TIER" rev-parse main)" ]
+  cx_position "$TIER" "$RW_O1" "$RW_O1" "$RW_O2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"main of"* ]]
+  move=$(printf '%s\n' "$stderr" | grep '^  git .*update-ref refs/heads/main')
+  [ -n "$move" ]
+  [[ "$move" == *" refs/remotes/origin/main" ]]
 }
 
 @test "cross tier: a dropped HEAD prints a detach to the remote's tip" {
@@ -162,6 +215,73 @@ $RW_N2 $CX_ZEROS" append
   [[ "$stderr" == *"neither on the remote's history"* ]]
   [[ "$stderr" == *"log --oneline --graph $unrelated refs/remotes/origin/live"* ]]
   [[ "$stderr" == *"A person must decide"* ]]
+}
+
+# --- CDPATH and quoting in the commands a refusal prints ---
+
+# Runs the command a refusal prints after "Check it out with: ", from an
+# unrelated directory, as a person pasting it would.
+run_printed_checkout() {
+  local cmd="${stderr#*Check it out with: }"
+  cmd="${cmd%%$'\n'*}"
+  run bash -c "cd / && $cmd"
+  [ "$status" -eq 0 ]
+}
+
+# Moves the fixture root into a directory named a$b"c under the test's own and
+# builds the parent with its memory store there, so every path a script prints
+# carries a dollar sign and a double quote. Built from scratch: the cached
+# template is repointed with sed, which does not escape a quote for git config.
+# The outer directory is what teardown removes.
+weird_root() {
+  OUTER_REPO="$TMP_REPO"
+  # shellcheck disable=SC2016 # the dollar sign is literal: it is the point
+  TMP_REPO="$OUTER_REPO"'/a$b"c'
+  _gitlore_build_parent_with_memory "$TMP_REPO" memory
+  TMP_REPO=$(cd "$TMP_REPO" && pwd -P)
+  cd "$TMP_REPO" || return 1
+  BARE_TIER="$TMP_REPO/.bare-ddaanet.git"
+}
+
+@test "cross: with CDPATH set, a tier refused as not checked out prints a checkout command that works" {
+  cx_tier_setup single
+  cx_memory_setup mapped
+  git -C memory submodule deinit -q -f ddaanet
+  [ ! -e memory/ddaanet/.git ]
+  CDPATH=".:$TMP_REPO/memory" run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"not a checked-out store"* ]]
+  run_printed_checkout
+  [ -e "$TMP_REPO/memory/ddaanet/.git" ]
+}
+
+@test "cross: a project path with a dollar sign and a double quote gets a checkout command that runs verbatim" {
+  weird_root
+  git submodule deinit -q -f memory
+  [ ! -e memory/.git ]
+  run --separate-stderr "$CROSS" memory
+  refused
+  [[ "$stderr" == *"not a checked-out store"* ]]
+  run_printed_checkout
+  [ -e "$TMP_REPO/memory/.git" ]
+}
+
+@test "cross tier: a refusal naming a store at a path with a dollar sign and a double quote prints a move that runs verbatim" {
+  weird_root
+  mount_tier_at_live ddaanet
+  rewrite_remote_history memory/ddaanet "$BARE_TIER"
+  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
+$RW_N2 $CX_ZEROS" append
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
+  cx_position "$TIER" "$RW_O1" "$RW_O2"
+  run --separate-stderr "$CROSS" "$TMP_REPO/$TIER"
+  refused
+  [[ "$stderr" == *"dropped"* ]]
+  move=$(printf '%s\n' "$stderr" | grep '^  git .*update-ref')
+  [ -n "$move" ]
+  run bash -c "cd / && $move"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" rev-parse live)" = "$RW_N1" ]
 }
 
 # --- one fetch per child ---

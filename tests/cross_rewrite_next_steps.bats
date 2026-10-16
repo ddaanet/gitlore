@@ -341,3 +341,20 @@ $RW_N2 $RW_O2"
   run_printed_checkout
   [ -e memory/ddaanet/.git ]
 }
+
+@test "cross: a store under a plain directory prints one checkout step for the gitlink, none for the directory" {
+  make_parent_with_memory .claude/memory
+  # A non-default subpath rebuilds the root in place, leaving the cwd stale.
+  cd "$TMP_REPO"
+  # .claude is a plain directory of the project; only .claude/memory is a gitlink.
+  [ "$(git ls-files -s -- .claude | awk '$1 == "160000" { n++ } END { print n + 0 }')" -eq 1 ]
+  [ -z "$(git ls-files -s -- .claude | awk '$4 == ".claude"')" ]
+  git submodule deinit -q -f .claude/memory
+  [ ! -e .claude/memory/.git ]
+  run --separate-stderr "$CROSS" .claude/memory
+  refused
+  [[ "$stderr" == *"not a checked-out store"* ]]
+  [[ "$stderr" != *'update --init -- ".claude"'* ]]
+  run_printed_checkout
+  [ -e "$TMP_REPO/.claude/memory/.git" ]
+}

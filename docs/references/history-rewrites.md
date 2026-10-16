@@ -122,19 +122,22 @@ local commits or not; one sharing none is refused. The preconditions of a
 rewrite — every clone publishes first — keep that case off the known clones; it
 exists for the ones nobody remembered.
 
-Every refusal ends in the act that resolves it. A dropped commit prints the move
-of the ref to the remote's tip for a ref with no local work, and the `git log`
-that lists the work to replay first for one with some. A ref on neither the
-remote's history nor a recorded commit prints the `git log` that compares it
-with the remote and says a person decides, and so do trees that differ outside
-gitlinks (`git diff --stat`) and a gitlink the child's record maps elsewhere
-(`git diff-tree`): the record may be wrong, or the rewrite may have meant to
-change them. A mapped commit the clone lacks is fetched from the remote's `main`
-first, since it can be published there before `live` carries it; when it is
-still absent, the rewritten history has not reached the remote, and the refusal
-says to run the script again once the force-push has landed, since a run fetches
-`live` and `main` itself. It never prints a rebuild, because the record may be
-right.
+Every refusal ends in the act that resolves it. A ref on a dropped commit holds
+no local work, so it prints only the move to the remote's tip: its `live` for
+HEAD and `live`, the remote's `main` for `main`, which is fetched first. A ref
+above a dropped commit prints the `git log` that lists the work and the replay
+onto that tip. A dropped `main` against a remote with no `main` prints the
+deletion of the local branch, or only the listing when it holds local work. A
+ref on neither the remote's history nor a recorded commit prints the `git log`
+that compares it with the remote and says a person decides, and so do trees that
+differ outside gitlinks (`git diff --stat`) and a gitlink the child's record
+maps elsewhere (`git diff-tree`): the record may be wrong, or the rewrite may
+have meant to change them. A mapped commit the clone lacks is fetched from the
+remote's `main` first, since it can be published there before `live` carries it;
+when it is still absent, the rewritten history has not reached the remote, and
+the refusal says to run the script again once the force-push has landed, since a
+run fetches `live` and `main` itself. It never prints a rebuild, because the
+record may be right.
 
 A record that cannot be read — no version file, a version that is not a number,
 no map, a map line that is not a pair of ids, a chain that does not end — prints
@@ -155,10 +158,12 @@ mirror,
 with the origin's URL made absolute, since the command runs from another
 directory. A version that is an integer above 1 says to update gitlore. A store
 that is not checked out prints the `git submodule update --init` that checks it
-out, run from the repository holding its gitlink, with one step per path
-component that is not checked out, outermost first: a tier whose memory store is
-absent initializes the store before the tier. A git that cannot report the
-object format fails with its own message.
+out, run from the repository holding its gitlink, with one step per gitlink on
+the path that is not checked out, outermost first: a tier whose memory store is
+absent initializes the store before the tier, and a plain directory on the way
+is part of the gitlink's path, not a step. Every printed path is double-quoted
+with `\`, `"`, `$` and a backtick escaped, so it runs verbatim. A git that
+cannot report the object format fails with its own message.
 
 The guard protects a clone only once that machine runs a gitlore release
 carrying it, so a rewrite's force-push follows the release and the plugin update
