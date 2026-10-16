@@ -12,8 +12,9 @@
 #
 # The record is a chain of commits, each holding `version` (1) and `map`
 # (`<old> <new>` lines, ids as long as the store's object ids: 40 hex digits
-# for sha1, 64 for sha256). New lines go on top of the remote's tip, and the
-# push is plain, so the remote refuses anything that is not a fast-forward. A
+# for sha1, 64 for sha256). New lines go on top of the remote's tip and the
+# push is a fast-forward leased to that tip, so a record that moved, was rolled
+# back or was deleted since the read is refused and nothing is overwritten. A
 # line the record already holds byte for byte is skipped. An old id the record maps to a
 # different new id is refused: that is a second rewrite of the same history, from
 # another mirror, and nothing is recorded for it.
@@ -22,9 +23,10 @@
 # line of the remote's map that is a pair of ids and does not close a chain loop,
 # drops the others and reports their line numbers, writes version 1, merges the
 # commit-map as above and pushes the result as a child of the tip it read: one
-# fast-forward, so the record is never absent from the remote and never rewritten,
-# and a tip that moved since the read is refused. A record of a newer version is
-# refused. On a healthy record --rebuild does what the plain run does.
+# fast-forward, so the record is never absent from the remote and never rewritten.
+# A trailing carriage return on a map line is stripped before parsing. A record
+# of a newer version is refused. On a healthy record --rebuild does what the
+# plain run does.
 #
 # The commit is built with plumbing (hash-object, mktree, commit-tree). The store's
 # branches, HEAD, index and worktree are left alone. Exit 0 when the record holds
@@ -83,6 +85,14 @@ read_record_for_rebuild() {
   if ! git -C "$store" show "$tip:map" > "$tmpd/raw" 2>/dev/null; then
     : > "$tmpd/raw"
     damaged=1
+  fi
+  # A map saved with CRLF endings keeps its lines: the carriage return is the
+  # damage, and the rebuild rewrites the map without it.
+  if grep -q $'\r$' "$tmpd/raw"; then
+    awk '{ sub(/\r$/, ""); print }' "$tmpd/raw" > "$tmpd/raw.lf"
+    mv "$tmpd/raw.lf" "$tmpd/raw"
+    damaged=1
+    echo "record-rewrite: stripped a trailing carriage return from the record's map on $remote." >&2
   fi
   bad=$(grep -Evn "$hex_pair" "$tmpd/raw" | cut -d: -f1 | awk 'NR <= 20' | paste -sd, - || true)
   : > "$tmpd/loops"
@@ -200,8 +210,12 @@ else
   commit=$(git -C "$store" commit-tree "$tree" -m "$msg")
 fi
 
-# Plain push, never forced: a remote tip that moved since the fetch is refused.
-if ! push_err=$(git -C "$store" push -q "$remote" "$commit:refs/heads/gitlore/rewrites" 2>&1); then
+# The lease is pinned to the tip this run read (an empty one when it read none,
+# so the ref must still be absent), and the commit descends from that tip, so the
+# push replaces nothing but what was read: a record that moved, was rolled back or
+# was deleted since the fetch is refused.
+lease="--force-with-lease=refs/heads/gitlore/rewrites:$tip"
+if ! push_err=$(git -C "$store" push -q "$lease" "$remote" "$commit:refs/heads/gitlore/rewrites" 2>&1); then
   refuse "$remote refused the record: $(printf '%s' "$push_err" | tr '\n' ' ')"
 fi
 if [ -n "$damaged" ]; then

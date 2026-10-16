@@ -14,8 +14,8 @@ fix).
   refused, naming the crossing script; nothing repairs it automatically
 - **D63** — a damaged record is repaired in place by
   `record-rewrite.sh --rebuild`: the readable lines are kept and the result is
-  pushed as one fast-forward on the tip it read, so the record is never absent
-  or rewritten
+  pushed as one fast-forward on the tip it read, leased to that tip, so the
+  record is never absent or rewritten
 
 ---
 
@@ -129,9 +129,9 @@ gitlinks (`git diff --stat`) and a gitlink the child's record maps elsewhere
 change them. A mapped commit the clone lacks is fetched from the remote's `main`
 first, since it can be published there before `live` carries it; when it is
 still absent, the rewritten history has not reached the remote, and the refusal
-prints the fetch to repeat after the force-push and the `cat-file -e` that
-confirms the commit arrived. It never prints a rebuild, because the record may
-be right.
+says to run the script again once the force-push has landed, since a run fetches
+`live` and `main` itself. It never prints a rebuild, because the record may be
+right.
 
 A record that cannot be read — no version file, a version that is not a number,
 no map, a map line that is not a pair of ids, a chain that does not end — prints
@@ -164,10 +164,14 @@ not close a chain loop, in order, so earlier rewrites survive; drops the others
 and reports their line numbers, never their content; writes version 1; merges
 the commit-map the way the plain run does; and pushes one commit whose parent is
 the tip it read. That is a fast-forward, so the record is never absent from the
-remote and never rewritten, and a tip that moved since the read is refused by
-the remote like any other non-fast-forward. A record of a newer version is
-refused: its lines may mean something this script does not know. On a healthy
-record the flag changes nothing.
+remote and never rewritten. The push carries a lease pinned to the sha the run
+read (an empty lease, meaning the ref must not exist, when it read none), so it
+can overwrite nothing but that sha: a record that moved forward or sideways, was
+rolled back to an earlier commit, or was deleted since the read is refused. A
+trailing carriage return on a map line is stripped before parsing, so a map
+saved with CRLF endings keeps its lines. A record of a newer version is refused:
+its lines may mean something this script does not know. On a healthy record the
+flag changes nothing.
 
 The repair needs the commit-map of the rewrite being recorded, which only the
 rewritten mirror holds, and a line it cannot parse is lost: the repair restores
@@ -183,10 +187,13 @@ a delete with no lease removes a tip another rewrite appended meanwhile; and a
 plain run starts from an empty map, losing every earlier rewrite's lines unless
 each rewrite's commit-map is still at hand.
 
-**A force-push with a lease.** The rebuilt record could replace the ref with
-`--force-with-lease` against the sha it read. Building the rebuilt commit on
-that sha makes the push a fast-forward, which the remote already refuses when
-the tip moved, so the force adds a way to overwrite and removes nothing.
+**A plain push of the rebuilt commit.** The remote accepts a child of the tip
+the run read whenever its ref is that tip, an ancestor of it, or absent. A
+record rolled back to an earlier commit, or deleted, between the read and the
+push is a deliberate act by someone else, and a plain push silently undoes it.
+The lease closes both and costs nothing: it is pinned to the sha the run read
+and the pushed commit descends from that sha, so it is strictly tighter than the
+plain push.
 
 
 **No guard.** Rewrites are rare, and a careful owner crosses every clone by

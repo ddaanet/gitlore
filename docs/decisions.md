@@ -43,14 +43,14 @@ old history does. [history-rewrites.md](references/history-rewrites.md)
   refused, naming the crossing script; nothing repairs it automatically
 - **D63** — a damaged record is repaired in place by
   `record-rewrite.sh --rebuild`: the readable lines are kept and the result is
-  pushed as one fast-forward on the tip it read, so the record is never absent
-  or rewritten
+  pushed as one fast-forward on the tip it read, leased to that tip, so the
+  record is never absent or rewritten
 
 *Rejected:* no guard · an automatic crossing at the yield · matching commits
 without a map · a path-keyed map · an external cache · a record force-pushed as
 a single commit · the old tip as a parent of the record · guarding the parent
-repository · deleting a damaged record and recording it again · a force-push
-with a lease to replace the record.
+repository · deleting a damaged record and recording it again · a plain push of
+the rebuilt commit.
 
 **The commit gate** — FR11's approval machinery.
 [commit-gate.md](references/commit-gate.md)

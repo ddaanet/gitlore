@@ -34,20 +34,42 @@ refused() {
 
 # --- refusals that diagnose, and what to do about each ---
 
-@test "cross tier: a mapped commit the remote has not published yet says to fetch after the force-push, not to rebuild" {
+@test "cross tier: a mapped commit the remote has not published yet says to run it again after the force-push, not to rebuild" {
   cx_tier_setup single
   absent=$(printf '%040d' 7)
   cx_record_commit "$BARE_TIER" "$RW_O1 $RW_N1
 $RW_O2 $absent"
+  # A remote with no main: the refusal must print nothing that needs one.
+  git --git-dir="$BARE_TIER" update-ref -d refs/heads/main
   cx_position "$TIER" "$RW_O1" "$RW_O2"
   run --separate-stderr "$CROSS" "$TIER"
   refused
   [[ "$stderr" == *"a commit this clone does not have"* ]]
   [[ "$stderr" == *"force-push"* ]]
-  [[ "$stderr" == *'fetch origin +refs/heads/live:refs/remotes/origin/live'* ]]
-  [[ "$stderr" == *"cat-file -e $absent"* ]]
+  [[ "$stderr" == *"run this again"* ]]
+  # The tier's remote has no main: a printed fetch of main would fail whole.
+  [[ "$stderr" != *"fetch origin"* ]]
+  [[ "$stderr" != *"cat-file"* ]]
   [[ "$stderr" != *"--rebuild"* ]]
   [[ "$stderr" != *"--delete"* ]]
+}
+
+@test "cross tier: running again after the force-push lands completes a crossing the remote's missing main refused" {
+  cx_tier_setup single
+  # The remote's live is behind and it has no main: N2 has not been published.
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
+  git --git-dir="$BARE_TIER" update-ref -d refs/heads/main
+  run git --git-dir="$BARE_TIER" rev-parse -q --verify refs/heads/main
+  [ "$status" -ne 0 ]
+  cx_position "$TIER" "$RW_O1" "$RW_O2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"run this again"* ]]
+  [ "$(git -C "$TIER" rev-parse live)" = "$RW_O2" ]
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N2"
+  run --separate-stderr "$CROSS" "$TIER"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" rev-parse live)" = "$RW_N2" ]
 }
 
 @test "cross tier: a mapped commit that only the remote's main holds is fetched and the crossing completes" {

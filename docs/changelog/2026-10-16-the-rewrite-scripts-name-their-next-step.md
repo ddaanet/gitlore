@@ -16,18 +16,18 @@ absolute. The rebuild needs the rewrite's commit-map, which only the rewritten
 mirror holds as `filter-repo/commit-map`; the refusal says to set `MIRROR` to
 it. A mapped commit the clone lacks is fetched from the remote's `main` first,
 and when it is still absent the refusal says the rewritten history has not
-reached the remote, with the fetch to repeat after the force-push; it never
-prints a rebuild, since the record may be right. Trees that differ outside
-gitlinks and a gitlink the child's record maps elsewhere print the `git diff`
-that shows them and say a person decides. A version that is an integer above 1
-says to update gitlore, and any other version is a damaged record. A dropped
-commit prints the move of the ref to the remote's tip, and the `git log` that
-lists local work to replay first. A commit on neither the remote's history nor a
-recorded commit prints the `git log` that compares it with the remote and says a
-person decides. The checkout command runs from the repository holding the
-gitlink, with a step for each path component not yet checked out: a tier whose
-memory store is absent initializes the store first. A git that cannot report the
-object format fails with its own message.
+reached the remote, and to run the script again once the force-push has landed;
+it never prints a rebuild, since the record may be right. Trees that differ
+outside gitlinks and a gitlink the child's record maps elsewhere print the
+`git diff` that shows them and say a person decides. A version that is an
+integer above 1 says to update gitlore, and any other version is a damaged
+record. A dropped commit prints the move of the ref to the remote's tip, and the
+`git log` that lists local work to replay first. A commit on neither the
+remote's history nor a recorded commit prints the `git log` that compares it
+with the remote and says a person decides. The checkout command runs from the
+repository holding the gitlink, with a step for each path component not yet
+checked out: a tier whose memory store is absent initializes the store first. A
+git that cannot report the object format fails with its own message.
 
 **A child's record is fetched once per run.** The script keeps each mounted
 child's map by path, so the gitlink checks of every ref and the children scan
@@ -43,7 +43,9 @@ the store, not to the record.
 keeps every readable line of the remote's map, drops the rest and reports their
 line numbers, writes version 1, merges the commit-map and pushes one commit on
 the tip it read: a fast-forward, so the record is never absent from the remote
-and never rewritten. A record of a newer version is refused. Deleting the record
-and recording it again is rejected: the gap reads as no rewrite to every clone's
-divergence check, a delete has no lease, and a plain run starts from an empty
-map.
+and never rewritten. The push is leased to that tip, so it overwrites nothing
+and refuses a record rolled back or deleted since the read. A map with CRLF line
+endings keeps its lines. A record of a newer version is refused. Deleting the
+record and recording it again is rejected: the gap reads as no rewrite to every
+clone's divergence check, a delete has no lease, and a plain run starts from an
+empty map.

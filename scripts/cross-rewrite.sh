@@ -236,9 +236,7 @@ check_commit() {
   if ! new_tree=$(git -C "$store" rev-parse -q --verify "$new^{tree}"); then
     fetch_main
     new_tree=$(git -C "$store" rev-parse -q --verify "$new^{tree}") \
-      || refuse "$name of $store is at ${old:0:7}, which maps to ${new:0:7}, a commit this clone does not have, and neither the remote's live nor its main holds it: the rewritten history has not reached the remote yet. Nothing was moved. Once the rewrite's force-push has landed, fetch it, check the commit arrived, then run this again:
-  git -C \"$store\" fetch origin +refs/heads/live:refs/remotes/origin/live +refs/heads/main:refs/remotes/origin/main
-  git -C \"$store\" cat-file -e $new^{commit}"
+      || refuse "$name of $store is at ${old:0:7}, which maps to ${new:0:7}, a commit this clone does not have, and neither the remote's live nor its main holds it: the rewritten history has not reached the remote yet. Nothing was moved. Once the rewrite's force-push has landed, run this again; it fetches the remote's live and main itself."
   fi
   git -C "$store" diff-tree -r -z --no-renames "$old_tree" "$new_tree" > "$tmpd/diff"
   mismatch=""

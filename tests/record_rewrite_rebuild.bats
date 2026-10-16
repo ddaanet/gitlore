@@ -144,3 +144,76 @@ $D $E" ]
   [ "$status" -eq 1 ]
   [ "$(git --git-dir="$REMOTE" rev-parse refs/heads/gitlore/rewrites)" = "$TIP" ]
 }
+
+# A `git` shim ahead of the real one on PATH. When the script pushes, it first
+# runs the given command against the remote, so the record moves between the
+# script's read and its push. Args: $1...=the git arguments to run on REMOTE
+move_remote_before_push() {
+  local real
+  real=$(command -v git)
+  mkdir -p "$TMP_REPO/shim"
+  {
+    printf '#!/bin/sh\n'
+    printf 'for a in "$@"; do\n  if [ "$a" = push ]; then\n    %q --git-dir=%q' "$real" "$REMOTE"
+    printf ' %q' "$@"
+    printf '\n    break\n  fi\ndone\nexec %q "$@"\n' "$real"
+  } > "$TMP_REPO/shim/git"
+  chmod 755 "$TMP_REPO/shim/git"
+  PATH="$TMP_REPO/shim:$PATH"
+}
+
+# Publish a child of the current TIP holding the given version and map bytes.
+# Sets ROOT to the parent and TIP to the child.
+publish_child() {
+  local vblob mblob tree
+  ROOT="$TIP"
+  vblob=$(printf '%s' "$1" | git -C store hash-object -w --stdin)
+  mblob=$(printf '%s' "$2" | git -C store hash-object -w --stdin)
+  tree=$(printf '100644 blob %s\tmap\n100644 blob %s\tversion\n' "$mblob" "$vblob" | git -C store mktree)
+  TIP=$(git -C store commit-tree "$tree" -p "$ROOT" -m "record rewrite")
+  git -C store push -q -f origin "$TIP:refs/heads/gitlore/rewrites"
+}
+
+@test "rebuild: a record rolled back to an ancestor between the read and the push is refused" {
+  publish $'1\n' "$A $B"$'\n'
+  publish_child $'1\n' "$A $B"$'\n'"bad"$'\n'
+  write_map "$C $D"
+  move_remote_before_push update-ref refs/heads/gitlore/rewrites "$ROOT"
+  run --separate-stderr "$SCRIPT" --rebuild store "$TMP_REPO/map" "$REMOTE"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"refused the record"* ]]
+  [ "$(git --git-dir="$REMOTE" rev-parse refs/heads/gitlore/rewrites)" = "$ROOT" ]
+}
+
+@test "rebuild: a record deleted between the read and the push is refused, not recreated" {
+  publish $'1\n' "$A $B"$'\n'"bad"$'\n'
+  write_map "$C $D"
+  move_remote_before_push update-ref -d refs/heads/gitlore/rewrites
+  run --separate-stderr "$SCRIPT" --rebuild store "$TMP_REPO/map" "$REMOTE"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"refused the record"* ]]
+  run git --git-dir="$REMOTE" rev-parse -q --verify refs/heads/gitlore/rewrites
+  [ "$status" -ne 0 ]
+}
+
+@test "rebuild: a record created between a read that found none and the push is refused" {
+  write_map "$C $D"
+  git -C store push -q origin HEAD:refs/heads/other
+  move_remote_before_push update-ref refs/heads/gitlore/rewrites "$(git -C store rev-parse HEAD)"
+  run --separate-stderr "$SCRIPT" --rebuild store "$TMP_REPO/map" "$REMOTE"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"refused the record"* ]]
+  [ "$(git --git-dir="$REMOTE" rev-parse refs/heads/gitlore/rewrites)" = "$(git -C store rev-parse HEAD)" ]
+}
+
+@test "rebuild: a map with CRLF line endings keeps its lines" {
+  publish $'1\n' "$A $B"$'\r\n'"$C $D"$'\r\n'
+  write_map "$D $E"
+  run --separate-stderr "$SCRIPT" --rebuild store "$TMP_REPO/map" "$REMOTE"
+  [ "$status" -eq 0 ]
+  [ "$(remote_map)" = "$A $B
+$C $D
+$D $E" ]
+  [[ "$stderr" == *"carriage return"* ]]
+  [ -z "$(git --git-dir="$REMOTE" show refs/heads/gitlore/rewrites:map | tr -d '\n0-9a-f ')" ]
+}
