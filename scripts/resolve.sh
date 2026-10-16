@@ -11,7 +11,7 @@ unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture
 # that may name another: a continuation invocation dispatched from a sub-agent
 # is reached by path, and its shell may carry the variable of an older session.
 PLUGIN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-export PLUGIN_ROOT CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+export PLUGIN_ROOT
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091

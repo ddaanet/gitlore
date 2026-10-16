@@ -22,7 +22,8 @@ itself through the pin (D5).
 root could run a newer script against older libraries, pin `gitlore.hooksDir`
 and the command keys into the wrong tree, or run the continuation of a prepared
 merge from a different tree than the script that prepared it. They resolve from
-their own path now. `install/run.sh` and `resolve.sh` still export the result,
-because `install/global-shim.sh` is the one script that requires
-`CLAUDE_PLUGIN_ROOT` and is handed it by `run.sh`; the `cc-hooks` scripts take
-the variable the harness injects for them and are unchanged.
+their own path now. `install/run.sh` alone still exports the result, because
+`install/global-shim.sh` is the one script that requires `CLAUDE_PLUGIN_ROOT`
+and is handed it by `run.sh`; `resolve.sh` exports `PLUGIN_ROOT` only. The
+`cc-hooks` scripts take the variable the harness injects for them and are
+unchanged.

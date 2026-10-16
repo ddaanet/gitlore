@@ -154,11 +154,19 @@ assert_own_libs() {
 @test "install/run.sh sources its own libraries when CLAUDE_PLUGIN_ROOT names another tree" {
   make_poisoned_cache "$BATS_TEST_TMPDIR/old"
 
-  # Once the script is its own tree's, this is a complete install, and without
-  # direnv it drops the global shim under $GITLORE_HOME: keep that off the real home.
-  export GITLORE_HOME="$BATS_TEST_TMPDIR/gitlore-home"
+  # Once the script is its own tree's, this is a complete install, and its last
+  # step writes outside the fixture: `direnv allow` records under XDG_DATA_HOME
+  # (default $HOME/.local/share), and without direnv the global shim goes under
+  # GITLORE_HOME. Keep every one of them off the real home.
+  export HOME="$BATS_TEST_TMPDIR/home"
+  export XDG_DATA_HOME="$HOME/.local/share" XDG_CONFIG_HOME="$HOME/.config"
+  export GITLORE_HOME="$HOME/.gitlore"
+  mkdir -p "$HOME"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$HOME/.gitconfig"
   CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/run.sh" memory local
   assert_own_libs
+  # The install ran to its end (the step that leaves the fixture), not just past the sourcing.
+  [ "$status" -eq 0 ]
 }
 
 @test "install/write-settings.sh pins the keys at its own tree when CLAUDE_PLUGIN_ROOT names another" {
