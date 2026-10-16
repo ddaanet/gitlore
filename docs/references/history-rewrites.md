@@ -68,11 +68,15 @@ The record is written by
 id. It runs on the rewritten repository, bare or not — a rewrite is done on a
 `--mirror` clone, which filter-repo leaves without `origin`, so that run names
 the remote as the third argument. The script keeps the changed lines, skips any
-the record already holds, appends the rest and pushes the record with a plain
-push, before the rewrite's own force-push. An old id the record already maps to
-a different new id is refused whole: it is a second rewrite of the same history
-from another mirror, and a genuine second rewrite starts from the first one's
-new ids, so it never collides. The archive branch is pushed separately.
+the record already holds, appends the rest and pushes the record with a push
+leased to the tip it read (`--force-with-lease`), before the rewrite's own
+force-push. The new commit has that tip as its parent, so the push is a
+fast-forward and the record is never rewritten; the lease refuses a record that
+was rolled back or deleted between the fetch and the push, which a plain push
+would re-publish. An old id the record already maps to a different new id is
+refused whole: it is a second rewrite of the same history from another mirror,
+and a genuine second rewrite starts from the first one's new ids, so it never
+collides. The archive branch is pushed separately.
 
 ## Detection and crossing — D62
 
@@ -182,21 +186,23 @@ such.
 Between the delete and the first `record-rewrite.sh` run the remote has no
 record, which the divergence check reads as the ordinary case of no rewrite
 (D62), so a clone that yields to the remote's `live` in that interval merges the
-old history back. The two commands run one after the other and nothing guards
-the interval; the owner runs them when no clone is publishing.
+old history back. The refusal prints the delete, one `record-rewrite.sh` line
+per commit-map and the `ls-remote` check, which the owner runs in that order,
+and nothing guards the interval; the owner runs them when no clone is
+publishing.
 
 ## Rejected alternatives
 
 **An in-place salvage of the damaged record (`record-rewrite.sh --rebuild`).**
-The flag kept every readable line of the remote's map, dropped the rest and
-reported their line numbers, wrote version 1, merged the commit-map and pushed
-one commit on the tip it read. It costs more than it buys for a record only
-`record-rewrite.sh` writes, which only a hand edit or a bug damages: a flag, a
-second reader of the record that tells damaged lines from sound ones, a
-chain-loop walk and a line-ending repair, all for a repair that runs rarely and
-still needs the commit-map of the rewrite being recorded. The one thing it
-bought is that the readable lines of a rewrite whose commit-map is gone survive;
-the from-scratch rebuild reuses the plain run and loses them.
+The flag would keep every readable line of the remote's map, drop the rest and
+report their line numbers, write version 1, merge the commit-map and push one
+commit on the tip it read. It is rejected because it costs more than it buys for
+a record only `record-rewrite.sh` writes, which only a hand edit or a bug
+damages: a flag, a second reader of the record that tells damaged lines from
+sound ones, a chain-loop walk and a line-ending repair, all for a repair that
+runs rarely and still needs the commit-map of the rewrite being recorded. The
+one thing it would buy is that the readable lines of a rewrite whose commit-map
+is gone survive; the from-scratch rebuild reuses the plain run and loses them.
 
 **No guard.** Rewrites are rare, and a careful owner crosses every clone by
 hand. But the failure is silent and propagates — the tooling merges and

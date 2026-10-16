@@ -239,6 +239,51 @@ record_with_only() {
   [ -z "$(git -C memory for-each-ref | grep '/archive/' || true)" ]
 }
 
+# --- a record that moves between the fetch and the push ---
+
+# The script fetches the record, then pushes. A pre-push hook runs too late
+# (after the push has read the remote's refs, and the receiving side then checks
+# the tip it advertised), so the move happens in a `git` ahead on PATH that runs
+# a command just before it execs the real `git push`.
+# Args: $1=shell command run against the remote's record
+install_move_before_push() {
+  local real
+  real=$(command -v git)
+  mkdir -p "$TMP_REPO/move-stub"
+  # The single-quoted $@ and $a are the stub's own, expanded when it runs.
+  # shellcheck disable=SC2016
+  printf '#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = push ]; then\n    %s\n    break\n  fi\ndone\nexec %q "$@"\n' "$1" "$real" > "$TMP_REPO/move-stub/git"
+  chmod +x "$TMP_REPO/move-stub/git"
+  PATH="$TMP_REPO/move-stub:$PATH"
+}
+
+# A second append: ids no other test records.
+second_append_map() {
+  rewrite_write_commit_map "$TMP_REPO/second-map" "$RW_P $RW_P" \
+    "1111111111111111111111111111111111111111 2222222222222222222222222222222222222222"
+}
+
+@test "record-rewrite: a record rolled back to an ancestor between fetch and push is refused" {
+  run --separate-stderr bash "$SCRIPT" memory "$MAP"
+  [ "$status" -eq 0 ]
+  [ "$(git --git-dir="$BARE" rev-parse refs/heads/gitlore/rewrites^)" = "$OLD_RECORD_TIP" ]
+  second_append_map
+  install_move_before_push "git --git-dir=$(printf %q "$BARE") update-ref refs/heads/gitlore/rewrites $OLD_RECORD_TIP"
+  run --separate-stderr bash "$SCRIPT" memory "$TMP_REPO/second-map"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"refused the record"* ]]
+  [ "$(git --git-dir="$BARE" rev-parse refs/heads/gitlore/rewrites)" = "$OLD_RECORD_TIP" ]
+}
+
+@test "record-rewrite: a record deleted between fetch and push is refused" {
+  second_append_map
+  install_move_before_push "git --git-dir=$(printf %q "$BARE") update-ref -d refs/heads/gitlore/rewrites"
+  run --separate-stderr bash "$SCRIPT" memory "$TMP_REPO/second-map"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"refused the record"* ]]
+  [ -z "$(git --git-dir="$BARE" for-each-ref refs/heads/gitlore/rewrites)" ]
+}
+
 # --- discovery ---
 
 @test "record-rewrite: the script exists and is executable" {

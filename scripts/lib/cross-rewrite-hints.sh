@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The commands scripts/cross-rewrite.sh prints in its refusals (D62, D63): the
 # checkout of a store that is absent, the run of record-rewrite.sh that
-# publishes a rewrite record, and the from-scratch rebuild of a damaged one. Sourced by that script, which sets
-# `script_dir`; it is not run on its own.
+# publishes a rewrite record, and the from-scratch rebuild of a damaged one.
+# Sourced by that script, which sets `script_dir`; it is not run on its own.
 # shellcheck disable=SC2154 # script_dir is the sourcing script's
 
 # Prints the command that checks out the store at $1, run from the repository

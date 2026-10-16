@@ -322,7 +322,9 @@ $RW_N2 $RW_O2"
   [ "$(git -C "$TIER" remote get-url origin)" = ../../.bare-ddaanet.git ]
   run --separate-stderr "$CROSS" "$TIER"
   refused
-  [[ "$stderr" == *'record-rewrite.sh" "$MIRROR" "$MIRROR/filter-repo/commit-map" '"$BARE_TIER"* ]]
+  # The script prints the path %q-escaped, so a TMPDIR with a space shows a backslash.
+  printf -v bare_quoted '%q' "$BARE_TIER"
+  [[ "$stderr" == *'record-rewrite.sh" "$MIRROR" "$MIRROR/filter-repo/commit-map" '"$bare_quoted"* ]]
   [[ "$stderr" != *"../../.bare-ddaanet.git"* ]]
 }
 

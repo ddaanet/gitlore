@@ -13,8 +13,10 @@
 # The record is a chain of commits, each holding `version` (1) and `map`
 # (`<old> <new>` lines, ids as long as the store's object ids: 40 hex digits
 # for sha1, 64 for sha256). New lines go on top of the remote's tip, and the
-# push is plain, so the remote refuses anything that is not a fast-forward. A
-# line the record already holds byte for byte is skipped. An old id the record maps to a
+# push is leased to the tip it read (--force-with-lease), so the remote refuses
+# a record that moved, was rolled back or was deleted since the fetch. The push
+# is never a rewrite: the new commit is a fast-forward of that tip. A line the
+# record already holds byte for byte is skipped. An old id the record maps to a
 # different new id is refused: that is a second rewrite of the same history, from
 # another mirror, and nothing is recorded for it.
 #
@@ -138,8 +140,12 @@ else
   commit=$(git -C "$store" commit-tree "$tree" -m "$msg")
 fi
 
-# Plain push, never forced: a remote tip that moved since the fetch is refused.
-if ! push_err=$(git -C "$store" push -q "$remote" "$commit:refs/heads/gitlore/rewrites" 2>&1); then
+# The commit has $tip as its parent, so the push is a fast-forward and the record
+# is never rewritten. The lease pins the remote tip to the one the fetch read (no
+# tip: the branch must be absent), so a record rolled back or deleted since the
+# fetch is refused instead of re-published. A plain push accepts that case as a
+# fast-forward from the rolled-back tip, or as a creation.
+if ! push_err=$(git -C "$store" push -q "--force-with-lease=refs/heads/gitlore/rewrites:$tip" "$remote" "$commit:refs/heads/gitlore/rewrites" 2>&1); then
   refuse "$remote refused the record: $(printf '%s' "$push_err" | tr '\n' ' ')"
 fi
 echo "record-rewrite: recorded $count changed lines on $remote gitlore/rewrites."
