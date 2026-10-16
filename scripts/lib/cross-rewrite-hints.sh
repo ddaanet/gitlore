@@ -3,9 +3,9 @@
 # checkout of a store that is absent, the run of record-rewrite.sh that
 # publishes a rewrite record, the from-scratch rebuild of a damaged one, and
 # the moves that resolve a ref on a dropped commit. Sourced by that script,
-# which sets `script_dir`, `store`, ZEROS and defines `refuse` and `fetch_main`;
-# it is not run on its own.
-# shellcheck disable=SC2154 # script_dir, store and ZEROS are the sourcing script's
+# which sets `script_dir`, `store`, ZEROS and MAIN_MISSING and defines `refuse`
+# and `fetch_main`; it is not run on its own.
+# shellcheck disable=SC2154 # script_dir, store, ZEROS and MAIN_MISSING are the sourcing script's
 
 # Prints the command that checks out the store at $1, run from the repository
 # whose index holds its gitlink: the nearest repository containing its
@@ -94,7 +94,7 @@ rebuild_steps() {
     map="$own_map"
   else
     map="<commit-map>"
-    placeholder="The commit-map is in .git/filter-repo/commit-map of the clone that ran the rewrite; replace <commit-map> with its path. "
+    placeholder="The commit-map is filter-repo/commit-map in the git dir of the clone that ran the rewrite: the mirror itself when it is bare, its .git otherwise; replace <commit-map> with its path. "
   fi
   printf 'Rebuild the record of %s from scratch; nothing repairs it in place. The record is rebuilt from the commit-maps of the rewrites, so a rewrite whose commit-map is no longer at hand drops out of it. %sRun these in order, with one record-rewrite.sh line per commit-map still at hand, oldest rewrite first. The owner runs them when no clone is publishing: between the delete and the first record-rewrite.sh run the remote has no record. The ls-remote line lists the branch once the record is back; then run this again:\n  git -C %s push origin --delete gitlore/rewrites\n  %s %s %s\n  git -C %s ls-remote origin gitlore/rewrites' \
     "$repo" "$placeholder" "$(dq "$repo")" "$(dq "$script_dir/record-rewrite.sh")" "$(dq "$repo")" "$(dq "$map")" "$(dq "$repo")"
@@ -104,54 +104,82 @@ rebuild_steps() {
 # that resolves it. A ref on the dropped commit itself ($3 equals $2) holds no
 # local work, so only the move to the remote's tip is printed; a ref above it
 # prints the listing of that work and the replay onto the tip. The tip is the
-# remote's `live`, or its `main` for main, which is fetched here. A HEAD with
-# work that is attached to a branch replays onto that branch's tip and ends
-# with the branch's update-ref, so one replay settles both. Args: $1=ref name,
-# $2=the ref's commit, $3=the recorded commit whose chain is dropped.
+# remote's `main` for the branch main, which is fetched here, and the remote's
+# `live` for any other ref. A HEAD attached to a branch is a ref of that
+# branch: its tip, and its move or replay ends with the branch's update-ref,
+# so one run settles both. Args: $1=ref name, $2=the ref's commit, $3=the
+# recorded commit whose chain is dropped.
 refuse_dropped() {
-  local name="$1" sha="$2" base="$3" tip=refs/remotes/origin/live move replay s
-  local branch="" ref_arg
+  local name="$1" sha="$2" base="$3" tip=refs/remotes/origin/live branch s steps=""
   s=$(dq "$store")
-  if [ "$name" = HEAD ] && [ "$base" != "$sha" ]; then
-    branch=$(git -C "$store" symbolic-ref -q HEAD || true)
-    branch=${branch#refs/heads/}
-  fi
-  if [ "$name" = main ] || [ "$branch" = main ]; then
+  branch=$(branch_of "$name")
+  if [ "$branch" = main ]; then
     fetch_main
-    tip=refs/remotes/origin/main
-    if ! git -C "$store" rev-parse -q --verify "$tip" > /dev/null; then
+    if [ -z "$MAIN_MISSING" ]; then
+      tip=refs/remotes/origin/main
+    elif [ "$name" = HEAD ] && [ "$base" = "$sha" ]; then
+      # No work to replay and no main to move to: HEAD leaves main for the
+      # remote's live, and main's own refusal deletes the branch.
+      branch=""
+    else
       refuse_dropped_no_main "$sha" "$base"
     fi
   fi
-  if [ "$name" = HEAD ]; then
-    move="git -C $s checkout --detach $tip"
-  else
-    move="git -C $s update-ref refs/heads/$name $tip"
-  fi
   if [ "$base" = "$sha" ]; then
-    refuse "$name of $store is at ${sha:0:7}, and its record chain ends in a dropped commit ($ZEROS). Nothing was moved. It holds no local work, so move it to the remote's tip, then run this again:
-  $move"
-  fi
-  replay="git -C $s checkout --detach $tip
-  git -C $s cherry-pick $base..$sha"
-  if [ "$name" != HEAD ]; then
-    branch="$name"
-  fi
-  if [ -n "$branch" ]; then
-    printf -v ref_arg '%q' "refs/heads/$branch"
-    replay="$replay
-  git -C $s update-ref $ref_arg HEAD"
+    # Each step opens with the newline that ends the line before it.
+    [ "$name" != HEAD ] || steps="
+  git -C $s checkout --detach $tip"
+    [ -z "$branch" ] || steps="$steps
+  git -C $s update-ref $(ref_word "refs/heads/$branch") $tip"
+    refuse "$name of $store is at ${sha:0:7}, and its record chain ends in a dropped commit ($ZEROS). Nothing was moved. It holds no local work, so move it to the remote's tip, then run this again:$steps"
   fi
   refuse "$name of $store has local commits on top of $base, a recorded commit whose record chain ends in a dropped commit ($ZEROS). Nothing was moved. List the local work, replay it onto the remote's tip, then run this again:
   git -C $s log --oneline $base..$sha
-  $replay"
+$(replay_steps "$tip" "$base" "$sha" "$name")"
 }
 
-# Refuses a dropped main, or a HEAD attached to it, when the origin has no
-# main to move it to: with no
-# local work the ref is deleted, which leaves it crossed; with some, the
-# listing is all there is to print. Args: $1=main's commit, $2=the recorded
-# commit whose chain is dropped.
+# Prints the commands that replay the commits $2..$3, local work on the ref
+# $4, onto the commit $1: detach there, cherry-pick, and, whenever a branch is
+# involved, the update-ref that moves it to the replayed HEAD. The branch is
+# resolved once, so a HEAD attached to one ends in its update-ref, mapped base
+# or dropped. Args: $1=tip, $2=base, $3=ref's commit, $4=ref name.
+replay_steps() {
+  local tip="$1" base="$2" sha="$3" name="$4" branch s
+  branch=$(branch_of "$name")
+  s=$(dq "$store")
+  printf '  git -C %s checkout --detach %s\n  git -C %s cherry-pick %s..%s' "$s" "$tip" "$s" "$base" "$sha"
+  if [ -n "$branch" ]; then
+    printf '\n  git -C %s update-ref %s HEAD' "$s" "$(ref_word "refs/heads/$branch")"
+  fi
+}
+
+# Prints the branch the ref $1 stands for: the branch HEAD is attached to when
+# $1 is HEAD (nothing when detached), otherwise $1 itself. Args: $1=ref name.
+branch_of() {
+  local branch
+  if [ "$1" != HEAD ]; then
+    printf '%s' "$1"
+    return 0
+  fi
+  branch=$(git -C "$store" symbolic-ref -q HEAD || true)
+  printf '%s' "${branch#refs/heads/}"
+}
+
+# Prints the ref $1 as one shell word: as it is when it holds only characters
+# that need no quoting, which is every ordinary branch, otherwise through dq.
+# Args: $1=ref.
+ref_word() {
+  if [[ $1 =~ ^[A-Za-z0-9._/-]+$ ]]; then
+    printf '%s' "$1"
+  else
+    dq "$1"
+  fi
+}
+
+# Refuses a dropped main, or a HEAD attached to it above a dropped base, when
+# the origin has no main to move it to: with no local work the ref is deleted,
+# which leaves it crossed; with some, the listing is all there is to print.
+# Args: $1=main's commit, $2=the recorded commit whose chain is dropped.
 refuse_dropped_no_main() {
   local sha="$1" base="$2" s
   s=$(dq "$store")
@@ -166,6 +194,10 @@ refuse_dropped_no_main() {
 # Prints $1 as one double-quoted shell word that reads back as $1: the four
 # characters that stay special inside double quotes are escaped. Character by
 # character, since bash 3.2 and 5 disagree on backslashes in ${s//x/y}.
+# Residual bound: `!` is left alone, so a word with one is rewritten by history
+# expansion in interactive bash and zsh, and fish reads a backtick escape
+# differently, so a command printed with such a path and pasted there can
+# misread it.
 # Args: $1=text.
 dq() {
   local s="$1" out="" c i

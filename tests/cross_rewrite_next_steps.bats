@@ -241,7 +241,7 @@ $RW_O2 $RW_N2" ]
   run --separate-stderr "$CROSS" "$TIER"
   refused
   assert_rebuild_named "$TIER"
-  [[ "$stderr" == *".git/filter-repo/commit-map of the clone that ran the rewrite"* ]]
+  [[ "$stderr" == *"filter-repo/commit-map in the git dir of the clone that ran the rewrite: the mirror itself when it is bare"* ]]
   [ "$(printf '%s' "$stderr" | grep -o '<[a-z-]*>' | sort -u)" = "<commit-map>" ]
   # The mirror the rewrite ran in holds the commit-map.
   mirror="$TMP_REPO/mirror.git"

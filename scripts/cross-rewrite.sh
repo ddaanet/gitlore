@@ -27,7 +27,10 @@ unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
 main() {
   # An absolute store, so every command a refusal prints runs from any directory.
   if [ -d "$store" ]; then
-    store=$(cd "$store" && pwd -P)
+    if ! abs=$(cd "$store" 2>&1 && pwd -P); then
+      refuse "cannot enter $store, so there is nothing to cross. cd said: $abs"
+    fi
+    store="$abs"
   fi
   [ -e "$store/.git" ] || refuse "$store is not a checked-out store, so there is nothing to cross. Check it out with: $(checkout_command "$store")"
   set_id_length
@@ -141,16 +144,15 @@ fetch_store() {
 
 # Fetches the remote's main, by explicit refspec, once: a mapped commit may be
 # published there before `live` carries it. A remote without a main has nothing
-# more to fetch, and its stale tracking ref is dropped.
+# more to fetch: MAIN_MISSING records it, since a tracking ref left from an
+# earlier fetch is stale and the check phase deletes nothing.
 fetch_main() {
   local err
   [ -z "$MAIN_FETCHED" ] || return 0
   MAIN_FETCHED=1
   if ! err=$(git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main 2>&1); then
     case "$err" in
-      *"couldn't find remote ref refs/heads/main"*)
-        # The remote has no main, so a tracking ref left from an earlier fetch is stale.
-        git -C "$store" update-ref -d refs/remotes/origin/main ;;
+      *"couldn't find remote ref refs/heads/main"*) MAIN_MISSING=1 ;;
       *) refuse "could not fetch from the origin of $store. Once the remote is reachable, run this again. git said: $err" ;;
     esac
   fi
@@ -193,7 +195,7 @@ load_child_record() {
     fi
     i=$((i + 1))
   done
-  [ -e "$child/.git" ] || refuse "$child is not checked out, so its rewrite record cannot be read. Check it out with: git -C $(dq "$store") submodule update --init -- $(dq "$path")"
+  [ -e "$child/.git" ] || refuse "$child is not checked out, so its rewrite record cannot be read. Check it out with: $(checkout_command "$child")"
   CHILD_MAP="$tmpd/child.$CHILD_N.map"
   if ! err=$(git -C "$child" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
     case "$err" in
@@ -238,12 +240,18 @@ chain_end() {
 # record of the store mounted there. Args: $1=ref name, $2=old commit, $3=new commit.
 check_commit() {
   local name="$1" old="$2" new="$3" old_tree new_tree meta path mismatch
-  local om nm st rec head _mode kind sha ns
+  local om nm st rec head _mode kind sha ns held fetches
   old_tree=$(git -C "$store" rev-parse "$old^{tree}")
   if ! new_tree=$(git -C "$store" rev-parse -q --verify "$new^{tree}"); then
     fetch_main
+    held="neither the remote's live nor its main holds it"
+    fetches="live and main"
+    if [ -n "$MAIN_MISSING" ]; then
+      held="the remote's live does not hold it"
+      fetches="live"
+    fi
     new_tree=$(git -C "$store" rev-parse -q --verify "$new^{tree}") \
-      || refuse "$name of $store is at ${old:0:7}, which maps to ${new:0:7}, a commit this clone does not have, and neither the remote's live nor its main holds it: the rewritten history has not reached the remote yet. Nothing was moved. Once the rewrite's force-push has landed, run this again; it fetches the remote's live and main itself."
+      || refuse "$name of $store is at ${old:0:7}, which maps to ${new:0:7}, a commit this clone does not have, and $held: the rewritten history has not reached the remote yet. Nothing was moved. Once the rewrite's force-push has landed, run this again; it fetches the remote's $fetches itself."
   fi
   git -C "$store" diff-tree -r -z --no-renames "$old_tree" "$new_tree" > "$tmpd/diff"
   mismatch=""
@@ -306,7 +314,7 @@ check_children() {
 # Sets PLAN_NEW to where the ref $1, at commit $2, moves to, or to `crossed`
 # when the commit is already on the remote's history. Refuses on any other case.
 classify_ref() {
-  local name="$1" sha="$2" base base_new target move
+  local name="$1" sha="$2" base base_new target
   if [ -n "$(map_next "$tmpd/map" "$sha")" ]; then
     chain_end "$tmpd/map" "$sha" "$store"
     target="$CHAIN_END"
@@ -331,12 +339,8 @@ classify_ref() {
     if [ "$base_new" = "$ZEROS" ]; then
       refuse_dropped "$name" "$sha" "$base"
     fi
-    move=""
-    [ "$name" = HEAD ] || move="
-  git -C $(dq "$store") update-ref refs/heads/$name HEAD"
     refuse "$name of $store has local commits on top of $base, a recorded commit that maps to $base_new. Nothing was moved. Replay them onto the new history, then run this again:
-  git -C $(dq "$store") checkout --detach $base_new
-  git -C $(dq "$store") cherry-pick $base..$sha$move"
+$(replay_steps "$base_new" "$base" "$sha" "$name")"
   fi
   # No recorded commit under it but history shared with the remote: local
   # commits on the new history, which a crossing has nothing to do for.
@@ -373,6 +377,7 @@ ZEROS=""
 CHILD_PATHS=()
 CHILD_N=0
 MAIN_FETCHED=""
+MAIN_MISSING=""
 CHILD_MAP=""
 CHAIN_END=""
 PLAN_NEW=""

@@ -31,6 +31,17 @@ refused() {
   [[ "$stderr" == *"cross-rewrite:"* ]]
 }
 
+# The printed commands run from an unrelated directory, as a person pasting them
+# would, so every store path in them must be absolute.
+run_printed() {
+  local c
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    run bash -c "cd / && $c"
+    [ "$status" -eq 0 ]
+  done <<< "$1"
+}
+
 # A tier whose second rewrite dropped N2 (O2 -> N2 -> zeros), with the remote's
 # live on N1 and its main deleted. The clone still tracks the main the mount
 # fetched before the rewrite: refs/remotes/origin/main is stale, not absent.
@@ -44,6 +55,21 @@ $RW_N2 $CX_ZEROS" append
   run git --git-dir="$BARE_TIER" rev-parse -q --verify refs/heads/main
   [ "$status" -ne 0 ]
   git -C "$TIER" rev-parse -q --verify refs/remotes/origin/main > /dev/null
+}
+
+# The dropped-N2 tier with HEAD attached to main on one local commit L above O2.
+# The remote's live and main are on different commits (N1, P), and live is
+# crossable (O1), so main is the only ref the work sits on.
+tier_head_on_main_above_dropped_base() {
+  cx_tier_setup single
+  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
+$RW_N2 $CX_ZEROS" append
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
+  git --git-dir="$BARE_TIER" update-ref refs/heads/main "$RW_P"
+  rewrite_position_clone "$TIER" old
+  git -C "$TIER" checkout -q -B main "$RW_LOCAL"
+  git -C "$TIER" update-ref refs/heads/live "$RW_O1"
+  [ "$(git -C "$TIER" symbolic-ref HEAD)" = refs/heads/main ]
 }
 
 # --- a stale origin/main ---
@@ -83,18 +109,7 @@ $RW_N2 $CX_ZEROS" append
 # --- HEAD attached to a branch above a dropped base ---
 
 @test "cross tier: HEAD attached to main above a dropped base replays onto the remote's main and ends with main's update-ref" {
-  cx_tier_setup single
-  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
-$RW_N2 $CX_ZEROS" append
-  # The remote's live and main are on different commits.
-  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
-  git --git-dir="$BARE_TIER" update-ref refs/heads/main "$RW_P"
-  # One local commit L above O2, with HEAD attached to main on it; live is
-  # crossable, so main is the only ref the work sits on.
-  rewrite_position_clone "$TIER" old
-  git -C "$TIER" checkout -q -B main "$RW_LOCAL"
-  git -C "$TIER" update-ref refs/heads/live "$RW_O1"
-  [ "$(git -C "$TIER" symbolic-ref HEAD)" = refs/heads/main ]
+  tier_head_on_main_above_dropped_base
   run --separate-stderr "$CROSS" "$TIER"
   refused
   [[ "$stderr" == *"HEAD of"* ]]
@@ -105,22 +120,12 @@ $RW_N2 $CX_ZEROS" append
 }
 
 @test "cross tier: the replay HEAD's refusal prints, run once, settles HEAD and main together" {
-  cx_tier_setup single
-  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
-$RW_N2 $CX_ZEROS" append
-  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
-  git --git-dir="$BARE_TIER" update-ref refs/heads/main "$RW_P"
-  rewrite_position_clone "$TIER" old
-  git -C "$TIER" checkout -q -B main "$RW_LOCAL"
-  git -C "$TIER" update-ref refs/heads/live "$RW_O1"
+  tier_head_on_main_above_dropped_base
   run --separate-stderr "$CROSS" "$TIER"
   refused
   cmds=$(printf '%s\n' "$stderr" | grep -E '^  git -C ' | grep -v ' log ' || true)
   [ "$(printf '%s\n' "$cmds" | grep -c .)" -eq 3 ]
-  while IFS= read -r c; do
-    run bash -c "cd / && $c"
-    [ "$status" -eq 0 ]
-  done <<< "$cmds"
+  run_printed "$cmds"
   [ "$(git -C "$TIER" rev-parse HEAD)" = "$(git -C "$TIER" rev-parse main)" ]
   [ "$(git -C "$TIER" rev-parse main^)" = "$RW_P" ]
   # One replay satisfies both: the rerun has nothing left to refuse.
@@ -130,17 +135,6 @@ $RW_N2 $CX_ZEROS" append
 }
 
 # --- a store given as a relative path ---
-
-# The printed commands run from an unrelated directory, as a person pasting them
-# would, so every store path in them must be absolute.
-run_printed() {
-  local c
-  while IFS= read -r c; do
-    [ -n "$c" ] || continue
-    run bash -c "cd / && $c"
-    [ "$status" -eq 0 ]
-  done <<< "$1"
-}
 
 @test "cross tier: a relative store's dropped-commit move runs from another directory" {
   cx_tier_setup single
@@ -179,4 +173,46 @@ $RW_N2 $CX_ZEROS" append
   [[ "$stderr" == *"neither on the remote's history"* ]]
   cmds=$(printf '%s\n' "$stderr" | grep -E '^  git -C ')
   run_printed "$cmds"
+}
+
+# --- one round settles an attached HEAD ---
+
+@test "cross tier: HEAD attached to live above a mapped base: the printed replay, run once, lets the rerun cross" {
+  cx_tier_setup single
+  # One local commit L above O2 (O2 maps to N2), HEAD attached to live on it.
+  rewrite_position_clone "$TIER" old
+  git -C "$TIER" checkout -q -B live "$RW_LOCAL"
+  [ "$(git -C "$TIER" symbolic-ref HEAD)" = refs/heads/live ]
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"HEAD of"* ]]
+  [[ "$stderr" == *"update-ref refs/heads/live HEAD"* ]]
+  cmds=$(printf '%s\n' "$stderr" | grep -E '^  git -C ')
+  run_printed "$cmds"
+  run --separate-stderr "$CROSS" "$TIER"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" show live:rw-local.md)" = "local" ]
+  [ "$(git -C "$TIER" rev-parse live)" != "$RW_LOCAL" ]
+}
+
+@test "cross tier: HEAD and main both on a dropped commit: the printed commands, run once, leave main on the remote's main and the rerun crosses" {
+  cx_tier_setup single
+  cx_record_commit "$BARE_TIER" "$(cx_record_map "$BARE_TIER")
+$RW_N2 $CX_ZEROS" append
+  # The remote's live and main are on different commits.
+  git --git-dir="$BARE_TIER" update-ref refs/heads/live "$RW_N1"
+  git --git-dir="$BARE_TIER" update-ref refs/heads/main "$RW_P"
+  git -C "$TIER" checkout -q -B main "$RW_O2"
+  git -C "$TIER" update-ref refs/heads/live "$RW_O1"
+  [ "$(git -C "$TIER" symbolic-ref HEAD)" = refs/heads/main ]
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"HEAD of"* ]]
+  cmds=$(printf '%s\n' "$stderr" | grep -E '^  git -C ')
+  run_printed "$cmds"
+  [ "$(git -C "$TIER" rev-parse main)" = "$RW_P" ]
+  [ "$(git -C "$TIER" rev-parse HEAD)" = "$RW_P" ]
+  run --separate-stderr "$CROSS" "$TIER"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" rev-parse main)" = "$RW_P" ]
 }

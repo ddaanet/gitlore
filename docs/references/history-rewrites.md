@@ -123,25 +123,35 @@ rewrite — every clone publishes first — keep that case off the known clones;
 exists for the ones nobody remembered.
 
 Every refusal ends in the act that resolves it. A ref on a dropped commit holds
-no local work, so it prints only the move to the remote's tip: its `live` for
-HEAD and `live`, the remote's `main` for `main`, which is fetched first. A ref
-above a dropped commit prints the `git log` that lists the work and the replay
-onto that tip; a HEAD attached to a branch replays onto that branch's tip and
-ends with the branch's `update-ref`, so one replay settles both. A dropped
-`main` against a remote with no `main` prints the deletion of the local branch,
-or only the listing when it holds local work; the fetch of `main` drops a
-tracking ref left from before the remote lost it, so a stale one is never the
-target. The store is made absolute once at startup, so every printed `git -C`
-runs from any directory. A ref on neither the remote's history nor a recorded
-commit prints the `git log` that compares it with the remote and says a person
-decides, and so do trees that differ outside gitlinks (`git diff --stat`) and a
-gitlink the child's record maps elsewhere (`git diff-tree`): the record may be
-wrong, or the rewrite may have meant to change them. A mapped commit the clone
-lacks is fetched from the remote's `main` first, since it can be published there
-before `live` carries it; when it is still absent, the rewritten history has not
+no local work, so it prints only the move to the remote's tip. The tip of a
+dropped base is the remote's `main` for the branch `main`, which is fetched
+first, and the remote's `live` for any other ref, so it is `live`'s tip only
+when the ref is not `main`. A HEAD attached to a branch is a ref of that branch:
+it takes that branch's tip, and its move is a detach followed by the branch's
+`update-ref`, so one run settles HEAD and the branch. A ref above a dropped
+commit prints the `git log` that lists the work and the replay onto that tip.
+One helper prints every replay, dropped base or mapped one: a detach at the tip,
+the cherry-pick, and, whenever a branch is involved, including HEAD attached to
+one, the branch's `update-ref` to the replayed HEAD, so one replay settles HEAD
+and its branch on every path. A dropped `main` against a remote with no `main`
+prints the deletion of the local branch, or only the listing when it holds local
+work; a HEAD on the dropped commit itself, attached to that `main`, detaches to
+the remote's `live` and leaves the branch to its own refusal. The fetch of
+`main` records that the remote has none and deletes nothing, so a tracking ref
+left from before the remote lost it is never the target and a refusal's "Nothing
+was moved" holds. The store is made absolute once at startup, so every printed
+`git -C` runs from any directory; a store that cannot be entered is refused with
+the cause. A ref on neither the remote's history nor a recorded commit prints
+the `git log` that compares it with the remote and says a person decides, and so
+do trees that differ outside gitlinks (`git diff --stat`) and a gitlink the
+child's record maps elsewhere (`git diff-tree`): the record may be wrong, or the
+rewrite may have meant to change them. A mapped commit the clone lacks is
+fetched from the remote's `main` first, since it can be published there before
+`live` carries it; when it is still absent, the rewritten history has not
 reached the remote, and the refusal says to run the script again once the
-force-push has landed, since a run fetches `live` and `main` itself. It never
-prints a rebuild, because the record may be right.
+force-push has landed, since a run fetches `live` and `main` itself; it names
+only `live` when the remote has no `main`. It never prints a rebuild, because
+the record may be right.
 
 A record that cannot be read — no version file, a version that is not a number,
 no map, a map line that is not a pair of ids, a chain that does not end — prints
@@ -154,20 +164,24 @@ the record, that each further commit-map takes one more `record-rewrite.sh`
 line, oldest rewrite first, and to run the crossing again once the branch is
 back. The commit-map is filter-repo's `filter-repo/commit-map` in the git dir of
 the clone that ran the rewrite: when the store being crossed holds one, its path
-is printed; otherwise the refusal says where the file is and `<commit-map>` is
-the one placeholder to replace. A remote with no record prints the first
-rewrite's `record-rewrite.sh` line instead: with `MIRROR` set to the rewritten
-mirror,
+is printed; otherwise the refusal says where the file is, in the git dir of the
+clone that ran the rewrite or at the root of the mirror itself when it is bare,
+and `<commit-map>` is the one placeholder to replace. A remote with no record
+prints the first rewrite's `record-rewrite.sh` line instead: with `MIRROR` set
+to the rewritten mirror,
 `scripts/record-rewrite.sh "$MIRROR" "$MIRROR/filter-repo/commit-map" <origin url>`,
 with the origin's URL made absolute, since the command runs from another
-directory. A version that is an integer above 1 says to update gitlore. A store
-that is not checked out prints the `git submodule update --init` that checks it
-out, run from the repository holding its gitlink, with one step per gitlink on
-the path that is not checked out, outermost first: a tier whose memory store is
-absent initializes the store before the tier, and a plain directory on the way
-is part of the gitlink's path, not a step. Every printed path is double-quoted
-with `\`, `"`, `$` and a backtick escaped, so it runs verbatim. A git that
-cannot report the object format fails with its own message.
+directory, and printed with `%q`, where the paths go through `dq`. A version
+that is an integer above 1 says to update gitlore. A store that is not checked
+out prints the `git submodule update --init` that checks it out, run from the
+repository holding its gitlink, with one step per gitlink on the path that is
+not checked out, outermost first: a tier whose memory store is absent
+initializes the store before the tier, and a plain directory on the way is part
+of the gitlink's path, not a step; a tier the crossing finds absent gets the
+same command. Every printed path is double-quoted with `\`, `"`, `$` and a
+backtick escaped, so it runs verbatim; `!` is not escaped, so interactive bash
+or zsh history expansion, and fish's backtick, can misread a path that holds
+one. A git that cannot report the object format fails with its own message.
 
 The guard protects a clone only once that machine runs a gitlore release
 carrying it, so a rewrite's force-push follows the release and the plugin update
