@@ -2,7 +2,7 @@
 
 The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17 points
 at. Motivation, FR15 itself and the Architecture overview live in `design.md`;
-the decision-level detail is here and in four sibling nodes. Most of it is
+the decision-level detail is here and in five sibling nodes. Most of it is
 needed only when touching this subsystem; the exception is the tier-store
 decisions D42–D44 and D52, which the commit and merge paths reach from outside
 it.
@@ -20,7 +20,7 @@ and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
 gitlore's *composition* of the root index. The mechanism is a subsystem rather
 than a single call, so its decisions are recorded individually as
-**D26–D40, D42–D44, D47 and D52**, across this node and four siblings:
+**D26–D40, D42–D44, D47 and D52**, across this node and five siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -31,10 +31,13 @@ than a single call, so its decisions are recorded individually as
   composition is placement · **D30** the tier manifest · **D31** compose
   triggers and validation · **D34** presence authority · **D35** the welded-line
   refusal · **D36** two projections · **D37** order as a merge input
-- The authoring surface, in [index-authoring-sync.md](index-authoring-sync.md) —
-  **D38** the one-way sync · **D39** the routing-key advisories · **D40**
-  pre-existing drift · **D47** authoring guidance as a skill, curation as a
-  command
+- The authoring-time sync, in [index-authoring-sync.md](index-authoring-sync.md)
+  — **D38** the one-way sync · **D39** the routing-key advisories · **D40**
+  pre-existing drift
+- The authoring guidance, in
+  [memory-authoring-guidance.md](memory-authoring-guidance.md) — **D47**
+  authoring guidance as a skill, curation as a command · **D48** its invocation
+  at the moments that act on facts already written
 - Stores and merges, in [tier-stores.md](tier-stores.md) — **D42** tier lockstep
   · **D43** tier pinning · **D44** tier merges. All three assume the
   detached-at-`live` branch model, which is D41, in

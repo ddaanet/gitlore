@@ -209,7 +209,7 @@ git and decides (D7).
   itself (D32, in [tiered-memory.md](references/tiered-memory.md)); and
   `/gitlore:index-audit`, the store-wide curation pass, a command because a
   human decides to run it (D47, in
-  [index-authoring-sync.md](references/index-authoring-sync.md)).
+  [memory-authoring-guidance.md](references/memory-authoring-guidance.md)).
 - **Skills** — `resolve`, the semantic merge of a diverged store, split across a
   gate, a fresh-context sub-agent (D9), the parent's approval and a continuation
   script; `push`, which publishes every store with no parent push and no

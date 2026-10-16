@@ -1,8 +1,8 @@
 # Index composition — decisions D29–D31, D34–D37, D57
 
 How a repo's root memory index comes to hold every active tier's pointer lines
-alongside its own, and what keeps the two surfaces from fighting. One of the
-five nodes of the tiered-memory subsystem (FR15), whose entry point is
+alongside its own, and what keeps the two surfaces from fighting. One of the six
+nodes of the tiered-memory subsystem (FR15), whose entry point is
 [tiered-memory.md](tiered-memory.md).
 
 - Composition — **D29** composition is placement, never text-derivation ·

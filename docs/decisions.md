@@ -180,8 +180,10 @@ report with a line saying composition did not run, via
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
 [tiered-memory.md](references/tiered-memory.md), composition (D29–D31, D34–D37,
 D57) in [index-composition.md](references/index-composition.md), the
-authoring-time sync and the authoring guidance with its invocation (D38–D40,
-D47, D48) in [index-authoring-sync.md](references/index-authoring-sync.md), the
+authoring-time sync (D38–D40) in
+[index-authoring-sync.md](references/index-authoring-sync.md), the authoring
+guidance with its invocation (D47, D48) in
+[memory-authoring-guidance.md](references/memory-authoring-guidance.md), the
 tier stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md),
 and the repair of an arriving index and the merged-index gate (D52) in
 [tier-arrival-repair.md](references/tier-arrival-repair.md).
