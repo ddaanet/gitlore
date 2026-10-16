@@ -1,0 +1,3 @@
+## Current task
+
+The backlog is cleared and `dev` is ready for its release review against `main`. Every commit on `dev` had its per-commit review; the release-level review of `dev` against `main` has not run. Next: run `/code-review high` on `dev` against `main`, then the codex adversarial review my human partner asked for (`/codex:adversarial-review astra` against `main`). The codex adversarial review is user-invoked only, so ask my human partner to type it, with `--base main`, and fold its findings after it returns. Fix confirmed findings under the one-re-review rule in shared-claude.md.
