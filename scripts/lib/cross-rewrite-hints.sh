@@ -104,12 +104,19 @@ rebuild_steps() {
 # that resolves it. A ref on the dropped commit itself ($3 equals $2) holds no
 # local work, so only the move to the remote's tip is printed; a ref above it
 # prints the listing of that work and the replay onto the tip. The tip is the
-# remote's `live`, or its `main` for main, which is fetched here. Args: $1=ref
-# name, $2=the ref's commit, $3=the recorded commit whose chain is dropped.
+# remote's `live`, or its `main` for main, which is fetched here. A HEAD with
+# work that is attached to a branch replays onto that branch's tip and ends
+# with the branch's update-ref, so one replay settles both. Args: $1=ref name,
+# $2=the ref's commit, $3=the recorded commit whose chain is dropped.
 refuse_dropped() {
   local name="$1" sha="$2" base="$3" tip=refs/remotes/origin/live move replay s
+  local branch="" ref_arg
   s=$(dq "$store")
-  if [ "$name" = main ]; then
+  if [ "$name" = HEAD ] && [ "$base" != "$sha" ]; then
+    branch=$(git -C "$store" symbolic-ref -q HEAD || true)
+    branch=${branch#refs/heads/}
+  fi
+  if [ "$name" = main ] || [ "$branch" = main ]; then
     fetch_main
     tip=refs/remotes/origin/main
     if ! git -C "$store" rev-parse -q --verify "$tip" > /dev/null; then
@@ -127,14 +134,21 @@ refuse_dropped() {
   fi
   replay="git -C $s checkout --detach $tip
   git -C $s cherry-pick $base..$sha"
-  [ "$name" = HEAD ] || replay="$replay
-  git -C $s update-ref refs/heads/$name HEAD"
+  if [ "$name" != HEAD ]; then
+    branch="$name"
+  fi
+  if [ -n "$branch" ]; then
+    printf -v ref_arg '%q' "refs/heads/$branch"
+    replay="$replay
+  git -C $s update-ref $ref_arg HEAD"
+  fi
   refuse "$name of $store has local commits on top of $base, a recorded commit whose record chain ends in a dropped commit ($ZEROS). Nothing was moved. List the local work, replay it onto the remote's tip, then run this again:
   git -C $s log --oneline $base..$sha
   $replay"
 }
 
-# Refuses a dropped main when the origin has no main to move it to: with no
+# Refuses a dropped main, or a HEAD attached to it, when the origin has no
+# main to move it to: with no
 # local work the ref is deleted, which leaves it crossed; with some, the
 # listing is all there is to print. Args: $1=main's commit, $2=the recorded
 # commit whose chain is dropped.

@@ -325,9 +325,9 @@ tier_live_local_on_old() {
   before=$(rewrite_store_snapshot "$TIER")
   run --separate-stderr "$CROSS" "$TIER"
   refused
-  [[ "$output$stderr" == *"git -C \"$TIER\" checkout --detach $RW_N2"* ]]
-  [[ "$output$stderr" == *"git -C \"$TIER\" cherry-pick $RW_O2..$RW_LOCAL"* ]]
-  [[ "$output$stderr" == *"git -C \"$TIER\" update-ref refs/heads/live HEAD"* ]]
+  [[ "$output$stderr" == *"git -C \"$TMP_REPO/$TIER\" checkout --detach $RW_N2"* ]]
+  [[ "$output$stderr" == *"git -C \"$TMP_REPO/$TIER\" cherry-pick $RW_O2..$RW_LOCAL"* ]]
+  [[ "$output$stderr" == *"git -C \"$TMP_REPO/$TIER\" update-ref refs/heads/live HEAD"* ]]
   [ "$(rewrite_store_snapshot "$TIER")" = "$before" ]
 }
 

@@ -25,6 +25,10 @@ unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
 
 # The crossing: checks, then the moves.
 main() {
+  # An absolute store, so every command a refusal prints runs from any directory.
+  if [ -d "$store" ]; then
+    store=$(cd "$store" && pwd -P)
+  fi
   [ -e "$store/.git" ] || refuse "$store is not a checked-out store, so there is nothing to cross. Check it out with: $(checkout_command "$store")"
   set_id_length
   tmpd=$(mktemp -d "${TMPDIR:-/tmp}/cross-rewrite.XXXXXX")
@@ -137,14 +141,16 @@ fetch_store() {
 
 # Fetches the remote's main, by explicit refspec, once: a mapped commit may be
 # published there before `live` carries it. A remote without a main has nothing
-# more to fetch.
+# more to fetch, and its stale tracking ref is dropped.
 fetch_main() {
   local err
   [ -z "$MAIN_FETCHED" ] || return 0
   MAIN_FETCHED=1
   if ! err=$(git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main 2>&1); then
     case "$err" in
-      *"couldn't find remote ref refs/heads/main"*) ;;
+      *"couldn't find remote ref refs/heads/main"*)
+        # The remote has no main, so a tracking ref left from an earlier fetch is stale.
+        git -C "$store" update-ref -d refs/remotes/origin/main ;;
       *) refuse "could not fetch from the origin of $store. Once the remote is reachable, run this again. git said: $err" ;;
     esac
   fi

@@ -100,7 +100,7 @@ $RW_O2 $CX_Z"
   run --separate-stderr "$CROSS" "$TIER"
   refused
   [[ "$stderr" == *"trees differ outside gitlinks"* ]]
-  [[ "$stderr" == *"git -C \"$TIER\" diff --stat $RW_O2 $CX_Z"* ]]
+  [[ "$stderr" == *"git -C \"$TMP_REPO/$TIER\" diff --stat $RW_O2 $CX_Z"* ]]
   [[ "$stderr" == *"A person must decide"* ]]
   [[ "$stderr" != *"from scratch"* ]]
   [[ "$stderr" != *"--delete"* ]]
@@ -113,7 +113,7 @@ $RW_O2 $CX_Z"
   run --separate-stderr "$CROSS" memory
   refused
   [[ "$stderr" == *"in the record of"* ]]
-  [[ "$stderr" == *"git -C \"memory\" diff-tree -r --no-renames $CX_M2 $CX_M2N"* ]]
+  [[ "$stderr" == *"git -C \"$TMP_REPO/memory\" diff-tree -r --no-renames $CX_M2 $CX_M2N"* ]]
   [[ "$stderr" == *"A person must decide"* ]]
   [[ "$stderr" != *"from scratch"* ]]
   [[ "$stderr" != *"--delete"* ]]
@@ -169,7 +169,7 @@ $RW_N2 $CX_ZEROS" append
   run --separate-stderr "$CROSS" "$TIER"
   refused
   [[ "$stderr" == *"dropped"* ]]
-  [[ "$stderr" == *"git -C \"$TIER\" log --oneline $RW_O2..$RW_LOCAL"* ]]
+  [[ "$stderr" == *"git -C \"$TMP_REPO/$TIER\" log --oneline $RW_O2..$RW_LOCAL"* ]]
   [[ "$stderr" != *"A person must decide"* ]]
   [[ "$stderr" != *"neither on the remote's history"* ]]
   [ "$(rewrite_store_snapshot "$TIER")" = "$before" ]
@@ -311,6 +311,6 @@ STUB
   [ "$(git -C memory rev-parse HEAD)" = "$CX_M2N" ]
   [ "$(git -C memory rev-parse main)" = "$CX_M2N" ]
   # The stub saw the store's own fetch, so a count of zero cannot be a blind stub.
-  [ "$(grep -cx 'memory' "$TMP_REPO/fetch.log")" -eq 1 ]
-  [ "$(grep -cx 'memory/ddaanet' "$TMP_REPO/fetch.log")" -eq 1 ]
+  [ "$(grep -cx "$TMP_REPO/memory" "$TMP_REPO/fetch.log")" -eq 1 ]
+  [ "$(grep -cx "$TMP_REPO/memory/ddaanet" "$TMP_REPO/fetch.log")" -eq 1 ]
 }

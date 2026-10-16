@@ -110,7 +110,7 @@ run_printed_checkout() {
   run --separate-stderr "$CROSS" memory
   refused
   [[ "$stderr" == *"not checked out"* ]]
-  [[ "$stderr" == *'git -C "memory" submodule update --init -- "ddaanet"'* ]]
+  [[ "$stderr" == *'git -C "'"$TMP_REPO"'/memory" submodule update --init -- "ddaanet"'* ]]
 }
 
 @test "cross tier: a record with no version file is refused, naming the rebuild" {

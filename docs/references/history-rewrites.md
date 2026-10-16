@@ -126,18 +126,22 @@ Every refusal ends in the act that resolves it. A ref on a dropped commit holds
 no local work, so it prints only the move to the remote's tip: its `live` for
 HEAD and `live`, the remote's `main` for `main`, which is fetched first. A ref
 above a dropped commit prints the `git log` that lists the work and the replay
-onto that tip. A dropped `main` against a remote with no `main` prints the
-deletion of the local branch, or only the listing when it holds local work. A
-ref on neither the remote's history nor a recorded commit prints the `git log`
-that compares it with the remote and says a person decides, and so do trees that
-differ outside gitlinks (`git diff --stat`) and a gitlink the child's record
-maps elsewhere (`git diff-tree`): the record may be wrong, or the rewrite may
-have meant to change them. A mapped commit the clone lacks is fetched from the
-remote's `main` first, since it can be published there before `live` carries it;
-when it is still absent, the rewritten history has not reached the remote, and
-the refusal says to run the script again once the force-push has landed, since a
-run fetches `live` and `main` itself. It never prints a rebuild, because the
-record may be right.
+onto that tip; a HEAD attached to a branch replays onto that branch's tip and
+ends with the branch's `update-ref`, so one replay settles both. A dropped
+`main` against a remote with no `main` prints the deletion of the local branch,
+or only the listing when it holds local work; the fetch of `main` drops a
+tracking ref left from before the remote lost it, so a stale one is never the
+target. The store is made absolute once at startup, so every printed `git -C`
+runs from any directory. A ref on neither the remote's history nor a recorded
+commit prints the `git log` that compares it with the remote and says a person
+decides, and so do trees that differ outside gitlinks (`git diff --stat`) and a
+gitlink the child's record maps elsewhere (`git diff-tree`): the record may be
+wrong, or the rewrite may have meant to change them. A mapped commit the clone
+lacks is fetched from the remote's `main` first, since it can be published there
+before `live` carries it; when it is still absent, the rewritten history has not
+reached the remote, and the refusal says to run the script again once the
+force-push has landed, since a run fetches `live` and `main` itself. It never
+prints a rebuild, because the record may be right.
 
 A record that cannot be read — no version file, a version that is not a number,
 no map, a map line that is not a pair of ids, a chain that does not end — prints
