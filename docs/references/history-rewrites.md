@@ -37,9 +37,12 @@ from whoever did the rewrite, published where every clone already looks.
 `gitlore/rewrites` on the store's own remote. Its tree holds two files:
 
 - `version` — the format version, `1`.
-- `map` — one line per rewritten commit, `<old id> <new id>`, 40-hex each. A
-  commit whose id the rewrite left unchanged has no line; a commit the rewrite
-  dropped maps to forty zeros.
+- `map` — one line per rewritten commit, `<old id> <new id>`, each id as long as
+  the store's object ids: 40 hex digits for a sha1 store, 64 for sha256, read
+  from `git rev-parse --show-object-format`. A commit whose id the rewrite left
+  unchanged has no line; a commit the rewrite dropped maps to zeros of that
+  length. The format version stays `1`: the length is a property of the store,
+  not of the record.
 
 Each rewrite appends its lines to `map` in a new commit on top of the previous
 record, so the branch only ever fast-forwards and the record itself is never a

@@ -12,6 +12,9 @@
 # store's gitlink is staged in its parent repository: a tier in the memory
 # store's index, the memory store in the project's.
 #
+# A child store's record is fetched once per run. Ids in the record are as long
+# as the store's object ids (40 hex digits for sha1, 64 for sha256).
+#
 # Every check runs before anything moves, so one refusal moves nothing. A
 # refusal prints `cross-rewrite:` and its cause on stderr and exits 1. When
 # every ref is already on the remote's history, the store is left alone and
@@ -21,8 +24,9 @@ set -euo pipefail
 
 # The crossing: checks, then the moves.
 main() {
-  [ -e "$store/.git" ] || refuse "$store is not a checked-out store, so there is nothing to cross."
   script_dir=$(cd "$(dirname "$0")" && pwd -P)
+  [ -e "$store/.git" ] || refuse "$store is not a checked-out store, so there is nothing to cross. Check it out with: git submodule update --init -- \"$store\""
+  set_id_length
   tmpd=$(mktemp -d "${TMPDIR:-/tmp}/cross-rewrite.XXXXXX")
   trap 'rm -rf "$tmpd"' EXIT
 
@@ -84,6 +88,22 @@ refuse() {
   exit 1
 }
 
+# Sets IDLEN, the hex length of the store's object ids (40 for sha1, 64 for
+# sha256), and ZEROS, the id a dropped commit maps to. A record's lines are
+# read with the store's length; a mounted child has the same object format.
+set_id_length() {
+  local format
+  if ! format=$(git -C "$store" rev-parse --show-object-format 2>&1); then
+    refuse "could not read the object format of $store: $format"
+  fi
+  case "$format" in
+    sha1) IDLEN=40 ;;
+    sha256) IDLEN=64 ;;
+    *) refuse "$store has an object format this script does not know." ;;
+  esac
+  ZEROS=$(printf '%0*d' "$IDLEN" 0)
+}
+
 # Refuses unless every status entry is a gitlink staged in the index. A tier
 # staged by an earlier crossing is the only change allowed; anything else,
 # staged or not, is uncommitted work the crossing must not touch.
@@ -110,9 +130,9 @@ fetch_store() {
   if ! err=$(git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites +refs/heads/live:refs/remotes/origin/live 2>&1); then
     case "$err" in
       *"couldn't find remote ref refs/heads/gitlore/rewrites"*)
-        refuse "no rewrite record on the origin of $store, so there is nothing to cross." ;;
+        refuse "no rewrite record on the origin of $store, so there is nothing to cross. The record is published by \"$script_dir/record-rewrite.sh\", run by whoever rewrote that history; once it is published, run this again." ;;
     esac
-    refuse "could not fetch from the origin of $store: $err"
+    refuse "could not fetch from the origin of $store. Once the remote is reachable, run this again. git said: $err"
   fi
 }
 
@@ -121,35 +141,46 @@ fetch_store() {
 read_record() {
   local repo="$1" out="$2" version map_err
   if ! version=$(git -C "$repo" show refs/gitlore/rewrites:version 2>&1); then
-    refuse "the rewrite record of $repo has no readable version file: $version"
+    refuse "the rewrite record of $repo has no readable version file. Ask the owner of the rewrite to repair gitlore/rewrites on the remote, then run this again. git said: $version"
   fi
   # The record is remote content and its ids reach printed commands, so
   # neither the version nor a bad line is echoed back.
-  [ "$version" = 1 ] || refuse "the rewrite record gitlore/rewrites of $repo is not version 1, the only version this script reads."
+  [ "$version" = 1 ] || refuse "the rewrite record gitlore/rewrites of $repo is not version 1, the only version this script reads. Update gitlore, then run this again."
   if ! map_err=$(git -C "$repo" show refs/gitlore/rewrites:map 2>&1 >"$out"); then
-    refuse "the rewrite record of $repo has no readable map: $map_err"
+    refuse "the rewrite record of $repo has no readable map. Ask the owner of the rewrite to repair gitlore/rewrites on the remote, then run this again. git said: $map_err"
   fi
-  if grep -Evq '^[0-9a-f]{40} [0-9a-f]{40}$' "$out"; then
-    refuse "the rewrite record gitlore/rewrites of $repo has a map line that is not two 40-hex ids, so it cannot be trusted."
+  if grep -Evq "^[0-9a-f]{$IDLEN} [0-9a-f]{$IDLEN}\$" "$out"; then
+    refuse "the rewrite record gitlore/rewrites of $repo has a map line that is not two ${IDLEN}-hex ids, so it cannot be trusted. Ask the owner of the rewrite to repair it on the remote, then run this again."
   fi
 }
 
-# Fetches the rewrite record of the store mounted at $1 from that store's own
-# origin, and writes its map to $2. A record the remote lacks is an empty map:
-# nothing was rewritten there, so its gitlinks are unchanged.
-# Args: $1=child store path, $2=output file.
+# Fetches the rewrite record of the store mounted at $store/$1 from that
+# store's own origin, once per run, and sets CHILD_MAP to a file holding its
+# map. A record the remote lacks is an empty map: nothing was rewritten there,
+# so its gitlinks are unchanged. Args: $1=child path within the store.
 load_child_record() {
-  local child="$1" out="$2" err
-  [ -e "$child/.git" ] || refuse "$child is not checked out, so its rewrite record cannot be read."
+  local path="$1" child="$store/$1" err i=0
+  while [ "$i" -lt "$CHILD_N" ]; do
+    if [ "${CHILD_PATHS[$i]}" = "$path" ]; then
+      CHILD_MAP="$tmpd/child.$i.map"
+      return 0
+    fi
+    i=$((i + 1))
+  done
+  [ -e "$child/.git" ] || refuse "$child is not checked out, so its rewrite record cannot be read. Check it out with: git -C \"$store\" submodule update --init -- \"$path\""
+  CHILD_MAP="$tmpd/child.$CHILD_N.map"
   if ! err=$(git -C "$child" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
     case "$err" in
       *"couldn't find remote ref refs/heads/gitlore/rewrites"*)
-        : > "$out"
-        return 0 ;;
+        : > "$CHILD_MAP" ;;
+      *)
+        refuse "could not fetch gitlore/rewrites, the rewrite record of $child, from its origin, so its gitlinks cannot be checked. Once the remote is reachable, run this again. git said: $err" ;;
     esac
-    refuse "could not fetch gitlore/rewrites, the rewrite record of $child, from its origin, so its gitlinks cannot be checked. Run this again once the remote is reachable. git said: $err"
+  else
+    read_record "$child" "$CHILD_MAP"
   fi
-  read_record "$child" "$out"
+  CHILD_PATHS[CHILD_N]="$path"
+  CHILD_N=$((CHILD_N + 1))
 }
 
 # Prints the new id the map file $1 gives for the id $2, or nothing when the
@@ -170,7 +201,7 @@ chain_end() {
     cur="$next"
     [ "$cur" != "$ZEROS" ] || break
     steps=$((steps + 1))
-    [ "$steps" -le "$lines" ] || refuse "the rewrite record's chain from $2 does not end, so nothing was moved."
+    [ "$steps" -le "$lines" ] || refuse "the rewrite record's chain from $2 does not end, so nothing was moved. Ask the owner of the rewrite to repair gitlore/rewrites on the remote, then run this again."
     next=$(map_next "$map" "$cur")
   done
   CHAIN_END="$cur"
@@ -214,8 +245,8 @@ check_commit() {
 check_gitlink() {
   local name="$1" old="$2" new="$3" path="$4" was="$5" now="$6" child
   child="$store/$path"
-  load_child_record "$child" "$tmpd/child.map"
-  chain_end "$tmpd/child.map" "$was"
+  load_child_record "$path"
+  chain_end "$CHILD_MAP" "$was"
   if [ "$CHAIN_END" != "$now" ]; then
     refuse "$name of $store: ${old:0:7} maps to ${new:0:7}, but its gitlink $path (${was:0:7}) maps to ${CHAIN_END:0:7} in the record of $child, not ${now:0:7}. Nothing was moved."
   fi
@@ -235,8 +266,8 @@ check_children() {
     child="$store/$path"
     [ -e "$child/.git" ] || continue
     child_head=$(git -C "$child" rev-parse HEAD)
-    load_child_record "$child" "$tmpd/child.map"
-    if [ -n "$(map_next "$tmpd/child.map" "$child_head")" ]; then
+    load_child_record "$path"
+    if [ -n "$(map_next "$CHILD_MAP" "$child_head")" ]; then
       refuse "tier $child is still on recorded commit ${child_head:0:7}, so $store cannot cross yet. Cross the tier first: \"$script_dir/cross-rewrite.sh\" \"$child\""
     fi
   done 3< "$tmpd/links"
@@ -302,7 +333,11 @@ if [ $# -ne 1 ]; then
   exit 2
 fi
 store="$1"
-ZEROS=0000000000000000000000000000000000000000
+IDLEN=""
+ZEROS=""
+CHILD_PATHS=()
+CHILD_N=0
+CHILD_MAP=""
 CHAIN_END=""
 PLAN_NEW=""
 main
