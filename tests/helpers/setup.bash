@@ -99,6 +99,21 @@ teardown_tmp_repo() {
   fi
 }
 
+# A suite that drives scripts/install/run.sh calls this from setup. run.sh ends by
+# leaving the fixture: `direnv allow` records under XDG_DATA_HOME
+# (default $HOME/.local/share), without direnv the global shim goes under
+# GITLORE_HOME (default $HOME/.gitlore), and gitlore_cc_memory_dir reads
+# $HOME/.claude/projects. Every one of them is pointed at a directory of the
+# test's own, outside the fixture repo so the repo's status is not disturbed.
+# Needs BATS_TEST_TMPDIR, so it runs from setup, never at load time.
+isolate_home() {
+  export HOME="$BATS_TEST_TMPDIR/home"
+  export XDG_DATA_HOME="$HOME/.local/share" XDG_CONFIG_HOME="$HOME/.config"
+  export GITLORE_HOME="$HOME/.gitlore"
+  mkdir -p "$HOME"
+  printf '[user]\n\tname = Test\n\temail = test@example.com\n' > "$HOME/.gitconfig"
+}
+
 # Load every script under scripts/lib so library functions are in scope.
 # The glob may expand to nothing if the directory doesn't exist yet; that's fine.
 shopt -s nullglob
