@@ -19,7 +19,7 @@ What makes a pure move checkable is that it is checkable: function bodies are
 byte-identical under `declare -f`, every `@test` name is preserved, comments
 naming a moved function or test point at its new file, and the
 rejection-discriminator site list names each part that now carries the pattern.
-Per-split reports and the agent brief are in `plans/file-splits/`.
+The agent brief is in `plans/2026-09-20-file-splits/`.
 
 The cap outside `docs/` is a convention rather than a gate: the `oversized-file`
 check in `scripts/check-docs-links.py` covers `docs/` only, so nothing will

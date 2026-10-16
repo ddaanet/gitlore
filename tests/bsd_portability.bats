@@ -8,7 +8,7 @@
 # not. They assume bash >= 4.1, where a failing `[[ ]]` anywhere in a test body
 # fails the test. Under 3.2 a failing non-final `[[ ]]` passes silently, while
 # a failing `[ ]` or plain command still fails the test (measured with bats
-# 1.14.0 on bash 3.2.57 by `plans/macos-check/run.sh`), so a suite asserting
+# 1.14.0 on bash 3.2.57 by `plans/2026-09-21-macos-check/run.sh`), so a suite asserting
 # with `[[ ]]` reports green on a Mac it never checked. `helpers/setup.bash`
 # refuses such a bash when a suite loads it. A macOS run therefore
 # drives bats with a modern bash (Homebrew's) and points what the tests exec at

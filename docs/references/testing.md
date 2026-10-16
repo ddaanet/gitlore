@@ -43,8 +43,8 @@ plus the tools the platform lacks, and sets `GITLORE_TEST_BASH_DIR`, which
 system's 3.2 while the assertions stay real. It runs every unit suite by
 default, exits with bats' status, and records no gate sentinel, since
 `test-unit`'s hash does not know which bash ran the scripts. It is run by hand
-on a Mac; no CI job runs it. `plans/macos-check/run.sh` is the one-shot
-diagnostic it grew out of, with the assertion probe and the
+on a Mac; no CI job runs it. `plans/2026-09-21-macos-check/run.sh` is the
+one-shot diagnostic it grew out of, with the assertion probe and the
 baseline/mixed/all-old comparison. On Linux the BSD behaviour the system tools
 would have contributed comes from the stubs `tests/bsd_portability.bats`
 installs instead.

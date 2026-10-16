@@ -22,7 +22,7 @@
 # bash, and often GNU sed, grep, find and coreutils, ahead of the system's. The
 # run gets the system directories alone, plus symlinks to exactly the tools
 # they lack; the header of the output names each one borrowed.
-# `plans/macos-check/run.sh` is the one-shot diagnostic this grew out of, with
+# `plans/2026-09-21-macos-check/run.sh` is the one-shot diagnostic this grew out of, with
 # the probes and the three-way comparison this leaves out.
 #
 # Its own shebang may resolve to any bash, so it is written for 3.2.

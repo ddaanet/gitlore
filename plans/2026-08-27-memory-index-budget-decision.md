@@ -50,14 +50,17 @@ That is +3,448 bytes in fourteen days, about 246 bytes — a little over one ent
 
 Against that, what curation has actually returned:
 
-- **Sweep B** (`plans/sweep-b-ownership-audit.md`, 2026-08-25) classified all
-  100 tier files and found **2 retirements and 2 relocations, 754 bytes**. All
-  four have since been applied — none of those four slugs exists any more.
-  Growth ate that 754 bytes back within 48 hours, four times over.
-- **The budget survey** (`plans/2026-08-27-memory-index-budget-survey.md`)
-  sampled ~20 entries and found **~245 bytes** in two merge candidates, and
-  reported the acted-inline relocation well as dry.
-- **The retirement sweep** (`plans/2026-08-27-memory-index-retirement-sweep.md`)
+- **Sweep B** (`git show a274b4c:plans/sweep-b-ownership-audit.md`, 2026-08-25)
+  classified all 100 tier files and found
+  **2 retirements and 2 relocations, 754 bytes**. All four have since been
+  applied — none of those four slugs exists any more. Growth ate that 754 bytes
+  back within 48 hours, four times over.
+- **The budget survey**
+  (`git show a274b4c:plans/2026-08-27-memory-index-budget-survey.md`) sampled
+  ~20 entries and found **~245 bytes** in two merge candidates, and reported the
+  acted-inline relocation well as dry.
+- **The retirement sweep**
+  (`git show a274b4c:plans/2026-08-27-memory-index-retirement-sweep.md`)
   returned **zero** further candidates. It reports itself honestly: its first
   pass re-classified 85 files from scratch before reading Sweep B, so that pass
   is redundant re-derivation rather than independent confirmation. What it adds
@@ -85,10 +88,10 @@ roughly 103 facts, and gaining one a day.
    project-local facts and the newest entries stop being the sacrificial tail. A
    mitigation, not a fix, and gitlore already owns this code.
 2. **Sub-scope the `ddaanet` tier.** The tier-wide-vs-sub-scoping fork that
-   `plans/memory-hygiene-sweep.md` deliberately left open. One index carrying
-   every fact for all 17 mounting repos is what makes the budget binding; a repo
-   mounting only the tiers it needs is the structural answer. This is the real
-   fix and the largest piece of work.
+   `plans/2026-08-11-memory-hygiene-sweep.md` deliberately left open. One index
+   carrying every fact for all 17 mounting repos is what makes the budget
+   binding; a repo mounting only the tiers it needs is the structural answer.
+   This is the real fix and the largest piece of work.
 3. **Raise gitlore's own advisory budget and accept the overage**, treating the
    ~24.4 KB loader cap as the thing to push back on upstream. Honest about where
    the constraint lives, but leaves facts silently dropped meanwhile.

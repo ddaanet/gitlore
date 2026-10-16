@@ -24,9 +24,9 @@ discovery once in `setup_file` and shares the status and output through
 `$BATS_FILE_TMPDIR`, rather than paying a real `just` invocation per case.
 `approve()` and `mount_tier_at_live()` live once in
 `tests/helpers/tier-fixtures.bash`; the copies in three helpers and in
-`tests/tier_lockstep.bats` are gone. And `plans/macos-check/run.sh` is the
-one-shot diagnostic that measures what bash 3.2 does to a bats assertion, runs
-the repair suites with assertions under a modern bash and exec'd scripts under
-3.2, and calls `run-bats-cached.sh` with every optional array empty —
+`tests/tier_lockstep.bats` are gone. And `plans/2026-09-21-macos-check/run.sh`
+is the one-shot diagnostic that measures what bash 3.2 does to a bats assertion,
+runs the repair suites with assertions under a modern bash and exec'd scripts
+under 3.2, and calls `run-bats-cached.sh` with every optional array empty —
 `GITLORE_TEST_BASH_DIR` in `tests/helpers/setup.bash` is the opt-in that puts a
 chosen `bash` first on PATH for what a test execs.

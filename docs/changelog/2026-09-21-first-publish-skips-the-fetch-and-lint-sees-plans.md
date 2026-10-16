@@ -15,14 +15,15 @@ so.
 
 The `lint` gate hash gains `plans/*.sh`, `*.bash` and `*.bats`. `lint-shell.sh`
 walks the whole tree while `precommit_inputs` leaves `plans/` out, so an edit to
-`plans/macos-check/run.sh` moved no hash and reported a cached pass over a file
-the run would have linted. By extension only: a plan's prose must not cost a
-lint run, so an extensionless script there is linted without moving the hash.
-Writing the test for that found `guard_line` in `tests/justfile_gates.bats`
-evaluating an empty name under just 1.46, whose dump nests an interpolation one
-level deeper — `guard_input_files` then listed the whole tree and the input
-assertions held vacuously. It reads both shapes now and fails when a name does
-not evaluate, which is the failure the vacuous pass had been hiding.
+`plans/2026-09-21-macos-check/run.sh` moved no hash and reported a cached pass
+over a file the run would have linted. By extension only: a plan's prose must
+not cost a lint run, so an extensionless script there is linted without moving
+the hash. Writing the test for that found `guard_line` in
+`tests/justfile_gates.bats` evaluating an empty name under just 1.46, whose dump
+nests an interpolation one level deeper — `guard_input_files` then listed the
+whole tree and the input assertions held vacuously. It reads both shapes now and
+fails when a name does not evaluate, which is the failure the vacuous pass had
+been hiding.
 
 Three files came under the 400-line cap by pure extraction, continuing the
 2026-09-20 pass: `check_common.py` holds what the two checkers duplicated,

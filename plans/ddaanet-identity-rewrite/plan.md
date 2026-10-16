@@ -187,7 +187,7 @@ the stored commit map.
 
 ```sh
 R=/Users/david/code/handoff            # the consumer
-MAP=/Users/david/code/gitlore/plans/ddaanet-identity-rewrite/commit-map
+MAP=/Users/david/code/gitlore/plans/ddaanet-identity-rewrite/run-2026-10-15/maps/tier-commit-map
 T="$R/memory/ddaanet"
 ( set -e          # no final `repointed` line: a check failed, nothing ran after
   test -z "$(git -C "$T" status --porcelain)"         # tier is clean
