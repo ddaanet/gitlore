@@ -198,16 +198,18 @@ paired guard plugin · the mount's size as a percentage of the advisory budget �
 sharing the edit-time advisory's marker kind with the mount, or giving the mount
 one of its own (index-composition.md) · frontmatter `description` as the source
 of truth for the index one-liner · scoring an index hook against its body,
-tf-idf style (index-authoring-sync.md) · an append-only constraint on
-shared-tier indexes · a `merge` driver plus `.gitattributes` ·
-`**/MEMORY.md merge=union` plus a dedup-by-path pass · a down projection that
-skips a root line whose file the tier does not hold · writing root and staging
-the pair atomically (tier-stores.md) · a message fix alone for an unadoptable
-arrival · a push that tolerates the defect · a `--no-ff` merge of the arrival
-onto the pin · an agent-driven repair through the memory-merger · a mechanical
-repair of a merge synthesis · repairing only when every problem names the
-carrier · a continuation that commits a defective merged index uncomposed · a
-scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
+tf-idf style (index-authoring-sync.md) · a `PreToolUse` deny on writes under
+`memory/` · an index-size trigger for the audit · carrying the index lines'
+routing surface into the descriptions (memory-authoring-guidance.md) · an
+append-only constraint on shared-tier indexes · a `merge` driver plus
+`.gitattributes` · `**/MEMORY.md merge=union` plus a dedup-by-path pass · a down
+projection that skips a root line whose file the tier does not hold · writing
+root and staging the pair atomically (tier-stores.md) · a message fix alone for
+an unadoptable arrival · a push that tolerates the defect · a `--no-ff` merge of
+the arrival onto the pin · an agent-driven repair through the memory-merger · a
+mechanical repair of a merge synthesis · repairing only when every problem names
+the carrier · a continuation that commits a defective merged index uncomposed ·
+a scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
 directories on the next repair (tier-arrival-repair.md).
 
 **Artifact size** — the 400-line cap over everything a reader takes in at one

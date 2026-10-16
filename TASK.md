@@ -1,3 +1,0 @@
-## Current task
-
-The option H identity rewrite has landed. The ddaanet tier and the gitlore memory store are rewritten, each with a `gitlore/rewrites` record and a `gitlore/archive/2026-10-15` branch, and gitlore's `main` and tags are force-pushed. This checkout and the 13 other tier clones on this machine are crossed by `plans/ddaanet-identity-rewrite/run-2026-10-15/run.sh`. Each clone holds a local parent commit recording the crossed memory store. Still to do: push those 13 parents, which is my human partner's call because most hold unrelated unpushed work, and cross the laptop's clones once it runs gitlore 0.10.0, following section 5 of that directory's `push-commands.md`. The run's evidence is in `report.md` there.

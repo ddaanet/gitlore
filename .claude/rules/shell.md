@@ -22,7 +22,7 @@ paths:
   (`err=$(cmd 2>&1)` then `case "$err"`) when failure modes differ; the redirect
   only when provoking the error *is* the mechanism, with the reason inline.
   Never replace git's message with a guess.
-  Details: `memory/ddaanet/no-stderr-suppression.md`.
+  Details: the `shell-scripting:shell-gotchas` skill, `references/robustness.md`.
 
 - **A bare `read` drops an unterminated final line.** `while IFS= read -r line`
   fills `$line` and *then* returns non-zero at EOF, so the last line of a file
@@ -36,7 +36,8 @@ paths:
   submodule-aware hook must clear the full set — `unset $(git rev-parse
   --local-env-vars)`, not just `GIT_DIR`/`GIT_INDEX_FILE`/`GIT_WORK_TREE` —
   except `GIT_INDEX_FILE`, which a staging hook captures before the unset and
-  restores for its `git add`. Details: `memory/ddaanet/git-hook-env-leak.md`.
+  restores for its `git add`. Details: the `shell-scripting:shell-gotchas` skill,
+  `references/environments.md`.
 
 - **`git -C` into an unchecked-out submodule operates on the parent.** Guard
   every tier/submodule loop with `[ -e "$path/.git" ]` first.

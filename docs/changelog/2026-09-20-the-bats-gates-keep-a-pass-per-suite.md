@@ -35,5 +35,5 @@ to the parent.
 Two things measured and not taken. Batching `rev-parse` in the hooks came out
 within noise; the patch stays under `plans/2026-09-20-precommit-speed/`
 unapplied, while the replay-marker tests it prompted stay in the suite. The
-timings and the argument against rewriting the hot path in Python are recorded
-there.
+timings and the argument against rewriting the hot path in Python are in
+`git show a274b4c:plans/precommit-speed/bats-timings-2026-09-20.md`.

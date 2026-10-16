@@ -20,7 +20,7 @@ and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
 gitlore's *composition* of the root index. The mechanism is a subsystem rather
 than a single call, so its decisions are recorded individually as
-**D26–D40, D42–D44, D47 and D52**, across this node and five siblings:
+**D26–D40, D42–D44, D47, D48, D52 and D57**, across this node and five siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -30,7 +30,8 @@ than a single call, so its decisions are recorded individually as
 - Composition, in [index-composition.md](index-composition.md) — **D29**
   composition is placement · **D30** the tier manifest · **D31** compose
   triggers and validation · **D34** presence authority · **D35** the welded-line
-  refusal · **D36** two projections · **D37** order as a merge input
+  refusal · **D36** two projections · **D37** order as a merge input · **D57**
+  the mount reports its composed size against the loader cutoff
 - The authoring-time sync, in [index-authoring-sync.md](index-authoring-sync.md)
   — **D38** the one-way sync · **D39** the routing-key advisories · **D40**
   pre-existing drift
