@@ -28,7 +28,9 @@ teardown() { teardown_tmp_repo; }
   [[ "$output$stderr" == *"memory merge prepared"* ]]
   [[ "$output$stderr" == *"flavor=head-vs-remote"* ]]
   [[ "$output$stderr" == *"continue-after-merge"* ]]
-  [[ "$output$stderr" == *"cd \"$TMP_REPO\" && bash \"$PLUGIN_ROOT/scripts/resolve.sh\""* ]]
+  # The script names its own tree, canonical, not the `..`-bearing fixture path.
+  own_root=$(cd "$PLUGIN_ROOT" && pwd)
+  [[ "$output$stderr" == *"cd \"$TMP_REPO\" && bash \"$own_root/scripts/resolve.sh\""* ]]
   [[ "$output$stderr" != *'$CLAUDE_PLUGIN_ROOT'* ]]
   statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
   [ -f "$statefile" ]

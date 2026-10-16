@@ -8,12 +8,14 @@ WRITE_SETTINGS="$PLUGIN_ROOT/scripts/install/write-settings.sh"
 setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  # The script pins its own tree, canonical; $PLUGIN_ROOT carries `..`.
+  OWN_ROOT=$(cd "$PLUGIN_ROOT" && pwd)
 }
 teardown() { teardown_tmp_repo; }
 
 @test "seeds gitlore.commitCommand pointing at commit-memory.sh" {
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.commitCommand)" = "$PLUGIN_ROOT/scripts/commit-memory.sh" ]
+  [ "$(git config gitlore.commitCommand)" = "$OWN_ROOT/scripts/commit-memory.sh" ]
 }
 
 # D20: the standalone push entry point is discovered the same way the standalone
@@ -21,25 +23,25 @@ teardown() { teardown_tmp_repo; }
 # caller (the push skill, or handoff wrapping up) can publish memory on its own.
 @test "seeds gitlore.pushCommand pointing at push-memory.sh" {
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.pushCommand)" = "$PLUGIN_ROOT/scripts/push-memory.sh" ]
+  [ "$(git config gitlore.pushCommand)" = "$OWN_ROOT/scripts/push-memory.sh" ]
   [ -x "$(git config gitlore.pushCommand)" ]
 }
 
 @test "seeds gitlore.mergeCommand pointing at merge-memory.sh" {
 
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.mergeCommand)" = "$PLUGIN_ROOT/scripts/merge-memory.sh" ]
+  [ "$(git config gitlore.mergeCommand)" = "$OWN_ROOT/scripts/merge-memory.sh" ]
   [ -x "$(git config gitlore.mergeCommand)" ]
 }
 
 @test "seeds gitlore.hooksDir alongside commitCommand" {
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.hooksDir)" = "$PLUGIN_ROOT/scripts/git-hooks" ]
+  [ "$(git config gitlore.hooksDir)" = "$OWN_ROOT/scripts/git-hooks" ]
 }
 
 @test "seeds gitlore.memoryApprovalClauseFile pointing at the reference clause" {
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.memoryApprovalClauseFile)" = "$PLUGIN_ROOT/reference/memory-approval-clause.txt" ]
+  [ "$(git config gitlore.memoryApprovalClauseFile)" = "$OWN_ROOT/reference/memory-approval-clause.txt" ]
 }
 
 @test "merging into an existing settings.json keeps its file mode" {

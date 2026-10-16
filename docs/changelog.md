@@ -7,6 +7,10 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-16 — A script sources the libraries shipped beside it](changelog/2026-10-16-a-script-sources-the-libraries-beside-it.md)
+  — the memory entry points and the push and memory-commit hooks take their
+  plugin root from their own path, not from `gitlore.hooksDir`, so a newer
+  script run by path no longer sources an older cache's libraries
 - [2026-10-15 — A clone on rewritten history is refused, not merged back](changelog/2026-10-15-a-clone-on-rewritten-history-is-refused.md)
   — a rewritten store publishes an append-only `gitlore/rewrites` record (D61);
   a divergence whose local side holds a recorded old commit is refused at the

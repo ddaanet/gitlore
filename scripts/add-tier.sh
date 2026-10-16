@@ -21,7 +21,7 @@
 set -euo pipefail
 unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+PLUGIN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # gitlore_get_frontmatter_description, to echo the tier's routing guidance back.

@@ -25,7 +25,10 @@ set -euo pipefail
 # shellcheck disable=SC2046  # intentional word-splitting of the var-name list
 unset $(git rev-parse --local-env-vars)
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git config gitlore.hooksDir)/../..}"
+# The libraries shipped beside this script, never the ones `gitlore.hooksDir` or
+# CLAUDE_PLUGIN_ROOT name: both can pin an older cache, and a newer script run
+# by path would then call functions its libraries lack.
+PLUGIN_ROOT=$(CDPATH="" cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091

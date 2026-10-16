@@ -6,10 +6,11 @@ mempath="${1:-memory}"
 remote_mode="${2:-auto}"
 remote_url="${3:-}"
 
-# Self-locate so we work under the Claude Code Bash tool, where
-# CLAUDE_PLUGIN_ROOT is injected for hooks but NOT for Bash commands.
-# Export it so the child install scripts inherit a correct value.
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# Self-locate: the tree this script ships in, never a CLAUDE_PLUGIN_ROOT that may
+# name another (it is injected for hooks, not for Bash commands, and a session
+# that froze at an older root keeps the older value). Export it so the child
+# install scripts, global-shim.sh among them, inherit this tree.
+PLUGIN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
 
 # shellcheck disable=SC1091
@@ -46,7 +47,7 @@ for probe_dir in "$toplevel" "$common_dir_abs"; do
     {
       echo "gitlore: cannot write to '$probe_dir' — the command sandbox is blocking install."
       echo "gitlore: re-run with the sandbox disabled:"
-      echo "  CLAUDE_PLUGIN_ROOT='$PLUGIN_ROOT' bash '${BASH_SOURCE[0]}' '$mempath'"
+      echo "  bash '${BASH_SOURCE[0]}' '$mempath'"
     } >&2
     exit 3
   fi
