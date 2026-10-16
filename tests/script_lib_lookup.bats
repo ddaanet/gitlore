@@ -121,3 +121,59 @@ assert_own_libs() {
   # The gate's own refusal, which only its own log.sh can word.
   [ "$status" -eq 1 ]
 }
+
+# The scripts that used to prefer CLAUDE_PLUGIN_ROOT. A session that froze at an
+# older plugin root can leave it naming another tree, and a script run by path
+# must still be its own tree's script.
+
+@test "add-tier.sh sources its own libraries when CLAUDE_PLUGIN_ROOT names another tree" {
+  make_parent_with_memory
+  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
+
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/add-tier.sh"
+  assert_own_libs
+}
+
+@test "emit-wrappers.sh sources its own libraries when CLAUDE_PLUGIN_ROOT names another tree" {
+  make_parent_with_memory
+  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
+
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
+  assert_own_libs
+  [ "$status" -eq 0 ]
+}
+
+@test "install/create-remote.sh sources its own libraries when CLAUDE_PLUGIN_ROOT names another tree" {
+  make_parent_with_memory
+  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
+
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" memory local
+  assert_own_libs
+}
+
+@test "install/run.sh sources its own libraries when CLAUDE_PLUGIN_ROOT names another tree" {
+  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
+
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/run.sh" memory local
+  assert_own_libs
+}
+
+@test "install/write-settings.sh pins the keys at its own tree when CLAUDE_PLUGIN_ROOT names another" {
+  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
+  own_root=$(cd "$PLUGIN_ROOT" && pwd)
+
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/write-settings.sh"
+  [ "$status" -eq 0 ]
+  [ "$(git config gitlore.hooksDir)" = "$own_root/scripts/git-hooks" ]
+  [ "$(git config gitlore.commitCommand)" = "$own_root/scripts/commit-memory.sh" ]
+}
+
+@test "install/emit-launcher.sh copies its own tree's shim when CLAUDE_PLUGIN_ROOT names another" {
+  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
+  mkdir -p "$BATS_TEST_TMPDIR/old/scripts/install"
+  echo '# not the shim' > "$BATS_TEST_TMPDIR/old/scripts/install/launcher-shim"
+
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
+  [ "$status" -eq 0 ]
+  diff .gitlore/bin/claude "$PLUGIN_ROOT/scripts/install/launcher-shim"
+}

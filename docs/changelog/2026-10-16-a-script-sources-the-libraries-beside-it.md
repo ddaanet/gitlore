@@ -15,7 +15,13 @@ Nothing relied on the old lookup: the wrapper reaches the hooks through
 agree whenever the wrapper ran it, and the wrappers keep resolving the hook
 itself through the pin (D5).
 
-`add-tier.sh`, `emit-wrappers.sh` and `install/*.sh` still prefer
-`CLAUDE_PLUGIN_ROOT` and fall back to their own path. That variable reaches Bash
-only where a caller exports it, so the same mismatch needs an explicit export
-pointing at another tree; left as is.
+**The scripts that preferred `CLAUDE_PLUGIN_ROOT` locate themselves too.**
+`add-tier.sh`, `emit-wrappers.sh` and the install scripts `run.sh`,
+`emit-launcher.sh`, `write-settings.sh` and `create-remote.sh` took
+`CLAUDE_PLUGIN_ROOT` ahead of their own path, so a session frozen at an older
+root could run a newer script against older libraries, or pin `gitlore.hooksDir`
+and the command keys into the wrong tree. They resolve from their own path now.
+`install/run.sh` still exports the result, because `install/global-shim.sh` is
+the one script that requires `CLAUDE_PLUGIN_ROOT` and is handed it by `run.sh`;
+the `cc-hooks` scripts take the variable the harness injects for them and are
+unchanged.
