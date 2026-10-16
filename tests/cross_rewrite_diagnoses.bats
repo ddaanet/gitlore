@@ -57,6 +57,31 @@ $RW_O2 $absent"
   [[ "$stderr" != *"--delete"* ]]
 }
 
+@test "cross tier: a mapped commit that is absent where the remote has no main names live only" {
+  cx_tier_setup single
+  absent=$(printf '%040d' 7)
+  cx_record_commit "$BARE_TIER" "$RW_O1 $RW_N1
+$RW_O2 $absent"
+  git --git-dir="$BARE_TIER" update-ref -d refs/heads/main
+  cx_position "$TIER" "$RW_O1" "$RW_O2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"the remote's live does not hold it"* ]]
+  [[ "$stderr" == *"fetches the remote's live itself"* ]]
+  [[ "$stderr" != *"main"* ]]
+}
+
+@test "cross tier: a store directory that cannot be entered is refused with the cause" {
+  [ "$(id -u)" -ne 0 ] || skip "root enters a mode 000 directory"
+  tier_old
+  chmod 000 "$TIER"
+  run --separate-stderr "$CROSS" "$TIER"
+  chmod 755 "$TIER"
+  refused
+  [[ "$stderr" == *"cannot enter $TIER, so there is nothing to cross"* ]]
+  [[ "$stderr" == *"cd said:"* ]]
+}
+
 @test "cross tier: running again after the force-push lands completes a crossing the remote's missing main refused" {
   cx_tier_setup single
   # The remote's live is behind and it has no main: N2 has not been published.

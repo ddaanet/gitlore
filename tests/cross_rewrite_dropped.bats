@@ -134,6 +134,42 @@ $RW_N2 $CX_ZEROS" append
   [ "$(git -C "$TIER" show main:rw-local.md)" = "local" ]
 }
 
+@test "cross tier: HEAD attached to a main the remote lacks, on the dropped commit: the printed commands, run once, settle HEAD and main" {
+  tier_dropped_remote_without_main
+  git -C "$TIER" checkout -q -B main "$RW_O2"
+  git -C "$TIER" update-ref refs/heads/live "$RW_O1"
+  [ "$(git -C "$TIER" symbolic-ref HEAD)" = refs/heads/main ]
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"HEAD of"* ]]
+  [[ "$stderr" == *"checkout --detach refs/remotes/origin/live"* ]]
+  [[ "$stderr" == *"update-ref -d refs/heads/main"* ]]
+  cmds=$(printf '%s\n' "$stderr" | grep -E '^  git -C ')
+  [ "$(printf '%s\n' "$cmds" | grep -c .)" -eq 2 ]
+  run_printed "$cmds"
+  [ "$(git -C "$TIER" rev-parse HEAD)" = "$RW_N1" ]
+  run git -C "$TIER" rev-parse -q --verify refs/heads/main
+  [ "$status" -ne 0 ]
+  # One run satisfies both: the rerun has nothing left to refuse.
+  run --separate-stderr "$CROSS" "$TIER"
+  [ "$status" -eq 0 ]
+}
+
+@test "cross tier: a replay of a ref other than HEAD, with HEAD detached on commits it lacks, says HEAD moves and lists them" {
+  cx_tier_setup single
+  rewrite_position_clone "$TIER" old
+  git -C "$TIER" checkout -q --detach "$RW_N2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" == *"HEAD is detached on commits that live does not hold"* ]]
+  [[ "$stderr" == *"git -C \"$TMP_REPO/$TIER\" log --oneline $RW_LOCAL..HEAD"* ]]
+  # Attached, or detached on commits the ref holds, HEAD keeps nothing to list.
+  git -C "$TIER" checkout -q --detach "$RW_O2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  [[ "$stderr" != *"HEAD is detached"* ]]
+}
+
 # --- a store given as a relative path ---
 
 @test "cross tier: a relative store's dropped-commit move runs from another directory" {

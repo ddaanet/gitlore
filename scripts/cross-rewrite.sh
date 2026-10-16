@@ -314,7 +314,7 @@ check_children() {
 # Sets PLAN_NEW to where the ref $1, at commit $2, moves to, or to `crossed`
 # when the commit is already on the remote's history. Refuses on any other case.
 classify_ref() {
-  local name="$1" sha="$2" base base_new target
+  local name="$1" sha="$2" base base_new target branch s
   if [ -n "$(map_next "$tmpd/map" "$sha")" ]; then
     chain_end "$tmpd/map" "$sha" "$store"
     target="$CHAIN_END"
@@ -339,8 +339,10 @@ classify_ref() {
     if [ "$base_new" = "$ZEROS" ]; then
       refuse_dropped "$name" "$sha" "$base"
     fi
+    s=$(dq "$store")
+    branch=$(branch_of "$name")
     refuse "$name of $store has local commits on top of $base, a recorded commit that maps to $base_new. Nothing was moved. Replay them onto the new history, then run this again:
-$(replay_steps "$base_new" "$base" "$sha" "$name")"
+$(head_moves_note "$name" "$sha")$(replay_steps "$base_new" "$base" "$sha" "$branch" "$s")"
   fi
   # No recorded commit under it but history shared with the remote: local
   # commits on the new history, which a crossing has nothing to do for.

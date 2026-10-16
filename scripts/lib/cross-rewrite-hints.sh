@@ -107,10 +107,12 @@ rebuild_steps() {
 # remote's `main` for the branch main, which is fetched here, and the remote's
 # `live` for any other ref. A HEAD attached to a branch is a ref of that
 # branch: its tip, and its move or replay ends with the branch's update-ref,
-# so one run settles both. Args: $1=ref name, $2=the ref's commit, $3=the
-# recorded commit whose chain is dropped.
+# so one run settles both. A HEAD on the dropped commit itself, attached to a
+# `main` the origin lacks, detaches to the remote's live and deletes the branch.
+# Args: $1=ref name, $2=the ref's commit, $3=the recorded commit whose chain is
+# dropped.
 refuse_dropped() {
-  local name="$1" sha="$2" base="$3" tip=refs/remotes/origin/live branch s steps=""
+  local name="$1" sha="$2" base="$3" tip=refs/remotes/origin/live branch s steps="" drop_main=""
   s=$(dq "$store")
   branch=$(branch_of "$name")
   if [ "$branch" = main ]; then
@@ -119,8 +121,9 @@ refuse_dropped() {
       tip=refs/remotes/origin/main
     elif [ "$name" = HEAD ] && [ "$base" = "$sha" ]; then
       # No work to replay and no main to move to: HEAD leaves main for the
-      # remote's live, and main's own refusal deletes the branch.
+      # remote's live and main, which is HEAD's own commit, is deleted.
       branch=""
+      drop_main=1
     else
       refuse_dropped_no_main "$sha" "$base"
     fi
@@ -131,26 +134,39 @@ refuse_dropped() {
   git -C $s checkout --detach $tip"
     [ -z "$branch" ] || steps="$steps
   git -C $s update-ref $(ref_word "refs/heads/$branch") $tip"
+    [ -z "$drop_main" ] || steps="$steps
+  git -C $s update-ref -d refs/heads/main"
     refuse "$name of $store is at ${sha:0:7}, and its record chain ends in a dropped commit ($ZEROS). Nothing was moved. It holds no local work, so move it to the remote's tip, then run this again:$steps"
   fi
   refuse "$name of $store has local commits on top of $base, a recorded commit whose record chain ends in a dropped commit ($ZEROS). Nothing was moved. List the local work, replay it onto the remote's tip, then run this again:
   git -C $s log --oneline $base..$sha
-$(replay_steps "$tip" "$base" "$sha" "$name")"
+$(head_moves_note "$name" "$sha")$(replay_steps "$tip" "$base" "$sha" "$branch" "$s")"
 }
 
-# Prints the commands that replay the commits $2..$3, local work on the ref
-# $4, onto the commit $1: detach there, cherry-pick, and, whenever a branch is
-# involved, the update-ref that moves it to the replayed HEAD. The branch is
-# resolved once, so a HEAD attached to one ends in its update-ref, mapped base
-# or dropped. Args: $1=tip, $2=base, $3=ref's commit, $4=ref name.
+# Prints the commands that replay the commits $2..$3, local work on a ref, onto
+# the commit $1: detach there, cherry-pick, and, whenever $4 names a branch, the
+# update-ref that moves it to the replayed HEAD. The caller resolved the branch
+# once (branch_of), so a HEAD attached to one ends in its update-ref, mapped
+# base or dropped. Args: $1=tip, $2=base, $3=ref's commit, $4=branch or empty,
+# $5=the store as one shell word (dq).
 replay_steps() {
-  local tip="$1" base="$2" sha="$3" name="$4" branch s
-  branch=$(branch_of "$name")
-  s=$(dq "$store")
+  local tip="$1" base="$2" sha="$3" branch="$4" s="$5"
   printf '  git -C %s checkout --detach %s\n  git -C %s cherry-pick %s..%s' "$s" "$tip" "$s" "$base" "$sha"
   if [ -n "$branch" ]; then
     printf '\n  git -C %s update-ref %s HEAD' "$s" "$(ref_word "refs/heads/$branch")"
   fi
+}
+
+# Prints, ahead of the replay of the ref $1 at $2, the warning that the replay's
+# detach moves HEAD, with the listing of the commits to keep, when HEAD is
+# detached on commits the ref does not hold; nothing otherwise. A replay of HEAD
+# itself moves the HEAD it replays. Args: $1=ref name, $2=ref's commit.
+head_moves_note() {
+  local name="$1" sha="$2"
+  [ "$name" != HEAD ] || return 0
+  git -C "$store" symbolic-ref -q HEAD > /dev/null && return 0
+  [ -n "$(git -C "$store" rev-list -n 1 "$sha..HEAD")" ] || return 0
+  printf 'HEAD is detached on commits that %s does not hold, and the replay moves HEAD off them. List the ones to keep with:\n  git -C %s log --oneline %s..HEAD\nThen replay:\n' "$name" "$(dq "$store")" "$sha"
 }
 
 # Prints the branch the ref $1 stands for: the branch HEAD is attached to when
@@ -197,7 +213,9 @@ refuse_dropped_no_main() {
 # Residual bound: `!` is left alone, so a word with one is rewritten by history
 # expansion in interactive bash and zsh, and fish reads a backtick escape
 # differently, so a command printed with such a path and pasted there can
-# misread it.
+# misread it. The origin URL is the one word printed with %q instead (see
+# record_command), whose $'...' form for a control character does not paste into
+# fish or POSIX sh.
 # Args: $1=text.
 dq() {
   local s="$1" out="" c i

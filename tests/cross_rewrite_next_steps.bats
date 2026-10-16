@@ -111,6 +111,9 @@ run_printed_checkout() {
   refused
   [[ "$stderr" == *"not checked out"* ]]
   [[ "$stderr" == *'git -C "'"$TMP_REPO"'/memory" submodule update --init -- "ddaanet"'* ]]
+  # The hint runs verbatim from an unrelated directory and checks the tier out.
+  run_printed_checkout
+  [ -e memory/ddaanet/.git ]
 }
 
 @test "cross tier: a record with no version file is refused, naming the rebuild" {
