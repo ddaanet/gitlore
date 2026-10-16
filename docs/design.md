@@ -166,8 +166,9 @@ is in [git-hooks.md](references/git-hooks.md).
 
 A store whose remote history was rewritten publishes a rewrite record beside
 `live`, and a clone still on the old history is refused at the divergence gate
-rather than merged back (D61, D62), and a damaged record is repaired in place
-(D63); the record, the detection, the manual crossing and the repair are in
+rather than merged back (D61, D62), and a damaged record is rebuilt from scratch
+from the commit-maps at hand (D63); the record, the detection, the manual
+crossing and the rebuild are in
 [history-rewrites.md](references/history-rewrites.md).
 
 ### Configuration

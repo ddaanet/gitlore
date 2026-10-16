@@ -10,24 +10,23 @@ checked out prints the `git submodule update --init` command for it; a fetch
 failure says to run again once the remote is reachable; a remote with no record
 prints the `record-rewrite.sh` command that publishes it; a record that cannot
 be read (no version file, a version that is not a number, no map, a line that is
-not a pair of ids, a chain that does not end) prints the
-`record-rewrite.sh --rebuild` run that repairs it, with the origin's URL made
-absolute. The rebuild needs the rewrite's commit-map, which only the rewritten
-mirror holds as `filter-repo/commit-map`; the refusal says to set `MIRROR` to
-it. A mapped commit the clone lacks is fetched from the remote's `main` first,
-and when it is still absent the refusal says the rewritten history has not
-reached the remote, and to run the script again once the force-push has landed;
-it never prints a rebuild, since the record may be right. Trees that differ
-outside gitlinks and a gitlink the child's record maps elsewhere print the
-`git diff` that shows them and say a person decides. A version that is an
-integer above 1 says to update gitlore, and any other version is a damaged
-record. A dropped commit prints the move of the ref to the remote's tip, and the
-`git log` that lists local work to replay first. A commit on neither the
-remote's history nor a recorded commit prints the `git log` that compares it
-with the remote and says a person decides. The checkout command runs from the
-repository holding the gitlink, with a step for each path component not yet
-checked out: a tier whose memory store is absent initializes the store first. A
-git that cannot report the object format fails with its own message.
+not a pair of ids, a chain that does not end) prints the from-scratch rebuild
+(D63). The command that publishes a first record needs the rewrite's commit-map,
+which only the rewritten mirror holds as `filter-repo/commit-map`; its refusal
+says to set `MIRROR` to it. A mapped commit the clone lacks is fetched from the
+remote's `main` first, and when it is still absent the refusal says the
+rewritten history has not reached the remote, and to run the script again once
+the force-push has landed; it never prints a rebuild, since the record may be
+right. Trees that differ outside gitlinks and a gitlink the child's record maps
+elsewhere print the `git diff` that shows them and say a person decides. A
+version that is an integer above 1 says to update gitlore, and any other version
+is a damaged record. A dropped commit prints the move of the ref to the remote's
+tip, and the `git log` that lists local work to replay first. A commit on
+neither the remote's history nor a recorded commit prints the `git log` that
+compares it with the remote and says a person decides. The checkout command runs
+from the repository holding the gitlink, with a step for each path component not
+yet checked out: a tier whose memory store is absent initializes the store
+first. A git that cannot report the object format fails with its own message.
 
 **A child's record is fetched once per run.** The script keeps each mounted
 child's map by path, so the gitlink checks of every ref and the children scan
@@ -39,13 +38,15 @@ share one fetch.
 mismatched line is refused. The record version stays `1`; the length belongs to
 the store, not to the record.
 
-**A damaged record is repaired in place (D63).** `record-rewrite.sh --rebuild`
-keeps every readable line of the remote's map, drops the rest and reports their
-line numbers, writes version 1, merges the commit-map and pushes one commit on
-the tip it read: a fast-forward, so the record is never absent from the remote
-and never rewritten. The push is leased to that tip, so it overwrites nothing
-and refuses a record rolled back or deleted since the read. A map with CRLF line
-endings keeps its lines. A record of a newer version is refused. Deleting the
-record and recording it again is rejected: the gap reads as no rewrite to every
-clone's divergence check, a delete has no lease, and a plain run starts from an
-empty map.
+**A damaged record is rebuilt from scratch (D63).** The refusal for a record
+that cannot be read prints, with the store's absolute path and the script's: the
+`git push origin --delete gitlore/rewrites` that removes it, a
+`record-rewrite.sh` line for the commit-map, and the `git ls-remote` that shows
+the branch is back. When the store holds a `filter-repo/commit-map` its path is
+printed; otherwise the refusal says the file is in `.git/filter-repo/commit-map`
+of the clone that ran the rewrite and `<commit-map>` is the one placeholder. A
+rewrite whose commit-map is no longer at hand drops out of the record; each
+further commit-map takes one more `record-rewrite.sh` line, oldest rewrite
+first. An in-place salvage is rejected: it costs more than it buys for a record
+only `record-rewrite.sh` writes. Between the delete and the first record the
+remote has no record, which the divergence check reads as no rewrite.

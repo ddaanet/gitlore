@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The commands scripts/cross-rewrite.sh prints in its refusals (D62, D63): the
-# checkout of a store that is absent, and the run of record-rewrite.sh that
-# publishes or rebuilds a rewrite record. Sourced by that script, which sets
+# checkout of a store that is absent, the run of record-rewrite.sh that
+# publishes a rewrite record, and the from-scratch rebuild of a damaged one. Sourced by that script, which sets
 # `script_dir`; it is not run on its own.
 # shellcheck disable=SC2154 # script_dir is the sourcing script's
 
@@ -46,20 +46,30 @@ origin_url() {
 }
 
 # Prints the record-rewrite.sh invocation that publishes the rewrite record to
-# the origin of the repository $1; $2=--rebuild adds that flag. The commit-map
-# is the one filter-repo wrote in the rewritten mirror, which only that mirror
-# has. Args: $1=repo, $2=optional flag.
+# the origin of the repository $1. The commit-map is the one filter-repo wrote
+# in the rewritten mirror, which only that mirror has. Args: $1=repo.
 record_command() {
-  local flag=""
-  [ -z "${2:-}" ] || flag=" $2"
   # shellcheck disable=SC2016 # $MIRROR stays literal: the reader sets it
-  printf '"%s/record-rewrite.sh"%s "$MIRROR" "$MIRROR/filter-repo/commit-map" %q' "$script_dir" "$flag" "$(origin_url "$1")"
+  printf '"%s/record-rewrite.sh" "$MIRROR" "$MIRROR/filter-repo/commit-map" %q' "$script_dir" "$(origin_url "$1")"
 }
 
-# Prints the step that rebuilds the damaged record at the origin of the
-# repository $1 in place, keeping every readable line of it.
-# Args: $1=repo.
+# Prints the steps that rebuild the damaged record at the origin of the
+# repository $1 from scratch: delete the record branch there, then record each
+# commit-map still at hand, oldest rewrite first. A commit-map is filter-repo's
+# file in the git dir of the clone that ran the rewrite: the repository's own
+# when it has one, otherwise a placeholder the reader replaces. Every printed
+# command is absolute. Args: $1=repo.
 rebuild_steps() {
-  # shellcheck disable=SC2016 # $MIRROR stays literal: the reader sets it
-  printf 'Rebuild the record of %s from the rewrite'"'"'s commit-map, which only the rewritten mirror has (filter-repo leaves it as filter-repo/commit-map in the mirror). With MIRROR set to the mirror'"'"'s path, run this, which keeps every readable line of the record and replaces it in one push, then run this again:\n  %s' "$1" "$(record_command "$1" --rebuild)"
+  local repo map own_map placeholder="" ref
+  repo=$(cd "$1" && pwd -P)
+  ref=$(git -C "$repo" rev-parse --git-path filter-repo/commit-map)
+  case "$ref" in /*) own_map="$ref" ;; *) own_map="$repo/$ref" ;; esac
+  if [ -e "$own_map" ]; then
+    map="$own_map"
+  else
+    map="<commit-map>"
+    placeholder="The commit-map is in .git/filter-repo/commit-map of the clone that ran the rewrite; replace <commit-map> with its path. "
+  fi
+  printf 'Rebuild the record of %s from scratch; nothing repairs it in place. The record is rebuilt from the commit-maps of the rewrites, so a rewrite whose commit-map is no longer at hand drops out of it. %sRun these in order, with one record-rewrite.sh line per commit-map still at hand, oldest rewrite first. The ls-remote line lists the branch once the record is back; then run this again:\n  git -C "%s" push origin --delete gitlore/rewrites\n  "%s/record-rewrite.sh" "%s" "%s"\n  git -C "%s" ls-remote origin gitlore/rewrites' \
+    "$repo" "$placeholder" "$repo" "$script_dir" "$repo" "$map" "$repo"
 }

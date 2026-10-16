@@ -41,16 +41,22 @@ tier_record_with_only() {
   git --git-dir="$BARE_TIER" update-ref refs/heads/gitlore/rewrites "$commit"
 }
 
-# The refusal in $stderr rebuilds the record at the origin of the store $1 with
-# one command naming the mirror variable, the record script and that origin's
-# URL, and deletes nothing.
+# The refusal in $stderr rebuilds the record at the origin of the store $1 from
+# scratch: it deletes the record branch there, records a commit-map with the
+# absolute path of record-rewrite.sh, checks with ls-remote, says that a rewrite
+# whose commit-map is gone drops out, and offers no in-place repair.
 # Args: $1=store path.
 assert_rebuild_named() {
-  local url
-  url=$(cd "$1" && cd "$(git remote get-url origin)" && pwd -P)
-  [[ "$stderr" == *'record-rewrite.sh" --rebuild "$MIRROR" "$MIRROR/filter-repo/commit-map" '"$url"* ]]
+  local abs root
+  abs=$(cd "$1" && pwd -P)
+  root=$(cd "$PLUGIN_ROOT" && pwd -P)
+  [[ "$stderr" == *"Rebuild the record of $abs from scratch"* ]]
+  [[ "$stderr" == *"git -C \"$abs\" push origin --delete gitlore/rewrites"* ]]
+  [[ "$stderr" == *"$root/scripts/record-rewrite.sh\" \"$abs\" \""* ]]
+  [[ "$stderr" == *"git -C \"$abs\" ls-remote origin gitlore/rewrites"* ]]
+  [[ "$stderr" == *"commit-map is no longer at hand drops out"* ]]
   [[ "$stderr" == *"run this again"* ]]
-  [[ "$stderr" != *"--delete"* ]]
+  [[ "$stderr" != *"--rebuild"* ]]
   [[ "$stderr" != *"Ask the owner"* ]]
 }
 
@@ -114,7 +120,6 @@ run_printed_checkout() {
   refused
   [[ "$stderr" == *"version"* ]]
   assert_rebuild_named "$TIER"
-  [[ "$stderr" == *"run this again"* ]]
 }
 
 @test "cross tier: a record with no map file is refused, naming the rebuild" {
@@ -124,7 +129,6 @@ run_printed_checkout() {
   refused
   [[ "$stderr" == *"map"* ]]
   assert_rebuild_named "$TIER"
-  [[ "$stderr" == *"run this again"* ]]
 }
 
 @test "cross tier: a record of a version this script does not read is refused, naming the update" {
@@ -192,20 +196,59 @@ tier_record_version() {
   [[ "$stderr" != *"--delete"* ]]
 }
 
-@test "cross tier: the printed rebuild command replaces a damaged record, and the crossing then completes" {
+# Runs the indented lines of the refusal in $stderr, as a person would paste
+# them: from an unrelated directory, stopping at the first failure. A
+# `<commit-map>` placeholder is first replaced by $1 when given.
+# Args: $1=commit-map path (optional)
+run_printed_rebuild() {
+  printf '%s\n' "$stderr" | grep '^  ' > "$TMP_REPO/rebuild.sh"
+  [ "$(wc -l < "$TMP_REPO/rebuild.sh")" -eq 3 ]
+  if [ -n "${1:-}" ]; then
+    sed "s|<commit-map>|$1|" "$TMP_REPO/rebuild.sh" > "$TMP_REPO/rebuild.sub"
+    mv "$TMP_REPO/rebuild.sub" "$TMP_REPO/rebuild.sh"
+  fi
+  run bash -ec "cd / && . $(printf '%q' "$TMP_REPO/rebuild.sh")"
+}
+
+@test "cross tier: a damaged record is refused with a from-scratch rebuild, and the printed commands make the crossing succeed" {
+  cx_tier_setup single
+  tier_record_with_only map
+  # The commit-map of the rewrite is in the clone's own git dir.
+  mapdir=$(git -C "$TIER" rev-parse --git-path filter-repo)
+  case "$mapdir" in /*) ;; *) mapdir="$TIER/$mapdir" ;; esac
+  mkdir -p "$mapdir"
+  rewrite_write_commit_map "$mapdir/commit-map" "$RW_P $RW_P" "$RW_O1 $RW_N1" "$RW_O2 $RW_N2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  assert_rebuild_named "$TIER"
+  [[ "$stderr" == *"$(cd "$mapdir" && pwd -P)/commit-map\""* ]]
+  [[ "$stderr" != *"<commit-map>"* ]]
+  run_printed_rebuild
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"refs/heads/gitlore/rewrites"* ]]
+  [ "$(git --git-dir="$BARE_TIER" show refs/heads/gitlore/rewrites:version)" = 1 ]
+  [ "$(git --git-dir="$BARE_TIER" show refs/heads/gitlore/rewrites:map)" = "$RW_O1 $RW_N1
+$RW_O2 $RW_N2" ]
+  cx_position "$TIER" "$RW_O1" "$RW_O2"
+  run --separate-stderr "$CROSS" "$TIER"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" rev-parse live)" = "$RW_N2" ]
+}
+
+@test "cross tier: with no commit-map in the clone the refusal says where it is and names the one placeholder" {
   cx_tier_setup single
   tier_record_with_only map
   run --separate-stderr "$CROSS" "$TIER"
   refused
-  # The mirror the rewrite ran in, with filter-repo's commit-map in its git dir.
+  assert_rebuild_named "$TIER"
+  [[ "$stderr" == *".git/filter-repo/commit-map of the clone that ran the rewrite"* ]]
+  [ "$(printf '%s' "$stderr" | grep -o '<[a-z-]*>' | sort -u)" = "<commit-map>" ]
+  # The mirror the rewrite ran in holds the commit-map.
   mirror="$TMP_REPO/mirror.git"
   git clone -q --mirror "$BARE_TIER" "$mirror"
   mkdir "$mirror/filter-repo"
   rewrite_write_commit_map "$mirror/filter-repo/commit-map" "$RW_P $RW_P" "$RW_O1 $RW_N1" "$RW_O2 $RW_N2"
-  # Run as a person would: the indented line, MIRROR set, from elsewhere.
-  printf '%s\n' "$stderr" | grep '^  ' > "$TMP_REPO/rebuild.sh"
-  [ "$(wc -l < "$TMP_REPO/rebuild.sh")" -eq 1 ]
-  run bash -c "cd / && MIRROR=$(printf '%q' "$mirror") && . $(printf '%q' "$TMP_REPO/rebuild.sh")"
+  run_printed_rebuild "$mirror/filter-repo/commit-map"
   [ "$status" -eq 0 ]
   [ "$(git --git-dir="$BARE_TIER" show refs/heads/gitlore/rewrites:map)" = "$RW_O1 $RW_N1
 $RW_O2 $RW_N2" ]
@@ -213,6 +256,34 @@ $RW_O2 $RW_N2" ]
   run --separate-stderr "$CROSS" "$TIER"
   [ "$status" -eq 0 ]
   [ "$(git -C "$TIER" rev-parse live)" = "$RW_N2" ]
+}
+
+@test "cross tier: the record of two rewrites is rebuilt with one record-rewrite.sh call per commit-map, oldest first" {
+  cx_tier_setup chain
+  tier_record_with_only map
+  cx_position "$TIER" "$RW_O1" "$RW_O2"
+  run --separate-stderr "$CROSS" "$TIER"
+  refused
+  assert_rebuild_named "$TIER"
+  rewrite_write_commit_map "$TMP_REPO/map1" "$RW_P $RW_P" "$RW_O1 $RW_N1" "$RW_O2 $RW_N2"
+  rewrite_write_commit_map "$TMP_REPO/map2" "$RW_P $RW_P" "$RW_N1 $CX_X1" "$RW_N2 $CX_X2"
+  # The delete line, one record line per map in rewrite order, the check.
+  printf '%s\n' "$stderr" | grep '^  ' > "$TMP_REPO/printed.sh"
+  {
+    sed -n 1p "$TMP_REPO/printed.sh"
+    sed -n 2p "$TMP_REPO/printed.sh" | sed "s|<commit-map>|$TMP_REPO/map1|"
+    sed -n 2p "$TMP_REPO/printed.sh" | sed "s|<commit-map>|$TMP_REPO/map2|"
+    sed -n 3p "$TMP_REPO/printed.sh"
+  } > "$TMP_REPO/rebuild.sh"
+  run bash -ec "cd / && . $(printf '%q' "$TMP_REPO/rebuild.sh")"
+  [ "$status" -eq 0 ]
+  [ "$(git --git-dir="$BARE_TIER" show refs/heads/gitlore/rewrites:map)" = "$RW_O1 $RW_N1
+$RW_O2 $RW_N2
+$RW_N1 $CX_X1
+$RW_N2 $CX_X2" ]
+  run --separate-stderr "$CROSS" "$TIER"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TIER" rev-parse live)" = "$CX_X2" ]
 }
 
 @test "cross: a git that fails to report the object format fails with git's own message" {
@@ -246,12 +317,12 @@ $RW_N2 $RW_O2"
 
 @test "cross tier: a relative origin url is printed absolute, so it holds under -C \"\$MIRROR\"" {
   cx_tier_setup single
-  tier_record_with_only map
+  git --git-dir="$BARE_TIER" update-ref -d refs/heads/gitlore/rewrites
   git -C "$TIER" remote set-url origin ../../.bare-ddaanet.git
   [ "$(git -C "$TIER" remote get-url origin)" = ../../.bare-ddaanet.git ]
   run --separate-stderr "$CROSS" "$TIER"
   refused
-  [[ "$stderr" == *' --rebuild "$MIRROR" "$MIRROR/filter-repo/commit-map" '"$BARE_TIER"* ]]
+  [[ "$stderr" == *'record-rewrite.sh" "$MIRROR" "$MIRROR/filter-repo/commit-map" '"$BARE_TIER"* ]]
   [[ "$stderr" != *"../../.bare-ddaanet.git"* ]]
 }
 

@@ -11,7 +11,7 @@ Newest first. Entries older than 2026-07-31 are indexed in
   — `record-rewrite.sh` names the remote it used; `cross-rewrite.sh` refusals
   name the act that resolves them, fetch each child's record once, and read ids
   at the store's object-format length (40 sha1, 64 sha256); a damaged record is
-  repaired in place by `record-rewrite.sh --rebuild` (D63)
+  rebuilt from scratch from the commit-maps at hand (D63)
 - [2026-10-15 — A clone on rewritten history is refused, not merged back](changelog/2026-10-15-a-clone-on-rewritten-history-is-refused.md)
   — a rewritten store publishes an append-only `gitlore/rewrites` record (D61);
   a divergence whose local side holds a recorded old commit is refused at the

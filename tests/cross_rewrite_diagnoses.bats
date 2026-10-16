@@ -50,7 +50,7 @@ $RW_O2 $absent"
   # The tier's remote has no main: a printed fetch of main would fail whole.
   [[ "$stderr" != *"fetch origin"* ]]
   [[ "$stderr" != *"cat-file"* ]]
-  [[ "$stderr" != *"--rebuild"* ]]
+  [[ "$stderr" != *"from scratch"* ]]
   [[ "$stderr" != *"--delete"* ]]
 }
 
@@ -99,7 +99,7 @@ $RW_O2 $CX_Z"
   [[ "$stderr" == *"trees differ outside gitlinks"* ]]
   [[ "$stderr" == *"git -C \"$TIER\" diff --stat $RW_O2 $CX_Z"* ]]
   [[ "$stderr" == *"A person must decide"* ]]
-  [[ "$stderr" != *"--rebuild"* ]]
+  [[ "$stderr" != *"from scratch"* ]]
   [[ "$stderr" != *"--delete"* ]]
 }
 
@@ -112,7 +112,7 @@ $RW_O2 $CX_Z"
   [[ "$stderr" == *"in the record of"* ]]
   [[ "$stderr" == *"git -C \"memory\" diff-tree -r --no-renames $CX_M2 $CX_M2N"* ]]
   [[ "$stderr" == *"A person must decide"* ]]
-  [[ "$stderr" != *"--rebuild"* ]]
+  [[ "$stderr" != *"from scratch"* ]]
   [[ "$stderr" != *"--delete"* ]]
 }
 
