@@ -24,7 +24,6 @@ set -euo pipefail
 
 # The crossing: checks, then the moves.
 main() {
-  script_dir=$(cd "$(dirname "$0")" && pwd -P)
   [ -e "$store/.git" ] || refuse "$store is not a checked-out store, so there is nothing to cross. Check it out with: $(checkout_command "$store")"
   set_id_length
   tmpd=$(mktemp -d "${TMPDIR:-/tmp}/cross-rewrite.XXXXXX")
@@ -88,41 +87,6 @@ refuse() {
   exit 1
 }
 
-# Prints the command that checks out the store at $1, run from the repository
-# whose index holds its gitlink: the repository containing its directory, which
-# is the memory store for a tier and the project for the memory store. A
-# directory that is not inside a repository gets the root form.
-# Args: $1=store path.
-checkout_command() {
-  local path="$1" dir top abs
-  dir=$(dirname "$path")
-  if [ -d "$dir" ] && top=$(git -C "$dir" rev-parse --show-toplevel 2>&1); then
-    abs="$(cd "$dir" && pwd -P)/$(basename "$path")"
-    printf 'git -C "%s" submodule update --init -- "%s"' "$top" "${abs#"$top"/}"
-  else
-    printf 'git submodule update --init -- "%s"' "$path"
-  fi
-}
-
-# Prints the record-rewrite.sh invocation that publishes the rewrite record to
-# the origin of the repository $1. The commit-map is the one filter-repo wrote
-# in the rewritten mirror, which only that mirror has. Args: $1=repo.
-record_command() {
-  local url
-  url=$(git -C "$1" remote get-url origin)
-  # shellcheck disable=SC2016 # $MIRROR stays literal: the reader sets it
-  printf '"%s/record-rewrite.sh" "$MIRROR" "$MIRROR/filter-repo/commit-map" %q' "$script_dir" "$url"
-}
-
-# Prints the steps that rebuild the damaged record at the origin of the
-# repository $1, ending the refusal that carries it. Args: $1=repo.
-rebuild_steps() {
-  local url
-  url=$(git -C "$1" remote get-url origin)
-  # shellcheck disable=SC2016 # $MIRROR stays literal: the reader sets it
-  printf 'Rebuild the record of %s from the rewrite'"'"'s commit-map, which only the rewritten mirror has (filter-repo leaves it as filter-repo/commit-map in the mirror). With MIRROR set to the mirror'"'"'s path, delete the damaged record, record each rewrite'"'"'s commit-map oldest first, then run this again:\n  git -C "$MIRROR" push %q --delete gitlore/rewrites\n  %s' "$1" "$url" "$(record_command "$1")"
-}
-
 # Sets IDLEN, the hex length of the store's object ids (40 for sha1, 64 for
 # sha256), and ZEROS, the id a dropped commit maps to. A record's lines are
 # read with the store's length; a mounted child has the same object format.
@@ -167,6 +131,21 @@ fetch_store() {
   $(record_command "$store")" ;;
     esac
     refuse "could not fetch from the origin of $store. Once the remote is reachable, run this again. git said: $err"
+  fi
+}
+
+# Fetches the remote's main, by explicit refspec, once: a mapped commit may be
+# published there before `live` carries it. A remote without a main has nothing
+# more to fetch.
+fetch_main() {
+  local err
+  [ -z "$MAIN_FETCHED" ] || return 0
+  MAIN_FETCHED=1
+  if ! err=$(git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main 2>&1); then
+    case "$err" in
+      *"couldn't find remote ref refs/heads/main"*) ;;
+      *) refuse "could not fetch from the origin of $store. Once the remote is reachable, run this again. git said: $err" ;;
+    esac
   fi
 }
 
@@ -255,7 +234,11 @@ check_commit() {
   local om nm st rec head _mode kind sha ns
   old_tree=$(git -C "$store" rev-parse "$old^{tree}")
   if ! new_tree=$(git -C "$store" rev-parse -q --verify "$new^{tree}"); then
-    refuse "$name of $store is at ${old:0:7}, which maps to ${new:0:7}, a commit this clone does not have. Nothing was moved. $(rebuild_steps "$store")"
+    fetch_main
+    new_tree=$(git -C "$store" rev-parse -q --verify "$new^{tree}") \
+      || refuse "$name of $store is at ${old:0:7}, which maps to ${new:0:7}, a commit this clone does not have, and neither the remote's live nor its main holds it: the rewritten history has not reached the remote yet. Nothing was moved. Once the rewrite's force-push has landed, fetch it, check the commit arrived, then run this again:
+  git -C \"$store\" fetch origin +refs/heads/live:refs/remotes/origin/live +refs/heads/main:refs/remotes/origin/main
+  git -C \"$store\" cat-file -e $new^{commit}"
   fi
   git -C "$store" diff-tree -r -z --no-renames "$old_tree" "$new_tree" > "$tmpd/diff"
   mismatch=""
@@ -267,7 +250,8 @@ check_commit() {
       mismatch=1
     fi
   done 3< "$tmpd/diff"
-  [ -z "$mismatch" ] || refuse "$name of $store: ${old:0:7} maps to ${new:0:7}, but their trees differ outside gitlinks. Nothing was moved. $(rebuild_steps "$store")"
+  [ -z "$mismatch" ] || refuse "$name of $store: ${old:0:7} maps to ${new:0:7}, but their trees differ outside gitlinks. Nothing was moved. A person must decide whether this rewrite was meant to change them; this script crosses only a rewrite that keeps every tree. Inspect the difference with:
+  git -C \"$store\" diff --stat $old $new"
   git -C "$store" ls-tree -r -z --full-tree "$old_tree" > "$tmpd/links"
   while IFS= read -r -d '' -u 3 rec; do
     head=${rec%%$'\t'*}
@@ -288,8 +272,8 @@ check_gitlink() {
   load_child_record "$path"
   chain_end "$CHILD_MAP" "$was" "$child"
   if [ "$CHAIN_END" != "$now" ]; then
-    refuse "$name of $store: ${old:0:7} maps to ${new:0:7}, but its gitlink $path (${was:0:7}) maps to ${CHAIN_END:0:7} in the record of $child, not ${now:0:7}. Nothing was moved. One of the two records is wrong. $(rebuild_steps "$child")
-Or, if the record of $store is the wrong one: $(rebuild_steps "$store")"
+    refuse "$name of $store: ${old:0:7} maps to ${new:0:7}, but its gitlink $path (${was:0:7}) maps to ${CHAIN_END:0:7} in the record of $child, not ${now:0:7}. Nothing was moved. A person must decide which of the two records is wrong. Inspect the pinned gitlinks with:
+  git -C \"$store\" diff-tree -r --no-renames $old $new"
   fi
 }
 
@@ -390,10 +374,14 @@ if [ $# -ne 1 ]; then
   exit 2
 fi
 store="$1"
+script_dir=$(cd "$(dirname "$0")" && pwd -P)
+# shellcheck disable=SC1091 # linted as a file of its own
+source "$script_dir/lib/cross-rewrite-hints.sh"
 IDLEN=""
 ZEROS=""
 CHILD_PATHS=()
 CHILD_N=0
+MAIN_FETCHED=""
 CHILD_MAP=""
 CHAIN_END=""
 PLAN_NEW=""

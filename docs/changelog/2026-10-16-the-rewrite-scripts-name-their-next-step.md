@@ -9,20 +9,25 @@ refusals the reader can act on end in the act: a store or child that is not
 checked out prints the `git submodule update --init` command for it; a fetch
 failure says to run again once the remote is reachable; a remote with no record
 prints the `record-rewrite.sh` command that publishes it; a record that cannot
-be read, a chain that does not end, a mapped commit the clone lacks, trees
-differing outside gitlinks and a gitlink the child's record maps elsewhere print
-the rebuild of the record. The rebuild needs the rewrite's commit-map, which
-only the rewritten mirror holds as `filter-repo/commit-map`; with `MIRROR` set
-to it, the refusal prints the `git push --delete` that drops the damaged record
-and the `record-rewrite.sh` run that records the map. A version that is an
-integer above 1 says to update gitlore, and any other version is a damaged
-record. A dropped commit prints the move of the ref to the remote's tip, and the
-`git log` that lists local work to replay first. A commit on neither the
-remote's history nor a recorded commit prints the `git log` that compares it
-with the remote and says a person decides. The checkout command runs from the
-repository holding the gitlink: the memory store for a tier, the project for the
-memory store. A git that cannot report the object format fails with its own
-message.
+be read (no version file, a version that is not a number, no map, a line that is
+not a pair of ids, a chain that does not end) prints the
+`record-rewrite.sh --rebuild` run that repairs it, with the origin's URL made
+absolute. The rebuild needs the rewrite's commit-map, which only the rewritten
+mirror holds as `filter-repo/commit-map`; the refusal says to set `MIRROR` to
+it. A mapped commit the clone lacks is fetched from the remote's `main` first,
+and when it is still absent the refusal says the rewritten history has not
+reached the remote, with the fetch to repeat after the force-push; it never
+prints a rebuild, since the record may be right. Trees that differ outside
+gitlinks and a gitlink the child's record maps elsewhere print the `git diff`
+that shows them and say a person decides. A version that is an integer above 1
+says to update gitlore, and any other version is a damaged record. A dropped
+commit prints the move of the ref to the remote's tip, and the `git log` that
+lists local work to replay first. A commit on neither the remote's history nor a
+recorded commit prints the `git log` that compares it with the remote and says a
+person decides. The checkout command runs from the repository holding the
+gitlink, with a step for each path component not yet checked out: a tier whose
+memory store is absent initializes the store first. A git that cannot report the
+object format fails with its own message.
 
 **A child's record is fetched once per run.** The script keeps each mounted
 child's map by path, so the gitlink checks of every ref and the children scan
@@ -33,3 +38,12 @@ share one fetch.
 64 in a sha256 one, and a dropped commit maps to zeros of that length. A
 mismatched line is refused. The record version stays `1`; the length belongs to
 the store, not to the record.
+
+**A damaged record is repaired in place (D63).** `record-rewrite.sh --rebuild`
+keeps every readable line of the remote's map, drops the rest and reports their
+line numbers, writes version 1, merges the commit-map and pushes one commit on
+the tip it read: a fast-forward, so the record is never absent from the remote
+and never rewritten. A record of a newer version is refused. Deleting the record
+and recording it again is rejected: the gap reads as no rewrite to every clone's
+divergence check, a delete has no lease, and a plain run starts from an empty
+map.

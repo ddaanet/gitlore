@@ -1,4 +1,4 @@
-# History rewrites — decisions D61, D62
+# History rewrites — decisions D61, D62, D63
 
 What a store's remote publishes when its history is rewritten, and what a clone
 still on the old history does about it. Covers the memory store and every tier;
@@ -12,6 +12,10 @@ fix).
   branch gitlore never fetches
 - **D62** — a divergence whose local side holds a recorded old commit is
   refused, naming the crossing script; nothing repairs it automatically
+- **D63** — a damaged record is repaired in place by
+  `record-rewrite.sh --rebuild`: the readable lines are kept and the result is
+  pushed as one fast-forward on the tip it read, so the record is never absent
+  or rewritten
 
 ---
 
@@ -119,27 +123,71 @@ Every refusal ends in the act that resolves it. A dropped commit prints the move
 of the ref to the remote's tip for a ref with no local work, and the `git log`
 that lists the work to replay first for one with some. A ref on neither the
 remote's history nor a recorded commit prints the `git log` that compares it
-with the remote and says a person decides. A record that cannot be read, a
-mapped commit the clone lacks, trees differing outside gitlinks and a gitlink
-the child's record maps elsewhere are defects of the record, and the refusal
-prints its rebuild. The commit-map is the one input a crossing clone cannot
-have: only the rewritten mirror holds it, as `filter-repo/commit-map`. With
-`MIRROR` set to that mirror, the refusal prints two commands:
-`git -C "$MIRROR" push <origin url> --delete gitlore/rewrites`, which drops the
-damaged record, and
-`scripts/record-rewrite.sh "$MIRROR" "$MIRROR/filter-repo/commit-map" <origin url>`,
-run once per rewrite, oldest first. A remote with no record prints the second
-command alone. A version that is an integer above 1 says to update gitlore; any
-other version is a damaged record. A store that is not checked out prints the
-`git submodule update --init` that checks it out, run from the repository
-holding its gitlink. A git that cannot report the object format fails with its
-own message.
+with the remote and says a person decides, and so do trees that differ outside
+gitlinks (`git diff --stat`) and a gitlink the child's record maps elsewhere
+(`git diff-tree`): the record may be wrong, or the rewrite may have meant to
+change them. A mapped commit the clone lacks is fetched from the remote's `main`
+first, since it can be published there before `live` carries it; when it is
+still absent, the rewritten history has not reached the remote, and the refusal
+prints the fetch to repeat after the force-push and the `cat-file -e` that
+confirms the commit arrived. It never prints a rebuild, because the record may
+be right.
+
+A record that cannot be read — no version file, a version that is not a number,
+no map, a map line that is not a pair of ids, a chain that does not end — prints
+the rebuild (D63). The commit-map is the one input a crossing clone cannot have:
+only the rewritten mirror holds it, as `filter-repo/commit-map`. With `MIRROR`
+set to that mirror, the refusal prints
+`scripts/record-rewrite.sh --rebuild "$MIRROR" "$MIRROR/filter-repo/commit-map" <origin url>`,
+with the origin's URL made absolute, since the command runs from another
+directory. A remote with no record prints the same command without `--rebuild`.
+A version that is an integer above 1 says to update gitlore. A store that is not
+checked out prints the `git submodule update --init` that checks it out, run
+from the repository holding its gitlink, with one step per path component that
+is not checked out, outermost first: a tier whose memory store is absent
+initializes the store before the tier. A git that cannot report the object
+format fails with its own message.
 
 The guard protects a clone only once that machine runs a gitlore release
 carrying it, so a rewrite's force-push follows the release and the plugin update
 on every machine that holds a clone.
 
+## Repairing a damaged record — D63
+
+**D63 — A damaged record is repaired in place by `record-rewrite.sh --rebuild`**
+
+A record can be damaged: a version file that is missing or is not a number, a
+map that is missing, a line that is not a pair of ids, or a line that closes a
+chain loop. The plain run refuses to append to such a record. With `--rebuild`
+the script keeps every line of the remote's map that is a pair of ids and does
+not close a chain loop, in order, so earlier rewrites survive; drops the others
+and reports their line numbers, never their content; writes version 1; merges
+the commit-map the way the plain run does; and pushes one commit whose parent is
+the tip it read. That is a fast-forward, so the record is never absent from the
+remote and never rewritten, and a tip that moved since the read is refused by
+the remote like any other non-fast-forward. A record of a newer version is
+refused: its lines may mean something this script does not know. On a healthy
+record the flag changes nothing.
+
+The repair needs the commit-map of the rewrite being recorded, which only the
+rewritten mirror holds, and a line it cannot parse is lost: the repair restores
+the record's shape, not information the damage destroyed.
+
 ## Rejected alternatives
+
+**Delete the damaged record and record it again.** The refusal could print a
+`git push --delete gitlore/rewrites` followed by a plain run. Between the two
+the remote has no record, which every clone's divergence check reads as the
+ordinary case of no rewrite, so a merge proceeds and re-imports the old history;
+a delete with no lease removes a tip another rewrite appended meanwhile; and a
+plain run starts from an empty map, losing every earlier rewrite's lines unless
+each rewrite's commit-map is still at hand.
+
+**A force-push with a lease.** The rebuilt record could replace the ref with
+`--force-with-lease` against the sha it read. Building the rebuilt commit on
+that sha makes the push a fast-forward, which the remote already refuses when
+the tip moved, so the force adds a way to overwrite and removes nothing.
+
 
 **No guard.** Rewrites are rare, and a careful owner crosses every clone by
 hand. But the failure is silent and propagates — the tooling merges and

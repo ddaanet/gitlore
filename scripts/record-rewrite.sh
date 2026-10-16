@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: scripts/record-rewrite.sh <store> <commit-map> [<remote>]
+# Usage: scripts/record-rewrite.sh [--rebuild] <store> <commit-map> [<remote>]
 #
 # Appends the changed lines of a `git filter-repo` commit-map to the append-only
 # `gitlore/rewrites` record on the store's remote (D61): `origin` unless a third
@@ -18,14 +18,27 @@
 # different new id is refused: that is a second rewrite of the same history, from
 # another mirror, and nothing is recorded for it.
 #
+# --rebuild repairs a record whose version or map is damaged (D63). It keeps every
+# line of the remote's map that is a pair of ids and does not close a chain loop,
+# drops the others and reports their line numbers, writes version 1, merges the
+# commit-map as above and pushes the result as a child of the tip it read: one
+# fast-forward, so the record is never absent from the remote and never rewritten,
+# and a tip that moved since the read is refused. A record of a newer version is
+# refused. On a healthy record --rebuild does what the plain run does.
+#
 # The commit is built with plumbing (hash-object, mktree, commit-tree). The store's
 # branches, HEAD, index and worktree are left alone. Exit 0 when the record holds
 # every changed line, whether added now or already there. Exit 1 with a
 # `record-rewrite:` message on stderr when nothing was pushed. Exit 2 on usage.
 set -euo pipefail
 
+rebuild=""
+if [ "${1:-}" = "--rebuild" ]; then
+  rebuild=1
+  shift
+fi
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
-  echo "usage: record-rewrite.sh <store> <commit-map> [<remote>]" >&2
+  echo "usage: record-rewrite.sh [--rebuild] <store> <commit-map> [<remote>]" >&2
   exit 2
 fi
 store="$1"
@@ -38,19 +51,71 @@ refuse() {
   exit 1
 }
 
+# The remote's record must be one this script can append to as it stands.
+# Remote content: a bad line is refused, never echoed.
+read_record_strict() {
+  local version
+  if ! version=$(git -C "$store" show "$tip:version" 2>&1); then
+    refuse "the record on $remote has no readable version file: $(printf '%s' "$version" | tr '\n' ' ')"
+  fi
+  [ "$version" = "1" ] || refuse "the record on $remote is not version 1, the only version this script writes."
+  if ! git -C "$store" show "$tip:map" > "$tmpd/record" 2>"$tmpd/err"; then
+    refuse "the record on $remote has no readable map: $(tr '\n' ' ' < "$tmpd/err")"
+  fi
+  ! grep -Evq "$hex_pair" "$tmpd/record" \
+    || refuse "the record on $remote has a map line that is not two ${idlen}-hex ids, so it cannot be appended to."
+  [ -z "$(tail -c 1 "$tmpd/record")" ] \
+    || refuse "the record's map does not end in a newline, so appending would join lines."
+}
+
+# Reads whatever of the remote's record is usable into $tmpd/record and sets
+# `damaged` when anything was dropped or replaced. A newer version is refused:
+# its lines may mean something this script does not know. Line numbers are
+# reported, the lines themselves never.
+read_record_for_rebuild() {
+  local version bad loops
+  version=$(git -C "$store" show "$tip:version" 2>/dev/null) || version=""
+  if [ "$version" != 1 ]; then
+    [[ ! $version =~ ^[1-9][0-9]*$ ]] \
+      || refuse "the record on $remote is version $version, which this script does not write, so it cannot be rebuilt."
+    damaged=1
+  fi
+  if ! git -C "$store" show "$tip:map" > "$tmpd/raw" 2>/dev/null; then
+    : > "$tmpd/raw"
+    damaged=1
+  fi
+  bad=$(grep -Evn "$hex_pair" "$tmpd/raw" | cut -d: -f1 | awk 'NR <= 20' | paste -sd, - || true)
+  : > "$tmpd/loops"
+  # A pair that closes a chain loop is dropped; the walk ends because every
+  # kept pair adds an edge from an old id not yet mapped.
+  grep -nE "$hex_pair" "$tmpd/raw" | awk -F: -v loops="$tmpd/loops" '
+    { split($2, p, " "); old = p[1]; cur = p[2]
+      while (cur in to) cur = to[cur]
+      if (cur == old) { print $1 > loops; next }
+      if (!(old in to)) to[old] = p[2]
+      print $2 }' > "$tmpd/record" || true
+  loops=$(awk 'NR <= 20' "$tmpd/loops" | paste -sd, -)
+  if [ -n "$bad" ]; then
+    damaged=1
+    echo "record-rewrite: dropped line(s) $bad of the record on $remote: not a pair of ${idlen}-hex ids." >&2
+  fi
+  if [ -n "$loops" ]; then
+    damaged=1
+    echo "record-rewrite: dropped line(s) $loops of the record on $remote: each closes a chain loop." >&2
+  fi
+}
+
 [ -f "$map_in" ] || refuse "there is no commit-map at $map_in."
 if ! gitdir_err=$(git -C "$store" rev-parse --git-dir 2>&1); then
   refuse "$store is not a git repository: $(printf '%s' "$gitdir_err" | tr '\n' ' ')"
 fi
 # The ids of a record are as long as the store's object ids: 40 hex digits for
 # sha1, 64 for sha256.
-if ! format=$(git -C "$store" rev-parse --show-object-format 2>&1); then
-  refuse "could not read the object format of $store: $(printf '%s' "$format" | tr '\n' ' ')"
-fi
+format=$(git -C "$store" rev-parse --show-object-format)
 case "$format" in
   sha1) idlen=40 ;;
   sha256) idlen=64 ;;
-  *) refuse "$store has an object format this script does not know." ;;
+  *) refuse "$store reports the object format '$format', which has no known id length." ;;
 esac
 # Only the default is checked by name: an explicit remote is a name git resolves
 # or a URL it reads, and either failing is git's own message below.
@@ -96,21 +161,15 @@ if ! fetch_err=$(git -C "$store" fetch -q --no-write-fetch-head "$remote" +refs/
 fi
 
 tip=""
+damaged=""
 : > "$tmpd/record"
 if git -C "$store" rev-parse -q --verify refs/gitlore/rewrites >/dev/null; then
   tip=$(git -C "$store" rev-parse refs/gitlore/rewrites)
-  if ! version=$(git -C "$store" show "$tip:version" 2>&1); then
-    refuse "the record on $remote has no readable version file: $(printf '%s' "$version" | tr '\n' ' ')"
+  if [ -n "$rebuild" ]; then
+    read_record_for_rebuild
+  else
+    read_record_strict
   fi
-  [ "$version" = "1" ] || refuse "the record on $remote is not version 1, the only version this script writes."
-  if ! git -C "$store" show "$tip:map" > "$tmpd/record" 2>"$tmpd/err"; then
-    refuse "the record on $remote has no readable map: $(tr '\n' ' ' < "$tmpd/err")"
-  fi
-  # Remote content: a bad line is refused, never echoed.
-  ! grep -Evq "$hex_pair" "$tmpd/record" \
-    || refuse "the record on $remote has a map line that is not two ${idlen}-hex ids, so it cannot be appended to."
-  [ -z "$(tail -c 1 "$tmpd/record")" ] \
-    || refuse "the record's map does not end in a newline, so appending would join lines."
 fi
 
 # Changed lines the record lacks, in commit-map order. A line whose old id is
@@ -123,7 +182,7 @@ if [ -n "$conflict" ]; then
   read -r _ old recorded proposed <<< "$conflict"
   refuse "gitlore/rewrites already maps $old to $recorded, not to $proposed. That is a second rewrite of the same history, from another mirror."
 fi
-if [ ! -s "$tmpd/added" ]; then
+if [ ! -s "$tmpd/added" ] && [ -z "$damaged" ]; then
   echo "record-rewrite: gitlore/rewrites on $remote already holds every changed line; nothing to add."
   exit 0
 fi
@@ -134,6 +193,7 @@ vblob=$(printf '1\n' | git -C "$store" hash-object -w --stdin)
 tree=$(printf '100644 blob %s\tmap\n100644 blob %s\tversion\n' "$mblob" "$vblob" | git -C "$store" mktree)
 count=$(awk 'END { print NR }' "$tmpd/added")
 msg="record rewrite: $count changed lines"
+[ -z "$damaged" ] || msg="rebuild record: $count changed lines added to the readable lines"
 if [ -n "$tip" ]; then
   commit=$(git -C "$store" commit-tree "$tree" -p "$tip" -m "$msg")
 else
@@ -144,4 +204,8 @@ fi
 if ! push_err=$(git -C "$store" push -q "$remote" "$commit:refs/heads/gitlore/rewrites" 2>&1); then
   refuse "$remote refused the record: $(printf '%s' "$push_err" | tr '\n' ' ')"
 fi
-echo "record-rewrite: recorded $count changed lines on $remote gitlore/rewrites."
+if [ -n "$damaged" ]; then
+  echo "record-rewrite: rebuilt gitlore/rewrites on $remote with $count added lines."
+else
+  echo "record-rewrite: recorded $count changed lines on $remote gitlore/rewrites."
+fi
