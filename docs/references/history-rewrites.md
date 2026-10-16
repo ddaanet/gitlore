@@ -213,6 +213,15 @@ runs rarely and still needs the commit-map of the rewrite being recorded. The
 one thing it would buy is that the readable lines of a rewrite whose commit-map
 is gone survive; the from-scratch rebuild reuses the plain run and loses them.
 
+**A leased replacement of the damaged record.** The replacement would be built
+locally from every commit-map at hand and pushed in one push leased to the
+damaged tip, so the remote never lacks a record and a failed or interrupted
+rebuild leaves the damaged one, and the guard, in place. It is rejected because
+it closes the interval between the delete and the first run at the price of a
+second mode of `record-rewrite.sh` that builds a record without publishing it,
+for a repair that only a hand edit or a bug calls for and that the owner runs
+when no clone is publishing.
+
 **No guard.** Rewrites are rare, and a careful owner crosses every clone by
 hand. But the failure is silent and propagates — the tooling merges and
 publishes without asking — and the clones that matter are exactly the ones

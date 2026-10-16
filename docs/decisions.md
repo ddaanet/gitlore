@@ -48,7 +48,8 @@ old history does. [history-rewrites.md](references/history-rewrites.md)
 *Rejected:* no guard · an automatic crossing at the yield · matching commits
 without a map · a path-keyed map · an external cache · a record force-pushed as
 a single commit · the old tip as a parent of the record · guarding the parent
-repository · an in-place salvage of a damaged record.
+repository · an in-place salvage of a damaged record · a leased replacement of a
+damaged record.
 
 **The commit gate** — FR11's approval machinery.
 [commit-gate.md](references/commit-gate.md)
