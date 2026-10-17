@@ -370,13 +370,13 @@ teardown() { teardown_tmp_repo; }
   # pre hook takes the baseline for every Bash call and the post hooks decide
   # from what actually changed.
   run jq -r '.hooks.PreToolUse[] | select(.matcher=="Write|Edit|Bash") | .hooks[].command' "$PLUGIN_ROOT/hooks/hooks.json"
-  [[ "$output" == *index-sync-pre.sh ]]
+  [[ "$output" == *index-sync-pre.sh\" ]]
   # PostToolBatch takes no matcher — it carries the whole batch, and the hooks
   # key on their own pre-batch baseline rather than on its calls. The event is
   # shared (memory-commit-batch.sh is also registered here), so select the
   # index-sync entry by command.
   run jq -r '.hooks.PostToolBatch[].hooks[].command | select(test("index-sync-post"))' "$PLUGIN_ROOT/hooks/hooks.json"
-  [[ "$output" == *index-sync-post.sh ]]
+  [[ "$output" == *index-sync-post.sh\" ]]
   # ...and is no longer double-registered on the per-call event.
   run jq -r '[.hooks.PostToolUse[]? | .hooks[].command] | map(select(test("index-sync"))) | length' "$PLUGIN_ROOT/hooks/hooks.json"
   [ "$output" = "0" ]

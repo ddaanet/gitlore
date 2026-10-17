@@ -1,3 +1,0 @@
-## Current task
-
-The release review of `dev` against `main` is finished: `/code-review high` and the Codex adversarial review ran, every confirmed finding is fixed through three re-review rounds, and the loop closed on low findings only. Codex's high finding (D63's unguarded rebuild interval) was kept by my human partner's call and recorded as a rejected alternative. Next: run `ddaa:preflight` on `dev`, then `just release` as the bare recipe call (no `dangerouslyDisableSandbox`), which moves `main` to the release. The stale `refs/remotes/origin/main` left after a successful crossing whose remote deleted main was left as is by choice (`git fetch --prune` clears it).

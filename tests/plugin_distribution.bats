@@ -319,11 +319,20 @@ load helpers/setup
       missing="$missing${missing:+, }$script"
     fi
   done < <(jq -r --arg root "$PLUGIN_ROOT" \
-    '.hooks.PostToolBatch[].hooks[].command | sub("^\\$\\{CLAUDE_PLUGIN_ROOT\\}"; $root)' \
+    '.hooks.PostToolBatch[].hooks[].command | gsub("\""; "") | sub("^\\$\\{CLAUDE_PLUGIN_ROOT\\}"; $root)' \
     "$PLUGIN_ROOT/hooks/hooks.json")
   [ "$count" -gt 0 ]
   if [ -n "$missing" ]; then
     echo "no gitlore_batch_hook_guard call in: $missing" >&2
     return 1
   fi
+}
+
+# A plugin installed under a path with a space must still run its hooks: the hook
+# shell word-splits an unquoted ${CLAUDE_PLUGIN_ROOT}, and the hook fails with no
+# visible error. Every command is exactly one double-quoted script path.
+@test "distribution: every hooks.json command double-quotes its plugin-root path" {
+  run jq -r '[.hooks[][].hooks[].command | select(test("^\"\\$\\{CLAUDE_PLUGIN_ROOT\\}/[^\" ]+\"$") | not)] | length' "$PLUGIN_ROOT/hooks/hooks.json"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
 }

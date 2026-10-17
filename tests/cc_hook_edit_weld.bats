@@ -190,11 +190,11 @@ B
   run jq -r '.hooks.PreToolUse[] | select(.matcher=="Edit") | .hooks[].command' \
       "$PLUGIN_ROOT/hooks/hooks.json"
   [ "$status" -eq 0 ]
-  [[ "$output" == *edit-weld-pre.sh ]]
+  [[ "$output" == *edit-weld-pre.sh\" ]]
   run jq -r '.hooks.PostToolUse[] | select(.matcher=="Edit") | .hooks[].command' \
       "$PLUGIN_ROOT/hooks/hooks.json"
   [ "$status" -eq 0 ]
-  [[ "$output" == *edit-weld-post.sh ]]
+  [[ "$output" == *edit-weld-post.sh\" ]]
   # Recorded mode, not the local filesystem mode: a marketplace clone
   # reproduces git's mode, and a local chmod would mask a 100644.
   for s in edit-weld-pre edit-weld-post; do

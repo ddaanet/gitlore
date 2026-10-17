@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/session-start.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/session-start.sh\""
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/nudge-reset.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/nudge-reset.sh\""
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-sync-pre.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-sync-pre.sh\""
           }
         ]
       },
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/edit-weld-pre.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/edit-weld-pre.sh\""
           }
         ]
       }
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/edit-weld-post.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/edit-weld-post.sh\""
           }
         ]
       },
@@ -55,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/worktree-drift.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/worktree-drift.sh\""
           }
         ]
       }
@@ -65,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-sync-post.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-sync-post.sh\""
           }
         ]
       },
@@ -73,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/add-tier-batch.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/add-tier-batch.sh\""
           }
         ]
       },
@@ -81,7 +81,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-compose.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/index-compose.sh\""
           }
         ]
       },
@@ -89,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/memory-commit-batch.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/memory-commit-batch.sh\""
           }
         ]
       },
@@ -97,7 +97,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/plugin-upgrade-batch.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/plugin-upgrade-batch.sh\""
           }
         ]
       },
@@ -105,7 +105,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/relay-drain.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/relay-drain.sh\""
           }
         ]
       }
@@ -115,7 +115,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/worktree-remove.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/cc-hooks/worktree-remove.sh\""
           }
         ]
       }
