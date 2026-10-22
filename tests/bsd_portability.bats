@@ -61,10 +61,10 @@ teardown() { teardown_tmp_repo; }
 @test "run-bats.sh log file survives BSD mktemp on a second run (trailing Xs only)" {
   make_bsd_stubs "$BSD" mktemp
   printf '#!/usr/bin/env bats\n@test "ok" { true; }\n' > one.bats
-  PATH="$BSD:$PATH" TMPDIR="$TMP_REPO" run "$PLUGIN_ROOT/scripts/run-bats.sh" one.bats
+  PATH="$BSD:$PATH" TMPDIR="$TMP_REPO" run "$PLUGIN_ROOT/plugin-dev/run-bats.sh" one.bats
   [ "$status" -eq 0 ]
   [[ "$output" == *"1 passed, 0 failed"* ]]
-  PATH="$BSD:$PATH" TMPDIR="$TMP_REPO" run "$PLUGIN_ROOT/scripts/run-bats.sh" one.bats
+  PATH="$BSD:$PATH" TMPDIR="$TMP_REPO" run "$PLUGIN_ROOT/plugin-dev/run-bats.sh" one.bats
   [ "$status" -eq 0 ]
   [[ "$output" == *"1 passed, 0 failed"* ]]
 }

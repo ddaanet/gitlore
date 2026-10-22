@@ -10,8 +10,8 @@
 # file did contain.
 #
 # Each helper prints its evidence to stderr and returns 1. bats shows a failed
-# test's stderr under the `not ok` line, which is what `scripts/run-bats.sh`
-# surfaces.
+# test's stderr under the `not ok` line, which is what
+# `plugin-dev/run-bats.sh` surfaces.
 
 # `status` and `output` are set by bats' own `run`, in the caller's scope.
 # shellcheck disable=SC2154

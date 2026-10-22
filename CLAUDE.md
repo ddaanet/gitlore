@@ -64,14 +64,14 @@ from the script the node names.
   A subagent receives that notification too; one that idles on a watcher of
   its own has the verdict readable from the gates — `lint`, `test-unit`,
   `test-integration` and `check-distribution` each write one under
-  `$(git rev-parse --git-path gitlore/gates)`, which resolves per worktree. A
-  gate file holds a content hash of that recipe's declared inputs, so it is
+  `$(git rev-parse --git-path plugin-dev/gates)`, which resolves per worktree.
+  A gate file holds a content hash of that recipe's declared inputs, so it is
   valid when re-hashing them reproduces it; mtime settles nothing, and an input
-  edited mid-run fails the recipe rather than recording a pass. `format-docs`,
+  edited mid-run leaves no pass recorded, saying so on stderr. `format-docs`,
   `check-memory-hygiene.py`, `check-docs-links.py` and `check-version` run
   uncached and write no gate file, so four fresh gates are not a green
   `precommit`. Neither `ps` nor stdout settles a run either: a fresh Bash call
-  cannot see another background task's processes, and `scripts/run-bats.sh`
+  cannot see another background task's processes, and `plugin-dev/run-bats.sh`
   buffers the whole suite into a log file.
   Only if the run dies, fall back to `just lint`, `just check-distribution`,
   `just test-integration` and `just test-unit` as separate sequential calls;
@@ -83,12 +83,12 @@ from the script the node names.
 - macOS is a target: bash 3.2 and BSD `sed`/`mktemp`/`grep`/`find`/`stat`.
   `tests/helpers/bsd-stubs.bash` shadows a tool with its BSD-strict contract so
   a GNU-ism fails on Linux; `tests/bsd_portability.bats` holds the lock-ins.
-- `test-unit`/`test-integration` run bats through `scripts/run-bats.sh`, not
-  bare `bats`: it shows only `not ok` blocks plus a pass/fail count and
-  stashes the full TAP stream in a logged tmp file. Don't pipe raw `bats`
-  output through `tail` — a run is hundreds of lines and a truncated tail can
-  crop the one `not ok` line that matters. Invoke `bats` directly only when
-  deliberately inspecting the full stream (e.g. debugging the wrapper
-  itself).
+- The gates run bats through the toolkit's `plugin-dev/run-bats.sh`, not bare
+  `bats`: it shows only `not ok` blocks plus a pass/fail count, and keeps the
+  full TAP stream in a tmp file it names when the run fails. Don't pipe raw
+  `bats` output through `tail` — a run is hundreds of lines and a truncated
+  tail can crop the one `not ok` line that matters. Invoke `bats` directly
+  only when deliberately inspecting the full stream (e.g. debugging the
+  wrapper itself).
 
 @memory/ddaanet/shared-claude.md

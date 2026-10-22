@@ -91,17 +91,22 @@ and hooks and the bats suites, but not `plans/` (D55).
 ## What a sentinel vouches for
 
 `lint`, `test-unit`, `test-integration` and `check-distribution` each write one
-file under `git rev-parse --git-path gitlore/gates`, which resolves per
-worktree, so a linked worktree keeps verdicts of its own. The file holds a
-`cksum` over that recipe's declared inputs — each path's name and contents, plus
-the versions of the unpinned tools the run leans on — and a gate is valid
-exactly when re-hashing those inputs reproduces it. No timestamp is consulted,
-so a commit that leaves the tree unchanged leaves a pass standing.
+file under `git rev-parse --git-path plugin-dev/gates`, which resolves per
+worktree, so a linked worktree keeps verdicts of its own. The sentinel functions
+are the toolkit's, from `plugin-dev/gates.just`, and its manual
+(`plugin-dev/manual/gates.md`) is their reference. The file holds a `cksum` over
+that recipe's declared inputs, the justfile and `plugin-dev/` — each path's
+name, contents and execute bit, plus the versions of the unpinned tools
+`PLUGIN_DEV_GATE_TOOLS` lists — and a gate is valid exactly when re-hashing
+those inputs reproduces it. A declared pathspec that matches no file is refused
+at the guard. No timestamp is consulted, so a commit that leaves the tree
+unchanged leaves a pass standing.
 
 The hash is taken before the checks start and again before the pass is recorded.
-A recipe that finds the two different says so and exits non-zero instead of
-recording: a peer session editing an input during a nine-minute run would
-otherwise seal in a pass for a tree nothing checked.
+A recipe that finds the two different says so and records nothing: a peer
+session editing an input during a nine-minute run would otherwise seal in a pass
+for a tree nothing checked. The recipe keeps its checks' own verdict, so the
+next run does the work again.
 
 `test-unit` subtracts `tests/integration_*` from the set it shares with `lint`
 and `test-integration`, so editing an integration suite leaves the unit verdict
@@ -109,15 +114,17 @@ standing.
 
 `format-docs`, `check-memory-hygiene.py`, `check-docs-links.py` and
 `check-version` run uncached and write no gate file, so four fresh gates are not
-the same thing as a green `precommit`. `GITLORE_GATE_FORCE=1` runs a gate
+the same thing as a green `precommit`. `PLUGIN_DEV_GATE_FORCE=1` runs a gate
 whatever its sentinel says.
 
 `scripts/lint-shell.sh` discovers from the set the hash enumerates — tracked
 files plus untracked, non-ignored ones — so a brand-new script that moves the
 `lint` hash is a script the recorded pass linted. The `lint` hash adds the shell
-files under `plans/` by extension (`plans/*.sh`, `*.bash`, `*.bats`), since
-`lint-shell.sh` walks the whole tree while the shared inputs leave `plans/` out;
-an extensionless script there is linted without moving the hash.
+files under `plans/` by extension (`plans/*.sh`), since `lint-shell.sh` walks
+the whole tree while the shared inputs leave `plans/` out; an extensionless
+script there is linted without moving the hash. `*.bash` and `*.bats` are not
+named while no plan carries one, because the guard refuses a pathspec that
+matches no file.
 
 Inside a `lint` run that the sentinel did not skip, `lint-shell.sh` keeps a
 finer cache of its own at `git rev-parse --git-path gitlore/lint-cache`: one key
@@ -129,7 +136,7 @@ basename, so the closure over-approximates what `-x` reads and an edit to a
 library relints everything that reaches it. A file sourced from outside the
 discovered set is in no key. The full pass is ~65 s and an unchanged tree ~4 s,
 which is the discovery walk; editing one suite adds under a second.
-`GITLORE_GATE_FORCE=1` lints every file regardless, and
+`PLUGIN_DEV_GATE_FORCE=1` lints every file regardless, and
 `scripts/lint-cache-keys.py` holds the key's argument.
 
 `test-unit` and `test-integration` keep the same kind of cache beneath their
@@ -152,9 +159,9 @@ the same after the run as before. The verdict per suite comes from bats' junit
 report, matched to the suites by position and cross-checked by name; a report
 that is missing, short, or out of order records nothing, and the suites run
 again. A failing suite does not keep the passing ones beside it from being
-recorded. `GITLORE_GATE_FORCE=1` runs every suite.
+recorded. `PLUGIN_DEV_GATE_FORCE=1` runs every suite.
 
-`GITLORE_GATE_DIR` names another directory for the gate files. It is for a
+`PLUGIN_DEV_GATE_DIR` names another directory for the gate files. It is for a
 caller that runs a recipe without meaning its verdict:
 `tests/justfile_gates.bats` drives the real `test-unit` and `test-integration`
 in this repository with `bats` stubbed out to list what they would run, and

@@ -44,7 +44,7 @@ fi
 # these contents, its own and those of everything it sources, and is not linted
 # again; lint-cache-keys.py says what a key covers. Only passes are recorded,
 # and the cache is rewritten from this run's keys, so it prunes itself.
-# `GITLORE_GATE_FORCE` lints everything, as it does for the gate around this.
+# `PLUGIN_DEV_GATE_FORCE` lints everything, as it does for the gate around this.
 # Under the gitdir for the gate sentinels' reason: bookkeeping in the working
 # tree would show up in `git status`.
 cache="$(git rev-parse --git-path gitlore/lint-cache)"
@@ -56,7 +56,7 @@ keys=()
 misses=()
 while IFS= read -r -d '' key && IFS= read -r -d '' f; do
   keys+=("$key")
-  if [ -n "${GITLORE_GATE_FORCE:-}" ] || ! grep -Fxq -- "$key" "$cache"; then
+  if [ -n "${PLUGIN_DEV_GATE_FORCE:-}" ] || ! grep -Fxq -- "$key" "$cache"; then
     misses+=("$f")
   fi
 done < <(printf '%s\0' "${files[@]}" | "$(dirname "$0")/lint-cache-keys.py" "$tool_version")

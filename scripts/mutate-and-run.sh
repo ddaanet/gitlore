@@ -131,7 +131,7 @@ cat "$mutant" > "$subject"
 bats_args=("$suite")
 [ -z "$filter" ] || bats_args=(--filter "$filter" "$suite")
 set +e
-"$here/run-bats.sh" "${bats_args[@]}" > "$suite_log" 2>&1
+"$here/../plugin-dev/run-bats.sh" "${bats_args[@]}" > "$suite_log" 2>&1
 suite_status=$?
 set -e
 cat "$suite_log"

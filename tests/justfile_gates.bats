@@ -19,15 +19,18 @@ all_suites() {
     | sort
 }
 
-# What `just test` would hand to bats, with bats stubbed out. Filtered to
-# *.bats lines: the recipes also pass `--jobs <n>`, which the stub echoes
-# like any other arg but which isn't a suite. Forced, because the runners are
+# What `just test` would hand to bats, with bats stubbed out. The stub writes
+# its arguments to a file and prints one passing TAP line: the quiet runner
+# shows nothing of a passing run, and counts a run with no test as a failure.
+# Filtered to *.bats lines: the recipes also pass `--jobs <n>` and the junit
+# report flags, which the stub records like any other arg but which aren't
+# suites. `bats --version`, which the gate hash folds in, is answered too. Forced, because the runners are
 # gates: a recorded pass would skip discovery and hand back nothing. The
 # sentinels go to a scratch directory: this runs the real recipes in the real
 # repo, and a stubbed pass recorded there would overwrite the verdicts of the
-# very gate this suite is running under. `2>&1` ahead of the filter: the stub
-# writes no junit report, `run-bats-cached.sh` says so on stderr, and bats'
-# `run` would fold that line into `$output` beside the suite names.
+# very gate this suite is running under. The stub writes no junit report, and
+# `run-bats-cached.sh` says so on stderr; the raw output keeps that beside the
+# recipes' own for a failing run to show.
 #
 # Run once per file, not once per test: the run hashes the whole input tree,
 # and three tests below all want the same discovery output. Its own stub dir
@@ -44,18 +47,22 @@ setup_file() {
   stub_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-justfile-stub.XXXXXX")"
   cat > "$stub_dir/bats" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "$@"
+[ "${1:-}" = --version ] && { echo "Bats stub"; exit 0; }
+printf '%s\n' "$@" >> "$(dirname "$0")/args"
+echo "1..1"
+echo "ok 1 stub"
 EOF
   chmod +x "$stub_dir/bats"
   printf '%s\n' "$stub_dir" > "$BATS_FILE_TMPDIR/discovered_suites.stub_dir"
 
-  if ( cd "$PLUGIN_ROOT" && PATH="$stub_dir:$PATH" GITLORE_GATE_FORCE=1 GITLORE_GATE_DIR="$stub_dir/gates" just test-unit test-integration ) \
+  if ( cd "$PLUGIN_ROOT" && PATH="$stub_dir:$PATH" PLUGIN_DEV_GATE_FORCE=1 PLUGIN_DEV_GATE_DIR="$stub_dir/gates" just test-unit test-integration ) \
       > "$BATS_FILE_TMPDIR/discovered_suites.raw" 2>&1
   then status=0
   else status=$?
   fi
   printf '%s\n' "$status" > "$BATS_FILE_TMPDIR/discovered_suites.status"
-  grep '\.bats$' "$BATS_FILE_TMPDIR/discovered_suites.raw" > "$BATS_FILE_TMPDIR/discovered_suites.out" || true
+  touch "$stub_dir/args"
+  grep '\.bats$' "$stub_dir/args" > "$BATS_FILE_TMPDIR/discovered_suites.out" || true
 }
 
 teardown_file() {
@@ -70,18 +77,6 @@ teardown_file() {
   stub_dir="$(cat "$BATS_FILE_TMPDIR/discovered_suites.stub_dir")"
   [ -f "$stub_dir/gates/test-unit" ]
   [ -f "$stub_dir/gates/test-integration" ]
-}
-
-@test "GITLORE_GATE_DIR moves the sentinel out of the gitdir" {
-  setup_gate_repo
-  run in_gate_repo "export GITLORE_GATE_DIR='$GATE_REPO/elsewhere'; check-sentinel g src || true; record-sentinel"
-  [ "$status" -eq 0 ]
-  [ -f "$GATE_REPO/elsewhere/g" ]
-  [ ! -e "$GATE_REPO/.git/gitlore/gates/g" ]
-
-  run in_gate_repo "export GITLORE_GATE_DIR='$GATE_REPO/elsewhere'; sentinel-guard g src; echo ran"
-  [ "$status" -eq 0 ]
-  [ "$output" = "g: cached (inputs unchanged)" ]
 }
 
 @test "every suite under tests/ is run by one of the test recipes" {
@@ -174,23 +169,6 @@ teardown_file() {
     done
     [ "$found" -eq 1 ]
   done
-}
-
-@test "sentinel-guard skips only when the gate's inputs are unchanged, and GITLORE_GATE_FORCE overrides it" {
-  setup_gate_repo
-  run in_gate_repo "sentinel-guard g src; echo ran"
-  [ "$status" -eq 0 ]
-  [ "$output" = ran ]
-
-  gate_record src
-  run in_gate_repo "sentinel-guard g src; echo ran"
-  [ "$status" -eq 0 ]
-  [ "$output" = "g: cached (inputs unchanged)" ]
-
-  run env GITLORE_GATE_FORCE=1 bash -c \
-    "cd '$GATE_REPO' && . '$PROLOG' && sentinel-guard g src; echo ran"
-  [ "$status" -eq 0 ]
-  [ "$output" = ran ]
 }
 
 @test "precommit and the gate recipes reach their runners" {

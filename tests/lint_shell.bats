@@ -12,10 +12,10 @@
 
 load helpers/setup
 
-# `GITLORE_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an
+# `PLUGIN_DEV_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an
 # ambient value would reach the script under test and make the cache-hit
 # cases silently unprovable.
-setup()    { unset GITLORE_GATE_FORCE; setup_tmp_repo; }
+setup()    { unset PLUGIN_DEV_GATE_FORCE; setup_tmp_repo; }
 teardown() { teardown_tmp_repo; }
 
 @test "lint-shell: catches a shellcheck violation in a tracked .sh file" {
@@ -137,7 +137,7 @@ plant_source_chain() {
   rm -rf "$SC_DIR"
 }
 
-@test "lint-shell: a different shellcheck, or GITLORE_GATE_FORCE, relints everything" {
+@test "lint-shell: a different shellcheck, or PLUGIN_DEV_GATE_FORCE, relints everything" {
   wrap_shellcheck
   plant_source_chain
   run "$PLUGIN_ROOT/scripts/lint-shell.sh"
@@ -151,7 +151,7 @@ plant_source_chain() {
   run "$PLUGIN_ROOT/scripts/lint-shell.sh"
   [ "$status" -eq 0 ]
   : > "$SC_LOG"
-  GITLORE_GATE_FORCE=1 run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  PLUGIN_DEV_GATE_FORCE=1 run "$PLUGIN_ROOT/scripts/lint-shell.sh"
   [ "$status" -eq 0 ]
   [ "$(grep -vc '^-' "$SC_LOG")" -eq 4 ]
   rm -rf "$SC_DIR"

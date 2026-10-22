@@ -1,7 +1,6 @@
 # gitlore
 
 A Claude Code plugin that makes Claude's auto-memory versioned, shared, and git-backed.
-See `docs/design.md` for the design, `docs/changelog.md` for how it got there, and `plans/` for implementation plans and specs.
 
 ## Install
 
@@ -24,66 +23,22 @@ under `~/.gitlore/bin/` and install prints the one-line `PATH` addition to add t
 your shell rc. Either way, Claude Code's auto-memory redirects into the submodule on
 the next session.
 
-## Development
+## Requirements
 
-    just test        # runs the bats suite
-    just format-docs # hard-wraps prose in docs/ and plans/ (rumdl)
-    just precommit   # the commit gate, in the order below
-    just evals      # the happy-path evals — slow, paid, drives the real CLI
-    just prerelease # the release gate
-    just release    # depends on prerelease; bumps, tags, publishes
-
-`precommit` runs `format-docs`, `check-distribution`,
-`scripts/check-memory-hygiene.py`, `scripts/check-docs-links.py`,
-`check-version`, `lint`, then `test` — which is `test-unit` and
-`test-integration`. `lint`, `test-unit`, `test-integration` and
-`check-distribution` are each runnable on their own, which is the recovery path
-when a `precommit` run dies: each records its own pass, so only the recipes that
-did not finish need re-running.
-
-Those four are the gates. Each records a content hash of its declared inputs on
-success and skips when they are unchanged, so a red integration run does not
-un-cache a green lint; `GITLORE_GATE_FORCE=1` runs one anyway. The other four
-steps — `format-docs`, `check-memory-hygiene.py`, `check-docs-links.py` and
-`check-version` — are uncached and run every time, so `just prerelease` right
-after a green `just precommit` still pays them; four cached gates are not a
-green `precommit`.
-
-The justfile declares four input sets at the top: `precommit_inputs`, what the
-checks read; `evals_inputs`, that plus `agents`, `commands` and `skills`, which
-the evals reach through the installed plugin; `distribution_inputs`, everything
-the distribution suite reads, so editing what the plugin ships invalidates that
-gate rather than the slow ones; and `reads_all_suites`, the suites that read
-other suites' *contents* and so need every suite in their cache key — none does
-today, and `justfile_gates.bats` fails when one appears undeclared. `memory/`
-and `docs/` are in none of them, so a memory-only or prose-only commit leaves a
-green gate green. `plans/` is out too, except that the `lint` hash adds the
-shell files under it by extension (`plans/*.sh`, `*.bash`, `*.bats`), because
-`lint-shell.sh` walks the whole tree. `docs/` and `plans/` are instead
-re-wrapped by `format-docs` on every run, which is fast enough to need no
-sentinel.
-
-Dependencies:
-- `bash` ≥ 3.2 for the shipped scripts. **Running the bats suite needs bash ≥
-  4.1**, where a failing `[[ ]]` fails the test — under the 3.2 macOS ships, a
-  failing non-final `[[ ]]` passes silently, so `require_assertion_bash` in
-  `tests/helpers/setup.bash` refuses the run rather than let it report green. On
-  a Mac, `scripts/test-macos.sh` is the way to run it: bats under a modern bash,
-  while the scripts a test execs meet the system's 3.2 on a system-only `PATH`.
+- `bash` ≥ 3.2 for the shipped scripts.
 - `git` ≥ 2.13 (for `git submodule absorbgitdirs`; install also uses manual gitdir absorption that works on older versions)
 - `jq`
-- `bats-core` ≥ 1.13 (`brew install bats-core` or `npm i -g bats`). Debian's
-  packaged `bats` is 1.11 and does not satisfy this: below 1.13 a merged `run`
-  leaves `$stderr` holding an earlier `run --separate-stderr` capture, so a
-  suite asserting on it passes against stale text. `require_bats_version` in
-  `tests/helpers/setup.bash` refuses the run rather than let it report green.
-- `uv` and direnv for the dev gate: `uv sync` once materializes `.venv/bin` from `uv.lock` (rumdl for `format-docs`, PyYAML for the wiring suite) and `.envrc` puts it on `PATH`
 - `mikefarah/yq` v4 OR `python3` with PyYAML — required for `wire-lefthook.sh` and `wire-overcommit.sh` to safely merge user YAML configs without clobbering existing keys. Note: yq-based wiring will strip pre-existing YAML comments from `lefthook.yml` / `.overcommit.yml` (the gitlore marker is preserved, user comments are not).
+
+## Development
+
+The [design document](https://github.com/ddaanet/gitlore/blob/main/docs/design.md)
+and its nodes hold the design, including the test suite and the commit gate
+for working on gitlore itself.
 
 ## Status
 
-Usable and dogfooded daily on the author's own repositories. `docs/changelog.md`
-records what changed and why.
+Usable and dogfooded daily on the author's own repositories.
 
 ## Tiers
 

@@ -9,10 +9,10 @@ bats_require_minimum_version 1.5.0
 
 load helpers/setup
 
-# `GITLORE_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an
+# `PLUGIN_DEV_GATE_FORCE` is cleared: this suite runs *inside* a gate, and an
 # ambient value would reach the script under test and make the cache-hit
 # cases silently unprovable.
-setup()    { unset GITLORE_GATE_FORCE; setup_tmp_repo; MARK="$TMP_REPO/marks"; mkdir -p "$MARK"; KEYS="$TMP_REPO/keys"; }
+setup()    { unset PLUGIN_DEV_GATE_FORCE; setup_tmp_repo; MARK="$TMP_REPO/marks"; mkdir -p "$MARK"; KEYS="$TMP_REPO/keys"; }
 teardown() { teardown_tmp_repo; }
 
 # A suite that touches "$MARK/<name>.ran" and then passes or fails.
@@ -115,12 +115,12 @@ cached() {
   ran s.bats
 }
 
-@test "GITLORE_GATE_FORCE=1 runs everything" {
+@test "PLUGIN_DEV_GATE_FORCE=1 runs everything" {
   plant a.bats; plant b.bats
   run cached "$KEYS" h1 -- a.bats b.bats
   [ "$status" -eq 0 ]
   clear_marks
-  GITLORE_GATE_FORCE=1 run cached "$KEYS" h1 -- a.bats b.bats
+  PLUGIN_DEV_GATE_FORCE=1 run cached "$KEYS" h1 -- a.bats b.bats
   [ "$status" -eq 0 ]
   ran a.bats
   ran b.bats
@@ -152,20 +152,22 @@ EOF
 @test "a report whose verdicts are not in the order the suites were given records nothing" {
   # Position is how a verdict finds its suite, so a report in another order
   # would hand the failing suite the passing one's verdict. The scripts are
-  # copied beside a parser that reverses the real one's lines.
-  mkdir alt
-  cp "$PLUGIN_ROOT/scripts/run-bats-cached.sh" "$PLUGIN_ROOT/scripts/run-bats.sh" alt/
-  cat > alt/parse-bats-junit.py <<PARSER
+  # copied beside a parser that reverses the real one's lines, the quiet runner
+  # where the cached one looks for it, in `../plugin-dev/`.
+  mkdir -p alt/scripts alt/plugin-dev
+  cp "$PLUGIN_ROOT/scripts/run-bats-cached.sh" alt/scripts/
+  cp "$PLUGIN_ROOT/plugin-dev/run-bats.sh" alt/plugin-dev/
+  cat > alt/scripts/parse-bats-junit.py <<PARSER
 #!/usr/bin/env bash
 "$PLUGIN_ROOT/scripts/parse-bats-junit.py" "\$@" | sed '1!G;h;\$!d'
 PARSER
-  chmod +x alt/parse-bats-junit.py
+  chmod +x alt/scripts/parse-bats-junit.py
   plant f1.bats fail; plant p1.bats pass
-  run alt/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
+  run alt/scripts/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
   [ "$status" -ne 0 ]
   [[ "$output" == *"nothing recorded"* ]]
   clear_marks
-  run alt/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
+  run alt/scripts/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
   ran f1.bats
   ran p1.bats
 }

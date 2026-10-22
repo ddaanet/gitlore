@@ -7,7 +7,7 @@ set -euo pipefail
 # docs/references/testing.md.
 #
 # Usage: run-bats-cached.sh <keys-file> <shared-hash> [--reads-all <suite>]... \
-#     -- <bats args and suites, as scripts/run-bats.sh takes them>
+#     -- <bats args and suites, as plugin-dev/run-bats.sh takes them>
 #
 # A suite's key covers the shared hash (the gate's own inputs, minus the
 # suites themselves), the names of every suite in this invocation (so adding,
@@ -101,7 +101,7 @@ for i in "${!suites[@]}"; do
   suite="${suites[$i]}"
   k="$(suite_key "$suite")"
   before_keys+=("$k")
-  if [ "$unhashable" -eq 0 ] && [ -z "${GITLORE_GATE_FORCE:-}" ] && has_key "$k"; then
+  if [ "$unhashable" -eq 0 ] && [ -z "${PLUGIN_DEV_GATE_FORCE:-}" ] && has_key "$k"; then
     hit_keys+=("$k")
   else
     miss_suites+=("$suite")
@@ -121,7 +121,7 @@ script_dir="$(dirname "$0")"
 junit_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitlore-bats-junit.XXXXXX")"
 trap 'rm -rf "$junit_dir"' EXIT
 
-cmd=("$script_dir/run-bats.sh")
+cmd=("$script_dir/../plugin-dev/run-bats.sh")
 [ "${#bats_opts[@]}" -gt 0 ] && cmd+=("${bats_opts[@]}")
 cmd+=(--report-formatter junit --output "$junit_dir")
 cmd+=("${miss_suites[@]}")

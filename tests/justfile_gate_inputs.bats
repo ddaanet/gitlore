@@ -36,7 +36,7 @@ load helpers/justfile-gates
   [[ "$output" != *"tests/integration_"* ]]
   # The narrowing must take only the integration suites with it.
   [[ "$output" == *"tests/justfile_gates.bats"* ]]
-  [[ "$output" == *"scripts/run-bats.sh"* ]]
+  [[ "$output" == *"scripts/run-bats-cached.sh"* ]]
 
   run guard_input_files test-integration
   [ "$status" -eq 0 ]
@@ -101,7 +101,9 @@ load helpers/justfile-gates
   # the rumdl pin/config are read by `format-docs`, which has no sentinel;
   # `TASK.md` and `TODO.md` are the handoff task frame, like `.claude`; the
   # shell scripts under `plans` reach the `lint` gate by pathspec instead.
-  excluded=" memory docs plans inbox README.md CLAUDE.md TASK.md TODO.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml "
+  # `dist.include` is read by the toolkit's dist build and dogfood sync, which
+  # no gate here runs.
+  excluded=" memory docs plans inbox README.md CLAUDE.md TASK.md TODO.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml dist.include "
   while IFS= read -r entry; do
     [[ "$declared" == *" $entry "* ]] || [[ "$excluded" == *" $entry "* ]] || {
       echo "top-level entry '$entry' is neither a declared gate input nor a deliberate exclusion" >&2

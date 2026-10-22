@@ -46,7 +46,7 @@ main() {
   environment
 
   PATH="$work/new:$PATH" GITLORE_TEST_BASH_DIR="$work/old" \
-    scripts/run-bats.sh "${suites[@]}"
+    plugin-dev/run-bats.sh "${suites[@]}"
 }
 
 # A glob, never a hand list, for `test-unit`'s reason: a list drifts and
