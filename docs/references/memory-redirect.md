@@ -50,22 +50,9 @@ mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path)
 [ "$(jq -r '.gitlore.enabled // false' "$root/.claude/settings.json" 2>/dev/null)" = true ] \
   || exec "$real" "$@"                                            # submodule present but disabled → passthrough
 
-# containment: lexical first (holds before the submodule is initialised), then physical
-refuse() {   # refuse <reason> <claude args>…
-  echo "gitlore: memory path '$mempath' in .gitmodules $1; launching claude without the memory redirect" >&2
-  shift
-  exec "$real" "$@"
-}
-case "$mempath" in /*) refuse "is absolute" "$@" ;; esac
-case "/$mempath/" in */../*) refuse "has a '..' component" "$@" ;; esac
-p="$root/$mempath"
-while [ ! -d "$p" ]; do
-  [ -L "$p" ] && refuse "crosses a symlink that names no directory" "$@"
-  p=${p%/*}
-done
-pabs=$(cd "$p" && pwd -P) || refuse "cannot be resolved" "$@"
-rootabs=$(cd "$root" && pwd -P) || refuse "cannot be resolved" "$@"
-case "$pabs/" in "$rootabs"/*) ;; *) refuse "resolves outside the repo" "$@" ;; esac
+# containment (see "Memory-path containment" below; full text in
+# scripts/install/launcher-shim): control characters, then lexical, then
+# physical, then the gitlink — any failure prints one line and execs "$real" "$@"
 
 json=$(jq -nc --arg p "$root/$mempath" '{autoMemoryDirectory:$p}')
 export GITLORE_LAUNCHED=1
@@ -88,23 +75,36 @@ exec "$real" --settings "$json" "$@"
   overridden; all other settings still resolve from their normal tiers.
 - **Memory-path containment.** `mempath` and `gitlore.enabled` both come from
   files the checkout controls, and the redirect gives `mempath` the standing of
-  a value the user typed, so the shim injects only a path inside the repo.
-  `git config --file` returns a `.gitmodules` path verbatim — `../x`, `a/../..`
-  and `/etc/x` alike; git's own `..` rejection applies when it adds a submodule,
-  not on a read. Claude Code then takes any absolute path, normalizes its `..`
-  away, and neither resolves symlinks nor compares it with the project (read in
-  the CC 2.1.310 resolver). The checks are lexical first, because before
-  `git submodule update --init` the memory directory does not exist and the shim
-  still injects it: an absolute `mempath` is refused, and so is any `..`
-  *component* — matched as `/../` in `/$mempath/`, so a name such as
-  `my..memory` passes. Then physical: the nearest existing directory on the
-  memory path (the memory directory itself once initialised) is resolved with
-  `cd … && pwd -P` and must be the physical root or sit under it, which catches
-  a symlinked memory directory and a symlinked parent that a not-yet-created
-  memory directory would land under. A symlink met on the way up that names no
-  directory is refused outright. A refusal is the one non-silent passthrough:
-  one `gitlore:` line on stderr names the path and the reason, then the real
-  `claude` runs with the original arguments, no `--settings` and
+  a value the user typed — and Claude Code auto-allows writes under
+  `autoMemoryDirectory`, so a memory directory of `.claude` would let a session
+  rewrite its own hooks unprompted. The shim therefore injects only the memory
+  submodule's own path: strictly inside the repo, outside its control
+  directories. `git config --file` returns a `.gitmodules` path verbatim —
+  `../x`, `a/../..` and `/etc/x` alike; git's own `..` rejection applies when it
+  adds a submodule, not on a read. Claude Code then takes any absolute path,
+  normalizes its `..` away, and neither resolves symlinks nor compares it with
+  the project (read in the CC 2.1.310 resolver). The checks run cheapest first.
+  A path with a control character is refused without being shown, since the
+  refusal line reaches the terminal; every other refusal prints the path with
+  `printf '%s'`. Then lexical, because before `git submodule update --init` the
+  memory directory does not exist and the shim still injects it: an absolute
+  `mempath` is refused, and so is any `..` or `.` *component* — matched as
+  `/../` or `/./` in `/$mempath/`, so a name such as `my..memory` passes — and
+  any `.git`, `.claude` or `.gitlore` component, compared case-insensitively
+  because macOS filesystems are. Then physical: the nearest existing directory
+  on the memory path (the memory directory itself once initialised) is resolved
+  with `cd … && pwd -P` and must sit under the physical root, never be the root
+  itself once it is the memory directory, and not resolve into a control
+  directory. That catches a symlinked memory directory and a symlinked parent
+  that a not-yet-created memory directory would land under. A symlink met on the
+  way up that names no directory is refused outright. Last, the one git call:
+  `git ls-files -s` on the literal path must return a single mode-160000 gitlink
+  entry for exactly `mempath`. A fresh clone has the gitlink before the
+  submodule is initialised, so the uninitialised case still injects, while a
+  plain directory, a non-normalized spelling (`./memory`, `memory/`) and any
+  path git refuses to index are refused. A refusal is the one non-silent
+  passthrough: one `gitlore:` line on stderr names the path and the reason, then
+  the real `claude` runs with the original arguments, no `--settings` and
   `GITLORE_LAUNCHED` unset — so the `SessionStart` guard also reports the
   unredirected launch, and with both placements on `PATH` each prints the line.
 
@@ -189,6 +189,12 @@ the submodule is initialised, so the shim would either pass through — silently
 disabling the redirect on every fresh clone — or skip the check. The lexical
 checks hold without the directory, and the physical check runs on its nearest
 existing ancestor.
+
+**Containment under the root as the whole test.** Inside the repo is not
+harmless: the root itself, `.git`, `.claude` and `.gitlore` all sit under it,
+and auto-allowed writes there reach hooks and settings. The gitlink requirement
+pins the path to the submodule, and the component checks cover the spellings git
+would index.
 
 **A `*..*` glob for traversal.** Rejects legitimate names such as `my..memory`
 and adds nothing the component match does not already catch.

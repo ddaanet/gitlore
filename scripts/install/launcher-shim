@@ -44,22 +44,41 @@ mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path)
   || exec "$real" "$@"                                            # submodule present but disabled → passthrough
 
 # Containment. `mempath` comes from the checkout's own `.gitmodules`, and the
-# redirect gives it the standing of a value the user typed, so it must name a
-# directory inside the repo. That is a refusal rather than a miss, so it says
-# why on one line and launches claude unredirected. Lexical checks first, since
-# before `git submodule update --init` the directory does not exist yet: no
-# absolute path, no `..` component (a component, so `my..memory` passes).
+# redirect gives it the standing of a value the user typed — Claude Code also
+# auto-allows writes under it — so it must name the memory submodule and
+# nothing else: a directory strictly inside the repo, outside its control
+# directories. That is a refusal rather than a miss, so it says why on one line
+# and launches claude unredirected.
 refuse() {   # refuse <reason> <claude args>…
-  echo "gitlore: memory path '$mempath' in .gitmodules $1; launching claude without the memory redirect" >&2
+  printf 'gitlore: memory path %s in .gitmodules %s; launching claude without the memory redirect\n' \
+    "$shown" "$1" >&2
   shift
   exec "$real" "$@"
 }
+# The path reaches the terminal in that line, so one carrying a control
+# character — an escape sequence — is refused without being shown.
+shown="'$mempath'"
+case "$mempath" in *[[:cntrl:]]*) shown='(not shown)'; refuse "contains a control character" "$@" ;; esac
+# Lexical checks next, since before `git submodule update --init` the directory
+# does not exist yet: no absolute path, no `..` or `.` component (components,
+# so `my..memory` passes), and no `.git`, `.claude` or `.gitlore` component in
+# any case, since macOS filesystems ignore it.
 case "$mempath" in /*) refuse "is absolute" "$@" ;; esac
 case "/$mempath/" in */../*) refuse "has a '..' component" "$@" ;; esac
+case "/$mempath/" in */./*) refuse "has a '.' component" "$@" ;; esac
+control_dir() {   # control_dir <path>: does a component name a repo control directory?
+  case "/$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')/" in
+    */.git/*|*/.claude/*|*/.gitlore/*) return 0 ;;
+  esac
+  return 1
+}
+control_dir "$mempath" && refuse "names a .git, .claude or .gitlore directory" "$@"
 # Then the physical check, on the nearest existing directory: a symlink at the
-# memory path or at any parent of it can still point out of the repo, and Claude
-# Code would create a missing memory directory through it. A symlink met on the
-# way up, dangling or not, is refused outright: nothing to resolve it against.
+# memory path or at any parent of it can still point out of the repo or into a
+# control directory, and Claude Code would create a missing memory directory
+# through it. A symlink met on the way up, dangling or not, is refused outright:
+# nothing to resolve it against. The memory directory itself, once it exists,
+# must not resolve to the root.
 p="$root/$mempath"
 while [ ! -d "$p" ]; do
   [ -L "$p" ] && refuse "crosses a symlink that names no directory" "$@"
@@ -68,6 +87,20 @@ done
 pabs=$(cd "$p" && pwd -P) || refuse "cannot be resolved" "$@"
 rootabs=$(cd "$root" && pwd -P) || refuse "cannot be resolved" "$@"
 case "$pabs/" in "$rootabs"/*) ;; *) refuse "resolves outside the repo" "$@" ;; esac
+rel=${pabs#"$rootabs"}
+[ "$p" = "$root/$mempath" ] && [ -z "$rel" ] && refuse "resolves to the repo root" "$@"
+control_dir "$rel" && refuse "resolves into a .git, .claude or .gitlore directory" "$@"
+# Last, the one git call: the index must hold a submodule gitlink (mode 160000)
+# at exactly this path. A fresh clone has it before `submodule update --init`.
+# Literal pathspec, unquoted output; the control-character check above keeps a
+# tab or newline out of the path, so the entry is one `mode sha stage<TAB>path`.
+entry=$(git -C "$root" -c core.quotePath=false ls-files -s -- ":(literal)$mempath")
+case "$entry" in
+  *'
+'*) refuse "is not a submodule gitlink in the index" "$@" ;;
+  "160000 "*"	$mempath") ;;
+  *) refuse "is not a submodule gitlink in the index" "$@" ;;
+esac
 
 json=$(jq -nc --arg p "$root/$mempath" '{autoMemoryDirectory:$p}')
 export GITLORE_LAUNCHED=1

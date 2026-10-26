@@ -97,8 +97,12 @@ bounded() {
 # global-shim.sh writes to `$GITLORE_HOME/bin/claude`. The repo root carries a
 # space.
 
-# contain_repo <mempath>: an enabled gitlore repo whose `.gitmodules` names
-# <mempath>; no submodule is checked out. Sets CROOT and leaves the cwd there.
+# contain_repo <mempath> [nogitlink]: an enabled gitlore repo whose `.gitmodules`
+# names <mempath>, with a submodule gitlink staged at <mempath> as a fresh
+# clone has one before `git submodule update --init` — unless `nogitlink`, or
+# git itself refuses the path (`..`, absolute, `.git`). Nothing is checked out
+# there, so each refusal case reaches the check it names rather than the gitlink
+# one. Sets CROOT and leaves the cwd there.
 contain_repo() {
   CROOT="$TMP_REPO/repo with space"
   mkdir -p "$CROOT/.claude"
@@ -106,6 +110,11 @@ contain_repo() {
   git init -q -b main
   git config --file .gitmodules submodule.gitlore-memory.path "$1"
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  [ "${2:-}" = nogitlink ] && return 0
+  # Refusal is the expected outcome for the paths git will not index, and its
+  # message would only add noise to a failing test's output.
+  git update-index --add --cacheinfo \
+    "160000,1111111111111111111111111111111111111111,$1" 2>/dev/null || true
 }
 
 # run_both_placements <args>…: install both placements from the cwd, then run
@@ -128,15 +137,15 @@ run_both_placements() {
   ERR_global=$(cat "$TMP_REPO/.err")
 }
 
-# A refusal launches the real claude with the original args and no --settings,
-# and says why on one stderr line.
+# assert_refused <reason>: both placements launched the real claude with the
+# original args and no --settings, and said why — <reason> — on one stderr line.
 assert_refused() {
   local p out err st
   for p in repo global; do
     eval "out=\$OUT_$p err=\$ERR_$p st=\$ST_$p"
     [ "$st" -eq 0 ] || { echo "$p: status $st"; return 1; }
     [ "$out" = "REAL:hi" ] || { echo "$p: forwarded [$out]"; return 1; }
-    [[ "$err" == "gitlore: "*"memory redirect"* ]] || { echo "$p: stderr [$err]"; return 1; }
+    [[ "$err" == "gitlore: "*"$1"*"memory redirect"* ]] || { echo "$p: stderr [$err]"; return 1; }
     [[ "$err" != *$'\n'* ]] || { echo "$p: stderr is not one line [$err]"; return 1; }
   done
 }
@@ -156,19 +165,56 @@ assert_injected() {
 @test "refuses a memory path that climbs out with a leading .." {
   contain_repo ../x
   run_both_placements hi
-  assert_refused
+  assert_refused "has a '..' component"
 }
 
 @test "refuses a memory path whose .. components climb past the root" {
   contain_repo a/../..
   run_both_placements hi
-  assert_refused
+  assert_refused "has a '..' component"
 }
 
 @test "refuses an absolute memory path" {
   contain_repo /etc/gitlore-memory
   run_both_placements hi
-  assert_refused
+  assert_refused "is absolute"
+}
+
+@test "refuses the repo root as the memory path" {
+  contain_repo .
+  run_both_placements hi
+  assert_refused "has a '.' component"
+}
+
+# Claude Code auto-allows writes under autoMemoryDirectory, so a memory
+# directory of `.claude` would let a session rewrite its own hooks unprompted.
+@test "refuses a repo control directory as the memory path" {
+  contain_repo .claude
+  run_both_placements hi
+  assert_refused "names a .git, .claude or .gitlore directory"
+}
+
+# Compared case-insensitively: on macOS `.GIT` is `.git`.
+@test "refuses a control directory spelled in another case" {
+  contain_repo .GIT/x
+  run_both_placements hi
+  assert_refused "names a .git, .claude or .gitlore directory"
+}
+
+@test "refuses a memory path the index holds no submodule gitlink for" {
+  contain_repo memory nogitlink
+  mkdir "$CROOT/memory"
+  run_both_placements hi
+  assert_refused "is not a submodule gitlink"
+}
+
+# The path reaches the user's terminal in the refusal line, so one carrying an
+# escape sequence is refused without being printed.
+@test "refuses a memory path with a control character and does not echo it" {
+  contain_repo "$(printf 'mem\033]0;pwned\007ory')"
+  run_both_placements hi
+  assert_refused "contains a control character"
+  [[ "$ERR_repo$ERR_global" != *$'\033'* ]]
 }
 
 @test "refuses a memory directory that is a symlink out of the repo" {
@@ -176,7 +222,7 @@ assert_injected() {
   mkdir "$TMP_REPO/outside"
   ln -s "$TMP_REPO/outside" "$CROOT/memory"
   run_both_placements hi
-  assert_refused
+  assert_refused "resolves outside the repo"
 }
 
 # Before the submodule is initialised the directory does not exist, so the
@@ -187,14 +233,14 @@ assert_injected() {
   mkdir "$TMP_REPO/outside"
   ln -s "$TMP_REPO/outside" "$CROOT/a"
   run_both_placements hi
-  assert_refused
+  assert_refused "resolves outside the repo"
 }
 
 @test "refuses a memory path that is a dangling symlink" {
   contain_repo memory
   ln -s "$TMP_REPO/not-yet" "$CROOT/memory"
   run_both_placements hi
-  assert_refused
+  assert_refused "crosses a symlink that names no directory"
 }
 
 @test "accepts a memory directory whose name contains two dots" {
