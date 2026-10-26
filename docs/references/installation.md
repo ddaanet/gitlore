@@ -2,16 +2,19 @@
 
 The literal setup detail `design.md`'s Architecture points at — the install
 command's own steps, per-hook-manager wiring syntax, and memory remote creation
-— followed by the decisions that argue for that shape (D8, D25). Motivation
-stays in `design.md`; this file is what you need while installing or debugging
-an install, or while proposing a change to how any of it is wired. The launcher
-shim and its two placements are in [memory-redirect.md](memory-redirect.md); the
-hook wrapper files and what every `SessionStart` does are in
+— followed by the decisions that argue for that shape (D8, D25, D45, D64, D65).
+Motivation stays in `design.md`; this file is what you need while installing or
+debugging an install, or while proposing a change to how any of it is wired. The
+launcher shim and its two placements are in
+[memory-redirect.md](memory-redirect.md); the hook wrapper files and what every
+`SessionStart` does are in
 [session.md](session.md).
 
 - Install and the remote — **D8** remote creation requires explicit user
   confirmation · **D25** direct wiring refuses rather than appends after an
-  existing `exec`
+  existing `exec` · **D64** `.gitmodules` records the https url while the remote
+  keeps the one given · **D65** a private remote under a public parent is warned
+  about, never changed
 
 ---
 
@@ -217,13 +220,48 @@ review (FR 11).
 **On creation failure** (auth, quota, network, name collision): fall back to
 method 2 (copy-paste). Do not abort install.
 
+**The url `.gitmodules` records (D64, D65)**
+
+The submodule's `remote.origin.url` keeps the url it was wired with — the one
+`gh repo view --json sshUrl` returned, or the one the person supplied — so
+pushes stay on that transport. The tracked `.gitmodules` records the https form
+(`https://github.com/<owner>/<repo>.git`), so a recursive clone, including
+Claude Code's `/plugin install`, needs no GitHub SSH key. Only a GitHub ssh url
+(`git@github.com:o/r[.git]`, `ssh://git@github.com/o/r[.git]`) is rewritten; an
+https url, another host and a local path are recorded as given.
+
+No script compares `.gitmodules`'s url with the remote's, so the two may differ
+in protocol. Every reader of `remote.origin.url` tests only for empty or the
+local-only placeholder (`gitlore_is_placeholder_url`); the placeholder is the
+one `.gitmodules` value that is matched, by basename, because
+`git submodule sync` absolutizes it on the way into `remote.origin.url`. A
+`git submodule sync` or a fresh clone sets the submodule's remote to the https
+`.gitmodules` url; that is the clone's own remote, and pushing from it needs
+https credentials, which an SSH key does not supply and a passing
+`gh auth status` does not imply. The memory push-failure hint names the two
+fixes: `gh auth setup-git`, which registers gh as git's credential helper, or
+`git -C <path> remote set-url origin git@github.com:<owner>/<repo>.git`, which
+puts that clone back on SSH. Nothing rewrites a clone's remote automatically.
+Existing installs keep the url they have; nothing rewrites a `.gitmodules` after
+the install that wrote it.
+
+A private repository anywhere in the chain aborts an anonymous recursive clone
+whatever the url form. When the person supplies the memory remote (url mode) and
+`gh` confirms the parent public and that remote private, install prints one
+stderr line naming the remote. Auto mode creates the remote with the parent's
+visibility, so it cannot produce the pair while `gh` can read the parent's
+visibility; when it cannot (an SSH host alias as the parent origin, no auth for
+the org, the network down) the parent reads as private, the memory remote is
+created private, and no warning is printed. A visibility `gh` cannot read prints
+nothing, and install never changes a repository's visibility.
+
 **Push semantics**
 
 Per NFR5 (double-commit semantics): memory `live` is pushed before parent push
 on every `git push`. Parent remote always points at a submodule SHA reachable on
 the memory remote.
 
-## Decisions — D8, D25, D45
+## Decisions — D8, D25, D45, D64, D65
 
 Why the wiring above has this shape: why creating the memory remote asks first,
 and why direct wiring refuses rather than appends after an existing `exec`.
@@ -281,6 +319,31 @@ reported on `systemMessage` with the way forward. The cost is that a new manager
 needs a wire script and an arm here rather than a hand-typed sentinel line,
 which is the right cost: a command gitlore runs on a stranger's clone should be
 one gitlore shipped.
+
+**D64 — `.gitmodules` records the https url; the remote keeps the one given**
+
+The tracked `.gitmodules` (the parent's for memory, memory's for a tier) records
+`https://github.com/<owner>/<repo>.git` for any GitHub ssh url, given or
+resolved, so an anonymous recursive clone, including `/plugin install`, needs no
+SSH key. The submodule's own `remote.origin.url` keeps the url as given, so
+pushes stay on their transport. The mechanism and its residuals are in
+[The url `.gitmodules` records](#remote-repository) above. Recording the ssh url
+aborts an anonymous clone on a publickey error; rewriting the remote to https as
+well breaks existing push auth; rewriting an existing install's `.gitmodules`
+from `SessionStart` or install touches repos that were never asked, so those are
+fixed through per-repo briefs only.
+
+**D65 — A private remote under a public parent is warned about, never changed**
+
+A private repository anywhere in the chain aborts an anonymous recursive clone
+whatever the url form, so no url choice repairs it. Install in url mode and
+`/gitlore:add-tier` print one stderr line when `gh` confirms the parent public
+and the memory or tier remote private; visibility is the repository owner's call
+and is never changed. An unknown visibility (no `gh`, no auth, non-GitHub, a
+local path) is silent, because a warning on a guess is a false alarm every time.
+Creating tiers public by default decides the owner's question for them; refusing
+the mount strands a legitimate private tier; a flag or command for the check
+adds surface for a one-line report.
 
 ## Rejected alternatives
 

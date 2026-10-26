@@ -35,7 +35,7 @@ export PLUGIN_DEV_GATE_TOOLS := "bats --version\nshellcheck --version\njq --vers
 # top-level entry must be declared here or in that suite's exclusion list.
 #
 # No path contains whitespace, so word-splitting the interpolation is intended.
-precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules hooks justfile plugin-dev reference scripts tests"
+precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules hooks justfile plugin-dev reference scripts tests tools"
 
 # The evals reach agents, commands and skills through the installed plugin.
 # Those stay out of `precommit_inputs` because the full bats suite is 7m30s
@@ -68,11 +68,11 @@ precommit: format-docs check-distribution check-refs
     # `memory/`, a gitlink here, so `git ls-files` yields one path and nothing
     # to `cat` — no input hash can see a fact change, and a cached pass would
     # skip exactly the commit that edits a memory file. 0.4s, nothing to cache.
-    scripts/check-memory-hygiene.py
+    tools/check-memory-hygiene.py
     # Same placement, because `docs/` is out of `precommit_inputs`: a docs-only
     # commit moves no hash, and a cached pass would skip the graph check on
     # precisely the commit that rewires the graph.
-    scripts/check-docs-links.py
+    tools/check-docs-links.py
     just check-version lint test
 
 # The shipped surface: that Claude Code can discover and dispatch what the
@@ -138,7 +138,7 @@ prerelease: precommit
 # the shell variables `sentinel` and `gate_inputs` that `record-sentinel`
 # reads back, so the prolog refuses a second gate in the same script.
 #
-# All three start from `precommit_inputs`: `scripts/lint-shell.sh` discovers
+# All three start from `precommit_inputs`: `tools/lint-shell.sh` discovers
 # every shell file under them, and both bats halves source `scripts/` and
 # `hooks/`. `test-unit` narrows from there, since it runs none of the
 # integration suites.
@@ -156,7 +156,7 @@ prerelease: precommit
 lint:
     #!{{ bash_prolog }}
     sentinel-guard lint {{ precommit_inputs }} 'plans/*.sh'
-    scripts/lint-shell.sh
+    tools/lint-shell.sh
     record-sentinel
 
 test: test-unit test-integration
@@ -220,7 +220,7 @@ run-suites () {
     shift
     shared_hash=$(gate_inputs=("${gate_inputs[@]}" ':(exclude)tests/*.bats' ':(exclude)tests/evals/lib/*.bats'); gate-inputs-hash) || shared_hash=""
     # `${a[@]+…}`: an empty array is unbound to `set -u` before bash 4.4.
-    scripts/run-bats-cached.sh "$sentinel_dir/$gate.suites" "$shared_hash" \
+    tools/run-bats-cached.sh "$sentinel_dir/$gate.suites" "$shared_hash" \
         ${reads_all[@]+"${reads_all[@]}"} \
         -- --jobs "${GITLORE_TEST_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}" "$@"
 }

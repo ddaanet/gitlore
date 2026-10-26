@@ -31,7 +31,9 @@ than a single call, so its decisions are recorded individually as
   composition is placement · **D30** the tier manifest · **D31** compose
   triggers and validation · **D34** presence authority · **D35** the welded-line
   refusal · **D36** two projections · **D37** order as a merge input · **D57**
-  the mount reports its composed size against the loader cutoff
+  the mount reports its composed size against the loader cutoff; the edit that
+  removes a stale pointer line (**D66**) is in
+  [index-drift-fixes.md](index-drift-fixes.md)
 - The authoring-time sync, in [index-authoring-sync.md](index-authoring-sync.md)
   — **D38** the one-way sync · **D39** the routing-key advisories · **D40**
   pre-existing drift
@@ -151,6 +153,20 @@ not a transient lock worth retrying. Because the hook has network and no
 sandbox, the url is bounded to a scheme allowlist before git sees it — the
 `helper::address` transport form (`ext::`, which runs a shell command) is
 refused outright rather than left to git's `protocol.ext.allow` default.
+
+**The url the mount records (D64, D65).** `submodule add` runs on the url as
+given, so the tier's own `remote.origin.url` — the one pushes go through — keeps
+its transport. The memory store's tracked `.gitmodules` then takes the https
+form (`gitlore_github_https_url`: `git@github.com:o/r.git` and
+`ssh://git@github.com/o/r` become `https://github.com/o/r.git`; any other url is
+recorded as given), re-staged because `submodule add` had staged the ssh form. A
+recursive clone of a repo mounting the tier then needs no GitHub SSH key. A tier
+created by `gh` is private, and a private repository anywhere in the chain
+aborts an anonymous recursive clone whatever the url form, so a mount under a
+confirmed-public parent prints one stderr line naming the private tier remote.
+Visibility is read with `gh repo view` — known outright for a tier this script
+just created — and a repository whose visibility `gh` cannot read stays silent.
+Changing visibility is never done from here.
 
 Both modes end by **appending `name` to `memory/.gitlore-tiers`** — activating
 the tier at the bottom, the lowest precedence, the position that cannot outrank

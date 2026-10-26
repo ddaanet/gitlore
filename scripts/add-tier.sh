@@ -144,6 +144,11 @@ fi
 # --------------------------------------------------------------- create branch
 # Seed the tier's content and its remote BEFORE mounting, so the mount below is
 # the identical code path in both modes.
+#
+# created_visibility is "private" once this script has made the remote with
+# `gh repo create --private`; empty otherwise, where the remote's visibility is
+# not ours to know.
+created_visibility=""
 if [ "$mode" = "create" ]; then
   # A url supplied for create is pushed to before anything is mounted, so it is
   # checked here as well as at the mount below.
@@ -158,6 +163,7 @@ if [ "$mode" = "create" ]; then
     gh repo create "$full_name" --private || die "gh repo create $full_name failed."
     url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl) || url=""
     [ -n "$url" ] || die "created $full_name but could not resolve its URL."
+    created_visibility="private"
   fi
 
   seed=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-tier-seed.XXXXXX")
@@ -211,6 +217,19 @@ tierpath="$mempath/$name"
 # Guard the submodule escape: without this, a failed add would leave `git -C`
 # operating on the memory store itself.
 [ -e "$tierpath/.git" ] || die "submodule add reported success but $tierpath is not a checkout."
+
+# `submodule add` recorded $url as given: the tier's own remote keeps it, so
+# pushes stay on the transport the person chose. The tracked entry takes the
+# https form, which a clone fetches with no GitHub SSH key. The rewrite dirties
+# the .gitmodules `submodule add` staged, so it is staged again.
+https_url=$(gitlore_github_https_url "$url")
+if [ "$https_url" != "$url" ]; then
+  git config --file "$mempath/.gitmodules" "submodule.${name}.url" "$https_url" || \
+    die "could not record the https url for tier '$name' in $mempath/.gitmodules."
+  git -C "$mempath" add -- .gitmodules || \
+    die "could not stage $mempath/.gitmodules after recording the https url for tier '$name'."
+fi
+gitlore_warn_private_under_public "tier remote" "$url" "$created_visibility"
 
 warnings=""
 # Propagation-in: create the local `live` from the remote. Fast-forward-only for

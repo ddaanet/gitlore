@@ -53,6 +53,7 @@ REFERENCE_SCAN_ROOTS = (
     "agents",
     "commands",
     "scripts",
+    "tools",
     "hooks",
 )
 

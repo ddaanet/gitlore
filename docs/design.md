@@ -113,8 +113,8 @@ the mechanism it argues. Plans and specs live in `plans/`.
     The cost is narrowed in two steps rather than one. Four per-recipe gates
     (`lint`, `test-unit`, `test-integration`, `check-distribution`) skip
     outright when their declared inputs are unchanged; beneath them two
-    sub-caches — per shell file in `scripts/lint-shell.sh`, per suite in
-    `scripts/run-bats-cached.sh` — narrow a run that does happen to what the
+    sub-caches — per shell file in `tools/lint-shell.sh`, per suite in
+    `tools/run-bats-cached.sh` — narrow a run that does happen to what the
     change reaches, so an edit to one suite or one script costs a fraction of
     the pass. An edit under `scripts/`, `hooks/` or `tests/helpers/` still pays
     the full one, and no full-run measurement postdating the sub-caches is
@@ -125,9 +125,9 @@ the mechanism it argues. Plans and specs live in `plans/`.
 12. **Bounded artifacts.** Every artifact a reader takes in at one go stays
     under 400 lines — a `docs/` node, a script, a hook, a bats suite alike —
     because the cap rations a context window rather than tidying documentation,
-    and `scripts/check-docs-links.py` blocks past it. What the count stands in
-    for where no formatter wraps a script, the need-time seam a split follows,
-    and why the rule outside `docs/` needed a gate (D55) in
+    and `tools/check-docs-links.py` blocks past it. What the count stands in for
+    where no formatter wraps a script, the need-time seam a split follows, and
+    why the rule outside `docs/` needed a gate (D55) in
     [artifact size](references/artifact-size.md).
 
 ---
@@ -190,8 +190,10 @@ Claude Code's native auto-memory writes to
 in an honored settings tier. Project settings are *not* honored (D10), so the
 only per-project, non-global mechanism is the `--settings` flag at launch,
 injected by a thin `claude` shim — the user keeps typing `claude`, and memory
-lands in the submodule. Shim body, its two placements and the `GITLORE_LAUNCHED`
-sentinel that stops them double-injecting:
+lands in the submodule. The shim redirects only to the memory submodule's own
+path and launches unredirected, with one stderr line saying why, when
+`.gitmodules` names anything else (D68). Shim body, its two placements and the
+`GITLORE_LAUNCHED` sentinel that stops them double-injecting:
 [memory-redirect.md](references/memory-redirect.md).
 
 ### Components
@@ -245,8 +247,10 @@ git and decides (D7).
   [session.md](references/session.md),
   [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md); the
   intent-file commit in [commit-gate.md](references/commit-gate.md), the index
-  pair in [index-composition.md](references/index-composition.md), the per-agent
-  keying and the relay in
+  pair in [index-composition.md](references/index-composition.md) (the edit that
+  removes a stale pointer line, D66, in
+  [index-drift-fixes.md](references/index-drift-fixes.md)), the per-agent keying
+  and the relay in
   [index-authoring-sync.md](references/index-authoring-sync.md), D51 in
   [cc-platform.md](references/cc-platform.md).
 - **Git hook and entry points** — `pre-push` publishes each tier's `live` and

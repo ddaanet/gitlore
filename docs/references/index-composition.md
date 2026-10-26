@@ -148,30 +148,11 @@ write a store *other* than the one being committed — the root index when a tie
 merged, a carrier when memory did. Those writes stay dirty and ride the next
 FR11 commit, the same float the `SessionStart` recompose produces.
 
-**The `Bash` arm is measured, not assumed**. Watching `Bash` widens the
-`PreToolUse` matcher from calls that name a memory file to every shell call, so
-the trade was settled against this machine's own transcript corpus — 2,441
-transcripts, 22,168 `Bash` calls, 13 months. Of those, ~49 mutated a real memory
-store: ~22 touched an index, ~29 a fact file, the sets overlapping. All but one
-fall in the corpus's final five weeks, so the behaviour is rising rather than a
-long-tail artifact — the arm earns more, not less, as the store ages. Fifteen
-were `git checkout`/`git restore` and three `git rm` — write paths that name no
-`file_path` at all, so no `Write|Edit` matcher can see them however it is
-scoped, which is the part of the case that cannot be met another way. Against
-1,190 `Write`/`Edit` calls on memory files, the arm exists for roughly 4% of the
-mutations and ~0.2% of the `Bash` calls it inspects. Of 25 native auto-memory
-stores under `~/.claude/projects/*/memory`, exactly one was ever mutated from
-`Bash` across the whole corpus: shell mutation is a *gitlore*-store phenomenon,
-because a gitlore store is a git repo the agent already runs git against. Cost,
-timed against this repo's real tree (23 KB index, one tier, 30–50 runs per path,
-steady state): **~45 ms** on a `Bash` call once the batch has a baseline,
-**~65 ms** on the first watched call of a batch (two `cksum`s plus the index
-`cp`), against ~18 ms for the bare unwatched-tool exit; a cold page cache
-roughly doubles all three. That is ~45 ms on every shell call to catch a
-mutation in one call out of five hundred. Accepted, because the failure it
-prevents is silent — the edit lands, neither propagation nor composition runs,
-and the store desyncs with nothing to show for it — and 45 ms is invisible next
-to a tool call's own latency.
+**The `Bash` arm is measured, not assumed**: ~45 ms on every shell call buys the
+memory mutations no `Write|Edit` matcher can see — a `git checkout` names no
+`file_path` — and is accepted because the failure it prevents is silent. The
+corpus measurement and the timing are in
+[compose-bash-arm.md](compose-bash-arm.md).
 
 **D34 — The index is authoritative over a pointer line's presence, and nothing
 is deleted to enforce it**
@@ -300,6 +281,10 @@ its carrier. That single rule covers a freshly mounted tier (the augmentation a
 mount owes the root index), a deactivate/reactivate round trip, and a tier whose
 block the agent cleared — the way to drop a tier's facts from a repo is to
 deactivate it, not to empty its block.
+
+**Removing a tier pointer is one of three edits, and the dangling and orphan
+reports name which**, decided by root at `HEAD` and root's other lines for the
+tier; the recipe is in [index-drift-fixes.md](index-drift-fixes.md).
 
 **D37 — Index order is a merge input, not a rule applied afterwards**
 

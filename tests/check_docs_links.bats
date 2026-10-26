@@ -215,7 +215,7 @@ load helpers/check-docs-links
 }
 
 @test "discovery: the checker is executable" {
-  [ -x "$PLUGIN_ROOT/scripts/check-docs-links.py" ]
+  [ -x "$PLUGIN_ROOT/tools/check-docs-links.py" ]
 }
 
 @test "discovery: just precommit reaches the checker" {

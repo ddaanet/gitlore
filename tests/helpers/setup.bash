@@ -15,7 +15,7 @@ require_assertion_bash() {
   local major="$1" minor="$2"
   if [ "$major" -gt 4 ] || { [ "$major" -eq 4 ] && [ "$minor" -ge 1 ]; }; then return 0; fi
   echo "gitlore tests: bats is running under bash $major.$minor, where a failing non-final [[ ]] passes silently." >&2
-  echo "Run bats with bash >= 4.1; on macOS, scripts/test-macos.sh does that while the scripts under test still meet the system's 3.2." >&2
+  echo "Run bats with bash >= 4.1; on macOS, tools/test-macos.sh does that while the scripts under test still meet the system's 3.2." >&2
   # `exit`, not `return`: bats acts on what a `load`ed file returns only from
   # 1.13 — under 1.11 a returned refusal prints its reason to stderr and every
   # test still reports ok. A guard that enforces a floor cannot be enforceable

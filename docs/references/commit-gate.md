@@ -13,7 +13,8 @@ commit one among them (D58), are in
   FR11 as defense in depth · **D19** one canonical approval clause, discovered
   externally via a git-config key · **D22** the memory-hygiene checker is a
   repo-local gate, not shipped surface · **D56** the batch retry is judged by
-  the approval's freshness, not by a status the run reports
+  the approval's freshness, not by a status the run reports · **D67** the repo's
+  own gate and dev tooling lives in `tools/`, outside `dist.include`
 
 ---
 
@@ -83,7 +84,7 @@ agent instead. A trigger on a **clean** store takes both IPC files, not just the
 trigger: a summary left behind covers a store with nothing pending, and the next
 dirty episode needs its own approval regardless.
 
-## Decisions — D4, D12, D19, D22, D56
+## Decisions — D4, D12, D19, D22, D56, D67
 
 Why approval has this shape: how the summary reaches the hook, why the submodule
 holds a gate of its own, the wording that carries the approval, why the hygiene
@@ -260,10 +261,10 @@ redeclaration.
 
 **D22 — The memory-hygiene checker is a repo-local gate, not shipped surface**
 
-`scripts/check-memory-hygiene.py` runs uncached at the head of `just precommit`
+`tools/check-memory-hygiene.py` runs uncached at the head of `just precommit`
 (the cache cannot see a fact change through the `memory` gitlink) and checks
 prose shape, wikilink targets, reference style and volatile git state across the
-store. It stays in gitlore's own `scripts/`; the plugin ships none of it.
+store. It stays in gitlore's own `tools/`; the plugin ships none of it.
 
 **Shipping it would make python3 and PyYAML a user-facing dependency.** The
 install surface is bash, git and jq, and every hook and script on the runtime
@@ -325,6 +326,20 @@ message file inside one batch gets one visible re-approval request rather than a
 lost commit — the same edge any bare retry carries. The handoff flow writes
 memory first and the summary only after the user's approval turn, so it does not
 meet it.
+
+**D67 — The repo's own tooling lives in `tools/`, not `scripts/`**
+
+`dist.include` lists `scripts` whole, so a file in `scripts/` ships to every
+consumer. The gate and dev tooling (`check-docs-links.py`,
+`check_docs_decisions.py`, `check_common.py`, `check-memory-hygiene.py`,
+`lint-shell.sh`, `lint-cache-keys.py`, `run-bats-cached.sh`,
+`parse-bats-junit.py`, `mutate-and-run.sh`, `test-macos.sh`) is gitlore's own
+and moved to `tools/`, which is not listed, so what ships is decided by where a
+file lives and not by a list that has to stay current. A per-file exclude or
+allowlist drifts silently when a file is added; leaving the files in `scripts/`
+with docstrings saying they do not ship leaves the shipping to the author's
+memory. The runtime scripts stay in `scripts/`; the checkers scan `tools/` for
+the line cap and citations.
 
 ## Rejected alternatives
 

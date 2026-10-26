@@ -113,17 +113,74 @@ gitlore_memory_approval_clause() {
 # "private" when there is no parent origin or gh cannot report it — the safe
 # default for memory, which may contain session context.
 gitlore_parent_visibility() {
-  local purl v
+  local purl
   purl=$(git config --get remote.origin.url || true)
-  if [ -n "$purl" ] && command -v gh >/dev/null 2>&1; then
-    # Redirect kept: this is a best-effort lookup whose failure modes are all
-    # normal and expected (no gh auth, non-GitHub remote, network down, repo not
-    # visible to this token) and each already has its answer — "private", the
-    # safe default. Surfacing gh's error would put a scary, actionable-looking
-    # message in front of a user for whom nothing is wrong.
-    v=$(gh repo view "$purl" --json visibility -q .visibility 2>/dev/null \
-          | tr '[:upper:]' '[:lower:]' || true)
-    [ "$v" = "public" ] && { printf 'public\n'; return 0; }
+  if [ -n "$purl" ] && [ "$(gitlore_repo_visibility "$purl")" = "public" ]; then
+    printf 'public\n'
+    return 0
   fi
   printf 'private\n'
+}
+
+# Print the visibility gh reports for the repository at $1 — "public",
+# "private" or "internal" — and nothing when it cannot say (empty $1, no gh, no
+# auth, a non-GitHub url, network down, a repo this token cannot see). Silence
+# is "unknown", which a caller must not read as private.
+# Args: $1 = a url gh accepts (https, ssh, scp-style) or OWNER/REPO.
+gitlore_repo_visibility() {
+  [ -n "$1" ] || return 0
+  command -v gh >/dev/null 2>&1 || return 0
+  # Redirect kept: this is a best-effort lookup whose failure modes are all
+  # normal and expected, and each already has its answer. Surfacing gh's error
+  # would put a scary, actionable-looking message in front of a user for whom
+  # nothing is wrong.
+  gh repo view "$1" --json visibility -q .visibility 2>/dev/null \
+    | tr '[:upper:]' '[:lower:]' || true
+}
+
+# Print the https form of a GitHub ssh url, so a tracked `.gitmodules` can be
+# cloned with no GitHub SSH key: `git@github.com:o/r[.git]` and
+# `ssh://git@github.com/o/r[.git]` become `https://github.com/o/r.git`. Any other
+# url — https already, another host, a local path, an unexpected path shape — is
+# printed unchanged. Only the url recorded in `.gitmodules` goes through this;
+# the submodule's own remote keeps the url it was given, so pushes stay on ssh.
+# Args: $1 = a url.
+gitlore_github_https_url() {
+  local url="$1" path
+  case "$url" in
+    git@github.com:*)         path="${url#git@github.com:}" ;;
+    ssh://git@github.com/*)   path="${url#ssh://git@github.com/}" ;;
+    *) printf '%s\n' "$url"; return 0 ;;
+  esac
+  path="${path%/}"
+  path="${path%.git}"
+  case "$path" in
+    ""|/*|*/|*/*/*|*[[:space:]]*) printf '%s\n' "$url" ;;
+    */*) printf 'https://github.com/%s.git\n' "$path" ;;
+    *)   printf '%s\n' "$url" ;;
+  esac
+}
+
+# Print the hint that follows a memory push failure caused by missing
+# credentials. A clone takes its remotes from the https `.gitmodules` urls, and
+# git pushes over https only with a credential helper — which a working
+# `gh auth status` does not imply.
+# Args: $1 = the memory store's path.
+gitlore_push_credentials_hint() {
+  printf "Check the network. If this clone's remote is https (a fresh clone takes it from .gitmodules), run 'gh auth setup-git' so git uses your gh credentials, or put the clone back on SSH: git -C \"%s\" remote set-url origin git@github.com:<owner>/<repo>.git" "$1"
+}
+
+# Warn, on one stderr line, when the repository at $2 is private while this
+# repository is public. An anonymous `git clone --recurse-submodules` of a
+# public repository aborts at any private submodule in the chain, whatever url
+# form `.gitmodules` records. Warns only on a confirmed pair: a visibility gh
+# cannot read stays silent, and visibility is never changed from here.
+# Args: $1 = what the repository is ("memory remote", "tier remote");
+#       $2 = its url; $3 = its visibility when already known (else looked up).
+gitlore_warn_private_under_public() {
+  local label="$1" url="$2" vis="${3-}"
+  [ -n "$vis" ] || vis=$(gitlore_repo_visibility "$url")
+  [ "$vis" = "private" ] || return 0
+  [ "$(gitlore_parent_visibility)" = "public" ] || return 0
+  echo "gitlore: warning: the $label $url is private but this repository is public, so an anonymous recursive clone of this repository fails at it whatever url .gitmodules records; making it public is the repository owner's call." >&2
 }

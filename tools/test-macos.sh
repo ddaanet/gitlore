@@ -4,7 +4,7 @@
 # failure, and every script and git hook a test execs under the system's bash
 # 3.2 with the BSD tools. Needs Homebrew's `bash` and `bats-core`:
 #
-#   scripts/test-macos.sh [suite.bats ...]
+#   tools/test-macos.sh [suite.bats ...]
 #
 # Exit status is bats' own, so this can gate. Suites named on the command line
 # replace the default — every `tests/*.bats` that is not an integration suite.

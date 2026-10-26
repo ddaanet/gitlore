@@ -52,7 +52,7 @@ teardown() { teardown_tmp_repo; }
   mkdir -p hooks
   printf '#!/usr/bin/env bash\ncd /tmp\n' > hooks/pre-commit
   git add hooks/pre-commit
-  PATH="$BSD:$PATH" run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  PATH="$BSD:$PATH" run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -ne 0 ]
   # Discovered AND linted — not skipped and then reported as "no shell files".
   [[ "$output" == *SC2164* ]]
@@ -77,7 +77,7 @@ teardown() { teardown_tmp_repo; }
   # `gitlore_file_mtime`) probe with a bare `stat -c` on a line of their own.
   cd "$PLUGIN_ROOT"
   gnu=$(grep -rl -e 'stat -c' -e 'stat --format' \
-        --include='*.sh' --include='*.bats' --include='*.bash' scripts tests)
+        --include='*.sh' --include='*.bats' --include='*.bash' scripts tools tests)
   while IFS= read -r f || [ -n "$f" ]; do
     [ -n "$f" ] || continue
     grep -q 'stat -f' "$f" || {
@@ -100,7 +100,7 @@ teardown() { teardown_tmp_repo; }
   # The suite asserts with `[[ … == *glob* ]]` throughout, which `[ ]` cannot
   # express, so the version is what gets checked rather than each assertion.
   run require_assertion_bash 3 2
-  assert_fails "bash 3.2" "[[ ]]" "scripts/test-macos.sh"
+  assert_fails "bash 3.2" "[[ ]]" "tools/test-macos.sh"
   run require_assertion_bash 4 0
   assert_fails "bash 4.0"
   run require_assertion_bash 4 1
@@ -149,7 +149,7 @@ teardown() { teardown_tmp_repo; }
   # own keyword, so the planted suite is assembled rather than quoted.
   printf '%s\n' 'load helpers/setup' 'require_bats_version 1.11.1' \
     "@""test \"never runs\" { true; }" > "$TMP_REPO/t/planted.bats"
-  # `$BASH` ahead of PATH: under scripts/test-macos.sh a bare `bash` is the
+  # `$BASH` ahead of PATH: under tools/test-macos.sh a bare `bash` is the
   # system's 3.2, and this nested bats should meet the one driving this test.
   run env PATH="$(dirname "$BASH"):$PATH" bats "$TMP_REPO/t/planted.bats"
   assert_fails "1.11.1" ">= 1.13"

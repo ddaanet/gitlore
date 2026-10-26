@@ -8,7 +8,7 @@
 load helpers/setup
 load helpers/run-asserts
 
-MUT="$PLUGIN_ROOT/scripts/mutate-and-run.sh"
+MUT="$PLUGIN_ROOT/tools/mutate-and-run.sh"
 
 # A throwaway repo holding a one-line subject and a suite that pins its output,
 # so a mutation of the subject has somewhere real to be killed or survive.
@@ -45,12 +45,12 @@ assert_subject_restored() {
 @test "mutate-and-run is discovered by the shell linter and ships executable" {
   # Discovery is by tracked path with a shell extension, and the recorded mode
   # is what a clone reproduces — a 100644 here would ship a tool nobody can run.
-  [ -x "$PLUGIN_ROOT/scripts/mutate-and-run.sh" ]
-  run git -C "$PLUGIN_ROOT" ls-files -s -- scripts/mutate-and-run.sh
+  [ -x "$PLUGIN_ROOT/tools/mutate-and-run.sh" ]
+  run git -C "$PLUGIN_ROOT" ls-files -s -- tools/mutate-and-run.sh
   [ "$status" -eq 0 ]
   [[ "$output" == 100755* ]]
   run git -C "$PLUGIN_ROOT" ls-files -- '*.sh'
-  assert_status 0 "scripts/mutate-and-run.sh"
+  assert_status 0 "tools/mutate-and-run.sh"
 }
 
 @test "a mutation the suite catches is reported KILLED, with the failing test named" {

@@ -26,6 +26,9 @@ fi
 
 wire_and_push() {
   # Args: $1 = remote URL. Wires origin, pushes live, rewrites .gitmodules URL.
+  # origin keeps $1 as given, so pushes use the transport the person chose; the
+  # tracked .gitmodules records its https form, which a clone fetches with no
+  # GitHub SSH key.
   local remote_url="$1"
   # `remote add` fails outright on an existing origin, which is exactly the
   # placeholder case reaching here — set-url is what repoints it.
@@ -38,7 +41,8 @@ wire_and_push() {
     echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:resolve to retry." >&2
     exit 1
   fi
-  git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" "$remote_url"
+  git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" \
+    "$(gitlore_github_https_url "$remote_url")"
   git add .gitmodules
 }
 
@@ -51,6 +55,9 @@ case "$mode" in
   url)
     [ -n "$url_arg" ] || { echo "gitlore: url mode requires a remote URL." >&2; exit 1; }
     wire_and_push "$url_arg"
+    # Auto mode creates the remote with the parent's visibility, so only a url
+    # the person supplied can put a private memory under a public parent.
+    gitlore_warn_private_under_public "memory remote" "$url_arg"
     ;;
 
   local)

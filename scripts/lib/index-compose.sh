@@ -239,7 +239,7 @@ gitlore_compose_and_report() {
       n=$(printf '%s\n' "$result" | grep -c '^composed ')
       if [ "$n" -eq 1 ]; then unit="index"; else unit="indexes"; fi
       sysmsg="gitlore: recomposed tier pointers ($n $unit)"
-      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and projected root-authored tier lines down into their carrier — including deletions, so removing a tier fact's line from the root index is enough; its carrier copy goes in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition places, drops and re-texts carrier lines to match the root index; the root index's own lines are only reordered, never re-texted.
+      ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and projected root-authored tier lines down into their carrier — including deletions of a line the memory store has committed, whose carrier copy goes in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition places, drops and re-texts carrier lines to match the root index; the root index's own lines are only reordered, never re-texted.
 $result"
     fi
 
@@ -250,12 +250,13 @@ $result"
     if [ -n "$orphans" ]; then
       o=$(printf '%s\n' "$orphans" | grep -c .)
       if [ "$o" -eq 1 ]; then ounit="line"; else ounit="lines"; fi
-      orphans_capped=$(printf '%s\n' "$orphans" | gitlore_cap_list)
+      orphans_capped=$(printf '%s\n' "$orphans" | gitlore_cap_list
+        gitlore_cap_rest_note "$o" "$mempath")
       sysmsg="${sysmsg:+$sysmsg
 }gitlore: $o tier index $ounit not in the root index"
       ctx="${ctx:+$ctx
 
-}These lines are in an active tier's own index but not in the root index ($o total), so they are not recallable here and nothing propagates them: composition projects the ROOT down, and root never carried them. Nothing was rewritten or deleted. Either add the line to $mempath/MEMORY.md with its tier prefix — \`- [Title](<tier>/<file>.md) — hook\` — if the fact belongs in this repo, or remove it from the tier's index if it does not.
+}These lines are in an active tier's own index but not in the root index ($o total), so they are not recallable here and nothing propagates them: composition projects the ROOT down, and root never carried them. Nothing was rewritten or deleted. Each line names both edits: delete it from the tier's index if the fact does not belong in this repo, or add the quoted line to $mempath/MEMORY.md if it does. Either edit is final.
 $orphans_capped"
     fi
 
@@ -266,12 +267,13 @@ $orphans_capped"
     if [ -n "$dangling" ]; then
       d=$(printf '%s\n' "$dangling" | grep -c .)
       if [ "$d" -eq 1 ]; then dunit="pointer"; else dunit="pointers"; fi
-      dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
+      dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list
+        gitlore_cap_rest_note "$d" "$mempath")
       sysmsg="${sysmsg:+$sysmsg
 }gitlore: $d dangling index $dunit — a line names a file that is not there"
       ctx="${ctx:+$ctx
 
-}These memory index lines point at files that do not exist ($d total). Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Either restore the file or remove the line — removing it deletes nothing.
+}These memory index lines point at files that do not exist ($d total). Nothing was rewritten or deleted: the index is authoritative over what memory contains, so a line outliving its file is a stale pointer to fix, not a reason to refuse the pass. Restore the file, or make the edit its line names: which indexes it touches depends on whether the memory store has committed the line and whether its tier keeps another root line. Removing a line deletes nothing.
 $dangling_capped"
     fi
 
@@ -337,10 +339,10 @@ gitlore_compose() {
 
   active=$(gitlore_active_tiers "$mempath")
 
-  # Down first, then the root layout. The order is load-bearing: the layout pass
-  # adopts a carrier for any active tier root has no line for, and deleting a
-  # tier's last root line must not resurrect its block. Running down first means
-  # those carrier lines are already gone when the layout reads it.
+  # Down first, then the root layout. The layout pass adopts a carrier for any
+  # active tier root has no line for, and the down pass skips that tier, so
+  # deleting a tier's last root line brings its whole block back: deactivating
+  # the tier is what drops it from a repo (D36).
   #
   # ACTIVE tiers only. Root does not represent a dormant tier — it holds no line
   # for one — so it has no authority over that tier's carrier, and projecting an

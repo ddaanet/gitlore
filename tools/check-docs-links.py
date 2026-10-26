@@ -83,6 +83,7 @@ CITATION_ROOTS = (
     "agents",
     "commands",
     "scripts",
+    "tools",
     "hooks",
     "CLAUDE.md",
     "README.md",
@@ -171,7 +172,7 @@ def discover_sources(root: str) -> list[str]:
     return sorted(found)
 
 
-SOURCE_DIRS = ("scripts", "hooks", "tests")
+SOURCE_DIRS = ("scripts", "tools", "hooks", "tests")
 SOURCE_SUFFIXES = (".sh", ".bash", ".bats", ".py")
 
 

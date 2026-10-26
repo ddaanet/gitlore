@@ -6,7 +6,7 @@ by name. This is the file to have in front of you when weighing a new decision �
 a conclusion missing from here is one that gets re-litigated, silently. The
 argument behind each conclusion — what was weighed, what was rejected, and why —
 lives in the `docs/references/` node its group names, one hop away, and
-`scripts/check-docs-links.py` gates that every conclusion here has an argument
+`tools/check-docs-links.py` gates that every conclusion here has an argument
 there and every argument there a conclusion here.
 
 ---
@@ -60,6 +60,9 @@ damaged record.
 - **D22** — the memory-hygiene checker is a repo-local gate, not shipped surface
 - **D56** — the batch retry is judged by the approval's freshness, read off the
   store, rather than by a status the run reports about its own failure
+- **D67** — the repo's own gate, test and dev tooling lives in `tools/`, not
+  `scripts/`: `dist.include` lists `scripts` whole, so anything there ships, and
+  `tools/` is not listed
 
 *Rejected:* a `Stop` hook to generate the commit message · `PostToolUse` on
 every memory `Write`/`Edit` · an interactive prompt inside the `pre-commit` hook
@@ -68,7 +71,9 @@ the agent's git operations · an exit-code or status-line protocol from
 `commit-memory.sh` · parsing the refusal text for "needs approval again" ·
 deleting the message file on a fix-needed refusal · an `-ef` guard inside `-F`
 skipping the rewrite when the operand is the message file · freshness checked in
-the hook before the run, the script unchanged.
+the hook before the run, the script unchanged · a per-file `dist.include`
+exclude or allowlist for the tooling · tooling left in `scripts/` with its
+docstrings fixed.
 
 **Git hooks** — what `pre-push` does inside a parent git operation, and the
 pointer invariant that rests on it.
@@ -118,19 +123,44 @@ approval.
 - **D25** — direct wiring refuses rather than appends after an existing `exec`
 - **D45** — the sentinel replay is an allow-list, never `sh -c` on the tracked
   file
+- **D64** — the tracked `.gitmodules` records
+  `https://github.com/<owner>/<repo>.git` for a GitHub ssh url, given or
+  resolved, while the submodule's own remote keeps the url as given, so pushes
+  stay on that transport
+- **D65** — a confirmed-public parent with a confirmed-private memory or tier
+  remote gets one stderr line, because a private repository anywhere in the
+  chain aborts an anonymous recursive clone whatever the url form; visibility is
+  never changed, and a visibility `gh` cannot read is silent
 
 *Rejected:* a strictly non-empty initial commit · `gh repo create` as the only
 remote-creation method · a separate `gitlore.memoryPath` config key · making the
-memory push optional in v1 · replaying the sentinel as a shell command.
+memory push optional in v1 · replaying the sentinel as a shell command ·
+recording the ssh url in `.gitmodules` · rewriting the remote to https as well ·
+rewriting an existing install's `.gitmodules` from `SessionStart` or install ·
+creating tiers public by default · refusing the mount over visibility · a new
+flag or command for the visibility check · warning on an unknown visibility.
 
 **Memory redirect** — [memory-redirect.md](references/memory-redirect.md)
 
 - **D10** — the redirect is a launch-time `--settings` shim, not a project
   setting
+- **D68** — the shim injects only the memory submodule's own path, refusing
+  cheapest first: a control character (the path unshown); an absolute path; a
+  `..` or `.` component; a `.git` or `.gitlore` component, or a `.claude`
+  component not followed directly by `memory`, all case-insensitive; a nearest
+  existing ancestor that does not resolve under the physical root, or whose
+  resolved path plus the part not yet created is the root or breaks the same
+  control-directory rule; a path the index does not hold only as mode-160000
+  entries, at any stage. A refusal is one stderr line, then claude launches
+  unredirected
 
 *Rejected:* `autoMemoryDirectory` in project settings · the same key in global
 `~/.claude/settings.json` · `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` via `.envrc` ·
-an explicit `gitlore` launch command instead of shadowing `claude`.
+an explicit `gitlore` launch command instead of shadowing `claude` ·
+canonicalizing the memory directory alone · a `*..*` glob for traversal · a
+silent passthrough on refusal · patching a consumer's generated copy ·
+containment under the root as the whole test · refusing every `.claude`
+component · requiring exactly one index entry.
 
 **The session and its wrappers** — where the wrappers live and are anchored, and
 what SessionStart says to whom.
@@ -189,8 +219,10 @@ authoring-time sync (D38–D40) in
 guidance with its invocation (D47, D48) in
 [memory-authoring-guidance.md](references/memory-authoring-guidance.md), the
 tier stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md),
-and the repair of an arriving index and the merged-index gate (D52) in
-[tier-arrival-repair.md](references/tier-arrival-repair.md).
+the repair of an arriving index and the merged-index gate (D52) in
+[tier-arrival-repair.md](references/tier-arrival-repair.md), and the edit that
+removes a tier pointer (D66) in
+[index-drift-fixes.md](references/index-drift-fixes.md).
 
 - **D17** — FR15: nested tier submodules plus a structurally composed root index
 
@@ -214,7 +246,8 @@ the arrival onto the pin · an agent-driven repair through the memory-merger · 
 mechanical repair of a merge synthesis · repairing only when every problem names
 the carrier · a continuation that commits a defective merged index uncomposed ·
 a scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
-directories on the next repair (tier-arrival-repair.md).
+directories on the next repair (tier-arrival-repair.md) · leaving the
+pointer-removal rule to recall from D36 (index-drift-fixes.md).
 
 **Artifact size** — the 400-line cap over everything a reader takes in at one
 go, and the check that gates it.

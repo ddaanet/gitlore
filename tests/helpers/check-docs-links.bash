@@ -12,7 +12,7 @@ export CHECKER
 
 setup() {
   setup_tmp_repo
-  CHECKER="$PLUGIN_ROOT/scripts/check-docs-links.py"
+  CHECKER="$PLUGIN_ROOT/tools/check-docs-links.py"
   mkdir -p docs/references
   # The hub itself: the checker requires it, but reads no conclusion from it.
   printf '# gitlore Design Document\n\nSee [decisions](decisions.md).\n' \
