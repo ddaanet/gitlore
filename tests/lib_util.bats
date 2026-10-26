@@ -122,6 +122,14 @@ EOF
   done
 }
 
+@test "gitlore_push_credentials_hint names both fixes and the clone's path" {
+  run gitlore_push_credentials_hint "my memory"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gh auth setup-git"* ]]
+  [[ "$output" == *'git -C "my memory" remote set-url origin git@github.com:<owner>/<repo>.git'* ]]
+  [[ "$output" != *"gh auth status"* ]]
+}
+
 @test "gitlore_parent_visibility defaults to private with no origin" {
   run gitlore_parent_visibility
   [ "$status" -eq 0 ]

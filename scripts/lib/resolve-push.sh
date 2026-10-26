@@ -262,8 +262,8 @@ gitlore_push_stores() {
   # so the redirect is the point rather than a swallowed message.
   if ! git -C "$mempath" ls-remote origin >/dev/null 2>&1; then
     gitlore_say_for_agent_or_user \
-      "gitlore: memory remote unreachable. Check network or 'gh auth status'." \
-      "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
+      "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" \
+      "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" >&2
     return 1
   fi
 
@@ -278,6 +278,13 @@ gitlore_push_stores() {
     *"(fetch first)"*|*"(non-fast-forward)"*) ;;
     *)
       if [ -n "$push_err" ]; then
+        # A public https remote answers ls-remote anonymously, so a push with
+        # no credential helper lands here, not in the unreachable branch above.
+        case "$push_err" in
+          *"could not read Username"*|*"Authentication failed"*|*"terminal prompts disabled"*)
+            push_err="$push_err
+$(gitlore_push_credentials_hint "$mempath")" ;;
+        esac
         gitlore_say_for_agent_or_user \
           "gitlore: pushing memory to its remote failed, and not because of divergence. git said:
 $push_err" \

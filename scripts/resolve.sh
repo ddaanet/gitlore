@@ -163,8 +163,8 @@ if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
 fi
 if ! remote_refs=$(git -C "$mempath" ls-remote origin 2>/dev/null); then
   gitlore_say_for_agent_or_user \
-    "gitlore: memory remote unreachable. Check network or 'gh auth status'." \
-    "gitlore: memory remote unreachable. Check network or 'gh auth status'." >&2
+    "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" \
+    "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" >&2
   exit 1
 fi
 # The reachability probe already listed the remote's refs, so whether memory's

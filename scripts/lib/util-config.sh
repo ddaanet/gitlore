@@ -161,6 +161,15 @@ gitlore_github_https_url() {
   esac
 }
 
+# Print the hint that follows a memory push failure caused by missing
+# credentials. A clone takes its remotes from the https `.gitmodules` urls, and
+# git pushes over https only with a credential helper — which a working
+# `gh auth status` does not imply.
+# Args: $1 = the memory store's path.
+gitlore_push_credentials_hint() {
+  printf "Check the network. If this clone's remote is https (a fresh clone takes it from .gitmodules), run 'gh auth setup-git' so git uses your gh credentials, or put the clone back on SSH: git -C \"%s\" remote set-url origin git@github.com:<owner>/<repo>.git" "$1"
+}
+
 # Warn, on one stderr line, when the repository at $2 is private while this
 # repository is public. An anonymous `git clone --recurse-submodules` of a
 # public repository aborts at any private submodule in the chain, whatever url

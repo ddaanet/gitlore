@@ -234,14 +234,22 @@ one `.gitmodules` value that is matched, by basename, because
 `git submodule sync` absolutizes it on the way into `remote.origin.url`. A
 `git submodule sync` or a fresh clone sets the submodule's remote to the https
 `.gitmodules` url; that is the clone's own remote, and pushing from it needs
-https credentials. Existing installs keep the url they have; nothing rewrites a
-`.gitmodules` after the install that wrote it.
+https credentials, which an SSH key does not supply and a passing
+`gh auth status` does not imply. The memory push-failure hint names the two
+fixes: `gh auth setup-git`, which registers gh as git's credential helper, or
+`git -C <path> remote set-url origin git@github.com:<owner>/<repo>.git`, which
+puts that clone back on SSH. Nothing rewrites a clone's remote automatically.
+Existing installs keep the url they have; nothing rewrites a `.gitmodules` after
+the install that wrote it.
 
 A private repository anywhere in the chain aborts an anonymous recursive clone
 whatever the url form. When the person supplies the memory remote (url mode) and
 `gh` confirms the parent public and that remote private, install prints one
 stderr line naming the remote. Auto mode creates the remote with the parent's
-visibility and cannot produce the pair. A visibility `gh` cannot read prints
+visibility, so it cannot produce the pair while `gh` can read the parent's
+visibility; when it cannot (an SSH host alias as the parent origin, no auth for
+the org, the network down) the parent reads as private, the memory remote is
+created private, and no warning is printed. A visibility `gh` cannot read prints
 nothing, and install never changes a repository's visibility.
 
 **Push semantics**
