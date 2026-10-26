@@ -9,7 +9,7 @@
 /.venv/
 /.claude/autodrive
 /dist/plugin/
-# Bytecode from the checkers importing their sibling modules; under `scripts/`,
+# Bytecode from the checkers importing their sibling modules; under `tools/`,
 # a gate input, it would move every hash.
 __pycache__/
 /.mcp.json

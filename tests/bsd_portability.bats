@@ -77,7 +77,7 @@ teardown() { teardown_tmp_repo; }
   # `gitlore_file_mtime`) probe with a bare `stat -c` on a line of their own.
   cd "$PLUGIN_ROOT"
   gnu=$(grep -rl -e 'stat -c' -e 'stat --format' \
-        --include='*.sh' --include='*.bats' --include='*.bash' scripts tests)
+        --include='*.sh' --include='*.bats' --include='*.bash' scripts tools tests)
   while IFS= read -r f || [ -n "$f" ]; do
     [ -n "$f" ] || continue
     grep -q 'stat -f' "$f" || {
