@@ -37,11 +37,37 @@ real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not fo
 # failures are the common case, each already has its answer (passthrough below),
 # and their messages would print on every unrelated launch.
 root=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -n "$root" ] || exec "$real" "$@"                               # not in a repo → passthrough
 mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path)
-# no gitlore submodule → passthrough
-if [ -z "$root" ] || [ -z "$mempath" ]; then exec "$real" "$@"; fi
+[ -n "$mempath" ] || exec "$real" "$@"                            # no gitlore submodule → passthrough
 [ "$(jq -r '.gitlore.enabled // false' "$root/.claude/settings.json" 2>/dev/null)" = true ] \
   || exec "$real" "$@"                                            # submodule present but disabled → passthrough
+
+# Containment. `mempath` comes from the checkout's own `.gitmodules`, and the
+# redirect gives it the standing of a value the user typed, so it must name a
+# directory inside the repo. That is a refusal rather than a miss, so it says
+# why on one line and launches claude unredirected. Lexical checks first, since
+# before `git submodule update --init` the directory does not exist yet: no
+# absolute path, no `..` component (a component, so `my..memory` passes).
+refuse() {   # refuse <reason> <claude args>…
+  echo "gitlore: memory path '$mempath' in .gitmodules $1; launching claude without the memory redirect" >&2
+  shift
+  exec "$real" "$@"
+}
+case "$mempath" in /*) refuse "is absolute" "$@" ;; esac
+case "/$mempath/" in */../*) refuse "has a '..' component" "$@" ;; esac
+# Then the physical check, on the nearest existing directory: a symlink at the
+# memory path or at any parent of it can still point out of the repo, and Claude
+# Code would create a missing memory directory through it. A symlink met on the
+# way up, dangling or not, is refused outright: nothing to resolve it against.
+p="$root/$mempath"
+while [ ! -d "$p" ]; do
+  [ -L "$p" ] && refuse "crosses a symlink that names no directory" "$@"
+  p=${p%/*}
+done
+pabs=$(cd "$p" && pwd -P) || refuse "cannot be resolved" "$@"
+rootabs=$(cd "$root" && pwd -P) || refuse "cannot be resolved" "$@"
+case "$pabs/" in "$rootabs"/*) ;; *) refuse "resolves outside the repo" "$@" ;; esac
 
 json=$(jq -nc --arg p "$root/$mempath" '{autoMemoryDirectory:$p}')
 export GITLORE_LAUNCHED=1

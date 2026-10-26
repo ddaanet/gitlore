@@ -44,10 +44,28 @@ real=$(PATH="$newpath" command -v claude) || { echo "gitlore: real claude not fo
 
 # in a gitlore-enabled repo? cheap git checks first, so jq only runs for actual gitlore repos
 root=$(git rev-parse --show-toplevel 2>/dev/null)
-mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path 2>/dev/null)
-[ -n "$root" ] && [ -n "$mempath" ] || exec "$real" "$@"          # no gitlore submodule → passthrough
+[ -n "$root" ] || exec "$real" "$@"                               # not in a repo → passthrough
+mempath=$(git config --file "$root/.gitmodules" submodule.gitlore-memory.path)
+[ -n "$mempath" ] || exec "$real" "$@"                            # no gitlore submodule → passthrough
 [ "$(jq -r '.gitlore.enabled // false' "$root/.claude/settings.json" 2>/dev/null)" = true ] \
   || exec "$real" "$@"                                            # submodule present but disabled → passthrough
+
+# containment: lexical first (holds before the submodule is initialised), then physical
+refuse() {   # refuse <reason> <claude args>…
+  echo "gitlore: memory path '$mempath' in .gitmodules $1; launching claude without the memory redirect" >&2
+  shift
+  exec "$real" "$@"
+}
+case "$mempath" in /*) refuse "is absolute" "$@" ;; esac
+case "/$mempath/" in */../*) refuse "has a '..' component" "$@" ;; esac
+p="$root/$mempath"
+while [ ! -d "$p" ]; do
+  [ -L "$p" ] && refuse "crosses a symlink that names no directory" "$@"
+  p=${p%/*}
+done
+pabs=$(cd "$p" && pwd -P) || refuse "cannot be resolved" "$@"
+rootabs=$(cd "$root" && pwd -P) || refuse "cannot be resolved" "$@"
+case "$pabs/" in "$rootabs"/*) ;; *) refuse "resolves outside the repo" "$@" ;; esac
 
 json=$(jq -nc --arg p "$root/$mempath" '{autoMemoryDirectory:$p}')
 export GITLORE_LAUNCHED=1
@@ -68,6 +86,27 @@ exec "$real" --settings "$json" "$@"
   so committed shims stay portable across clones. `--settings` loads an
   *additional* settings tier (`flagSettings`), so only `autoMemoryDirectory` is
   overridden; all other settings still resolve from their normal tiers.
+- **Memory-path containment.** `mempath` and `gitlore.enabled` both come from
+  files the checkout controls, and the redirect gives `mempath` the standing of
+  a value the user typed, so the shim injects only a path inside the repo.
+  `git config --file` returns a `.gitmodules` path verbatim — `../x`, `a/../..`
+  and `/etc/x` alike; git's own `..` rejection applies when it adds a submodule,
+  not on a read. Claude Code then takes any absolute path, normalizes its `..`
+  away, and neither resolves symlinks nor compares it with the project (read in
+  the CC 2.1.310 resolver). The checks are lexical first, because before
+  `git submodule update --init` the memory directory does not exist and the shim
+  still injects it: an absolute `mempath` is refused, and so is any `..`
+  *component* — matched as `/../` in `/$mempath/`, so a name such as
+  `my..memory` passes. Then physical: the nearest existing directory on the
+  memory path (the memory directory itself once initialised) is resolved with
+  `cd … && pwd -P` and must be the physical root or sit under it, which catches
+  a symlinked memory directory and a symlinked parent that a not-yet-created
+  memory directory would land under. A symlink met on the way up that names no
+  directory is refused outright. A refusal is the one non-silent passthrough:
+  one `gitlore:` line on stderr names the path and the reason, then the real
+  `claude` runs with the original arguments, no `--settings` and
+  `GITLORE_LAUNCHED` unset — so the `SessionStart` guard also reports the
+  unredirected launch, and with both placements on `PATH` each prints the line.
 
 **Placement A — repo-local, direnv (default).** `/gitlore:install` emits two
 **committed** files: `.gitlore/bin/claude` (the shim) and `.envrc`. The `.envrc`
@@ -90,6 +129,17 @@ auto-append) the one `PATH` line for the user's shell rc (e.g.
 otherwise. The gitlore-repo detection is generic, so this one shim
 auto-activates in any gitlore repo and no-ops everywhere else. It covers users
 without direnv, and launches from outside an allowed directory.
+
+**Refreshing a placed shim.** Both placements are copies of
+`scripts/install/launcher-shim`, and nothing rewrites them on a plugin update or
+at session start. Re-running `/gitlore:install` from the main worktree root
+(with the memory path the repo uses, if not `memory`) is the refresh path: the
+install is idempotent, `emit-launcher.sh` overwrites `.gitlore/bin/claude` and
+stages it for the user to commit, and on a machine without direnv
+`global-shim.sh` overwrites `~/.gitlore/bin/claude`. A global shim on a machine
+that has since gained direnv is not rewritten by the install;
+`CLAUDE_PLUGIN_ROOT=<plugin dir> bash <plugin dir>/scripts/install/global-shim.sh`
+rewrites it directly.
 
 **D10 — Memory redirect via a launch-time `--settings` shim, not project
 settings**
@@ -133,3 +183,20 @@ memory-write auto-allow and can inject cowork guidelines into the system prompt.
 **An explicit `gitlore` launch command instead of shadowing `claude`.** Breaks
 the value proposition: users would have to remember a new command. The shim
 keeps them typing `claude`.
+
+**Containment by canonicalizing the memory directory alone.** `cd` fails before
+the submodule is initialised, so the shim would either pass through — silently
+disabling the redirect on every fresh clone — or skip the check. The lexical
+checks hold without the directory, and the physical check runs on its nearest
+existing ancestor.
+
+**A `*..*` glob for traversal.** Rejects legitimate names such as `my..memory`
+and adds nothing the component match does not already catch.
+
+**A silent passthrough on refusal.** The shim is quiet on the common misses, but
+a refusal is not a miss: the user's memory goes unredirected because of what the
+checkout says, and they should learn why.
+
+**Patching a consumer's generated `.gitlore/bin/claude`.** It drifts from the
+plugin's source and leaves every other consumer exposed; the fix lives in
+`scripts/install/launcher-shim` and reaches consumers through a re-install.
