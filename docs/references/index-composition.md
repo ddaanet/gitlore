@@ -282,22 +282,9 @@ mount owes the root index), a deactivate/reactivate round trip, and a tier whose
 block the agent cleared — the way to drop a tier's facts from a repo is to
 deactivate it, not to empty its block.
 
-**Removing a tier pointer is one of three edits, and the reports name which.**
-For a root line `T/P` of an active tier `T`:
-
-- Root at `HEAD` carries it and root keeps another `T/` line: delete it from
-  root only; the next compose drops the carrier copy as root's deletion.
-- Root at `HEAD` lacks it (an uncommitted take, or added since the last commit):
-  delete `P` from `memory/T/MEMORY.md`, then `T/P` from root. Root alone leaves
-  the copy, kept and reported as an orphan.
-- The deletion leaves root no `T/` line, so the layout adopts the whole carrier
-  back: delete `P` from the carrier first too, or deactivate `T`.
-
-Carrier first, since a carrier edit triggers no compose. An orphan is the second
-case with root already done — a path root at `HEAD` carries never survives a
-pass — so it is one edit, like a project line. `gitlore_dangling_root_fix` picks
-the case per dangling line, counting the third per tier, and each orphan quotes
-the prefixed line to add. Neither report edits anything (D34).
+**Removing a tier pointer is one of three edits, and the dangling and orphan
+reports name which**, decided by root at `HEAD` and root's other lines for the
+tier; the recipe is in [index-drift-fixes.md](index-drift-fixes.md).
 
 **D37 — Index order is a merge input, not a rule applied afterwards**
 

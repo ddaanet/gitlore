@@ -250,7 +250,8 @@ $result"
     if [ -n "$orphans" ]; then
       o=$(printf '%s\n' "$orphans" | grep -c .)
       if [ "$o" -eq 1 ]; then ounit="line"; else ounit="lines"; fi
-      orphans_capped=$(printf '%s\n' "$orphans" | gitlore_cap_list)
+      orphans_capped=$(printf '%s\n' "$orphans" | gitlore_cap_list
+        gitlore_cap_rest_note "$o" "$mempath")
       sysmsg="${sysmsg:+$sysmsg
 }gitlore: $o tier index $ounit not in the root index"
       ctx="${ctx:+$ctx
@@ -266,7 +267,8 @@ $orphans_capped"
     if [ -n "$dangling" ]; then
       d=$(printf '%s\n' "$dangling" | grep -c .)
       if [ "$d" -eq 1 ]; then dunit="pointer"; else dunit="pointers"; fi
-      dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
+      dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list
+        gitlore_cap_rest_note "$d" "$mempath")
       sysmsg="${sysmsg:+$sysmsg
 }gitlore: $d dangling index $dunit — a line names a file that is not there"
       ctx="${ctx:+$ctx

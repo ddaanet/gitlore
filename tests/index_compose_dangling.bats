@@ -241,15 +241,19 @@ drop_bullet() {
   gitlore_compose memory
   commit_memory_state
   rm memory/ddaanet/one.md memory/ddaanet/two.md
+  # An orphan beside them: the adoption would carry it into root unless it is
+  # settled first, which is what the report tells the agent to do.
+  seed_tier_bullet ddaanet stray.md "never in the root"
   run gitlore_compose_dangling memory
   [ "$status" -eq 0 ]
   # Per tier, not per line: each line alone leaves the other, but deleting both
   # from the root empties the tier block and the layout adopts the carrier back.
   [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
   # shellcheck disable=SC2016 # the backticks are report text, not a substitution
-  [[ "$output" == *'ddaanet/two.md names no file in the memory store — delete the `two.md` line from memory/ddaanet/MEMORY.md, then its line from memory/MEMORY.md; memory/MEMORY.md keeps no other live ddaanet/ line, and compose adopts the whole tier index into a root with none. To drop ddaanet from this repo instead, delete its line from memory/.gitlore-tiers'* ]]
+  [[ "$output" == *'ddaanet/two.md names no file in the memory store — settle any orphan reported in memory/ddaanet/MEMORY.md first, then delete the `two.md` line from it if present, then its line from memory/MEMORY.md; memory/MEMORY.md keeps no other live ddaanet/ line, and compose adopts the whole tier index, orphans included, into a root with none. To drop ddaanet from this repo instead, delete its line from memory/.gitlore-tiers'* ]]
   # shellcheck disable=SC2016 # the backticks are report text, not a substitution
-  [[ "$output" == *'ddaanet/one.md names no file in the memory store — delete the `one.md` line from memory/ddaanet/MEMORY.md, then its line'* ]]
+  [[ "$output" == *'ddaanet/one.md names no file in the memory store — settle any orphan reported in memory/ddaanet/MEMORY.md first, then delete the `one.md` line from it if present'* ]]
+  drop_bullet stray.md memory/ddaanet/MEMORY.md
   drop_bullet one.md memory/ddaanet/MEMORY.md
   drop_bullet two.md memory/ddaanet/MEMORY.md
   drop_bullet ddaanet/one.md memory/MEMORY.md

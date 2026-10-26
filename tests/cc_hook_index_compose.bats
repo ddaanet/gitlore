@@ -192,6 +192,27 @@ gitlore_relay_drain() {
   [ -z "$output" ]
 }
 
+@test "a capped dangling list tells the agent where the rest surface" {
+  # A line collapsed into "… and N more" carries no fix, so the context names
+  # how to see it; a list within the cap needs no such line.
+  export GITLORE_DANGLING_CAP=1
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_bullet "gone.md" "stale line"
+  run feed
+  [ "$status" -eq 0 ]
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
+  [[ "$ctx" == *"gone.md names no file"* ]]
+  [[ "$ctx" != *"re-runs this report"* ]]
+
+  pre "$PWD/memory/MEMORY.md"
+  seed_root_bullet "lost.md" "another stale line"
+  run feed
+  [ "$status" -eq 0 ]
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
+  [[ "$ctx" == *"… and 1 more"* ]]
+  [[ "$ctx" == *"Only the first 1 are listed. Every edit to memory/MEMORY.md re-runs this report with the rest."* ]]
+}
+
 # D60: a PostToolBatch hook that dies reports instead of ending the turn. A
 # stamp the pre-hook left and a later umask, a restore or another user's run
 # made unreadable: `was=$(gitlore_compose_stamp_get "$key" < "$stamp")`)

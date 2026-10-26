@@ -30,6 +30,15 @@ gitlore_cap_list() {
   fi
 }
 
+# For the agent's channel: when $1 lines outnumber the cap, print where the
+# lines past it surface, since a collapsed line carries no fix of its own.
+# $2 = mempath.
+gitlore_cap_rest_note() {
+  [ "$1" -gt "$GITLORE_DANGLING_CAP" ] || return 0
+  printf 'Only the first %d are listed. Every edit to %s re-runs this report with the rest.\n' \
+    "$GITLORE_DANGLING_CAP" "$2/MEMORY.md"
+}
+
 # Print one report line per pointer bullet whose target file is absent; return 0
 # either way. This is the fifth compose validation, and the only one that
 # REPORTS instead of refusing: a dangling line does not make the composed output
@@ -101,7 +110,8 @@ EOF
 #     so it goes from the carrier too;
 #   the dangling lines are all root's lines for the tier → deleting them leaves
 #     root none, and the layout adopts the whole carrier back, so the copy goes
-#     from the carrier too — or the tier is deactivated. Counted per tier, not per
+#     from the carrier too, after the tier's orphans, which the adoption would
+#     carry into root — or the tier is deactivated. Counted per tier, not per
 #     line: each of several such lines alone leaves the others standing.
 #
 # Carrier first on both surfaces: a carrier edit triggers no compose, so the
@@ -117,8 +127,12 @@ gitlore_dangling_root_fix() {
   both="delete the \`${path#"$tier"/}\` line from $carrier, then its line from $root"
   if [ "$(gitlore_paths_in_tier "$tier" <<<"$dangling")" -ge \
        "$(gitlore_paths_in_tier "$tier" <<<"$all")" ]; then
-    printf '%s; %s keeps no other live %s/ line, and compose adopts the whole tier index into a root with none. To drop %s from this repo instead, delete its line from %s\n' \
-      "$both" "$root" "$tier" "$tier" "$mempath/.gitlore-tiers"
+    # The adoption takes the carrier's orphans too, so they are settled first.
+    # "If present": a root-first attempt was adopted back and the carrier line
+    # may already be gone when this is reported again.
+    # shellcheck disable=SC2016 # the backticks are report text, not a substitution
+    printf 'settle any orphan reported in %s first, then delete the `%s` line from it if present, then its line from %s; %s keeps no other live %s/ line, and compose adopts the whole tier index, orphans included, into a root with none. To drop %s from this repo instead, delete its line from %s\n' \
+      "$carrier" "${path#"$tier"/}" "$root" "$root" "$tier" "$tier" "$mempath/.gitlore-tiers"
   elif grep -qxF -- "$path" <<<"$head"; then
     printf 'delete its line from %s only; the next compose drops the copy in %s\n' \
       "$root" "$carrier"
