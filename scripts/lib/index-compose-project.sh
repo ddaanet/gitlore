@@ -38,19 +38,33 @@ gitlore_cap_list() {
 #
 # Under presence-authority (D17) the index says what memory CONTAINS, so the
 # missing FILE is the anomaly, not the line — which is why nothing here touches
-# either surface. Reporting is the whole job.
+# either surface. Each line ends with the edit that removes it, chosen by
+# gitlore_dangling_root_fix: which one works depends on state the working tree
+# does not show, so the report decides it rather than the agent's recall.
 gitlore_compose_dangling() {
-  local mempath="$1" mounted tier file line path reported=""
+  local mempath="$1" mounted active head tier file line path all="" reported=""
 
   file="$mempath/MEMORY.md"
   if [ -f "$file" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
+      all="$all$path
+"
       [ -e "$mempath/$path" ] && continue
-      printf '%s: %s names no file in the memory store\n' "$file" "$path"
-      reported="$reported
-$path"
+      reported="$reported$path
+"
     done < "$file"
+  fi
+  if [ -n "$reported" ]; then
+    active=$(gitlore_active_tiers "$mempath")
+    head=$(gitlore_index_head_paths "$mempath")
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      printf '%s: %s names no file in the memory store — %s\n' "$file" "$path" \
+        "$(gitlore_dangling_root_fix "$mempath" "$path" "$active" "$head" "$all" "$reported")"
+    done <<EOF
+$reported
+EOF
   fi
 
   # Carrier lines too: a DORMANT tier's bullets never reach the root, so a
@@ -67,12 +81,70 @@ $path"
       # report the root's copy only, since that is the surface the agent edits.
       # Here-string, not a pipe — see the same note at gitlore_compose_check above.
       grep -qxF -- "$tier/$path" <<<"$reported" && continue
-      printf '%s: %s names no file in the tier\n' "$file" "$path"
+      printf '%s: %s names no file in the tier — delete its line from %s\n' \
+        "$file" "$path" "$file"
     done < "$file"
   done <<EOF
 $mounted
 EOF
   return 0
+}
+
+# Print the edit that removes dangling root line $2. Args: $1 = mempath,
+# $3 = active tiers, $4 = root's paths at HEAD, $5 = every root path, $6 = the
+# dangling root paths — all newline-separated. A project line is one edit. A
+# tier line's fix turns on what the next compose does with the carrier copy:
+#
+#   root at HEAD has it → the down projection reads root's deletion and drops the
+#     copy, so the root edit alone is the fix;
+#   root at HEAD lacks it → the copy reads as never authored in root and is kept,
+#     so it goes from the carrier too;
+#   the dangling lines are all root's lines for the tier → deleting them leaves
+#     root none, and the layout adopts the whole carrier back, so the copy goes
+#     from the carrier too — or the tier is deactivated. Counted per tier, not per
+#     line: each of several such lines alone leaves the others standing.
+#
+# Carrier first on both surfaces: a carrier edit triggers no compose, so the
+# root edit that follows composes against a carrier already without the line.
+gitlore_dangling_root_fix() {
+  local mempath="$1" path="$2" active="$3" head="$4" all="$5" dangling="$6"
+  local root="$mempath/MEMORY.md" tier carrier both
+  if ! tier=$(gitlore_tier_of "$path" "$active"); then
+    printf 'delete its line from %s\n' "$root"
+    return 0
+  fi
+  carrier="$mempath/$tier/MEMORY.md"
+  both="delete the \`${path#"$tier"/}\` line from $carrier, then its line from $root"
+  if [ "$(gitlore_paths_in_tier "$tier" <<<"$dangling")" -ge \
+       "$(gitlore_paths_in_tier "$tier" <<<"$all")" ]; then
+    printf '%s; %s keeps no other live %s/ line, and compose adopts the whole tier index into a root with none. To drop %s from this repo instead, delete its line from %s\n' \
+      "$both" "$root" "$tier" "$tier" "$mempath/.gitlore-tiers"
+  elif grep -qxF -- "$path" <<<"$head"; then
+    printf 'delete its line from %s only; the next compose drops the copy in %s\n' \
+      "$root" "$carrier"
+  else
+    printf '%s; compose keeps a tier line the memory store has not committed\n' "$both"
+  fi
+}
+
+# Count the newline-separated paths on stdin that tier $1 prefixes.
+gitlore_paths_in_tier() {
+  local tier="$1" path n=0
+  while IFS= read -r path || [ -n "$path" ]; do
+    case "$path" in "$tier"/*) n=$((n + 1)) ;; esac
+  done
+  printf '%s\n' "$n"
+}
+
+# Print the root index's pointer paths at the memory store's HEAD, one per line.
+# `-q --verify` is silent on the one expected miss: a store whose root index is
+# not committed yet, which prints nothing.
+gitlore_index_head_paths() {
+  local mempath="$1" line
+  git -C "$mempath" rev-parse -q --verify HEAD:MEMORY.md >/dev/null || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    gitlore_bullet_path "$line" || continue
+  done < <(git -C "$mempath" show HEAD:MEMORY.md)
 }
 
 # Print tier $2's new carrier bullet list, unprefixed: root's lines for that tier,
@@ -133,16 +205,12 @@ gitlore_compose_down() {
     done < <(gitlore_index_part "$carrier" bullets)
   fi
 
-  # root at HEAD — paths only, and only this tier's. `-q --verify` is silent on
-  # the one expected miss: a store whose root index is not committed yet, which
+  # root at HEAD — paths only, and only this tier's. An uncommitted root index
   # leaves the list empty and makes every carrier line a keep.
-  if git -C "$mempath" rev-parse -q --verify HEAD:MEMORY.md >/dev/null; then
-    while IFS= read -r line || [ -n "$line" ]; do
-      path=$(gitlore_bullet_path "$line") || continue
-      case "$path" in "$tier"/*) ;; *) continue ;; esac
-      printf '%s\n' "${path#"$tier"/}" >> "$tmpd/head.paths"
-    done < <(git -C "$mempath" show HEAD:MEMORY.md)
-  fi
+  while IFS= read -r path; do
+    case "$path" in "$tier"/*) ;; *) continue ;; esac
+    printf '%s\n' "${path#"$tier"/}" >> "$tmpd/head.paths"
+  done < <(gitlore_index_head_paths "$mempath")
 
   while IFS= read -r path; do
     [ -n "$path" ] || continue
@@ -185,9 +253,9 @@ gitlore_index_has_tier() {
 #   - root carries no line at all for an active tier. That is what a freshly
 #     mounted or freshly activated tier looks like, and root has no opinion about
 #     it yet, so it takes the carrier's — the augmentation a mount owes the
-#     index. Deleting every one of a tier's lines from root does NOT resurrect
-#     the block: the down projection runs first and has already dropped those
-#     lines from the carrier by the time this reads it.
+#     index. Deleting every one of a tier's lines from root therefore brings the
+#     block back: the down projection skips a tier root has no line for, so the
+#     carrier still holds them. Deactivating the tier is what drops its block.
 #
 # Lines prefixed with a mounted but DORMANT tier are dropped: root does not
 # represent a dormant tier. They keep living in its carrier, and reactivating the
@@ -254,7 +322,11 @@ gitlore_compose_up() {
 # and never mentioned this path — a line written straight into the carrier, or
 # one left there while the tier slept. Nothing is rewritten or dropped over it:
 # it is a line whose two surfaces disagree about whether the fact is in play
-# here, and which way to settle that is the agent's call, not the pass's.
+# here, and which way to settle that is the agent's call, not the pass's. Either
+# way is one edit, and the line names both: a carrier path that root at HEAD
+# carries never survives a pass (the down projection reads it as root's
+# deletion), so every orphan is one root never committed, and deleting it from
+# the carrier is final.
 gitlore_compose_orphans() {
   local mempath="$1" active tier line path
   active=$(gitlore_active_tiers "$mempath")
@@ -265,8 +337,10 @@ gitlore_compose_orphans() {
     while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       gitlore_index_has_path "$mempath/MEMORY.md" "$tier/$path" && continue
-      printf '%s: %s is in the tier but not in the root index\n' \
-        "$mempath/$tier/MEMORY.md" "$path"
+      # shellcheck disable=SC2016 # the backticks are report text, not a substitution
+      printf '%s: %s is in the tier but not in the root index — delete its line from %s, or add `%s` to %s to recall it here\n' \
+        "$mempath/$tier/MEMORY.md" "$path" "$mempath/$tier/MEMORY.md" \
+        "$(gitlore_bullet_reprefix "$line" "$tier")" "$mempath/MEMORY.md"
     done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
   done <<EOF
 $active

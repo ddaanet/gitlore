@@ -122,8 +122,8 @@ teardown() { teardown_tmp_repo; }
   # And named, so it is not silently stranded out of recall.
   run gitlore_compose_orphans memory
   [ "$status" -eq 0 ]
-  [[ "$output" == *"stray.md is in the tier but not in the root index"* ]]
-  [[ "$output" != *"known.md"* ]]
+  # shellcheck disable=SC2016 # the backticks are report text, not a substitution
+  [ "$output" = 'memory/ddaanet/MEMORY.md: stray.md is in the tier but not in the root index — delete its line from memory/ddaanet/MEMORY.md, or add `- [stray](ddaanet/stray.md) — nobody authored this in the root` to memory/MEMORY.md to recall it here' ]
 }
 
 # --- indexes whose last line carries no newline ---

@@ -174,3 +174,98 @@ b" ]
   cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 }
 
+# --- the fix each dangling line names ---
+#
+# Which edit removes a stale pointer depends on state the working tree does not
+# show: whether root at HEAD carries the line, and whether root keeps any other
+# line for its tier. The report decides it, so each case below applies the act
+# the report names and asserts the store comes out clean.
+
+# Apply a report's delete: drop the bullet whose path is $1 from index $2.
+drop_bullet() {
+  grep -vF -- "]($1)" "$2" > "$BATS_TEST_TMPDIR/drop" && mv "$BATS_TEST_TMPDIR/drop" "$2"
+}
+
+@test "a dangling project line names a one-edit delete from the root" {
+  make_parent_with_memory
+  seed_root_bullet "gone.md" "stale line"
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "memory/MEMORY.md: gone.md names no file in the memory store — delete its line from memory/MEMORY.md" ]
+}
+
+@test "a dangling tier line root has committed names a root-only delete" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet keep.md "still here"
+  seed_tier_bullet ddaanet gone.md "file removed"
+  gitlore_compose memory
+  commit_memory_state
+  rm memory/ddaanet/gone.md
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "memory/MEMORY.md: ddaanet/gone.md names no file in the memory store — delete its line from memory/MEMORY.md only; the next compose drops the copy in memory/ddaanet/MEMORY.md" ]
+  drop_bullet ddaanet/gone.md memory/MEMORY.md
+  gitlore_compose memory
+  assert_bullets memory/ddaanet/MEMORY.md '- [keep](keep.md) — still here'
+  [ -z "$(gitlore_compose_dangling memory)$(gitlore_compose_orphans memory)" ]
+}
+
+@test "a dangling tier line root has not committed names a delete on both surfaces" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet keep.md "still here"
+  gitlore_compose memory
+  commit_memory_state
+  seed_root_bullet "ddaanet/new.md" "authored, never written"
+  gitlore_compose memory                    # projects the new line down
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  # shellcheck disable=SC2016 # the backticks are report text, not a substitution
+  [ "$output" = 'memory/MEMORY.md: ddaanet/new.md names no file in the memory store — delete the `new.md` line from memory/ddaanet/MEMORY.md, then its line from memory/MEMORY.md; compose keeps a tier line the memory store has not committed' ]
+  drop_bullet new.md memory/ddaanet/MEMORY.md
+  drop_bullet ddaanet/new.md memory/MEMORY.md
+  gitlore_compose memory
+  assert_bullets memory/ddaanet/MEMORY.md '- [keep](keep.md) — still here'
+  [ -z "$(gitlore_compose_dangling memory)$(gitlore_compose_orphans memory)" ]
+}
+
+@test "dangling lines that are all of a tier's root lines name both surfaces or deactivation" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet one.md "first"
+  seed_tier_bullet ddaanet two.md "second"
+  gitlore_compose memory
+  commit_memory_state
+  rm memory/ddaanet/one.md memory/ddaanet/two.md
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  # Per tier, not per line: each line alone leaves the other, but deleting both
+  # from the root empties the tier block and the layout adopts the carrier back.
+  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
+  # shellcheck disable=SC2016 # the backticks are report text, not a substitution
+  [[ "$output" == *'ddaanet/two.md names no file in the memory store — delete the `two.md` line from memory/ddaanet/MEMORY.md, then its line from memory/MEMORY.md; memory/MEMORY.md keeps no other live ddaanet/ line, and compose adopts the whole tier index into a root with none. To drop ddaanet from this repo instead, delete its line from memory/.gitlore-tiers'* ]]
+  # shellcheck disable=SC2016 # the backticks are report text, not a substitution
+  [[ "$output" == *'ddaanet/one.md names no file in the memory store — delete the `one.md` line from memory/ddaanet/MEMORY.md, then its line'* ]]
+  drop_bullet one.md memory/ddaanet/MEMORY.md
+  drop_bullet two.md memory/ddaanet/MEMORY.md
+  drop_bullet ddaanet/one.md memory/MEMORY.md
+  drop_bullet ddaanet/two.md memory/MEMORY.md
+  gitlore_compose memory
+  run ! grep -qF 'ddaanet/' memory/MEMORY.md
+  [ -z "$(gitlore_compose_dangling memory)$(gitlore_compose_orphans memory)" ]
+}
+
+@test "a dangling line only a carrier holds names a delete from that carrier" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest                         # mounted, never active
+  printf -- '- [stale](stale.md) — no such file\n' >> memory/ddaanet/MEMORY.md
+  run gitlore_compose_dangling memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "memory/ddaanet/MEMORY.md: stale.md names no file in the tier — delete its line from memory/ddaanet/MEMORY.md" ]
+}
+
