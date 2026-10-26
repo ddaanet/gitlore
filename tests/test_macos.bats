@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# scripts/test-macos.sh against tiny real suites. The platform cannot be faked
+# tools/test-macos.sh against tiny real suites. The platform cannot be faked
 # from Linux, so what is pinned is the wiring: bats' verdict becomes the exit
 # status, and the stand-in for /bin/bash is the bash a test execs while the
 # test body stays under the modern one. `OLD_BASH` is a wrapper that logs each
@@ -42,11 +42,11 @@ plant() {
 
 macos() {
   OLD_BASH="$TMP_REPO/old-bash" MODERN_BASH="$real_bash" \
-    "$PLUGIN_ROOT/scripts/test-macos.sh" "$@"
+    "$PLUGIN_ROOT/tools/test-macos.sh" "$@"
 }
 
 @test "test-macos.sh is discoverable and executable" {
-  [ -x "$PLUGIN_ROOT/scripts/test-macos.sh" ]
+  [ -x "$PLUGIN_ROOT/tools/test-macos.sh" ]
 }
 
 @test "a passing suite exits 0 and the header names both bashes" {
@@ -83,7 +83,7 @@ macos() {
 @test "a /bin/bash that is not 3.x is refused unless OLD_BASH names a stand-in" {
   [ "$(/bin/bash -c 'echo "${BASH_VERSINFO[0]}"')" != 3 ] || skip "/bin/bash is 3.x here"
   plant ok.bats true
-  run env -u OLD_BASH "$PLUGIN_ROOT/scripts/test-macos.sh" "$TMP_REPO/t/ok.bats"
+  run env -u OLD_BASH "$PLUGIN_ROOT/tools/test-macos.sh" "$TMP_REPO/t/ok.bats"
   [ "$status" -ne 0 ]
   grep -qF "is not bash 3.x" <<< "$output"
 }

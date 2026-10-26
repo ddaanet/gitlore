@@ -37,7 +37,7 @@ test still reports `ok`. Neither floor is a pin. `gate-inputs-hash` folds
 into every gate hash because this repo pins no tool versions; the floors say
 what a version has to do, and the hash makes a change of one invalidate the
 gates. A macOS run therefore drives bats with a modern bash.
-`scripts/test-macos.sh` is that run: it narrows `PATH` to the system directories
+`tools/test-macos.sh` is that run: it narrows `PATH` to the system directories
 plus the tools the platform lacks, and sets `GITLORE_TEST_BASH_DIR`, which
 `setup_tmp_repo` puts first on `PATH` so the scripts a test execs meet the
 system's 3.2 while the assertions stay real. It runs every unit suite by
@@ -117,14 +117,14 @@ standing.
 the same thing as a green `precommit`. `PLUGIN_DEV_GATE_FORCE=1` runs a gate
 whatever its sentinel says.
 
-`scripts/lint-shell.sh` discovers from the set the hash enumerates — tracked
-files plus untracked, non-ignored ones — so a brand-new script that moves the
-`lint` hash is a script the recorded pass linted. The `lint` hash adds the shell
-files under `plans/` by extension (`plans/*.sh`), since `lint-shell.sh` walks
-the whole tree while the shared inputs leave `plans/` out; an extensionless
-script there is linted without moving the hash. `*.bash` and `*.bats` are not
-named while no plan carries one, because the guard refuses a pathspec that
-matches no file.
+`tools/lint-shell.sh` discovers from the set the hash enumerates — tracked files
+plus untracked, non-ignored ones — so a brand-new script that moves the `lint`
+hash is a script the recorded pass linted. The `lint` hash adds the shell files
+under `plans/` by extension (`plans/*.sh`), since `lint-shell.sh` walks the
+whole tree while the shared inputs leave `plans/` out; an extensionless script
+there is linted without moving the hash. `*.bash` and `*.bats` are not named
+while no plan carries one, because the guard refuses a pathspec that matches no
+file.
 
 Inside a `lint` run that the sentinel did not skip, `lint-shell.sh` keeps a
 finer cache of its own at `git rev-parse --git-path gitlore/lint-cache`: one key
@@ -137,17 +137,17 @@ library relints everything that reaches it. A file sourced from outside the
 discovered set is in no key. The full pass is ~65 s and an unchanged tree ~4 s,
 which is the discovery walk; editing one suite adds under a second.
 `PLUGIN_DEV_GATE_FORCE=1` lints every file regardless, and
-`scripts/lint-cache-keys.py` holds the key's argument.
+`tools/lint-cache-keys.py` holds the key's argument.
 
 `test-unit` and `test-integration` keep the same kind of cache beneath their
-sentinels, through the prolog's `run-suites` and `scripts/run-bats-cached.sh`:
-one key per suite, in `<gate>.suites` beside the gate files. A key covers a
-shared hash — the gate's own input hash with the suite files left out — the
-names of every suite the gate runs, and the suite's path and contents. So an
-edit to one suite reruns that suite (the integration half: 68 s cold, 9 s after
-touching one suite, most of it the three whole-tree hashes); adding, renaming or
-deleting a suite reruns all of them, since a suite may enumerate its siblings;
-and an edit under `scripts/`, `hooks/` or `tests/helpers/` reruns all of them,
+sentinels, through the prolog's `run-suites` and `tools/run-bats-cached.sh`: one
+key per suite, in `<gate>.suites` beside the gate files. A key covers a shared
+hash — the gate's own input hash with the suite files left out — the names of
+every suite the gate runs, and the suite's path and contents. So an edit to one
+suite reruns that suite (the integration half: 68 s cold, 9 s after touching one
+suite, most of it the three whole-tree hashes); adding, renaming or deleting a
+suite reruns all of them, since a suite may enumerate its siblings; and an edit
+under `scripts/`, `tools/`, `hooks/` or `tests/helpers/` reruns all of them,
 because nothing records which scripts a suite exercises. A suite that read other
 suites' *contents* would need every suite in its key; the justfile's
 `reads_all_suites` names such suites — `tests/bsd_portability.bats`, which
@@ -174,10 +174,10 @@ A test written against code that already behaves gets its evidence from a
 mutation: break the behaviour it names, and the test must go red. Hand-running
 that is where the accidents live — a run read as a mutant result when the edit
 never landed, mutants stacked on each other, a backup written to `/` because
-`$TMPDIR` was unset. `scripts/mutate-and-run.sh` does the whole cycle:
+`$TMPDIR` was unset. `tools/mutate-and-run.sh` does the whole cycle:
 
 ```sh
-scripts/mutate-and-run.sh <file> <sed-script> <bats-file> [<filter>]
+tools/mutate-and-run.sh <file> <sed-script> <bats-file> [<filter>]
 ```
 
 The mutation is a sed script, so a report can quote it as the mutation's name; a

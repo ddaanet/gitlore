@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# scripts/run-bats-cached.sh against tiny real suites: bats itself decides
+# tools/run-bats-cached.sh against tiny real suites: bats itself decides
 # pass/fail, and each suite's own marker file says whether IT actually ran —
 # the junit report is the plumbing, not the thing asserted on.
 
@@ -36,7 +36,7 @@ ran() {
 clear_marks() { rm -f "$MARK"/*.ran; }
 
 cached() {
-  "$PLUGIN_ROOT/scripts/run-bats-cached.sh" "$@"
+  "$PLUGIN_ROOT/tools/run-bats-cached.sh" "$@"
 }
 
 @test "a second run over unchanged suites runs nothing, exits 0, reports all cached" {
@@ -154,20 +154,20 @@ EOF
   # would hand the failing suite the passing one's verdict. The scripts are
   # copied beside a parser that reverses the real one's lines, the quiet runner
   # where the cached one looks for it, in `../plugin-dev/`.
-  mkdir -p alt/scripts alt/plugin-dev
-  cp "$PLUGIN_ROOT/scripts/run-bats-cached.sh" alt/scripts/
+  mkdir -p alt/tools alt/plugin-dev
+  cp "$PLUGIN_ROOT/tools/run-bats-cached.sh" alt/tools/
   cp "$PLUGIN_ROOT/plugin-dev/run-bats.sh" alt/plugin-dev/
-  cat > alt/scripts/parse-bats-junit.py <<PARSER
+  cat > alt/tools/parse-bats-junit.py <<PARSER
 #!/usr/bin/env bash
-"$PLUGIN_ROOT/scripts/parse-bats-junit.py" "\$@" | sed '1!G;h;\$!d'
+"$PLUGIN_ROOT/tools/parse-bats-junit.py" "\$@" | sed '1!G;h;\$!d'
 PARSER
-  chmod +x alt/scripts/parse-bats-junit.py
+  chmod +x alt/tools/parse-bats-junit.py
   plant f1.bats fail; plant p1.bats pass
-  run alt/scripts/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
+  run alt/tools/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
   [ "$status" -ne 0 ]
   [[ "$output" == *"nothing recorded"* ]]
   clear_marks
-  run alt/scripts/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
+  run alt/tools/run-bats-cached.sh "$KEYS" h9 -- f1.bats p1.bats
   ran f1.bats
   ran p1.bats
 }

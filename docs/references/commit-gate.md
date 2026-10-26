@@ -260,10 +260,10 @@ redeclaration.
 
 **D22 — The memory-hygiene checker is a repo-local gate, not shipped surface**
 
-`scripts/check-memory-hygiene.py` runs uncached at the head of `just precommit`
+`tools/check-memory-hygiene.py` runs uncached at the head of `just precommit`
 (the cache cannot see a fact change through the `memory` gitlink) and checks
 prose shape, wikilink targets, reference style and volatile git state across the
-store. It stays in gitlore's own `scripts/`; the plugin ships none of it.
+store. It stays in gitlore's own `tools/`; the plugin ships none of it.
 
 **Shipping it would make python3 and PyYAML a user-facing dependency.** The
 install surface is bash, git and jq, and every hook and script on the runtime

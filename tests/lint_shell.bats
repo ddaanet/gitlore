@@ -21,7 +21,7 @@ teardown() { teardown_tmp_repo; }
 @test "lint-shell: catches a shellcheck violation in a tracked .sh file" {
   printf '#!/usr/bin/env bash\nfoo=$(echo hi)\necho $foo\n' > bad.sh
   git add bad.sh
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *SC2086* ]]
 }
@@ -30,7 +30,7 @@ teardown() { teardown_tmp_repo; }
   mkdir -p hooks
   printf '#!/usr/bin/env bash\ncd /tmp\n' > hooks/pre-commit
   git add hooks/pre-commit
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *SC2164* ]]
 }
@@ -42,7 +42,7 @@ teardown() { teardown_tmp_repo; }
   printf '#!/usr/bin/env bash\necho clean\n' > good.sh
   git add good.sh
   printf '#!/usr/bin/env bash\nfoo=$(echo hi)\necho $foo\n' > untracked.sh
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *untracked.sh* ]]
   [[ "$output" == *SC2086* ]]
@@ -51,7 +51,7 @@ teardown() { teardown_tmp_repo; }
 @test "lint-shell: discovers an untracked extensionless script by shebang" {
   mkdir -p hooks
   printf '#!/usr/bin/env bash\ncd /tmp\n' > hooks/pre-push
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *SC2164* ]]
 }
@@ -63,7 +63,7 @@ teardown() { teardown_tmp_repo; }
   mkdir scratch
   printf '#!/usr/bin/env bash\nfoo=$(echo hi)\necho $foo\n' > scratch/ignored.sh
   printf '#!/usr/bin/env bash\ncd /tmp\n' > scratch/ignored-hook
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"1 files clean"* ]]
 }
@@ -101,10 +101,10 @@ plant_source_chain() {
 @test "lint-shell: a second run over an unchanged tree lints nothing and still reports clean" {
   wrap_shellcheck
   plant_source_chain
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   : > "$SC_LOG"
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"4 files clean (4 cached)"* ]]
   [ ! -s "$SC_LOG" ]
@@ -114,11 +114,11 @@ plant_source_chain() {
 @test "lint-shell: an edit relints the file and everything that sources it, however indirectly, and nothing else" {
   wrap_shellcheck
   plant_source_chain
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   : > "$SC_LOG"
   printf 'three=3\nexport three\n' >> lib2.sh
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   linted="$(grep -v '^-' "$SC_LOG" | sort | tr '\n' ' ')"
   [ "$linted" = "a.sh lib1.sh lib2.sh " ]
@@ -129,9 +129,9 @@ plant_source_chain() {
   wrap_shellcheck
   printf '#!/usr/bin/env bash\nfoo=$(echo hi)\necho $foo\n' > bad.sh
   printf '#!/usr/bin/env bash\necho clean\n' > good.sh
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -ne 0 ]
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -ne 0 ]
   [[ "$output" == *SC2086* ]]
   rm -rf "$SC_DIR"
@@ -140,18 +140,18 @@ plant_source_chain() {
 @test "lint-shell: a different shellcheck, or PLUGIN_DEV_GATE_FORCE, relints everything" {
   wrap_shellcheck
   plant_source_chain
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
 
   : > "$SC_LOG"
-  SC_VERSION_SUFFIX=other run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  SC_VERSION_SUFFIX=other run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   [ "$(grep -vc '^-' "$SC_LOG")" -eq 4 ]
 
-  run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   : > "$SC_LOG"
-  PLUGIN_DEV_GATE_FORCE=1 run "$PLUGIN_ROOT/scripts/lint-shell.sh"
+  PLUGIN_DEV_GATE_FORCE=1 run "$PLUGIN_ROOT/tools/lint-shell.sh"
   [ "$status" -eq 0 ]
   [ "$(grep -vc '^-' "$SC_LOG")" -eq 4 ]
   rm -rf "$SC_DIR"

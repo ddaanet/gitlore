@@ -194,7 +194,7 @@ teardown_file() {
 
   for gate in lint test-unit test-integration; do
     case "$gate" in
-      lint) runner="scripts/lint-shell.sh" ;;
+      lint) runner="tools/lint-shell.sh" ;;
       # The two bats gates reach theirs through the prolog's `run-suites`.
       *) runner="run-suites" ;;
     esac
@@ -209,7 +209,7 @@ teardown_file() {
   # `run-suites` is prolog text, which the dump above does not hold.
   run just_here --evaluate bash_prolog
   [ "$status" -eq 0 ]
-  [[ "$output" == *"scripts/run-bats-cached.sh"* ]]
+  [[ "$output" == *"tools/run-bats-cached.sh"* ]]
 }
 
 # A literal `*.bats` glob in a suite's code is what iterating over sibling

@@ -2,7 +2,7 @@
 
 The 400-line cap over every artifact a reader takes in at one go — a `docs/`
 node, a shell script, a hook, a bats suite — and the `oversized-file` check that
-makes it a gate. Enforced by `scripts/check-docs-links.py`, which ships nothing
+makes it a gate. Enforced by `tools/check-docs-links.py`, which ships nothing
 and gates this repository alone (D22).
 
 - **D55** — the 400-line cap is a context budget, so it binds scripts, hooks and
@@ -79,10 +79,10 @@ taken for `docs/` on the same terms.
 ## What the checker walks
 
 `discover` walks `docs/` for `.md`. `discover_sources` walks `SOURCE_DIRS` —
-`scripts`, `hooks`, `tests` — for `SOURCE_SUFFIXES`: `.sh`, `.bash`, `.bats`,
-`.py`. Every path from either walk goes through `check_size`, which blocks with
-`oversized-file` past `MAX_LINES`. `oversized-file` is named in the counter
-block whether or not it fired, like every other blocking check.
+`scripts`, `tools`, `hooks`, `tests` — for `SOURCE_SUFFIXES`: `.sh`, `.bash`,
+`.bats`, `.py`. Every path from either walk goes through `check_size`, which
+blocks with `oversized-file` past `MAX_LINES`. `oversized-file` is named in the
+counter block whether or not it fired, like every other blocking check.
 
 Shell under `plans/` is out of scope deliberately: a plan's scripts are run-once
 artifacts belonging to a finished job, and `plans/*/reports/` is not even

@@ -36,7 +36,7 @@ load helpers/justfile-gates
   [[ "$output" != *"tests/integration_"* ]]
   # The narrowing must take only the integration suites with it.
   [[ "$output" == *"tests/justfile_gates.bats"* ]]
-  [[ "$output" == *"scripts/run-bats-cached.sh"* ]]
+  [[ "$output" == *"tools/run-bats-cached.sh"* ]]
 
   run guard_input_files test-integration
   [ "$status" -eq 0 ]

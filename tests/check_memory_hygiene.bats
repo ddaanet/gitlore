@@ -18,7 +18,7 @@ CHECKER=
 
 setup() {
   setup_tmp_repo
-  CHECKER="$PLUGIN_ROOT/scripts/check-memory-hygiene.py"
+  CHECKER="$PLUGIN_ROOT/tools/check-memory-hygiene.py"
 }
 teardown() { teardown_tmp_repo; }
 
@@ -358,7 +358,7 @@ plant_fact() {
 }
 
 @test "discovery: the checker is executable" {
-  [ -x "$PLUGIN_ROOT/scripts/check-memory-hygiene.py" ]
+  [ -x "$PLUGIN_ROOT/tools/check-memory-hygiene.py" ]
 }
 
 @test "discovery: just precommit reaches the checker" {
