@@ -26,11 +26,28 @@ if [ -z "$stdout_val" ] && [ "${1:-}" = "--version" ]; then
   stdout_val="gh version mock 0.0.0 (mock build)"
 fi
 
-# `gh repo view <url> --json visibility -q .visibility` → GH_MOCK_VISIBILITY.
+# `gh repo view <url> --json visibility -q .visibility` answers per repository
+# from GH_MOCK_VISIBILITY_MAP, newline-separated `owner/repo=VISIBILITY` lines
+# (the target's github.com prefix and `.git` suffix are dropped before the
+# lookup), falling back to GH_MOCK_VISIBILITY for a target the map does not
+# name. A target neither names gets no answer, which gitlore reads as unknown.
 if [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ] && \
-   printf '%s\n' "$@" | grep -q 'visibility' && [ -n "${GH_MOCK_VISIBILITY:-}" ]; then
-  printf '%s\n' "$GH_MOCK_VISIBILITY"
-  exit 0
+   printf '%s\n' "$@" | grep -q 'visibility'; then
+  target="${3:-}"
+  target="${target#https://github.com/}"
+  target="${target#ssh://git@github.com/}"
+  target="${target#git@github.com:}"
+  target="${target%.git}"
+  while IFS= read -r entry; do
+    if [ -n "$entry" ] && [ "${entry%%=*}" = "$target" ]; then
+      printf '%s\n' "${entry#*=}"
+      exit 0
+    fi
+  done <<< "${GH_MOCK_VISIBILITY_MAP:-}"
+  if [ -n "${GH_MOCK_VISIBILITY:-}" ]; then
+    printf '%s\n' "$GH_MOCK_VISIBILITY"
+    exit 0
+  fi
 fi
 
 # `gh repo view <name> --json sshUrl -q .sshUrl` returns the configured remote URL

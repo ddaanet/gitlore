@@ -48,6 +48,13 @@ name=ddaanet
 description=Cross-project facts shared by all ddaanet repositories
 ```
 
+Give the url in the form the person pushes with. The tier keeps that url as its
+remote; the memory store's tracked `.gitmodules` records the `https://` form of
+a GitHub ssh url, so a recursive clone needs no GitHub SSH key. A tier that
+`gh` creates is private, and a private tier under a public repo breaks an
+anonymous recursive clone: the report then says so. Report it to the user;
+making a repository public is their call.
+
 Activation and precedence live in one file, `memory/.gitlore-tiers`: one tier
 name per line, file order is precedence (top wins), listed = active. The hook
 mounts the tier **and** activates it — appending its name to the bottom of

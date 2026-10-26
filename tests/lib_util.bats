@@ -102,6 +102,26 @@ EOF
   [ "$output" = "$(basename "$TMP_REPO")-memory" ]
 }
 
+@test "gitlore_github_https_url turns GitHub ssh forms into the https .git form" {
+  [ "$(gitlore_github_https_url "git@github.com:acme/project.git")" = "https://github.com/acme/project.git" ]
+  [ "$(gitlore_github_https_url "git@github.com:acme/project")" = "https://github.com/acme/project.git" ]
+  [ "$(gitlore_github_https_url "ssh://git@github.com/acme/project.git")" = "https://github.com/acme/project.git" ]
+  [ "$(gitlore_github_https_url "ssh://git@github.com/acme/project")" = "https://github.com/acme/project.git" ]
+  [ "$(gitlore_github_https_url "git@github.com:acme/project.git/")" = "https://github.com/acme/project.git" ]
+  [ "$(gitlore_github_https_url "git@github.com:acme/my.repo-memory.git")" = "https://github.com/acme/my.repo-memory.git" ]
+}
+
+@test "gitlore_github_https_url leaves every other url as given" {
+  local u
+  for u in "https://github.com/acme/project.git" "https://github.com/acme/project" \
+           "git@git.example.org:acme/project.git" "ssh://git@git.example.org/acme/project.git" \
+           "git://github.com/acme/project.git" "/srv/git/project.git" "./project.git" \
+           "git@github.com:project.git" "git@github.com:a/b/c.git" "git@github.com:acme/with space.git" \
+           "git@github.com:" ""; do
+    [ "$(gitlore_github_https_url "$u")" = "$u" ]
+  done
+}
+
 @test "gitlore_parent_visibility defaults to private with no origin" {
   run gitlore_parent_visibility
   [ "$status" -eq 0 ]

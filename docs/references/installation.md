@@ -217,6 +217,33 @@ review (FR 11).
 **On creation failure** (auth, quota, network, name collision): fall back to
 method 2 (copy-paste). Do not abort install.
 
+**The url `.gitmodules` records**
+
+The submodule's `remote.origin.url` keeps the url it was wired with — the one
+`gh repo view --json sshUrl` returned, or the one the person supplied — so
+pushes stay on that transport. The tracked `.gitmodules` records the https form
+(`https://github.com/<owner>/<repo>.git`), so a recursive clone, including
+Claude Code's `/plugin install`, needs no GitHub SSH key. Only a GitHub ssh url
+(`git@github.com:o/r[.git]`, `ssh://git@github.com/o/r[.git]`) is rewritten; an
+https url, another host and a local path are recorded as given.
+
+No script compares `.gitmodules`'s url with the remote's, so the two may differ
+in protocol. Every reader of `remote.origin.url` tests only for empty or the
+local-only placeholder (`gitlore_is_placeholder_url`); the placeholder is the
+one `.gitmodules` value that is matched, by basename, because
+`git submodule sync` absolutizes it on the way into `remote.origin.url`. A
+`git submodule sync` or a fresh clone sets the submodule's remote to the https
+`.gitmodules` url; that is the clone's own remote, and pushing from it needs
+https credentials. Existing installs keep the url they have; nothing rewrites a
+`.gitmodules` after the install that wrote it.
+
+A private repository anywhere in the chain aborts an anonymous recursive clone
+whatever the url form. When the person supplies the memory remote (url mode) and
+`gh` confirms the parent public and that remote private, install prints one
+stderr line naming the remote. Auto mode creates the remote with the parent's
+visibility and cannot produce the pair. A visibility `gh` cannot read prints
+nothing, and install never changes a repository's visibility.
+
 **Push semantics**
 
 Per NFR5 (double-commit semantics): memory `live` is pushed before parent push
