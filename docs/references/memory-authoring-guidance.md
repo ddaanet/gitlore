@@ -1,4 +1,4 @@
-# Memory authoring guidance — decisions D47, D48
+# Memory authoring guidance — decisions D47, D48, D69
 
 Where the guidance for writing a fact and curating the index lives and where it
 is invoked: a skill that fires on the write, a command a human starts, and the
@@ -11,7 +11,8 @@ frontmatter, the routing-key advisories (D39) and the drift sweep (D40) are in
 - The authoring guidance — **D47** authoring guidance is a skill and curation is
   a command, shipped by the plugin rather than held as memories · **D48** the
   skill is invoked by directive at the three moments that act on facts already
-  written
+  written · **D69** the gate reads an owned-projects inventory and the approval
+  summary answers an existence question per new fact
 
 ---
 
@@ -123,6 +124,36 @@ fires on the migrating branch and not the scaffold branch. Whether the agent
 invokes the skill on being told to is agent behaviour, and belongs to the eval
 tier (NFR9).
 
+**D69 — The memory gate reads an owned-projects inventory, and the approval
+summary answers an existence question per new fact**
+
+Measured over 243 approval rounds, 14% redirected a fact's destination and 6%
+rejected a fact outright. A reviewer holding only the written rules matched most
+fact-to-skill moves and none of the moves to a tool, hook or template, and
+reproduced almost none of the rejections.
+
+**What the owners list lacked was inventory.** Question 2 of the skill names the
+kinds of owner but not which projects exist, that my human partner owns them,
+that a fix there beats a note, or that a sibling's skill body or agent
+definition can hold the fact. The inventory is the fact `owned-projects.md` at
+the root of each mounted shared tier, read by name: `<mempath>` from
+`git config --file .gitmodules submodule.gitlore-memory.path`, the tiers from
+`<mempath>/.gitlore-tiers`, a tier without the file skipped. It has no index
+line, because the only moment that needs it is question 2, which the skill
+fires; an index line would spend capped bytes in every session to route to a
+fact one pass reads. A project the inventory does not list is asked about at the
+memory gate and nowhere else, and the answer is a row added to the inventory in
+the same memory change, so the question is asked once. The detail is the skill's
+`references/owner-inventory.md`.
+
+**The rejections came from questions the skill already asks.** The incident and
+the unaided-reach questions did not produce a verdict when stated as rules; they
+did when applied to a named fact by a reader who doubts it. The clause's **New**
+paragraph therefore states, per fact, the incident that produced it and why a
+reader would not reach it unaided, beside what prompted writing it now. Handoff
+wraps the clause verbatim, so the change reaches its gates unedited. Whether the
+paragraph moves the agent's verdict is agent behaviour and untested.
+
 ## Rejected alternatives
 
 **A `PreToolUse` deny on writes under `memory/`** to inject the authoring rules
@@ -139,3 +170,22 @@ notice is the right altitude (D47).
 description is injected every session exactly as an index line is, so the move
 would free the capped index only to spend the same bytes uncapped; both triggers
 are computable, so neither description needs routing surface (D47).
+
+**Listing the sibling repositories' plugins at each gate** rather than holding a
+list. The list never drifts, and costs a sweep of every sibling's plugins, hooks
+and agents on every gate, for an answer that changes when a project is created
+(D69).
+
+**The route alone, with no inventory.** Naming the `inbox/` route without saying
+which projects are owned leaves the agent to guess modifiability, which is the
+gap the measured redirections show (D69).
+
+**An index line for the inventory fact.** The index is capped and some stores
+already exceed the loader's truncation size; the fact is read by name at one
+moment, so a line would pay every session for a fetch the skill makes anyway
+(D69).
+
+**A general memory reviewer.** A blind reviewer holding the written rules
+reproduced few redirections and almost no rejections; a second agent with the
+same rules adds a round without the inventory or the per-fact question that
+carried the missing signal (D69).

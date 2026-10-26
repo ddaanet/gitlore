@@ -20,7 +20,8 @@ and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
 gitlore's *composition* of the root index. The mechanism is a subsystem rather
 than a single call, so its decisions are recorded individually as
-**D26–D40, D42–D44, D47, D48, D52 and D57**, across this node and five siblings:
+**D26–D40, D42–D44, D47, D48, D52, D57 and D69**, across this node and five
+siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -40,7 +41,8 @@ than a single call, so its decisions are recorded individually as
 - The authoring guidance, in
   [memory-authoring-guidance.md](memory-authoring-guidance.md) — **D47**
   authoring guidance as a skill, curation as a command · **D48** its invocation
-  at the moments that act on facts already written
+  at the moments that act on facts already written · **D69** the owned-projects
+  inventory and the per-fact existence question at the gate
 - Stores and merges, in [tier-stores.md](tier-stores.md) — **D42** tier lockstep
   · **D43** tier pinning · **D44** tier merges. All three assume the
   detached-at-`live` branch model, which is D41, in

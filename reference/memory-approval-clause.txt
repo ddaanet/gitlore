@@ -13,7 +13,8 @@ at, so its changes are already implied. Template:
 
     <subject line, no conventional-commit prefix>
 
-    **New <tier>/<slug>:** what the fact records, and what prompted writing it
+    **New <tier>/<slug>:** what the fact records; the incident that produced
+    it; why a reader would not reach it unaided; and what prompted writing it
     now rather than earlier.
 
     **Update <tier>/<slug>:** what the wording claimed before, what it claims

@@ -216,7 +216,7 @@ the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
 D57) in [index-composition.md](references/index-composition.md), the
 authoring-time sync (D38–D40) in
 [index-authoring-sync.md](references/index-authoring-sync.md), the authoring
-guidance with its invocation (D47, D48) in
+guidance with its invocation and its owner inventory (D47, D48, D69) in
 [memory-authoring-guidance.md](references/memory-authoring-guidance.md), the
 tier stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md),
 the repair of an arriving index and the merged-index gate (D52) in
@@ -247,7 +247,10 @@ mechanical repair of a merge synthesis · repairing only when every problem name
 the carrier · a continuation that commits a defective merged index uncomposed ·
 a scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
 directories on the next repair (tier-arrival-repair.md) · leaving the
-pointer-removal rule to recall from D36 (index-drift-fixes.md).
+pointer-removal rule to recall from D36 (index-drift-fixes.md) · listing the
+sibling repositories' plugins at each gate instead of holding a list · the route
+alone, with no inventory · an index line for the inventory fact · a general
+memory reviewer (memory-authoring-guidance.md).
 
 **Artifact size** — the 400-line cap over everything a reader takes in at one
 go, and the check that gates it.

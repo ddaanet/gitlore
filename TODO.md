@@ -1,12 +1,9 @@
-## Open decisions
-
-- Six inbox briefs under `inbox/` (https-submodule-urls, launcher-memory-path-containment, launcher-shim-second-sighting, memory-gate-owner-inventory-and-existence, orphan-report-fix-recipe, write-https-urls): triage which to take.
-- `just resume-release` is not in `sandbox.excludedCommands` (unlike `just release *`), so it reached github.com only with `dangerouslyDisableSandbox`. Decide whether to add a `just resume-release` exclusion.
-
 ## Remaining
 
-- `MEMORY.md` is at 97% of its 25600-byte budget (loader truncates past 24.4KB): run `/gitlore:index-audit`.
-- `memory/ddaanet/simplicity-no-unneeded-code.md` links `[[removing-cleanly]]`, which matches no memory file; likely meant the `craft:removing-cleanly` skill.
-- `tests/install_remote.bats` sets `GITLORE_HOME` for only one test; call `isolate_home` (`tests/helpers/setup.bash`) in its `setup`.
+- Probe whether CC 2.1.310 honors autoMemoryDirectory from trusted project settings (D10 may be stale; see the launcher containment notes in docs/references/memory-redirect.md).
+- Fix the dangling `[[removing-cleanly]]` link in `memory/ddaanet/simplicity-no-unneeded-code.md` (likely means the `craft:removing-cleanly` skill); memory commit needs an approved summary.
+- Simplification (my human partner's plan): the agent commits memory directly via heredoc + script, with no hook commits, no memory pre-commit approval gate and no SessionStart ff; only an explicit `gitlore:merge`. Record its D-entry, noting G3 as moot.
+- Postponed: propose a design for the silent tier-line loss. A line deleted from a tier index only, while root has it and HEAD carries it, is accepted by gitlore_compose_down's union merge, and no report fires.
+- Plugin-creation (arriving from another session) should add new projects to `ddaanet/owned-projects.md`; wire it in when it lands.
 - Delete each `gitlore/archive/2026-10-15` branch (tier and memory store) on or after 2026-11-15.
-- Simplification (my human partner's plan): agent commits memory directly via heredoc + script, no hook commits, no memory pre-commit approval gate, no SessionStart ff — explicit `gitlore:merge` only. G3 (identity scrub) is moot under it; record that in the simplification's D-entry.
+- Push memory (owned-projects commit and the https tier-url commit) with the next parent push, via /gitlore:push first.

@@ -57,6 +57,13 @@ nobody tracks.
      input named, at the moment of the failure, and costs nothing on every
      unrelated session. A memory restating what a hook's own stderr already
      says reaches the reader later and says it worse.
+   - **A sibling project's skill body or agent definition**, not only its name
+     and description. A fix at an owner my human partner owns is preferred to
+     a note; a brief in the owning repo's `inbox/` is a destination in its own
+     right. Read the inventory (`owned-projects.md` in each mounted tier) here;
+     an owner it does not list is asked about at the memory gate and recorded
+     in the same change
+     ([owner-inventory.md](references/owner-inventory.md)).
    Grep the owner for the load-bearing terms before accepting a pointer that
    claims coverage.
 3. **Would the reader reach it unaided?** A fact restating common sense, or one

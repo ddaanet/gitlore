@@ -222,10 +222,11 @@ git and decides (D7).
   adopt, and publishes nothing (D43, D49, D52); `recall`, which fetches bodies
   into context mid-task with no hook, no request file and no state (D18); and
   `memory-writing`, whether a learning becomes a fact, what it says, which tier
-  it lands in, whether its line routes, and where it is invoked (D47, D48). Each
-  is a skill rather than a command because each has an entry no user types — a
-  hook's stderr, a session start, an ending session, a token in a tool result, a
-  write under `memory/`. Steps in
+  it lands in, whether its line routes, which sibling project owns it per the
+  owned-projects inventory, and where it is invoked (D47, D48, D69). Each is a
+  skill rather than a command because each has an entry no user types — a hook's
+  stderr, a session start, an ending session, a token in a tool result, a write
+  under `memory/`. Steps in
   [merge-and-resolve.md](references/merge-and-resolve.md).
 - **Claude Code hooks** — `SessionStart` is the self-healing pass and does the
   most work; it is also where a new worktree's memory worktree is created,
