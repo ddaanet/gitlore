@@ -191,14 +191,14 @@ assert_injected() {
 @test "refuses a repo control directory as the memory path" {
   contain_repo .claude
   run_both_placements hi
-  assert_refused "names a .git, .claude or .gitlore directory"
+  assert_refused "names a control directory"
 }
 
 # Compared case-insensitively: on macOS `.GIT` is `.git`.
 @test "refuses a control directory spelled in another case" {
   contain_repo .GIT/x
   run_both_placements hi
-  assert_refused "names a .git, .claude or .gitlore directory"
+  assert_refused "names a control directory"
 }
 
 @test "refuses a memory path the index holds no submodule gitlink for" {
@@ -241,6 +241,46 @@ assert_injected() {
   ln -s "$TMP_REPO/not-yet" "$CROOT/memory"
   run_both_placements hi
   assert_refused "crosses a symlink that names no directory"
+}
+
+# `.claude/memory` is the documented alternative layout (docs/design.md,
+# Memory Submodule); every other `.claude/<dir>` is something Claude Code loads.
+@test "injects the .claude/memory layout before the submodule is initialised" {
+  contain_repo .claude/memory
+  run_both_placements hi
+  assert_injected .claude/memory
+}
+
+@test "injects the .claude/memory layout once its directory exists" {
+  contain_repo .claude/memory
+  mkdir "$CROOT/.claude/memory"
+  run_both_placements hi
+  assert_injected .claude/memory
+}
+
+@test "refuses a .claude directory other than .claude/memory" {
+  contain_repo .claude/skills
+  run_both_placements hi
+  assert_refused "names a control directory"
+}
+
+# A parent merge where both sides moved the memory gitlink leaves it unmerged,
+# one index entry per stage — exactly when the user launches claude to resolve
+# the merge.
+@test "injects while the memory gitlink is unmerged after a parent merge conflict" {
+  contain_repo memory
+  git add .gitmodules
+  git -c user.name=t -c user.email=t@t commit -q -m base
+  git checkout -q -b side
+  git update-index --cacheinfo "160000,2222222222222222222222222222222222222222,memory"
+  git -c user.name=t -c user.email=t@t commit -q -m side
+  git checkout -q main
+  git update-index --cacheinfo "160000,3333333333333333333333333333333333333333,memory"
+  git -c user.name=t -c user.email=t@t commit -q -m main
+  run -1 git -c user.name=t -c user.email=t@t merge -q side
+  [ "$(git ls-files -s -- memory | wc -l)" -eq 3 ]
+  run_both_placements hi
+  assert_injected memory
 }
 
 @test "accepts a memory directory whose name contains two dots" {

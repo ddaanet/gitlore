@@ -79,34 +79,43 @@ exec "$real" --settings "$json" "$@"
   `autoMemoryDirectory`, so a memory directory of `.claude` would let a session
   rewrite its own hooks unprompted. The shim therefore injects only the memory
   submodule's own path: strictly inside the repo, outside its control
-  directories. `git config --file` returns a `.gitmodules` path verbatim —
-  `../x`, `a/../..` and `/etc/x` alike; git's own `..` rejection applies when it
-  adds a submodule, not on a read. Claude Code then takes any absolute path,
-  normalizes its `..` away, and neither resolves symlinks nor compares it with
-  the project (read in the CC 2.1.310 resolver). The checks run cheapest first.
-  A path with a control character is refused without being shown, since the
-  refusal line reaches the terminal; every other refusal prints the path with
-  `printf '%s'`. Then lexical, because before `git submodule update --init` the
-  memory directory does not exist and the shim still injects it: an absolute
-  `mempath` is refused, and so is any `..` or `.` *component* — matched as
-  `/../` or `/./` in `/$mempath/`, so a name such as `my..memory` passes — and
-  any `.git`, `.claude` or `.gitlore` component, compared case-insensitively
-  because macOS filesystems are. Then physical: the nearest existing directory
-  on the memory path (the memory directory itself once initialised) is resolved
-  with `cd … && pwd -P` and must sit under the physical root, never be the root
-  itself once it is the memory directory, and not resolve into a control
-  directory. That catches a symlinked memory directory and a symlinked parent
-  that a not-yet-created memory directory would land under. A symlink met on the
-  way up that names no directory is refused outright. Last, the one git call:
-  `git ls-files -s` on the literal path must return a single mode-160000 gitlink
-  entry for exactly `mempath`. A fresh clone has the gitlink before the
+  directories — `.git`, `.gitlore`, and `.claude` except `.claude/memory`, the
+  documented alternative layout (design.md, Memory Submodule).
+  `git config --file` returns a `.gitmodules` path verbatim — `../x`, `a/../..`
+  and `/etc/x` alike; git's own `..` rejection applies when it adds a submodule,
+  not on a read. Claude Code then takes any absolute path, normalizes its `..`
+  away, and neither resolves symlinks nor compares it with the project (read in
+  the CC 2.1.310 resolver). The checks run cheapest first. A path with a control
+  character is refused without being shown, since the refusal line reaches the
+  terminal; every other refusal prints the path with `printf '%s'`. Then
+  lexical, because before `git submodule update --init` the memory directory
+  does not exist and the shim still injects it: an absolute `mempath` is
+  refused, and so is any `..` or `.` *component* — matched as `/../` or `/./` in
+  `/$mempath/`, so a name such as `my..memory` passes — and any `.git` or
+  `.gitlore` component, and any `.claude` component not followed directly by
+  `memory` — so `.claude/memory` passes while `.claude` itself and
+  `.claude/skills`, `commands`, `agents` or `hooks`, which Claude Code loads, do
+  not. All compared case-insensitively, because macOS filesystems are. Then
+  physical: the nearest existing directory on the memory path (the memory
+  directory itself once initialised) is resolved with `cd … && pwd -P` and must
+  sit under the physical root; that resolved directory plus the part of the path
+  not created yet must not be the root itself and must pass the same
+  control-directory rule. That catches a symlinked memory directory and a
+  symlinked parent that a not-yet-created memory directory would land under. A
+  symlink met on the way up that names no directory is refused outright. Last,
+  the one git call: `git ls-files -s` on the literal path must return only
+  mode-160000 gitlink entries for exactly `mempath` — one, or one per stage
+  while a parent merge leaves the gitlink unmerged, which is when the user
+  launches claude to resolve it. A fresh clone has the gitlink before the
   submodule is initialised, so the uninitialised case still injects, while a
   plain directory, a non-normalized spelling (`./memory`, `memory/`) and any
-  path git refuses to index are refused. A refusal is the one non-silent
-  passthrough: one `gitlore:` line on stderr names the path and the reason, then
-  the real `claude` runs with the original arguments, no `--settings` and
-  `GITLORE_LAUNCHED` unset — so the `SessionStart` guard also reports the
-  unredirected launch, and with both placements on `PATH` each prints the line.
+  path git refuses to index are refused, as is a path holding `"` or `\`, which
+  git C-quotes in that output whatever `core.quotePath` says. A refusal is the
+  one non-silent passthrough: one `gitlore:` line on stderr names the path and
+  the reason, then the real `claude` runs with the original arguments, no
+  `--settings` and `GITLORE_LAUNCHED` unset — so the `SessionStart` guard also
+  reports the unredirected launch, and with both placements on `PATH` each
+  prints the line.
 
 **Placement A — repo-local, direnv (default).** `/gitlore:install` emits two
 **committed** files: `.gitlore/bin/claude` (the shim) and `.envrc`. The `.envrc`
@@ -195,6 +204,14 @@ harmless: the root itself, `.git`, `.claude` and `.gitlore` all sit under it,
 and auto-allowed writes there reach hooks and settings. The gitlink requirement
 pins the path to the submodule, and the component checks cover the spellings git
 would index.
+
+**Refusing every `.claude` component.** Refuses the documented `.claude/memory`
+layout. Writes auto-allowed under `.claude/memory/` reach nothing Claude Code
+loads; only `.claude` itself and its other directories do.
+
+**Requiring exactly one index entry.** Refuses the unmerged gitlink a parent
+merge conflict leaves, one entry per stage, just when the user opens a session
+to resolve it.
 
 **A `*..*` glob for traversal.** Rejects legitimate names such as `my..memory`
 and adds nothing the component match does not already catch.
