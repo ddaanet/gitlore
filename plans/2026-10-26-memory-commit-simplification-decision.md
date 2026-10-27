@@ -98,12 +98,13 @@ Point":
 > section for a store with nothing to commit or not mounted, or a store named
 > twice is refused the same way, nothing committed. Root changes confined to
 > `MEMORY.md` need no section, since an index line moves with its fact: alone
-> they get the canned index commit the merge path makes, and beside a `memory`
-> section they ride in root's own commit. No message file exists at any point.
-> Guards (exit 0): not a gitlore repo / no memory submodule / submodule worktree
-> absent / memory clean-and-synced. Dirty with the store or any mounted tier
-> mid-merge → the stale-merge guard's directive (exit 1), ahead of everything
-> else.
+> they get a plain commit of their own whose canned message names the tiers
+> whose index lines it captures (`Index lines from <tier>, …`), distinct from
+> the merge path's bookkeeping message, and beside a `memory` section they ride
+> in root's own commit. No message file exists at any point. Guards (exit 0):
+> not a gitlore repo / no memory submodule / submodule worktree absent / memory
+> clean-and-synced. Dirty with the store or any mounted tier mid-merge → the
+> stale-merge guard's directive (exit 1), ahead of everything else.
 
 Decision paragraph, after D58:
 

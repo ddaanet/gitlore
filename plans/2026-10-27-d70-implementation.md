@@ -61,9 +61,10 @@ at any boundary.
   committed, pointing at `/gitlore:commit`) when a store with changes has no
   section, a section names a store with nothing to commit or not mounted, or a
   store appears twice. Root changes confined to `MEMORY.md` need no section,
-  since an index line moves with its fact: alone they get the canned index
-  commit the merge path makes, and beside a `memory` section they ride in root's
-  own commit.
+  since an index line moves with its fact: alone they get a plain commit of
+  their own whose canned message names the tiers whose index lines it captures
+  (`Index lines from <tier>, …`), distinct from the merge path's bookkeeping
+  message, and beside a `memory` section they ride in root's own commit.
 - Red first: an empty and an all-whitespace stdin each exit 2 with nothing
   committed; a headerless summary is refused when only the tier changed, so
   nothing lands in the shared store; each refusal arm of the section check; a
