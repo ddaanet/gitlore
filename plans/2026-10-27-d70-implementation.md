@@ -34,7 +34,7 @@ at any boundary.
   paragraphs grouped under a `== <tier> ==` / `== memory ==` header per store
   when more than one store changed), then the protocol — show the summary, end
   the turn, and on the user's approving reply run
-  `gitlore-commit-memory -F - <<'EOF'` from the repo root with the approved text
+  `gitlore-commit-memory <<'EOF'` from the repo root with the approved text
   verbatim. The skill body becomes the clause's only copy. Tests: the skill
   ships, and its body carries the review directive and the section format.
 - Invariant: the keys still work; nothing yet calls the names or the skill.
@@ -43,15 +43,18 @@ at any boundary.
 
 - Pre: bare invocation commits on an approval file judged by freshness; the sync
   restamps the message file on failure.
-- Post: `-m`, `-F <file>` or `-F -` required; absent, empty or all-whitespace
-  summary exits 2 before any store access, the usage error pointing at
-  `/gitlore:commit`; every other refusal that needs a summary does too. The
-  summary goes to a `mktemp` file passed as an argument through
-  `resolve-sync-memory.sh` / `resolve-sync-tiers.sh` as the `-F` operand of
-  every commit the run makes, removed on every exit. Freshness arm, every
-  `touch "$msgfile"`, the restamp block and `rm -f "$msgfile"` gone;
-  `gitlore_commit_msg_file`, `gitlore_commit_msg_freshness` gone from `util.sh`,
-  `gitlore_approval_present` reduced to a string check or inlined.
+- Post: the summary is read from stdin, the only input; `-m`, `-F` and bare mode
+  are gone. A terminal on stdin, or an empty or all-whitespace summary, exits 2
+  before any store access, the usage error pointing at `/gitlore:commit`; every
+  other refusal that needs a summary does too. No message file exists at any
+  point: each commit reads its store's section, extracted from the summary
+  string by a function (bash 3.2 has no associative arrays), on
+  `git commit -F -`; a prepared merge keeps git's own `MERGE_MSG`. This
+  supersedes the draft's `-F -` call syntax and its temporary-file transport.
+  Freshness arm, every `touch "$msgfile"`, the restamp block and
+  `rm -f "$msgfile"` gone; `gitlore_commit_msg_file`,
+  `gitlore_commit_msg_freshness` gone from `util.sh`, `gitlore_approval_present`
+  reduced to a string check or inlined.
 - Post (per-store messages): a summary with no `== <store> ==` line is one
   message, valid only when one store has changes. Otherwise the script splits it
   on header lines (`memory` for root, a tier's mount name for a tier) and
@@ -61,14 +64,14 @@ at any boundary.
   mounted, or a store appears twice. Tier changes alone give root the canned
   index commit the merge path makes; with root changes too, the index update
   rides in root's own commit.
-- Red first: bare `commit-memory.sh` and whitespace-only `-F -` each exit 2 with
-  nothing committed; each refusal arm of the section check; a two-store run
-  lands each section in its own store and no other store's text; no file left
-  under `.claude/` after a successful run or a refusal. Suites seeding the
-  message file are rewritten to pass `-F` (list in the removals file);
+- Red first: an empty and an all-whitespace stdin each exit 2 with nothing
+  committed; each refusal arm of the section check; a two-store run lands each
+  section in its own store and no other store's text; no file left under
+  `.claude/` after a successful run or a refusal. Suites seeding the message
+  file are rewritten to pipe the summary on stdin (list in the removals file);
   `commit_memory_retry.bats` goes.
 - Invariant: the trigger-file batch still works until commit 3 — it now passes
-  its message file with `-F` and keeps its own trigger bookkeeping.
+  its message file on stdin and keeps its own trigger bookkeeping.
 
 ## 3. Hook commit path and store gate retire
 
@@ -126,7 +129,7 @@ gate in the background and commits.
 ## Dogfood (same day)
 
 `just dogfood`, then in a fresh session in this repo: write a fact, approve a
-summary, and confirm `gitlore-commit-memory -F -` resolves on PATH and commits;
+summary, and confirm `gitlore-commit-memory` resolves on PATH and commits;
 confirm a stale `pre-commit` wrapper in `memory/` is removed at session start.
 Then `just evals`, in the background, before the branch review.
 
