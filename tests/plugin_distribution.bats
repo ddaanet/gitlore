@@ -336,3 +336,29 @@ load helpers/setup
   [ "$status" -eq 0 ]
   [ "$output" = "0" ]
 }
+
+# The commit skill is self-triggering: a pending memory change at the end of a
+# task, or a request to commit memory, must reach it from context alone.
+@test "distribution: commit skill ships with a self-trigger description and Bash+Skill tools" {
+  skill="$PLUGIN_ROOT/skills/commit/SKILL.md"
+  [ -f "$skill" ]
+  fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
+  grep -qE '^name:[[:space:]]*commit[[:space:]]*$' <<<"$fm"
+  grep -E '^allowed-tools:' <<<"$fm" | grep -q 'Bash'
+  grep -E '^allowed-tools:' <<<"$fm" | grep -q 'Skill'
+  desc="$(grep -E '^description:' <<<"$fm")"
+  grep -qi 'pending' <<<"$desc"
+  grep -qi 'memory' <<<"$desc"
+  grep -qi 'commit' <<<"$desc"
+}
+
+@test "distribution: commit skill body carries the review directive, section format and call" {
+  skill="$PLUGIN_ROOT/skills/commit/SKILL.md"
+  [ -f "$skill" ]
+  # shellcheck disable=SC2016 # literal backticks
+  grep -qF 'invoke the `gitlore:memory-writing` skill' "$skill"
+  grep -qxF '== memory ==' "$skill"
+  grep -qF '== <tier> ==' "$skill"
+  grep -qF 'gitlore-commit-memory' "$skill"
+  grep -qF "<<'EOF'" "$skill"
+}

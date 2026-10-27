@@ -35,7 +35,7 @@ export PLUGIN_DEV_GATE_TOOLS := "bats --version\nshellcheck --version\njq --vers
 # top-level entry must be declared here or in that suite's exclusion list.
 #
 # No path contains whitespace, so word-splitting the interpolation is intended.
-precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules hooks justfile plugin-dev reference scripts tests tools"
+precommit_inputs := ".claude-plugin .gitignore .gitlore .gitmodules bin hooks justfile plugin-dev reference scripts tests tools"
 
 # The evals reach agents, commands and skills through the installed plugin.
 # Those stay out of `precommit_inputs` because the full bats suite is 7m30s
@@ -47,7 +47,7 @@ evals_inputs := precommit_inputs + " agents commands skills"
 # its own inputs. The overlap with `precommit_inputs` (hooks/scripts/tests)
 # costs a redundant 2s run and buys independence: narrowing `precommit_inputs`
 # later cannot silently uncover this suite's assertions.
-distribution_inputs := ".gitmodules agents commands hooks scripts skills tests/helpers tests/plugin_distribution.bats"
+distribution_inputs := ".gitmodules agents bin commands hooks scripts skills tests/helpers tests/plugin_distribution.bats"
 
 # Suites that read other suites' contents — one that greps or sources a
 # sibling `.bats` file, rather than merely listing names. Its per-suite key in
