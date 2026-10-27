@@ -1,12 +1,14 @@
 # Draft — D70, the memory commit simplification
 
 For review. Records my human partner's decision: the agent commits memory
-itself, through `commit-memory.sh` with the approved summary on a quoted
-heredoc, after the user approves that summary in conversation; no hook commits
-authoring content and no git hook gates a memory commit. D58 (the commit is the
-agent's own act) and D59 (SessionStart moves memory nowhere) are already
-recorded and true, and are not part of this entry. The entry is recorded when
-the code in section 5 is true.
+itself, through `gitlore-commit-memory` (the plugin `bin/` name for
+`commit-memory.sh`) with the approved summary on a quoted heredoc, after the
+user approves that summary in conversation; no hook commits authoring content
+and no git hook gates a memory commit. The `gitlore.commitCommand`,
+`gitlore.pushCommand` and `gitlore.mergeCommand` discovery keys retire in favour
+of the three `bin/` names. D58 (the commit is the agent's own act) and D59
+(SessionStart moves memory nowhere) are already recorded and true, and are not
+part of this entry. The entry is recorded when the code in section 5 is true.
 
 ## 1. Number
 
@@ -46,9 +48,11 @@ Conclusion line:
 
 ```markdown
 - **D70** — the agent commits memory itself, with the approved summary as
-  `commit-memory.sh -F -` on a quoted heredoc; no hook makes an authoring
+  `gitlore-commit-memory -F -` on a quoted heredoc; no hook makes an authoring
   commit, no git hook gates one, and the summary travels with the call, never
-  through a file the agent writes
+  through a file the agent writes; callers reach the three entry points by the
+  plugin `bin/` names `gitlore-commit-memory`, `gitlore-push-memory` and
+  `gitlore-merge-memory`, and the `gitlore.*Command` keys retire
 ```
 
 *Rejected:* additions to the group's line:
@@ -58,7 +62,8 @@ an intent file and a `PostToolBatch` hook as a fallback for a denied call · a
 submodule `pre-commit` gate behind the conversational approval · a bare
 `commit-memory.sh` retrying on an approval left on disk · the summary
 transported through a well-known path in the parent working tree · unsetting
-`GIT_AUTHOR_*` and `GIT_COMMITTER_*` before every store commit
+`GIT_AUTHOR_*` and `GIT_COMMITTER_*` before every store commit · keeping the
+`gitlore.*Command` discovery keys alongside the `bin/` names
 ```
 
 The commit-gate group's existing *Rejected:* items move with them:
@@ -98,7 +103,7 @@ Decision paragraph, after D58:
 >
 > The agent summarizes the pending changes, shows the summary, ends its turn,
 > and once the user's reply approves it runs
-> `bash "$(git config gitlore.commitCommand)" -F - <<'EOF'` with the summary as
+> `gitlore-commit-memory -F - <<'EOF'` from the repo root with the summary as
 > the heredoc body. That is the whole commit protocol. No hook commits authoring
 > content: the `PostToolBatch` path that committed on a trigger file is gone,
 > and so is the gate inside each store that admitted only commits carrying a
@@ -144,6 +149,35 @@ Decision paragraph, after D58:
 > (D59), `add-tier-batch.sh` commits only the seed of a tier it is creating, in
 > a scratch repository before any clone mounts it, and the index hooks write
 > files without committing them.
+>
+> **Callers reach the entry points by name, not by a config key.** The plugin
+> ships `bin/gitlore-commit-memory`, `bin/gitlore-push-memory` and
+> `bin/gitlore-merge-memory`, each a thin `exec` of `scripts/commit-memory.sh`,
+> `scripts/push-memory.sh` or `scripts/merge-memory.sh` resolved from the file's
+> own location. Claude Code puts each enabled plugin's `bin/` on the Bash tool's
+> PATH: a session's PATH holds
+> `~/.claude/plugins/cache/ddaanet/autodrive-handoff/0.18.0/bin`, a versioned
+> cache path only Claude Code knows, and subagents inherit it. The
+> `gitlore.commitCommand`, `gitlore.pushCommand` and `gitlore.mergeCommand` keys
+> existed for exactly those callers — the `handoff` plugin and the agent's own
+> Bash, which have no `CLAUDE_PLUGIN_ROOT` (D16's "Discovery via
+> `gitlore.commitCommand`", the push "Discovery" paragraph, and D20's skill
+> body, which makes its one call through `gitlore.pushCommand`). gitlore's own
+> hooks have the variable and never read the keys, and they keep calling
+> `$PLUGIN_ROOT/scripts/…`: a hook that calls a bare `bin/` name works in
+> dogfood, where the shim sets PATH on the whole process, and may fail once
+> released. So the keys retire with their seeding in
+> `scripts/install/write-settings.sh`, their re-pin at `SessionStart`, and D16's
+> advice that a caller check the resolved path is executable. Staleness is
+> unchanged: PATH is fixed at session start and the key was re-pinned at session
+> start, so a plugin update mid-session leaves either one naming the old cache
+> path until the next session. A disabled plugin makes the name "command not
+> found"; whether gitlore manages memory in a repo is still read from the memory
+> submodule registration in `.gitmodules` (FR12), never from the command's
+> existence. The in-repo dogfood session gets the same names:
+> `plugin-dev/bin/claude` appends `<root>/dist/plugin/bin` to PATH
+> unconditionally, and `just dogfood` ships `bin/` there once `dist.include`
+> lists it.
 
 The orientation argument moves here from D12, as the paragraph after "No gate
 inside the store", lightly re-framed: the orientation paragraph of
@@ -190,125 +224,22 @@ Rejected alternatives paragraphs, appended to the node's section:
 > `PostToolBatch` hooks run under Claude Code with no git operation around them.
 > An identity exported in the user's own shell is their identity, not a leak.
 > The scrub guards a state nothing produces (D70).
+>
+> **Keeping the `gitlore.*Command` discovery keys alongside the `bin/` names.**
+> Every caller the keys served runs in the Bash tool, where the names already
+> resolve, and the keys go stale exactly when PATH does. Kept, they are a second
+> discovery path to the same script, with a seed at install, a re-pin every
+> session, an executable check every caller is told to make, and tests for each.
+> The one caller they reach that PATH does not is a human in a terminal outside
+> Claude Code, and the commit there is not the human's path: it is the agent's
+> act (D58), and push and merge are skills (D20, D43).
 
 ## 5. What becomes false, and what has to go
 
-### Decisions removed from the index
-
-- **D4** (file handshake; presence is approval) — inverts: nothing the agent
-  writes is an approval signal. Its rejected items move per section 3.
-- **D12** (submodule-side gate) — the hard gate retires; the orientation half
-  moves into D70 (section 4).
-- **D53** (report-only guard arms do not restamp) — no restamp exists.
-- **D54** (failure-time restamp blessing a concurrent write) — no restamp
-  exists. The residual it accepted on the success path (freshness read before
-  the `add -A`) disappears with freshness; a write another session lands mid-run
-  is committed under the summary, which is the case D54's last sentence already
-  places outside what an approval speaks for.
-- **D56** (batch retry judged by freshness) — no batch, no bare retry.
-
-### Decision lines and node paragraphs edited
-
-- `decisions.md` group "Memory entry points", D58 line — unchanged; its node
-  paragraph's opening ("`commit-memory.sh` — directly, or through the trigger
-  file `memory-commit-batch.sh` acts on — is the one commit path") drops the
-  trigger clause.
-- `memory-entry-points.md` D16 "Arg-driven, not file-driven" — keeps the
-  `git commit`-shaped contract; loses "The message file stays purely the
-  hook↔commit IPC handshake (D4)", the whole freshness / bare-invocation passage
-  and "the mtime gate continues to protect the non-interactive trigger-file
-  path". The approval rests on the caller's contract, full stop. D16's
-  motivating paragraph ("a naked submodule commit is blocked by the D12 gate")
-  loses the D12 clause.
-- `memory-entry-points.md` D20 "Why the skill calls the script directly, unlike
-  the trigger-file commit" — becomes: both entry points are called directly; the
-  denial argument there is the one D70 now makes for the commit.
-- `memory-entry-points.md` "Shared body" chain — drop "dirty/freshness gate",
-  `rm <msgfile>` and the freshness-arm wording; the summary-request arm moves
-  out of the sync into the script's usage error.
-- `git-hooks.md` D50 — drop "the approval is restamped" from the index-file
-  abort; delete the paragraph
-  "**A failure keeps the approval, unless it prepared a merge.**"; in "A tier
-  commit the run could not record…", "`memory-commit-batch.sh` promises a
-  transparent retry" becomes "a retried commit would be refused for good". The
-  D50 conclusion line stands.
-- `git-hooks.md` header bullets and "Decisions — D46, D50, D53, D54" — drop
-  D53/D54 and their two rejected paragraphs; title becomes "D46, D50".
-- `commit-gate.md` — Mechanism section (intent file, four states, blank screen,
-  merge outranks screen) is deleted whole; D4, D12, D56 sections and their
-  rejected paragraphs go; D19's call-site paragraph is rewritten (open question
-  5); what remains is D19, D22, D67.
-- `commit-gate.md` D19, "`resolve.sh` reaches the clause through its callers" —
-  falls if the sync's refusal arm goes (it is the one call site there).
-- `docs/design.md:29-35` FR11 — "before the commit message file is written and
-  the commit executes" becomes "before the commit executes".
-- `docs/design.md:203-204` "the agent writes prose or an intent file" — still
-  true for `add-tier`; `:235` "`PostToolBatch` acts on the two intent files"
-  becomes "the add-tier intent file".
-- `docs/references/configuration.md:34-40` IPC files — only
-  `.claude/gitlore-add-tier` remains; `:60-65` "Commit message file" paragraph
-  goes.
-- `docs/references/session.md:296` — drop `memory-pre-commit` from the
-  agent-vs-user branch list.
-- `docs/references/tier-stores.md:38-50` — the "No recursing hook" argument
-  loses its `memory-pre-commit` clauses; the driver-side recursion argument
-  stands.
-- `docs/references/memory-authoring-guidance.md:91-94` — the freshness sentence
-  goes; the review-before-summary placement argument stands on the summary
-  describing the commit.
-- `docs/references/cc-platform.md:252-262` (D60) — "all six hooks" becomes five;
-  the `memory-commit-batch.sh` consequence clause goes.
-- `CLAUDE.md` (repo) "Memory and commits" — already describes the direct call.
-  `memory/ddaanet/shared-claude.md` "Never `--no-verify`… the parent repo's
-  pre-commit hook is the gitlore memory gate" has been false since D58; it is a
-  shared tier, so propose, do not edit.
-
-### Code and tests that go
-
-- `scripts/cc-hooks/memory-commit-batch.sh`; its entry in `hooks/hooks.json:92`.
-- `scripts/git-hooks/memory-pre-commit`, `scripts/emit-memory-gate.sh`, and its
-  call at `scripts/cc-hooks/session-start.sh:201`.
-- `scripts/lib/util.sh`: `gitlore_commit_trigger_file`,
-  `gitlore_commit_msg_file`, `gitlore_commit_msg_freshness`;
-  `gitlore_approval_present` becomes a check on the summary string (or is
-  inlined).
-- `scripts/lib/resolve-sync-memory.sh`: the freshness arm (`:33-56`), every
-  `touch "$msgfile"` (15 across it and `resolve-sync-tiers.sh`), the restamp
-  comment block (`:67-87`), `rm -f "$msgfile"` (`:247`); the function takes the
-  message file as an argument.
-- `GITLORE_MEMORY_COMMIT=1` at `resolve-sync-memory.sh:245`,
-  `resolve-sync-tiers.sh:61`, `resolve.sh:70`, `resolve-adopt-report.sh:131`,
-  `install/init-submodule.sh:81`, and the gate's own test.
-- `scripts/commit-memory.sh`: bare mode and its usage line; the post-write
-  approval screen becomes a pre-write usage check.
-- Comment fixups naming the batch: `resolve-push.sh:28`,
-  `util-config.sh:27,105`, `util-merge-state.sh:49`,
-  `resolve-sync-tiers.sh:48,60`.
-- `.gitignore:6-7`; `tests/helpers/fixtures.bash:199`.
-- Tests deleted: `tests/cc_hook_memory_commit_batch.bats`,
-  `tests/cc_hook_memory_commit_batch_merge.bats`,
-  `tests/helpers/cc-hook-memory-commit-batch.bash`,
-  `tests/git_hook_memory_pre_commit.bats`, `tests/emit_memory_gate.bats`,
-  `tests/integration_memory_gate.bats`, `tests/commit_memory_retry.bats`
-  (freshness retry), the freshness and trigger cases in `tests/lib_util.bats`,
-  the `emit-memory-gate.sh` and `memory-pre-commit` cases in
-  `tests/script_lib_lookup.bats`, the gate cases in
-  `tests/tier_lockstep.bats:178-200`, `tests/plugin_distribution.bats:205-210`,
-  `tests/index_sync_propagation.bats:376` comment.
-- Tests rewritten to pass the summary with `-F`: every suite seeding the message
-  file — `commit_memory.bats`, `commit_memory_approval.bats`,
-  `commit_memory_compose_status.bats`, `commit_memory_reports.bats`,
-  `integration_happy_path.bats`, `resolve_compose.bats`,
-  `resolve_recovery_landed_commit.bats`, `helpers/resolve-recovery.bash`,
-  `helpers/tier-fixtures.bash:97` (`approve`).
-- Evals: `tests/evals/lib/finish-commit.sh`,
-  `tests/evals/lib/asserts_commit.bats`, `tests/evals/asserts/memory-commit.sh`,
-  `tests/evals/asserts/tier-write.sh` assert on the message file and the
-  trigger; they assert on the memory log and the absence of an in-turn commit
-  instead.
-- New: a red test that a bare `commit-memory.sh` and an all-whitespace `-F -`
-  each exit 2 with nothing committed; a test that no file is left under
-  `.claude/` after a run, success or refusal.
+Every decision, node paragraph, script and test the entry makes false — the
+commit-path removals and the retired discovery keys — is listed with file, line
+and what it needs in
+[the removals list](2026-10-26-memory-commit-simplification-removals.md).
 
 ## 6. G3
 
@@ -327,11 +258,12 @@ to `/Users/david/code/handoff` and nothing more: `memory_directive` drops
 says, in both modes:
 
 > Once approved, commit the memory from the repo root, the approved summary as
-> the heredoc body: `bash "$(git config gitlore.commitCommand)" -F - <<'EOF'`.
+> the heredoc body: `gitlore-commit-memory -F - <<'EOF'`.
 
-It verifies the resolved path is executable, as D16 asks of a caller, and keeps
-its clause-file refusal unchanged. `with-commit` mode then commits memory before
-the parent commit stages the pointer the script staged.
+`gitlore-commit-memory` is on the Bash tool's PATH through gitlore's plugin
+`bin/`, so `handoff` resolves no key and checks no path; it keeps its
+clause-file refusal unchanged. `with-commit` mode then commits memory before the
+parent commit stages the pointer the script staged.
 
 ## 8. Open questions
 
@@ -340,7 +272,18 @@ approval comes before the memory commit, as it does today; the difference is
 that the memory commit is a step of the agent's normal commit workflow rather
 than a hook's; the `SessionStart` orientation keeps naming the commit command
 and the clause file rather than inlining the clause. 1–3 take their defaults.
-The `handoff` brief of section 7 is in `/Users/david/code/handoff/inbox/`.
+The `handoff` brief of section 7 is in `/Users/david/code/handoff/inbox/` and
+names `gitlore-commit-memory`.
+
+My human partner's answer, 2026-10-27: the three entry points ship as plugin
+`bin/` names — `gitlore-commit-memory`, `gitlore-push-memory`,
+`gitlore-merge-memory` — and the `gitlore.*Command` keys retire with their
+seeding, their re-pin and D16's executable-path advice; the agent's commit is
+`gitlore-commit-memory -F - <<'EOF'` from the repo root. Section 4 carries the
+grounds. One ground is unverified: D20's denial recovery re-runs the call behind
+a `!` prefix, and nothing yet shows that `!`-mode Bash has the plugin `bin/` on
+PATH. The probe is `echo "$PATH"` behind `!` in a session with gitlore enabled;
+if the entry is absent, the `!` recovery needs another form.
 
 1. **Does the take inside `pre-push` stay?** It is the one hook path left that
    commits (bookkeeping, arrival repair). Default: **stays** — no authoring
