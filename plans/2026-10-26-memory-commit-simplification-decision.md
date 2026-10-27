@@ -47,10 +47,11 @@ group keeps D19, D22 and D67 and is retitled (open question 6).
 Conclusion line:
 
 ```markdown
-- **D70** — the agent commits memory itself, with the approved summary as
-  `gitlore-commit-memory -F -` on a quoted heredoc; no hook makes an authoring
-  commit, no git hook gates one, and the summary travels with the call, never
-  through a file the agent writes; callers reach the three entry points by the
+- **D70** — the agent commits memory itself through the `gitlore:commit` skill,
+  the approved summary on `gitlore-commit-memory`'s stdin as a quoted heredoc,
+  one `== <store> ==` section per store when more than one changed; no hook
+  makes an authoring commit, no git hook gates one, and the summary travels
+  with the call, never through a file; callers reach the three entry points by the
   plugin `bin/` names `gitlore-commit-memory`, `gitlore-push-memory` and
   `gitlore-merge-memory`, and the `gitlore.*Command` keys retire
 ```
@@ -87,13 +88,18 @@ one's reason.
 Mechanism, replacing the bare-invocation sentence block of "Memory Commit Entry
 Point":
 
-> Arg-driven, `git commit`-style: `-m <summary>`, `-F <file>`, or `-F -`
-> (stdin/heredoc), one of them required. A summary that is absent, empty or all
-> whitespace is a usage error ahead of any store access. The script writes the
-> summary to a temporary file, the same way `resolve.sh` carries a merge
-> message, and that file is the `-F` operand of every commit the run makes — the
-> tier commits and memory's own — and is removed on every exit. Guards (exit 0):
-> not a gitlore repo / no memory submodule / submodule worktree absent / memory
+> The summary is read from stdin, the script's only input. A terminal on stdin,
+> or a summary that is empty or all whitespace, is a usage error pointing at
+> `/gitlore:commit`, ahead of any store access. A summary with no
+> `== <store> ==` line is one message, valid only when one store has changes;
+> otherwise each section — `memory` for root, a tier's mount name for a tier —
+> is its store's message, piped verbatim to that store's `git commit -F -`,
+> tiers before root. A store with changes and no section, a section for a store
+> with nothing to commit or not mounted, or a store named twice is refused the
+> same way, nothing committed. Tier changes alone give root the canned index
+> commit the merge path makes; with root changes too, the index update rides in
+> root's own commit. No message file exists at any point. Guards (exit 0): not a
+> gitlore repo / no memory submodule / submodule worktree absent / memory
 > clean-and-synced. Dirty with the store or any mounted tier mid-merge → the
 > stale-merge guard's directive (exit 1), ahead of everything else.
 
@@ -101,13 +107,15 @@ Decision paragraph, after D58:
 
 > **D70 — The agent commits memory itself, with the summary passed in the call**
 >
-> The agent summarizes the pending changes, shows the summary, ends its turn,
-> and once the user's reply approves it runs
-> `gitlore-commit-memory -F - <<'EOF'` from the repo root with the summary as
-> the heredoc body. That is the whole commit protocol. No hook commits authoring
-> content: the `PostToolBatch` path that committed on a trigger file is gone,
-> and so is the gate inside each store that admitted only commits carrying a
-> sentinel.
+> The `gitlore:commit` skill carries the protocol and the summary format: the
+> agent summarizes the pending changes, shows the summary, ends its turn, and
+> once the user's reply approves it runs `gitlore-commit-memory <<'EOF'` from
+> the repo root with the approved summary, verbatim, as the heredoc body. That
+> is the whole commit protocol. One message per store keeps a private store's
+> paragraphs out of a shared tier's log, which a single summary committed into
+> every store did not. No hook commits authoring content: the `PostToolBatch`
+> path that committed on a trigger file is gone, and so is the gate inside each
+> store that admitted only commits carrying a sentinel.
 >
 > **The approval lives in the conversation, so the commit goes where the
 > conversation is.** D58 moved the commit out of the parent `pre-commit` because
@@ -211,8 +219,8 @@ Rejected alternatives paragraphs, appended to the node's section:
 >
 > **The summary transported through a well-known path in the parent working
 > tree.** A named path invites a caller to pre-write it, the alternative D16
-> already refuses, and a leftover file reads as a pending approval. A temporary
-> file per run carries the text and means nothing after the run (D70).
+> already refuses, and a leftover file reads as a pending approval. The text
+> stays in the process and reaches each commit on its stdin (D70).
 >
 > **Unsetting `GIT_AUTHOR_*` and `GIT_COMMITTER_*` before every store commit.**
 > The leak it guards came from a store commit made inside the parent's
@@ -257,13 +265,12 @@ to `/Users/david/code/handoff` and nothing more: `memory_directive` drops
 `msgfile`, `trigger` and the mode split, and after the shared approval text
 says, in both modes:
 
-> Once approved, commit the memory from the repo root, the approved summary as
-> the heredoc body: `gitlore-commit-memory -F - <<'EOF'`.
+> Commit memory through `/gitlore:commit`.
 
-`gitlore-commit-memory` is on the Bash tool's PATH through gitlore's plugin
-`bin/`, so `handoff` resolves no key and checks no path; it keeps its
-clause-file refusal unchanged. `with-commit` mode then commits memory before the
-parent commit stages the pointer the script staged.
+The skill carries the summary format, the approval turn and the call, so
+`handoff` resolves no key, checks no path, and loses its clause-file refusal
+with the clause file. `with-commit` mode then commits memory before the parent
+commit stages the pointer the script staged.
 
 ## 8. Open questions
 
@@ -274,6 +281,14 @@ than a hook's; the `SessionStart` orientation keeps naming the commit command
 and the clause file rather than inlining the clause. 1–3 take their defaults.
 The `handoff` brief of section 7 is in `/Users/david/code/handoff/inbox/` and
 names `gitlore-commit-memory`.
+
+Later answers, 2026-10-27, superseding the call syntax in the next paragraph and
+the answer to question 5 above: the summary is read from stdin only (`-m`, `-F`
+and bare mode go), and no message file exists, temporary or not; a multi-store
+summary carries one `== <store> ==` section per store, each committed in its own
+store; the summary format and protocol live in a `gitlore:commit` skill that the
+script's usage and error messages point at, and the clause file, its key and its
+reader retire.
 
 My human partner's answer, 2026-10-27: the three entry points ship as plugin
 `bin/` names — `gitlore-commit-memory`, `gitlore-push-memory`,

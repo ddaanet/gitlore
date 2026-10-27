@@ -108,7 +108,7 @@ line, and what each needs. Section numbers below are the draft's.
   `tests/script_lib_lookup.bats`, the gate cases in
   `tests/tier_lockstep.bats:178-200`, `tests/plugin_distribution.bats:205-210`,
   `tests/index_sync_propagation.bats:376` comment.
-- Tests rewritten to pass the summary with `-F`: every suite seeding the message
+- Tests rewritten to pipe the summary on stdin: every suite seeding the message
   file — `commit_memory.bats`, `commit_memory_approval.bats`,
   `commit_memory_compose_status.bats`, `commit_memory_reports.bats`,
   `integration_happy_path.bats`, `resolve_compose.bats`,
@@ -119,9 +119,9 @@ line, and what each needs. Section numbers below are the draft's.
   `tests/evals/asserts/tier-write.sh` assert on the message file and the
   trigger; they assert on the memory log and the absence of an in-turn commit
   instead.
-- New: a red test that a bare `commit-memory.sh` and an all-whitespace `-F -`
-  each exit 2 with nothing committed; a test that no file is left under
-  `.claude/` after a run, success or refusal.
+- New: a red test that an empty and an all-whitespace stdin each exit 2 with
+  nothing committed; a test that no file is left under `.claude/` after a run,
+  success or refusal.
 
 ### The discovery keys and the `bin/` names
 
@@ -148,16 +148,15 @@ Scripts:
 
 - `scripts/install/write-settings.sh:35-37` — the three seeds go.
 - `scripts/cc-hooks/session-start.sh:112-114` — the three re-pins go; `:77`
-  orientation text names `gitlore-commit-memory -F -` in place of
-  `bash "$(git config gitlore.commitCommand)" -F -`.
+  orientation text names the `gitlore:commit` skill in place of
+  `bash "$(git config gitlore.commitCommand)" -F -` and the clause file.
 - `scripts/commit-memory.sh:12`, `scripts/push-memory.sh:12`,
   `scripts/merge-memory.sh:14-15` — "Discover this script via `git config …`"
   becomes "Callers run it as `gitlore-…-memory`, the plugin `bin/` name".
 
 Skills:
 
-- `skills/push/SKILL.md:25` → `gitlore-push-memory`; `:73` →
-  `gitlore-commit-memory -F -`.
+- `skills/push/SKILL.md:25` → `gitlore-push-memory`; `:73` → `/gitlore:commit`.
 - `skills/merge/SKILL.md:21` → `gitlore-merge-memory`.
 - `skills/memory-writing/SKILL.md:240` — "through `gitlore.commitCommand`"
   becomes "through `gitlore-commit-memory`".
@@ -178,23 +177,22 @@ Docs:
 - `docs/references/workflows.md:17`, `:50`, `:65` — each "through the
   `gitlore.*Command` key" becomes the `bin/` name; `:17-19` also loses the
   trigger-file alternative.
-- `docs/references/commit-gate.md:163` (orientation, moving into D70) →
-  `gitlore-commit-memory -F -`; `:233-239` "Discovery mirrors D16's
-  `gitlore.commitCommand`" loses its precedent and states the clause-file key's
-  own case: a caller outside gitlore needs a data file's path, and `bin/` puts
-  commands, not files, on PATH.
-- "Five keys" becomes two (`gitlore.hooksDir`,
-  `gitlore.memoryApprovalClauseFile`): `docs/references/configuration.md:24-31`
-  (and its "each consumer verifies the resolved path" clause narrows to those
-  two), `docs/references/session.md:74-76`, `docs/design.md:177-179`,
-  `docs/references/plugin-upgrade-notice.md:31-32`.
+- `docs/references/commit-gate.md:163` (orientation, moving into D70) → the
+  `gitlore:commit` skill; `:233-239` "Discovery mirrors D16's
+  `gitlore.commitCommand`" goes with the clause file and its key: the skill body
+  is the summary format's only copy, and D19's call-site paragraphs follow.
+- "Five keys" becomes one (`gitlore.hooksDir`):
+  `docs/references/configuration.md:24-31` (and its "each consumer verifies the
+  resolved path" clause narrows to it), `docs/references/session.md:74-76`,
+  `docs/design.md:177-179`, `docs/references/plugin-upgrade-notice.md:31-32`.
 
 Tests:
 
 - `tests/write_settings.bats:16-34` — the three seeding cases go; `:37` "seeds
   gitlore.hooksDir alongside commitCommand" is renamed.
-- `tests/cc_hook_session_start.bats:77-79` — the three re-pin assertions go;
-  `:178-179` assert the orientation names `gitlore-commit-memory -F -`.
+- `tests/cc_hook_session_start.bats:77-80` — the four re-pin assertions go (the
+  clause-file key's with the others); `:178-179` assert the orientation names
+  the `gitlore:commit` skill.
 - `tests/cc_hook_session_start_report.bats:161`,
   `tests/cc_hook_session_start_relay.bats:143` — assert the bin name.
 - `tests/script_lib_lookup.bats:7` comment and `:179` — the assertion runs
