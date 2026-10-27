@@ -47,14 +47,12 @@ at any boundary.
   are gone. A terminal on stdin, or an empty or all-whitespace summary, exits 2
   before any store access, the usage error pointing at `/gitlore:commit`; every
   other refusal that needs a summary does too. No message file exists at any
-  point: each commit reads its store's section, extracted from the summary
-  string by a function (bash 3.2 has no associative arrays), on
-  `git commit -F -`; a prepared merge keeps git's own `MERGE_MSG`. This
-  supersedes the draft's `-F -` call syntax and its temporary-file transport.
-  Freshness arm, every `touch "$msgfile"`, the restamp block and
-  `rm -f "$msgfile"` gone; `gitlore_commit_msg_file`,
-  `gitlore_commit_msg_freshness` gone from `util.sh`, `gitlore_approval_present`
-  reduced to a string check or inlined.
+  point: each store's section, extracted from the summary string by a function
+  (bash 3.2 has no associative arrays), is piped to that store's `git commit` on
+  stdin; a prepared merge keeps git's own `MERGE_MSG`. Freshness arm, every
+  `touch "$msgfile"`, the restamp block and `rm -f "$msgfile"` gone;
+  `gitlore_commit_msg_file`, `gitlore_commit_msg_freshness` gone from `util.sh`,
+  `gitlore_approval_present` reduced to a string check or inlined.
 - Post (per-store messages): a summary with no `== <store> ==` line is one
   message, valid only when one store has changes. Otherwise the script splits it
   on header lines (`memory` for root, a tier's mount name for a tier) and
