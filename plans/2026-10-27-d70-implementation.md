@@ -31,12 +31,12 @@ at any boundary.
 - Post: `skills/commit/SKILL.md`, its description self-triggering on pending
   memory changes and a request to commit memory. Body: the review directive and
   the summary format (the text of `reference/memory-approval-clause.txt`, its
-  paragraphs grouped under a `== <tier> ==` / `== memory ==` header per store
-  when more than one store changed), then the protocol — show the summary, end
-  the turn, and on the user's approving reply run
-  `gitlore-commit-memory <<'EOF'` from the repo root with the approved text
-  verbatim. The skill body becomes the clause's only copy. Tests: the skill
-  ships, and its body carries the review directive and the section format.
+  paragraphs grouped under a `== <tier> ==` / `== memory ==` header per store,
+  always — one store or several), then the protocol — show the summary, end the
+  turn, and on the user's approving reply run `gitlore-commit-memory <<'EOF'`
+  from the repo root with the approved text verbatim. The skill body becomes the
+  clause's only copy. Tests: the skill ships, and its body carries the review
+  directive and the section format.
 - Invariant: the keys still work; nothing yet calls the names or the skill.
 
 ## 2. `commit-memory.sh` takes the summary in the call
@@ -53,21 +53,24 @@ at any boundary.
   `touch "$msgfile"`, the restamp block and `rm -f "$msgfile"` gone;
   `gitlore_commit_msg_file`, `gitlore_commit_msg_freshness` gone from `util.sh`,
   `gitlore_approval_present` reduced to a string check or inlined.
-- Post (per-store messages): a summary with no `== <store> ==` line is one
-  message, valid only when one store has changes. Otherwise the script splits it
-  on header lines (`memory` for root, a tier's mount name for a tier) and
-  commits each section verbatim in its own store, tiers before root. It refuses
-  (exit 2, nothing committed, pointing at `/gitlore:commit`) when a store with
-  changes has no section, a section names a store with nothing to commit or not
-  mounted, or a store appears twice. Tier changes alone give root the canned
-  index commit the merge path makes; with root changes too, the index update
-  rides in root's own commit.
+- Post (per-store messages): every summary carries one `== <store> ==` section
+  per store with changes, a single store included; text before the first header,
+  or no header at all, is refused. The script splits it on header lines
+  (`memory` for root, a tier's mount name for a tier) and commits each section
+  verbatim in its own store, tiers before root. It refuses (exit 2, nothing
+  committed, pointing at `/gitlore:commit`) when a store with changes has no
+  section, a section names a store with nothing to commit or not mounted, or a
+  store appears twice. Root changes confined to `MEMORY.md` need no section,
+  since an index line moves with its fact: alone they get the canned index
+  commit the merge path makes, and beside a `memory` section they ride in root's
+  own commit.
 - Red first: an empty and an all-whitespace stdin each exit 2 with nothing
-  committed; each refusal arm of the section check; a two-store run lands each
-  section in its own store and no other store's text; no file left under
-  `.claude/` after a successful run or a refusal. Suites seeding the message
-  file are rewritten to pipe the summary on stdin (list in the removals file);
-  `commit_memory_retry.bats` goes.
+  committed; a headerless summary is refused when only the tier changed, so
+  nothing lands in the shared store; each refusal arm of the section check; a
+  two-store run lands each section in its own store and no other store's text;
+  no file left under `.claude/` after a successful run or a refusal. Suites
+  seeding the message file are rewritten to pipe the summary on stdin (list in
+  the removals file); `commit_memory_retry.bats` goes.
 - Invariant: the trigger-file batch still works until commit 3 — it now passes
   its message file on stdin and keeps its own trigger bookkeeping.
 

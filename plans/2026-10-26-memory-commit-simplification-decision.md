@@ -49,7 +49,7 @@ Conclusion line:
 ```markdown
 - **D70** — the agent commits memory itself through the `gitlore:commit` skill,
   the approved summary on `gitlore-commit-memory`'s stdin as a quoted heredoc,
-  one `== <store> ==` section per store when more than one changed; no hook
+  one `== <store> ==` section per store that changed; no hook
   makes an authoring commit, no git hook gates one, and the summary travels
   with the call, never through a file; callers reach the three entry points by the
   plugin `bin/` names `gitlore-commit-memory`, `gitlore-push-memory` and
@@ -90,18 +90,20 @@ Point":
 
 > The summary is read from stdin, the script's only input. A terminal on stdin,
 > or a summary that is empty or all whitespace, is a usage error pointing at
-> `/gitlore:commit`, ahead of any store access. A summary with no
-> `== <store> ==` line is one message, valid only when one store has changes;
-> otherwise each section — `memory` for root, a tier's mount name for a tier —
-> is its store's message, piped verbatim to that store's `git commit -F -`,
-> tiers before root. A store with changes and no section, a section for a store
-> with nothing to commit or not mounted, or a store named twice is refused the
-> same way, nothing committed. Tier changes alone give root the canned index
-> commit the merge path makes; with root changes too, the index update rides in
-> root's own commit. No message file exists at any point. Guards (exit 0): not a
-> gitlore repo / no memory submodule / submodule worktree absent / memory
-> clean-and-synced. Dirty with the store or any mounted tier mid-merge → the
-> stale-merge guard's directive (exit 1), ahead of everything else.
+> `/gitlore:commit`, ahead of any store access. Every summary is one
+> `== <store> ==` section per store with changes, a single store included, and
+> each section — `memory` for root, a tier's mount name for a tier — is its
+> store's message, piped verbatim to that store's `git commit` on stdin, tiers
+> before root. Text outside a section, a store with changes and no section, a
+> section for a store with nothing to commit or not mounted, or a store named
+> twice is refused the same way, nothing committed. Root changes confined to
+> `MEMORY.md` need no section, since an index line moves with its fact: alone
+> they get the canned index commit the merge path makes, and beside a `memory`
+> section they ride in root's own commit. No message file exists at any point.
+> Guards (exit 0): not a gitlore repo / no memory submodule / submodule worktree
+> absent / memory clean-and-synced. Dirty with the store or any mounted tier
+> mid-merge → the stale-merge guard's directive (exit 1), ahead of everything
+> else.
 
 Decision paragraph, after D58:
 
@@ -284,11 +286,13 @@ names `gitlore-commit-memory`.
 
 Later answers, 2026-10-27, superseding the call syntax in the next paragraph and
 the answer to question 5 above: the summary is read from stdin only (`-m`, `-F`
-and bare mode go), and no message file exists, temporary or not; a multi-store
-summary carries one `== <store> ==` section per store, each committed in its own
-store; the summary format and protocol live in a `gitlore:commit` skill that the
-script's usage and error messages point at, and the clause file, its key and its
-reader retire.
+and bare mode go), and no message file exists, temporary or not; every summary
+carries one `== <store> ==` section per changed store, a single store included,
+each committed in its own store — a headerless form would commit wherever the
+changes are, landing a summary meant for root in a shared tier when only the
+tier changed; the summary format and protocol live in a `gitlore:commit` skill
+that the script's usage and error messages point at, and the clause file, its
+key and its reader retire.
 
 My human partner's answer, 2026-10-27: the three entry points ship as plugin
 `bin/` names — `gitlore-commit-memory`, `gitlore-push-memory`,
