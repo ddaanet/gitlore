@@ -15,10 +15,10 @@ launch mechanism in [installation.md](installation.md).
 
 Claude Code's native auto-memory writes to
 `~/.claude/projects/<sanitized-cwd>/memory/` unless `autoMemoryDirectory` is set
-in an honored settings tier. Project settings are *not* honored (D10), so the
-only per-project, non-global mechanism is the `--settings` flag at launch. The
-launcher is a thin `claude` shim that injects it transparently — the user keeps
-typing `claude`, and memory lands in the submodule.
+in an honored settings tier. Project settings honor only an absolute value,
+fixed at launch, so the redirect is injected at launch through the `--settings`
+flag (D10). The launcher is a thin `claude` shim that injects it transparently —
+the user keeps typing `claude`, and memory lands in the submodule.
 
 **One shim, two placements.** The shim body is identical in both modes; only how
 it lands on `PATH` differs. It is `#!/usr/bin/env sh`:
@@ -155,22 +155,29 @@ rewrites it directly.
 **D10 — Memory redirect via a launch-time `--settings` shim, not project
 settings**
 
-Claude Code resolves `autoMemoryDirectory` only from the `policySettings`,
-`flagSettings`, and `userSettings` tiers (verified by reading the resolver in
-the CC binary, v2.1.150). Project-level `.claude/settings.json` and
-`.claude/settings.local.json` are deliberately excluded for security — a
-checked-in repo setting must not be able to redirect where a user's memory is
-written. The discard is silent: a project tier carrying the key produces no
-diagnostic, and memory simply lands in the default
-`~/.claude/projects/<sanitized-cwd>/memory/` dir (Rejected Alternatives).
+Verified against CC 2.1.310, an absolute `autoMemoryDirectory` in
+`.claude/settings.json` or `.claude/settings.local.json` is honored; a relative
+value (`mem`, `./mem`) is silently discarded, with no diagnostic, and memory
+lands in the default `~/.claude/projects/<sanitized-cwd>/memory/` dir. The value
+is fixed at launch: one written during a session (by a `SessionStart` hook, say)
+redirects the next launch, not that session. CC applies no containment to a
+project-set path and auto-allows writes there; the trust dialog is the boundary,
+as for project hooks.
 
-The honored tiers are either global (`userSettings`, `policySettings`) or
-per-launch (`flagSettings`, via `--settings`). Per-project redirection without
-polluting other projects therefore requires supplying the value at launch. A
-thin `claude` shim injects `--settings '{"autoMemoryDirectory":…}'`
-transparently (see Memory Redirect Launcher). This keeps the value proposition
-intact — the user invokes Claude Code normally and uses its *native*
-auto-memory; only the storage directory is redirected, with no cowork semantics.
+A checked-in `.claude/settings.json` cannot carry a path valid on every clone,
+since only an absolute value works. The untracked `.claude/settings.local.json`
+could, but gitlore would have to write it from `SessionStart` for a fresh clone
+or new worktree, and that session stays unredirected until a restart; each
+linked worktree needs its own file, and the containment check (D68) moves from
+each launch to wherever gitlore writes it. A launch-time value is the only one
+that redirects the session that sets it (Rejected Alternatives). The global
+tiers (`userSettings`, `policySettings`) redirect every project; the per-launch
+tier (`flagSettings`, via `--settings`) is the one that is both per-project and
+in force from the first session. A thin `claude` shim injects
+`--settings '{"autoMemoryDirectory":…}'` transparently (see Memory Redirect
+Launcher). This keeps the value proposition intact — the user invokes Claude
+Code normally and uses its *native* auto-memory; only the storage directory is
+redirected, with no cowork semantics.
 
 Because an unredirected launch strands memory silently, the `SessionStart`
 launcher guard (sentinel `GITLORE_LAUNCHED`) detects one and warns.
@@ -192,10 +199,10 @@ above, and the shim body is `scripts/install/launcher-shim`.
 ## Rejected alternatives
 
 **`autoMemoryDirectory` in `.claude/settings.json` or
-`.claude/settings.local.json`.** Silently ignored — CC honours the key only from
-`policySettings`, `flagSettings` and `userSettings`, never a project tier.
-Observed, not inferred: with the key written there, memory lands in the default
-directory and nothing reports the discard (D10).
+`.claude/settings.local.json`.** A relative value is silently discarded, so the
+shared file cannot carry it. The local file can carry an absolute one, but a
+value written from `SessionStart` takes effect only on the next launch, leaving
+the first session of every fresh clone or worktree unredirected (D10).
 
 **`autoMemoryDirectory` in global `~/.claude/settings.json`.** Honoured, but
 global: every project's auto-memory would redirect into one repo's submodule.

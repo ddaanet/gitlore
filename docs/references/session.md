@@ -70,7 +70,8 @@ has no memory submodule entry, no-op.
    with a plain `claude` — memory is *not* redirected and will strand in the
    default directory. Say so on `systemMessage`, naming the fix (`direnv allow`,
    or the global shim on a machine without direnv). Nothing is written to any
-   settings file; that tier is ignored (D10).
+   settings file; a value written there would not redirect until the next launch
+   (D10).
 2. **Re-pin the five plugin-path keys** — `gitlore.hooksDir`,
    `gitlore.commitCommand`, `gitlore.pushCommand`, `gitlore.mergeCommand`,
    `gitlore.memoryApprovalClauseFile` — so a plugin upgrade heals itself.

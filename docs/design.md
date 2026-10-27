@@ -187,9 +187,9 @@ and key is in [configuration.md](references/configuration.md).
 
 Claude Code's native auto-memory writes to
 `~/.claude/projects/<sanitized-cwd>/memory/` unless `autoMemoryDirectory` is set
-in an honored settings tier. Project settings are *not* honored (D10), so the
-only per-project, non-global mechanism is the `--settings` flag at launch,
-injected by a thin `claude` shim — the user keeps typing `claude`, and memory
+in an honored settings tier. Project settings honor only an absolute value,
+fixed at launch, so the redirect is injected at launch through the `--settings`
+flag by a thin `claude` shim (D10) — the user keeps typing `claude`, and memory
 lands in the submodule. The shim redirects only to the memory submodule's own
 path and launches unredirected, with one stderr line saying why, when
 `.gitmodules` names anything else (D68). Shim body, its two placements and the

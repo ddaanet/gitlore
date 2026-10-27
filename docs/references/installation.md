@@ -65,7 +65,8 @@ has no `.git` (registered but not checked out).
     `PATH_add` line, both staged for commit — then activate it: `direnv allow`
     when direnv is available (non-fatal; a read-only direnv dir is not a
     blocker), otherwise `global-shim.sh`. Does **not** write
-    `autoMemoryDirectory` to any settings file; that tier is ignored (D10).
+    `autoMemoryDirectory` to any settings file; the launcher injects it at
+    launch (D10).
 12. Write `gitlore.hooksDir` (abs path to plugin hooks) to local git config.
 13. Run hook-manager detection script → apply idempotent wiring, write sentinel
     file.

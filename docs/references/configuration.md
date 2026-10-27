@@ -49,13 +49,12 @@ staged from inside a subagent, built at `<name>.tmp`, removed by the drain that
 delivers it to the parent (`relay-drain.sh`, or `SessionStart` folding it into
 its own report) or by the seven-day sweep (D51).
 
-> **No `autoMemoryDirectory` in project settings.** Claude Code resolves
-> `autoMemoryDirectory` only from `policySettings`, `flagSettings` (the
-> `--settings` flag), or `userSettings` (`~/.claude/settings.json`) — never from
-> project-level `.claude/settings.json` or `.claude/settings.local.json`, which
-> it discards for security. The per-project redirect is therefore injected at
-> launch by the Memory Redirect Launcher, not written to a settings file. See
-> D10.
+> **No `autoMemoryDirectory` in project settings.** Project-level
+> `.claude/settings.json` and `.claude/settings.local.json` honor only an
+> absolute value, fixed at launch: a relative one is discarded, and one written
+> during a session redirects only the next launch. The per-project redirect is
+> therefore injected at launch by the Memory Redirect Launcher, not written to a
+> settings file. See D10.
 
 **Commit message file:** `.claude/gitlore-memory-message`, resolved by
 `gitlore_commit_msg_file` from the superproject working tree
@@ -76,9 +75,9 @@ and executable from every worktree — including one where no Claude session has
 ever run — where `.git/` is a gitlink *file*. Every producer and every consumer
 resolves it that way; none hardcode it.
 
-`autoMemoryDirectory` is deliberately absent from this inventory: Claude Code
-resolves it only from `policySettings`, `flagSettings` (the `--settings` flag)
-or `userSettings`, never from a project tier, which it discards for security.
-The per-project redirect is therefore injected at launch by the launcher shim,
-not written to a settings file — see D10 in
+`autoMemoryDirectory` is deliberately absent from this inventory: a project tier
+honors only an absolute value, fixed at launch, so a value written from
+`SessionStart` would not redirect the session that wrote it. The per-project
+redirect is therefore injected at launch by the launcher shim, not written to a
+settings file — see D10 in
 [memory-redirect.md](memory-redirect.md).
