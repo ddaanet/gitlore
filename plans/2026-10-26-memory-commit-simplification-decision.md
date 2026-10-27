@@ -280,10 +280,10 @@ My human partner's answer, 2026-10-27: the three entry points ship as plugin
 `gitlore-merge-memory` — and the `gitlore.*Command` keys retire with their
 seeding, their re-pin and D16's executable-path advice; the agent's commit is
 `gitlore-commit-memory -F - <<'EOF'` from the repo root. Section 4 carries the
-grounds. One ground is unverified: D20's denial recovery re-runs the call behind
-a `!` prefix, and nothing yet shows that `!`-mode Bash has the plugin `bin/` on
-PATH. The probe is `echo "$PATH"` behind `!` in a session with gitlore enabled;
-if the entry is absent, the `!` recovery needs another form.
+grounds. D20's denial recovery re-runs the call behind a `!` prefix, and
+`!`-mode Bash has the plugin `bin/` on PATH: `echo "$PATH"` behind `!` in the
+dogfood session (CC 2.1.310, 2026-10-27) listed `dist/plugin/bin` and
+`autodrive-handoff/0.18.0/bin`.
 
 1. **Does the take inside `pre-push` stay?** It is the one hook path left that
    commits (bookkeeping, arrival repair). Default: **stays** — no authoring
