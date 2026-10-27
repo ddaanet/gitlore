@@ -215,15 +215,22 @@ second is the body spec — subject line, blank line, then
 **one paragraph per changed memory file**, each opening
 `**<Kind> <tier>/<slug>:**` with the kind drawn from New, Update, Augment,
 Reduce, or Remove — followed by a literal template of three example paragraphs.
-A `MEMORY.md`, root or tier, is excluded from the listing: an index line moves
+A paragraph names the change in one clause and spends its one to three sentences
+on what the diff cannot show: what prompted it, what the old wording got wrong,
+where removed content went, and who decided. It does not retell the new body:
+across the memory commits of every ddaanet store (2026-10-27, 275 summaries),
+about three sentences in four of a New, Update or Augment paragraph restated the
+diff, and the cause sat last, after them. The approver has watched the edits
+land in the conversation, so the retelling costs review without informing it. A
+`MEMORY.md`, root or tier, is excluded from the listing: an index line moves
 with the fact it points at, so a paragraph for it would restate its neighbour
 and put the routing table on the same footing as the facts. Read via
 `gitlore_memory_approval_clause()` (`scripts/lib/util-config.sh`), it is
 appended at the end of each call site's message rather than spliced into a
 sentence: a template is inherently multi-line, and one line per file could not
-carry what a memory commit message is for — what the fact now claims and what
-moved it. Shipping the template rather than describing the shape lets the agent
-copy a form instead of inferring one, and the bold prefix is what makes the body
+carry what a memory commit message is for — what changed and what moved it.
+Shipping the template rather than describing the shape lets the agent copy a
+form instead of inferring one, and the bold prefix is what makes the body
 scannable in the approval blockquote. The multi-line clause also constrains
 emission: a hook that puts it in JSON must build that JSON with `jq --arg`,
 since a raw newline inside a hand-written string is invalid. The sites keep
