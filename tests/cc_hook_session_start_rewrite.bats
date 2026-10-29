@@ -30,7 +30,7 @@ tier_setup() {
   rewrite_remote_history memory/ddaanet "$TMP_REPO/.bare-ddaanet.git"
   rewrite_position_clone memory/ddaanet "$1"
   git -C memory add ddaanet
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "record the tier commit"
+  git -C memory commit -q -m "record the tier commit"
   enable_gitlore
 }
 

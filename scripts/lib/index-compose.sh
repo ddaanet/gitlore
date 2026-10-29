@@ -172,7 +172,7 @@ gitlore_compose_write() {
   # Inside the store's own gitdir, not beside the target: the same reason
   # gitlore_weld_repair (edit-weld.sh) gives for its own scratch file — a kill
   # between this write and the mv/rm below would otherwise leave an untracked
-  # neighbour inside the tracked worktree for the FR11 gate's `git add -A` to
+  # neighbour inside the tracked worktree for a `git add -A` to
   # sweep up. `$$`: this runs per-store, but never assume only one caller.
   # `--absolute-git-dir`, not `--git-path`: the latter is relative to the `-C`
   # dir for a plain repo, and the caller's cwd is not that dir.

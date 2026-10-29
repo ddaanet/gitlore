@@ -57,12 +57,12 @@ grep -q "($TIER/reference_acme_staging_db.md)" "$MEM/MEMORY.md" || \
   fail "root index carries no '$TIER/'-prefixed line for the tier's seeded fact; composition did not run"
 
 # 7. Nothing was committed inside the memory store. The mount is staged and
-#    rides the next ordinary commit through the FR11 gate — the agent commits
+#    rides the next ordinary memory commit — the agent commits
 #    nothing itself, and add-tier.sh is not a committer either.
 baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
 now=$(git -C "$MEM" rev-parse HEAD)
 [ "$now" = "$baseline" ] || \
-  fail "memory store advanced from $baseline to $now — something committed inside memory during add-tier, bypassing the FR11 gate"
+  fail "memory store advanced from $baseline to $now — something committed inside memory during add-tier"
 
 # 8. …but the mount IS staged, which is what lets it ride that next commit.
 git -C "$MEM" diff --cached --quiet -- .gitmodules "$TIER" && \

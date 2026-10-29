@@ -153,8 +153,7 @@ load helpers/commit-memory
 
   head_before=$(git -C memory rev-parse HEAD)
   # A bats run inherits CLAUDECODE from the invoking shell, and a subagent
-  # dispatch exports it as 1, so it is unset explicitly here (as
-  # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
+  # dispatch exports it as 1, so it is unset explicitly here to read the user arm
   # regardless of the ambient environment.
   unset CLAUDECODE
   run --separate-stderr commit_sections "memory: record the shared fact"
@@ -179,8 +178,7 @@ load helpers/commit-memory
   head_before=$(git -C memory rev-parse HEAD)
   chmod a-w memory/ddaanet
   # A bats run inherits CLAUDECODE from the invoking shell, and a subagent
-  # dispatch exports it as 1, so it is unset explicitly here (as
-  # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
+  # dispatch exports it as 1, so it is unset explicitly here to read the user arm
   # regardless of the ambient environment.
   unset CLAUDECODE
   run --separate-stderr commit_sections "memory: record the shared fact"
@@ -204,8 +202,7 @@ load helpers/commit-memory
 
   head_before=$(git -C memory rev-parse HEAD)
   # A bats run inherits CLAUDECODE from the invoking shell, and a subagent
-  # dispatch exports it as 1, so it is unset explicitly here (as
-  # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
+  # dispatch exports it as 1, so it is unset explicitly here to read the user arm
   # regardless of the ambient environment.
   unset CLAUDECODE
   run --separate-stderr commit_sections "memory: record the shared fact"

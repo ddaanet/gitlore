@@ -56,7 +56,7 @@ grep -q "($TIER/$new_file)" "$MEM/MEMORY.md" || \
 grep -q "($new_file)" "$TIERPATH/MEMORY.md" || \
   fail "tier index $TIER/MEMORY.md has no line for $new_file; the compose pass did not mirror it down"
 
-# 4. The approval gate ran, and the approved summary is what commits both stores.
+# 4. The approved summary is what commits both stores.
 #    The end state is graded (see lib/finish-commit.sh).
 baseline=""
 [ -f "$EVAL_OUT_DIR/memory-baseline" ] && baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
@@ -71,6 +71,9 @@ settle_commit_path "$MEM" "$baseline"
 # 5. Memory advanced past where the trial started.
 mem_after=$(git -C "$MEM" rev-parse HEAD)
 [ "$mem_after" != "$baseline" ] || fail "memory store did not advance ($path_taken); nothing was committed"
+
+# The commit went through the gitlore:commit skill, not around it.
+check_commit_trace
 
 # 6. The tier committed the fact itself. Checking the file is in the tier's
 #    HEAD tree beats checking the tier merely advanced: an advance can be an

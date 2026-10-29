@@ -177,7 +177,7 @@ teardown() {
   make_tier_in_memory ddaanet
   git -C memory/ddaanet commit -q --allow-empty -m "local, unpublished"
   git -C memory add ddaanet
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "record the tier commit"
+  git -C memory commit -q -m "record the tier commit"
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   export GITLORE_LAUNCHED=1
@@ -195,7 +195,7 @@ teardown() {
   make_tier_in_memory ddaanet
   git -C memory/ddaanet commit -q --allow-empty -m "local, unpublished"
   git -C memory add ddaanet
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "record the tier commit"
+  git -C memory commit -q -m "record the tier commit"
   push_tier_fact ddaanet >/dev/null
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json

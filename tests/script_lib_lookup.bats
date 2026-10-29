@@ -28,9 +28,12 @@ make_old_cache() {
   mkdir -p "$root/scripts/git-hooks"
   cp -R "$PLUGIN_ROOT/scripts/lib" "$root/scripts/lib"
   # Range delete of the function body; the closing brace is the first column-0 `}`.
-  sed '/^gitlore_approval_present() {/,/^}/d' "$root/scripts/lib/util.sh" > "$root/util.tmp"
+  sed '/^gitlore_memory_dirty() {/,/^}/d' "$root/scripts/lib/util.sh" > "$root/util.tmp"
   mv "$root/util.tmp" "$root/scripts/lib/util.sh"
-  ! grep -q '^gitlore_approval_present' "$root/scripts/lib/util.sh"
+  ! grep -q '^gitlore_memory_dirty' "$root/scripts/lib/util.sh"
+  # The simulation is only meaningful while the script under test calls the
+  # function the older cache lacks.
+  grep -q 'gitlore_memory_dirty' "$PLUGIN_ROOT/scripts/commit-memory.sh"
 }
 
 # A plugin tree whose libraries announce themselves and abort when sourced, for
@@ -92,16 +95,6 @@ assert_own_libs() {
   assert_own_libs
 }
 
-@test "emit-memory-gate.sh sources its own libraries when hooksDir pins another tree" {
-  make_parent_with_memory
-  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
-  git config gitlore.hooksDir "$BATS_TEST_TMPDIR/old/scripts/git-hooks"
-
-  run bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
-  assert_own_libs
-  [ "$status" -eq 0 ]
-}
-
 @test "git-hooks/pre-push sources its own libraries when hooksDir pins another tree" {
   make_parent_with_memory
   make_poisoned_cache "$BATS_TEST_TMPDIR/old"
@@ -109,17 +102,6 @@ assert_own_libs() {
 
   run bash "$PLUGIN_ROOT/scripts/git-hooks/pre-push" origin "$TMP_REPO" </dev/null
   assert_own_libs
-}
-
-@test "git-hooks/memory-pre-commit sources its own libraries when hooksDir pins another tree" {
-  make_parent_with_memory
-  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
-  git config gitlore.hooksDir "$BATS_TEST_TMPDIR/old/scripts/git-hooks"
-
-  run env -u GITLORE_MEMORY_COMMIT bash "$PLUGIN_ROOT/scripts/git-hooks/memory-pre-commit"
-  assert_own_libs
-  # The gate's own refusal, which only its own log.sh can word.
-  [ "$status" -eq 1 ]
 }
 
 # The scripts that used to prefer CLAUDE_PLUGIN_ROOT. A session that froze at an

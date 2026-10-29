@@ -120,7 +120,7 @@ Stray line
   # index at all. Composition tolerates that; the continuation's staging step
   # must too.
   git -C memory rm -q MEMORY.md
-  GITLORE_MEMORY_COMMIT=1 git -C memory -c user.email=t@t -c user.name=t commit -q -m "No root index"
+  git -C memory -c user.email=t@t -c user.name=t commit -q -m "No root index"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
   commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null

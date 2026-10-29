@@ -367,7 +367,7 @@ memory: record the shared fact"
   set_tier_manifest ddaanet other
   seed_tier_bullet other fact.md "a fact"
   git -C memory/other add -A
-  GITLORE_MEMORY_COMMIT=1 git -C memory/other commit -q -m "other: fact"
+  git -C memory/other commit -q -m "other: fact"
   commit_memory_state
   seed_tier_bullet ddaanet shared.md "fresh hook"
   seed_root_bullet "other/fact.md" "a fact"

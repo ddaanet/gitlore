@@ -1,6 +1,6 @@
 {
   "name": "Tier write — route a portable fact into the tier and commit both stores",
-  "description": "With an active tier mounted, the agent is told a fact that holds for every repo in the org. It must write the body into the tier rather than project memory, add the tier-prefixed pointer line to the ROOT index, let composition mirror that line down into the tier's own carrier, and have one approved summary, run through commit-memory.sh, commit memory and the tier in lockstep",
+  "description": "With an active tier mounted, the agent is told a fact that holds for every repo in the org. It must write the body into the tier rather than project memory, add the tier-prefixed pointer line to the ROOT index, let composition mirror that line down into the tier's own carrier, and have one approved summary, piped to gitlore-commit through the gitlore:commit skill, commit memory and the tier in lockstep",
   "setup": "mounted-tier",
   "assert": "tier-write",
   "initial_memory": "# Memory Index\n",

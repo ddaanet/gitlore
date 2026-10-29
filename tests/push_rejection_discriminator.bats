@@ -239,7 +239,7 @@ HOOK
     cd memory || exit 1
     echo new-fact > FACT.md
     git add FACT.md
-    GITLORE_MEMORY_COMMIT=1 git commit -q -m "Add fact"
+    git commit -q -m "Add fact"
     git push -q . HEAD:live
   )
 

@@ -166,11 +166,11 @@ strand_live_behind_head() {
     git checkout -q live
     printf 'on-live\n' > ON-LIVE.md
     git add -A
-    GITLORE_MEMORY_COMMIT=1 git commit -q -m "on live only"
+    git commit -q -m "on live only"
     git checkout -q --detach "$base"
     printf 'on-head\n' > ON-HEAD.md
     git add -A
-    GITLORE_MEMORY_COMMIT=1 git commit -q -m "on HEAD only"
+    git commit -q -m "on HEAD only"
   )
   head=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)

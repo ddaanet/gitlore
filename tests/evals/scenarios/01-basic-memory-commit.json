@@ -1,6 +1,6 @@
 {
   "name": "Basic memory commit",
-  "description": "Agent edits MEMORY.md and is asked to commit it; the SessionStart orientation has it summarise and ask for approval, then run commit-memory.sh on the approved summary — memory committed, live ff-pushed, memory pointer staged in the parent",
+  "description": "Agent edits MEMORY.md and is asked to commit it; the SessionStart orientation has it summarise and ask for approval, then pipe the approved summary to gitlore-commit through the gitlore:commit skill — memory committed, live ff-pushed, memory pointer staged in the parent",
   "initial_memory": "# Memory\n\nInitial content.",
   "prompt": "Add a note to memory/MEMORY.md that we are building an eval suite for gitlore, then commit it to memory.",
   "approval_message": "Looks good, proceed.",

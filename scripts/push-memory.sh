@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Standalone push entry point (D20): publish the memory store and every mounted
 # tier to their own remotes WITHOUT pushing the parent repo. The sibling of
-# commit-memory.sh (D16) — that one satisfies the FR11 gate at an interactive
+# commit-memory.sh (D16) — that one takes the approved summary at an interactive
 # moment, this one satisfies FR8 at one, so a session that commits memory and
 # then ends can still leave every fact durable on its remote.
 #

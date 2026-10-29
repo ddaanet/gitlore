@@ -100,3 +100,29 @@ EOF
   [ -f "$DOGFOOD_RECORD.env" ]
   [ "$(cat "$DOGFOOD_RECORD.env")" = "unset" ]
 }
+
+# A rubric cannot be exercised without the real claude, so what is pinned is the
+# plumbing a rubric depends on: the judge's prompt carries the rubric, the diff
+# and the multi-line message each verbatim, with the message under its own
+# header. A summary that retells a fact body, or omits the reason for an edit,
+# is graded from exactly this text.
+@test "judge.sh puts the rubric, diff and a multi-paragraph summary into the prompt verbatim" {
+  cat > "$MOCK_BIN/claude" <<'MOCK'
+#!/usr/bin/env bash
+# The prompt is the argument after --print.
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--print" ]; then printf '%s' "$2" > "$PROMPT_FILE"; fi
+  shift
+done
+printf 'pass fine\n'
+MOCK
+  chmod +x "$MOCK_BIN/claude"
+  export PROMPT_FILE="$BATS_TEST_TMPDIR/prompt"
+  summary=$'memory: raise the partner rate limit\n\n**Update reference_api_rate_limit:** the limit rose to 600.\nThe account moved to the Business tier (SUP-4412).'
+  run "$JUDGE_SCRIPT" "Fail if it omits the reason." $'-100 per minute\n+600 per minute' "$summary"
+  assert_ok
+  prompt=$(cat "$PROMPT_FILE")
+  [[ "$prompt" == *"RUBRIC: Fail if it omits the reason."* ]]
+  [[ "$prompt" == *$'DIFF:\n-100 per minute\n+600 per minute'* ]]
+  [[ "$prompt" == *"COMMIT_MESSAGE:"$'\n'"$summary" ]]
+}

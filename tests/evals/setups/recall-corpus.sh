@@ -48,6 +48,6 @@ EOF
 
 # Committed, so the store is clean when the agent starts: a dirty memory store
 # would drag the commit gate into a scenario that is grading recall.
-GITLORE_MEMORY_COMMIT=1 git -C memory add -A
-GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "Add deploy lock reference"
+git -C memory add -A
+git -C memory commit -q -m "Add deploy lock reference"
 git -C memory branch -f live HEAD

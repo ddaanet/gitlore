@@ -27,6 +27,9 @@ source "$PLUGIN_ROOT/scripts/lib/session-tiers.sh"
 # report_memory_position, the "where memory stands" stage below.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/session-memory.sh"
+# gitlore_retire_store_gates, the retired-gate cleanup stage below.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/session-gate-cleanup.sh"
 
 # Guard 1: gitlore.enabled
 # Guard on the file rather than suppressing jq: "no settings.json" is the normal
@@ -195,10 +198,8 @@ if git -C "$mempath" symbolic-ref -q HEAD >/dev/null; then
   gitlore_git -C "$mempath" checkout -q --detach
 fi
 
-# Wire the submodule-side commit gate (Fix A / FR11). Runs after the memory
-# worktree exists so its gitdir hooks dir is resolvable. Idempotent; re-pins the
-# submodule's gitlore.hooksDir to the live plugin each session.
-bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
+# Remove the retired store gate's pre-commit wrapper and hooksDir mirror (D70).
+gitlore_retire_store_gates "$mempath"
 
 report_memory_position "$mempath"
 

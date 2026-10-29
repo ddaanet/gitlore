@@ -285,7 +285,7 @@ load helpers/resolve-recovery
   resolve_gate || true
   # Land the merge as the continuation does, then let a checkout move HEAD off
   # it while the state file is still there.
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q --no-edit
+  git -C memory commit -q --no-edit
   landed=$(git -C memory rev-parse HEAD)
   git -C memory checkout -q --detach live
   # The merge commit is reachable from no ref, and `fsck --unreachable` still

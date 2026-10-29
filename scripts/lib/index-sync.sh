@@ -61,7 +61,7 @@ gitlore_set_frontmatter_description() {
   # below already removes $tmp on a caught failure, but that cannot run at all
   # if the process is killed mid-write; placing it outside the tracked
   # worktree bounds that window to "leftover in the gitdir", never "untracked
-  # neighbour the FR11 gate's `git add -A` sweeps up". `--absolute-git-dir`,
+  # neighbour a later `git add -A` sweeps up". `--absolute-git-dir`,
   # not `--git-path`: the latter is relative to the `-C` dir for a plain repo.
   tmp=$(git -C "$(dirname -- "$file")" rev-parse --absolute-git-dir) \
     && tmp="$tmp/gitlore-frontmatter.tmp.$$" || return 1

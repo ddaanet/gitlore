@@ -49,7 +49,7 @@ gitlore_sync_tiers_to_live() {
     fi
     # The message goes in on stdin: no file holds it. Plain git, not gitlore_git,
     # because its lock retry would re-read a stdin the first attempt consumed.
-    if ! printf '%s\n' "$body" | GITLORE_MEMORY_COMMIT=1 git -C "$tierpath" commit -q -F -; then
+    if ! printf '%s\n' "$body" | git -C "$tierpath" commit -q -F -; then
       rm -f "$landing"
       return 1
     fi

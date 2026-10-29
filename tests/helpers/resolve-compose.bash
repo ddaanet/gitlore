@@ -19,7 +19,7 @@ diverge_memory_with_index() {
   (
     cd memory || exit 1
     git add -A
-    GITLORE_MEMORY_COMMIT=1 git -c user.email=t@t -c user.name=t commit -q -m "Pending index"
+    git -c user.email=t@t -c user.name=t commit -q -m "Pending index"
   )
   advance_branch_with_file memory live LIVE.md live-side "Live commit"
   echo parent > parent-file

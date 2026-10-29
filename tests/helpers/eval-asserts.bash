@@ -39,8 +39,8 @@ _make_memory() {
   git -C "$EVAL_REPO" config user.name E
   ( cd "$EVAL_REPO" && make_parent_with_memory )
   printf '# Memory Index\n' > "$EVAL_REPO/memory/MEMORY.md"
-  GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory" add -A
-  GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory" commit -q -m "index"
+  git -C "$EVAL_REPO/memory" add -A
+  git -C "$EVAL_REPO/memory" commit -q -m "index"
   git -C "$EVAL_REPO/memory" branch -f live HEAD
   git -C "$EVAL_REPO/memory" rev-parse HEAD > "$EVAL_OUT_DIR/memory-baseline"
 }
@@ -69,4 +69,80 @@ EOF
     && gitlore_compose memory ) >/dev/null
   # The baseline is taken before the flow; the mount must not have moved HEAD.
   git -C "$EVAL_REPO/memory" rev-parse HEAD > "$EVAL_OUT_DIR/memory-baseline"
+}
+
+# Session-transcript fixtures for the commit assertions: one jsonl line per
+# tool_use, in the shape the recall suite uses.
+_SKILL_COMMIT='{"message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"gitlore:commit"}}]}}'
+_SKILL_WRITING='{"message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"gitlore:memory-writing"}}]}}'
+_BASH_COMMIT='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"gitlore-commit <<'"'"'EOF'"'"'\n== memory ==\nmemory: note\nEOF"}}]}}'
+_BASH_PROBE='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"command -v gitlore-commit"}}]}}'
+_BASH_RAW='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git -C memory commit -am note"}}]}}'
+
+# _write_commit_transcript <line>... : the transcript, one line per argument in
+# order; an empty argument is skipped.
+_write_commit_transcript() {
+  : > "$EVAL_OUT_DIR/transcript.jsonl"
+  local line
+  for line in "$@"; do
+    [ -z "$line" ] || printf '%s\n' "$line" >> "$EVAL_OUT_DIR/transcript.jsonl"
+  done
+}
+
+# The agent-side finish: the agent piped the approved summary to `gitlore-commit`,
+# so memory committed before the assertion ran. Calling the same entry point here
+# reproduces the end state rather than imitating it.
+_commit_approved() {
+  ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
+    "$PLUGIN_ROOT/bin/gitlore-commit" <<<"$SUMMARY" ) >/dev/null
+  _write_commit_transcript "$_SKILL_COMMIT" "$_BASH_COMMIT"
+}
+
+# A dirty memory store plus the approved summary: the state the agent leaves when
+# the user approved and the agent stopped before committing.
+_make_dirty_approved_memory() {
+  _make_memory
+  printf -- '- [eval suite](project_evals.md) — we are building an eval suite\n' \
+    >> "$EVAL_REPO/memory/MEMORY.md"
+  SUMMARY='== memory ==
+memory: note that we are building an eval suite'
+  _stub_judge
+}
+
+# The judge is the last assertion and it shells out to `claude`. Stub it, or
+# every test here would spend a real API call to grade a fixture.
+_stub_judge() {
+  MOCK_BIN="$BATS_TEST_TMPDIR/bin"
+  mkdir -p "$MOCK_BIN"
+  printf '#!/usr/bin/env bash\nprintf "pass fixture\\n"\n' > "$MOCK_BIN/claude"
+  chmod +x "$MOCK_BIN/claude"
+  PATH="$MOCK_BIN:$PATH"
+  export PATH
+}
+
+# The state the agent leaves behind once the user has approved: the fact in the
+# tier, the prefixed pointer in the root index, composition run, and the
+# approved summary in $SUMMARY. Nothing is committed yet; the tests below commit
+# it with _commit_approved or leave memory unmoved.
+FACT=reference_sentry_dsn.md
+
+_make_tier_write_end_state() {
+  _make_add_tier_end_state
+
+  printf -- '---\nname: reference-sentry-dsn\ndescription: one shared DSN across acme services\n---\n\nEvery acme service shares one Sentry DSN; rotating it takes a coordinated deploy.\n' \
+    > "$EVAL_REPO/memory/acme/$FACT"
+  printf -- '- [shared sentry dsn](acme/%s) — rotating it needs a coordinated deploy\n' "$FACT" \
+    >> "$EVAL_REPO/memory/MEMORY.md"
+  # shellcheck disable=SC1091  # dynamic plugin-root paths, resolved at runtime
+  ( cd "$EVAL_REPO" \
+    && source "$PLUGIN_ROOT/scripts/lib/util.sh" \
+    && source "$PLUGIN_ROOT/scripts/lib/index-compose.sh" \
+    && gitlore_compose memory ) >/dev/null
+
+  SUMMARY='== acme ==
+memory: record the shared acme Sentry DSN and its rotation cost
+== memory ==
+memory: record the shared acme Sentry DSN and its rotation cost'
+
+  _stub_judge
 }

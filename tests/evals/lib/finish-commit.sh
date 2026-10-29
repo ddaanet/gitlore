@@ -3,9 +3,10 @@
 # `fail <reason>` (print, exit 1) and has EVAL_REPO / PLUGIN_ROOT in the
 # environment.
 #
-# After the user approves, the agent commits memory by piping the approved
-# sectioned summary to `gitlore-commit`. Nothing else consumes a summary, so the
-# assertions grade the outcome: memory moved past the baseline.
+# After the user approves, the agent commits memory by invoking the
+# `gitlore:commit` skill and piping the approved sectioned summary to
+# `gitlore-commit`. The assertions grade the outcome (memory moved past the
+# baseline) and the trace (the skill came before the commit).
 
 # settle_commit_path <memory-dir> <baseline-sha>
 # Passes when memory committed, or fails. Sets `path_taken` for the failure
@@ -17,6 +18,31 @@ settle_commit_path() {
     return 0
   fi
   fail "memory never moved — the agent did not commit the approved summary after Turn 2"
+}
+
+# check_commit_trace
+# The session transcript must show the `gitlore:commit` Skill call ahead of a
+# Bash command running `gitlore-commit`. A raw `git commit` moves memory too, so
+# only the transcript tells the skill's path from a bypass.
+check_commit_trace() {
+  local transcript="$EVAL_OUT_DIR/transcript.jsonl" trace skill_at after_at any_at
+  [ -s "$transcript" ] || fail "no session transcript at $transcript; the harness did not capture the run"
+  # Indices of the first gitlore:commit Skill call, the first gitlore-commit Bash
+  # command after it, and the first one anywhere (-1 when absent). A mention
+  # ahead of the skill, such as a `command -v` probe, does not fail a run whose
+  # real commit follows the skill.
+  trace=$(jq -rs '
+    [.[] | .message.content[]? | select(.type == "tool_use")]
+    | to_entries as $t
+    | ($t | map(select(.value.name == "Skill" and .value.input.skill == "gitlore:commit")) | first | .key // -1) as $skill
+    | ($t | map(select(.value.name == "Bash" and ((.value.input.command // "") | contains("gitlore-commit")))) | map(.key)) as $bash
+    | [$skill, ($bash | map(select(. > $skill)) | first // -1), ($bash | first // -1)]
+    | map(tostring) | join(" ")' "$transcript") || \
+    fail "could not read the session transcript $transcript"
+  read -r skill_at after_at any_at <<<"$trace"
+  [ "$skill_at" != "-1" ] || fail "the gitlore:commit skill was never invoked"
+  [ "$any_at" != "-1" ] || fail "gitlore-commit was never run"
+  [ "$after_at" != "-1" ] || fail "gitlore-commit ran before the gitlore:commit skill was invoked"
 }
 
 # check_no_commit_before_approval <baseline-sha>

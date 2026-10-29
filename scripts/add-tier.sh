@@ -16,7 +16,7 @@
 #
 # It also makes no commit inside the memory store: gitlore_tier_paths reads
 # memory/.gitmodules from the WORKING TREE, so a staged `submodule add` is
-# already discoverable and the FR11 gate stays the sole committer — the
+# already discoverable and nothing is committed here — the
 # manifest write is the same kind of working-tree-only edit.
 set -euo pipefail
 unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture

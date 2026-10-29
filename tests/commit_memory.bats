@@ -201,7 +201,7 @@ memory: add notes"
   seed_tier_bullet ddaanet shared.md "hook"
   seed_tier_bullet ddaanet shared.md "hook"
   git -C memory/ddaanet add -A
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q -m "carrier: duplicate pointer"
+  git -C memory/ddaanet commit -q -m "carrier: duplicate pointer"
   commit_memory_state
   [ -z "$(git -C memory/ddaanet status --porcelain -- MEMORY.md)" ]
   seed_tier_bullet other o.md "hook"

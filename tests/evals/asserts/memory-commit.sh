@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Assertion: the FR11 memory-commit flow reached its end state.
+# Assertion: the memory-commit flow reached its end state.
 #
 # Contract shared by every script in this directory: run after the agent's turns,
 # with cwd anywhere and EVAL_REPO / EVAL_OUT_DIR / EVAL_RUBRIC /
 # PLUGIN_ROOT / LIB_DIR in the environment. Exit 0 to pass; exit non-zero with
 # the reason on stdout to fail.
 #
-# The agent's own act commits memory (no parent hook does), so the assertion
-# grades the outcome: memory did not move before approval, memory advanced, live
-# fast-forwarded, the parent records the memory pointer, and the message passes
-# the rubric.
+# The agent's own act commits memory, so the assertion grades the outcome and
+# the trace: memory did not move before approval, memory advanced, the session
+# invoked the gitlore:commit skill ahead of gitlore-commit, live fast-forwarded,
+# the parent records the memory pointer, and the message passes the rubric.
 set -uo pipefail
 
 fail() { printf '%s\n' "$1"; exit 1; }
@@ -32,6 +32,9 @@ settle_commit_path "$MEM" "$baseline"
 
 # Assertion 1: memory advanced past where the trial started.
 [ "$(git -C "$MEM" rev-parse HEAD)" != "$baseline" ] || fail "memory not committed ($path_taken)"
+
+# The commit went through the gitlore:commit skill, not around it.
+check_commit_trace
 
 # Assertion 2: live is ff-pushed (HEAD == live).
 head=$(git -C "$EVAL_REPO/memory" rev-parse HEAD)

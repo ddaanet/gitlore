@@ -13,7 +13,7 @@ load helpers/resolve-recovery
 @test "recovery: after the recovery, a memory commit runs to completion instead of aborting on the pin guard" {
   tier_prepare_head_vs_live ddaanet
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  git -C memory/ddaanet commit -q --no-edit
   landed=$(git -C memory/ddaanet rev-parse HEAD)
   git -C memory/ddaanet checkout -q --detach live
 
@@ -31,7 +31,7 @@ load helpers/resolve-recovery
   export GITLORE_GIT_RETRY_SCHEDULE="0 0"
   tier_prepare_head_vs_live ddaanet
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  git -C memory/ddaanet commit -q --no-edit
   landed=$(git -C memory/ddaanet rev-parse HEAD)
   git -C memory/ddaanet checkout -q --detach live
 
@@ -57,7 +57,7 @@ load helpers/resolve-recovery
 # holds today and is a regression pin rather than a red.
 #
 # A host project is not a memory store just for keeping a MEMORY.md at its root,
-# and its gitlink to `memory` is the pre-commit hook's to move under FR11 —
+# and its gitlink to `memory` is the approved-summary commit's to move —
 # staging it here would put a pointer move into the user's own project index
 # outside every approval gate.
 #
@@ -91,7 +91,7 @@ load helpers/resolve-recovery
   run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q --no-edit
+  git -C memory commit -q --no-edit
   landed=$(git -C memory rev-parse HEAD)
   git -C memory checkout -q --detach live
 
@@ -158,7 +158,7 @@ load helpers/resolve-recovery
   [ "$status" -ne 0 ]
   [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  git -C memory/ddaanet commit -q --no-edit
   landed=$(git -C memory/ddaanet rev-parse HEAD)
   git -C memory/ddaanet checkout -q --detach live
   # The merge result, before the commit path is allowed near it.
@@ -193,7 +193,7 @@ load helpers/resolve-recovery
   tier_prepare_head_vs_live ddaanet
   pin_before=$(git -C memory rev-parse ":ddaanet")
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  git -C memory/ddaanet commit -q --no-edit
   landed=$(git -C memory/ddaanet rev-parse HEAD)
   [ "$landed" != "$pin_before" ]
   git -C memory/ddaanet checkout -q --detach live

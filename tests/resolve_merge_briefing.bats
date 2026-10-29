@@ -125,7 +125,7 @@ diverge_index_same_path_different_offsets() {
   (
     cd memory || exit 1
     git add -A
-    GITLORE_MEMORY_COMMIT=1 git -c user.email=t@t -c user.name=t commit -q -m "Base index"
+    git -c user.email=t@t -c user.name=t commit -q -m "Base index"
     git push -q . HEAD:live
   )
   # theirs — the pending commit, adding A after Z.
@@ -134,7 +134,7 @@ diverge_index_same_path_different_offsets() {
   (
     cd memory || exit 1
     git add -A
-    GITLORE_MEMORY_COMMIT=1 git -c user.email=t@t -c user.name=t commit -q -m "Pending index"
+    git -c user.email=t@t -c user.name=t commit -q -m "Pending index"
   )
   # ours — `live` moves sideways, adding A before Z with different text.
   local blob tree commit idx

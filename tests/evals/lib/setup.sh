@@ -59,7 +59,7 @@ setup_eval_repo() {
   # Derived, never hand-listed: a hand-written subset is a registration the evals
   # never exercise, and the whole point of an eval is that it walks the wiring
   # production ships ([[feedback_test_the_invocation_path]]). A subset would leave
-  # hooks dark — the PostToolBatch ones (composition, the commit trigger, add-tier)
+  # hooks dark — the PostToolBatch ones (composition, add-tier)
   # among them.
   local tmp
   tmp=$(mktemp)

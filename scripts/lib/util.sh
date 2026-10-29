@@ -68,7 +68,7 @@ gitlore_cd_project_root() {
 # `git config gitlore.hooksDir` and degrades to a clean skip (exit 0) when that
 # config is unset or the target hook is missing (plugin upgraded + cache GC'd),
 # so a transient plugin state never bricks a commit/push (NFR8/D5). Shared by the
-# parent-hook wrappers (emit-wrappers.sh) and the submodule gate (emit-memory-gate.sh).
+# parent-hook wrappers (emit-wrappers.sh), and by the retired gate's cleanup.
 # Args: $1 = output file path; $2 = hook name to exec under HOOKS_DIR.
 gitlore_emit_hook_wrapper() {
   local out="$1" hook="$2"
@@ -214,12 +214,6 @@ gitlore_memory_dirty() {
   else
     printf '1\n'
   fi
-}
-
-# Exit 0 when the summary file $1 holds something other than whitespace. An
-# all-whitespace file is no approval: it is non-empty, so `-s` alone admits it.
-gitlore_approval_present() {
-  [ -s "$1" ] && grep -q '[^[:space:]]' "$1"
 }
 
 # Exit 0 if $1 is a writable directory, 1 otherwise. Used to detect a sandboxed

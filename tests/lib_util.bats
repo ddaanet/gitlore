@@ -240,20 +240,6 @@ EOF
   [ "$(cat "$TMP_REPO/git-calls")" = "4" ]    # 1 initial + 3 retries
 }
 
-@test "gitlore_approval_present accepts a summary and refuses absent, empty and blank" {
-  msgfile="$TMP_REPO/approval"
-  run ! gitlore_approval_present "$msgfile"        # absent
-  : > "$msgfile"
-  run ! gitlore_approval_present "$msgfile"        # empty
-  # Non-empty, so `-s` alone admits it: this is the case that reaches
-  # `git commit -F` and comes back as "empty commit message".
-  printf '\n  \n\t\n' > "$msgfile"
-  run ! gitlore_approval_present "$msgfile"
-  printf 'memory: record notes\n' > "$msgfile"
-  run gitlore_approval_present "$msgfile"
-  [ "$status" -eq 0 ]
-}
-
 @test "gitlore_store_mid_merge reads a state file, a MERGE_HEAD, or neither" {
   git commit -q --allow-empty -m base
   run ! gitlore_store_mid_merge "$TMP_REPO"

@@ -56,7 +56,7 @@ committed_carrier_defect_store() {
   seed_tier_bullet ddaanet shared.md "hook"
   seed_tier_bullet ddaanet shared.md "hook"
   git -C memory/ddaanet add -A || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q -m "carrier: duplicate pointer" || return 1
+  git -C memory/ddaanet commit -q -m "carrier: duplicate pointer" || return 1
   commit_memory_state || return 1
   [ -z "$(git -C memory/ddaanet status --porcelain -- MEMORY.md)" ] || {
     echo "committed_carrier_defect_store: the carrier is dirty" >&2

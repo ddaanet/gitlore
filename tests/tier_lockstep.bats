@@ -8,9 +8,7 @@
 #      writes, not a set of repositories.
 #   2. The memory submodule gets NO recursing pre-commit/pre-push. Recursion is
 #      driver-side (gitlore_sync_memory_to_live / the parent pre-push), exactly
-#      as the parent already drives memory. `memory-pre-commit` stays a pure FR11
-#      gate — and is emitted into each tier too, so a naked tier commit is
-#      blocked the same way a naked memory commit is.
+#      as the parent already drives memory.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
@@ -21,7 +19,6 @@ load helpers/fixtures
 load helpers/tier-fixtures
 
 PRE_PUSH="$PLUGIN_ROOT/scripts/git-hooks/pre-push"
-EMIT_GATE="$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
 
 setup() {
   setup_tmp_repo
@@ -173,41 +170,4 @@ teardown() { teardown_tmp_repo; }
   local_sha=$(git -C memory rev-parse live)
   remote_sha=$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)
   [ "$local_sha" = "$remote_sha" ]
-}
-
-# --- FR11 gate reaches tiers ---
-
-@test "emit-memory-gate writes the FR11 gate into each tier's hooks dir" {
-  make_parent_with_memory
-  mount_tier_at_live ddaanet
-  run bash "$EMIT_GATE"
-  [ "$status" -eq 0 ]
-  hookfile="$(git -C memory/ddaanet rev-parse --git-path hooks)/pre-commit"
-  [ -x "$hookfile" ]
-}
-
-@test "a naked commit inside a tier is blocked by the FR11 gate" {
-  make_parent_with_memory
-  mount_tier_at_live ddaanet
-  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
-  bash "$EMIT_GATE"
-  echo "- [sneaky](s.md) — x" >> memory/ddaanet/MEMORY.md
-
-  # `approval gate` appears only in the agent arm of memory-pre-commit, so the
-  # arm has to be chosen here rather than inherited from the invoking shell.
-  CLAUDECODE=1 run git -C memory/ddaanet commit -aqm "naked"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"approval gate"* ]]
-}
-
-@test "the blessed driver passes the tier's FR11 gate" {
-  make_parent_with_memory
-  mount_tier_at_live ddaanet
-  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
-  bash "$EMIT_GATE"
-  echo "- [org fact](f.md) — hook" >> memory/ddaanet/MEMORY.md
-
-  run commit_sections "memory: record the org fact"
-  [ "$status" -eq 0 ]
-  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 }

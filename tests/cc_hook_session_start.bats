@@ -124,7 +124,7 @@ assert_session_start_did_nothing() {
   # Live and the detached HEAD both lack the index, so the ff-merge has nothing
   # to restore it from and the working tree is clean before the hook runs.
   git -C memory rm -q MEMORY.md
-  GITLORE_MEMORY_COMMIT=1 git -C memory -c user.email=t@t -c user.name=t commit -q -m "no index"
+  git -C memory -c user.email=t@t -c user.name=t commit -q -m "no index"
   git -C memory update-ref refs/heads/live HEAD
   before=$(git -C memory rev-parse HEAD)
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
@@ -191,22 +191,6 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("FR[0-9]") | not'
   # Forbids by role, never by naming a command form to reason around.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("git -C"; "i") | not'
-}
-
-@test "wires the submodule commit gate (memory-pre-commit) into the submodule hooks dir" {
-  make_parent_with_memory
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  hookfile="$(git -C memory rev-parse --git-path hooks)/pre-commit"
-  [ -x "$hookfile" ]
-  # And it must actually block a naked direct commit.
-  echo dirty > memory/notes.md
-  git -C memory add -A
-  CLAUDECODE=1 run --separate-stderr git -C memory commit -m "direct"
-  [ "$status" -ne 0 ]
-  [[ "${output}${stderr}" == *"blocked"* ]]
 }
 
 @test "detaches memory HEAD when it arrives on a named branch" {

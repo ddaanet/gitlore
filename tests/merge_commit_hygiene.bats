@@ -171,7 +171,7 @@ mount_pinned_tier() {
   mount_pinned_tier
   # Local tier commit …
   seed_tier_bullet ddaanet local-fact.md "local hook"
-  ( cd memory/ddaanet && git add -A && GITLORE_MEMORY_COMMIT=1 git commit -q -m "local tier fact" )
+  ( cd memory/ddaanet && git add -A && git commit -q -m "local tier fact" )
   git -C memory/ddaanet push -q . HEAD:live
   commit_memory_state
   # … and an upstream one: diverged.
