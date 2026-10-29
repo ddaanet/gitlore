@@ -56,7 +56,7 @@ assert_own_libs() {
   git config gitlore.hooksDir "$BATS_TEST_TMPDIR/old/scripts/git-hooks"
   echo dirty > memory/notes.md
 
-  run bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: add notes"
+  run commit_sections "memory: add notes"
   [ "$status" -eq 0 ]
   [[ "$output" != *"command not found"* ]]
   [ -z "$(git -C memory status --porcelain)" ]
@@ -68,7 +68,7 @@ assert_own_libs() {
   make_poisoned_cache "$BATS_TEST_TMPDIR/old"
   echo dirty > memory/notes.md
 
-  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: add notes"
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run commit_sections "memory: add notes"
   assert_own_libs
   [ "$status" -eq 0 ]
   [ "$(git -C memory log -1 --pretty=%s)" = "memory: add notes" ]

@@ -373,8 +373,7 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" == *index-sync-pre.sh\" ]]
   # PostToolBatch takes no matcher — it carries the whole batch, and the hooks
   # key on their own pre-batch baseline rather than on its calls. The event is
-  # shared (memory-commit-batch.sh is also registered here), so select the
-  # index-sync entry by command.
+  # shared with other hooks, so select the index-sync entry by command.
   run jq -r '.hooks.PostToolBatch[].hooks[].command | select(test("index-sync-post"))' "$PLUGIN_ROOT/hooks/hooks.json"
   [[ "$output" == *index-sync-post.sh\" ]]
   # ...and is no longer double-registered on the per-call event.

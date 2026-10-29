@@ -17,10 +17,6 @@ fail() { printf '%s\n' "$1"; exit 1; }
 # shellcheck disable=SC1091  # dynamic path resolved at runtime
 source "$LIB_DIR/finish-commit.sh"
 
-# The approved-summary IPC file the agent writes and commit-memory.sh consumes.
-# Spelled out rather than resolved via scripts/lib/util.sh: these assertions are
-# black-box, and must fail if production moves the file.
-MSG_FILE="$EVAL_REPO/.claude/gitlore-memory-message"
 MEM="$EVAL_REPO/memory"
 
 baseline=""
@@ -31,9 +27,8 @@ baseline=""
 check_no_commit_before_approval "$baseline"
 
 path_taken=""   # set by settle_commit_path
-# Assertion 0: the approved summary was committed — by the agent, by the batch
-# hook, or by finishing the stop path here.
-settle_commit_path "$MEM" "$baseline" "$MSG_FILE"
+# Assertion 0: the approved summary was committed by the agent.
+settle_commit_path "$MEM" "$baseline"
 
 # Assertion 1: memory advanced past where the trial started.
 [ "$(git -C "$MEM" rev-parse HEAD)" != "$baseline" ] || fail "memory not committed ($path_taken)"
@@ -43,10 +38,7 @@ head=$(git -C "$EVAL_REPO/memory" rev-parse HEAD)
 live=$(git -C "$EVAL_REPO/memory" rev-parse live)
 [ "$head" = "$live" ] || fail "live not ff-pushed (HEAD=$head live=$live)"
 
-# Assertion 3: commit-msg temp file was consumed and deleted.
-[ ! -f "$MSG_FILE" ] || fail "commit-msg file still present at $MSG_FILE"
-
-# Assertion 4: the memory pointer is staged in the parent index.
+# Assertion 3: the memory pointer is staged in the parent index.
 check_memory_pointer_staged
 
 # LLM judge: commit message must match the rubric. Capture the judge's stderr

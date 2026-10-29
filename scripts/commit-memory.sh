@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Standalone blessed entry point (D16): commit the memory submodule and advance
-# local `live` without a parent commit. Arg-driven, git-commit-style:
-#   commit-memory.sh -m "<summary>"     # inline
-#   commit-memory.sh -F <file>          # read summary from a file
-#   commit-memory.sh -F -               # read summary from stdin (heredoc)
-#   commit-memory.sh                    # bare: commit on the approval already
-#                                       # on disk, judged by freshness
-# Activation is the memory submodule registration (FR12). Discover this
-# script via `git config gitlore.commitCommand`.
+# Standalone blessed entry point (D16): commit the memory store and its dirty tiers
+# from a sectioned summary, then fast-forward each committed store's local `live`.
+# The summary is the only input, on stdin, through a quoted heredoc:
+#   bash "$(git config gitlore.commitCommand)" <<'EOF'
+#   == <tier> ==
+#   <tier commit message>
+#   == memory ==
+#   <root commit message>
+#   EOF
+# One `== <store> ==` section per store with changes, `memory` for root. Each
+# section is committed verbatim in its own store, tiers before root. Refused
+# before any store is touched (exit 2) when the summary is empty, has text
+# before its first header, or does not match the stores that have changes.
+# It never prepares or takes a merge: a `live` that cannot fast-forward is
+# reported. Discover this script via `git config gitlore.commitCommand`.
 
 # Defensive: a caller's env may carry leaked repo-local GIT_* vars (see
 # `.claude/rules/shell.md` "Git hook env leak"). Clear the full local-env-var set, not a hand-picked
@@ -28,74 +34,122 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
-usage() { echo "usage: commit-memory.sh [-m <summary> | -F <file> | -F - | bare]" >&2; exit 2; }
-summary=""
-have_summary=0
-while [ $# -gt 0 ]; do
-  # Operand checked up front: `shift 2` past the end returns 1, which under
-  # `set -e` would end the script with no message at all.
-  case "$1" in
-    -m)
-      [ $# -ge 2 ] || usage
-      summary="$2"; have_summary=1; shift 2 ;;
-    -F)
-      [ $# -ge 2 ] || usage
-      if [ "$2" = "-" ]; then summary="$(cat)"; else summary="$(cat "$2")"; fi
-      have_summary=1; shift 2 ;;
-    *) usage ;;
-  esac
-done
+refuse() {
+  printf 'usage: commit-memory.sh: %s. Run /gitlore:commit to draft the summary and get it approved.\n' "$1" >&2
+  exit 2
+}
+
+# Whether the root change at $1 belongs to a tier: a tier's gitlink, or a
+# MEMORY.md whose changed link lines all point under a tier prefix. A MEMORY.md
+# change with no changed link line (a heading, a prose line) is root content.
+root_change_is_tier() {
+  local path="$1" tier links=0
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ "$path" = "$tier" ] && return 0
+  done < <(gitlore_tier_paths "$mempath")
+  [ "$path" = MEMORY.md ] || return 1
+  # A changed link that points outside every tier prefix is root content.
+  while IFS= read -r ptr; do
+    local under=0
+    links=1
+    while IFS= read -r tier; do
+      [ -n "$tier" ] || continue
+      case "$ptr" in "$tier"/*) under=1 ;; esac
+    done < <(gitlore_tier_paths "$mempath")
+    [ "$under" = 1 ] || return 1
+  done < <(git -C "$mempath" diff HEAD -U0 -- MEMORY.md | grep -E '^[-+]' | grep -vE '^(\+\+\+|---) ' | grep -oE '\]\([^)]*\)' | sed -e 's/^](//' -e 's/)$//')
+  [ "$links" = 1 ]
+}
+
+[ "$#" -eq 0 ] || refuse "takes no arguments; the summary is read on stdin"
+[ -t 0 ] && refuse "stdin is a terminal, not a summary"
+summary=$(cat)
+case "$summary" in
+  *[![:space:]]*) ;;
+  *) refuse "the summary on stdin is empty" ;;
+esac
 
 mempath=$(gitlore_memory_path) || mempath=""
 
 # Activation: no memory submodule → nothing to do.
 [ -z "$mempath" ] && exit 0
 # Session-less worktree: memory worktree not materialized → nothing to do.
-[ ! -e "$mempath/.git" ] && exit 0
+[ -e "$mempath/.git" ] || exit 0
 
-# Arg-driven approval: when memory is dirty and a summary arrived with the
-# call, write it into the commit-msg IPC file, which satisfies
-# gitlore_sync_memory_to_live's freshness gate by construction (written
-# immediately before the commit). Bare (no summary) leaves the file as it
-# stands and lets that freshness gate judge the approval already on disk.
+# A prepared merge is answered before anything is committed on top of it.
+gitlore_guard_stale_merge_state "$mempath" || exit 1
+# A tier holding a prepared merge is answered before the summary is judged: the
+# merge's directive is the message, not a request for a summary.
+while IFS= read -r tier; do
+  [ -n "$tier" ] || continue
+  [ -e "$mempath/$tier/.git" ] || continue
+  gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
+done < <(gitlore_tier_paths "$mempath")
+
+# What has changes. Tier-only root changes (a gitlink moving, MEMORY.md lines
+# under a tier prefix) need no section; any other root change does.
+dirty_tiers=""
+while IFS= read -r tier; do
+  [ -n "$tier" ] || continue
+  [ -e "$mempath/$tier/.git" ] || continue
+  # A status that cannot be read is not evidence of a clean tier: it counts as
+  # changed, so the sync's own reads report the failure rather than a refusal
+  # saying the tier has nothing to commit.
+  if ! tier_status=$(git -C "$mempath/$tier" status --porcelain 2>&1); then
+    dirty_tiers="$dirty_tiers$tier"$'\n'
+  elif [ -n "$tier_status" ]; then
+    dirty_tiers="$dirty_tiers$tier"$'\n'
+  fi
+done < <(gitlore_tier_paths "$mempath")
+
+root_has=0
+root_content=0
 if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
-  msgfile=$(gitlore_commit_msg_file "$mempath")
-  if [ "$have_summary" = "1" ]; then
-    mkdir -p "$(dirname "$msgfile")"   # .claude/ may not exist yet in a fresh tree
-    printf '%s\n' "$summary" > "$msgfile"
+  root_has=1
+  # NUL-delimited, so a tier path with a space arrives unquoted. A rename record
+  # is followed by its source path as a field of its own.
+  while IFS= read -r -d '' entry; do
+    [ -n "$entry" ] || continue
+    case "${entry:0:2}" in R?|?R|C?|?C) IFS= read -r -d '' _source || true ;; esac
+    if ! root_change_is_tier "${entry:3}"; then root_content=1; fi
+  done < <(git -C "$mempath" status --porcelain -z)
+fi
+
+# Nothing to commit: exit 0 whatever the summary says.
+if [ "$root_has" = "0" ] && [ -z "$dirty_tiers" ]; then
+  exit 0
+fi
+
+# The section check. Every refusal here precedes the first commit.
+headers=$(gitlore_summary_headers "$summary")
+if [ -n "$(gitlore_summary_preamble "$summary")" ]; then
+  refuse "text before the first '== <store> ==' header belongs to no store"
+fi
+tiers=$(gitlore_tier_paths "$mempath")
+seen=""
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  if grep -Fqx -- "$name" <<<"$seen"; then
+    refuse "store '$name' has more than one section"
   fi
-  # A prepared merge outranks the screen below. A merge state makes memory dirty
-  # by construction — its checkout moved the worktree — so a store mid-merge
-  # arrives here with nothing approved and would be answered by a request to
-  # summarize, putting in front of the user a merge both of whose sides they
-  # already approved (D49) in place of the directive /gitlore:resolve acts on.
-  # The sync runs this same guard first; a state this call passes is clean by the
-  # time it runs, so the second one costs a rev-parse and a stat. It goes after
-  # the `-m`/`-F` write so an approval passed with the call is kept for the retry.
-  gitlore_guard_stale_merge_state "$mempath" || exit 1
-  # Screened on both arms, after the write, because `-m ""` and `-F -` over empty
-  # stdin both reach here; memory-commit-batch.sh screens with the same predicate.
-  if ! gitlore_approval_present "$msgfile"; then
-    # Every mounted tier gets the same guard before that refusal speaks:
-    # gitlore_sync_tiers_to_live prepares a head-vs-live merge inside the tier's
-    # own gitdir, not the root's, so a tier mid-merge with nothing approved hands
-    # over that guard's directive instead of a request for a summary.
-    # Inside this arm rather than ahead of it, the placement resolve-sync-memory.sh
-    # gives its own refusal-side loop, and for the same reason: the guard's
-    # stale-no-merge-head arm REPAIRS, writing into the tier, so running it over a
-    # summary just passed with `-m` would make that approval stale by mtime and
-    # refuse it one step later. The approved path keeps the sync's own per-tier
-    # guard, which runs after the freshness read this one would invalidate.
-    while IFS= read -r tier; do
-      [ -n "$tier" ] || continue
-      [ -e "$mempath/$tier/.git" ] || continue
-      gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
-    done < <(gitlore_tier_paths "$mempath")
-    gitlore_say_for_agent_or_user \
-      "gitlore: memory is dirty; commit-memory needs an approved summary. Pass it with -m <summary> or -F - (heredoc)." \
-      "gitlore: memory has uncommitted changes; run this from Claude Code with an approved summary." >&2
-    exit 1
+  seen="$seen$name"$'\n'
+  if [ "$name" = memory ]; then
+    [ "$root_has" = "1" ] || refuse "store 'memory' has no changes to commit"
+  elif grep -Fqx -- "$name" <<<"$tiers"; then
+    grep -Fqx -- "$name" <<<"$dirty_tiers" || refuse "store '$name' has no changes to commit"
+  else
+    refuse "store '$name' is not a mounted store"
   fi
+  body=$(gitlore_summary_section "$summary" "$name")
+  [ -n "${body//[[:space:]]/}" ] || refuse "the section for '$name' is empty"
+done <<<"$headers"
+while IFS= read -r tier; do
+  [ -n "$tier" ] || continue
+  grep -Fqx -- "$tier" <<<"$headers" || refuse "store '$tier' has changes and no section"
+done <<<"$dirty_tiers"
+if [ "$root_content" = "1" ]; then
+  grep -Fqx -- memory <<<"$headers" || refuse "the root store has changes beyond its tiers and no 'memory' section"
 fi
 
 # Stage the memory gitlink into the superproject index (D58) when this run moved
@@ -126,7 +180,7 @@ stage_memory_pointer() {
 }
 
 memory_before=$(git -C "$mempath" rev-parse HEAD)
-gitlore_sync_memory_to_live "$mempath"
+gitlore_sync_memory_to_live "$mempath" "$summary" || exit 1
 memory_after=$(git -C "$mempath" rev-parse HEAD)
 if [ "$memory_before" != "$memory_after" ]; then
   stage_memory_pointer "$mempath"

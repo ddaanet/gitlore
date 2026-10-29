@@ -35,6 +35,8 @@ source "${BASH_SOURCE[0]%/*}/resolve-merge-state.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/rewrite-guard.sh"
 # shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/commit-summary.sh"
+# shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-sync-tiers.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-sync-memory.sh"

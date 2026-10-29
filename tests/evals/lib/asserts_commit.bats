@@ -1,8 +1,7 @@
 #!/usr/bin/env bats
 # The tier-write and memory-commit assertion scripts against end states built by
-# hand: the fact routed into the mounted tier, the approved summary, and which
-# finish (the assertion running commit-memory.sh, or a commit already made) the
-# agent left behind. The add-tier and recall assertions are in asserts.bats; both
+# hand: the fact routed into the mounted tier, the approved summary, and
+# whether the agent committed it. The add-tier and recall assertions are in asserts.bats; both
 # suites share tests/helpers/eval-asserts.bash.
 #
 # An assertion that always passes turns a scenario into an expensive no-op, and
@@ -44,9 +43,8 @@ EOF
 
 # The state the agent leaves behind once the user has approved: the fact in the
 # tier, the prefixed pointer in the root index, composition run, and the
-# approved summary on disk. Nothing is committed yet — which finish happens next
-# (the assertion running commit-memory.sh, or a commit already made) is what the
-# tests below vary.
+# approved summary in $SUMMARY. Nothing is committed yet; the tests below commit
+# it with _commit_approved or leave memory unmoved.
 FACT=reference_sentry_dsn.md
 
 _make_tier_write_end_state() {
@@ -62,8 +60,10 @@ _make_tier_write_end_state() {
     && source "$PLUGIN_ROOT/scripts/lib/index-compose.sh" \
     && gitlore_compose memory ) >/dev/null
 
-  printf 'memory: record the shared acme Sentry DSN and its rotation cost\n' \
-    > "$EVAL_REPO/.claude/gitlore-memory-message"
+  SUMMARY='== acme ==
+memory: record the shared acme Sentry DSN and its rotation cost
+== memory ==
+memory: record the shared acme Sentry DSN and its rotation cost'
 
   _stub_judge
 }
@@ -79,28 +79,17 @@ _stub_judge() {
   export PATH
 }
 
-# The agent-side finish: the agent ran commit-memory.sh itself, or wrote the
-# trigger too and the batch hook ran it, so memory committed before the assertion
-# ever ran. commit-memory.sh IS what both invoke, so calling it here reproduces
-# the end state rather than imitating it.
-_commit_via_batch_path() {
+# The agent-side finish: the agent piped the approved summary to `gitlore-commit`,
+# so memory committed before the assertion ran. Calling the same entry point here
+# reproduces the end state rather than imitating it.
+_commit_approved() {
   ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
-    bash "$PLUGIN_ROOT/scripts/commit-memory.sh" \
-      -F "$EVAL_REPO/.claude/gitlore-memory-message" ) >/dev/null
-}
-
-@test "tier-write: passes when the agent stopped after writing the summary" {
-  _make_tier_write_end_state
-  _run_assert tier-write
-  assert_ok
-  # The assertion finished the commit itself, through commit-memory.sh.
-  [ "$(git -C "$EVAL_REPO/memory" rev-parse HEAD)" != "$(cat "$EVAL_OUT_DIR/memory-baseline")" ]
-  [ ! -f "$EVAL_REPO/.claude/gitlore-memory-message" ]
+    "$PLUGIN_ROOT/bin/gitlore-commit" <<<"$SUMMARY" ) >/dev/null
 }
 
 @test "tier-write: fails when the memory pointer is not staged in the parent" {
   _make_tier_write_end_state
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" reset -q -- memory
   _run_assert tier-write
   assert_fails "does not have 'memory' staged"
@@ -110,7 +99,7 @@ _commit_via_batch_path() {
 # then recorded at HEAD and the index is clean.
 @test "tier-write: passes when the agent also committed the pointer in the parent" {
   _make_tier_write_end_state
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" commit -q -m "record memory pointer"
   [ -z "$(git -C "$EVAL_REPO" diff --cached --name-only)" ]   # nothing left staged
   [ "$(git -C "$EVAL_REPO" rev-parse HEAD:memory)" = "$(git -C "$EVAL_REPO/memory" rev-parse HEAD)" ]
@@ -131,6 +120,7 @@ _commit_via_batch_path() {
 
 @test "tier-write: passes when memory had not moved by the end of turn 1" {
   _make_tier_write_end_state
+  _commit_approved
   cp "$EVAL_OUT_DIR/memory-baseline" "$EVAL_OUT_DIR/memory-after-turn1"
   _run_assert tier-write
   assert_ok
@@ -140,6 +130,7 @@ _commit_via_batch_path() {
 # moved: it is read as absent.
 @test "tier-write: an empty memory-after-turn1 is ignored" {
   _make_tier_write_end_state
+  _commit_approved
   : > "$EVAL_OUT_DIR/memory-after-turn1"
   _run_assert tier-write
   assert_ok
@@ -149,7 +140,7 @@ _commit_via_batch_path() {
 # recorded gitlink is stale and the user's next parent commit would move it.
 @test "tier-write: fails when memory moved again after the parent recorded the pointer" {
   _make_tier_write_end_state
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" commit -q -m "record memory pointer"
   GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory" commit -q --allow-empty -m "later"
   git -C "$EVAL_REPO/memory" branch -f live HEAD
@@ -161,7 +152,7 @@ _commit_via_batch_path() {
 # Staging the path is not enough: the gitlink must be memory's current HEAD.
 @test "tier-write: fails when the index records memory at a stale sha" {
   _make_tier_write_end_state
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" update-index --cacheinfo "160000,$(cat "$EVAL_OUT_DIR/memory-baseline"),memory"
   # Memory is staged (so the path-name check is satisfied) but at the old sha,
   # and the parent's HEAD does not record the current one either.
@@ -173,7 +164,7 @@ _commit_via_batch_path() {
 
 @test "tier-write: fails when only an unrelated path is staged" {
   _make_tier_write_end_state
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" reset -q -- memory
   printf 'x\n' > "$EVAL_REPO/unrelated.txt"
   git -C "$EVAL_REPO" add unrelated.txt
@@ -182,32 +173,15 @@ _commit_via_batch_path() {
   assert_fails "does not have 'memory' staged"
 }
 
-@test "tier-write: passes when the batch hook already committed (summary consumed)" {
+@test "tier-write: fails when the agent never committed and memory never moved" {
   _make_tier_write_end_state
-  _commit_via_batch_path
-  [ ! -f "$EVAL_REPO/.claude/gitlore-memory-message" ]   # the flow consumed it
   _run_assert tier-write
-  assert_ok
-}
-
-@test "tier-write: fails when the trigger is present but no summary was written" {
-  _make_tier_write_end_state
-  rm -f "$EVAL_REPO/.claude/gitlore-memory-message"
-  : > "$EVAL_REPO/.claude/gitlore-commit-memory"
-  _run_assert tier-write
-  assert_fails "trigger IS present"
-}
-
-@test "tier-write: fails when neither summary nor trigger exists and memory never moved" {
-  _make_tier_write_end_state
-  rm -f "$EVAL_REPO/.claude/gitlore-memory-message"
-  _run_assert tier-write
-  assert_fails "did not write the approved summary"
+  assert_fails "memory never moved"
 }
 
 @test "tier-write: fails on the one-behind gitlink lag" {
   _make_tier_write_end_state
-  _commit_via_batch_path
+  _commit_approved
   # The tier moves after memory recorded it — exactly what committing memory
   # before the tier would leave behind, and invisible in both working trees.
   GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory/acme" \
@@ -219,6 +193,7 @@ _commit_via_batch_path() {
 
 @test "tier-write: fails when the commit message misses the rubric" {
   _make_tier_write_end_state
+  _commit_approved
   printf '#!/usr/bin/env bash\nprintf "fail says nothing about Sentry\\n"\n' > "$MOCK_BIN/claude"
   _run_assert tier-write
   assert_fails "failed judge rubric"
@@ -227,10 +202,10 @@ _commit_via_batch_path() {
 # ------------------------------------------------------------- memory-commit
 
 # The extraction out of run-evals.sh must not have changed what this grades.
-@test "memory-commit: fails when the agent wrote no approved summary" {
+@test "memory-commit: fails when the agent never committed" {
   _make_memory
   _run_assert memory-commit
-  assert_fails "no commit-msg file"
+  assert_fails "memory never moved"
 }
 
 # A dirty memory store plus the approved summary: the state the agent leaves when
@@ -239,29 +214,21 @@ _make_dirty_approved_memory() {
   _make_memory
   printf -- '- [eval suite](project_evals.md) — we are building an eval suite\n' \
     >> "$EVAL_REPO/memory/MEMORY.md"
-  printf 'memory: note that we are building an eval suite\n' \
-    > "$EVAL_REPO/.claude/gitlore-memory-message"
+  SUMMARY='== memory ==
+memory: note that we are building an eval suite'
   _stub_judge
 }
 
 @test "memory-commit: passes when the agent committed memory itself" {
   _make_dirty_approved_memory
-  _commit_via_batch_path
+  _commit_approved
   _run_assert memory-commit
   assert_ok
-}
-
-@test "memory-commit: passes when the agent stopped after writing the summary" {
-  _make_dirty_approved_memory
-  _run_assert memory-commit
-  assert_ok
-  # The assertion committed memory itself, through commit-memory.sh.
-  [ "$(git -C "$EVAL_REPO/memory" rev-parse HEAD)" != "$(cat "$EVAL_OUT_DIR/memory-baseline")" ]
 }
 
 @test "memory-commit: fails when the memory pointer is not staged in the parent" {
   _make_dirty_approved_memory
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" reset -q -- memory
   _run_assert memory-commit
   assert_fails "does not have 'memory' staged"
@@ -271,7 +238,7 @@ _make_dirty_approved_memory() {
 # then recorded at HEAD and the index is clean.
 @test "memory-commit: passes when the agent also committed the pointer in the parent" {
   _make_dirty_approved_memory
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" commit -q -m "record memory pointer"
   [ -z "$(git -C "$EVAL_REPO" diff --cached --name-only)" ]   # nothing left staged
   [ "$(git -C "$EVAL_REPO" rev-parse HEAD:memory)" = "$(git -C "$EVAL_REPO/memory" rev-parse HEAD)" ]
@@ -292,6 +259,7 @@ _make_dirty_approved_memory() {
 
 @test "memory-commit: passes when memory had not moved by the end of turn 1" {
   _make_dirty_approved_memory
+  _commit_approved
   cp "$EVAL_OUT_DIR/memory-baseline" "$EVAL_OUT_DIR/memory-after-turn1"
   _run_assert memory-commit
   assert_ok
@@ -301,6 +269,7 @@ _make_dirty_approved_memory() {
 # moved: it is read as absent.
 @test "memory-commit: an empty memory-after-turn1 is ignored" {
   _make_dirty_approved_memory
+  _commit_approved
   : > "$EVAL_OUT_DIR/memory-after-turn1"
   _run_assert memory-commit
   assert_ok
@@ -310,7 +279,7 @@ _make_dirty_approved_memory() {
 # recorded gitlink is stale and the user's next parent commit would move it.
 @test "memory-commit: fails when memory moved again after the parent recorded the pointer" {
   _make_dirty_approved_memory
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" commit -q -m "record memory pointer"
   GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory" commit -q --allow-empty -m "later"
   git -C "$EVAL_REPO/memory" branch -f live HEAD
@@ -322,7 +291,7 @@ _make_dirty_approved_memory() {
 # Staging the path is not enough: the gitlink must be memory's current HEAD.
 @test "memory-commit: fails when the index records memory at a stale sha" {
   _make_dirty_approved_memory
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" update-index --cacheinfo "160000,$(cat "$EVAL_OUT_DIR/memory-baseline"),memory"
   # Memory is staged (so the path-name check is satisfied) but at the old sha,
   # and the parent's HEAD does not record the current one either.
@@ -334,7 +303,7 @@ _make_dirty_approved_memory() {
 
 @test "memory-commit: fails when only an unrelated path is staged" {
   _make_dirty_approved_memory
-  _commit_via_batch_path
+  _commit_approved
   git -C "$EVAL_REPO" reset -q -- memory
   printf 'x\n' > "$EVAL_REPO/unrelated.txt"
   git -C "$EVAL_REPO" add unrelated.txt
@@ -345,6 +314,7 @@ _make_dirty_approved_memory() {
 
 @test "memory-commit: fails when the commit message misses the rubric" {
   _make_dirty_approved_memory
+  _commit_approved
   printf '#!/usr/bin/env bash\nprintf "fail generic message\\n"\n' > "$MOCK_BIN/claude"
   _run_assert memory-commit
   assert_fails "failed judge rubric"

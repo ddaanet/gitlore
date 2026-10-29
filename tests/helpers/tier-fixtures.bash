@@ -92,10 +92,6 @@ mount_tier_at_live() {
   git -C "memory/$tier" checkout -q --detach live
 }
 
-# Write $1 as the memory episode's approval summary, the shape
-# `commit-memory.sh` reads back as the commit message.
-approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
-
 # Push a new commit onto a tier remote's `live` branch and echo its SHA.
 # Args: $1 = tier name (default "ddaanet"), $2 = line to append to MEMORY.md
 push_tier_fact() {

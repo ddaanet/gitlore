@@ -46,8 +46,8 @@ gitlore_clear_merge_state() {
 # MERGE_HEAD, or both. This is gitlore_detect_stale_merge_state's "clean"
 # outcome inverted, without its classification of the other three: a caller that
 # only needs to order a merge ahead of its own work lives outside resolve.sh
-# (memory-commit-batch.sh, and index-compose-check.sh, which resolve.sh sources)
-# and cannot reach that function.
+# (index-compose-check.sh, which resolve.sh sources) and cannot reach that
+# function.
 #
 # Kept rather than replaced by gitlore_any_store_mid_merge below: a caller that
 # asks about one *named* store still needs this one. index-compose-check.sh runs

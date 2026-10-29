@@ -3,8 +3,6 @@
 /.claude/handoff.md
 /.claude/handoff-task.md
 .claude/handoff-session
-/.claude/gitlore-memory-message
-/.claude/gitlore-commit-memory
 /.claude/gitlore-add-tier
 /.venv/
 /.claude/autodrive

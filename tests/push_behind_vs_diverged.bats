@@ -230,7 +230,7 @@ add_memory_commit() {
   git -C memory checkout -q --detach HEAD~
   head_before=$(git -C memory rev-parse HEAD)
 
-  run --separate-stderr gitlore_sync_memory_to_live memory
+  run --separate-stderr gitlore_advance_live memory memory
   [ "$status" -eq 1 ]
   msg="$output$stderr"
   [[ "$msg" == *"is not at its local 'live'"* ]]

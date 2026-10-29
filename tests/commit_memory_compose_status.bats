@@ -27,7 +27,7 @@ load helpers/commit-memory
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
 
   head_before=$(git -C memory rev-parse HEAD)
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record the shared fact"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
   [[ "$stderr" == *"tier composition refused"* ]]
@@ -65,7 +65,7 @@ load helpers/commit-memory
   gd=$(git -C memory/ddaanet rev-parse --absolute-git-dir)
   git -C memory/ddaanet rev-parse HEAD > "$gd/MERGE_HEAD"
 
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record the shared fact"
   # Three separate abort points answer this fixture — the per-tier stale-merge
   # loop, the pin guard, and gitlore_sync_tiers_to_live's own guard — so the
   # exit code alone cannot say which one fired, and only removing all three
@@ -84,8 +84,7 @@ load helpers/commit-memory
   # Reuses the induction at tests/index_compose_dangling.bats: chmod a-w on the
   # carrier's directory fails the `mv` gitlore_compose_write makes into it (the
   # temp file itself lands in the tier's own gitdir, never here). A half-written
-  # carrier must not be committed, so the approved summary must survive for the
-  # retry rather than being consumed by an aborted commit.
+  # carrier must not be committed, and the aborted run leaves no file behind.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -94,11 +93,11 @@ load helpers/commit-memory
 
   head_before=$(git -C memory rev-parse HEAD)
   chmod a-w memory/ddaanet
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record the shared fact"
   chmod u+w memory/ddaanet
   [ "$status" -ne 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
-  [ -f "$(gitlore_commit_msg_file memory)" ]
+  [ -z "$(claude_files)" ]
   # The exit code alone would pass against a silent abort, which is the worse
   # failure: a refused commit with nothing said about why. Header plus the
   # forwarded problem line, for the same two-faults reason as the rc-1 case.
@@ -110,7 +109,7 @@ load helpers/commit-memory
   [[ "$stderr" == *"Investigate that path (permissions, disk space, a read-only worktree)"* ]]
 }
 
-@test "an unrecognised compose status aborts and keeps the approval" {
+@test "an unrecognised compose status aborts and says which status it met" {
   # gitlore_compose returns only 0, 1 or 2 (index-compose.sh:324-377), so the
   # `*)` arm is unreachable through the real function. Drive it directly with a
   # stub that redefines gitlore_compose after sourcing the real libs, in the
@@ -118,39 +117,21 @@ load helpers/commit-memory
   make_parent_with_memory
   printf -- '---\nname: local\ndescription: ""\n---\n\na local fact\n' > memory/local.md
   seed_root_bullet "local.md" "a local fact"
-  msgfile=$(gitlore_commit_msg_file memory)
-  printf 'memory: record a local fact\n' > "$msgfile"
-  # gitlore_commit_msg_freshness compares whole-second mtimes with `>=`, so a
-  # restamp landing in the same second as the summary would still read fresh
-  # and this test's freshness assertion would go vacuous.
-  sleep 1
-
-  driver="$BATS_TEST_TMPDIR/driver.sh"
-  cat > "$driver" <<DRIVER
-#!/usr/bin/env bash
-set -euo pipefail
-source "$PLUGIN_ROOT/scripts/lib/util.sh"
-source "$PLUGIN_ROOT/scripts/lib/log.sh"
-source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
-gitlore_compose() {
-  printf 'stub: could not write memory/MEMORY.md\n'
+  stub_commit_script 'gitlore_compose() {
+  printf "stub: could not write memory/MEMORY.md\n"
   touch memory/MEMORY.md
   return 7
-}
-gitlore_sync_memory_to_live memory
-DRIVER
+}'
 
   head_before=$(git -C memory rev-parse HEAD)
-  run --separate-stderr bash "$driver"
+  run --separate-stderr commit_sections "memory: record a local fact"
   [ "$status" -ne 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   # The whole arm text, not a bare "7": stderr carries tmpdir paths whose
   # mktemp suffix can contain the digit, so a substring match on it alone would
   # go vacuous without ever proving the `*)` arm was reached.
   [[ "$stderr" == *"unrecognised status (7)"* ]]
-  # This is this test's half of the red: the restamp the fix adds is what keeps
-  # the approval usable on the retry.
-  [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
+  [ -z "$(claude_files)" ]
 }
 
 @test "the rc-1 user arm does not tell a user to retry a commit that succeeded" {
@@ -176,7 +157,7 @@ DRIVER
   # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
   # regardless of the ambient environment.
   unset CLAUDECODE
-  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  run --separate-stderr commit_sections "memory: record the shared fact"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
   [[ "$stderr" == *"ask it to repair the memory store."* ]]
@@ -202,7 +183,7 @@ DRIVER
   # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
   # regardless of the ambient environment.
   unset CLAUDECODE
-  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  run --separate-stderr commit_sections "memory: record the shared fact"
   chmod u+w memory/ddaanet
   [ "$status" -ne 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
@@ -227,7 +208,7 @@ DRIVER
   # tests/git_hook_memory_pre_commit.bats:29 also does) to read the user arm
   # regardless of the ambient environment.
   unset CLAUDECODE
-  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  run --separate-stderr commit_sections "memory: record the shared fact"
   [ "$status" -ne 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   # The header fragment is what discriminates: the "…, then retry." ending is

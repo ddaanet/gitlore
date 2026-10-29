@@ -154,10 +154,11 @@ strand_live_behind_head() {
   [[ "$output$stderr" == *"stranded behind HEAD"* ]]
 }
 
-@test "reports a store whose HEAD and 'live' have diverged instead of moving either" {
-  # Only a `live` the current HEAD contains is unambiguously stranded. When each
-  # ref holds a commit the other lacks, which one was intended is not
-  # recoverable from the refs, so the repair declines and says so.
+@test "a store whose HEAD and 'live' have diverged gets a prepared merge of HEAD, and live stays put" {
+  # Each ref holds a commit the other lacks. /gitlore:merge reconciles them
+  # after its remote step: a merge is prepared for /gitlore:resolve, as for a
+  # diverged remote; `live` does not move until it lands. The preparation checks
+  # out the authority, so HEAD is read from MERGE_HEAD, the pending side.
   wire_memory_remote
   base=$(git -C memory rev-parse HEAD)
   (
@@ -176,9 +177,11 @@ strand_live_behind_head() {
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [ "$(git -C memory rev-parse HEAD)" = "$head" ]
+  [[ "$output$stderr" == *"memory merge prepared"* ]]
+  [[ "$output$stderr" != *"have each moved"* ]]
+  [ "$(jq -r .flavor "$(gitlore_merge_state_file memory)")" = "head-vs-live" ]
   [ "$(git -C memory rev-parse live)" = "$live" ]
-  [[ "$output$stderr" == *"have each moved since they last agreed"* ]]
+  [ "$(git -C memory rev-parse MERGE_HEAD)" = "$head" ]
   # The repair runs before the no-op report, so a store that is about to fail is
   # never first told it holds everything it needs.
   [[ "$output$stderr" != *"already holds everything"* ]]

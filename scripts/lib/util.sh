@@ -140,24 +140,10 @@ _gitlore_ipc_dir() {
   printf '%s/.claude\n' "$super"
 }
 
-# Print abs path to the memory commit-message IPC file. The agent writes the
-# approved commit summary here; gitignored (see `.gitignore`).
-gitlore_commit_msg_file() {
-  printf '%s/gitlore-memory-message\n' "$(_gitlore_ipc_dir "$1")"
-}
-
-# Print abs path to the commit-memory trigger file. The agent creates this
-# ordinary file to ask the PostToolBatch hook (memory-commit-batch.sh) to commit
-# memory on its behalf — the agent never runs git, sidestepping the sandbox and
-# the auto-mode classifier. Gitignored.
-gitlore_commit_trigger_file() {
-  printf '%s/gitlore-commit-memory\n' "$(_gitlore_ipc_dir "$1")"
-}
-
 # Print abs path to the add-tier intent file. The agent writes the mount/create
 # intent here as `key=value` lines; the PostToolBatch hook (add-tier-batch.sh)
-# runs the git on its behalf. Same trigger-file route as the commit path, and for
-# a second reason on top of the classifier: mounting a tier CLONES, and the
+# runs the git on its behalf. The agent never runs git here, which sidesteps the
+# auto-mode classifier, and mounting a tier CLONES, and the
 # command sandbox has no network — only the hook, which runs outside it, can
 # reach the remote. Gitignored.
 gitlore_add_tier_file() {
@@ -213,7 +199,7 @@ EOF
 # Print abs path to a tier's landing record: the commit the tier sat on when the
 # commit path last began a commit inside it (gitlore_sync_tiers_to_live), read
 # back by gitlore_stage_landed_tiers. Lives in the tier's gitdir, so it is
-# invisible to `git status` and to the approval's freshness scan.
+# invisible to `git status`.
 # Args: $1 = tier worktree path.
 gitlore_tier_landing_file() {
   git -C "$1" rev-parse --git-path gitlore-tier-landing
@@ -230,52 +216,8 @@ gitlore_memory_dirty() {
   fi
 }
 
-# Print a file's mtime as an epoch second, portably (GNU `stat -c` vs BSD/macOS
-# `stat -f`). The flavor is probed ONCE, against a path that always exists, and
-# memoized — rather than running the GNU form per file and discarding its stderr,
-# which on BSD suppresses an expected error every call and on GNU silently
-# swallows a real one (missing file, permission denied). After the probe, no stat
-# error is hidden. The probe itself redirects because provoking the failure is
-# how it detects the flavor. Args: $1 = file.
-_gitlore_mtime() {
-  if [ -z "${_GITLORE_STAT_FLAVOR:-}" ]; then
-    if stat -c '%Y' . >/dev/null 2>&1; then
-      _GITLORE_STAT_FLAVOR=gnu
-    else
-      _GITLORE_STAT_FLAVOR=bsd
-    fi
-  fi
-  case "$_GITLORE_STAT_FLAVOR" in
-    gnu) stat -c '%Y' "$1" ;;
-    *)   stat -f '%m' "$1" ;;
-  esac
-}
-
-# Echo "yes" if commit-msg file is fresh (mtime >= newest tracked memory file),
-# else "no" or "absent".
-gitlore_commit_msg_freshness() {
-  local mempath="$1"
-  local msgfile
-  msgfile=$(gitlore_commit_msg_file "$mempath") || return 1
-  [ -f "$msgfile" ] || { printf 'absent\n'; return 0; }
-  local newest=0 f m
-  while IFS= LC_ALL=C read -r -d '' f; do
-    m=$(_gitlore_mtime "$f")
-    [ "$m" -gt "$newest" ] && newest="$m"
-  done < <(find "$mempath" -type f -not -path '*/.git/*' -print0)
-  local msgmtime
-  msgmtime=$(_gitlore_mtime "$msgfile")
-  awk -v a="$msgmtime" -v b="${newest:-0}" \
-      'BEGIN { print (a+0 >= b+0) ? "yes" : "no" }'
-}
-
-# Exit 0 when an approved commit summary is present and says something. An
-# all-whitespace file is no approval: it is non-empty and fresh by mtime, so it
-# reaches `git commit -F`, which rejects it as an empty message on an arm that
-# restamps the file — a refusal every later batch would then reproduce
-# verbatim. Both entry points screen with this before the run, which is what
-# makes "no summary" mean the same thing on either. `-s` leads so grep is never
-# handed a missing file. Args: $1 = the commit-message IPC file.
+# Exit 0 when the summary file $1 holds something other than whitespace. An
+# all-whitespace file is no approval: it is non-empty, so `-s` alone admits it.
 gitlore_approval_present() {
   [ -s "$1" ] && grep -q '[^[:space:]]' "$1"
 }

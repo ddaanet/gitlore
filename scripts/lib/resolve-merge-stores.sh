@@ -277,3 +277,50 @@ gitlore_live_ahead_of_head() {
   [ "$head" != "$live" ] || return 1
   git -C "$store" merge-base --is-ancestor "$head" "$live"
 }
+
+# Reconcile every store's checked-out branch with its local `live`, after the
+# remote step: fast-forward when HEAD is ahead of `live`, a prepared head-vs-live
+# merge for `/gitlore:resolve` when the two have forked. A HEAD behind `live` is
+# left to the take and the publish preflight, which own that direction.
+# Returns 0 when every store agrees or was advanced, 1 after a merge was prepared
+# or a store could not be advanced.
+# Args: $1 = memory worktree path.
+gitlore_reconcile_stores() {
+  local mempath="$1" tier tierpath
+  gitlore_reconcile_one "$mempath" memory || return 1
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
+    [ -e "$tierpath/.git" ] || continue
+    gitlore_reconcile_one "$tierpath" "tier '$tier'" || return 1
+  done < <(gitlore_tier_paths "$mempath")
+  return 0
+}
+
+# One store's reconcile. Args: $1 = store worktree, $2 = label for messages.
+gitlore_reconcile_one() {
+  local store="$1" label="$2" live head push_err
+  # A merge left dead by hand is disposed of, or a prepared one continued, before
+  # anything here reads the refs: the take runs the same guard first.
+  gitlore_guard_stale_merge_state "$store" || return 1
+  # `-q --verify` is silent when `live` does not exist (never fetched).
+  live=$(git -C "$store" rev-parse -q --verify live) || return 0
+  head=$(git -C "$store" rev-parse HEAD)
+  [ "$head" = "$live" ] && return 0
+  case "$(gitlore_classify_refusal "$store" HEAD live)" in
+    ahead)
+      # The existing advance of a `live` stranded behind HEAD (the publish
+      # preflights use the same one).
+      gitlore_repair_stranded_live "$store" "$label" || return 1
+      return 0
+      ;;
+    diverged)
+      # The authority is `live`, the pending side is HEAD: the same preparation
+      # the take uses for a diverged remote.
+      gitlore_yield_merge "$store" live head-vs-live HEAD || return 1
+      return 1
+      ;;
+  esac
+  return 0
+}

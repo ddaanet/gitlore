@@ -20,17 +20,17 @@ the summary describes the facts as they will be committed.
 
 ## Summary format
 
-The commit message is a subject line, a blank line, then sections. Subject line
-has no conventional-commit prefix.
-
-Every section is headed by the store it covers:
+The summary is one section per store with changes, and nothing outside them.
+Each section is headed by the store it covers:
 
 - `== <tier> ==` for each mounted tier store that changed, where `<tier>` is the
   tier's mount name, its directory under `memory/`.
 - `== memory ==` for the root memory store.
 
 Use these headers always, whether one store changed or several. Tiers come
-before `memory`. Under each header, one paragraph per changed memory file.
+before `memory`. Each section is that store's whole commit message: a subject
+line with no conventional-commit prefix, a blank line, then one paragraph per
+changed memory file in that store.
 
 A paragraph opens with a bold prefix naming the file's kind — New, Update,
 Augment, Reduce, or Remove — and its slug, names the change in one clause, and
@@ -41,15 +41,16 @@ body or the index line: the edits are already in the conversation and in
 `git show`, and a retelling buries the cause the approver is weighing. Attribute
 a decision or correction to whoever made it.
 
-A `MEMORY.md` — root or tier — gets no paragraph. If the only root change is
-`MEMORY.md`, the summary has no `== memory ==` section.
+A `MEMORY.md` — root or tier — gets no paragraph. Root changes that only carry
+a tier's facts — its index lines in the root `MEMORY.md`, its gitlink — take no
+`== memory ==` section; they are committed with the tier's.
 
-Template, with two tier stores and a root change:
+Template, with a tier store and a root change:
 
 ```text
-<subject line, no conventional-commit prefix>
-
 == <tier> ==
+
+<subject line for the tier commit>
 
 **New <tier>/<slug>:** what it records, in one clause. What prompted
 writing it now.
@@ -58,6 +59,8 @@ writing it now.
 got wrong, and the evidence that showed it.
 
 == memory ==
+
+<subject line for the root commit>
 
 **Remove <slug>:** what showed it wrong or redundant, and where its
 content now lives.
@@ -73,7 +76,7 @@ content now lives.
    verbatim on stdin through a quoted heredoc so the shell expands nothing:
 
 ```bash
-gitlore-commit-memory <<'EOF'
+gitlore-commit <<'EOF'
 <approved summary, verbatim>
 EOF
 ```

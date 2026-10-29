@@ -176,14 +176,13 @@ _tier_live_ahead_of_pin() {
 
   # --- The memory commit that remedy asks for. ---
   # RECOVERY, and why the residual is accepted: the carrier line is committed
-  # on the pin, the tier's HEAD:live push is refused because `live` still holds
-  # the arrival, and that refusal is divergence — so a head-vs-live merge is
-  # prepared in the tier, joining the line to the file it names. The dangling
-  # report does not block this commit; the divergence gate is what stops it.
-  run --separate-stderr bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: follow the printed remedy"
-  [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"gitlore: memory merge prepared (flavor=head-vs-live) in store:"* ]]
-  [[ "$output$stderr" == *"/memory/ddaanet"* ]]
+  # on the pin, the tier's `live` cannot fast-forward because it still holds
+  # the arrival, and that is reported as divergence. The commit prepares no
+  # merge: /gitlore:merge or /gitlore:push joins the line to the file it names.
+  run --separate-stderr commit_sections "memory: follow the printed remedy"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"/gitlore:merge"* || "$stderr" == *"/gitlore:push"* ]]
+  [ -z "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$live_sha" ]      # the arrival is still held
 }

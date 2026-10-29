@@ -24,7 +24,7 @@
 gitlore_tier_paths() {
   local mempath="$1" rec
   [ -f "$mempath/.gitmodules" ] || return 0
-  # LC_ALL=C: matches gitlore_commit_msg_freshness's own NUL-delimited `read`,
+  # LC_ALL=C: a NUL-delimited `read`,
   # against the bash 5.0-5.3 multibyte `read -d ''` overshoot (BP#65).
   while IFS= LC_ALL=C read -r -d '' rec; do
     printf '%s\n' "${rec#*$'\n'}"
@@ -102,7 +102,7 @@ gitlore_memory_remote_name() {
 # END of its own message. It carries a literal template, so it is multi-line and
 # cannot be spliced into the middle of a sentence — a call site emitting JSON
 # must therefore build it with jq, never a hand-written string. One file so the
-# call sites (memory-commit-batch.sh, resolve.sh) cannot drift on what "approve"
+# call sites cannot drift on what "approve"
 # means — see docs/design.md D19.
 gitlore_memory_approval_clause() {
   cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt"

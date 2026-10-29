@@ -52,14 +52,10 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "agent-written IPC files resolve under the parent .claude/, not the gitdir" {
-  make_parent_with_memory
-  local dir="$TMP_REPO/.claude"
-  # The agent writes these, so they must live where the agent can write.
-  [ "$(gitlore_commit_msg_file memory)"     = "$dir/gitlore-memory-message" ]
-  [ "$(gitlore_commit_trigger_file memory)" = "$dir/gitlore-commit-memory" ]
-  [[ "$(gitlore_commit_msg_file memory)"     != *".git/"* ]]
-  [[ "$(gitlore_commit_trigger_file memory)" != *".git/"* ]]
+@test "no message file path or freshness judgement exists: the summary has no file" {
+  run bash -c 'source "$1/scripts/lib/util.sh"; declare -F gitlore_commit_msg_file gitlore_commit_msg_freshness' _ "$PLUGIN_ROOT"
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
 }
 
 @test "gitlore_probe_writable succeeds on a writable dir" {

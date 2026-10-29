@@ -2,7 +2,6 @@
 # tier-merge preparation helpers, and the fixtures that diverge a store's root
 # index or mount a tier detached on `live`.
 
-COMMIT_MEMORY="$PLUGIN_ROOT/scripts/commit-memory.sh"
 PRE_PUSH="$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 # shellcheck disable=SC2034   # used by callers' @test bodies
 RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
@@ -40,7 +39,7 @@ prepare_tier_merge_with_new_lines() {
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
   bash "$preparer" && return 1
   printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [org fact](f.md) — ours\n- [their fact](t.md) — theirs\n' \

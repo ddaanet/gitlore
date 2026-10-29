@@ -16,7 +16,6 @@ fail() { printf '%s\n' "$1"; exit 1; }
 TIER=acme
 MEM="$EVAL_REPO/memory"
 TIERPATH="$MEM/$TIER"
-MSG_FILE="$EVAL_REPO/.claude/gitlore-memory-message"
 
 # shellcheck disable=SC1091  # dynamic path resolved at runtime
 source "$LIB_DIR/finish-commit.sh"
@@ -58,9 +57,7 @@ grep -q "($new_file)" "$TIERPATH/MEMORY.md" || \
   fail "tier index $TIER/MEMORY.md has no line for $new_file; the compose pass did not mirror it down"
 
 # 4. The approval gate ran, and the approved summary is what commits both stores.
-#    Which finish the agent picked is not graded (see lib/finish-commit.sh); the
-#    end state is, so a stop-after-summary run is finished here by
-#    commit-memory.sh, the way the product commits an approved summary.
+#    The end state is graded (see lib/finish-commit.sh).
 baseline=""
 [ -f "$EVAL_OUT_DIR/memory-baseline" ] && baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
 [ -n "$baseline" ] || fail "no memory baseline captured; the harness did not record where the store started"
@@ -69,7 +66,7 @@ baseline=""
 check_no_commit_before_approval "$baseline"
 
 path_taken=""   # set by settle_commit_path
-settle_commit_path "$MEM" "$baseline" "$MSG_FILE"
+settle_commit_path "$MEM" "$baseline"
 
 # 5. Memory advanced past where the trial started.
 mem_after=$(git -C "$MEM" rev-parse HEAD)
@@ -112,11 +109,7 @@ fi
 [ "$tier_after" = "$tier_live" ] || \
   fail "tier HEAD ($tier_after) is not at live ($tier_live); the tier commit did not fast-forward live"
 
-# 10. The commit-msg file is consumed by the commit that used it. One approval is
-#     spent once: a summary left on disk would be re-applied to the next commit.
-[ ! -f "$MSG_FILE" ] || fail "commit-msg file still present at $MSG_FILE ($path_taken)"
-
-# 10b. The memory pointer is staged in the parent index.
+# 10. The memory pointer is staged in the parent index.
 check_memory_pointer_staged
 
 # 11. The rubric. The scenario grades whether the commit message describes the

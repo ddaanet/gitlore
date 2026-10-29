@@ -92,7 +92,7 @@ gitlore_set_frontmatter_description() {
 }
 
 # Abs/relative path of the pre-edit MEMORY.md stash, inside the submodule
-# gitdir (untracked; mirrors gitlore_commit_msg_file). $1 = memory path;
+# gitdir (untracked). $1 = memory path;
 # $2 = agent id, optional. Absent or empty yields today's unsuffixed name, so
 # the main thread's files do not migrate; non-empty appends `-<agent_id>` —
 # see _gitlore_agent_suffix for the exact suffix and why it is sanitized.

@@ -39,12 +39,14 @@ wire_gate() {
   wire_gate
   echo dirty > memory/notes.md
 
-  run bash "$COMMIT_MEMORY" -m "memory: add notes"
+  run bash "$COMMIT_MEMORY" <<'EOF'
+== memory ==
+memory: add notes
+EOF
   [ "$status" -eq 0 ]
   wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
-  [ ! -f "$(gitlore_commit_msg_file memory)" ]
 }
 
 # D58: the parent commit no longer meets the FR11 gate. The approval is asked

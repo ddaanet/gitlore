@@ -21,9 +21,9 @@ run_bare() {
   grep -qxF 'bin' "$PLUGIN_ROOT/dist.include"
 }
 
-@test "bin: gitlore-commit-memory is executable and reaches commit-memory.sh" {
-  [ -x "$PLUGIN_ROOT/bin/gitlore-commit-memory" ]
-  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-commit-memory" --bogus
+@test "bin: gitlore-commit is executable and reaches commit-memory.sh" {
+  [ -x "$PLUGIN_ROOT/bin/gitlore-commit" ]
+  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-commit" --bogus
   # Not an exec failure (126 not executable, 127 not found).
   [ "$status" -ne 126 ]
   [ "$status" -ne 127 ]
@@ -32,20 +32,27 @@ run_bare() {
   [[ "$output" == *"usage: commit-memory.sh"* ]]
 }
 
-@test "bin: gitlore-push-memory is executable and reaches push-memory.sh" {
-  [ -x "$PLUGIN_ROOT/bin/gitlore-push-memory" ]
-  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-push-memory"
+@test "bin: gitlore-push is executable and reaches push-memory.sh" {
+  [ -x "$PLUGIN_ROOT/bin/gitlore-push" ]
+  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-push"
   [ "$status" -ne 126 ]
   [ "$status" -ne 127 ]
   [ "$status" -eq 0 ]
   [[ "$output" == *"nothing to publish"* ]]
 }
 
-@test "bin: gitlore-merge-memory is executable and reaches merge-memory.sh" {
-  [ -x "$PLUGIN_ROOT/bin/gitlore-merge-memory" ]
-  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-merge-memory"
+@test "bin: gitlore-merge is executable and reaches merge-memory.sh" {
+  [ -x "$PLUGIN_ROOT/bin/gitlore-merge" ]
+  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-merge"
   [ "$status" -ne 126 ]
   [ "$status" -ne 127 ]
   [ "$status" -eq 0 ]
   [[ "$output" == *"nothing to reconcile"* ]]
+}
+
+@test "bin: the retired -memory names are gone and exactly the three short names ship" {
+  for old in gitlore-commit-memory gitlore-push-memory gitlore-merge-memory; do
+    [ ! -e "$PLUGIN_ROOT/bin/$old" ]
+  done
+  [ "$(find "$PLUGIN_ROOT/bin" -mindepth 1 -maxdepth 1 -exec basename {} \; | LC_ALL=C sort | paste -sd, -)" = "gitlore-commit,gitlore-merge,gitlore-push" ]
 }

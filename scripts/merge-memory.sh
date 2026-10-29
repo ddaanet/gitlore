@@ -11,8 +11,9 @@ set -euo pipefail
 # putting local facts on a remote.
 #
 # Takes no arguments. There is nothing to approve: taking an already-published
-# commit discloses nothing. Discover this script via `git config
-# gitlore.mergeCommand`.
+# commit discloses nothing. It fetches what each store's remote holds, then
+# reconciles each store's checked-out branch with its local `live`. Discover
+# this script via `git config gitlore.mergeCommand`.
 #
 # Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no memory
 # submodule, or a session-less worktree where memory was never checked out.
@@ -52,6 +53,13 @@ if [ ! -e "$mempath/.git" ]; then
   printf 'gitlore: memory is not checked out in this worktree, so there is nothing to reconcile here. Run `git submodule update --init %s` first.\n' "$mempath"
   exit 0
 fi
+
+# Each store's branch against its local `live` first: fast-forward, or a prepared
+# merge for /gitlore:resolve. A commit leaves those two free to part (D70), and
+# the take refuses a store whose HEAD and `live` have forked, so the reconcile
+# has to answer that before the take runs. A merge prepared here publishes
+# nothing once it lands (the take's own rule).
+GITLORE_MERGE_NO_PUBLISH=1 gitlore_reconcile_stores "$mempath"
 
 gitlore_merge_stores "$mempath"
 

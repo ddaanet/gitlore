@@ -21,7 +21,7 @@ load helpers/commit-memory
   printf -- '---\nname: unrelated\ndescription: ""\n---\n\nbody\n' > memory/unrelated.md
 
   head_before=$(git -C memory rev-parse HEAD)
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record an unrelated fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record an unrelated fact"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
   [[ "${output}${stderr}" == *"the commit went ahead"* ]]
@@ -38,7 +38,7 @@ load helpers/commit-memory
   printf -- '---\nname: unrelated\ndescription: ""\n---\n\nbody\n' > memory/unrelated.md
 
   head_before=$(git -C memory rev-parse HEAD)
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record an unrelated fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record an unrelated fact"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
   [[ "${output}${stderr}" == *"the commit went ahead"* ]]
@@ -76,7 +76,7 @@ committed_carrier_defect_store() {
   printf -- '---\nname: unrelated\ndescription: ""\n---\n\nbody\n' > memory/unrelated.md
 
   head_before=$(git -C memory rev-parse HEAD)
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record an unrelated fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record an unrelated fact"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
   [[ "${output}${stderr}" == *"the commit went ahead"* ]]
@@ -91,7 +91,7 @@ committed_carrier_defect_store() {
   seed_root_bullet "gone/x.md" "leftover"
 
   head_before=$(git -C memory rev-parse HEAD)
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record a leftover prefix"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record a leftover prefix"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
   [[ "${output}${stderr}" == *"root index line 'gone/x.md' has a prefix naming no mounted tier"* ]]
@@ -117,7 +117,7 @@ committed_carrier_defect_store() {
   gd=$(git -C memory/ddaanet rev-parse --absolute-git-dir)
   git -C memory/ddaanet rev-parse HEAD > "$gd/MERGE_HEAD"
 
-  run bash "$CMD" -m "memory: record the shared fact"
+  run commit_sections "memory: record the shared fact"
   [ "$status" -eq 1 ]
   assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — stale hook'
 }
@@ -161,7 +161,7 @@ committed_carrier_defect_store() {
 
   head_before=$(git -C memory rev-parse HEAD)
   pin_before=$(git -C memory rev-parse ":ddaanet")
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record the shared fact"
   [ "$status" -ne 0 ]
   # The unchanged HEAD and the unchanged pin are the assertions this item
   # exists for — the exit code alone would pass against an abort that had
@@ -169,14 +169,8 @@ committed_carrier_defect_store() {
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
   assert_bullets memory/ddaanet/MEMORY.md "- [shared](shared.md) — stale hook"
-  [ -f "$(gitlore_commit_msg_file memory)" ]
-  # The approval survives the abort, so the retry is not refused for a change
-  # nobody made. It reads "absent" against a commit that lands and consumes the
-  # file. What it cannot see is the abort arm's restamp: this fixture writes
-  # nothing before the pin guard, so the tree is no newer than the summary with
-  # or without it — "a commit that fails after composing keeps the approval for
-  # the retry" is the case where the restamp has an observable.
-  [ "$(gitlore_commit_msg_freshness memory)" = "yes" ]
+  # No message file is written, so none is left behind to retry on.
+  [ -z "$(claude_files)" ]
   [[ "$stderr" == *"moved off the commit the memory store records for it"* ]]
   [[ "$stderr" == *"is checked out at"* ]]
   # The wrapper's own sentence, which nothing else in the suite looks at. It
@@ -223,25 +217,21 @@ committed_carrier_defect_store() {
     "$(git -C memory rev-parse ":ddaanet")" HEAD
 
   # The second run reuses this fixture, so what the first run leaves behind is
-  # snapshotted rather than assumed: a first run that stamped the commit-msg
-  # file, staged the gitlink or left merge state would make the second run's
+  # snapshotted rather than assumed: a first run that left a file under
+  # .claude/, staged the gitlink or left merge state would make the second run's
   # result mean something other than "the user arm says the same thing".
   pin_before=$(git -C memory rev-parse ":ddaanet")
   tier_head_before=$(git -C memory/ddaanet rev-parse HEAD)
   tier_state_before=$(git -C memory/ddaanet status --porcelain)
   mem_state_before=$(git -C memory status --porcelain)
 
-  CLAUDECODE=1 run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record the shared fact"
   [ "$status" -ne 0 ]
   agent_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
   [[ "$agent_line" == *"ahead"* ]]
   [[ "$agent_line" == *"leave nothing uncommitted"* ]]
   [[ "$stderr" != *"checkout --detach"* ]]
-  # Every remedy the abort prints writes into the store, which the approved
-  # summary's freshness is measured against, so the agent arm must not promise
-  # the approval survives it.
-  [[ "$stderr" != *"still in place"* ]]
-  [[ "$stderr" == *"approved again"* ]]
+  [ -z "$(claude_files)" ]
 
   [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head_before" ]
@@ -249,7 +239,7 @@ committed_carrier_defect_store() {
   [ "$(git -C memory status --porcelain)" = "$mem_state_before" ]
 
   unset CLAUDECODE
-  run --separate-stderr bash "$CMD" -m "memory: record the shared fact"
+  run --separate-stderr commit_sections "memory: record the shared fact"
   [ "$status" -ne 0 ]
   user_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
   [[ "$user_line" == *"ahead"* ]]

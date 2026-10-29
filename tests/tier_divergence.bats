@@ -108,14 +108,15 @@ load helpers/tier-divergence
   [ -f "$(tier_state_file ddaanet)" ]
 }
 
-@test "pre-commit prepares a merge when a tier commit diverged from its own live" {
+@test "the resolver prepares a merge when a tier commit diverged from its own live" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   # `live` moves sideways underneath the detached worktree.
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
 
-  run --separate-stderr bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
+  run --separate-stderr merge_gate
   [ "$status" -ne 0 ]
   all="${output}${stderr}"
   [[ "$all" == *"gitlore: memory merge prepared"* ]]
@@ -128,7 +129,7 @@ load helpers/tier-divergence
   mount_tier_at_live ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
   # Reachable remote, refused for a reason a merge cannot fix.
   rm -rf "$TMP_REPO/.bare-ddaanet.git/hooks"
   mkdir -p "$TMP_REPO/.bare-ddaanet.git/hooks"
@@ -150,7 +151,7 @@ load helpers/tier-divergence
   mount_tier_at_live ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
   git -C memory merge-base --is-ancestor origin/live live
   [ "$(git -C memory rev-parse live)" != "$(git -C memory rev-parse origin/live)" ]
   published=$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)
@@ -179,7 +180,8 @@ load helpers/tier-divergence
   mount_tier_at_live ddaanet
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact" || true
+  commit_sections "memory: record the org fact"
+  merge_gate || true
   merge_head=$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)
   [ -n "$merge_head" ]
   [ -f "$(git -C memory/ddaanet rev-parse --git-path MERGE_MSG)" ]
@@ -217,7 +219,8 @@ load helpers/tier-divergence
   set_tier_manifest ddaanet
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact" || true
+  commit_sections "memory: record the org fact"
+  merge_gate || true
   [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
 
   mkdir -p .claude

@@ -38,8 +38,8 @@ tier_prepare_head_vs_live() {
   git -C "memory/$tier" checkout -q --detach live
   advance_branch_with_file "memory/$tier" live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> "memory/$tier/MEMORY.md"
-  printf 'memory: record the org fact\n' > "$(gitlore_commit_msg_file memory)"
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  commit_sections "memory: record the org fact"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
   [ -n "$(git -C "memory/$tier" rev-parse -q --verify MERGE_HEAD)" ]
 }

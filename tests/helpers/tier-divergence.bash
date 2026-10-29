@@ -20,7 +20,7 @@ diverge_tier_from_remote() {
   local tier="${1:-ddaanet}"
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   echo "- [org fact](f.md) — ours" >> "memory/$tier/MEMORY.md"
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
   push_tier_fact "$tier" "- [their fact](t.md) — theirs" >/dev/null
 }
 

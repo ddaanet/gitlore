@@ -41,6 +41,10 @@ at any boundary.
 
 ## 2. `commit-memory.sh` takes the summary in the call
 
+- Rename (settled 2026-10-29): the `bin/` names become `gitlore-commit`,
+  `gitlore-push`, `gitlore-merge`, matching the skills; every later mention of
+  `gitlore-*-memory` in this plan reads as the short name.
+
 - Pre: bare invocation commits on an approval file judged by freshness; the sync
   restamps the message file on failure.
 - Post: the summary is read from stdin, the only input; `-m`, `-F` and bare mode
@@ -60,29 +64,47 @@ at any boundary.
   verbatim in its own store, tiers before root. It refuses (exit 2, nothing
   committed, pointing at `/gitlore:commit`) when a store with changes has no
   section, a section names a store with nothing to commit or not mounted, or a
-  store appears twice. Root changes confined to `MEMORY.md` need no section,
-  since an index line moves with its fact: alone they get a plain commit of
-  their own whose canned message names the tiers whose index lines it captures
-  (`Index lines from <tier>, …`), distinct from the merge path's bookkeeping
-  message, and beside a `memory` section they ride in root's own commit.
+  store appears twice. Tier-only root changes — a tier gitlink moving, and
+  `MEMORY.md` lines under a tier prefix — are left out of the summary: a commit
+  created at the same time carries them silently, so beside a `memory` section
+  they ride in root's own commit, and alone they get a plain commit whose canned
+  message names the tiers (`Index lines from <tier>, …`), distinct from the
+  merge path's bookkeeping message. A root `MEMORY.md` line with a bare path is
+  root content and needs the `memory` section.
+- Post (no sync, settled 2026-10-28): the script commits each store on its
+  checked-out branch, then attempts to fast-forward that store's local `live` to
+  the new commit. It never prepares or takes a merge: when `live` cannot
+  fast-forward, the run reports divergence and points at `/gitlore:merge` or
+  `/gitlore:push`, exit 0: a fork is an expected condition, and the report is a
+  directive (`craft:directive-writing`) naming the next act, not an error. The
+  merge and push scripts gain the branch-vs-`live` step ahead of their remote
+  step, so `live` carries the new commit before a push publishes it:
+  fast-forward, else merge, conflicts routed to `/gitlore:resolve` as now.
+  Memory with nothing to commit exits 0. Dirty memory stops being a resting
+  state the commit path produces. The suites that ran the commit on a clean
+  store to reach the sync drive the merge or push entry point instead.
 - Red first: an empty and an all-whitespace stdin each exit 2 with nothing
   committed; a headerless summary is refused when only the tier changed, so
   nothing lands in the shared store; each refusal arm of the section check; a
   two-store run lands each section in its own store and no other store's text;
-  no file left under `.claude/` after a successful run or a refusal. Suites
-  seeding the message file are rewritten to pipe the summary on stdin (list in
-  the removals file); `commit_memory_retry.bats` goes.
-- Invariant: the trigger-file batch still works until commit 3 — it now passes
-  its message file on stdin and keeps its own trigger bookkeeping.
+  no file left under `.claude/` after a successful run or a refusal; `live`
+  fast-forwarded after a commit, and left in place with a divergence report
+  naming `/gitlore:merge` or `/gitlore:push` when it cannot be, no merge
+  prepared. Suites seeding the message file are rewritten to pipe the summary on
+  stdin (list in the removals file); `commit_memory_retry.bats` goes.
+- Post (settled 2026-10-29): the trigger-file batch path goes here, not in
+  commit 3, since it cannot feed the sectioned contract —
+  `memory-commit-batch.sh` and its `hooks.json` entry, its suites,
+  `gitlore_commit_msg_file`, `gitlore_commit_trigger_file` and the `.gitignore`
+  lines.
 
 ## 3. Hook commit path and store gate retire
 
-- Post: `memory-commit-batch.sh` and its `hooks.json` entry,
-  `memory-pre-commit`, `emit-memory-gate.sh` and its `SessionStart` call, every
-  `GITLORE_MEMORY_COMMIT=1` site, `gitlore_commit_trigger_file`, the
-  `.gitignore` lines and the listed tests are gone; batch-naming comments fixed.
-  Evals assert on the memory log and the absence of an in-turn commit, not on
-  the message file or trigger, and on the `Skill` tool_use for `gitlore:commit`
+- Post: `memory-pre-commit`, `emit-memory-gate.sh` and its `SessionStart` call,
+  every `GITLORE_MEMORY_COMMIT=1` site and the listed tests are gone;
+  batch-naming comments fixed (the batch path itself went in commit 2). Evals
+  assert on the memory log and the absence of an in-turn commit, not on the
+  message file or trigger, and on the `Skill` tool_use for `gitlore:commit`
   ahead of the commit. A new scenario edits a fact file for a stated reason, and
   its rubric fails a summary that retells the body or omits the reason.
 - New (Q4): `SessionStart` removes a store or tier `pre-commit` byte-identical
@@ -125,8 +147,8 @@ Commits 1–4: one red author (Sonnet), one red reviewer (Sonnet, a different
 agent), one green implementer (Sonnet for 2 and 3, whose threading and hook
 edits leave choices open; Haiku for 1 and 4), reused across commits by
 `SendMessage`. Commit 5: one Sonnet agent with the two plan files as its brief.
-Each writes its report to a named file. The main thread reviews diffs, runs the
-gate in the background and commits.
+Each writes its report to a named file. A Sonnet reviewer reviews each green
+diff; the main thread orchestrates, runs the gate in the background and commits.
 
 ## Dogfood (same day)
 

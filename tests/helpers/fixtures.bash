@@ -191,12 +191,11 @@ _gitlore_build_parent_with_memory() {
       git branch live
       git checkout -q --detach live
     )
-    # The memory commit-message IPC file lives in the parent tree under .claude/
-    # (relocated 2026-07-16 from the submodule gitdir). Mirror production: create
-    # the dir and gitignore the file so an untracked message never pollutes a
-    # parent `git add -A`.
+    # The add-tier intent file lives in the parent tree under .claude/. Mirror
+    # production: create the dir and gitignore the file so an untracked intent
+    # never pollutes a parent `git add -A`.
     mkdir -p .claude
-    printf '/.claude/gitlore-memory-message\n/.claude/gitlore-commit-memory\n' > .gitignore
+    printf '/.claude/gitlore-add-tier\n' > .gitignore
     git add .gitmodules "$subpath" .gitignore
     git commit -q -m "Add memory submodule"
   )

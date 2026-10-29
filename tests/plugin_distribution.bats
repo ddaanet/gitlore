@@ -198,17 +198,6 @@ load helpers/setup
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/worktree-drift.sh" ]
 }
 
-# The memory-commit trigger hook (FR11) must be registered on PostToolBatch —
-# additive to the index-sync entry that shares the event — and executable, so a
-# distributed plugin can commit memory on a file trigger without the agent
-# running git (sidesteps the sandbox and the auto-mode classifier).
-@test "distribution: memory-commit-batch hook is wired on PostToolBatch and executable" {
-  run jq -r '[.hooks.PostToolBatch[].hooks[].command | select(test("memory-commit-batch"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
-  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh" ]
-}
-
 # D58: a memory commit is the agent's own act, so nothing watches Bash for a
 # commit command. The positive half pins that the hooks it sits beside are still
 # registered, so a hooks.json that lost every entry does not satisfy the absence.
@@ -359,6 +348,8 @@ load helpers/setup
   grep -qF 'invoke the `gitlore:memory-writing` skill' "$skill"
   grep -qxF '== memory ==' "$skill"
   grep -qF '== <tier> ==' "$skill"
-  grep -qF 'gitlore-commit-memory' "$skill"
+  grep -qxF "gitlore-commit <<'EOF'" "$skill"
+  run grep -F 'gitlore-commit-memory' "$skill"
+  [ "$status" -eq 1 ]
   grep -qF "<<'EOF'" "$skill"
 }

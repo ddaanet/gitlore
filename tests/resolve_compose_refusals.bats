@@ -136,7 +136,7 @@ gitlore: then fix the problems listed above and run /gitlore:merge."* ]]
   printf -- '- [new fact](f.md) — mine\n' >> memory/MEMORY.md
   echo mine > memory/f.md
   git -C memory add -A
-  bash "$COMMIT_MEMORY" -m "memory: add a fact"
+  commit_sections "memory: add a fact"
   # Local `live` strictly ahead of the remote's: routed by ancestry, the declined
   # push would read as a non-fast-forward the remote raced.
   git -C memory merge-base --is-ancestor origin/live live

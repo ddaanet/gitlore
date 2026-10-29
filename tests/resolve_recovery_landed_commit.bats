@@ -22,8 +22,7 @@ load helpers/resolve-recovery
   # index records; the per-tier merge-state guard runs ahead of that pin check
   # in the very same function, so the recovery above is what has to bring the
   # two back into agreement before the pin guard ever looks.
-  printf 'memory: adopt the tier merge\n' > "$(gitlore_commit_msg_file memory)"
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr commit_sections 'memory: adopt the tier merge'
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse ":ddaanet")" = "$landed" ]
 }
@@ -89,7 +88,7 @@ load helpers/resolve-recovery
   # cleanup line here to trip errexit whatever a fixed implementation does with
   # the file.
   printf '# host project notes\n' > MEMORY.md
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
 
   GITLORE_MEMORY_COMMIT=1 git -C memory commit -q --no-edit
@@ -128,8 +127,7 @@ load helpers/resolve-recovery
   # A fact both indexes carry, established through the real commit path so
   # root's block holds root's own copy of the line.
   seed_tier_bullet ddaanet shared.md "ours"
-  printf 'memory: record the shared fact\n' > "$(gitlore_commit_msg_file memory)"
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr commit_sections 'memory: record the shared fact'
   [ "$status" -eq 0 ]
   assert_bullets memory/MEMORY.md '- [shared](ddaanet/shared.md) — ours'
   base=$(git -C memory/ddaanet rev-parse HEAD)
@@ -155,8 +153,8 @@ load helpers/resolve-recovery
   # The local side is a BODY file, so the tier's own commit touches no index
   # line and the merge below cannot conflict on the one under test.
   printf 'body\n' > memory/ddaanet/local-body.md
-  printf 'memory: local body fact\n' > "$(gitlore_commit_msg_file memory)"
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  commit_sections 'memory: local body fact'
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
   [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
 
@@ -165,9 +163,7 @@ load helpers/resolve-recovery
   git -C memory/ddaanet checkout -q --detach live
   # The merge result, before the commit path is allowed near it.
   assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — upstream text'
-
-  printf 'memory: adopt the tier merge\n' > "$(gitlore_commit_msg_file memory)"
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr commit_sections 'memory: adopt the tier merge'
   [ "$status" -eq 0 ]
   # The carrier still holds what the merge landed …
   assert_bullets memory/ddaanet/MEMORY.md '- [shared](shared.md) — upstream text'
@@ -213,7 +209,7 @@ load helpers/resolve-recovery
 
 @test "recovery: a checkout-cleared merge whose HEAD is not the authority names both shas" {
   make_diverged_head_vs_live memory
-  bash "$COMMIT_MEMORY" || true
+  resolve_gate || true
   head_at=$(git -C memory rev-parse HEAD)
   echo "synthesized" > memory/SYNTH.md
   git -C memory add -A
@@ -223,7 +219,7 @@ load helpers/resolve-recovery
   advance_branch_with_file memory live MOVED.md moved "live moved on" live
   moved=$(git -C memory rev-parse live)
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -eq 1 ]
   all="$output$stderr"
   [[ "$all" == *"$head_at"* ]]
@@ -237,7 +233,7 @@ load helpers/resolve-recovery
   printf '{"flavor":"head-vs-live","store":"%s"}\n' "$(cd memory && pwd)" \
     > "$(gitlore_merge_state_file memory)"
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -eq 1 ]
   all="$output$stderr"
   [[ "$all" == *"manual intervention required"* ]]
