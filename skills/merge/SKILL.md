@@ -18,7 +18,7 @@ publishing this repo's; this skill is the half that discloses nothing.
 ## Reconcile
 
 ```bash
-bash "$(git config gitlore.mergeCommand)"
+gitlore-merge
 ```
 
 Exit codes:

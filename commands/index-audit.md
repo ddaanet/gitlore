@@ -155,5 +155,5 @@ Editing the index rewrites the `description:` of every fact file a changed
 line points at, so a two-line index edit can produce a fifty-file diff. Review
 `git -C memory status --short` and the frontmatter changes as part of the
 pass, then commit memory with an approved summary through
-`gitlore.commitCommand`; the next parent commit records the pointer. Report the before and after byte counts, the levers used, and the
+`gitlore-commit`; the next parent commit records the pointer. Report the before and after byte counts, the levers used, and the
 auditors' confirmed findings with their repairs.

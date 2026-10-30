@@ -68,7 +68,7 @@ exec 3>&1 1>&2
 # guards an action the agent would otherwise take unprompted, so it cannot be
 # deferred, and the commit command is front-loaded because no hook surfaces it any
 # more — a parent commit does not commit memory (D58), so the agent that holds the
-# user's approval runs commit-memory.sh itself. Writing stays seamless: an ordinary
+# user's approval runs gitlore-commit itself. Writing stays seamless: an ordinary
 # edit, with no approval step before it, so the text does not induce ceremony.
 # The text is acts, carrying no mechanism: what the gate is, which hook blocks, and
 # what it records are things the agent cannot act on, and the gate emits its own
@@ -76,8 +76,7 @@ exec 3>&1 1>&2
 # naming the command forms — spelling out `git -C <mempath> commit` invites reasoning
 # about the forms not named — and nothing here cites an FR id, which resolves to
 # nothing in the consumer repos this context lands in.
-# The `$(git config …)` is literal text for the agent to run, so it is escaped here.
-protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then run bash \"\$(git config gitlore.commitCommand)\" -F - from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule. A request to commit memory is not approval of a summary the user has not seen: show the summary, end your turn, and commit only after the user's reply approves it."
+protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then commit through the gitlore:commit skill, which runs gitlore-commit from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule. A request to commit memory is not approval of a summary the user has not seen: show the summary, end your turn, and commit only after the user's reply approves it."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook
@@ -112,10 +111,6 @@ fi
 
 # Hook dir + wrappers.
 git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
-git config gitlore.commitCommand "$PLUGIN_ROOT/scripts/commit-memory.sh"
-git config gitlore.pushCommand "$PLUGIN_ROOT/scripts/push-memory.sh"
-git config gitlore.mergeCommand "$PLUGIN_ROOT/scripts/merge-memory.sh"
-git config gitlore.memoryApprovalClauseFile "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
 # Sentinel replay: re-apply hook-setup recorded at install time.

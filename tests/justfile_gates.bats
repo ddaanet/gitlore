@@ -105,7 +105,7 @@ teardown_file() {
   # and checks that every name on it is a suite that exists.
   literals="$(grep -n '[A-Za-z_]\.bats' "$PLUGIN_ROOT/justfile" || true)"
   stray="$(printf '%s\n' "$literals" \
-    | grep -v 'tests/plugin_distribution\.bats' \
+    | grep -v 'tests/plugin_distribution\(_commands\)\?\.bats' \
     | grep -v '^[0-9]*:reads_all_suites :=' || true)"
   [ -z "$stray" ]
 }

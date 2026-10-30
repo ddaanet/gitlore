@@ -4,7 +4,7 @@ bats_require_minimum_version 1.5.0
 
 # A script sources the libraries shipped beside itself. `gitlore.hooksDir` is a
 # per-repo pin that lags a plugin upgrade, so a script reached by path (the
-# blessed entry points are discovered through `gitlore.commitCommand` and kin)
+# blessed entry points are the plugin's bin/ names, which exec them)
 # must not follow it to a different tree's libraries. Each case builds a second
 # plugin tree whose libraries are wrong in a way that shows, pins the repo's
 # `gitlore.hooksDir` into it, and runs the script of THIS tree.
@@ -158,7 +158,6 @@ assert_own_libs() {
   CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/write-settings.sh"
   [ "$status" -eq 0 ]
   [ "$(git config gitlore.hooksDir)" = "$own_root/scripts/git-hooks" ]
-  [ "$(git config gitlore.commitCommand)" = "$own_root/scripts/commit-memory.sh" ]
 }
 
 @test "install/emit-launcher.sh copies its own tree's shim when CLAUDE_PLUGIN_ROOT names another" {

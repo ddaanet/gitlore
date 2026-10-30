@@ -87,8 +87,15 @@ load helpers/setup
 # anyway — one per site, so a site losing it is visible here rather than only
 # in an eval.
 @test "distribution: the three post-write moments each invoke memory-writing (D48)" {
-  # The commit gate, via the clause all four D19 call sites append.
-  grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
+  # The commit moment: the gitlore:commit skill's review directive (D70). The
+  # directive must precede the summary format it would otherwise read as a
+  # footnote to, so compare line numbers rather than test for presence.
+  local skill="$PLUGIN_ROOT/skills/commit/SKILL.md" directive_line body_line
+  directive_line=$(grep -n 'invoke the .gitlore:memory-writing. skill' "$skill" | head -1 | cut -d: -f1)
+  body_line=$(grep -n '^## Summary format' "$skill" | head -1 | cut -d: -f1)
+  [ -n "$directive_line" ]
+  [ -n "$body_line" ]
+  [ "$directive_line" -lt "$body_line" ]
   # A store migrated by install, and the announcement the step is conditioned on.
   grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/commands/install.md"
   grep -qF 'migrated auto-memory from' "$PLUGIN_ROOT/commands/install.md"
@@ -141,9 +148,10 @@ load helpers/setup
   # The script the skill shells out to must ship executable -- a 100644 here
   # makes the skill's one Bash call fail for every installed user.
   [ -x "$PLUGIN_ROOT/scripts/push-memory.sh" ]
-  # The skill must reach the script through the config key, never a hardcoded
-  # plugin path: CLAUDE_PLUGIN_ROOT is unset in agent Bash.
-  grep -qF 'git config gitlore.pushCommand' "$skill"
+  # The skill must reach the script through the plugin's bin/ name (D70), never
+  # a hardcoded plugin path: CLAUDE_PLUGIN_ROOT is unset in agent Bash.
+  [ -x "$PLUGIN_ROOT/bin/gitlore-push" ]
+  grep -qE '(^|[^[:alnum:]:/-])gitlore-push([^[:alnum:]-]|$)' "$skill"
 }
 
 # merge is push's other half — take without publishing — and is a skill for the
@@ -156,7 +164,8 @@ load helpers/setup
   fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
   grep -qE '^name:[[:space:]]*merge[[:space:]]*$' <<<"$fm"
   [ -x "$PLUGIN_ROOT/scripts/merge-memory.sh" ]
-  grep -qF 'git config gitlore.mergeCommand' "$skill"
+  [ -x "$PLUGIN_ROOT/bin/gitlore-merge" ]
+  grep -qE '(^|[^[:alnum:]:/-])gitlore-merge([^[:alnum:]-]|$)' "$skill"
 }
 
 # record-rewrite.sh is run by hand by a store's owner after a history rewrite

@@ -9,7 +9,7 @@ set -euo pipefail
 #
 # Takes no arguments. There is nothing to approve: FR11 gated this content when
 # it was committed, and publishing an already-approved commit adds no disclosure
-# decision. Discover this script via `git config gitlore.pushCommand`.
+# decision. Callers run it as `gitlore-push`, the plugin `bin/` name.
 #
 # Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no memory
 # submodule, or a session-less worktree where memory was never checked out.

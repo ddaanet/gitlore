@@ -121,9 +121,9 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
         fail_reason="eval runner failed — ${runner_err//$'\n'/ }"
     fi
 
-    # Grade the flow. The assertion script owns everything after the turns —
-    # including finishing a commit the agent left approved but unrun, where the
-    # flow has one — and reports a failure by exiting non-zero with the reason on stdout/stderr.
+    # Grade the flow. The assertion script grades everything after the turns
+    # from the memory log and the transcript, and reports a failure by exiting
+    # non-zero with the reason on stdout/stderr.
     if [ -z "$fail_reason" ]; then
       assert_out=$(
         EVAL_REPO="$EVAL_REPO" EVAL_OUT_DIR="$EVAL_OUT_DIR" \

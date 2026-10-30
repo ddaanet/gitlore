@@ -4,7 +4,7 @@ set -euo pipefail
 # Standalone blessed entry point (D16): commit the memory store and its dirty tiers
 # from a sectioned summary, then fast-forward each committed store's local `live`.
 # The summary is the only input, on stdin, through a quoted heredoc:
-#   bash "$(git config gitlore.commitCommand)" <<'EOF'
+#   gitlore-commit <<'EOF'
 #   == <tier> ==
 #   <tier commit message>
 #   == memory ==
@@ -15,7 +15,7 @@ set -euo pipefail
 # before any store is touched (exit 2) when the summary is empty, has text
 # before its first header, or does not match the stores that have changes.
 # It never prepares or takes a merge: a `live` that cannot fast-forward is
-# reported. Discover this script via `git config gitlore.commitCommand`.
+# reported. Callers run it as `gitlore-commit`, the plugin `bin/` name.
 
 # Defensive: a caller's env may carry leaked repo-local GIT_* vars (see
 # `.claude/rules/shell.md` "Git hook env leak"). Clear the full local-env-var set, not a hand-picked

@@ -12,8 +12,8 @@ set -euo pipefail
 #
 # Takes no arguments. There is nothing to approve: taking an already-published
 # commit discloses nothing. It fetches what each store's remote holds, then
-# reconciles each store's checked-out branch with its local `live`. Discover
-# this script via `git config gitlore.mergeCommand`.
+# reconciles each store's checked-out branch with its local `live`. Callers run
+# it as `gitlore-merge`, the plugin `bin/` name.
 #
 # Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no memory
 # submodule, or a session-less worktree where memory was never checked out.

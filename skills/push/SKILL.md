@@ -22,7 +22,7 @@ and that commit restructures lines without adding text, so it adds none either
 ## Publish
 
 ```bash
-bash "$(git config gitlore.pushCommand)"
+gitlore-push
 ```
 
 Exit codes:
@@ -69,10 +69,9 @@ those facts are **not** on the remote and what would publish them — an approve
 summary and a memory commit, then this skill again.
 
 Getting that commit does not mean creating a parent commit whose only content
-is the memory pointer. Commit memory with the approved summary through
-`bash "$(git config gitlore.commitCommand)" -F -`, the summary on stdin through
-a quoted heredoc (`<<'EOF'`) so the shell expands nothing in it, which stages the
-pointer in the parent index; the next parent commit records it. Bundle the
+is the memory pointer. Commit memory with the approved summary through `/gitlore:commit`, which pipes
+it on stdin to `gitlore-commit` through a quoted heredoc (`<<'EOF'`) so the
+shell expands nothing in it; that stages the pointer in the parent index; the next parent commit records it. Bundle the
 pointer with the source change it corresponds to, not with whatever happens to
 be unpushed: if the memory content documents the commit just made, amend it in
 (only an option while that commit is unpushed). If it stands alone with no
