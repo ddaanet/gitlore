@@ -18,7 +18,7 @@ publishing this repo's; this skill is the half that discloses nothing.
 ## Reconcile
 
 ```bash
-bash "$(git config gitlore.mergeCommand)"
+gitlore-merge
 ```
 
 Exit codes:
@@ -38,8 +38,10 @@ run themselves, and continue from its output.
 
 ## Diverged
 
-This store and its remote each hold commits the other lacks, so taking the
-remote is not a fast-forward and a merge is already prepared. This is an
+A store holds commits its counterpart lacks, so no fast-forward joins them, and
+a merge is already prepared. The counterpart is the store's local `live` (a
+commit has forked from it) or its remote (taking the remote is not a
+fast-forward); the directive's flavor says which. This is an
 ordinary outcome: resolving it runs a sub-agent that synthesizes memory content
 and lands a merge commit.
 

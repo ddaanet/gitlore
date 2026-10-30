@@ -158,7 +158,7 @@ load helpers/cc-hook-session-start
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   # The hook still speaks: the orientation rides additionalContext.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("gitlore.commitCommand")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("gitlore:commit")'
   echo "$output" | jq -e '.systemMessage | test("fetch|upstream"; "i") | not'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("fetch|upstream"; "i") | not'
 }

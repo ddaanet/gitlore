@@ -37,7 +37,7 @@ dirty_memory() { echo "fact from this session" >> memory/MEMORY.md; }
 @test "commit-memory -m stages the moved gitlink in the parent index" {
   before=$(git -C memory rev-parse HEAD)
   dirty_memory
-  run bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: record a fact"
+  run commit_sections "memory: record a fact"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" != "$before" ]
   run git diff --cached --name-only
@@ -47,7 +47,7 @@ dirty_memory() { echo "fact from this session" >> memory/MEMORY.md; }
 
 @test "a plain parent commit after commit-memory records the memory pointer" {
   dirty_memory
-  bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: record a fact"
+  commit_sections "memory: record a fact"
   run git diff --cached --name-only
   [ "$output" = "memory" ]
   git commit -q -m "record memory only"
@@ -56,21 +56,21 @@ dirty_memory() { echo "fact from this session" >> memory/MEMORY.md; }
 
 @test "a run with nothing to commit stages nothing, even over a stale index" {
   dirty_memory
-  bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: record a fact"
+  commit_sections "memory: record a fact"
   run git diff --cached --name-only
   [ "$output" = "memory" ]
   git commit -q -m "record memory only"
   # Move memory again, then put the index back on the old pointer: an
   # unconditional `git add` in a no-op run would now change the index.
   dirty_memory
-  bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: record another fact"
+  commit_sections "memory: record another fact"
   git reset -q -- memory
   run git diff --name-only
   [ "$output" = "memory" ]
   [ -z "$(git diff --cached --name-only)" ]
   head=$(git -C memory rev-parse HEAD)
 
-  run bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: nothing new"
+  run commit_sections "memory: nothing new"
   [ "$status" -eq 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$head" ]
   [ -z "$(git diff --cached --name-only)" ]
@@ -81,7 +81,7 @@ dirty_memory() { echo "fact from this session" >> memory/MEMORY.md; }
   dirty_memory
   : > "$(git rev-parse --git-path index.lock)"
 
-  run bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: record a fact"
+  run commit_sections "memory: record a fact"
   rm -f "$(git rev-parse --git-path index.lock)"
   [ "$status" -eq 0 ]
   [[ "$output" == *stag* ]]

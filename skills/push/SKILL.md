@@ -22,7 +22,7 @@ and that commit restructures lines without adding text, so it adds none either
 ## Publish
 
 ```bash
-bash "$(git config gitlore.pushCommand)"
+gitlore-push
 ```
 
 Exit codes:
@@ -48,8 +48,10 @@ run themselves, and continue from its output.
 
 ## Diverged
 
-Someone else published to this store since it was last fetched, so the push was
-refused and a merge is already prepared. This is an ordinary outcome, not an
+A store holds commits its counterpart lacks, and a merge is already prepared:
+either the store's checked-out branch and its local `live` have forked (found
+before anything is published), or someone else published to the remote since it
+was last fetched and the push was refused. This is an ordinary outcome, not an
 error, and it is the reason a push is not a fire-and-forget operation: resolving
 it runs a sub-agent that synthesizes memory content and lands a merge commit.
 
@@ -69,10 +71,9 @@ those facts are **not** on the remote and what would publish them — an approve
 summary and a memory commit, then this skill again.
 
 Getting that commit does not mean creating a parent commit whose only content
-is the memory pointer. Commit memory with the approved summary through
-`bash "$(git config gitlore.commitCommand)" -F -`, the summary on stdin through
-a quoted heredoc (`<<'EOF'`) so the shell expands nothing in it, which stages the
-pointer in the parent index; the next parent commit records it. Bundle the
+is the memory pointer. Commit memory with the approved summary through `/gitlore:commit`, which pipes
+it on stdin to `gitlore-commit` through a quoted heredoc (`<<'EOF'`) so the
+shell expands nothing in it; that stages the pointer in the parent index; the next parent commit records it. Bundle the
 pointer with the source change it corresponds to, not with whatever happens to
 be unpushed: if the memory content documents the commit just made, amend it in
 (only an option while that commit is unpushed). If it stands alone with no

@@ -138,8 +138,7 @@ Take what every store's remote holds, and publish nothing. A skill for the same
 reasons `push` is: `/gitlore:merge` is the front door, but a session start that
 reported commits on `live` not checked out here, upstream memory commits or an
 upstream-ahead tier has to be able to reach it from context. The body makes one
-call — `bash "$(git config gitlore.mergeCommand)"` — and reads the exit the same
-way.
+call — `gitlore-merge` — and reads the exit the same way.
 
 For the memory root only, the take opens with the local half: a `live` that
 strictly contains HEAD — commits another checkout of the store made — is checked
@@ -291,8 +290,8 @@ controls sits a harness rule —
 *do not call the AgentTool unless the user requested it* — with no scope and no
 rationale, which nothing in a `CLAUDE.md`, a skill or a memory file can qualify.
 Every other blocking gitlore directive asks for an act the agent performs
-itself: write the approval summary, write the trigger file. The merge directive
-is the only one whose execution needs someone else's permission, and naming the
+itself: draft the approval summary, run the commit. The merge directive is the
+only one whose execution needs someone else's permission, and naming the
 sub-agent does not grant it — read literally,
 *dispatch the memory-merger sub-agent with state file:* describes an option, so
 an agent meeting it reports the blocker and stops mid-push.

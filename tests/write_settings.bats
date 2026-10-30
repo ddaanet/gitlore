@@ -13,35 +13,18 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-@test "seeds gitlore.commitCommand pointing at commit-memory.sh" {
-  bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.commitCommand)" = "$OWN_ROOT/scripts/commit-memory.sh" ]
-}
-
-# D20: the standalone push entry point is discovered the same way the standalone
-# commit one is -- one git-config lookup, no coupling to gitlore's layout -- so a
-# caller (the push skill, or handoff wrapping up) can publish memory on its own.
-@test "seeds gitlore.pushCommand pointing at push-memory.sh" {
-  bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.pushCommand)" = "$OWN_ROOT/scripts/push-memory.sh" ]
-  [ -x "$(git config gitlore.pushCommand)" ]
-}
-
-@test "seeds gitlore.mergeCommand pointing at merge-memory.sh" {
-
-  bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.mergeCommand)" = "$OWN_ROOT/scripts/merge-memory.sh" ]
-  [ -x "$(git config gitlore.mergeCommand)" ]
-}
-
-@test "seeds gitlore.hooksDir alongside commitCommand" {
+# D70: the entry points are the plugin's bin/ names, so install seeds no
+# discovery key for them and no approval-clause file key; only hooksDir remains.
+@test "seeds gitlore.hooksDir" {
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
   [ "$(git config gitlore.hooksDir)" = "$OWN_ROOT/scripts/git-hooks" ]
 }
 
-@test "seeds gitlore.memoryApprovalClauseFile pointing at the reference clause" {
+@test "seeds no discovery key and no approval-clause key" {
   bash "$WRITE_SETTINGS" "lefthook run pre-commit"
-  [ "$(git config gitlore.memoryApprovalClauseFile)" = "$OWN_ROOT/reference/memory-approval-clause.txt" ]
+  run git config --local --get-regexp '^gitlore\.(commit|push|merge)command$|^gitlore\.memoryapprovalclausefile$'
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
 }
 
 @test "merging into an existing settings.json keeps its file mode" {

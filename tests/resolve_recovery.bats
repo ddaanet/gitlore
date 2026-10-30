@@ -12,7 +12,7 @@ load helpers/resolve-recovery
 
 @test "recovery: a prepared merge met by a later gate is continued, not discarded" {
   make_diverged_head_vs_live memory
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
   statefile=$(gitlore_merge_state_file memory)
   pending=$(git -C memory rev-parse "$GITLORE_PENDING_REF")
@@ -23,7 +23,7 @@ load helpers/resolve-recovery
   state_before=$(cat "$statefile")
 
   # A gate meeting the prepared merge in a later session.
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
   all="$output$stderr"
   [[ "$all" == *"continue-after-merge"* ]]
@@ -40,7 +40,7 @@ load helpers/resolve-recovery
   # repairs and reach the stale-state guard.
   git -C memory push -q origin live
   make_diverged_head_vs_live memory
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
   pending=$(git -C memory rev-parse "$GITLORE_PENDING_REF")
   printf 'synthesized by the merger\n' > memory/SYNTH.md
@@ -57,14 +57,14 @@ load helpers/resolve-recovery
 @test "recovery: a merge prepared in an earlier session lands through the continuation" {
   git -C memory push -q origin live
   make_diverged_head_vs_live memory
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
   live_before=$(git -C memory rev-parse live)
   pending=$(git -C memory rev-parse "$GITLORE_PENDING_REF")
   printf 'synthesized by the merger\n' > memory/SYNTH.md
   git -C memory add -A
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [[ "$output$stderr" == *"continue-after-merge"* ]]
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
@@ -179,7 +179,7 @@ load helpers/resolve-recovery
   run gitlore_detect_stale_merge_state memory
   [ "$output" = "stale-no-merge-head" ]
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
   all="$output$stderr"
   [[ "$all" == *"interrupted before its merge ran"* ]]
@@ -221,7 +221,7 @@ load helpers/resolve-recovery
 
 @test "recovery: a checkout-cleared merge that nothing landed is discarded, and the gate re-prepares it" {
   make_diverged_head_vs_live memory
-  bash "$COMMIT_MEMORY" || true
+  resolve_gate || true
   pending=$(git -C memory rev-parse "$GITLORE_PENDING_REF")
   # The shape a hand-run `git merge --abort` leaves: the pointers go and the
   # index is reset to HEAD, so nothing of the merge survives but gitlore's own
@@ -229,7 +229,7 @@ load helpers/resolve-recovery
   git -C memory merge --abort
   [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD || true)" ]
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   all="$output$stderr"
   # It says what it disposed of before it re-prepares, so a repair is never a
   # silent rewrite of the store.
@@ -248,7 +248,7 @@ load helpers/resolve-recovery
   # live branch" early return before reaching the guard.
   git -C memory push -q origin live
   make_diverged_head_vs_live memory
-  bash "$COMMIT_MEMORY" || true
+  resolve_gate || true
   git -C memory merge --abort
 
   run --separate-stderr bash "$RESOLVE"
@@ -260,7 +260,7 @@ load helpers/resolve-recovery
 
 @test "recovery: a checkout-cleared merge with its synthesis staged keeps it and asks for the sub-agent" {
   make_diverged_head_vs_live memory
-  bash "$COMMIT_MEMORY" || true
+  resolve_gate || true
   pending=$(git -C memory rev-parse "$GITLORE_PENDING_REF")
   # The merger sub-agent's synthesis, staged exactly as it leaves it.
   echo "synthesized" > memory/SYNTH.md
@@ -268,7 +268,7 @@ load helpers/resolve-recovery
   git -C memory checkout -q --detach HEAD
   [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD || true)" ]
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -eq 1 ]
   all="$output$stderr"
   [ "$(git -C memory rev-parse -q --verify MERGE_HEAD)" = "$pending" ]
@@ -282,10 +282,10 @@ load helpers/resolve-recovery
 
 @test "recovery: a merge that landed before the checkout is restored, not declared dead" {
   make_diverged_head_vs_live memory
-  bash "$COMMIT_MEMORY" || true
+  resolve_gate || true
   # Land the merge as the continuation does, then let a checkout move HEAD off
   # it while the state file is still there.
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q --no-edit
+  git -C memory commit -q --no-edit
   landed=$(git -C memory rev-parse HEAD)
   git -C memory checkout -q --detach live
   # The merge commit is reachable from no ref, and `fsck --unreachable` still
@@ -294,7 +294,7 @@ load helpers/resolve-recovery
   run git -C memory fsck --unreachable
   [[ "$output" != *"$landed"* ]]
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -eq 0 ]
   [[ "$output$stderr" == *"$landed"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$landed" ]

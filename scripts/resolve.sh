@@ -47,10 +47,7 @@ if [ $# -ge 1 ]; then
       # and the message is canned rather than git's MERGE_MSG: a merge whose two
       # sides both passed an approval gate needs no prompt, and the subject that
       # serves every consumer of a shared store names the repos rather than the
-      # refs (D49). Blessed path: carry the sentinel past the submodule gate.
-      # Via a file, not a pipe: the sentinel has to be in the environment of
-      # `git commit` itself, and `VAR=1 printf … | git commit` exports it to
-      # the wrong end of the pipeline.
+      # refs (D49). The message goes in a file so `git commit -F` reads it.
       merge_msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-merge-msg.XXXXXX") \
         || {
           echo "gitlore: the merge message file could not be created, so the merge was not committed; the merge stays prepared." >&2
@@ -67,7 +64,7 @@ if [ $# -ge 1 ]; then
           echo "gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared." >&2
           exit 1
         }
-      GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$merge_msgfile" \
+      gitlore_git -C "$mempath" commit -q -F "$merge_msgfile" \
         || {
           rm -f "$merge_msgfile"
           echo "gitlore: the merge commit was refused, so the merge was not committed; the merge stays prepared." >&2

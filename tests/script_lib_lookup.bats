@@ -4,7 +4,7 @@ bats_require_minimum_version 1.5.0
 
 # A script sources the libraries shipped beside itself. `gitlore.hooksDir` is a
 # per-repo pin that lags a plugin upgrade, so a script reached by path (the
-# blessed entry points are discovered through `gitlore.commitCommand` and kin)
+# blessed entry points are the plugin's bin/ names, which exec them)
 # must not follow it to a different tree's libraries. Each case builds a second
 # plugin tree whose libraries are wrong in a way that shows, pins the repo's
 # `gitlore.hooksDir` into it, and runs the script of THIS tree.
@@ -28,9 +28,12 @@ make_old_cache() {
   mkdir -p "$root/scripts/git-hooks"
   cp -R "$PLUGIN_ROOT/scripts/lib" "$root/scripts/lib"
   # Range delete of the function body; the closing brace is the first column-0 `}`.
-  sed '/^gitlore_approval_present() {/,/^}/d' "$root/scripts/lib/util.sh" > "$root/util.tmp"
+  sed '/^gitlore_memory_dirty() {/,/^}/d' "$root/scripts/lib/util.sh" > "$root/util.tmp"
   mv "$root/util.tmp" "$root/scripts/lib/util.sh"
-  ! grep -q '^gitlore_approval_present' "$root/scripts/lib/util.sh"
+  ! grep -q '^gitlore_memory_dirty' "$root/scripts/lib/util.sh"
+  # The simulation is only meaningful while the script under test calls the
+  # function the older cache lacks.
+  grep -q 'gitlore_memory_dirty' "$PLUGIN_ROOT/scripts/commit-memory.sh"
 }
 
 # A plugin tree whose libraries announce themselves and abort when sourced, for
@@ -56,7 +59,7 @@ assert_own_libs() {
   git config gitlore.hooksDir "$BATS_TEST_TMPDIR/old/scripts/git-hooks"
   echo dirty > memory/notes.md
 
-  run bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: add notes"
+  run commit_sections "memory: add notes"
   [ "$status" -eq 0 ]
   [[ "$output" != *"command not found"* ]]
   [ -z "$(git -C memory status --porcelain)" ]
@@ -68,7 +71,7 @@ assert_own_libs() {
   make_poisoned_cache "$BATS_TEST_TMPDIR/old"
   echo dirty > memory/notes.md
 
-  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: add notes"
+  CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run commit_sections "memory: add notes"
   assert_own_libs
   [ "$status" -eq 0 ]
   [ "$(git -C memory log -1 --pretty=%s)" = "memory: add notes" ]
@@ -92,16 +95,6 @@ assert_own_libs() {
   assert_own_libs
 }
 
-@test "emit-memory-gate.sh sources its own libraries when hooksDir pins another tree" {
-  make_parent_with_memory
-  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
-  git config gitlore.hooksDir "$BATS_TEST_TMPDIR/old/scripts/git-hooks"
-
-  run bash "$PLUGIN_ROOT/scripts/emit-memory-gate.sh"
-  assert_own_libs
-  [ "$status" -eq 0 ]
-}
-
 @test "git-hooks/pre-push sources its own libraries when hooksDir pins another tree" {
   make_parent_with_memory
   make_poisoned_cache "$BATS_TEST_TMPDIR/old"
@@ -109,17 +102,6 @@ assert_own_libs() {
 
   run bash "$PLUGIN_ROOT/scripts/git-hooks/pre-push" origin "$TMP_REPO" </dev/null
   assert_own_libs
-}
-
-@test "git-hooks/memory-pre-commit sources its own libraries when hooksDir pins another tree" {
-  make_parent_with_memory
-  make_poisoned_cache "$BATS_TEST_TMPDIR/old"
-  git config gitlore.hooksDir "$BATS_TEST_TMPDIR/old/scripts/git-hooks"
-
-  run env -u GITLORE_MEMORY_COMMIT bash "$PLUGIN_ROOT/scripts/git-hooks/memory-pre-commit"
-  assert_own_libs
-  # The gate's own refusal, which only its own log.sh can word.
-  [ "$status" -eq 1 ]
 }
 
 # The scripts that used to prefer CLAUDE_PLUGIN_ROOT. A session that froze at an
@@ -176,7 +158,6 @@ assert_own_libs() {
   CLAUDE_PLUGIN_ROOT="$BATS_TEST_TMPDIR/old" run bash "$PLUGIN_ROOT/scripts/install/write-settings.sh"
   [ "$status" -eq 0 ]
   [ "$(git config gitlore.hooksDir)" = "$own_root/scripts/git-hooks" ]
-  [ "$(git config gitlore.commitCommand)" = "$own_root/scripts/commit-memory.sh" ]
 }
 
 @test "install/emit-launcher.sh copies its own tree's shim when CLAUDE_PLUGIN_ROOT names another" {

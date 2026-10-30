@@ -128,7 +128,7 @@ gitlore_commit_tier_bookkeeping() {
 
   # Bare `commit`, never `-a` or an `add -A`: exactly the pair staged above goes
   # in. A store clean before the take has nothing else staged to catch.
-  if ! err=$(GITLORE_MEMORY_COMMIT=1 gitlore_git -C "$mempath" commit -q -F "$msgfile" 2>&1); then
+  if ! err=$(gitlore_git -C "$mempath" commit -q -F "$msgfile" 2>&1); then
     rm -f "$msgfile"
     printf 'gitlore: %s advanced and its pointer is staged, but the bookkeeping commit failed, so it rides the next memory commit. git said:\n%s\n' "$tier" "$err" >&2
     return 0

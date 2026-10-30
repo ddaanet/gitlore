@@ -44,6 +44,10 @@ setup_eval_repo() {
   export GIT_CONFIG_VALUE_0=always
   # Suppress launcher warning: eval bypasses the shim intentionally
   export GITLORE_LAUNCHED=1
+  # A marketplace install appends the plugin's `bin/` to PATH, last; the eval
+  # repo has no plugin installed, so the same entry is added here. Exported so it
+  # reaches the `claude` subprocess and the Bash tool commands it runs.
+  export PATH="$PATH:$PLUGIN_ROOT/bin"
 
   # Install detects no hook manager and wires the direct pre-push stub itself,
   # so the fixture carries the same git-hook wiring a real install does. The
@@ -59,7 +63,7 @@ setup_eval_repo() {
   # Derived, never hand-listed: a hand-written subset is a registration the evals
   # never exercise, and the whole point of an eval is that it walks the wiring
   # production ships ([[feedback_test_the_invocation_path]]). A subset would leave
-  # hooks dark — the PostToolBatch ones (composition, the commit trigger, add-tier)
+  # hooks dark — the PostToolBatch ones (composition, add-tier)
   # among them.
   local tmp
   tmp=$(mktemp)
@@ -72,6 +76,8 @@ setup_eval_repo() {
 
   # Skills and commands are plugin-scoped, and the eval repo has no plugin
   # installed — copy them in so their prompt contracts are what the agent reads.
+  # Copied in as project skills, they carry no plugin prefix: the Skill tool
+  # names the commit skill `commit` here, where an install names it `gitlore:commit`.
   # Without this, /add-tier is an unknown command and the recall skill never
   # activates, and the scenario silently grades a different flow.
   mkdir -p .claude/skills .claude/commands

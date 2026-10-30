@@ -77,7 +77,7 @@ load helpers/add-tier
   run bash "$ADD_TIER"
   [ "$status" -eq 0 ]
 
-  # The FR11 gate stays the sole committer; the staged .gitmodules is already
+  # Nothing is committed in memory; the staged .gitmodules is already
   # enough for discovery, which reads the working tree.
   [ "$(git -C memory rev-parse HEAD)" = "$before" ]
   run gitlore_tier_paths memory

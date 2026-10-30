@@ -69,8 +69,8 @@ make_tier_in_memory() {
     git config user.email "test@example.com"
     git config user.name  "Test"
   )
-  # Blessed commit inside the memory submodule so the FR11 gate admits it.
-  GITLORE_MEMORY_COMMIT=1 git -C "$mempath" commit -q -m "Add $tier tier"
+  # Commit inside the memory submodule.
+  git -C "$mempath" commit -q -m "Add $tier tier"
   # The tier belongs to the memory trunk: advance every other local branch to the
   # tier commit, so whichever branch SessionStart checks out still sees the tier.
   # (Otherwise checking out a stale branch drops memory/.gitmodules and the tier
@@ -91,10 +91,6 @@ mount_tier_at_live() {
   git -C "memory/$tier" fetch -q origin "live:live"
   git -C "memory/$tier" checkout -q --detach live
 }
-
-# Write $1 as the memory episode's approval summary, the shape
-# `commit-memory.sh` reads back as the commit message.
-approve() { printf '%s\n' "$1" > "$(gitlore_commit_msg_file memory)"; }
 
 # Push a new commit onto a tier remote's `live` branch and echo its SHA.
 # Args: $1 = tier name (default "ddaanet"), $2 = line to append to MEMORY.md
@@ -134,14 +130,13 @@ seed_tier_bullet() {
 
 # Commit the memory store's current tree. The down projection reads root at HEAD
 # to tell a line root DELETED from one it never carried, so a test about a
-# deletion has to establish that HEAD first. The blessed sentinel carries the
-# commit past the FR11 gate. Args: $1 = commit subject (optional, hence most
+# deletion has to establish that HEAD first. Args: $1 = commit subject (optional, hence most
 # callers below invoke it bare — scoped disable, since SC2119 fires at each
 # call site and SC2120 at the definition).
 # shellcheck disable=SC2119,SC2120
 commit_memory_state() {
   git -C memory add -A || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q -m "${1:-memory: checkpoint}"
+  git -C memory commit -q -m "${1:-memory: checkpoint}"
 }
 
 # Append a bullet to the ROOT index. Args: $1 = path (may be tier-prefixed),
@@ -205,7 +200,7 @@ strand_live_ahead_of_pin() {
   pin=$(git -C "memory/$tier" rev-parse HEAD) || return 1
   seed_tier_bullet "$tier" "$file" "committed here, never recorded" || return 1
   git -C "memory/$tier" add -A || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -q -m "tier fact" || return 1
+  git -C "memory/$tier" commit -q -m "tier fact" || return 1
   git -C "memory/$tier" push -q . HEAD:refs/heads/live || return 1
   git -C "memory/$tier" checkout -q --detach "$pin" || return 1
 }
@@ -239,7 +234,7 @@ move_tier_off_pin() {
   local tier="${1:-ddaanet}"
   seed_tier_bullet "$tier" upstream.md "arrived in another repo"
   git -C "memory/$tier" add -A || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge"
+  git -C "memory/$tier" commit -qm "carrier advanced outside a merge"
 }
 
 # The same advance with the tier's local `live` following HEAD — a tier commit
@@ -266,7 +261,7 @@ move_tier_sideways_off_pin() {
   git -C "memory/$tier" checkout -q --orphan gitlore-sideways-test
   seed_tier_bullet "$tier" upstream.md "arrived sideways, not forward"
   git -C "memory/$tier" add -A || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier replaced by unrelated history"
+  git -C "memory/$tier" commit -qm "carrier replaced by unrelated history"
 }
 
 # Move a tier's HEAD onto a SIBLING of the pin: shared history, but the pin is
@@ -286,12 +281,12 @@ move_tier_diverged_off_pin() {
   base=$(git -C "memory/$tier" rev-parse HEAD) || return 1
   seed_tier_bullet "$tier" upstream.md "arrived in another repo"
   git -C "memory/$tier" add -A || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier advanced outside a merge" || return 1
+  git -C "memory/$tier" commit -qm "carrier advanced outside a merge" || return 1
   git -C memory add -- "$tier" || return 1
   git -C "memory/$tier" checkout -q --detach "$base" || return 1
   seed_tier_bullet "$tier" rewritten.md "the same history, re-authored"
   git -C "memory/$tier" add -A || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -qm "carrier rebuilt on rewritten history"
+  git -C "memory/$tier" commit -qm "carrier rebuilt on rewritten history"
 }
 
 # The store every test in this section starts from: one composed, committed tier

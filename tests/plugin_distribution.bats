@@ -87,8 +87,15 @@ load helpers/setup
 # anyway — one per site, so a site losing it is visible here rather than only
 # in an eval.
 @test "distribution: the three post-write moments each invoke memory-writing (D48)" {
-  # The commit gate, via the clause all four D19 call sites append.
-  grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
+  # The commit moment: the gitlore:commit skill's review directive (D70). The
+  # directive must precede the summary format it would otherwise read as a
+  # footnote to, so compare line numbers rather than test for presence.
+  local skill="$PLUGIN_ROOT/skills/commit/SKILL.md" directive_line body_line
+  directive_line=$(grep -n 'invoke the .gitlore:memory-writing. skill' "$skill" | head -1 | cut -d: -f1)
+  body_line=$(grep -n '^## Summary format' "$skill" | head -1 | cut -d: -f1)
+  [ -n "$directive_line" ]
+  [ -n "$body_line" ]
+  [ "$directive_line" -lt "$body_line" ]
   # A store migrated by install, and the announcement the step is conditioned on.
   grep -qF 'gitlore:memory-writing' "$PLUGIN_ROOT/commands/install.md"
   grep -qF 'migrated auto-memory from' "$PLUGIN_ROOT/commands/install.md"
@@ -141,9 +148,10 @@ load helpers/setup
   # The script the skill shells out to must ship executable -- a 100644 here
   # makes the skill's one Bash call fail for every installed user.
   [ -x "$PLUGIN_ROOT/scripts/push-memory.sh" ]
-  # The skill must reach the script through the config key, never a hardcoded
-  # plugin path: CLAUDE_PLUGIN_ROOT is unset in agent Bash.
-  grep -qF 'git config gitlore.pushCommand' "$skill"
+  # The skill must reach the script through the plugin's bin/ name (D70), never
+  # a hardcoded plugin path: CLAUDE_PLUGIN_ROOT is unset in agent Bash.
+  [ -x "$PLUGIN_ROOT/bin/gitlore-push" ]
+  grep -qE '(^|[^[:alnum:]:/-])gitlore-push([^[:alnum:]-]|$)' "$skill"
 }
 
 # merge is push's other half — take without publishing — and is a skill for the
@@ -156,7 +164,8 @@ load helpers/setup
   fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
   grep -qE '^name:[[:space:]]*merge[[:space:]]*$' <<<"$fm"
   [ -x "$PLUGIN_ROOT/scripts/merge-memory.sh" ]
-  grep -qF 'git config gitlore.mergeCommand' "$skill"
+  [ -x "$PLUGIN_ROOT/bin/gitlore-merge" ]
+  grep -qE '(^|[^[:alnum:]:/-])gitlore-merge([^[:alnum:]-]|$)' "$skill"
 }
 
 # record-rewrite.sh is run by hand by a store's owner after a history rewrite
@@ -196,17 +205,6 @@ load helpers/setup
   [ "$status" -eq 0 ]
   [[ "$output" == *"worktree-drift.sh"* ]]
   [ -x "$PLUGIN_ROOT/scripts/cc-hooks/worktree-drift.sh" ]
-}
-
-# The memory-commit trigger hook (FR11) must be registered on PostToolBatch —
-# additive to the index-sync entry that shares the event — and executable, so a
-# distributed plugin can commit memory on a file trigger without the agent
-# running git (sidesteps the sandbox and the auto-mode classifier).
-@test "distribution: memory-commit-batch hook is wired on PostToolBatch and executable" {
-  run jq -r '[.hooks.PostToolBatch[].hooks[].command | select(test("memory-commit-batch"))] | length' "$PLUGIN_ROOT/hooks/hooks.json"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
-  [ -x "$PLUGIN_ROOT/scripts/cc-hooks/memory-commit-batch.sh" ]
 }
 
 # D58: a memory commit is the agent's own act, so nothing watches Bash for a
@@ -335,4 +333,32 @@ load helpers/setup
   run jq -r '[.hooks[][].hooks[].command | select(test("^\"\\$\\{CLAUDE_PLUGIN_ROOT\\}/[^\" ]+\"$") | not)] | length' "$PLUGIN_ROOT/hooks/hooks.json"
   [ "$status" -eq 0 ]
   [ "$output" = "0" ]
+}
+
+# The commit skill is self-triggering: a pending memory change at the end of a
+# task, or a request to commit memory, must reach it from context alone.
+@test "distribution: commit skill ships with a self-trigger description and Bash+Skill tools" {
+  skill="$PLUGIN_ROOT/skills/commit/SKILL.md"
+  [ -f "$skill" ]
+  fm="$(awk 'NR==1&&/^---$/{f=1;next} /^---$/{exit} f' "$skill")"
+  grep -qE '^name:[[:space:]]*commit[[:space:]]*$' <<<"$fm"
+  grep -E '^allowed-tools:' <<<"$fm" | grep -q 'Bash'
+  grep -E '^allowed-tools:' <<<"$fm" | grep -q 'Skill'
+  desc="$(grep -E '^description:' <<<"$fm")"
+  grep -qi 'pending' <<<"$desc"
+  grep -qi 'memory' <<<"$desc"
+  grep -qi 'commit' <<<"$desc"
+}
+
+@test "distribution: commit skill body carries the review directive, section format and call" {
+  skill="$PLUGIN_ROOT/skills/commit/SKILL.md"
+  [ -f "$skill" ]
+  # shellcheck disable=SC2016 # literal backticks
+  grep -qF 'invoke the `gitlore:memory-writing` skill' "$skill"
+  grep -qxF '== memory ==' "$skill"
+  grep -qF '== <tier> ==' "$skill"
+  grep -qxF "gitlore-commit <<'EOF'" "$skill"
+  run grep -F 'gitlore-commit-memory' "$skill"
+  [ "$status" -eq 1 ]
+  grep -qF "<<'EOF'" "$skill"
 }

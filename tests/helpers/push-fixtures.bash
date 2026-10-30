@@ -29,7 +29,7 @@ advance_tier_past_remote() {
   local tier="$1" file="${2:-plain.md}"
   printf 'x\n' > "memory/$tier/$file" || return 1
   git -C "memory/$tier" add "$file" || return 1
-  GITLORE_MEMORY_COMMIT=1 git -C "memory/$tier" commit -q -m "plain commit, no index line" || return 1
+  git -C "memory/$tier" commit -q -m "plain commit, no index line" || return 1
   git -C "memory/$tier" branch -f live HEAD
 }
 

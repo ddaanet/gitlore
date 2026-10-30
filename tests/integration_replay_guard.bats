@@ -39,7 +39,7 @@ teardown() { teardown_tmp_repo; }
 
 commit_memory() {
   echo "fact from this session" >> memory/MEMORY.md
-  bash "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" -m "memory: record a fact"
+  commit_sections "memory: record a fact"
 }
 
 # Two branches whose tips conflict, so replaying one onto the other stops.

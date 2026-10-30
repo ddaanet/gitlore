@@ -239,7 +239,7 @@ HOOK
     cd memory || exit 1
     echo new-fact > FACT.md
     git add FACT.md
-    GITLORE_MEMORY_COMMIT=1 git commit -q -m "Add fact"
+    git commit -q -m "Add fact"
     git push -q . HEAD:live
   )
 
@@ -265,8 +265,11 @@ HOOK
   # hook; and a pinned tier's fetch is read-only, so nothing there is ever
   # refused for divergence. Dropping a site from this loop would otherwise be
   # indistinguishable from losing its coverage.
+  #
+  # resolve-sync-tiers.sh is absent too: its tier commits advance `live` through
+  # gitlore_advance_live in resolve-sync-memory.sh, which serves both stores, so
+  # that one site is the discriminator for the tiers as well.
   for site in \
-    scripts/lib/resolve-sync-tiers.sh \
     scripts/lib/resolve-sync-memory.sh \
     scripts/lib/resolve-push.sh \
     scripts/lib/continuation.sh

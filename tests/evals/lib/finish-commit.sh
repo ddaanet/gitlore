@@ -3,40 +3,47 @@
 # `fail <reason>` (print, exit 1) and has EVAL_REPO / PLUGIN_ROOT in the
 # environment.
 #
-# After the user approves, the agent has three correct ways to finish, and which
-# one it picks is not what the scenarios grade:
-#   - run commit-memory.sh with the summary (`-m`);
-#   - write the summary AND the commit trigger, and let the PostToolBatch hook
-#     run commit-memory.sh on its behalf;
-#   - write the summary and STOP. Nothing consumes it on its own — no parent
-#     hook commits memory — so the assertion runs commit-memory.sh on the
-#     summary, as the product does for a bare `commit-memory.sh -F <file>`.
-# Grading the stop-point instead of the outcome would fail a flow whose fact is
-# committed, so the assertions grade the same end state whichever ran.
+# After the user approves, the agent commits memory by invoking the
+# `gitlore:commit` skill and piping the approved sectioned summary to
+# `gitlore-commit`. The assertions grade the outcome (memory moved past the
+# baseline) and the trace (the skill came before the commit).
 
-# settle_commit_path <memory-dir> <baseline-sha> <summary-file>
-# Leaves memory committed, or fails. Sets `path_taken` for the failure messages
-# of the checks that follow.
+# settle_commit_path <memory-dir> <baseline-sha>
+# Passes when memory committed, or fails. Sets `path_taken` for the failure
+# messages of the checks that follow.
 settle_commit_path() {
-  local mem="$1" baseline="$2" msgfile="$3" commit_err
+  local mem="$1" baseline="$2"
   if [ "$(git -C "$mem" rev-parse HEAD)" != "$baseline" ]; then
     path_taken="the agent committed memory itself"
     return 0
   fi
-  if [ -f "$msgfile" ]; then
-    if ! commit_err=$( (cd "$EVAL_REPO" \
-          && bash "$PLUGIN_ROOT/scripts/commit-memory.sh" -F "$msgfile") 2>&1 ); then
-      fail "commit-memory.sh failed on the approved summary — ${commit_err//$'\n'/ }"
-    fi
-    path_taken="the agent stopped after writing the summary; commit-memory.sh finished it"
-    return 0
-  fi
-  # No summary on disk and memory has not moved: the agent never committed, with
-  # two distinguishable causes worth naming separately.
-  if [ -f "$EVAL_REPO/.claude/gitlore-commit-memory" ]; then
-    fail "no commit-msg file, but the commit trigger IS present — the agent asked for the commit without ever writing the approved summary, so the batch hook is parked waiting for it"
-  fi
-  fail "no commit-msg file and no trigger, and memory never moved — the agent did not write the approved summary after Turn 2"
+  fail "memory never moved — the agent did not commit the approved summary after Turn 2"
+}
+
+# check_commit_trace
+# The session transcript must show the `gitlore:commit` Skill call ahead of a
+# Bash command running `gitlore-commit`. The eval fixture copies the skills in as
+# project skills, so the same skill is named `commit` there; both names count. A raw `git commit` moves memory too, so
+# only the transcript tells the skill's path from a bypass.
+check_commit_trace() {
+  local transcript="$EVAL_OUT_DIR/transcript.jsonl" trace skill_at after_at any_at
+  [ -s "$transcript" ] || fail "no session transcript at $transcript; the harness did not capture the run"
+  # Indices of the first gitlore:commit Skill call, the first gitlore-commit Bash
+  # command after it, and the first one anywhere (-1 when absent). A mention
+  # ahead of the skill, such as a `command -v` probe, does not fail a run whose
+  # real commit follows the skill.
+  trace=$(jq -rs '
+    [.[] | .message.content[]? | select(.type == "tool_use")]
+    | to_entries as $t
+    | ($t | map(select(.value.name == "Skill" and (.value.input.skill == "gitlore:commit" or .value.input.skill == "commit"))) | first | .key // -1) as $skill
+    | ($t | map(select(.value.name == "Bash" and ((.value.input.command // "") | contains("gitlore-commit")))) | map(.key)) as $bash
+    | [$skill, ($bash | map(select(. > $skill)) | first // -1), ($bash | first // -1)]
+    | map(tostring) | join(" ")' "$transcript") || \
+    fail "could not read the session transcript $transcript"
+  read -r skill_at after_at any_at <<<"$trace"
+  [ "$skill_at" != "-1" ] || fail "the gitlore:commit skill was never invoked"
+  [ "$any_at" != "-1" ] || fail "gitlore-commit was never run"
+  [ "$after_at" != "-1" ] || fail "gitlore-commit ran before the gitlore:commit skill was invoked"
 }
 
 # check_no_commit_before_approval <baseline-sha>

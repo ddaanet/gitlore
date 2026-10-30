@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Tier discovery/listing (gitlore_tier_paths, gitlore_active_tiers,
 # gitlore_active_tier_scopes) and store remote/publishing configuration
-# (gitlore_memory_remote_name, gitlore_memory_approval_clause,
-# gitlore_parent_visibility). Function-only — no readonly, no top-level
+# (gitlore_memory_remote_name, gitlore_parent_visibility). Function-only — no readonly, no top-level
 # state — so unlike util.sh it is safe to source twice; definition order
 # relative to util.sh does not matter, since a call only needs the
 # other file's functions defined by the time it runs, not by the time
@@ -24,7 +23,7 @@
 gitlore_tier_paths() {
   local mempath="$1" rec
   [ -f "$mempath/.gitmodules" ] || return 0
-  # LC_ALL=C: matches gitlore_commit_msg_freshness's own NUL-delimited `read`,
+  # LC_ALL=C: a NUL-delimited `read`,
   # against the bash 5.0-5.3 multibyte `read -d ''` overshoot (BP#65).
   while IFS= LC_ALL=C read -r -d '' rec; do
     printf '%s\n' "${rec#*$'\n'}"
@@ -95,17 +94,6 @@ gitlore_memory_remote_name() {
     base=$(basename "$(git rev-parse --show-toplevel)")
   fi
   printf '%s-memory\n' "$base"
-}
-
-# Print the canonical memory-approval clause: the self-contained block every
-# call site that asks the user to approve a pending memory commit appends at the
-# END of its own message. It carries a literal template, so it is multi-line and
-# cannot be spliced into the middle of a sentence — a call site emitting JSON
-# must therefore build it with jq, never a hand-written string. One file so the
-# call sites (memory-commit-batch.sh, resolve.sh) cannot drift on what "approve"
-# means — see docs/design.md D19.
-gitlore_memory_approval_clause() {
-  cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt"
 }
 
 # Print the visibility to use for the memory remote: "public" or "private".

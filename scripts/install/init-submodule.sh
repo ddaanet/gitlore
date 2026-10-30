@@ -76,9 +76,7 @@ EOF
   (
     cd "$mempath"
     gitlore_git add -A
-    # Sentinel for parity with all other blessed commit paths; the submodule gate
-    # isn't wired until SessionStart, but a re-run install must still pass it (FR11).
-    GITLORE_MEMORY_COMMIT=1 gitlore_git commit -q --allow-empty -m "Initial memory"
+    gitlore_git commit -q --allow-empty -m "Initial memory"
   )
 
   # 4. Absorb gitdir manually: move <mempath>/.git into .git/modules/gitlore-memory

@@ -61,7 +61,7 @@ gitlore_set_frontmatter_description() {
   # below already removes $tmp on a caught failure, but that cannot run at all
   # if the process is killed mid-write; placing it outside the tracked
   # worktree bounds that window to "leftover in the gitdir", never "untracked
-  # neighbour the FR11 gate's `git add -A` sweeps up". `--absolute-git-dir`,
+  # neighbour a later `git add -A` sweeps up". `--absolute-git-dir`,
   # not `--git-path`: the latter is relative to the `-C` dir for a plain repo.
   tmp=$(git -C "$(dirname -- "$file")" rev-parse --absolute-git-dir) \
     && tmp="$tmp/gitlore-frontmatter.tmp.$$" || return 1
@@ -92,7 +92,7 @@ gitlore_set_frontmatter_description() {
 }
 
 # Abs/relative path of the pre-edit MEMORY.md stash, inside the submodule
-# gitdir (untracked; mirrors gitlore_commit_msg_file). $1 = memory path;
+# gitdir (untracked). $1 = memory path;
 # $2 = agent id, optional. Absent or empty yields today's unsuffixed name, so
 # the main thread's files do not migrate; non-empty appends `-<agent_id>` —
 # see _gitlore_agent_suffix for the exact suffix and why it is sanitized.

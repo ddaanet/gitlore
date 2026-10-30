@@ -61,7 +61,7 @@ nobody tracks.
      and description. A fix at an owner my human partner owns is preferred to
      a note; a brief in the owning repo's `inbox/` is a destination in its own
      right. Read the inventory (`owned-projects.md` in each mounted tier) here;
-     an owner it does not list is asked about at the memory gate and recorded
+     an owner it does not list is asked about at the commit review and recorded
      in the same change
      ([owner-inventory.md](references/owner-inventory.md)).
    Grep the owner for the load-bearing terms before accepting a pointer that
@@ -237,12 +237,12 @@ counting an owner.
 Write the file under `memory/` (or the matching tier's directory) and add its
 line to the root `memory/MEMORY.md` — `- [Title](<tier>/<file>.md) — hook`;
 tier carriers and frontmatter follow from that edit. The fact is committed with the
-user's approved summary through `gitlore.commitCommand`, and its pointer rides
+user's approved summary through `gitlore-commit` (the `gitlore:commit` skill), and its pointer rides
 the parent commit carrying the change it documents.
 
 ## 9. Arriving here at a gate, over facts already written
 
-Three gitlore moments run this pass over facts that exist: the commit gate,
+Three gitlore moments run this pass over facts that exist: the commit review,
 before the approval summary is drafted; `/gitlore:install`, over a store just
 migrated from Claude Code's own auto-memory; and a tier mount, over the local
 facts a new tier's scope may now cover. Nothing changes about the questions —

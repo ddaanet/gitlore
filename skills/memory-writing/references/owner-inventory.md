@@ -34,7 +34,7 @@ one about how an agent behaves, in its definition.
 - **A sibling owns it and the inventory lists it:** a brief dropped in that
   repository's `inbox/` is a destination in its own right, with or without a
   pointer left in memory. Other repositories are read-only beyond that brief.
-- **The inventory has no row for the owner:** at the memory gate, and only
+- **The inventory has no row for the owner:** at the commit review, and only
   there, ask my human partner whether that project is modifiable. Record the
   answer by adding a row to the tier's `owned-projects.md` in the same memory
   change, so the next gate does not ask again.

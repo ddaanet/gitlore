@@ -44,7 +44,7 @@ Each trial:
 2. Records where the memory store stands, before the agent touches anything
 3. **Turn 1** — eval runner: agent works the flow and stops
 4. **Turn 2** — eval runner resumes the session with the approval message, for scenarios that have an approval gate
-5. Runs the scenario's assertion script, which owns everything after the turns — including finishing a commit the agent left approved but unrun, where the flow has one
+5. Runs the scenario's assertion script, which grades everything after the turns
 
 The eval repo's hooks are copied wholesale from the plugin's own `hooks/hooks.json`, with `${CLAUDE_PLUGIN_ROOT}` resolved. Derived, never hand-listed: a hand-written subset is a registration the evals never exercise, and an eval's whole point is to walk the wiring production ships. Skills and commands are copied in too, so the prompt contracts the agent reads are the real ones.
 
@@ -56,16 +56,17 @@ Fixtures reach no network — every remote in here is a local bare repo, and `GI
 
 | Scenario | Assertion | What only an eval sees |
 |---|---|---|
-| 01 basic memory commit | `memory-commit` | SessionStart orientation → summary → approval → `commit-memory.sh` → memory pointer staged in the parent |
+| 01 basic memory commit | `memory-commit` | SessionStart orientation → `gitlore:commit` skill → sectioned summary → approval → `gitlore-commit` → memory pointer staged in the parent |
 | 03 add tier | `add-tier` | intent file → PostToolBatch hook mounts (agent runs no git) → manifest edit recomposes the root index |
 | 04 tier write | `tier-write` | routing a portable fact to the tier, the mirror-down, and one approved summary committing memory *and* the tier |
 | 05 active recall | `recall` | a probe surfaces the trigger mid-task → the agent Reads the body *after* it → the answer uses it |
+| 06 fact edit reason | `memory-commit` | the summary carries the cause of a fact edit, not the new body or the diff's own change |
 
 ### The memory-commit flow
 
-The parent repo has no pre-commit hook: a parent `git commit` never commits memory. A memory commit is the agent's own act, taught by the SessionStart orientation. The agent edits memory and is asked to commit it, summarises the pending changes, and stops for approval. On approval (turn 2) it runs `bash "$(git config gitlore.commitCommand)" -m "<approved summary>"`, or writes the summary and trigger files for the PostToolBatch hook to act on.
+The parent repo has no pre-commit hook: a parent `git commit` never commits memory. A memory commit is the agent's own act, taught by the SessionStart orientation and carried out through the `gitlore:commit` skill. The agent edits memory and is asked to commit it, invokes the skill first, drafts the sectioned summary the skill specifies, and stops for approval. On approval (turn 2) it pipes the approved summary on stdin to `gitlore-commit` through a quoted heredoc.
 
-The assertions grade the end state, whichever finish the agent picked: memory advanced, `live` fast-forwarded, the approved summary consumed, the memory pointer staged in the parent index (`git diff --cached --name-only`), and the commit message passing the rubric. An agent that wrote the approved summary and stopped is finished by the assertion running `commit-memory.sh -F` on it (`lib/finish-commit.sh`), which is what the product does for a bare `commit-memory.sh -F <file>`.
+The assertions grade the end state from the memory log and the session transcript: memory moved past `memory-baseline`, `live` fast-forwarded, the memory pointer staged in the parent index (`git diff --cached --name-only`), and the commit message passing the rubric. The transcript shows whether the `gitlore:commit` skill ran ahead of the `gitlore-commit` call (`check_commit_trace` in `lib/finish-commit.sh`).
 
 ## Adding scenarios
 

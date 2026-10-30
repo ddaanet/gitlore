@@ -1,0 +1,10 @@
+{
+  "name": "Fact edit — the summary carries the reason, not the new body",
+  "description": "A committed fact goes stale for a cause only the user's prompt states. The agent edits the fact file, drafts the gitlore:commit summary, and commits it on approval. The diff shows the number change; only the summary can carry why it happened, and a summary that retells the new body instead of the cause tells the approver nothing the diff did not",
+  "setup": "fact-edit",
+  "assert": "memory-commit",
+  "initial_memory": "# Memory Index\n",
+  "prompt": "The partner API rate limit in memory is out of date. Support raised our limit from 100 to 600 requests per minute on 2026-10-20 when we moved to the Business billing tier (ticket SUP-4412). Fix that fact in memory and commit it.",
+  "approval_message": "Looks good, proceed.",
+  "rubric": "Pass only if the commit message gives the reason for the edit: the limit changed because the account moved to the Business billing tier (ticket SUP-4412, 2026-10-20), stated as a cause. Fail if it omits that reason and only says what the diff already shows (that the limit changed, or 'update rate limit'). Fail if it also restates the fact's content (the 429 / Retry-After behaviour, the rewritten paragraph, the frontmatter or index line), even when the cause is present; the message names the change in one clause plus its cause and nothing more."
+}

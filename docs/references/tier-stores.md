@@ -26,27 +26,20 @@ the moved gitlink is part of the memory commit rather than lagging it;
 pointer never goes out ahead of what it points at. Two decisions the shared
 driver rests on:
 
-*One approval summary per memory episode, not per tier.* The gate is keyed to a
-single message file, and the episode's approved summary is reused verbatim as
-the commit message in every store it touched. The user approves a set of
+*One approval per memory episode, not per tier.* The episode's summary is shown
+and approved once, and carries one section per store it touched; each store's
+commit takes its own section verbatim (D70). The user approves a set of
 *writes*, not a set of repositories; N prompts for one decision buys no extra
-information. What the approval prompt owes the user is
-**grouping by destination** — a line bound for a shared tier is more public than
-one bound for project memory, and that difference is the only part of the split
-that carried real content.
+information. What the approval owes the user is **grouping by destination** — a
+line bound for a shared tier is more public than one bound for project memory,
+and the sections keep a private store's paragraphs out of a shared tier's log.
 
 *No recursing hook in the memory store.* Recursion is driver-side, exactly as
 the parent already drives memory: `commit-memory.sh` calls the sync function and
 `pre-push` pushes explicitly, rather than relying on a hook one level down. A
 hook-side version would re-litigate the full `--local-env-vars` unset and the
-`GIT_INDEX_FILE` capture/restore at a level that needs neither, and would force
-the FR11 gate to share `memory-pre-commit` with the driver — the gate exits 0 on
-its first line under the blessed sentinel, so the two would diverge by sentinel
-inside one hook. `memory-pre-commit` stays a pure gate and is now
-*emitted into each tier as well*, since neither the parent's hooks nor memory's
-own gate reach a submodule-inside-a-submodule; each tier gets its own
-`gitlore.hooksDir` mirror because the wrapper's `git config` reads whichever
-store it fires in.
+`GIT_INDEX_FILE` capture/restore at a level that needs neither. No hook runs in
+the memory store or a tier at commit time (D70).
 
 Scope is every **mounted** tier, not only the active ones: the manifest governs
 routing and composition, and silently dropping a dormant tier's writes would be
@@ -158,11 +151,11 @@ recomposed root index land in a canned bookkeeping commit
 (`Update MEMORY.md for <tier> tier merge.`) that advances memory's local `live`,
 so an explicit take leaves the store clean. The parent-level gitlink still
 floats to the next parent commit, as every memory advance leaves it (a commit
-through `commit-memory.sh` is the one advance that stages it). One path
-degrades: a root store that held unapproved work *before* the take gets no
-canned commit — the pair includes `MEMORY.md`, whose recompose folds in whatever
-unapproved index edits the episode already held — and falls back to the
-staged-pair discipline below.
+through `gitlore-commit` is the one advance that stages it). One path degrades:
+a root store that held unapproved work *before* the take gets no canned commit —
+the pair includes `MEMORY.md`, whose recompose folds in whatever unapproved
+index edits the episode already held — and falls back to the staged-pair
+discipline below.
 
 **A take whose up projection fails records nothing and walks the tier back.**
 Staging the gitlink would put the tier on its pin while root still holds the
@@ -191,12 +184,13 @@ gitlink that never moved. A take retried at once finds nothing to take. The next
 the down projection writes root's line into the carrier for a file the tier no
 longer holds; the dangling report names root's line and nothing names the
 carrier. A take after that refuses the dirty tier. What recovers it is the
-commit path: the carrier line is committed on the pin, its `HEAD:live` push is
-refused as a non-fast-forward because `live` still holds the arrival, the
-refusal classifies as divergence, and the `head-vs-live` merge
-`/gitlore:resolve` lands joins the line to its file and stages the pair. Nothing
-is lost at any step, and the cost is one merger dispatch and a redundant commit
-in the tier's history, for a failure that takes a kill inside one function.
+commit path followed by the reconcile: the carrier line is committed on the pin,
+its `HEAD:live` advance is refused as a non-fast-forward because `live` still
+holds the arrival and is reported as a fork, and the `head-vs-live` merge that
+the next `/gitlore:merge` or `/gitlore:push` prepares and `/gitlore:resolve`
+lands joins the line to its file and stages the pair. Nothing is lost at any
+step, and the cost is one merger dispatch and a redundant commit in the tier's
+history, for a failure that takes a kill inside one function.
 `tests/killed_take_repro.bats` pins the whole sequence.
 
 **A tier merge the root index cannot adopt still lands, and the root records

@@ -25,15 +25,18 @@ teardown() { teardown_tmp_repo; }
   # 3. Claude edits memory.
   echo "added during session" >> memory/MEMORY.md
 
+  # The install and SessionStart write files under .claude; the commit adds none.
+  claude_before=$(claude_files)
+
   # 4. Claude commits memory with the approved summary (D58): its own act.
-  run bash "$(git config gitlore.commitCommand)" -m "memory: record session edits"
+  run bash -c "printf '== memory ==\nmemory: record session edits\n' | '$PLUGIN_ROOT/bin/gitlore-commit'"
   [ "$status" -eq 0 ]
   wt=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
   [ "$wt" = "$live" ]
   run git -C memory log --oneline
   [[ "$output" == *"record session edits"* ]]
-  [ ! -f "$(gitlore_commit_msg_file memory)" ]
+  [ "$(claude_files)" = "$claude_before" ]
 
   # 5. The script staged the moved gitlink: the parent index is checked BEFORE
   # any parent commit, because nothing else may do it for the script.

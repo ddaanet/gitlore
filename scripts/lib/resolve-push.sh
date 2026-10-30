@@ -8,15 +8,13 @@
 # read decides whether a composition problem is in a file this commit changes,
 # i.e. whether committing would publish it, so a failure there leaves the
 # question open and the commit stops on it — with the compose refusal that sent
-# the run to the read, which is the list a retry has to fix. The approval is
-# restamped by the caller, as after every failure that prepared no merge, so the
-# retry reuses the summary as it stands.
+# the run to the read, which is the list a retry has to fix.
 # Args: $1 = the index file whose status could not be read, $2 = that refusal.
 gitlore_say_unreadable_index_status() {
   local file="$1" refusal="$2"
   gitlore_say_for_agent_or_user \
     "$refusal
-gitlore: the commit was aborted because git could not read the status of $file, so whether this commit changes that index is unknown. Establish why \`git status\` fails in the store holding it, then retry the commit — the approved summary is still in place." \
+gitlore: the commit was aborted because git could not read the status of $file, so whether this commit changes that index is unknown. Establish why \`git status\` fails in the store holding it, then run \`gitlore-commit\` again with the summary on stdin." \
     "$refusal
 gitlore: the commit was aborted because git could not read the status of $file. Open this project in Claude Code and ask it to repair the memory store, then retry the commit." >&2
 }
@@ -25,9 +23,9 @@ gitlore: the commit was aborted because git could not read the status of $file. 
 # made and a stopped run never recorded: memory's `add -A` failed after it (a
 # transient index.lock) or the run died between the two. That tier sits ahead of
 # its pin, the shape gitlore_compose_check_pins refuses for a tier moved behind
-# gitlore's back, so without this the retry memory-commit-batch.sh promises is
-# refused for good. Staging it overwrites nothing: the commit path composed that
-# carrier from the root index just before committing it.
+# gitlore's back, so without this the retry of the commit is refused for good.
+# Staging it overwrites nothing: the commit path composed that carrier from the
+# root index just before committing it.
 #
 # Recognised by the landing record written just before that commit — HEAD's
 # parent must be the commit the record names, and memory's index must still pin

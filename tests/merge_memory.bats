@@ -154,10 +154,11 @@ strand_live_behind_head() {
   [[ "$output$stderr" == *"stranded behind HEAD"* ]]
 }
 
-@test "reports a store whose HEAD and 'live' have diverged instead of moving either" {
-  # Only a `live` the current HEAD contains is unambiguously stranded. When each
-  # ref holds a commit the other lacks, which one was intended is not
-  # recoverable from the refs, so the repair declines and says so.
+@test "a store whose HEAD and 'live' have diverged gets a prepared merge of HEAD, and live stays put" {
+  # Each ref holds a commit the other lacks. /gitlore:merge reconciles them
+  # after its remote step: a merge is prepared for /gitlore:resolve, as for a
+  # diverged remote; `live` does not move until it lands. The preparation checks
+  # out the authority, so HEAD is read from MERGE_HEAD, the pending side.
   wire_memory_remote
   base=$(git -C memory rev-parse HEAD)
   (
@@ -165,23 +166,79 @@ strand_live_behind_head() {
     git checkout -q live
     printf 'on-live\n' > ON-LIVE.md
     git add -A
-    GITLORE_MEMORY_COMMIT=1 git commit -q -m "on live only"
+    git commit -q -m "on live only"
     git checkout -q --detach "$base"
     printf 'on-head\n' > ON-HEAD.md
     git add -A
-    GITLORE_MEMORY_COMMIT=1 git commit -q -m "on HEAD only"
+    git commit -q -m "on HEAD only"
   )
   head=$(git -C memory rev-parse HEAD)
   live=$(git -C memory rev-parse live)
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [ "$(git -C memory rev-parse HEAD)" = "$head" ]
+  [[ "$output$stderr" == *"memory merge prepared"* ]]
+  [[ "$output$stderr" != *"have each moved"* ]]
+  [ "$(jq -r .flavor "$(gitlore_merge_state_file memory)")" = "head-vs-live" ]
   [ "$(git -C memory rev-parse live)" = "$live" ]
-  [[ "$output$stderr" == *"have each moved since they last agreed"* ]]
+  [ "$(git -C memory rev-parse MERGE_HEAD)" = "$head" ]
   # The repair runs before the no-op report, so a store that is about to fail is
   # never first told it holds everything it needs.
   [[ "$output$stderr" != *"already holds everything"* ]]
+}
+
+@test "a diverged HEAD and 'live' with uncommitted store changes prepares no merge" {
+  wire_memory_remote
+  base=$(git -C memory rev-parse HEAD)
+  (
+    cd memory || exit 1
+    git checkout -q live
+    printf 'on-live\n' > ON-LIVE.md
+    git add -A
+    git commit -q -m "on live only"
+    git checkout -q --detach "$base"
+    printf 'on-head\n' > ON-HEAD.md
+    git add -A
+    git commit -q -m "on HEAD only"
+    printf 'unapproved\n' > UNAPPROVED.md
+  )
+  live=$(git -C memory rev-parse live)
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"uncommitted changes"* ]]
+  [[ "$output$stderr" != *"memory merge prepared"* ]]
+  [ ! -e "$(gitlore_merge_state_file memory)" ]
+  run git -C memory rev-parse -q --verify MERGE_HEAD
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse live)" = "$live" ]
+  [ -f memory/UNAPPROVED.md ]
+}
+
+@test "a diverged root whose only uncommitted edit is inside a tier is still reconciled" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  base=$(git -C memory rev-parse HEAD)
+  (
+    cd memory || exit 1
+    git checkout -q live
+    printf 'on-live\n' > ON-LIVE.md
+    git add -A
+    git commit -q -m "on live only"
+    git checkout -q --detach "$base"
+    printf 'on-head\n' > ON-HEAD.md
+    git add -A
+    git commit -q -m "on HEAD only"
+  )
+  # A tier edit rides no root merge: the root only sees a modified submodule.
+  printf 'tier edit\n' >> memory/ddaanet/MEMORY.md
+  [ -n "$(git -C memory status --porcelain)" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"memory merge prepared"* ]]
+  [[ "$output$stderr" != *"uncommitted changes"* ]]
+  [ -e "$(gitlore_merge_state_file memory)" ]
 }
 
 @test "leaves a store whose remote it is ahead of alone" {

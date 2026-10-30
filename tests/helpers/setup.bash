@@ -52,6 +52,10 @@ export PLUGIN_ROOT
 # shellcheck source=tests/helpers/triggers.bash
 source "${BATS_TEST_DIRNAME}/helpers/triggers.bash"
 
+# commit_with / commit_sections: the sectioned summary commit-memory.sh reads on stdin.
+# shellcheck source=tests/helpers/commit-summary.bash
+source "${BATS_TEST_DIRNAME}/helpers/commit-summary.bash"
+
 setup_tmp_repo() {
   # A hook reads its payload with `payload=$(cat)`, and a test that invokes one
   # without piping anything into it inherits bats' own stdin — a socket or a

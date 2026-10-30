@@ -49,13 +49,13 @@ source "$BATS_TEST_DIRNAME/../../helpers/eval-asserts.bash"
   assert_fails "not detached at live"
 }
 
-# The FR11 gate is the sole committer. A tier flow that commits inside memory
-# would slip a change past the approval gate entirely.
+# A memory commit is the approved-summary path's alone. A tier flow that commits
+# inside memory would slip a change past the user's approval entirely.
 @test "add-tier: fails when something committed inside the memory store" {
   _make_add_tier_end_state
-  GITLORE_MEMORY_COMMIT=1 git -C "$EVAL_REPO/memory" commit -q -m "snuck in"
+  git -C "$EVAL_REPO/memory" commit -q -m "snuck in"
   _run_assert add-tier
-  assert_fails "bypassing the FR11 gate"
+  assert_fails "committed inside memory during add-tier"
 }
 
 @test "add-tier: fails when the tier was never mounted at all" {

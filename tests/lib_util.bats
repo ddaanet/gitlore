@@ -52,14 +52,10 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "agent-written IPC files resolve under the parent .claude/, not the gitdir" {
-  make_parent_with_memory
-  local dir="$TMP_REPO/.claude"
-  # The agent writes these, so they must live where the agent can write.
-  [ "$(gitlore_commit_msg_file memory)"     = "$dir/gitlore-memory-message" ]
-  [ "$(gitlore_commit_trigger_file memory)" = "$dir/gitlore-commit-memory" ]
-  [[ "$(gitlore_commit_msg_file memory)"     != *".git/"* ]]
-  [[ "$(gitlore_commit_trigger_file memory)" != *".git/"* ]]
+@test "no message file path or freshness judgement exists: the summary has no file" {
+  run bash -c 'source "$1/scripts/lib/util.sh"; declare -F gitlore_commit_msg_file gitlore_commit_msg_freshness' _ "$PLUGIN_ROOT"
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
 }
 
 @test "gitlore_probe_writable succeeds on a writable dir" {
@@ -134,28 +130,6 @@ EOF
   run gitlore_parent_visibility
   [ "$status" -eq 0 ]
   [ "$output" = "private" ]
-}
-
-@test "gitlore_memory_approval_clause prints the canonical clause from reference/" {
-  run gitlore_memory_approval_clause
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(cat "$PLUGIN_ROOT/reference/memory-approval-clause.txt")" ]
-  [[ "$output" == *"New, Update, Augment, Reduce, or Remove"* ]]
-}
-
-@test "the approval clause opens with the memory-writing review directive" {
-  run gitlore_memory_approval_clause
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'gitlore:memory-writing'* ]]
-  # Order is the content here: the review runs BEFORE the summary is drafted,
-  # so the directive has to precede the body spec it would otherwise read as a
-  # footnote to. Line numbers, not a substring match, since both blocks exist.
-  local directive_line body_line
-  directive_line=$(printf '%s\n' "$output" | grep -n 'gitlore:memory-writing' | head -1 | cut -d: -f1)
-  body_line=$(printf '%s\n' "$output" | grep -n 'The commit message is a subject line' | head -1 | cut -d: -f1)
-  [ -n "$directive_line" ]
-  [ -n "$body_line" ]
-  [ "$directive_line" -lt "$body_line" ]
 }
 
 @test "gitlore_is_migration_stub true for a dir holding only the migration breadcrumb" {
@@ -242,20 +216,6 @@ EOF
   [ "$status" -eq 128 ]
   [[ "$output" == *index.lock* ]]
   [ "$(cat "$TMP_REPO/git-calls")" = "4" ]    # 1 initial + 3 retries
-}
-
-@test "gitlore_approval_present accepts a summary and refuses absent, empty and blank" {
-  msgfile="$TMP_REPO/approval"
-  run ! gitlore_approval_present "$msgfile"        # absent
-  : > "$msgfile"
-  run ! gitlore_approval_present "$msgfile"        # empty
-  # Non-empty, so `-s` alone admits it: this is the case that reaches
-  # `git commit -F` and comes back as "empty commit message".
-  printf '\n  \n\t\n' > "$msgfile"
-  run ! gitlore_approval_present "$msgfile"
-  printf 'memory: record notes\n' > "$msgfile"
-  run gitlore_approval_present "$msgfile"
-  [ "$status" -eq 0 ]
 }
 
 @test "gitlore_store_mid_merge reads a state file, a MERGE_HEAD, or neither" {

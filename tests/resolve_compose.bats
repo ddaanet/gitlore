@@ -34,7 +34,7 @@ load helpers/resolve-compose
 - [P](p.md) — project
 - [T](ddaanet/x.md) — org'
 
-  run bash "$COMMIT_MEMORY"
+  run resolve_gate
   [ "$status" -ne 0 ]
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
@@ -55,7 +55,7 @@ load helpers/resolve-compose
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
 
   run bash "$PRE_PUSH"
@@ -92,7 +92,7 @@ duplicate_tier_carrier() {
 
 # The head-vs-live counterpart to prepare_tier_merge_with_new_lines: the tier
 # diverges from its own local `live`, as tier_divergence.bats's pre-commit
-# preparation does, rather than from its remote, so pre-commit prepares the
+# preparation does, rather than from its remote, so the resolver prepares the
 # merge instead of pre-push.
 prepare_tier_merge_head_vs_live() {
   make_parent_with_memory
@@ -101,7 +101,8 @@ prepare_tier_merge_head_vs_live() {
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact" && return 1
+  commit_sections "memory: record the org fact"
+  resolve_gate && return 1
   return 0
 }
 
@@ -238,8 +239,8 @@ prepare_tier_merge_head_vs_live() {
 }
 
 @test "a refused tier merge answers an unapproved parent commit with its continuation directive" {
-  # The kept merge moves the tier's gitlink, so memory reads dirty with no
-  # fresh approval. The merge speaks first: a summary request would put a
+  # The kept merge moves the tier's gitlink, so memory reads dirty with
+  # nothing approved. The merge speaks first: a summary request would put a
   # merge in front of the user, and nothing may commit on top of it anyway.
   prepare_tier_merge_with_new_lines
   duplicate_tier_carrier
@@ -247,9 +248,8 @@ prepare_tier_merge_head_vs_live() {
   [ "$status" -eq 1 ]
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)
   mem_before=$(git -C memory rev-parse HEAD)
-  [ "$(gitlore_commit_msg_freshness memory)" != "yes" ]
 
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -eq 1 ]
   all="${output}${stderr}"
   [[ "$all" == *"memory merge prepared"* ]]
@@ -271,7 +271,7 @@ prepare_tier_merge_head_vs_live() {
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs- [their other](u.md) — also theirs" >/dev/null
   run bash "$PRE_PUSH"
   [ "$status" -eq 1 ]

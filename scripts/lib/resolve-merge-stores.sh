@@ -277,3 +277,62 @@ gitlore_live_ahead_of_head() {
   [ "$head" != "$live" ] || return 1
   git -C "$store" merge-base --is-ancestor "$head" "$live"
 }
+
+# Reconcile every store's checked-out branch with its local `live`, before the
+# remote step (the take or the publish): fast-forward when HEAD is ahead of
+# `live`, a prepared head-vs-live merge for `/gitlore:resolve` when the two have
+# forked. A HEAD behind `live` is left to the take and the publish preflight,
+# which own that direction.
+# Returns 0 when every store agrees or was advanced, 1 after a merge was
+# prepared, after a diverged store was refused for uncommitted changes, or when
+# a store could not be advanced.
+# Args: $1 = memory worktree path.
+gitlore_reconcile_stores() {
+  local mempath="$1" tier tierpath
+  gitlore_reconcile_one "$mempath" memory || return 1
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
+    [ -e "$tierpath/.git" ] || continue
+    gitlore_reconcile_one "$tierpath" "tier '$tier'" || return 1
+  done < <(gitlore_tier_paths "$mempath")
+  return 0
+}
+
+# One store's reconcile. Args: $1 = store worktree, $2 = label for messages.
+gitlore_reconcile_one() {
+  local store="$1" label="$2" live head push_err
+  # A merge left dead by hand is disposed of, or a prepared one continued, before
+  # anything here reads the refs: the take runs the same guard first.
+  gitlore_guard_stale_merge_state "$store" || return 1
+  # `-q --verify` is silent when `live` does not exist (never fetched).
+  live=$(git -C "$store" rev-parse -q --verify live) || return 0
+  head=$(git -C "$store" rev-parse HEAD)
+  [ "$head" = "$live" ] && return 0
+  case "$(gitlore_classify_refusal "$store" HEAD live)" in
+    ahead)
+      # The existing advance of a `live` stranded behind HEAD (the publish
+      # preflights use the same one).
+      gitlore_repair_stranded_live "$store" "$label" || return 1
+      return 0
+      ;;
+    diverged)
+      # The continuation commits with `add -A`, so uncommitted edits would ride
+      # into the merge commit unapproved: refused first, as the take refuses.
+      # A tier's own edits (or moved gitlink) do not ride the root merge, so
+      # submodule changes are ignored; untracked files still count.
+      if [ -n "$(git -C "$store" status --porcelain --ignore-submodules=all)" ]; then
+        gitlore_say_for_agent_or_user \
+          "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them (approved summary, then a memory commit) and run /gitlore:merge or /gitlore:push again." \
+          "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them and try again." >&2
+        return 1
+      fi
+      # The authority is `live`, the pending side is HEAD: the same preparation
+      # the take uses for a diverged remote.
+      gitlore_yield_merge "$store" live head-vs-live HEAD || return 1
+      return 1
+      ;;
+  esac
+  return 0
+}

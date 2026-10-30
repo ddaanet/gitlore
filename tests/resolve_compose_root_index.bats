@@ -21,7 +21,7 @@ load helpers/resolve-compose
 - [P](p.md) — one
 - [P again](p.md) — two'
 
-  run bash "$COMMIT_MEMORY"
+  run resolve_gate
   [ "$status" -ne 0 ]
   mem_before=$(git -C memory rev-parse HEAD)
   run --separate-stderr run_stub_synth memory
@@ -39,7 +39,7 @@ load helpers/resolve-compose
 
 - [A](a.md) — a- [B](b.md) — b'
 
-  run bash "$COMMIT_MEMORY"
+  run resolve_gate
   [ "$status" -ne 0 ]
   mem_before=$(git -C memory rev-parse HEAD)
   run --separate-stderr run_stub_synth memory
@@ -64,7 +64,7 @@ load helpers/resolve-compose
 Stray line
 - [Q](q.md) — three'
 
-  run bash "$COMMIT_MEMORY"
+  run resolve_gate
   [ "$status" -ne 0 ]
   mem_before=$(git -C memory rev-parse HEAD)
   run --separate-stderr run_stub_synth memory
@@ -82,7 +82,7 @@ Stray line
 
 - [Old fact](gone/x.md) — a tier that is no longer mounted'
 
-  run bash "$COMMIT_MEMORY"
+  run resolve_gate
   [ "$status" -ne 0 ]
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
@@ -98,7 +98,7 @@ Stray line
 
 - [Gone](gone.md) — the file this names is not there'
 
-  run bash "$COMMIT_MEMORY"
+  run resolve_gate
   [ "$status" -ne 0 ]
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
@@ -120,9 +120,9 @@ Stray line
   # index at all. Composition tolerates that; the continuation's staging step
   # must too.
   git -C memory rm -q MEMORY.md
-  GITLORE_MEMORY_COMMIT=1 git -C memory -c user.email=t@t -c user.name=t commit -q -m "No root index"
+  git -C memory -c user.email=t@t -c user.name=t commit -q -m "No root index"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  bash "$COMMIT_MEMORY" -m "memory: record the org fact"
+  commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
 
   run bash "$PRE_PUSH"

@@ -11,12 +11,12 @@ load helpers/fixtures
 load helpers/divergence-fixtures
 load helpers/stub-synth
 
-COMMIT_MEMORY="$PLUGIN_ROOT/scripts/commit-memory.sh"
 
 setup() {
   setup_tmp_repo
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   make_parent_with_memory
+  wire_memory_origin
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   # Stage a parent-side change so the pre-commit hook has a real commit context.
   echo parent > parent-file
@@ -26,7 +26,7 @@ setup() {
 teardown() { teardown_tmp_repo; }
 
 @test "head-vs-live: pre-commit yields directive on ff-push failure" {
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr merge_gate
   [ "$status" -ne 0 ]
   [[ "$output$stderr" == *"memory merge prepared"* ]]
   [[ "$output$stderr" == *"flavor=head-vs-live"* ]]
@@ -62,7 +62,7 @@ teardown() { teardown_tmp_repo; }
 # argument is scoped to this dispatch and must stay visible in the text, so it
 # never reads as licence to skip a permission gate in general.
 @test "the merge directive authorizes the dispatch it asks for" {
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr merge_gate
   [ "$status" -ne 0 ]
   local all="$output$stderr"
   # Plugin-qualified: a bare `memory-merger` fails discovery with
@@ -77,7 +77,7 @@ teardown() { teardown_tmp_repo; }
 }
 
 @test "head-vs-live loop: continuation yields again if retry-push fails" {
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr merge_gate
   [ "$status" -ne 0 ]
   # The merge is prepared (HEAD detached at live, MERGE_HEAD set) but not
   # committed. Simulate a concurrent worktree advancing `live` underneath us
@@ -94,7 +94,7 @@ teardown() { teardown_tmp_repo; }
 
 @test "head-vs-live: continuation finalizes the merge, ff-pushes live, stays detached" {
   live_before=$(git -C memory rev-parse live)
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr merge_gate
   [ "$status" -ne 0 ]
   run_stub_synth memory
 

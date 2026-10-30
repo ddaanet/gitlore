@@ -74,12 +74,22 @@ assert_session_start_did_nothing() {
   [ "$status" -eq 0 ]
   [ ! -f .claude/settings.local.json ]
   [ "$(git config gitlore.hooksDir)" = "$CLAUDE_PLUGIN_ROOT/scripts/git-hooks" ]
-  [ "$(git config gitlore.commitCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/commit-memory.sh" ]
-  [ "$(git config gitlore.pushCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/push-memory.sh" ]
-  [ "$(git config gitlore.mergeCommand)" = "$CLAUDE_PLUGIN_ROOT/scripts/merge-memory.sh" ]
-  [ "$(git config gitlore.memoryApprovalClauseFile)" = "$CLAUDE_PLUGIN_ROOT/reference/memory-approval-clause.txt" ]
   [ -x .git/gitlore-pre-commit ]
   [ -x .git/gitlore-pre-push ]
+}
+
+# D70: the entry points are plugin bin/ names; SessionStart pins no discovery
+# key for them and no approval-clause file key (gitlore.hooksDir stays, above).
+@test "pins no discovery key and no approval-clause key" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  run bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ -n "$(git config gitlore.hooksDir)" ]
+  run git config --local --get-regexp '^gitlore\.(commit|push|merge)command$|^gitlore\.memoryapprovalclausefile$'
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
 }
 
 @test "emits launcher-guard JSON on stdout when GITLORE_LAUNCHED is unset" {
@@ -124,7 +134,7 @@ assert_session_start_did_nothing() {
   # Live and the detached HEAD both lack the index, so the ff-merge has nothing
   # to restore it from and the working tree is clean before the hook runs.
   git -C memory rm -q MEMORY.md
-  GITLORE_MEMORY_COMMIT=1 git -C memory -c user.email=t@t -c user.name=t commit -q -m "no index"
+  git -C memory -c user.email=t@t -c user.name=t commit -q -m "no index"
   git -C memory update-ref refs/heads/live HEAD
   before=$(git -C memory rev-parse HEAD)
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
@@ -172,11 +182,13 @@ assert_session_start_did_nothing() {
   # The prohibition (the one piece that must precede any action) is present...
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never run git commit inside the memory submodule"; "i")'
   # ...along with the happy path, as the acts it asks for: write the file like
-  # any other edit, then commit memory through the config-pinned command. The
-  # command substitution reaches the agent as literal text, not expanded.
+  # any other edit, then commit memory through the gitlore:commit skill (D70),
+  # which names the command; no config-key lookup rides the orientation.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("git config gitlore.commitCommand")'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("$(git config gitlore.commitCommand)")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("gitlore:commit")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("commitCommand|git config gitlore"; "i") | not'
+  # A request to commit is not approval of a summary the user has not seen.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("not approval.*summary"; "i")'
   # A parent commit no longer carries memory, so the text must not say it does.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("committing the parent repo"; "i") | not'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("all it needs"; "i") | not'
@@ -191,22 +203,6 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("FR[0-9]") | not'
   # Forbids by role, never by naming a command form to reason around.
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("git -C"; "i") | not'
-}
-
-@test "wires the submodule commit gate (memory-pre-commit) into the submodule hooks dir" {
-  make_parent_with_memory
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  hookfile="$(git -C memory rev-parse --git-path hooks)/pre-commit"
-  [ -x "$hookfile" ]
-  # And it must actually block a naked direct commit.
-  echo dirty > memory/notes.md
-  git -C memory add -A
-  CLAUDECODE=1 run --separate-stderr git -C memory commit -m "direct"
-  [ "$status" -ne 0 ]
-  [[ "${output}${stderr}" == *"blocked"* ]]
 }
 
 @test "detaches memory HEAD when it arrives on a named branch" {

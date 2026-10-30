@@ -256,7 +256,7 @@ rest_unadopted_tier() {
 # reason other than divergence, so it is the last place that should re-diagnose
 # it as one.
 #
-# An empty message is treated as divergence, matching the memory gate: `push -q`
+# An empty message is treated as divergence: `push -q`
 # names its rejection reason, so silence here means the refusal carried no text
 # to route on and the local `HEAD:live` case is the only cause left.
 # Args: $1 = store worktree, $2… = push arguments (remote and refspec).

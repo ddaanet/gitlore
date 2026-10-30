@@ -10,7 +10,7 @@ You are resolving a gitlore memory submodule from divergence.
 
 ## Entry mode
 
-**Commit-triggered**: A commit path already emitted a merge directive — `commit-memory.sh`, run by the agent or by the `PostToolBatch` hook that commits memory on its behalf, or the `pre-push` hook — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
+**Commit-triggered**: A commit path already emitted a merge directive — `gitlore-commit`, run by the agent through the `gitlore:commit` skill, or the `pre-push` hook — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
 
 **Standalone** (user ran `/gitlore:resolve` or state is unclear): Run the resolver:
 
@@ -90,7 +90,7 @@ After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again 
 
 ## Resume commit
 
-If this skill was triggered by a commit failure, retry the memory commit bare now that memory is resolved: the same `commit-memory.sh` call with no `-m` and no `-F`. Do not pass the original summary again. A summary passed with the call counts as approved at that moment, and the merge may have written content it never covered; bare, the script judges the approval already on disk. A commit that had landed before the merge leaves nothing to approve and the retry only advances `live`. If the retry refuses for want of an approved summary, follow its directive: present the summary again as it prints, amended for what the merge brought, and commit only once the user approves it.
+If this skill was triggered by a commit failure, pass the summary again to `gitlore-commit` now that memory is resolved, through the `gitlore:commit` skill. Re-approve it first if the merge brought content the summary did not cover: present it again, amended for what the merge brought, and commit once the user approves it. `gitlore-commit` on a store with no changes exits 0 whatever the summary says and does not advance `live`, so a commit that had landed before the merge needs no retry: run `/gitlore:merge` or `/gitlore:push` to move `live`. An empty summary on stdin is refused (exit 2), so a retry always carries an approved summary.
 
 ## Summarize
 

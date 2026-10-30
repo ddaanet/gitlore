@@ -81,7 +81,7 @@ teardown_file() {
 
 @test "every suite under tests/ is run by one of the test recipes" {
   # The regression this exists for: `make test` once hand-listed its suites and
-  # five of them (21 tests) drifted off the list, including the FR11 memory-gate
+  # five of them (21 tests) drifted off the list, including the memory-gate
   # cover. Nothing was red — they simply never ran.
   [ "$(cat "$BATS_FILE_TMPDIR/discovered_suites.status")" -eq 0 ]
   discovered="$(sort "$BATS_FILE_TMPDIR/discovered_suites.out")"
@@ -105,7 +105,7 @@ teardown_file() {
   # and checks that every name on it is a suite that exists.
   literals="$(grep -n '[A-Za-z_]\.bats' "$PLUGIN_ROOT/justfile" || true)"
   stray="$(printf '%s\n' "$literals" \
-    | grep -v 'tests/plugin_distribution\.bats' \
+    | grep -v 'tests/plugin_distribution\(_commands\)\?\.bats' \
     | grep -v '^[0-9]*:reads_all_suites :=' || true)"
   [ -z "$stray" ]
 }

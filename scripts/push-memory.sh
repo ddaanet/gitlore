@@ -3,13 +3,13 @@ set -euo pipefail
 
 # Standalone push entry point (D20): publish the memory store and every mounted
 # tier to their own remotes WITHOUT pushing the parent repo. The sibling of
-# commit-memory.sh (D16) — that one satisfies the FR11 gate at an interactive
+# commit-memory.sh (D16) — that one takes the approved summary at an interactive
 # moment, this one satisfies FR8 at one, so a session that commits memory and
 # then ends can still leave every fact durable on its remote.
 #
 # Takes no arguments. There is nothing to approve: FR11 gated this content when
 # it was committed, and publishing an already-approved commit adds no disclosure
-# decision. Discover this script via `git config gitlore.pushCommand`.
+# decision. Callers run it as `gitlore-push`, the plugin `bin/` name.
 #
 # Guards exit 0 (FR12 coexistence, NFR8): not a gitlore repo, no memory
 # submodule, or a session-less worktree where memory was never checked out.
@@ -85,6 +85,13 @@ done < <(
     store_state "$mempath/$tier"
   done < <(gitlore_tier_paths "$mempath")
 )
+
+# Reconcile each store's branch with its local `live` before anything is
+# published: a store that has forked from its own `live` (a commit made since the
+# last take) prepares its merge here, and nothing goes out until it is resolved.
+# This runs ahead of the publish, which would otherwise send HEAD to the remote
+# while the merge that reconciles it is still owed.
+gitlore_reconcile_stores "$mempath"
 
 # The publish itself — shared verbatim with pre-push, so the tier-before-memory
 # ordering and the divergence policy cannot drift between the two entry points.

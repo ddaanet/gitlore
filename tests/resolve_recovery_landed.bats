@@ -18,7 +18,7 @@ load helpers/resolve-recovery
   # Land directly, bypassing the continuation: MERGE_HEAD clears (git's own
   # post-commit cleanup), the merge-state file does not, and memory's index is
   # still pinned at the pre-merge commit.
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  git -C memory/ddaanet commit -q --no-edit
   landed=$(git -C memory/ddaanet rev-parse HEAD)
   [ "$landed" != "$pin_before" ]
   # HEAD moves off the landed merge onto a clean ancestor of it — the branch
@@ -42,7 +42,7 @@ load helpers/resolve-recovery
 @test "recovery: the branch where HEAD already carries the landed merge stages it too" {
   tier_prepare_head_vs_live ddaanet
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  git -C memory/ddaanet commit -q --no-edit
   landed=$(git -C memory/ddaanet rev-parse HEAD)
   # HEAD is left exactly where the commit put it — the OTHER rc-0 branch from
   # the case above, where only the bookkeeping outlived the merge.
@@ -63,7 +63,7 @@ load helpers/resolve-recovery
 @test "recovery: adoption is a no-op when the enclosing index already records the tier's HEAD" {
   tier_prepare_head_vs_live ddaanet
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory/ddaanet commit -q --no-edit
+  git -C memory/ddaanet commit -q --no-edit
   landed=$(git -C memory/ddaanet rev-parse HEAD)
 
   # Adopt once, directly, and commit it in memory — exactly what a
@@ -97,7 +97,7 @@ load helpers/resolve-recovery
 # superproject's own `submodule.gitlore-memory.path` (both conditions — no
 # membership test against `gitlore_tier_paths`, which would only restate what
 # `--show-superproject-working-tree` already settled). Staging the memory
-# root's own gitlink into the user's project index is the pre-commit hook's job,
+# root's own gitlink into the user's project index is the approved-summary commit's job,
 # gated by FR11's approval — not this recovery's to do unprompted.
 #
 # "Nothing staged in the parent repo" held against the code as it stood when
@@ -113,10 +113,10 @@ load helpers/resolve-recovery
 # root's scope, not as the clause's pin.
 @test "recovery: the same recovery for the memory root stages nothing in the parent repo" {
   make_diverged_head_vs_live memory
-  run --separate-stderr bash "$COMMIT_MEMORY"
+  run --separate-stderr resolve_gate
   [ "$status" -ne 0 ]
 
-  GITLORE_MEMORY_COMMIT=1 git -C memory commit -q --no-edit
+  git -C memory commit -q --no-edit
   landed=$(git -C memory rev-parse HEAD)
   git -C memory checkout -q --detach live
 

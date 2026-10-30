@@ -161,7 +161,7 @@ B
 
 @test "repair keeps the target's mode and leaves no scratch file behind" {
   # The target may sit in the memory worktree, where an untracked leftover is
-  # swept into the FR11 gate's `git add -A`.
+  # swept into a `git add -A`.
   printf 'A\nX\nB\n' > f
   chmod 640 f
   gitlore_weld_plan f $'\nX' > state

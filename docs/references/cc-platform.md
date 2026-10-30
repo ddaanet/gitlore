@@ -228,7 +228,7 @@ exit 1-ish: the user gets a notice, the agent nothing, and inside a subagent
 renders.
 
 `gitlore_batch_hook_guard` (`scripts/lib/hook-guard.sh`) is called once by each
-of the six `PostToolBatch` hooks, after the memory path resolves and before the
+of the five `PostToolBatch` hooks, after the memory path resolves and before the
 first fallible step, with the hook name, the memory worktree and a consequence
 sentence for the agent. It redirects the hook's stderr to a capture file in the
 memory store's git dir and records the failing command and its line in an `ERR`
@@ -251,17 +251,16 @@ Deaths before the call (sourcing, the `cd`) stay plain non-zero exits and none
 is an exit-2 path. A hook killed by a signal runs no trap and strands its
 capture file and any claimed baseline, one file per kill and never reused, since
 every reader tests the unclaimed name. A `jq` dying mid-emit is the stated
-residual: all six hooks write their stdout as their last act, so one object is
+residual: all five hooks write their stdout as their last act, so one object is
 emitted either way.
 
 The consequence differs by hook. A dying `relay-drain.sh` loses the reports it
 read this batch, because it can die at its final emit after the drain removed
 the markers it read; unread ones stay staged. `add-tier-batch.sh` leaves the
-mount outcome unknown, and `memory-commit-batch.sh` the commit outcome unknown,
-with the trigger and summary files possibly still in place. The baseline hooks
-(`index-sync-post.sh`, `index-compose.sh`) claim by rename, so a copy that loses
-the race exits 0 quietly rather than dying on a missing file; the mechanism is
-in [index-authoring-sync.md](index-authoring-sync.md). `plugin-upgrade-batch.sh`
+mount outcome unknown. The baseline hooks (`index-sync-post.sh`,
+`index-compose.sh`) claim by rename, so a copy that loses the race exits 0
+quietly rather than dying on a missing file; the mechanism is in
+[index-authoring-sync.md](index-authoring-sync.md). `plugin-upgrade-batch.sh`
 falls back to an empty session when the payload does not parse and sends the
 notice when its marker cannot be written, where a repeated notice costs a line
 and a withheld one the only telling there is.

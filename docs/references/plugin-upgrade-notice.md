@@ -18,7 +18,7 @@ This node holds the argument for reporting that and never repairing it; the
 session runs: another repo's session installs, or the user runs
 `/plugin update`. Everything this session froze at start then belongs to the
 *old* version — hook event registration, skill bodies, agent definitions, and
-the five `gitlore.*` keys that point into the plugin root (D5 in
+the `gitlore.hooksDir` key that points into the plugin root (D5 in
 [session.md](session.md)). The `PostToolBatch` hook `plugin-upgrade-batch.sh`
 notices the disagreement and names the remedy, once per episode.
 
@@ -29,9 +29,9 @@ the entire remedy.** Verified 2026-07-31 by a two-run `--plugin-dir` probe whose
 `source=resume` and ran the **new** command, under the **same** `session_id`.
 The transcript records no plugin path or version, so a resumed process has no
 stale root to restore — it re-resolves the root from the install record, re-pins
-the five keys, re-emits the wrappers and re-wires the memory gate exactly as a
-cold start does, and the conversation survives. Nothing available inside a live
-session substitutes for it.
+the key, and re-emits the wrappers exactly as a cold start does, and the
+conversation survives. Nothing available inside a live session substitutes for
+it.
 
 **Why reporting is the whole fix.** Both ways of making a live session adopt the
 upgrade produce a *split-version* session, strictly worse than uniform

@@ -83,7 +83,7 @@ gitlore_weld_repair() {
   local state="$1" file="$2" scratch status
   # The scratch file lives in the state directory, never beside the target: a
   # target inside the memory worktree would otherwise gain an untracked
-  # neighbour, which the FR11 gate's `git add -A` sweeps into the next commit.
+  # neighbour, which a `git add -A` sweeps into the next commit.
   scratch="$(gitlore_weld_state_dir)/repair.$$"
   mkdir -p "$(gitlore_weld_state_dir)" || return 1
   # Truncate-and-write rather than a rename, so the target keeps its inode and
