@@ -56,7 +56,7 @@ Fixtures reach no network — every remote in here is a local bare repo, and `GI
 
 | Scenario | Assertion | What only an eval sees |
 |---|---|---|
-| 01 basic memory commit | `memory-commit` | SessionStart orientation → summary → approval → `gitlore:commit` skill → `gitlore-commit` → memory pointer staged in the parent |
+| 01 basic memory commit | `memory-commit` | SessionStart orientation → `gitlore:commit` skill → sectioned summary → approval → `gitlore-commit` → memory pointer staged in the parent |
 | 03 add tier | `add-tier` | intent file → PostToolBatch hook mounts (agent runs no git) → manifest edit recomposes the root index |
 | 04 tier write | `tier-write` | routing a portable fact to the tier, the mirror-down, and one approved summary committing memory *and* the tier |
 | 05 active recall | `recall` | a probe surfaces the trigger mid-task → the agent Reads the body *after* it → the answer uses it |
@@ -64,7 +64,7 @@ Fixtures reach no network — every remote in here is a local bare repo, and `GI
 
 ### The memory-commit flow
 
-The parent repo has no pre-commit hook: a parent `git commit` never commits memory. A memory commit is the agent's own act, taught by the SessionStart orientation and carried out through the `gitlore:commit` skill. The agent edits memory and is asked to commit it, drafts the sectioned summary, and stops for approval. On approval (turn 2) it invokes the skill, which pipes the approved summary on stdin to `gitlore-commit` through a quoted heredoc.
+The parent repo has no pre-commit hook: a parent `git commit` never commits memory. A memory commit is the agent's own act, taught by the SessionStart orientation and carried out through the `gitlore:commit` skill. The agent edits memory and is asked to commit it, invokes the skill first, drafts the sectioned summary the skill specifies, and stops for approval. On approval (turn 2) it pipes the approved summary on stdin to `gitlore-commit` through a quoted heredoc.
 
 The assertions grade the end state from the memory log and the session transcript: memory moved past `memory-baseline`, `live` fast-forwarded, the memory pointer staged in the parent index (`git diff --cached --name-only`), and the commit message passing the rubric. The transcript shows whether the `gitlore:commit` skill ran ahead of the `gitlore-commit` call (`check_commit_trace` in `lib/finish-commit.sh`).
 

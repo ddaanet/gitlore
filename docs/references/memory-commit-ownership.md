@@ -101,30 +101,30 @@ they own.
 
 **The orientation carries the protocol, front-loaded.** `SessionStart` emits a
 standing `additionalContext` every gitlore session, carrying the commit as an
-act: writing a memory file is an ordinary edit; to commit memory, summarize the
-pending changes, get the user's explicit approval, then commit through the
-`gitlore:commit` skill, which runs `gitlore-commit` from the repo root with the
-approved summary on stdin, through a quoted heredoc; never run `git commit`
-inside the memory submodule. The text ends with the rule that a request to
-commit memory is not approval of a summary the user has not seen: show the
-summary, end the turn, commit only after the user's reply approves it. A summary
-passed with the call counts as approved by construction, so this text is the
-only gate between the agent and the commit; the eval above ran the command in
-the same turn in 4 of 5 runs, one stating it treated the request as the
-approval. The summary travels on stdin and not as an argument because it is
-prose derived from memory content: templated into a double-quoted argument, a
-backtick or `$(…)` in it would be run by the agent's shell. The text is acts and
-nothing else: the hooks that no longer exist are mechanism the agent cannot act
-on; the prohibition forbids by role, because naming `git -C <mempath> commit`
-invites reasoning about the forms left unnamed; and no FR id appears, since it
-resolves to nothing in the consumer repos this context reaches. Pinned by the
-assertions in `tests/cc_hook_session_start.bats`. The base Claude Code memory
-instructions describe generic "edit files, save facts" memory with no review
-gate, so the agent's default is actively wrong in a gitlore repo; the
-prohibition guards an action the agent would otherwise take unprompted, so it
-must be front-loaded, and no hook surfaces the command just in time. Writing
-stays seamless — no step before an edit — and the approval step attaches to the
-commit alone.
+act: writing a memory file is an ordinary edit; to commit memory, invoke the
+`gitlore:commit` skill before drafting anything: it gives the summary format,
+has the agent show the summary and end the turn, and after the user's reply
+approves it runs `gitlore-commit` from the repo root with the approved summary
+on stdin, through a quoted heredoc; never run `git commit` inside the memory
+submodule. The text ends with the rule that a request to commit memory is not
+approval of a summary the user has not seen: show the summary, end the turn,
+commit only after the user's reply approves it. A summary passed with the call
+counts as approved by construction, so this text is the only gate between the
+agent and the commit; the eval above ran the command in the same turn in 4 of 5
+runs, one stating it treated the request as the approval. The summary travels on
+stdin and not as an argument because it is prose derived from memory content:
+templated into a double-quoted argument, a backtick or `$(…)` in it would be run
+by the agent's shell. The text is acts and nothing else: the hooks that no
+longer exist are mechanism the agent cannot act on; the prohibition forbids by
+role, because naming `git -C <mempath> commit` invites reasoning about the forms
+left unnamed; and no FR id appears, since it resolves to nothing in the consumer
+repos this context reaches. Pinned by the assertions in
+`tests/cc_hook_session_start.bats`. The base Claude Code memory instructions
+describe generic "edit files, save facts" memory with no review gate, so the
+agent's default is actively wrong in a gitlore repo; the prohibition guards an
+action the agent would otherwise take unprompted, so it must be front-loaded,
+and no hook surfaces the command just in time. Writing stays seamless — no step
+before an edit — and the approval step attaches to the commit alone.
 
 **What a hook may still commit.** `pre-push` runs the take when a store is
 behind its remote or a tier's `live` is ahead of its HEAD, and the take can land

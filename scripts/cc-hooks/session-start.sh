@@ -76,7 +76,7 @@ exec 3>&1 1>&2
 # naming the command forms — spelling out `git -C <mempath> commit` invites reasoning
 # about the forms not named — and nothing here cites an FR id, which resolves to
 # nothing in the consumer repos this context lands in.
-protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, summarize the pending changes, get the user's explicit approval, then commit through the gitlore:commit skill, which runs gitlore-commit from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule. A request to commit memory is not approval of a summary the user has not seen: show the summary, end your turn, and commit only after the user's reply approves it."
+protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, invoke the gitlore:commit skill before drafting anything: it gives the summary format, has you show the summary and end your turn, and after the user's reply approves it runs gitlore-commit from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule. A request to commit memory is not approval of a summary the user has not seen: show the summary, end your turn, and commit only after the user's reply approves it."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook
