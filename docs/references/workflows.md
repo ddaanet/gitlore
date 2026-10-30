@@ -14,13 +14,11 @@ each component runs in.
 2. When the work is ready to commit, Claude summarizes the pending memory
    changes in prose and presents the summary. The user reviews the full diff in
    their own git tooling if they wish, then gives explicit confirmation.
-3. Claude runs `commit-memory.sh` through the `gitlore.commitCommand` key with
-   the confirmed summary on stdin (`-F -`), or writes the summary and the
-   trigger file and lets the `PostToolBatch` hook run it. The preceding
-   confirmation covers the commit itself.
-4. The script commits every dirty tier and advances each tier's `live`, then
-   commits memory with the summary, deletes the message file, and ff-pushes
-   `HEAD` → `live`.
+3. Claude runs `gitlore-commit` through the `gitlore:commit` skill with the
+   confirmed summary on stdin, one `== <store> ==` section per changed store
+   (D70). The preceding confirmation covers the commit itself.
+4. The script commits every dirty tier with its section and advances each tier's
+   `live`, then commits memory with its section, and ff-pushes `HEAD` → `live`.
 5. The script stages the memory gitlink in the parent index (skipped, with a
    notice, during a rebase, cherry-pick or revert).
 6. Claude commits the parent as usual. The commit touches no memory; it records
@@ -47,7 +45,7 @@ bound for project memory.
 
 1. The user runs `/gitlore:push`, or a session that committed memory is ending
    with no parent push in sight.
-2. The skill runs `push-memory.sh` through the `gitlore.pushCommand` key.
+2. The skill runs `gitlore-push`.
 3. Each tier's `live` goes to its own remote, then memory's — the same order
    `pre-push` uses, from the same shared body.
 4. A store whose remote is ahead is taken in the run — fast-forward, adoption,
@@ -62,7 +60,7 @@ bound for project memory.
 1. The user runs `/gitlore:merge`, or a session start reported commits on `live`
    not checked out here, upstream memory commits, or a tier whose remote is
    ahead.
-2. The skill runs `merge-memory.sh` through the `gitlore.mergeCommand` key.
+2. The skill runs `gitlore-merge`.
 3. Memory's own store is taken first, then each tier's — the mirror of the
    publish order (D49 in [merge-and-resolve.md](merge-and-resolve.md)). For
    memory's own store a local `live` ahead of `HEAD` is taken first: a clean

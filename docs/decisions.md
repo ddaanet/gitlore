@@ -51,29 +51,18 @@ a single commit · the old tip as a parent of the record · guarding the parent
 repository · an in-place salvage of a damaged record · a leased replacement of a
 damaged record.
 
-**The commit gate** — FR11's approval machinery.
-[commit-gate.md](references/commit-gate.md)
+**Approval wording and repo gates** — the one approval wording, and the repo's
+own gate and tooling. [commit-gate.md](references/commit-gate.md)
 
-- **D4** — commit message by file handshake; its presence is the approval signal
-- **D12** — a submodule-side commit gate backs FR11 as defense in depth
-- **D19** — one canonical approval clause, discovered via a git-config key
+- **D19** — one canonical approval wording, held in the `gitlore:commit` skill
+  and nowhere else
 - **D22** — the memory-hygiene checker is a repo-local gate, not shipped surface
-- **D56** — the batch retry is judged by the approval's freshness, read off the
-  store, rather than by a status the run reports about its own failure
 - **D67** — the repo's own gate, test and dev tooling lives in `tools/`, not
   `scripts/`: `dist.include` lists `scripts` whole, so anything there ships, and
   `tools/` is not listed
 
-*Rejected:* a `Stop` hook to generate the commit message · `PostToolUse` on
-every memory `Write`/`Edit` · an interactive prompt inside the `pre-commit` hook
-· an in-session diff dump for commit review · a `PreToolUse` hook constraining
-the agent's git operations · an exit-code or status-line protocol from
-`commit-memory.sh` · parsing the refusal text for "needs approval again" ·
-deleting the message file on a fix-needed refusal · an `-ef` guard inside `-F`
-skipping the rewrite when the operand is the message file · freshness checked in
-the hook before the run, the script unchanged · a per-file `dist.include`
-exclude or allowlist for the tooling · tooling left in `scripts/` with its
-docstrings fixed.
+*Rejected:* a per-file `dist.include` exclude or allowlist for the tooling ·
+tooling left in `scripts/` with its docstrings fixed.
 
 **Git hooks** — what `pre-push` does inside a parent git operation, and the
 pointer invariant that rests on it.
@@ -85,36 +74,53 @@ pointer invariant that rests on it.
   and every other compose refusal reports; a tier merely ahead of its pin is put
   back on it for `/gitlore:merge` to adopt, and a retry that skips that take
   commits — the residual is accepted, costing one later merge and no fact
-- **D53** — the stale-merge guard's report-only arms do not restamp the
-  approval, because the guard does not say which arm failed
-- **D54** — a failure-time restamp that blesses a concurrent write is an
-  accepted residual, the success path holding the same window open
 
 *Rejected:* a tip amend to re-pin memory · a refusal that instructs the agent to
 run compose · reporting an off-pin tier and committing through it · recognising
 gitlore's own landed tier commit by its message · staging each tier gitlink
 right after its commit · composing a clean store · reporting a non-empty
 commit-path compose · leaving a tier whose adoption failed ahead of an unstaged
-pin · a per-arm return code from `gitlore_guard_stale_merge_state` · a
-`touch -r` snapshot of the approval's mtime · a blanket refusal for every tier
-ahead of its pin · refusing the commit while a tier's local `live` is ahead of
-its pin · adopting inside the pin guard rather than directing to
-`/gitlore:merge`.
+pin · a blanket refusal for every tier ahead of its pin · refusing the commit
+while a tier's local `live` is ahead of its pin · adopting inside the pin guard
+rather than directing to `/gitlore:merge`.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.
 [memory-entry-points.md](references/memory-entry-points.md)
 
-- **D16** — a standalone, arg-driven memory-commit entry point
+- **D16** — a standalone memory-commit entry point, called with the approved
+  summary
 - **D20** — a push entry point the skill calls directly, with no trigger file
-- **D58** — a memory commit is the agent's own act, never a side effect of a
-  parent commit: `commit-memory.sh` is the one commit path and stages the moved
-  gitlink; the parent `pre-commit` hook and its nudge are retired
 
 *Rejected:* triggering a memory commit through a parent commit · reimplementing
 the sentinel, `push HEAD:live` and merge-state logic in a caller · a caller that
-pre-writes the commit-message file · the hook standing down on a missing
-approval.
+pre-writes the commit-message file · a `Stop` hook to generate the commit
+message · `PostToolUse` on every memory `Write`/`Edit` · an interactive prompt
+inside the `pre-commit` hook · an in-session diff dump for commit review.
+
+**Who commits memory** — the agent's own act, never a parent-commit side effect
+or a hook's.
+[memory-commit-ownership.md](references/memory-commit-ownership.md)
+
+- **D58** — a memory commit is the agent's own act, never a side effect of a
+  parent commit: `commit-memory.sh` is the one commit path and stages the moved
+  gitlink; the parent `pre-commit` hook and its nudge are retired
+- **D70** — the agent commits memory itself through the `gitlore:commit` skill,
+  the approved summary on `gitlore-commit`'s stdin as a quoted heredoc, one
+  `== <store> ==` section per store that changed; no hook makes an authoring
+  commit, no git hook gates one, and the summary travels with the call, never
+  through a file; callers reach the three entry points by the plugin `bin/`
+  names `gitlore-commit`, `gitlore-push` and `gitlore-merge`, and the
+  `gitlore.*Command` keys retire
+
+*Rejected:* the hook standing down on a missing approval · a `PreToolUse` hook
+constraining the agent's git operations · an intent file and a `PostToolBatch`
+hook as a fallback for a denied call · a submodule `pre-commit` gate behind the
+conversational approval · a bare `commit-memory.sh` retrying on an approval left
+on disk · the summary transported through a well-known path in the parent
+working tree · unsetting `GIT_AUTHOR_*` and `GIT_COMMITTER_*` before every store
+commit · keeping the `gitlore.*Command` discovery keys alongside the `bin/`
+names.
 
 **Install and the memory remote** — what one-time setup does and refuses.
 [installation.md](references/installation.md)

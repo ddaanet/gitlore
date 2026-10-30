@@ -72,12 +72,12 @@ has no memory submodule entry, no-op.
    or the global shim on a machine without direnv). Nothing is written to any
    settings file; a value written there would not redirect until the next launch
    (D10).
-2. **Re-pin the five plugin-path keys** — `gitlore.hooksDir`,
-   `gitlore.commitCommand`, `gitlore.pushCommand`, `gitlore.mergeCommand`,
-   `gitlore.memoryApprovalClauseFile` — so a plugin upgrade heals itself.
+2. **Re-pin the plugin-path key** `gitlore.hooksDir`, so a plugin upgrade heals
+   itself.
 3. **Emit the wrapper** `gitlore-pre-push` and the `gitlore-pre-commit` stub
-   into the git common dir, and the FR11 commit gate into the memory store and
-   each tier. Idempotent and worktree-agnostic (D11, D12).
+   into the git common dir, and remove the retired store gate's `pre-commit`
+   wrapper from the memory store and each tier (D70). Idempotent and
+   worktree-agnostic (D11).
 4. **Replay the hook-manager sentinel** to reinstate wiring after a clone or a
    new machine (`direct` and `manual` are keywords; the three manager commands
    are matched as literals and nothing else is run, D45 — see Hook Manager
@@ -123,7 +123,7 @@ has no memory submodule entry, no-op.
    session. No earlier step ends the pass, so a resume or compaction of the same
    session always collects what is waiting.
 11. **Emit the standing orientation** on `additionalContext`: the FR11
-   prohibition (D12) and the active tiers' own routing descriptions (D28).
+   prohibition (D70) and the active tiers' own routing descriptions (D28).
 
 **Worktree creation — handled by `SessionStart`, not a `WorktreeCreate` hook.**
 Memory-worktree setup for a new worktree happens lazily at the next
@@ -226,7 +226,7 @@ Both keep git operations unblocked rather than breaking a commit on a
 transient/stale-config condition.
 
 **The refresh is `claude -c`, not a cold session.** Any process start re-pins
-the five keys — `SessionStart` fires on a resume as it does on a startup, with
+the key — `SessionStart` fires on a resume as it does on a startup, with
 `source=resume` (D21, [plugin-upgrade-notice.md](plugin-upgrade-notice.md)) — so
 a resume closes the staleness window while keeping the conversation that hit it.
 A cold session closes the same window and throws the context away. This is the
@@ -255,9 +255,7 @@ Considered and rejected: a **per-worktree** anchor via
 `…/worktrees/<name>/gitlore-<hook>`). It reintroduces the commit-blocking gap in
 any worktree where no session has run yet, because the shared wired stub would
 `exec` a per-worktree wrapper that does not exist. The common-dir anchor has no
-such gap. (The commit-message file legitimately uses the per-worktree
-`--git-path` because each worktree has its own pending message; the wrapper is
-the opposite — one shared executable.)
+such gap. (The wrapper is one shared executable.)
 
 Corollary fix: once the wrapper *fires* in a linked worktree, the git-hook runs
 `git -C "$mempath" …` under `set -e`. If the memory submodule worktree was never
@@ -292,11 +290,11 @@ the single SessionStart JSON the hook writes to fd 3:
 - **Launcher-not-redirected** warning → `systemMessage`; when present it leads
   the message and the state line follows.
 
-`additionalContext` carries the standing commit-protocol orientation (D12) on
+`additionalContext` carries the standing commit-protocol orientation (D70) on
 every path. The agent-vs-user text branch (`gitlore_say_for_agent_or_user`)
-exists only for the git hook (`pre-push`, `memory-pre-commit`) and the commit
-and push scripts, which run where `CLAUDECODE` may be unset; SessionStart always
-runs in-session, so its notices are written directly for the user.
+exists only for the git hook (`pre-push`) and the commit and push scripts, which
+run where `CLAUDECODE` may be unset; SessionStart always runs in-session, so its
+notices are written directly for the user.
 
 **D59 — SessionStart moves memory nowhere; every advance is an explicit take or
 push**

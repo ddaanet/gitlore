@@ -7,6 +7,12 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-30 — Memory commits take the summary in the call](changelog/2026-10-30-memory-commits-take-the-summary-in-the-call.md)
+  — the agent commits memory through the `gitlore:commit` skill, the summary on
+  `gitlore-commit`'s stdin, one section per store (D70); D4, D12, D53, D54 and
+  D56 leave the index with the message file, the store gate, the trigger hook
+  and the freshness machinery; the `gitlore.*Command` keys give way to plugin
+  `bin/` names
 - [2026-10-21 — The gates run on the toolkit's sentinel](changelog/2026-10-21-the-gates-run-on-the-toolkit-sentinel.md)
   — the sentinel functions and the quiet bats runner come from `plugin-dev/`;
   `run-suites` stays; the gate files and variables take the toolkit's names; an

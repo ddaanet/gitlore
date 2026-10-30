@@ -100,29 +100,28 @@ clobber curated lines and re-inject stale text
 
 Each tier is a git submodule mounted *inside* the project's memory submodule at
 a free-form path (`memory/ddaanet`, …). It reuses the existing init, FR11 commit
-gate, and push-lockstep machinery — a submodule-within-a-submodule, more nesting
-of an already-solved problem (D11/D12 carry the linked-worktree and hook-env
-scar tissue). Discovery is by **enclosure, not name**, and the asymmetry with
-the parent level is load-bearing: the parent picks *one* submodule out of
-possibly many by the fixed name `gitlore-memory` (the `GITLORE_SUBMODULE_NAME`
-constant, resolved to a path through `.gitmodules`), so a repo's unrelated
-submodules stay foreign; but a submodule nested *inside the memory store* is a
-tier *by definition* — `SessionStart` enumerates the memory submodule's own
-`memory/.gitmodules` and treats every entry as a tier. No tier-name constant
-exists, nor should one: at the memory level the enclosure is the signal, which
-is why "don't hardcode the tier name" falls out for free. The first concrete
-tier is org-scoped `ddaanet`; a truly-global tier waits until there is anyone to
-share it with.
+path, and push-lockstep machinery — a submodule-within-a-submodule, more nesting
+of an already-solved problem (D11 carries the linked-worktree scar tissue).
+Discovery is by **enclosure, not name**, and the asymmetry with the parent level
+is load-bearing: the parent picks *one* submodule out of possibly many by the
+fixed name `gitlore-memory` (the `GITLORE_SUBMODULE_NAME` constant, resolved to
+a path through `.gitmodules`), so a repo's unrelated submodules stay foreign;
+but a submodule nested *inside the memory store* is a tier *by definition* —
+`SessionStart` enumerates the memory submodule's own `memory/.gitmodules` and
+treats every entry as a tier. No tier-name constant exists, nor should one: at
+the memory level the enclosure is the signal, which is why "don't hardcode the
+tier name" falls out for free. The first concrete tier is org-scoped `ddaanet`;
+a truly-global tier waits until there is anyone to share it with.
 
 **D28 — Routing is a generation choice, not a content classifier**
 
 Which tier a new fact belongs to is a *generation* choice the authoring agent
-owns, guided by the standing SessionStart `additionalContext` (the D12
+owns, guided by the standing SessionStart `additionalContext` (the D70
 orientation block): portable facts → the appropriate `memory/<tier>/`, project
 facts → `memory/`. The directory *is* the tier *is* the submodule, so the FR11
-gate commits whichever submodule the file landed in, and no shell logic inspects
-a fact's content to route it. D7 governs *detection*, and where to file a fact
-you are already authoring is not detection.
+commit covers whichever submodule the file landed in, and no shell logic
+inspects a fact's content to route it. D7 governs *detection*, and where to file
+a fact you are already authoring is not detection.
 **The per-tier routing guidance is self-describing and travels:** each tier
 states what it is for in its own `memory/<tier>/MEMORY.md` frontmatter
 `description:`, authored once by whoever owns the tier and identical in every

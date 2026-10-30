@@ -21,14 +21,15 @@ from the script the node names.
 
 ## Memory and commits
 
-- `memory/` moves in lockstep with the parent: committed through
-  `commit-memory.sh` with the approved summary before the root commit, which
-  then records the gitlink the script staged; pushed alongside every parent
-  push. Lockstep is `live` vs `origin/live` — the memory tree's `main` may
-  legitimately sit ahead.
-- A memory approval summary takes no conventional-commit prefix. Its format is
-  the clause at `gitlore.memoryApprovalClauseFile`; get the user's approval of
-  the summary, then pass it to `commit-memory.sh`.
+- `memory/` moves in lockstep with the parent: committed through the
+  `gitlore:commit` skill, which runs `gitlore-commit` with the approved summary
+  on stdin, before the root commit, which then records the gitlink the script
+  staged; pushed alongside every parent push. Lockstep is `live` vs
+  `origin/live` — the memory tree's `main` may legitimately sit ahead.
+- A memory approval summary takes no conventional-commit prefix. Its format,
+  one `== <store> ==` section per changed store, is in
+  `skills/commit/SKILL.md`; get the user's approval of the summary, then pass it
+  on `gitlore-commit`'s stdin through a quoted heredoc.
 
 ## Writing
 

@@ -29,9 +29,9 @@ the entire remedy.** Verified 2026-07-31 by a two-run `--plugin-dir` probe whose
 `source=resume` and ran the **new** command, under the **same** `session_id`.
 The transcript records no plugin path or version, so a resumed process has no
 stale root to restore — it re-resolves the root from the install record, re-pins
-the five keys, re-emits the wrappers and re-wires the memory gate exactly as a
-cold start does, and the conversation survives. Nothing available inside a live
-session substitutes for it.
+the key, and re-emits the wrappers exactly as a cold start does, and the
+conversation survives. Nothing available inside a live session substitutes for
+it.
 
 **Why reporting is the whole fix.** Both ways of making a live session adopt the
 upgrade produce a *split-version* session, strictly worse than uniform

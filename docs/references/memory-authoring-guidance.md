@@ -81,17 +81,14 @@ tier's scope may now cover. At each of them gitlore already emits text the agent
 reads, so the trigger is a sentence in that text — no new hook, and nothing
 added to always-on context.
 
-**At the gate the directive rides the shared approval clause**, so it reaches
-all four D19 call sites, including the `handoff` consumer that discovers the
-file through `gitlore.memoryApprovalClauseFile` and would otherwise commit
-memory with no discipline applied — the drift D19 exists to prevent. The clause
-is therefore two blocks: the review directive, then the message body spec. Its
-placement is load-bearing rather than cosmetic: the review's edits must land
-*before* the summary, because the summary states what the facts claim as
-committed and an edit after it describes a commit that no longer matches. It
-also keeps the summary's freshness check honest — `gitlore_commit_msg_freshness`
-compares the message file's mtime against the newest memory file, so a fact
-edited after approval invalidates the approval anyway.
+**At the gate the directive rides the approval wording in the `gitlore:commit`
+skill**, so it reaches every caller that commits through the skill, including a
+consumer such as `handoff` that would otherwise commit memory with no discipline
+applied — the drift D19 exists to prevent. The skill is therefore two blocks:
+the review directive, then the summary format. Its placement is load-bearing
+rather than cosmetic: the review's edits must land *before* the summary, because
+the summary describes the facts as they will be committed and an edit after it
+describes a commit that no longer matches.
 
 **Install conditions the review on an announcement, not on the store existing.**
 `init-submodule.sh` prints
@@ -119,10 +116,10 @@ loader cap is explicitly not the gate's business; retirement across the store
 stays `/gitlore:index-audit`, taken as its own decision.
 
 What the bats suites can hold is that each site names the skill, that the
-clause's directive precedes its body spec, and that the migration announcement
-fires on the migrating branch and not the scaffold branch. Whether the agent
-invokes the skill on being told to is agent behaviour, and belongs to the eval
-tier (NFR9).
+skill's directive precedes its summary format, and that the migration
+announcement fires on the migrating branch and not the scaffold branch. Whether
+the agent invokes the skill on being told to is agent behaviour, and belongs to
+the eval tier (NFR9).
 
 **D69 — The memory gate reads an owned-projects inventory, and the approval
 summary answers an existence question per new fact**
@@ -148,11 +145,11 @@ the same memory change, so the question is asked once. The detail is the skill's
 
 **The rejections came from questions the skill already asks.** The incident and
 the unaided-reach questions did not produce a verdict when stated as rules; they
-did when applied to a named fact by a reader who doubts it. The clause's **New**
+did when applied to a named fact by a reader who doubts it. The skill's **New**
 paragraph therefore states, per fact, the incident that produced it and why a
-reader would not reach it unaided, beside what prompted writing it now. Handoff
-wraps the clause verbatim, so the change reaches its gates unedited. Whether the
-paragraph moves the agent's verdict is agent behaviour and untested.
+reader would not reach it unaided, beside what prompted writing it now. A caller
+that invokes the skill gets the change unedited. Whether the paragraph moves the
+agent's verdict is agent behaviour and untested.
 
 ## Rejected alternatives
 
