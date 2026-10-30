@@ -38,7 +38,9 @@ spends the rest on what the diff cannot show: what prompted it (the incident,
 correction or measurement, with its date or version), what the old wording got
 wrong, and for a Reduce or Remove where the content went. Do not retell the new
 body or the index line: the edits are already in the conversation and in
-`git show`, and a retelling buries the cause the approver is weighing. Attribute
+`git show`, and a retelling buries the cause the approver is weighing. That
+includes the closing sentence: no sentence says what the fact now states — its
+new value, rule or wording — even as a wrap-up; end on the cause. Attribute
 a decision or correction to whoever made it.
 
 A `MEMORY.md` — root or tier — gets no paragraph. Root changes that only carry
