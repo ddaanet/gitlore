@@ -22,7 +22,8 @@ settle_commit_path() {
 
 # check_commit_trace
 # The session transcript must show the `gitlore:commit` Skill call ahead of a
-# Bash command running `gitlore-commit`. A raw `git commit` moves memory too, so
+# Bash command running `gitlore-commit`. The eval fixture copies the skills in as
+# project skills, so the same skill is named `commit` there; both names count. A raw `git commit` moves memory too, so
 # only the transcript tells the skill's path from a bypass.
 check_commit_trace() {
   local transcript="$EVAL_OUT_DIR/transcript.jsonl" trace skill_at after_at any_at
@@ -34,7 +35,7 @@ check_commit_trace() {
   trace=$(jq -rs '
     [.[] | .message.content[]? | select(.type == "tool_use")]
     | to_entries as $t
-    | ($t | map(select(.value.name == "Skill" and .value.input.skill == "gitlore:commit")) | first | .key // -1) as $skill
+    | ($t | map(select(.value.name == "Skill" and (.value.input.skill == "gitlore:commit" or .value.input.skill == "commit"))) | first | .key // -1) as $skill
     | ($t | map(select(.value.name == "Bash" and ((.value.input.command // "") | contains("gitlore-commit")))) | map(.key)) as $bash
     | [$skill, ($bash | map(select(. > $skill)) | first // -1), ($bash | first // -1)]
     | map(tostring) | join(" ")' "$transcript") || \

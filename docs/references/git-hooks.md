@@ -44,23 +44,29 @@ routes to `/gitlore:resolve`, which diagnoses the flavor.
 
 ### The gitlink and `live`
 
-**The gitlink a parent commit records is always an ancestor of memory's `live`,
-or `live` itself.** `commit-memory.sh` makes it `live` itself: after a commit
-that moved memory's HEAD it stages the commit it just advanced `live` to
-(skipped during a rebase, cherry-pick or revert, where a replayed commit keeps
-the pointer it recorded). Every other path that advances memory — the
-`/gitlore:merge` (its local move of `HEAD` onto `live` included), a resolved
-merge — moves `live` forward and leaves the gitlink behind as an ancestor; a
-`head-vs-remote` merge in particular keeps the pending commit reachable as its
-second parent (D6). A gitlink behind memory's HEAD is therefore the resting
-state — ` M memory` in the parent's porcelain — not drift: it floats between
-parent commits, the next one records the move, and nothing walks memory back to
-it. `SessionStart` runs `submodule update` on memory only when its worktree is
-absent; the pin-to-the-gitlink discipline (D43) is for tiers inside memory, not
-for memory in the parent.
+**The gitlink a parent commit records is memory's `live` itself or an ancestor
+of it, except after a commit that forked from `live`.** `commit-memory.sh` makes
+it `live` itself when the commit fast-forwards `live`: after a commit that moved
+memory's HEAD it stages memory's HEAD, which is the commit it just advanced
+`live` to. When `live` holds commits the new commit lacks, the staged HEAD is
+not an ancestor of `live` until `/gitlore:merge` or `/gitlore:push` prepares and
+lands the head-vs-live merge. The staging is skipped during a rebase,
+cherry-pick or revert, where a replayed commit keeps the pointer it recorded.
+Every other path that advances memory — the `/gitlore:merge` (its local move of
+`HEAD` onto `live` included), a resolved merge — moves `live` forward and leaves
+the gitlink behind as an ancestor; a `head-vs-remote` merge in particular keeps
+the pending commit reachable as its second parent (D6). A gitlink behind
+memory's HEAD is therefore the resting state — ` M memory` in the parent's
+porcelain — not drift: it floats between parent commits, the next one records
+the move, and nothing walks memory back to it. `SessionStart` runs
+`submodule update` on memory only when its worktree is absent; the
+pin-to-the-gitlink discipline (D43) is for tiers inside memory, not for memory
+in the parent.
 
-The invariant is what NFR5 rests on, and it survives any number of merge rounds.
-A push of `live` publishes every ancestor, so `origin/live` contains the gitlink
+The invariant is what NFR5 rests on at publish time: the reconcile that precedes
+every publish lands a head-vs-live merge first, which keeps the staged commit
+reachable as its second parent, and it survives any number of merge rounds. A
+push of `live` publishes every ancestor, so `origin/live` contains the gitlink
 the moment that push succeeds, and `pre-push` orders memory before the parent,
 so a parent push that goes through implies its gitlink is public. A push refused
 by divergence is therefore resolved and pushed again, however many times
@@ -169,10 +175,10 @@ the commit the store records, so a retried commit that does not run
 the tier's local `live` alone. Nothing is lost — `live` holds every arrived
 commit and the guard's message names the take as the next command. The cost
 lands later: the next commit to that tier is made on the pin, its `HEAD:live`
-push from `gitlore_sync_tiers_to_live` is refused as a non-fast-forward, and the
-refusal classifies as divergence, so a `head-vs-live` merge is prepared and
-`/gitlore:resolve` lands it. A skipped take therefore costs one merge later,
-never a fact.
+advance from `gitlore_sync_tiers_to_live` is refused as a non-fast-forward and
+reported as a fork, and the next `/gitlore:merge` or `/gitlore:push` reconcile
+prepares a `head-vs-live` merge that `/gitlore:resolve` lands. A skipped take
+therefore costs one merge later, never a fact.
 
 **A tier commit the run could not record is adopted on the retry.** The tier
 commit moves the tier's HEAD, and only memory's later `add -A` stages the moved

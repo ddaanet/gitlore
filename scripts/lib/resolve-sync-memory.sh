@@ -92,7 +92,7 @@ gitlore_commit_root() {
   fi
   body=$(gitlore_summary_section "$summary" memory)
   if [ -n "${body//[[:space:]]/}" ]; then
-    printf '%s\n' "$body" | git -C "$mempath" commit -q -F - || return 1
+    gitlore_git -C "$mempath" commit -q -m "$body" || return 1
     return 0
   fi
   while IFS= read -r tier; do

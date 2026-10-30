@@ -21,6 +21,17 @@ teardown() {
   assert_grep "# Initial Memory" "$EVAL_REPO/memory/MEMORY.md"
 }
 
+@test "setup_eval_repo appends the plugin bin to PATH, last, so gitlore-commit resolves" {
+  setup_eval_repo "# Memory"
+  [ "${PATH##*:}" = "$PLUGIN_ROOT/bin" ]
+  [ -x "$PLUGIN_ROOT/bin/gitlore-commit" ]
+}
+
+@test "setup_eval_repo copies the commit skill in as the project skill the eval names commit" {
+  setup_eval_repo "# Memory"
+  [ -f "$EVAL_REPO/.claude/skills/commit/SKILL.md" ]
+}
+
 @test "setup_eval_repo creates at least one memory commit" {
   setup_eval_repo "# Memory"
   run git -C "$EVAL_REPO/memory" log --oneline

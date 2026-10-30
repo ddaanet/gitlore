@@ -1,6 +1,9 @@
 #!/usr/bin/env bats
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
+# Each @test is its own subshell; a per-test `export GITLORE_GIT_RETRY_SCHEDULE`
+# is read only by that test's own run.
+# shellcheck disable=SC2030,SC2031
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -291,3 +294,81 @@ Fix them"* ]]
   [[ "${output}${stderr}" != *"the commit was aborted because a problem is in an index file"* ]]
 }
 
+
+@test "run from a subdirectory of the project it commits the memory store" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  mkdir -p src/deep
+  cd src/deep
+
+  unset CLAUDE_PROJECT_DIR
+  run commit_sections "memory: add notes from a subdirectory"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TMP_REPO/memory" log -1 --pretty=%s)" = "memory: add notes from a subdirectory" ]
+  [ -z "$(git -C "$TMP_REPO/memory" status --porcelain)" ]
+}
+
+# Agent Bash carries no CLAUDE_PROJECT_DIR, and its cwd persists into memory/.
+@test "run from inside the memory store it commits the memory store" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  cd memory
+  unset CLAUDE_PROJECT_DIR
+
+  run commit_sections "memory: add notes from inside the store"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TMP_REPO/memory" log -1 --pretty=%s)" = "memory: add notes from inside the store" ]
+}
+
+# A `git` first in PATH that fails the first `commit` it sees ($1 times) with an
+# index.lock message, then runs the real git. Echoes the bin dir.
+fake_git_lock_on_commit() {
+  local bin="$BATS_TEST_TMPDIR/lockbin" real
+  real=$(command -v git)
+  mkdir -p "$bin"
+  printf '0\n' > "$BATS_TEST_TMPDIR/commit-fails"
+  cat > "$bin/git" <<EOF
+#!/usr/bin/env bash
+for a in "\$@"; do
+  if [ "\$a" = commit ]; then
+    n=\$(cat "$BATS_TEST_TMPDIR/commit-fails")
+    if [ "\$n" -lt "$1" ]; then
+      printf '%s\n' \$((n + 1)) > "$BATS_TEST_TMPDIR/commit-fails"
+      echo "fatal: Unable to create '/r/.git/index.lock': File exists." >&2
+      exit 128
+    fi
+    break
+  fi
+done
+exec "$real" "\$@"
+EOF
+  chmod +x "$bin/git"
+  printf '%s\n' "$bin"
+}
+
+@test "the root commit retries a transient index.lock" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  bin=$(fake_git_lock_on_commit 1)
+  export GITLORE_GIT_RETRY_SCHEDULE=0
+
+  PATH="$bin:$PATH" run commit_sections "memory: add notes under a lock"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/commit-fails")" = 1 ]
+  [ "$(git -C memory log -1 --pretty=%s)" = "memory: add notes under a lock" ]
+}
+
+@test "a tier commit retries a transient index.lock" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  commit_memory_state
+  echo dirty > memory/ddaanet/notes.md
+  bin=$(fake_git_lock_on_commit 1)
+  export GITLORE_GIT_RETRY_SCHEDULE=0
+
+  PATH="$bin:$PATH" run commit_sections "memory: add a tier note under a lock"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/commit-fails")" = 1 ]
+  [ "$(git -C memory/ddaanet log -1 --pretty=%s)" = "memory: add a tier note under a lock" ]
+}

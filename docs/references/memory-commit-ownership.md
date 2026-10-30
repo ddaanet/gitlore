@@ -140,20 +140,22 @@ ships `bin/gitlore-commit`, `bin/gitlore-push` and `bin/gitlore-merge`, each a
 thin `exec` of `scripts/commit-memory.sh`, `scripts/push-memory.sh` or
 `scripts/merge-memory.sh` resolved from the file's own location. Claude Code
 puts each enabled plugin's `bin/` on the Bash tool's PATH, subagents included.
-That serves the callers that have no `CLAUDE_PLUGIN_ROOT` — the `handoff` plugin
-and the agent's own Bash. gitlore's own hooks have the variable and call
-`$PLUGIN_ROOT/scripts/…`: a hook that calls a bare `bin/` name works in dogfood,
-where the shim sets PATH on the whole process, and may fail once released. No
-`gitlore.*Command` key exists, so nothing is seeded at install or re-pinned at
-`SessionStart`, and no caller checks a resolved path is executable. PATH is
-fixed at session start, so a plugin update mid-session leaves the name on the
-old cache path until the next session. A disabled plugin makes the name "command
-not found"; whether gitlore manages memory in a repo is still read from the
-memory submodule registration in `.gitmodules` (FR12), never from the command's
-existence. The in-repo dogfood session gets the same names:
-`plugin-dev/bin/claude` appends `<root>/dist/plugin/bin` to PATH
-unconditionally, and `just dogfood` ships `bin/` there because `dist.include`
-lists it.
+That serves the callers that have no `CLAUDE_PLUGIN_ROOT`, the agent's own Bash
+first. The `handoff` plugin has not adopted the names: it still reads
+`gitlore.memoryApprovalClauseFile` and writes `.claude/gitlore-memory-message`
+and `.claude/gitlore-commit-memory`, the retired file protocol, until its own
+update. gitlore's own hooks have the variable and call `$PLUGIN_ROOT/scripts/…`:
+a hook that calls a bare `bin/` name works in dogfood, where the shim sets PATH
+on the whole process, and may fail once released. No `gitlore.*Command` key
+exists, so nothing is seeded at install or re-pinned at `SessionStart`, and no
+caller checks a resolved path is executable. PATH is fixed at session start, so
+a plugin update mid-session leaves the name on the old cache path until the next
+session. A disabled plugin makes the name "command not found"; whether gitlore
+manages memory in a repo is still read from the memory submodule registration in
+`.gitmodules` (FR12), never from the command's existence. The in-repo dogfood
+session gets the same names: `plugin-dev/bin/claude` appends
+`<root>/dist/plugin/bin` to PATH unconditionally, and `just dogfood` ships
+`bin/` there because `dist.include` lists it.
 
 ## Rejected alternatives
 

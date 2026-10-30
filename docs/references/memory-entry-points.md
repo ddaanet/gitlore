@@ -49,7 +49,7 @@ message. No message file exists at any point. After committing, each store's
 local `live` is fast-forwarded to the new commit; the script never prepares or
 takes a merge, and a `live` that cannot fast-forward is reported as divergence,
 pointing at `/gitlore:merge` or `/gitlore:push`, exit 0 since a fork is
-expected; those two fast-forward or merge the branch with `live` after their
+expected; those two fast-forward or merge the branch with `live` before their
 remote step. Guards (exit 0): not a gitlore repo / no memory submodule /
 submodule worktree absent / nothing to commit. Dirty with the store or any
 mounted tier mid-merge → the stale-merge guard's directive (exit 1), ahead of

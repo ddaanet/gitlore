@@ -40,26 +40,31 @@ refuse() {
 }
 
 # Whether the root change at $1 belongs to a tier: a tier's gitlink, or a
-# MEMORY.md whose changed link lines all point under a tier prefix. A MEMORY.md
-# change with no changed link line (a heading, a prose line) is root content.
+# MEMORY.md whose changed lines are all link lines pointing under a tier prefix.
+# Any other changed MEMORY.md line (a heading, prose, a blank, a link outside
+# every tier prefix, a line mixing both) is root content.
 root_change_is_tier() {
-  local path="$1" tier links=0
+  local path="$1" tier line ptr ptrs under changed=0
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     [ "$path" = "$tier" ] && return 0
   done < <(gitlore_tier_paths "$mempath")
   [ "$path" = MEMORY.md ] || return 1
-  # A changed link that points outside every tier prefix is root content.
-  while IFS= read -r ptr; do
-    local under=0
-    links=1
-    while IFS= read -r tier; do
-      [ -n "$tier" ] || continue
-      case "$ptr" in "$tier"/*) under=1 ;; esac
-    done < <(gitlore_tier_paths "$mempath")
-    [ "$under" = 1 ] || return 1
-  done < <(git -C "$mempath" diff HEAD -U0 -- MEMORY.md | grep -E '^[-+]' | grep -vE '^(\+\+\+|---) ' | grep -oE '\]\([^)]*\)' | sed -e 's/^](//' -e 's/)$//')
-  [ "$links" = 1 ]
+  while IFS= read -r line || [ -n "$line" ]; do
+    changed=1
+    # Captured, so a line with no link is told apart from a failed read.
+    ptrs=$(printf '%s\n' "${line:1}" | grep -oE '\]\([^)]*\)' | sed -e 's/^](//' -e 's/)$//' || true)
+    [ -n "$ptrs" ] || return 1
+    while IFS= read -r ptr; do
+      under=0
+      while IFS= read -r tier; do
+        [ -n "$tier" ] || continue
+        case "$ptr" in "$tier"/*) under=1 ;; esac
+      done < <(gitlore_tier_paths "$mempath")
+      [ "$under" = 1 ] || return 1
+    done <<<"$ptrs"
+  done < <(git -C "$mempath" diff HEAD -U0 -- MEMORY.md | grep -E '^[-+]' | grep -vE '^(\+\+\+|---) ' || true)
+  [ "$changed" = 1 ]
 }
 
 [ "$#" -eq 0 ] || refuse "takes no arguments; the summary is read on stdin"
@@ -69,6 +74,21 @@ case "$summary" in
   *[![:space:]]*) ;;
   *) refuse "the summary on stdin is empty" ;;
 esac
+
+# The launch repo, whatever directory the agent's shell is in: the memory path is
+# read from `.gitmodules` relative to it. Agent Bash has no CLAUDE_PROJECT_DIR,
+# so without it the repo is the outermost worktree holding the cwd — climbing
+# out of memory/ or a tier when the shell sits inside one.
+if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
+  gitlore_cd_project_root || exit 0
+# Outside any worktree rev-parse fails, which is expected: memory_path then
+# finds no .gitmodules and the run is a no-op.
+elif top=$(git rev-parse --show-toplevel 2>/dev/null); then
+  cd "$top" || exit 1
+  while sup=$(git rev-parse --show-superproject-working-tree) && [ -n "$sup" ]; do
+    cd "$sup" || exit 1
+  done
+fi
 
 mempath=$(gitlore_memory_path) || mempath=""
 
@@ -86,6 +106,13 @@ while IFS= read -r tier; do
   [ -e "$mempath/$tier/.git" ] || continue
   gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
 done < <(gitlore_tier_paths "$mempath")
+
+# Composition runs before the stores are judged: it writes tier carriers, so a
+# root tier-line edit it propagates makes a tier dirty that the status below
+# must see. A refusal or a failed write is reported by the sync's own compose,
+# which runs again; a refusal writes nothing, so the state read here is the
+# state the sync starts from.
+gitlore_compose "$mempath" >/dev/null || true
 
 # What has changes. Tier-only root changes (a gitlink moving, MEMORY.md lines
 # under a tier prefix) need no section; any other root change does.

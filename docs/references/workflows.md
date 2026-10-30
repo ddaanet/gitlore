@@ -73,15 +73,16 @@ bound for project memory.
 
 **Resolve (on divergence) — primary path: agent-driven**
 
-Most divergence is detected while the agent is attempting a memory commit or a
-push. The agent sees the exit-1 stderr of `commit-memory.sh` or the `pre-push`
-hook (addressed to it via the `$CLAUDECODE` branch) and invokes
-`/gitlore:resolve` inline without user intervention; the skill's five steps are
-in [merge-and-resolve.md](merge-and-resolve.md). It ends by advancing `live` —
-and, for a remote-flavored merge, `origin/live` — leaving HEAD detached at the
-new `live`, refreshing the parent's context with the incoming diff (or directing
-the user to `/clear` when resolve ran at session start), and retrying the
-original memory commit or push.
+Most divergence is detected while the agent is attempting a take or a push. The
+agent sees the exit-1 stderr of `merge-memory.sh`, `push-memory.sh` or the
+`pre-push` hook (addressed to it via the `$CLAUDECODE` branch) and invokes
+`/gitlore:resolve` inline without user intervention; a memory commit that forks
+from `live` exits 0 and reports it, naming `/gitlore:merge` and `/gitlore:push`;
+the skill's five steps are in [merge-and-resolve.md](merge-and-resolve.md). It
+ends by advancing `live` — and, for a remote-flavored merge, `origin/live` —
+leaving HEAD detached at the new `live`, refreshing the parent's context with
+the incoming diff (or directing the user to `/clear` when resolve ran at session
+start), and retrying the original take or push.
 
 **Resolve fallback: user-driven**
 

@@ -90,7 +90,7 @@ After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again 
 
 ## Resume commit
 
-If this skill was triggered by a commit failure, pass the summary again to `gitlore-commit` now that memory is resolved, through the `gitlore:commit` skill. Re-approve it first if the merge brought content the summary did not cover: present it again, amended for what the merge brought, and commit once the user approves it. A commit that had landed before the merge leaves nothing to approve, and the retry only advances `live`.
+If this skill was triggered by a commit failure, pass the summary again to `gitlore-commit` now that memory is resolved, through the `gitlore:commit` skill. Re-approve it first if the merge brought content the summary did not cover: present it again, amended for what the merge brought, and commit once the user approves it. `gitlore-commit` on a store with no changes exits 0 whatever the summary says and does not advance `live`, so a commit that had landed before the merge needs no retry: run `/gitlore:merge` or `/gitlore:push` to move `live`. An empty summary on stdin is refused (exit 2), so a retry always carries an approved summary.
 
 ## Summarize
 

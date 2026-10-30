@@ -48,8 +48,10 @@ run themselves, and continue from its output.
 
 ## Diverged
 
-Someone else published to this store since it was last fetched, so the push was
-refused and a merge is already prepared. This is an ordinary outcome, not an
+A store holds commits its counterpart lacks, and a merge is already prepared:
+either the store's checked-out branch and its local `live` have forked (found
+before anything is published), or someone else published to the remote since it
+was last fetched and the push was refused. This is an ordinary outcome, not an
 error, and it is the reason a push is not a fire-and-forget operation: resolving
 it runs a sub-agent that synthesizes memory content and lands a merge commit.
 

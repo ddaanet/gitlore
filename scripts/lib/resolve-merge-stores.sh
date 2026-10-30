@@ -278,8 +278,8 @@ gitlore_live_ahead_of_head() {
   git -C "$store" merge-base --is-ancestor "$head" "$live"
 }
 
-# Reconcile every store's checked-out branch with its local `live`, after the
-# remote step: fast-forward when HEAD is ahead of `live`, a prepared head-vs-live
+# Reconcile every store's checked-out branch with its local `live`, before the
+# remote step (the take or the publish): fast-forward when HEAD is ahead of `live`, a prepared head-vs-live
 # merge for `/gitlore:resolve` when the two have forked. A HEAD behind `live` is
 # left to the take and the publish preflight, which own that direction.
 # Returns 0 when every store agrees or was advanced, 1 after a merge was prepared
@@ -316,6 +316,14 @@ gitlore_reconcile_one() {
       return 0
       ;;
     diverged)
+      # The continuation commits with `add -A`, so uncommitted edits would ride
+      # into the merge commit unapproved: refused first, as the take refuses.
+      if [ "$(gitlore_memory_dirty "$store")" = "1" ]; then
+        gitlore_say_for_agent_or_user \
+          "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them (approved summary, then a memory commit) and run /gitlore:merge or /gitlore:push again." \
+          "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them and try again." >&2
+        return 1
+      fi
       # The authority is `live`, the pending side is HEAD: the same preparation
       # the take uses for a diverged remote.
       gitlore_yield_merge "$store" live head-vs-live HEAD || return 1

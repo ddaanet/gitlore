@@ -74,6 +74,7 @@ EOF
 # Session-transcript fixtures for the commit assertions: one jsonl line per
 # tool_use, in the shape the recall suite uses.
 _SKILL_COMMIT='{"message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"gitlore:commit"}}]}}'
+_SKILL_COMMIT_PROJECT='{"message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"commit"}}]}}'
 _SKILL_WRITING='{"message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"gitlore:memory-writing"}}]}}'
 _BASH_COMMIT='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"gitlore-commit <<'"'"'EOF'"'"'\n== memory ==\nmemory: note\nEOF"}}]}}'
 _BASH_PROBE='{"message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"command -v gitlore-commit"}}]}}'

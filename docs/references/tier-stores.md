@@ -184,12 +184,13 @@ gitlink that never moved. A take retried at once finds nothing to take. The next
 the down projection writes root's line into the carrier for a file the tier no
 longer holds; the dangling report names root's line and nothing names the
 carrier. A take after that refuses the dirty tier. What recovers it is the
-commit path: the carrier line is committed on the pin, its `HEAD:live` push is
-refused as a non-fast-forward because `live` still holds the arrival, the
-refusal classifies as divergence, and the `head-vs-live` merge
-`/gitlore:resolve` lands joins the line to its file and stages the pair. Nothing
-is lost at any step, and the cost is one merger dispatch and a redundant commit
-in the tier's history, for a failure that takes a kill inside one function.
+commit path followed by the reconcile: the carrier line is committed on the pin,
+its `HEAD:live` advance is refused as a non-fast-forward because `live` still
+holds the arrival and is reported as a fork, and the `head-vs-live` merge that
+the next `/gitlore:merge` or `/gitlore:push` prepares and `/gitlore:resolve`
+lands joins the line to its file and stages the pair. Nothing is lost at any
+step, and the cost is one merger dispatch and a redundant commit in the tier's
+history, for a failure that takes a kill inside one function.
 `tests/killed_take_repro.bats` pins the whole sequence.
 
 **A tier merge the root index cannot adopt still lands, and the root records

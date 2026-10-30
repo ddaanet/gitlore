@@ -47,9 +47,9 @@ gitlore_sync_tiers_to_live() {
     if pre=$(git -C "$tierpath" rev-parse -q --verify HEAD); then
       printf '%s\n' "$pre" > "$landing" || return 1
     fi
-    # The message goes in on stdin: no file holds it. Plain git, not gitlore_git,
-    # because its lock retry would re-read a stdin the first attempt consumed.
-    if ! printf '%s\n' "$body" | git -C "$tierpath" commit -q -F -; then
+    # The message goes in as an argument: no file holds it, and gitlore_git's
+    # lock retry has no stdin to re-read.
+    if ! gitlore_git -C "$tierpath" commit -q -m "$body"; then
       rm -f "$landing"
       return 1
     fi

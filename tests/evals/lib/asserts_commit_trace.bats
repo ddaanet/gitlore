@@ -24,6 +24,14 @@ source "$BATS_TEST_DIRNAME/../../helpers/eval-asserts.bash"
   assert_ok
 }
 
+@test "memory-commit: passes when the project-scoped skill name the eval fixture produces was invoked" {
+  _make_dirty_approved_memory
+  _commit_approved
+  _write_commit_transcript "$_SKILL_COMMIT_PROJECT" "$_BASH_COMMIT"
+  _run_assert memory-commit
+  assert_ok
+}
+
 @test "memory-commit: passes when a probe mentioning gitlore-commit precedes the skill" {
   _make_dirty_approved_memory
   _commit_approved

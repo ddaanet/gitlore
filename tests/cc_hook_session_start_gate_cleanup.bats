@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # D70 Q4: the store gate retired. SessionStart removes the `pre-commit` the gate
-# left in memory/ and in each mounted tier when it is byte-identical to the
+# left in memory/ and in each mounted tier when it carries the marker line of the
 # wrapper `gitlore_emit_hook_wrapper <path> memory-pre-commit` writes, and unsets
 # the `gitlore.hooksDir` mirrored beside it. Any other pre-commit is the user's
 # and stays, byte for byte. A fresh install plants none.
@@ -65,12 +65,32 @@ start_session() {
   [ -z "$(hooksdir_of memory/ddaanet)" ]
 }
 
+@test "SessionStart removes an older retired wrapper whose text differs but carries the exec marker" {
+  make_parent_with_memory
+  # shellcheck disable=SC2016  # the wrapper text is literal, `$HOOKS_DIR` unexpanded
+  older='#!/usr/bin/env sh
+# gitlore store gate (an older wording)
+HOOKS_DIR=$(git config gitlore.hooksDir)
+[ -n "$HOOKS_DIR" ] || exit 0
+exec "$HOOKS_DIR/memory-pre-commit" "$@"
+'
+  leave_gate memory "$older"
+  [ -x "$(hook_of memory)" ]
+
+  start_session
+
+  [ ! -e "$(hook_of memory)" ]
+  [ -z "$(hooksdir_of memory)" ]
+}
+
 @test "SessionStart leaves a foreign pre-commit in memory and a tier byte for byte" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
-  # One byte off the wrapper: a trailing space on the last line.
-  foreign=$(write_retired_wrapper "$BATS_TEST_TMPDIR/w" && cat "$BATS_TEST_TMPDIR/w"; printf x)
-  foreign="${foreign%x} "
+  # The wrapper with its marker line pointing at another hook: not the gate's.
+  write_retired_wrapper "$BATS_TEST_TMPDIR/w"
+  foreign=$(sed 's|memory-pre-commit|my-own-hook|' "$BATS_TEST_TMPDIR/w"; printf x)
+  foreign="${foreign%x}"
+  [[ "$foreign" != *memory-pre-commit* ]]
   leave_gate memory "$foreign"
   leave_gate memory/ddaanet "#!/bin/sh
 echo my own check
