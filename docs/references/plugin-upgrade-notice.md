@@ -18,7 +18,7 @@ This node holds the argument for reporting that and never repairing it; the
 session runs: another repo's session installs, or the user runs
 `/plugin update`. Everything this session froze at start then belongs to the
 *old* version — hook event registration, skill bodies, agent definitions, and
-the five `gitlore.*` keys that point into the plugin root (D5 in
+the `gitlore.hooksDir` key that points into the plugin root (D5 in
 [session.md](session.md)). The `PostToolBatch` hook `plugin-upgrade-batch.sh`
 notices the disagreement and names the remedy, once per episode.
 
