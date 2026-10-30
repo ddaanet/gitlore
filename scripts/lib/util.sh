@@ -67,8 +67,8 @@ gitlore_cd_project_root() {
 # Write an executable hook wrapper that resolves the live plugin via
 # `git config gitlore.hooksDir` and degrades to a clean skip (exit 0) when that
 # config is unset or the target hook is missing (plugin upgraded + cache GC'd),
-# so a transient plugin state never bricks a commit/push (NFR8/D5). Shared by the
-# parent-hook wrappers (emit-wrappers.sh), and by the retired gate's cleanup.
+# so a transient plugin state never bricks a commit/push (NFR8/D5). Used by the
+# parent-hook wrappers (emit-wrappers.sh).
 # Args: $1 = output file path; $2 = hook name to exec under HOOKS_DIR.
 gitlore_emit_hook_wrapper() {
   local out="$1" hook="$2"

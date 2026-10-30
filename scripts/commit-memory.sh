@@ -12,8 +12,10 @@ set -euo pipefail
 #   EOF
 # One `== <store> ==` section per store with changes, `memory` for root. Each
 # section is committed verbatim in its own store, tiers before root. Refused
-# before any store is touched (exit 2) when the summary is empty, has text
-# before its first header, or does not match the stores that have changes.
+# (exit 2) when the summary is empty, has text before its first header, or does
+# not match the stores that have changes; no commit precedes a refusal. A
+# refused run may still have composed first: that writes the tier carriers and
+# the root MEMORY.md, the same writes the index-compose hook makes.
 # It never prepares or takes a merge: a `live` that cannot fast-forward is
 # reported. Callers run it as `gitlore-commit`, the plugin `bin/` name.
 
@@ -77,25 +79,45 @@ esac
 
 # The launch repo, whatever directory the agent's shell is in: the memory path is
 # read from `.gitmodules` relative to it. Agent Bash has no CLAUDE_PROJECT_DIR,
-# so without it the repo is the outermost worktree holding the cwd — climbing
-# out of memory/ or a tier when the shell sits inside one.
+# so without it the repo is the nearest worktree holding the cwd that has a
+# memory submodule — climbing out of memory/ or a tier when the shell sits
+# inside one, and stopping at the first repo that holds memory, so a gitlore
+# project that is itself a submodule of another repo is not left for the outer.
+outside_worktree=0
 if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
-  gitlore_cd_project_root || exit 0
+  gitlore_cd_project_root || {
+    echo "gitlore: nothing was committed: the project directory '$CLAUDE_PROJECT_DIR' cannot be entered." >&2
+    exit 0
+  }
 # Outside any worktree rev-parse fails, which is expected: memory_path then
 # finds no .gitmodules and the run is a no-op.
 elif top=$(git rev-parse --show-toplevel 2>/dev/null); then
   cd "$top" || exit 1
-  while sup=$(git rev-parse --show-superproject-working-tree) && [ -n "$sup" ]; do
+  while ! gitlore_memory_path >/dev/null \
+    && sup=$(git rev-parse --show-superproject-working-tree) && [ -n "$sup" ]; do
     cd "$sup" || exit 1
   done
+else
+  outside_worktree=1
 fi
 
 mempath=$(gitlore_memory_path) || mempath=""
 
-# Activation: no memory submodule → nothing to do.
-[ -z "$mempath" ] && exit 0
+# Activation: no memory submodule → nothing to do. Exit 0 stays, but the caller
+# is told, so an agent does not report a commit that never happened.
+if [ -z "$mempath" ]; then
+  if [ "$outside_worktree" = 1 ]; then
+    echo "gitlore: nothing was committed: the current directory is outside any git worktree." >&2
+  else
+    echo "gitlore: nothing was committed: this repository has no memory submodule." >&2
+  fi
+  exit 0
+fi
 # Session-less worktree: memory worktree not materialized → nothing to do.
-[ -e "$mempath/.git" ] || exit 0
+if [ ! -e "$mempath/.git" ]; then
+  echo "gitlore: nothing was committed: the memory worktree '$mempath' is not materialized in this checkout." >&2
+  exit 0
+fi
 
 # A prepared merge is answered before anything is committed on top of it.
 gitlore_guard_stale_merge_state "$mempath" || exit 1
@@ -148,7 +170,8 @@ if [ "$root_has" = "0" ] && [ -z "$dirty_tiers" ]; then
   exit 0
 fi
 
-# The section check. Every refusal here precedes the first commit.
+# The section check. Every refusal here precedes the first commit (composition
+# above has already written, as its hook does).
 headers=$(gitlore_summary_headers "$summary")
 if [ -n "$(gitlore_summary_preamble "$summary")" ]; then
   refuse "text before the first '== <store> ==' header belongs to no store"

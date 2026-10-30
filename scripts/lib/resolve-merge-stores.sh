@@ -279,11 +279,13 @@ gitlore_live_ahead_of_head() {
 }
 
 # Reconcile every store's checked-out branch with its local `live`, before the
-# remote step (the take or the publish): fast-forward when HEAD is ahead of `live`, a prepared head-vs-live
-# merge for `/gitlore:resolve` when the two have forked. A HEAD behind `live` is
-# left to the take and the publish preflight, which own that direction.
-# Returns 0 when every store agrees or was advanced, 1 after a merge was prepared
-# or a store could not be advanced.
+# remote step (the take or the publish): fast-forward when HEAD is ahead of
+# `live`, a prepared head-vs-live merge for `/gitlore:resolve` when the two have
+# forked. A HEAD behind `live` is left to the take and the publish preflight,
+# which own that direction.
+# Returns 0 when every store agrees or was advanced, 1 after a merge was
+# prepared, after a diverged store was refused for uncommitted changes, or when
+# a store could not be advanced.
 # Args: $1 = memory worktree path.
 gitlore_reconcile_stores() {
   local mempath="$1" tier tierpath
@@ -318,7 +320,9 @@ gitlore_reconcile_one() {
     diverged)
       # The continuation commits with `add -A`, so uncommitted edits would ride
       # into the merge commit unapproved: refused first, as the take refuses.
-      if [ "$(gitlore_memory_dirty "$store")" = "1" ]; then
+      # A tier's own edits (or moved gitlink) do not ride the root merge, so
+      # submodule changes are ignored; untracked files still count.
+      if [ -n "$(git -C "$store" status --porcelain --ignore-submodules=all)" ]; then
         gitlore_say_for_agent_or_user \
           "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them (approved summary, then a memory commit) and run /gitlore:merge or /gitlore:push again." \
           "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them and try again." >&2

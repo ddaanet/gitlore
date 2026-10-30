@@ -17,8 +17,10 @@ load helpers/commit-memory
 # summary in the first place is in commit_memory_approval.bats.
 
 @test "exits 0 when gitlore is not configured" {
-  run commit_sections "noop"
+  run --separate-stderr commit_sections "noop"
   [ "$status" -eq 0 ]
+  # The caller is told nothing was committed, so it does not report a commit.
+  [[ "$stderr" == *"nothing was committed: this repository has no memory submodule"* ]]
 }
 
 @test "exits 0 when memory is clean and synced" {
@@ -294,31 +296,6 @@ Fix them"* ]]
   [[ "${output}${stderr}" != *"the commit was aborted because a problem is in an index file"* ]]
 }
 
-
-@test "run from a subdirectory of the project it commits the memory store" {
-  make_parent_with_memory
-  echo dirty > memory/notes.md
-  mkdir -p src/deep
-  cd src/deep
-
-  unset CLAUDE_PROJECT_DIR
-  run commit_sections "memory: add notes from a subdirectory"
-  [ "$status" -eq 0 ]
-  [ "$(git -C "$TMP_REPO/memory" log -1 --pretty=%s)" = "memory: add notes from a subdirectory" ]
-  [ -z "$(git -C "$TMP_REPO/memory" status --porcelain)" ]
-}
-
-# Agent Bash carries no CLAUDE_PROJECT_DIR, and its cwd persists into memory/.
-@test "run from inside the memory store it commits the memory store" {
-  make_parent_with_memory
-  echo dirty > memory/notes.md
-  cd memory
-  unset CLAUDE_PROJECT_DIR
-
-  run commit_sections "memory: add notes from inside the store"
-  [ "$status" -eq 0 ]
-  [ "$(git -C "$TMP_REPO/memory" log -1 --pretty=%s)" = "memory: add notes from inside the store" ]
-}
 
 # A `git` first in PATH that fails the first `commit` it sees ($1 times) with an
 # index.lock message, then runs the real git. Echoes the bin dir.

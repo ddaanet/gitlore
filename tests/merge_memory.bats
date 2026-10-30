@@ -215,6 +215,32 @@ strand_live_behind_head() {
   [ -f memory/UNAPPROVED.md ]
 }
 
+@test "a diverged root whose only uncommitted edit is inside a tier is still reconciled" {
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  base=$(git -C memory rev-parse HEAD)
+  (
+    cd memory || exit 1
+    git checkout -q live
+    printf 'on-live\n' > ON-LIVE.md
+    git add -A
+    git commit -q -m "on live only"
+    git checkout -q --detach "$base"
+    printf 'on-head\n' > ON-HEAD.md
+    git add -A
+    git commit -q -m "on HEAD only"
+  )
+  # A tier edit rides no root merge: the root only sees a modified submodule.
+  printf 'tier edit\n' >> memory/ddaanet/MEMORY.md
+  [ -n "$(git -C memory status --porcelain)" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"memory merge prepared"* ]]
+  [[ "$output$stderr" != *"uncommitted changes"* ]]
+  [ -e "$(gitlore_merge_state_file memory)" ]
+}
+
 @test "leaves a store whose remote it is ahead of alone" {
   # Local commits awaiting publication are /gitlore:push's business. Taking
   # nothing is the right answer, and it must not read as a divergence.
