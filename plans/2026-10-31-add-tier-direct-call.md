@@ -69,21 +69,19 @@ Each step is one commit, gated by `just precommit`, reviewed at medium.
    the canned commit carrying exactly the mount, then stages the parent gitlink.
    Red tests first, per behaviour: the stdin intent drives the mount; a clean
    store gets the canned commit carrying exactly the mount; a store with pending
-   work gets no canned commit and the mount left staged; the parent gitlink is
-   staged; the url refusal still fires; the mount's compose report reaches the
-   agent once, the `PostToolBatch` index-compose hook included, from the main
-   thread and from a subagent. How it stays single is settled here, not in D71:
-   the compose stamp is named by an agent id that reaches hooks only
-   (`scripts/lib/index-sync.sh:110`).
+   work gets no canned commit, the mount left staged, and a report that says so;
+   the parent gitlink is staged; the url refusal still fires; the mount's
+   compose report reaches the agent once, the `PostToolBatch` index-compose hook
+   included, from the main thread and from a subagent. How it stays single is
+   settled here, not in D71: the compose stamp is named by an agent id that
+   reaches hooks only (`scripts/lib/index-sync.sh:110`).
 3. **Retire the hook.** Delete `add-tier-batch.sh`, its `hooks/hooks.json`
-   entry, the intent filename in `.gitignore`, and every reference: the
-   `git grep -E 'gitlore-add-tier|add-tier-batch'` list outside
-   `docs/changelog/` is the sweep's input (`craft:removing-cleanly`), together
-   with `git grep -n -i 'intent file'` outside `docs/changelog/`, since prose
-   describing the mechanism need not name either file. The D57 report-once text
-   in `docs/references/index-composition.md` is one such hit ("keyed by nothing:
-   the intent file is consumed"); its once-only basis is restated as whatever
-   step 2 settles.
+   entry, the intent filename in `.gitignore`, and restate every live text that
+   describes the intent file or the add-tier hook as the current mechanism
+   (`craft:removing-cleanly`). Grep is a starting point, not the list: prose can
+   describe the mechanism without naming a file. Superseded and
+   rejected-alternative mentions, `docs/changelog/` and `plans/` stay as they
+   are.
 4. **Command and eval.** Rewrite `commands/add-tier.md` steps 2 and 4: call the
    script and relay its report; when the report says the mount was left staged
    (a store with pending work), hand off to `gitlore:commit`, otherwise no
