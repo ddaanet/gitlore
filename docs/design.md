@@ -286,9 +286,10 @@ FR8 holds out of the box, and reaches the wrapper through the git common dir
 (D11); `SessionStart` replays only the three commands the wire scripts write
 (D45). The remote inherits name, owner and visibility from the parent's
 `origin`, is disclosed before creation (FR10), and a parent with no remote is a
-supported local-only end state. The detection table, each manager's syntax, the
-disclosure text and the per-provider creation methods are in
-[installation.md](references/installation.md).
+supported local-only end state. The detection table and each manager's syntax
+are in [installation.md](references/installation.md); the disclosure text and
+the per-provider creation methods are in
+[memory-remote.md](references/memory-remote.md).
 
 ### Workflows
 

@@ -1,20 +1,18 @@
 # Installation and launch mechanism
 
 The literal setup detail `design.md`'s Architecture points at — the install
-command's own steps, per-hook-manager wiring syntax, and memory remote creation
-— followed by the decisions that argue for that shape (D8, D25, D45, D64, D65).
-Motivation stays in `design.md`; this file is what you need while installing or
-debugging an install, or while proposing a change to how any of it is wired. The
-launcher shim and its two placements are in
-[memory-redirect.md](memory-redirect.md); the hook wrapper files and what every
-`SessionStart` does are in
+command's own steps and per-hook-manager wiring syntax — followed by the
+decisions that argue for that shape (D25, D45). Motivation stays in `design.md`;
+this file is what you need while installing or debugging an install, or while
+proposing a change to how any of it is wired. The memory remote the install
+creates is in [memory-remote.md](memory-remote.md). The launcher shim and its
+two placements are in [memory-redirect.md](memory-redirect.md); the hook wrapper
+files and what every `SessionStart` does are in
 [session.md](session.md).
 
-- Install and the remote — **D8** remote creation requires explicit user
-  confirmation · **D25** direct wiring refuses rather than appends after an
-  existing `exec` · **D64** `.gitmodules` records the https url while the remote
-  keeps the one given · **D65** a private remote under a public parent is warned
-  about, never changed
+- Install — **D25** direct wiring refuses rather than appends after an existing
+  `exec` · **D45** the sentinel replay is an allow-list, never `sh -c` on the
+  tracked file
 
 ---
 
@@ -37,9 +35,10 @@ has no `.git` (registered but not checked out).
 3. Display install-time disclosure: proposed memory remote name, owner,
    visibility (inherited from parent), and notice that memory may contain
    session context. Await acknowledgement (informational, not a hard gate).
-4. Create the memory remote with explicit D8 confirmation — see Remote
-   Repository below. `gh repo create` (or provider-appropriate method) runs. If
-   the parent has no remote, skip; memory stays local-only.
+4. Create the memory remote with explicit D8 confirmation — see
+   [memory-remote.md](memory-remote.md). `gh repo create` (or
+   provider-appropriate method) runs. If the parent has no remote, skip; memory
+   stays local-only.
 5. `git submodule add <remote-url> <path>` (or a local path if no remote) —
    registers the submodule in `.gitmodules` and initializes the empty working
    tree.
@@ -170,118 +169,10 @@ Idempotency: every wiring modification uses a detection marker
 (`# gitlore: managed` or the format-appropriate equivalent). Re-applying is a
 no-op.
 
-## Remote Repository
+## Decisions — D25, D45
 
-The memory submodule is pushed to a dedicated remote, matching the parent repo's
-provider, ownership, and visibility where possible.
-
-**Naming**
-
-- Default: `<parent-remote-name>-memory`, derived from `origin` on the parent
-  (e.g., `github.com/org/project.git` → `project-memory`).
-- If a repo with the default name exists in the target namespace, prompt for an
-  alternative.
-
-**Ownership**
-
-- Default: same owner as parent `origin` (user account or org).
-- Overridable at creation time.
-
-**Visibility**
-
-- Default: match parent repo (public parent → public memory; private parent →
-  private).
-- Rationale: memory is auxiliary to the project; no reason to split access
-  control.
-- User can override the default.
-
-**Install-time disclosure (informational)**
-
-Before creating the remote, display proposed name, owner, and visibility
-(inherited from parent), along with:
-
-> Memory pushed to this remote may contain any context Claude has recorded —
-> project details, decisions, or incidental session content. Each memory commit
-> is reviewed and confirmed before it's pushed, so you control what goes up.
-
-This is orientation, not a clearance gate. The effective gate is the per-commit
-review (FR 11).
-
-**Creation method**
-
-1. **GitHub + `gh` CLI available** →
-   `gh repo create <owner>/<name> [--public|--private]` matching parent
-   visibility.
-2. **Other providers** → emit copy-paste instructions: "Create a repository at
-   `<detected-provider>` named `<name>` with matching visibility, then paste the
-   clone URL here." Wait for URL.
-3. **Parent has no remote** → skip memory remote creation. Memory stays
-   local-only. Informational message; user can add a remote later.
-
-**On creation failure** (auth, quota, network, name collision): fall back to
-method 2 (copy-paste). Do not abort install.
-
-**The url `.gitmodules` records (D64, D65)**
-
-The submodule's `remote.origin.url` keeps the url it was wired with — the one
-`gh repo view --json sshUrl` returned, or the one the person supplied — so
-pushes stay on that transport. The tracked `.gitmodules` records the https form
-(`https://github.com/<owner>/<repo>.git`), so a recursive clone, including
-Claude Code's `/plugin install`, needs no GitHub SSH key. Only a GitHub ssh url
-(`git@github.com:o/r[.git]`, `ssh://git@github.com/o/r[.git]`) is rewritten; an
-https url, another host and a local path are recorded as given.
-
-No script compares `.gitmodules`'s url with the remote's, so the two may differ
-in protocol. Every reader of `remote.origin.url` tests only for empty or the
-local-only placeholder (`gitlore_is_placeholder_url`); the placeholder is the
-one `.gitmodules` value that is matched, by basename, because
-`git submodule sync` absolutizes it on the way into `remote.origin.url`. A
-`git submodule sync` or a fresh clone sets the submodule's remote to the https
-`.gitmodules` url; that is the clone's own remote, and pushing from it needs
-https credentials, which an SSH key does not supply and a passing
-`gh auth status` does not imply. The push-failure hint, for memory and for each
-tier, names the two fixes: `gh auth setup-git`, which registers gh as git's
-credential helper, or
-`git -C <path> remote set-url origin git@github.com:<owner>/<repo>.git`, which
-puts that clone back on SSH and is printed only when the store's origin is a
-GitHub https url, with the store's absolute path and the owner and repo read
-from that url filled in. Nothing rewrites a clone's remote automatically.
-Existing installs keep the url they have; nothing rewrites a `.gitmodules` after
-the install that wrote it.
-
-A private repository anywhere in the chain aborts an anonymous recursive clone
-whatever the url form. When the person supplies the memory remote (url mode) and
-`gh` confirms the parent public and that remote private, install prints one
-stderr line naming the remote. Auto mode creates the remote with the parent's
-visibility, so it cannot produce the pair while `gh` can read the parent's
-visibility; when it cannot (an SSH host alias as the parent origin, no auth for
-the org, the network down) the parent reads as private, the memory remote is
-created private, and no warning is printed. A visibility `gh` cannot read prints
-nothing, and install never changes a repository's visibility.
-
-**Push semantics**
-
-Per NFR5 (double-commit semantics): memory `live` is pushed before parent push
-on every `git push`. Parent remote always points at a submodule SHA reachable on
-the memory remote.
-
-## Decisions — D8, D25, D45, D64, D65
-
-Why the wiring above has this shape: why creating the memory remote asks first,
-and why direct wiring refuses rather than appends after an existing `exec`.
-
-**D8 — Remote creation requires explicit user confirmation**
-
-Creating a remote repository is a visible external action with side effects
-outside the local machine (namespace occupancy, provider-side records,
-potentially public visibility). Even when `gh` CLI is available and parameters
-are straightforward, the agent presents the full proposal — name, owner,
-visibility, creation method — and waits for explicit approval before executing.
-
-This confirmation is distinct from the install-time disclosure, which is
-informational orientation. D8 gates the specific external action. Rationale:
-external actions are not covered by the per-commit review gate and require their
-own opt-in.
+Why the wiring above has this shape: why direct wiring refuses rather than
+appends after an existing `exec`, and why the sentinel replay is an allow-list.
 
 **D25 — Direct wiring refuses rather than appends after an existing `exec`**
 
@@ -324,31 +215,6 @@ needs a wire script and an arm here rather than a hand-typed sentinel line,
 which is the right cost: a command gitlore runs on a stranger's clone should be
 one gitlore shipped.
 
-**D64 — `.gitmodules` records the https url; the remote keeps the one given**
-
-The tracked `.gitmodules` (the parent's for memory, memory's for a tier) records
-`https://github.com/<owner>/<repo>.git` for any GitHub ssh url, given or
-resolved, so an anonymous recursive clone, including `/plugin install`, needs no
-SSH key. The submodule's own `remote.origin.url` keeps the url as given, so
-pushes stay on their transport. The mechanism and its residuals are in
-[The url `.gitmodules` records](#remote-repository) above. Recording the ssh url
-aborts an anonymous clone on a publickey error; rewriting the remote to https as
-well breaks existing push auth; rewriting an existing install's `.gitmodules`
-from `SessionStart` or install touches repos that were never asked, so those are
-fixed through per-repo briefs only.
-
-**D65 — A private remote under a public parent is warned about, never changed**
-
-A private repository anywhere in the chain aborts an anonymous recursive clone
-whatever the url form, so no url choice repairs it. Install in url mode and
-`/gitlore:add-tier` print one stderr line when `gh` confirms the parent public
-and the memory or tier remote private; visibility is the repository owner's call
-and is never changed. An unknown visibility (no `gh`, no auth, non-GitHub, a
-local path) is silent, because a warning on a guess is a false alarm every time.
-Creating tiers public by default decides the owner's question for them; refusing
-the mount strands a legitimate private tier; a flag or command for the check
-adds surface for a one-line report.
-
 ## Rejected alternatives
 
 **Replaying the sentinel as a shell command.** The `*) sh -c "$cmd"` arm was the
@@ -362,12 +228,6 @@ need without gitlore running the line.
 auto-memory or a `MEMORY.md` scaffold, but a prior failed install can leave the
 migration source a stub, and a hard failure there helps nobody.
 
-**`gh repo create` as the only remote-creation method.** Locks out non-GitHub
-users; the provider-agnostic copy-paste flow covers them.
-
 **A separate `gitlore.memoryPath` config key.** `.gitmodules` plus the fixed
 submodule name `gitlore-memory` is already canonical; a second source is a
 divergence risk.
-
-**Making the memory push optional in v1.** Gitlore without shared memory is a
-diminished product. An opt-out can be added later as a preference.

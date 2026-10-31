@@ -121,13 +121,20 @@ working tree · unsetting `GIT_AUTHOR_*` and `GIT_COMMITTER_*` before every stor
 commit · keeping the `gitlore.*Command` discovery keys alongside the `bin/`
 names.
 
-**Install and the memory remote** — what one-time setup does and refuses.
+**Install** — what one-time setup does and refuses.
 [installation.md](references/installation.md)
 
-- **D8** — remote creation requires explicit user confirmation
 - **D25** — direct wiring refuses rather than appends after an existing `exec`
 - **D45** — the sentinel replay is an allow-list, never `sh -c` on the tracked
   file
+
+*Rejected:* a strictly non-empty initial commit · a separate
+`gitlore.memoryPath` config key · replaying the sentinel as a shell command.
+
+**The memory remote** — how it is created, and which url is recorded.
+[memory-remote.md](references/memory-remote.md)
+
+- **D8** — remote creation requires explicit user confirmation
 - **D64** — the tracked `.gitmodules` records
   `https://github.com/<owner>/<repo>.git` for a GitHub ssh url, given or
   resolved, while the submodule's own remote keeps the url as given, so pushes
@@ -137,13 +144,12 @@ names.
   chain aborts an anonymous recursive clone whatever the url form; visibility is
   never changed, and a visibility `gh` cannot read is silent
 
-*Rejected:* a strictly non-empty initial commit · `gh repo create` as the only
-remote-creation method · a separate `gitlore.memoryPath` config key · making the
-memory push optional in v1 · replaying the sentinel as a shell command ·
-recording the ssh url in `.gitmodules` · rewriting the remote to https as well ·
-rewriting an existing install's `.gitmodules` from `SessionStart` or install ·
-creating tiers public by default · refusing the mount over visibility · a new
-flag or command for the visibility check · warning on an unknown visibility.
+*Rejected:* `gh repo create` as the only remote-creation method · making the
+memory push optional in v1 · recording the ssh url in `.gitmodules` · rewriting
+the remote to https as well · rewriting an existing install's `.gitmodules` from
+`SessionStart` or install · creating tiers public by default · refusing the
+mount over visibility · a new flag or command for the visibility check · warning
+on an unknown visibility.
 
 **Memory redirect** — [memory-redirect.md](references/memory-redirect.md)
 
