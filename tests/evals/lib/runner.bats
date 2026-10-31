@@ -115,7 +115,7 @@ EOF
   [ ! -s "$MOCK_BIN/stdin.log" ]
 }
 
-# Scenarios with no approval gate (recall) are a single turn. A
+# Scenarios with no approval gate (add-tier, recall) are a single turn. A
 # synthetic second message would put the agent's reply to something the flow
 # never sends into the very transcript the assertions read.
 @test "claude-runner: --prompt without --approval runs exactly one turn" {

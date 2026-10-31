@@ -9,9 +9,9 @@ A **tier** is a memory store shared across repos — a submodule mounted inside
 this repo's `memory/` submodule. Facts that hold for every project in an org
 live there instead of being duplicated per repo.
 
-You do not run any git. You write one intent file; a hook does the git and
-reports back. That is not ceremony: mounting clones, and your command sandbox
-has no network.
+You run one script, `gitlore-add-tier`, which does the git: it clones the tier,
+registers it, activates it, recomposes the root index and, on a clean store,
+commits the mount.
 
 ## 1. Settle the intent
 
@@ -31,22 +31,41 @@ memory".
 
 Ask the user for whatever is missing. Do not guess a URL.
 
-## 2. Write the intent file
+## 2. Run `gitlore-add-tier`
 
-Write `.claude/gitlore-add-tier` — `key=value`, one per line, value is the rest
-of the line:
+From the repo root, give it the intent on stdin through a quoted heredoc —
+`key=value`, one per line, value is the rest of the line:
 
 ```
+gitlore-add-tier <<'EOF'
 mode=mount
 name=ddaanet
 url=git@github.com:ddaanet/ddaanet-memory.git
+EOF
 ```
 
 ```
+gitlore-add-tier <<'EOF'
 mode=create
 name=ddaanet
 description=Cross-project facts shared by all ddaanet repositories
+EOF
 ```
+
+Run it in the sandbox, and list in the Bash call's `allowed_domains` on the
+first call every host the mode reaches:
+
+- **mount** — the url's host (`github.com` for the example above) and
+  `api.github.com`.
+- **create** without a `url=` — `api.github.com` and `github.com`.
+- **create** with a `url=` — the url's host and `api.github.com`.
+
+In a mode that ignores `allowed_domains`, a network denial is retried unsandboxed
+through the permission prompt. A denied call has moved nothing, so the retry is
+the same command.
+
+A create whose push was denied after `gh repo create` has made the remote:
+re-run with `url=` set to the repo it created, and keep the `description=` line.
 
 Give the url in the form the person pushes with. The tier keeps that url as its
 remote; the memory store's tracked `.gitmodules` records the `https://` form of
@@ -56,22 +75,27 @@ anonymous recursive clone: the report then says so. Report it to the user;
 making a repository public is their call.
 
 Activation and precedence live in one file, `memory/.gitlore-tiers`: one tier
-name per line, file order is precedence (top wins), listed = active. The hook
+name per line, file order is precedence (top wins), listed = active. The script
 mounts the tier **and** activates it — appending its name to the bottom of
 `.gitlore-tiers` (lowest precedence, so it never outranks a tier this repo
-already trusted) — as one step, then recomposes the root index within the same
-batch. There is no separate manifest edit for you to make: the intent you just
-wrote already names the one tier being added, so there is nothing left to
-settle deliberately.
+already trusted) — as one step, then recomposes the root index. There is no
+separate manifest edit for you to make: the intent you gave already names the
+one tier being added, so there is nothing left to settle deliberately.
 
-Then **stop and let the turn end**. The hook runs at the end of the batch and
-its report comes back to you. Do not poll for it, and do not run
-`add-tier.sh` yourself — under the sandbox it cannot reach the remote.
+Relay the script's report. It ends one of two ways:
+
+- It says the mount was **left staged** for the next `gitlore:commit` — the
+  memory store held unapproved work before the call. Invoke the `gitlore:commit`
+  skill to commit it, with a `== memory ==` section in the summary the user
+  approves.
+- Otherwise the mount is already committed under its canned message
+  (`mount <tier> tier from <url>`) and the parent's memory pointer is staged.
+  There is nothing to hand off.
 
 Read the composition report:
 
 - **Refused** — the store is left untouched and the reason is named. Fix it,
-  by hand, and re-trigger composition with any index edit.
+  by hand, and run the script again.
 - **Composed** — done. Do not re-read the indexes to verify; composition moves
   lines, it never rewrites them.
 
@@ -108,7 +132,6 @@ they resolve nowhere from another consumer, so strip them as part of the move.
 ## 4. Report
 
 Tell the user the tier's name, its remote, its routing guidance, and where it
-now ranks. Mention that the mount and activation are staged in `memory/`
-(`.gitmodules` and `.gitlore-tiers`) as memory root content, which no parent
-commit records, then invoke the `gitlore:commit` skill to commit them, with a
+now ranks. Triage moves from step 3 are memory changes the mount's commit did
+not carry: commit them through the `gitlore:commit` skill, with a
 `== memory ==` section in the summary the user approves.

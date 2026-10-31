@@ -15,96 +15,99 @@ source "$BATS_TEST_DIRNAME/../../helpers/eval-asserts.bash"
 
 # ------------------------------------------------------------------- add-tier
 
-# The end state after the user approved the `== memory ==` summary: the staged
-# mount committed through the skill and gitlore-commit.
-_make_add_tier_committed_state() {
-  _make_add_tier_end_state pending
-  SUMMARY='== memory ==
-memory: mount the acme tier'
-  _commit_approved
-}
-
-@test "add-tier: passes on a mounted, activated, composed, committed tier" {
-  _make_add_tier_committed_state
+# The end state of the one-turn flow: the script mounted into a clean store and
+# committed the mount itself under its canned message.
+@test "add-tier: passes on a mounted, activated, composed tier with its canned commit" {
+  _make_add_tier_end_state
   _run_assert add-tier
   assert_ok
 }
 
-@test "add-tier: fails when the intent file was never consumed" {
-  _make_add_tier_committed_state
-  printf 'mode=mount\n' > "$EVAL_REPO/.claude/gitlore-add-tier"
-  _run_assert add-tier
-  assert_fails "never consumed it"
-}
-
 @test "add-tier: fails when the tier is mounted but not activated" {
-  _make_add_tier_committed_state
+  _make_add_tier_end_state
   : > "$EVAL_REPO/memory/.gitlore-tiers"
   _run_assert add-tier
   assert_fails "mounted but inactive"
 }
 
 @test "add-tier: fails when activation did not recompose the root index" {
-  _make_add_tier_committed_state
+  _make_add_tier_end_state
   printf '# Memory Index\n' > "$EVAL_REPO/memory/MEMORY.md"
   _run_assert add-tier
   assert_fails "composition did not run"
 }
 
 @test "add-tier: fails when the tier is left on a branch instead of detached at live" {
-  _make_add_tier_committed_state
+  _make_add_tier_end_state
   git -C "$EVAL_REPO/memory/acme" checkout -q -B main
   _run_assert add-tier
   assert_fails "not detached at live"
 }
 
-# The mount reaches memory's history only through the approved summary. A
-# memory that moved by the end of turn 1 was committed before the user approved.
-@test "add-tier: fails when memory was committed before approval" {
-  _make_add_tier_committed_state
-  git -C "$EVAL_REPO/memory" rev-parse HEAD > "$EVAL_OUT_DIR/memory-after-turn1"
-  [ "$(cat "$EVAL_OUT_DIR/memory-after-turn1")" != "$(cat "$EVAL_OUT_DIR/memory-baseline")" ]
-  _run_assert add-tier
-  assert_fails "committed before approval"
-}
-
 @test "add-tier: fails when the mount was never committed" {
-  _make_add_tier_end_state pending
-  _write_commit_transcript "$_SKILL_COMMIT" "$_BASH_COMMIT"
+  _make_add_tier_end_state
+  git -C "$EVAL_REPO/memory" rev-parse HEAD > "$EVAL_OUT_DIR/memory-baseline"
   _run_assert add-tier
   assert_fails "memory never moved"
 }
 
-# Memory moved, but without the mount: the commit carries an unrelated file and
-# the mount's staged paths are left behind.
-@test "add-tier: fails when a commit left the mount out" {
-  _make_add_tier_end_state pending
-  git -C "$EVAL_REPO/memory" reset -q -- .gitmodules .gitlore-tiers acme
-  printf 'x\n' > "$EVAL_REPO/memory/other.md"
-  git -C "$EVAL_REPO/memory" add other.md
-  git -C "$EVAL_REPO/memory" commit -q -m "unrelated"
+@test "add-tier: fails when memory moved by more than the one canned commit" {
+  _make_add_tier_end_state
+  git -C "$EVAL_REPO/memory" commit -q --allow-empty -m "second"
   git -C "$EVAL_REPO/memory" branch -f live HEAD
-  git -C "$EVAL_REPO/memory" add .gitmodules .gitlore-tiers acme
-  _write_commit_transcript "$_SKILL_COMMIT" "$_BASH_COMMIT"
   _run_assert add-tier
-  assert_fails "does not include '.gitmodules'"
+  assert_fails "want exactly the one canned mount commit"
 }
 
-# The commit carries the mount, but a later edit to a mount path sits staged
-# and uncommitted (here the manifest reorder the report invites).
+@test "add-tier: fails when the commit subject is not the canned one" {
+  _make_add_tier_end_state
+  git -C "$EVAL_REPO/memory" commit -q --amend -m "memory: mount the acme tier"
+  git -C "$EVAL_REPO/memory" branch -f live HEAD
+  _run_assert add-tier
+  assert_fails "commit subject is"
+}
+
+# One commit, canned subject, but it carries a file that is not the mount's.
+@test "add-tier: fails when the commit carries more than the mount" {
+  _make_add_tier_end_state
+  printf 'x\n' > "$EVAL_REPO/memory/other.md"
+  git -C "$EVAL_REPO/memory" add other.md
+  git -C "$EVAL_REPO/memory" commit -q --amend --no-edit
+  git -C "$EVAL_REPO/memory" branch -f live HEAD
+  _run_assert add-tier
+  assert_fails "carries more than the mount: other.md"
+}
+
+# The commit is the mount's, but a path of the mount was left out of it.
+@test "add-tier: fails when the commit left part of the mount out" {
+  _make_add_tier_end_state
+  git -C "$EVAL_REPO/memory" rm -q --cached -- .gitlore-tiers
+  git -C "$EVAL_REPO/memory" commit -q --amend --no-edit
+  git -C "$EVAL_REPO/memory" branch -f live HEAD
+  _run_assert add-tier
+  assert_fails "does not include '.gitlore-tiers'"
+}
+
 @test "add-tier: fails when part of the mount is still staged after the commit" {
-  _make_add_tier_committed_state
+  _make_add_tier_end_state
   printf 'acme\nother\n' > "$EVAL_REPO/memory/.gitlore-tiers"
   git -C "$EVAL_REPO/memory" add .gitlore-tiers
   _run_assert add-tier
   assert_fails "still staged but uncommitted"
 }
 
-@test "add-tier: fails when gitlore-commit ran without the gitlore:commit skill" {
-  _make_add_tier_committed_state
-  _write_commit_transcript "" "$_BASH_COMMIT"
+@test "add-tier: fails when live was not fast-forwarded to the commit" {
+  _make_add_tier_end_state
+  git -C "$EVAL_REPO/memory" branch -f live "$(cat "$EVAL_OUT_DIR/memory-baseline")"
   _run_assert add-tier
-  assert_fails "gitlore:commit skill was never invoked"
+  assert_fails "live not ff-pushed"
+}
+
+@test "add-tier: fails when the parent does not stage the memory gitlink" {
+  _make_add_tier_end_state
+  git -C "$EVAL_REPO" reset -q -- memory
+  _run_assert add-tier
+  assert_fails "does not have 'memory' staged"
 }
 
 @test "add-tier: fails when the tier was never mounted at all" {

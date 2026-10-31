@@ -50,30 +50,17 @@ _make_memory() {
 # from what the flow actually produces, and then this suite would be testing the
 # imitation.
 #
-# $1 = `clean` or `pending`. Pending: an untracked note sits in the memory
-# store before the mount, so the mount is left staged for an approved
-# gitlore:commit (D71) instead of committing itself under its canned message.
+# The baseline is taken before the mount, where the graded flow starts; the
+# script mounts, activates, composes and commits on the clean store itself.
 _make_add_tier_end_state() {
   _make_memory
   ( cd "$EVAL_REPO" && bash "$SETUPS/tier-remote.sh" ) >/dev/null
-  if [ "${1:-}" = pending ]; then
-    printf 'pending\n' > "$EVAL_REPO/memory/pending-note.md"
-  fi
 
   ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" bash "$PLUGIN_ROOT/scripts/add-tier.sh" ) >/dev/null <<EOF
 mode=mount
 name=acme
 url=$EVAL_REPO/.tier-remote.git
 EOF
-
-  printf 'acme\n' > "$EVAL_REPO/memory/.gitlore-tiers"
-  # shellcheck disable=SC1091  # dynamic plugin-root paths, resolved at runtime
-  ( cd "$EVAL_REPO" \
-    && source "$PLUGIN_ROOT/scripts/lib/util.sh" \
-    && source "$PLUGIN_ROOT/scripts/lib/index-compose.sh" \
-    && gitlore_compose memory ) >/dev/null
-  # The baseline is taken after the fixture's mount, where the graded flow starts.
-  git -C "$EVAL_REPO/memory" rev-parse HEAD > "$EVAL_OUT_DIR/memory-baseline"
 }
 
 # Session-transcript fixtures for the commit assertions: one jsonl line per
@@ -134,7 +121,9 @@ _stub_judge() {
 FACT=reference_sentry_dsn.md
 
 _make_tier_write_end_state() {
-  _make_add_tier_end_state clean
+  _make_add_tier_end_state
+  # This flow starts after the mount.
+  git -C "$EVAL_REPO/memory" rev-parse HEAD > "$EVAL_OUT_DIR/memory-baseline"
 
   printf -- '---\nname: reference-sentry-dsn\ndescription: one shared DSN across acme services\n---\n\nEvery acme service shares one Sentry DSN; rotating it takes a coordinated deploy.\n' \
     > "$EVAL_REPO/memory/acme/$FACT"

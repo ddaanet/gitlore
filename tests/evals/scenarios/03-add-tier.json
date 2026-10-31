@@ -1,9 +1,8 @@
 {
   "name": "Add tier — mount an existing tier and activate it",
-  "description": "Agent runs /add-tier, writes the intent file and no git; the PostToolBatch hook mounts the tier remote (outside the sandbox, which has no network), activates it in memory/.gitlore-tiers as its own final step, and recomposes the tier's pointer lines into the root index; the agent then commits the staged mount through gitlore:commit after the user approves the summary",
+  "description": "Agent runs /add-tier, calls gitlore-add-tier with the intent on stdin; the script mounts the tier remote, activates it in memory/.gitlore-tiers as its own final step, recomposes the tier's pointer lines into the root index, and commits the mount itself under its canned message on the clean store",
   "setup": "tier-remote",
   "assert": "add-tier",
   "initial_memory": "# Memory Index\n",
-  "prompt": "/add-tier The acme team already has a shared memory tier and I want this repo to join it. It mounts as `acme`, and its clone URL is {{EVAL_REPO}}/.tier-remote.git — mount it and make it active.",
-  "approval_message": "Looks good, proceed."
+  "prompt": "/add-tier The acme team already has a shared memory tier and I want this repo to join it. It mounts as `acme`, and its clone URL is {{EVAL_REPO}}/.tier-remote.git — mount it and make it active."
 }
