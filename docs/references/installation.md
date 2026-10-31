@@ -7,8 +7,8 @@ this file is what you need while installing or debugging an install, or while
 proposing a change to how any of it is wired. The memory remote the install
 creates is in [memory-remote.md](memory-remote.md). The launcher shim and its
 two placements are in [memory-redirect.md](memory-redirect.md); the hook wrapper
-files and what every `SessionStart` does are in
-[session.md](session.md).
+files are in [hook-wrappers.md](hook-wrappers.md), and what every `SessionStart`
+does is in [session.md](session.md).
 
 - Install — **D25** direct wiring refuses rather than appends after an existing
   `exec` · **D45** the sentinel replay is an allow-list, never `sh -c` on the

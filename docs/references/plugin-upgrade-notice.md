@@ -19,8 +19,9 @@ session runs: another repo's session installs, or the user runs
 `/plugin update`. Everything this session froze at start then belongs to the
 *old* version — hook event registration, skill bodies, agent definitions, and
 the `gitlore.hooksDir` key that points into the plugin root (D5 in
-[session.md](session.md)). The `PostToolBatch` hook `plugin-upgrade-batch.sh`
-notices the disagreement and names the remedy, once per episode.
+[hook-wrappers.md](hook-wrappers.md)). The `PostToolBatch` hook
+`plugin-upgrade-batch.sh` notices the disagreement and names the remedy, once
+per episode.
 
 **Everything frozen at process start is re-read on a resume, so `claude -c` is
 the entire remedy.** Verified 2026-07-31 by a two-run `--plugin-dir` probe whose

@@ -179,19 +179,24 @@ silent passthrough on refusal · patching a consumer's generated copy ·
 containment under the root as the whole test · refusing every `.claude`
 component · requiring exactly one index entry.
 
-**The session and its wrappers** — where the wrappers live and are anchored, and
-what SessionStart says to whom.
-[session.md](references/session.md)
+**The hook wrappers** — where the wrappers live and how they are anchored.
+[hook-wrappers.md](references/hook-wrappers.md)
 
 - **D5** — wrapper scripts live in the git common dir, untracked
 - **D11** — wrapper paths anchor at the git common dir, so linked worktrees work
+
+*Rejected:* tracked hook scripts in the repo · a literal `.git/gitlore-<hook>`
+wrapper path · a per-worktree wrapper anchor.
+
+**The session** — what SessionStart says to whom, and why it moves memory
+nowhere. [session.md](references/session.md)
+
 - **D14** — user-facing SessionStart output goes on `systemMessage`
 - **D59** — SessionStart moves memory nowhere; every advance is an explicit take
   or push
 
-*Rejected:* tracked hook scripts in the repo · a literal `.git/gitlore-<hook>`
-wrapper path · a per-worktree wrapper anchor · a `WorktreeCreate` hook · the
-clean-only fast-forward at session start.
+*Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
+start.
 
 **The plugin-upgrade notice** — what a session does when the plugin moves under
 it. [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md)

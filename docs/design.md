@@ -250,6 +250,7 @@ the git and decides (D7).
   there ends the turn and exit 1 tells the agent nothing (D60, in
   [cc-platform.md](references/cc-platform.md)).
   [session.md](references/session.md),
+  [hook-wrappers.md](references/hook-wrappers.md),
   [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md); the index
   pair in [index-composition.md](references/index-composition.md) (the edit that
   removes a stale pointer line, D66, in
