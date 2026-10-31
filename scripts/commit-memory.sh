@@ -77,29 +77,19 @@ case "$summary" in
   *) refuse "the summary on stdin is empty" ;;
 esac
 
-# The launch repo, whatever directory the agent's shell is in: the memory path is
-# read from `.gitmodules` relative to it. Agent Bash has no CLAUDE_PROJECT_DIR,
-# so without it the repo is the nearest worktree holding the cwd that has a
-# memory submodule — climbing out of memory/ or a tier when the shell sits
-# inside one, and stopping at the first repo that holds memory, so a gitlore
-# project that is itself a submodule of another repo is not left for the outer.
+# The launch repo, whatever directory the agent's shell is in. Outside any
+# worktree memory_path then finds no .gitmodules and the run is a no-op.
 outside_worktree=0
-if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
-  gitlore_cd_project_root || {
+launch_rc=0
+gitlore_cd_launch_repo || launch_rc=$?
+case "$launch_rc" in
+  0) ;;
+  1)
     echo "gitlore: nothing was committed: the project directory '$CLAUDE_PROJECT_DIR' cannot be entered." >&2
-    exit 0
-  }
-# Outside any worktree rev-parse fails, which is expected: memory_path then
-# finds no .gitmodules and the run is a no-op.
-elif top=$(git rev-parse --show-toplevel 2>/dev/null); then
-  cd "$top" || exit 1
-  while ! gitlore_memory_path >/dev/null \
-    && sup=$(git rev-parse --show-superproject-working-tree) && [ -n "$sup" ]; do
-    cd "$sup" || exit 1
-  done
-else
-  outside_worktree=1
-fi
+    exit 0 ;;
+  2) outside_worktree=1 ;;
+  *) exit 1 ;;
+esac
 
 mempath=$(gitlore_memory_path) || mempath=""
 

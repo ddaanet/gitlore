@@ -52,6 +52,16 @@ no_intent() {
   die "no intent on stdin; pass it through a quoted heredoc: gitlore-add-tier <<'EOF' ... EOF"
 }
 
+# The launch repo, whatever directory the agent's shell is in (memory/, a tier,
+# a subdirectory): every path below is relative to it.
+launch_rc=0
+gitlore_cd_launch_repo || launch_rc=$?
+case "$launch_rc" in
+  0) ;;
+  1) die "the project directory '$CLAUDE_PROJECT_DIR' cannot be entered." ;;
+  2) die "the current directory is outside any git worktree; run this from the project." ;;
+  *) die "the repository holding the current directory cannot be entered." ;;
+esac
 gitlore_has_submodule || die "this repo has no gitlore memory submodule; run /gitlore:install first."
 mempath=$(gitlore_memory_path)
 [ -e "$mempath/.git" ] || die "the memory submodule is not checked out here."
@@ -319,11 +329,15 @@ if [ -z "$pending" ]; then
   else
     head_line="mount $name tier from $url"
   fi
+  # The description is the tier publisher's text, and its JSON-quoted form can
+  # decode to several lines: folded to one, so no line of it can open a
+  # `== <store> ==` section of the summary.
+  desc_line=$(printf '%s' "$desc" | tr '\r\n' '  ')
   summary="== memory ==
 $head_line"
-  if [ -n "$desc" ]; then summary="$summary
+  if [ -n "$desc_line" ]; then summary="$summary
 
-$desc"; fi
+$desc_line"; fi
   gitlore_sync_memory_to_live "$mempath" "$summary" || \
     die "the mount is staged, but its commit was refused. See the message above."
   gitlore_stage_memory_pointer "$mempath"

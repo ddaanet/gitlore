@@ -64,6 +64,33 @@ gitlore_cd_project_root() {
   cd "${CLAUDE_PROJECT_DIR:-$PWD}" || return 1
 }
 
+# cd to the launch repo for a script the agent runs from its own Bash, whatever
+# directory that shell sits in: the memory path is read from `.gitmodules`
+# relative to it. Agent Bash has no CLAUDE_PROJECT_DIR, so without it the repo is
+# the nearest worktree holding the cwd that has a memory submodule — climbing out
+# of memory/ or a tier when the shell sits inside one, and stopping at the first
+# repo that holds memory, so a gitlore project that is itself a submodule of
+# another repo is not left for the outer. Runs in the caller's shell (never in
+# `$(…)`), since the cd is the point.
+# Returns 0 in a worktree (whether or not it holds memory: the caller's
+# gitlore_memory_path says), 1 when CLAUDE_PROJECT_DIR cannot be entered, 2 when
+# the cwd is outside any git worktree, 3 when a worktree found cannot be entered.
+gitlore_cd_launch_repo() {
+  local top sup
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
+    gitlore_cd_project_root || return 1
+    return 0
+  fi
+  # Outside any worktree rev-parse fails, which is expected: that is return 2.
+  top=$(git rev-parse --show-toplevel 2>/dev/null) || return 2
+  cd "$top" || return 3
+  while ! gitlore_memory_path >/dev/null \
+    && sup=$(git rev-parse --show-superproject-working-tree) && [ -n "$sup" ]; do
+    cd "$sup" || return 3
+  done
+  return 0
+}
+
 # Write an executable hook wrapper that resolves the live plugin via
 # `git config gitlore.hooksDir` and degrades to a clean skip (exit 0) when that
 # config is unset or the target hook is missing (plugin upgraded + cache GC'd),
