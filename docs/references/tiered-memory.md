@@ -2,7 +2,7 @@
 
 The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17 points
 at. Motivation, FR15 itself and the Architecture overview live in `design.md`;
-the decision-level detail is here and in five sibling nodes. Most of it is
+the decision-level detail is here and in seven sibling nodes. Most of it is
 needed only when touching this subsystem; the exception is the tier-store
 decisions D42–D44 and D52, which the commit and merge paths reach from outside
 it.
@@ -20,8 +20,8 @@ and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
 gitlore's *composition* of the root index. The mechanism is a subsystem rather
 than a single call, so its decisions are recorded individually as
-**D26–D40, D42–D44, D47, D48, D52, D57, D69 and D71**, across this node and five
-siblings:
+**D26–D40, D42–D44, D47, D48, D52, D57, D69 and D71**, across this node and
+seven siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -33,11 +33,12 @@ siblings:
   canned message when the memory store held no unapproved work
 - Composition, in [index-composition.md](index-composition.md) — **D29**
   composition is placement · **D30** the tier manifest · **D31** compose
-  triggers and validation · **D34** presence authority · **D35** the welded-line
-  refusal · **D36** two projections · **D37** order as a merge input · **D57**
-  the mount reports its composed size against the loader cutoff; the edit that
-  removes a stale pointer line (**D66**) is in
+  triggers and validation · **D36** two projections · **D37** order as a merge
+  input; the edit that removes a stale pointer line (**D66**) is in
   [index-drift-fixes.md](index-drift-fixes.md)
+- What composition reports, in [composition-reports.md](composition-reports.md)
+  — **D34** presence authority · **D35** the welded-line refusal · **D57** the
+  mount reports its composed size against the loader cutoff
 - The authoring-time sync, in [index-authoring-sync.md](index-authoring-sync.md)
   — **D38** the one-way sync · **D39** the routing-key advisories · **D40**
   pre-existing drift

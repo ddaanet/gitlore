@@ -223,13 +223,15 @@ writes · a `PreToolUse` deny on the first durable write of an episode.
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33, D71)
 in [tiered-memory.md](references/tiered-memory.md), composition (D29–D31,
-D34–D37, D57) in [index-composition.md](references/index-composition.md), the
-authoring-time sync (D38–D40) in
-[index-authoring-sync.md](references/index-authoring-sync.md), the authoring
-guidance with its invocation and its owner inventory (D47, D48, D69) in
-[memory-authoring-guidance.md](references/memory-authoring-guidance.md), the
-tier stores and merges (D42–D44) in [tier-stores.md](references/tier-stores.md),
-the repair of an arriving index and the merged-index gate (D52) in
+D36–D37) in [index-composition.md](references/index-composition.md), what
+composition reports (D34, D35, D57) in
+[composition-reports.md](references/composition-reports.md), the authoring-time
+sync (D38–D40) in [index-authoring-sync.md](references/index-authoring-sync.md),
+the authoring guidance with its invocation and its owner inventory (D47, D48,
+D69) in [memory-authoring-guidance.md](references/memory-authoring-guidance.md),
+the tier stores and merges (D42–D44) in
+[tier-stores.md](references/tier-stores.md), the repair of an arriving index and
+the merged-index gate (D52) in
 [tier-arrival-repair.md](references/tier-arrival-repair.md), and the edit that
 removes a tier pointer (D66) in
 [index-drift-fixes.md](references/index-drift-fixes.md).
@@ -238,32 +240,33 @@ removes a tier pointer (D66) in
 
 *Rejected:* a flat merge-everything store · a content classifier routing each
 new fact (tiered-memory.md) · propagating the root index down into the carriers
-· recompose owning index-line presence · deleting a memory file when its pointer
-line is removed · a `SessionStart` warning when a tier is mounted without a
-paired guard plugin · the mount's size as a percentage of the advisory budget ·
-sharing the edit-time advisory's marker kind with the mount, or giving the mount
-one of its own (index-composition.md) · frontmatter `description` as the source
-of truth for the index one-liner · scoring an index hook against its body,
-tf-idf style (index-authoring-sync.md) · a `PreToolUse` deny on writes under
-`memory/` · an index-size trigger for the audit · carrying the index lines'
-routing surface into the descriptions (memory-authoring-guidance.md) · an
-append-only constraint on shared-tier indexes · a `merge` driver plus
-`.gitattributes` · `**/MEMORY.md merge=union` plus a dedup-by-path pass · a down
-projection that skips a root line whose file the tier does not hold · writing
-root and staging the pair atomically (tier-stores.md) · a message fix alone for
-an unadoptable arrival · a push that tolerates the defect · a `--no-ff` merge of
-the arrival onto the pin · an agent-driven repair through the memory-merger · a
-mechanical repair of a merge synthesis · repairing only when every problem names
-the carrier · a continuation that commits a defective merged index uncomposed ·
-a scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
-directories on the next repair (tier-arrival-repair.md) · leaving the
-pointer-removal rule to recall from D36 (index-drift-fixes.md) · listing the
-sibling repositories' plugins at each gate instead of holding a list · the route
-alone, with no inventory · an index line for the inventory fact · a general
-memory reviewer (memory-authoring-guidance.md) · keeping the add-tier intent
-file and hook with a canned commit added · the agent running `gitlore-commit`
-with a canned mount summary · a rubric-graded mount summary · the add-tier
-intent as `--options` or JSON arguments (tiered-memory.md).
+· a `SessionStart` warning when a tier is mounted without a paired guard plugin
+(index-composition.md) · recompose owning index-line presence · deleting a
+memory file when its pointer line is removed · the mount's size as a percentage
+of the advisory budget · sharing the edit-time advisory's marker kind with the
+mount, or giving the mount one of its own (composition-reports.md) · frontmatter
+`description` as the source of truth for the index one-liner · scoring an index
+hook against its body, tf-idf style (index-authoring-sync.md) · a `PreToolUse`
+deny on writes under `memory/` · an index-size trigger for the audit · carrying
+the index lines' routing surface into the descriptions
+(memory-authoring-guidance.md) · an append-only constraint on shared-tier
+indexes · a `merge` driver plus `.gitattributes` · `**/MEMORY.md merge=union`
+plus a dedup-by-path pass · a down projection that skips a root line whose file
+the tier does not hold · writing root and staging the pair atomically
+(tier-stores.md) · a message fix alone for an unadoptable arrival · a push that
+tolerates the defect · a `--no-ff` merge of the arrival onto the pin · an
+agent-driven repair through the memory-merger · a mechanical repair of a merge
+synthesis · repairing only when every problem names the carrier · a continuation
+that commits a defective merged index uncomposed · a scratch directory in the
+tier's gitdir · a sweep of stale `gitlore-repair.*` directories on the next
+repair (tier-arrival-repair.md) · leaving the pointer-removal rule to recall
+from D36 (index-drift-fixes.md) · listing the sibling repositories' plugins at
+each gate instead of holding a list · the route alone, with no inventory · an
+index line for the inventory fact · a general memory reviewer
+(memory-authoring-guidance.md) · keeping the add-tier intent file and hook with
+a canned commit added · the agent running `gitlore-commit` with a canned mount
+summary · a rubric-graded mount summary · the add-tier intent as `--options` or
+JSON arguments (tiered-memory.md).
 
 **Design history** — how the design's changelog is kept, and where a retired
 decision goes. [design-history.md](references/design-history.md)
