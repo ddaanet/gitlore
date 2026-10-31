@@ -6,7 +6,6 @@
 # Written by autodrive-handoff until it adopts gitlore:commit (D70).
 /.claude/gitlore-memory-message
 /.claude/gitlore-commit-memory
-/.claude/gitlore-add-tier
 /.venv/
 /.claude/autodrive
 /dist/plugin/

@@ -228,7 +228,7 @@ exit 1-ish: the user gets a notice, the agent nothing, and inside a subagent
 renders.
 
 `gitlore_batch_hook_guard` (`scripts/lib/hook-guard.sh`) is called once by each
-of the five `PostToolBatch` hooks, after the memory path resolves and before the
+of the four `PostToolBatch` hooks, after the memory path resolves and before the
 first fallible step, with the hook name, the memory worktree and a consequence
 sentence for the agent. It redirects the hook's stderr to a capture file in the
 memory store's git dir and records the failing command and its line in an `ERR`
@@ -251,16 +251,15 @@ Deaths before the call (sourcing, the `cd`) stay plain non-zero exits and none
 is an exit-2 path. A hook killed by a signal runs no trap and strands its
 capture file and any claimed baseline, one file per kill and never reused, since
 every reader tests the unclaimed name. A `jq` dying mid-emit is the stated
-residual: all five hooks write their stdout as their last act, so one object is
+residual: all four hooks write their stdout as their last act, so one object is
 emitted either way.
 
 The consequence differs by hook. A dying `relay-drain.sh` loses the reports it
 read this batch, because it can die at its final emit after the drain removed
-the markers it read; unread ones stay staged. `add-tier-batch.sh` leaves the
-mount outcome unknown. The baseline hooks (`index-sync-post.sh`,
-`index-compose.sh`) claim by rename, so a copy that loses the race exits 0
-quietly rather than dying on a missing file; the mechanism is in
-[index-authoring-sync.md](index-authoring-sync.md). `plugin-upgrade-batch.sh`
+the markers it read; unread ones stay staged. The baseline hooks
+(`index-sync-post.sh`, `index-compose.sh`) claim by rename, so a copy that loses
+the race exits 0 quietly rather than dying on a missing file; the mechanism is
+in [index-authoring-sync.md](index-authoring-sync.md). `plugin-upgrade-batch.sh`
 falls back to an empty session when the payload does not parse and sends the
 notice when its marker cannot be written, where a repeated notice costs a line
 and a withheld one the only telling there is.
@@ -273,13 +272,12 @@ A step of the report builder in `gitlore_compose_and_report` (the `grep -c`
 counts, `gitlore_compose_orphans`, `gitlore_compose_dangling`,
 `gitlore_active_tier_scopes`) can die after the composition pass has run; a
 failing `gitlore_compose` is not such a death, since it is caught into
-`compose_rc` and reported with return 0. After a successful mount
-`add-tier-batch.sh` dies with it, and the guard reports the death with
-add-tier's consequence, so the mount report is not emitted. That is left as it
-is, because no state reached from a fixture produces it and the guard's report
-already tells the agent to check `.gitmodules`. Calling the function under
-`if !` alone does not help: errexit is suspended for its whole body, which ends
-in assignments, so it runs on and returns 0.
+`compose_rc` and reported with return 0. After a successful mount `add-tier.sh`
+dies with it and exits non-zero, so the mount report is not emitted and the
+call's own output shows the failure. That is left as it is, because no state
+reached from a fixture produces it and the mount itself has landed. Calling the
+function under `if !` alone does not help: errexit is suspended for its whole
+body, which ends in assignments, so it runs on and returns 0.
 
 ## Rejected alternatives
 

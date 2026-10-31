@@ -197,8 +197,8 @@ gitlore_index_budget_pct() {
 # adds tens of KB of index in a single step, and the only one whose report is
 # not a `PostToolBatch` pass over an index the agent edited — so it never
 # reaches the advisory in index-sync-post.sh, and a mount that lands past the
-# cutoff is otherwise silent. It needs no once-per-episode marker: the intent
-# file is consumed, so the mount reports once by construction, and writing no
+# cutoff is otherwise silent. It needs no once-per-episode marker: the mount
+# reports once, when add-tier.sh composes, and writing no
 # `budget` marker leaves a later edit-time advisory in the same session free to
 # fire. Past the cutoff the percentage is the wrong number to print — 97% of
 # budget is already truncating — so the cutoff, not the budget, is what the

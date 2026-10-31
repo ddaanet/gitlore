@@ -91,8 +91,7 @@ names its target at all, which is why the `PreToolUse` matcher is
 reach the same `gitlore_compose_and_report` call: that stamp comparison, and
 `/gitlore:add-tier`'s activation write, which happens inside `add-tier.sh` after
 the baseline was taken and so cannot be attributed to a tool call —
-`add-tier-batch.sh` calls the function directly, in the same batch, right after
-a successful mount.
+`add-tier.sh` calls the function directly, right after a successful mount.
 
 The recompose **validates and is fail-safe**: it refuses — reporting on
 `systemMessage` (user) + `additionalContext` (agent) without clobbering the
@@ -332,9 +331,9 @@ names the **cutoff, never the percentage** — the advisory budget (25,600) sits
 *above* the cutoff (~24,985), so 100% of budget is already truncating and 97% of
 it can be, which makes a percentage the reassuring number in the one case where
 the mount has cost the repo its most specific memory. And the line is
-**keyed by nothing**: the intent file is consumed, so a mount reports once by
-construction, and writing no `budget` marker leaves a later edit-time advisory
-in the same session free to fire.
+**keyed by nothing**: `add-tier.sh` reports a mount once, when it composes, and
+writing no `budget` marker leaves a later edit-time advisory in the same session
+free to fire.
 
 A mount past the cutoff is still a correct mount. This reports, never refuses —
 an over-budget tier is its owner's to fix, not the consuming repo's — and the
@@ -382,4 +381,4 @@ nothing is broken (D57).
 mount a marker kind of its own. Sharing makes the mount advisory eat the
 edit-time one for the rest of the session — the session most likely to edit the
 index next; a separate kind spends marker machinery on an emission already
-one-shot, the intent file being consumed when it fires (D57).
+one-shot, `add-tier.sh` reporting once per mount (D57).

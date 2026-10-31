@@ -55,9 +55,9 @@ stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
 # baselines are keyed per agent, so a parent batch ending mid-subagent consumes
 # and removes its own bare pair only. An existing file here therefore belongs to
 # the batch in flight of this agent — an invariant the consuming hooks hold up
-# jointly, and it stands only while index-sync-post.sh, index-compose.sh and
-# add-tier-batch.sh resolve the SAME keyed name and drop the baseline they
-# consumed at batch end, even when nothing was touched.
+# jointly, and it stands only while index-sync-post.sh and index-compose.sh
+# resolve the SAME keyed name and drop the baseline they consumed at batch end,
+# even when nothing was touched.
 #
 # One residual, bounded rather than swept. A pair stranded by an interrupted
 # batch is consumed and deleted by the next batch of that same agent id; one left

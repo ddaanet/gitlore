@@ -8,8 +8,8 @@ hook that is guarding on the wrong thing.
 ---
 
 Configuration splits three ways by what has to travel: tracked files travel with
-the repo, git-config keys are per-clone and machine-local, and the one IPC file
-is a transient handshake between the agent and a hook.
+the repo, git-config keys are per-clone and machine-local, and hook-owned state
+lives in the store's gitdir.
 
 **Tracked — travels with the repo.** `.claude/settings.json` carries
 `gitlore.enabled: true`, the activation flag every hook guards on.
@@ -29,17 +29,14 @@ each consumer verifies the resolved path before using it rather than trusting
 the key (D5). The three entry points are reached by the plugin `bin/` names
 `gitlore-commit`, `gitlore-push` and `gitlore-merge`, which need no key (D70).
 
-**IPC file — the agent writes, a hook acts.** `.claude/gitlore-add-tier` (mount
-intent) sits in the parent working tree, gitignored. It lives there rather than
-in a gitdir because a gitdir write is blocked by the CC sandbox and read as
-self-configuration by the auto-mode classifier — the agent can write an ordinary
-project file and nothing else. Hook-owned state that the agent must *not* write
-goes the other way, into the store's gitdir: the once-per-session
-`gitlore-budget-nudged-<session>` and `gitlore-upgrade-nudged-<session>`
-markers, the merge-state file, the index pair's per-batch baselines
-`gitlore-index-preimage[-<agent>]` and `gitlore-compose-stamp[-<agent>]` (D31,
-suffixed by the agent id inside a subagent), a tier's `gitlore-tier-landing`
-record of the commit a tier commit started from (D50), and the relay reports
+**Hook-owned state — the store's gitdir.** The agent must *not* write it, so it
+lives in the store's gitdir, which the agent's tools cannot write: the
+once-per-session `gitlore-budget-nudged-<session>` and
+`gitlore-upgrade-nudged-<session>` markers, the merge-state file, the index
+pair's per-batch baselines `gitlore-index-preimage[-<agent>]` and
+`gitlore-compose-stamp[-<agent>]` (D31, suffixed by the agent id inside a
+subagent), a tier's `gitlore-tier-landing` record of the commit a tier commit
+started from (D50), and the relay reports
 `gitlore-relay-<session>-<agent>-<epoch>-<pid>-<tag>` — one per report a hook
 staged from inside a subagent, built at `<name>.tmp`, removed by the drain that
 delivers it to the parent (`relay-drain.sh`, or `SessionStart` folding it into

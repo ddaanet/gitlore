@@ -222,9 +222,9 @@ gitlore_compose_write() {
 # the post-mount triage nudge — then set GITLORE_COMPOSE_SYSMSG and
 # GITLORE_COMPOSE_CTX (either may end up empty: nothing worth reporting).
 # Shared by the PostToolBatch recompose hook (cc-hooks/index-compose.sh, which
-# detects a touch via .tool_calls[]) and add-tier-batch.sh (which writes the
-# manifest itself, outside any tool call, and so has nothing for that detection
-# to see — it calls this directly instead, with $2 always set).
+# detects a touch via .tool_calls[]) and add-tier.sh (which writes the manifest
+# itself, outside any tool call, and so has nothing for that detection to see —
+# it calls this directly instead, with $2 always set).
 # Depends on gitlore_active_tier_scopes (util-config.sh) and
 # gitlore_get_frontmatter_description (index-sync.sh); callers must source both.
 # Args: $1 = mempath, $2 = non-empty when the manifest changed this batch.

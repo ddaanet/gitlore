@@ -145,38 +145,6 @@ gitlore_has_submodule() {
 # shellcheck disable=SC2034  # consumed by sourcing scripts (lib/resolve.sh, resolve.sh)
 readonly GITLORE_PENDING_REF="refs/gitlore/pending"
 
-# Print abs path to the `.claude/` dir in the PARENT working tree that hosts the
-# memory IPC file (the add-tier intent). Resolves the
-# superproject working tree; falls back to the memory worktree's parent dir when
-# memory is not a registered submodule (or is detached). Relocated 2026-07-16
-# from the submodule gitdir so the agent can write these under auto mode — the
-# gitdir is unwritable via every agent tool (Write and a bash heredoc are both
-# classifier/sandbox denied). Args: $1 = memory worktree path (relative or absolute).
-_gitlore_ipc_dir() {
-  local mempath="$1" super=""
-  # Guard on the gitlink rather than suppressing stderr: without a checked-out
-  # memory worktree the rev-parse would fail with an expected "not a git
-  # repository", which is exactly the fallback case below. Guarding removes the
-  # expected failure, so a *real* rev-parse error is no longer swallowed.
-  if [ -e "$mempath/.git" ]; then
-    super=$(git -C "$mempath" rev-parse --show-superproject-working-tree) || super=""
-  fi
-  if [ -z "$super" ]; then
-    super=$(CDPATH='' cd -- "$(dirname -- "$mempath")" && pwd)
-  fi
-  printf '%s/.claude\n' "$super"
-}
-
-# Print abs path to the add-tier intent file. The agent writes the mount/create
-# intent here as `key=value` lines; the PostToolBatch hook (add-tier-batch.sh)
-# runs the git on its behalf. The agent never runs git here, which sidesteps the
-# auto-mode classifier, and mounting a tier CLONES, and the
-# command sandbox has no network — only the hook, which runs outside it, can
-# reach the remote. Gitignored.
-gitlore_add_tier_file() {
-  printf '%s/gitlore-add-tier\n' "$(_gitlore_ipc_dir "$1")"
-}
-
 # Print the CC project-scoped auto-memory dir for a repo root.
 # CC encodes the project dir name by replacing every non-[A-Za-z0-9] byte with
 # `-` (verified empirically against ~/.claude/projects/ entries). The >200-char
