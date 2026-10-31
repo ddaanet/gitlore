@@ -23,10 +23,15 @@ load helpers/commit-memory
   [[ "$stderr" == *"nothing was committed: this repository has no memory submodule"* ]]
 }
 
-@test "exits 0 when memory is clean and synced" {
+@test "exits 0 when memory is clean and synced, and says nothing was committed" {
   make_parent_with_memory
-  run commit_sections "memory: nothing to commit"
+  head_before=$(git -C memory rev-parse HEAD)
+  run --separate-stderr commit_with "== memory ==
+memory: nothing to commit"
   [ "$status" -eq 0 ]
+  # A real commit prints nothing either, so the notice is what tells them apart.
+  [[ "$stderr" == *"nothing was committed: memory and every mounted tier are clean"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
 }
 
 @test "exits 0 in a session-less worktree where the memory worktree is absent" {
@@ -35,8 +40,13 @@ load helpers/commit-memory
   git worktree add -q -b feat "$WT" >/dev/null
   [ ! -e "$WT/memory/.git" ]
   cd "$WT"
-  run commit_sections "noop"
+  # An uncommitted parent file: without the materialization guard, git run in
+  # the unpopulated memory/ reaches this worktree and fails.
+  echo untracked > parent-notes.md
+  run --separate-stderr commit_with "== memory ==
+noop"
   [ "$status" -eq 0 ]
+  [[ "$stderr" == *"nothing was committed: the memory worktree 'memory' is not materialized in this checkout"* ]]
 }
 
 @test "a summary on stdin commits dirty memory and advances live without a parent commit" {
@@ -80,7 +90,7 @@ EOF"
     run --separate-stderr bash "$CMD" $args <<<"== memory ==
 memory: add notes"
     [ "$status" -eq 2 ]
-    [[ "$stderr" == *"usage: commit-memory.sh"* ]]
+    [[ "$stderr" == *"usage: gitlore-commit"* ]]
     [[ "$stderr" == *"/gitlore:commit"* ]]
   done
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]

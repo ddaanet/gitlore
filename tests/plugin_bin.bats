@@ -29,7 +29,7 @@ run_bare() {
   [ "$status" -ne 127 ]
   # commit-memory.sh's own usage refusal.
   [ "$status" -eq 2 ]
-  [[ "$output" == *"usage: commit-memory.sh"* ]]
+  [[ "$output" == *"usage: gitlore-commit"* ]]
 }
 
 @test "bin: gitlore-push is executable and reaches push-memory.sh" {

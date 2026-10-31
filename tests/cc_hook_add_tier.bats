@@ -101,6 +101,10 @@ write_intent() {
   [[ "$sys" == *"mounted at memory/ddaanet"* ]]
   [[ "$ctx" == *".gitlore-tiers"* ]]
   [[ "$ctx" == *"Do not run any git yourself"* ]]
+  # The mount is memory root content: only gitlore:commit commits it.
+  [[ "$ctx" == *"invoke the gitlore:commit skill"* ]]
+  [[ "$ctx" == *"'== memory ==' section"* ]]
+  [[ "$ctx" != *"ride the next parent commit"* ]]
 
   # Activation is folded into the same hook call: no separate manifest edit,
   # and the recompose + triage nudge already fired.

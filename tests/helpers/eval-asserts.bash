@@ -94,7 +94,8 @@ _write_commit_transcript() {
 # so memory committed before the assertion ran. Calling the same entry point here
 # reproduces the end state rather than imitating it.
 _commit_approved() {
-  ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
+  # A caller's CLAUDE_PROJECT_DIR would send the commit to its own project.
+  ( cd "$EVAL_REPO" && unset CLAUDE_PROJECT_DIR && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
     "$PLUGIN_ROOT/bin/gitlore-commit" <<<"$SUMMARY" ) >/dev/null
   _write_commit_transcript "$_SKILL_COMMIT" "$_BASH_COMMIT"
 }

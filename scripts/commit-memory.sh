@@ -37,7 +37,7 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 refuse() {
-  printf 'usage: commit-memory.sh: %s. Run /gitlore:commit to draft the summary and get it approved.\n' "$1" >&2
+  printf 'usage: gitlore-commit: %s. Run /gitlore:commit to draft the summary and get it approved.\n' "$1" >&2
   exit 2
 }
 
@@ -165,8 +165,10 @@ if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
   done < <(git -C "$mempath" status --porcelain -z)
 fi
 
-# Nothing to commit: exit 0 whatever the summary says.
+# Nothing to commit: exit 0 whatever the summary says, and the caller is told,
+# so an agent does not report a commit that never happened.
 if [ "$root_has" = "0" ] && [ -z "$dirty_tiers" ]; then
+  echo "gitlore: nothing was committed: memory and every mounted tier are clean." >&2
   exit 0
 fi
 

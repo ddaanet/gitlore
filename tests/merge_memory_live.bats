@@ -91,3 +91,22 @@ assert_prepared_head_vs_live() {
   # The merge lives in the tier; memory is not mid-merge.
   [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
 }
+
+@test "merge refuses a diverged root while a tier sits off the gitlink root records" {
+  wire_memory_remote
+  mount_tier_at_live ddaanet
+  # Root records the tier at its current HEAD, so only the commit below moves it.
+  git -C memory add ddaanet
+  git -C memory -c user.email=t@t -c user.name=t commit -q --allow-empty -m "pin ddaanet"
+  git -C memory branch -f live HEAD
+  commit_on_head memory HEAD_SIDE.md
+  advance_branch_with_file memory live LIVE.md live-side "Live commit" live
+  commit_on_head memory/ddaanet MOVED.md
+  [ -n "$(git -C memory status --porcelain -- ddaanet)" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"memory has uncommitted changes"* ]]
+  # No merge was prepared, so the continuation's `add -A` cannot adopt the move.
+  [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+}

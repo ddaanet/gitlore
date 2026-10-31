@@ -21,9 +21,9 @@ set -euo pipefail
 # hook. The payload is read for one field, agent_id, and only to key the
 # compose baseline this hook drops below.
 #
-# One-shot, like the recall request and unlike the commit trigger: an add-tier
-# failure is a bad url or a taken name, not a transient lock, so retrying it on
-# every subsequent batch would just re-report the same error. The agent fixes
+# One-shot, like the recall request: an add-tier failure is a bad url or a
+# taken name, not a transient lock, so retrying it on every subsequent batch
+# would just re-report the same error. The agent fixes
 # the intent and writes it again.
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
@@ -97,7 +97,7 @@ if [ "$rc" -eq 0 ]; then
   sysmsg="$out"
   ctx="$out
 
-Do not run any git yourself; the mount and activation are already staged in $mempath (the submodule in .gitmodules, the tier's name in .gitlore-tiers) and ride the next parent commit."
+Do not run any git yourself; the mount and activation are already staged in $mempath (the submodule in .gitmodules, the tier's name in .gitlore-tiers). They are memory root content, which no parent commit records: invoke the gitlore:commit skill to commit them, with a '== memory ==' section in the summary the user approves."
   if [ -n "$GITLORE_COMPOSE_SYSMSG" ]; then
     sysmsg="$sysmsg
 $GITLORE_COMPOSE_SYSMSG"

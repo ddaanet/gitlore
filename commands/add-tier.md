@@ -109,5 +109,6 @@ they resolve nowhere from another consumer, so strip them as part of the move.
 
 Tell the user the tier's name, its remote, its routing guidance, and where it
 now ranks. Mention that the mount and activation are staged in `memory/`
-(`.gitmodules` and `.gitlore-tiers`) and ride the next ordinary commit —
-nothing else is theirs to do.
+(`.gitmodules` and `.gitlore-tiers`) as memory root content, which no parent
+commit records, then invoke the `gitlore:commit` skill to commit them, with a
+`== memory ==` section in the summary the user approves.

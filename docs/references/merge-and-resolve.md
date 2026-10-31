@@ -33,20 +33,21 @@ file is what you need while running or changing a merge.
   in-place detach.
 - **After commit.** The commit path advances `live` immediately
   (`push . HEAD:live`, fast-forward only), so `live` holds every commit the
-  moment it exists and memory is repo-global rather than branch-scoped.
-  Divergence blocks and routes to `/gitlore:resolve`.
-- **Two divergence gates, one shape.** A store's pending HEAD against its own
-  local `live` (`commit-memory.sh`), and its local `live` against its own
-  `origin/live` (`pre-push`). Both reduce to "my pending commit vs the
-  authoritative side", which is why one merge machinery serves memory and tiers
-  alike (D6, D41).
+  moment it exists and memory is repo-global rather than branch-scoped. A commit
+  that has forked from `live` exits 0 with a notice naming `/gitlore:merge` and
+  `/gitlore:push`, whose reconcile prepares the merge.
+- **Two divergences, one shape.** A store's pending HEAD against its own local
+  `live` (prepared by the reconcile in `merge-memory.sh` and `push-memory.sh`),
+  and its local `live` against its own `origin/live` (prepared by the take and
+  the publish). Both reduce to "my pending commit vs the authoritative side",
+  which is why one merge machinery serves memory and tiers alike (D6, D41).
 - **Parent branch switches, rebases and force-pushes are independent of
   memory.** Memory history is its own concern; nothing in the parent's ref
   layout is mirrored.
 
 ### The `resolve` skill
 
-Semantic merge of a diverged store. Self-triggering: a commit or push that fails
+Semantic merge of a diverged store. Self-triggering: a merge or push that fails
 with `gitlore: memory merge prepared` on stderr carries everything the skill
 needs, so the agent invokes it without being asked. It is also invocable as
 `/gitlore:resolve` for the three entries where no directive reached an agent — a
@@ -55,7 +56,7 @@ health check after a compaction, a fresh session, or a divergence surfaced by a
 
 The division of labour is D7's: the script decides, the agent writes prose.
 
-1. **A gate yields.** Whichever hook meets the divergence calls
+1. **A divergence yields.** Whichever script meets it calls
    `gitlore_yield_merge`, which prepares the merge, writes a state file into the
    diverged store's gitdir, and emits the directive on stderr. Preparation pins
    the pending commit at `refs/gitlore/pending`, checks the authority out
@@ -205,9 +206,9 @@ as first parent; the divergent side becomes the second parent. This preserves
 the conventional `git log --first-parent` reading — the authoritative trunk
 stays linear, divergent work appears as merged-in contributors.
 
-- **head-vs-live** (post-commit): local `live` is the trunk; the pending commit
-  on the detached HEAD is the divergent side. First parent is `live`, second is
-  the pending commit.
+- **head-vs-live** (reconcile): local `live` is the trunk; the pending commit on
+  the detached HEAD is the divergent side. First parent is `live`, second is the
+  pending commit.
 - **head-vs-remote** (pre-push): `origin/live` is more authoritative than
   anything local. First parent is `origin/live`, second is the pending commit
   (which by then carries local `live`).

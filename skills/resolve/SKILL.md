@@ -1,6 +1,6 @@
 ---
 name: resolve
-description: Resolve or repair a diverged gitlore memory store or tier. Use when a memory commit or a push fails with output containing "gitlore: memory merge prepared" — invoke it without waiting to be asked. Also use when the user runs /gitlore:resolve, reports that memory has stopped publishing, or hands back a divergence message from a push they ran in their own terminal.
+description: Resolve or repair a diverged gitlore memory store or tier. Use when a memory merge or push fails with output containing "gitlore: memory merge prepared" — invoke it without waiting to be asked. Also use when the user runs /gitlore:resolve, reports that memory has stopped publishing, or hands back a divergence message from a push they ran in their own terminal.
 allowed-tools: ["Bash", "Task", "SendMessage"]
 ---
 
@@ -10,7 +10,7 @@ You are resolving a gitlore memory submodule from divergence.
 
 ## Entry mode
 
-**Commit-triggered**: A commit path already emitted a merge directive — `gitlore-commit`, run by the agent through the `gitlore:commit` skill, or the `pre-push` hook — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
+**Commit-triggered**: A merge path already emitted a merge directive — `gitlore-merge` or `gitlore-push`, whose reconcile prepares the merge — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
 
 **Standalone** (user ran `/gitlore:resolve` or state is unclear): Run the resolver:
 

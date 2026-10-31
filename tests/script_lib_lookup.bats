@@ -30,7 +30,11 @@ make_old_cache() {
   # Range delete of the function body; the closing brace is the first column-0 `}`.
   sed '/^gitlore_memory_dirty() {/,/^}/d' "$root/scripts/lib/util.sh" > "$root/util.tmp"
   mv "$root/util.tmp" "$root/scripts/lib/util.sh"
-  ! grep -q '^gitlore_memory_dirty' "$root/scripts/lib/util.sh"
+  # A bare `! grep` here would assert nothing, being neither last nor tested.
+  if grep -q '^gitlore_memory_dirty' "$root/scripts/lib/util.sh"; then
+    echo "make_old_cache: the older cache still defines gitlore_memory_dirty" >&2
+    return 1
+  fi
   # The simulation is only meaningful while the script under test calls the
   # function the older cache lacks.
   grep -q 'gitlore_memory_dirty' "$PLUGIN_ROOT/scripts/commit-memory.sh"

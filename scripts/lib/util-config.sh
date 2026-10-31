@@ -149,13 +149,32 @@ gitlore_github_https_url() {
   esac
 }
 
-# Print the hint that follows a memory push failure caused by missing
+# Print the hint that follows a store push failure caused by missing
 # credentials. A clone takes its remotes from the https `.gitmodules` urls, and
 # git pushes over https only with a credential helper — which a working
-# `gh auth status` does not imply.
-# Args: $1 = the memory store's path.
+# `gh auth status` does not imply. The SSH alternative is printed only when the
+# store's own `remote.origin.url` is a GitHub https url, filled in from it with
+# the store's absolute path, so the command runs as printed.
+# Args: $1 = the store's path (a memory store or a tier).
 gitlore_push_credentials_hint() {
-  printf "Check the network. If this clone's remote is https (a fresh clone takes it from .gitmodules), run 'gh auth setup-git' so git uses your gh credentials, or put the clone back on SSH: git -C \"%s\" remote set-url origin git@github.com:<owner>/<repo>.git" "$1"
+  local store="$1" url path abs
+  printf "Check the network. If this clone's remote is https (a fresh clone takes it from .gitmodules), run 'gh auth setup-git' so git uses your gh credentials"
+  # Unchecked out, `git -C` would read the enclosing repository's remote.
+  [ -e "$store/.git" ] && url=$(git -C "$store" config --get remote.origin.url) \
+    || url=""
+  case "$url" in
+    https://github.com/*) path="${url#https://github.com/}" ;;
+    *) path="" ;;
+  esac
+  path="${path%/}"
+  path="${path%.git}"
+  case "$path" in
+    ""|*/*/*|*[[:space:]]*|*\'*|*\"*) printf '.'; return 0 ;;
+    */*) ;;
+    *) printf '.'; return 0 ;;
+  esac
+  abs=$(cd "$store" && pwd -P) || abs="$store"
+  printf ', or put the clone back on SSH: git -C %q remote set-url origin git@github.com:%s.git' "$abs" "$path"
 }
 
 # Warn, on one stderr line, when the repository at $2 is private while this

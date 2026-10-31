@@ -140,7 +140,7 @@ ctx_of() { printf '%s' "$1" | jq -r '.hookSpecificOutput.additionalContext'; }
 }
 
 # Pairs with the firing test: a record that would fire, in a repo with no memory
-# store. The five gitlore.* keys only exist where gitlore is installed.
+# store. The gitlore.hooksDir key only exists where gitlore is installed.
 @test "silent outside a gitlore repo" {
   write_record "$NEW_VER"
 

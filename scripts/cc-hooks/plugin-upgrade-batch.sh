@@ -8,11 +8,11 @@ set -euo pipefail
 # installed_plugins.json. The record keeps moving — another repo's session, or
 # the user's own `/plugin update`, rewrites it mid-session. When the two
 # disagree, everything this session froze at start (hook event registration,
-# skill bodies, agent definitions, and the five gitlore.* git-config keys that
-# point into the plugin root) belongs to the OLD version, and nothing available
+# skill bodies, agent definitions, and the gitlore.hooksDir git-config key that
+# points into the plugin root) belongs to the OLD version, and nothing available
 # inside the session changes that.
 #
-# So this hook reports and never repairs. Repointing the git-config keys at the
+# So this hook reports and never repairs. Repointing the git-config key at the
 # new root would leave CC-side registration on the old one — a split-version
 # session, strictly worse than uniform staleness. Exit and relaunch with
 # `claude -c` is the whole remedy: it is a full process restart that re-fires
@@ -118,11 +118,11 @@ touch "$marker" || true
 # repairs are dead ends. Routing the remedy through the agent alone would make a
 # hot-path notice model-dependent, which D7 rules out — so the user-facing line
 # names the remedy directly, departing from the usual no-instructions style.
-sysmsg="gitlore: this session runs $old_ver, but $new_ver is what is installed for this repo. A mid-session upgrade does not take effect: hook registration, skill bodies and the five gitlore.* git-config keys are all fixed at process start. Exit Claude and relaunch with \`claude -c\` — it resumes this conversation."
+sysmsg="gitlore: this session runs $old_ver, but $new_ver is what is installed for this repo. A mid-session upgrade does not take effect: hook registration, skill bodies and the gitlore.hooksDir git-config key are all fixed at process start. Exit Claude and relaunch with \`claude -c\` — it resumes this conversation."
 
 # The prohibition is the load-bearing half: the session that prompted this ran
 # two full cycles of exactly those remedies before the cause was found.
-ctx="gitlore: the plugin was upgraded to $new_ver since this session started; this session still runs $old_ver and its git-config keys point into $old_ver. Nothing in this session can adopt it. Do not attempt a repair with /plugin, /reload-plugins, or by rewriting gitlore.* git config — none of them re-fire SessionStart. Tell the user to exit and relaunch with \`claude -c\`."
+ctx="gitlore: the plugin was upgraded to $new_ver since this session started; this session still runs $old_ver and its gitlore.hooksDir git-config key points into $old_ver. Nothing in this session can adopt it. Do not attempt a repair with /plugin, /reload-plugins, or by rewriting gitlore.* git config — none of them re-fire SessionStart. Tell the user to exit and relaunch with \`claude -c\`."
 
 jq -n --arg s "$sysmsg" --arg c "$ctx" \
   '{systemMessage: $s, suppressOutput: true,

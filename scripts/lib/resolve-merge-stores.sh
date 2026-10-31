@@ -320,9 +320,10 @@ gitlore_reconcile_one() {
     diverged)
       # The continuation commits with `add -A`, so uncommitted edits would ride
       # into the merge commit unapproved: refused first, as the take refuses.
-      # A tier's own edits (or moved gitlink) do not ride the root merge, so
-      # submodule changes are ignored; untracked files still count.
-      if [ -n "$(git -C "$store" status --porcelain --ignore-submodules=all)" ]; then
+      # A tier's own uncommitted edits do not ride the root merge, so in-tier
+      # dirt is ignored; a tier HEAD moved off the gitlink this store records
+      # would be staged by that `add -A`, so it counts, as untracked files do.
+      if [ -n "$(git -C "$store" status --porcelain --ignore-submodules=dirty)" ]; then
         gitlore_say_for_agent_or_user \
           "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them (approved summary, then a memory commit) and run /gitlore:merge or /gitlore:push again." \
           "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them and try again." >&2

@@ -102,9 +102,10 @@ the command is for when you want a topic looked up directly.
     /gitlore:resolve
 
 Repairs a memory store or tier that has drifted from its authoritative `live`.
-You rarely need to type it: memory has two gates — the pending commit against
-local `live`, and local `live` against the remote — and either one, on failing,
-prints a prepared-merge directive that Claude acts on by itself. A sub-agent
+You rarely need to type it: a memory commit that forks from local `live` exits
+0 and names `/gitlore:merge` and `/gitlore:push`, and whichever of those
+reconciles the fork, or meets a remote that moved, prints a prepared-merge
+directive that Claude acts on by itself. A sub-agent
 with fresh context synthesizes the merge, and you approve the summary before
 anything is committed.
 
@@ -116,5 +117,5 @@ Run it yourself in the cases where nothing is left to trigger on:
 - No divergence at all: run standalone it is a health check, and repairs a
   missing memory remote or an unpushed `live` on the spot.
 
-The same two gates and the same command apply to every mounted tier, not just
+The same reconcile and the same command apply to every mounted tier, not just
 the project's own memory.

@@ -103,10 +103,10 @@ emit_session_json() {
 # Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's
 # native auto-memory strands in ~/.claude/projects/<cwd>/memory instead of the submodule.
 if [ -z "${GITLORE_LAUNCHED:-}" ]; then
-  add_sysmsg "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install-launcher' if you don't use direnv), then restart Claude Code."
+  add_sysmsg "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install' if you don't use direnv, which installs the launcher shim globally), then restart Claude Code."
   protocol_ctx="$protocol_ctx
 
-gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or '/gitlore:install-launcher' (Placement B) and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
+gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or, without direnv, '/gitlore:install', which installs the global launcher shim (Placement B), and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
 fi
 
 # Hook dir + wrappers.

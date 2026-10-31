@@ -153,6 +153,18 @@ memory: record it again"
   assert_refused
 }
 
+@test "a section with no text under its header is refused" {
+  make_two_dirty_stores
+  # Whitespace only: a header alone is not an approved summary.
+  run --separate-stderr commit_with "== ddaanet ==
+memory: record the tier fact
+== memory ==
+   
+"
+  assert_refused
+  [[ "$stderr" == *"the section for 'memory' is empty"* ]]
+}
+
 @test "text before the first header is refused" {
   make_two_dirty_stores
   run --separate-stderr commit_with "a preamble that belongs to no store

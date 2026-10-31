@@ -92,12 +92,11 @@ forbids by role. Its cost is a sentinel on every commit site gitlore owns, a
 wrapper emitted into every store's hooks dir, a `gitlore.hooksDir` mirrored into
 every store's config, and a stale wrapper's "relaunch" hint whenever the plugin
 cache moves. `SessionStart` removes a store's `pre-commit` wrapper, and unsets
-the mirrored key, only when the hook is byte-identical to what the retired
-emitter wrote (the `wire-direct.sh` precedent of D58); any other `pre-commit` is
-the user's and stays. So the orientation is the only control between the agent
-and an authoring commit, and the entry says so rather than implying a backstop.
-A human committing inside the store meets nothing, as with any git repository
-they own.
+the mirrored key, only when the hook contains the retired wrapper's line
+`exec "$HOOKS_DIR/memory-pre-commit" "$@"`; any other `pre-commit` is the user's
+and stays. So the orientation is the only control between the agent and an
+authoring commit, and the entry says so rather than implying a backstop. A human
+committing inside the store meets nothing, as with any git repository they own.
 
 **The orientation carries the protocol, front-loaded.** `SessionStart` emits a
 standing `additionalContext` every gitlore session, carrying the commit as an
@@ -141,21 +140,23 @@ thin `exec` of `scripts/commit-memory.sh`, `scripts/push-memory.sh` or
 `scripts/merge-memory.sh` resolved from the file's own location. Claude Code
 puts each enabled plugin's `bin/` on the Bash tool's PATH, subagents included.
 That serves the callers that have no `CLAUDE_PLUGIN_ROOT`, the agent's own Bash
-first. The `handoff` plugin has not adopted the names: it still reads
-`gitlore.memoryApprovalClauseFile` and writes `.claude/gitlore-memory-message`
-and `.claude/gitlore-commit-memory`, the retired file protocol, until its own
-update. gitlore's own hooks have the variable and call `$PLUGIN_ROOT/scripts/…`:
-a hook that calls a bare `bin/` name works in dogfood, where the shim sets PATH
-on the whole process, and may fail once released. No `gitlore.*Command` key
-exists, so nothing is seeded at install or re-pinned at `SessionStart`, and no
-caller checks a resolved path is executable. PATH is fixed at session start, so
-a plugin update mid-session leaves the name on the old cache path until the next
-session. A disabled plugin makes the name "command not found"; whether gitlore
-manages memory in a repo is still read from the memory submodule registration in
-`.gitmodules` (FR12), never from the command's existence. The in-repo dogfood
-session gets the same names: `plugin-dev/bin/claude` appends
-`<root>/dist/plugin/bin` to PATH unconditionally, and `just dogfood` ships
-`bin/` there because `dist.include` lists it.
+first. The `handoff` plugin reaches memory commits through the skill, not a
+file: on a dirty memory submodule its checkpoint tells the agent to invoke
+`gitlore:commit`, and its parent commit records the gitlink `gitlore-commit`
+staged — so renaming the skill or changing that staging breaks handoff without
+an error. gitlore's own hooks have the variable and call
+`$PLUGIN_ROOT/scripts/…`: a hook that calls a bare `bin/` name works in dogfood,
+where the shim sets PATH on the whole process, and may fail once released. No
+`gitlore.*Command` key exists, so nothing is seeded at install or re-pinned at
+`SessionStart`, and no caller checks a resolved path is executable. PATH is
+fixed at session start, so a plugin update mid-session leaves the name on the
+old cache path until the next session. A disabled plugin makes the name "command
+not found"; whether gitlore manages memory in a repo is still read from the
+memory submodule registration in `.gitmodules` (FR12), never from the command's
+existence. The in-repo dogfood session gets the same names:
+`plugin-dev/bin/claude` appends `<root>/dist/plugin/bin` to PATH
+unconditionally, and `just dogfood` ships `bin/` there because `dist.include`
+lists it.
 
 ## Rejected alternatives
 

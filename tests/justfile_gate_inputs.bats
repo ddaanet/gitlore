@@ -47,6 +47,25 @@ load helpers/justfile-gates
   [[ "$output" == *"tests/integration_"* ]]
 }
 
+@test "each gate's inputs cover the files its suites read outside tests/" {
+  # A file a suite reads but its gate does not hash leaves the gate cached on a
+  # commit that changes only that file: plugin_bin.bats checks dist.include,
+  # commit_skill_template.bats and evals/lib/setup.bats read the commit skill,
+  # and plugin_distribution.bats compares .gitlore/bin/claude.
+  run guard_input_files test-unit
+  [ "$status" -eq 0 ]
+  grep -qxF dist.include <<<"$output"
+  grep -qxF skills/commit/SKILL.md <<<"$output"
+
+  run guard_input_files test-integration
+  [ "$status" -eq 0 ]
+  grep -qxF skills/commit/SKILL.md <<<"$output"
+
+  run guard_input_files check-distribution
+  [ "$status" -eq 0 ]
+  grep -qxF .gitlore/bin/claude <<<"$output"
+}
+
 @test "the lint gate's inputs cover the shell scripts under plans/, and only those" {
   # `lint-shell.sh` discovers every tracked shell file, `plans/` included, but a
   # gate whose hash leaves them out reports cached on the commit that edits one.
@@ -101,9 +120,7 @@ load helpers/justfile-gates
   # the rumdl pin/config are read by `format-docs`, which has no sentinel;
   # `TASK.md` and `TODO.md` are the handoff task frame, like `.claude`; the
   # shell scripts under `plans` reach the `lint` gate by pathspec instead.
-  # `dist.include` is read by the toolkit's dist build and dogfood sync, which
-  # no gate here runs.
-  excluded=" memory docs plans inbox README.md CLAUDE.md TASK.md TODO.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml dist.include "
+  excluded=" memory docs plans inbox README.md CLAUDE.md TASK.md TODO.md .claude .editorconfig .envrc pyproject.toml uv.lock .rumdl.toml "
   while IFS= read -r entry; do
     [[ "$declared" == *" $entry "* ]] || [[ "$excluded" == *" $entry "* ]] || {
       echo "top-level entry '$entry' is neither a declared gate input nor a deliberate exclusion" >&2

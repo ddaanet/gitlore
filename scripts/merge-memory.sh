@@ -39,7 +39,7 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 if [ $# -gt 0 ]; then
-  echo "usage: merge-memory.sh   (no arguments)" >&2
+  echo "usage: gitlore-merge   (no arguments)" >&2
   exit 2
 fi
 

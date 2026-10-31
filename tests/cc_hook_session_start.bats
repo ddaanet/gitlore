@@ -102,6 +102,11 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.systemMessage | test("direnv allow")'
   echo "$output" | jq -e '.hookSpecificOutput.hookEventName == "SessionStart"'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("GITLORE_LAUNCHED")'
+  # The no-direnv remedy is a command that exists: /gitlore:install.
+  for channel in .systemMessage .hookSpecificOutput.additionalContext; do
+    echo "$output" | jq -e "$channel | test(\"'/gitlore:install'\")"
+    echo "$output" | jq -e "$channel | test(\"install-launcher\") | not"
+  done
 }
 
 @test "clean launched session: success confirmation on systemMessage, no launcher warning (D14)" {

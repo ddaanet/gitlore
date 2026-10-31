@@ -175,3 +175,35 @@ HOOK
   [[ "$output$stderr" != *"(non-fast-forward)"* ]]
   [[ "$output$stderr" != *"(fetch first)"* ]]
 }
+
+# --- a tier push refused for missing credentials carries the hint ---
+
+@test "a tier push refused for missing https credentials prints a runnable SSH fix for that tier" {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live aa
+  publish_memory
+  advance_tier_past_remote aa
+  # The tier's origin reads as a GitHub https url, as a fresh clone's does;
+  # insteadOf routes the traffic to the local bare remote.
+  git -C memory/aa remote set-url origin https://github.com/acme/aa-memory.git
+  git -C memory/aa config "url.$TMP_REPO/.bare-aa.git.insteadOf" \
+    https://github.com/acme/aa-memory.git
+  # The bare remote refuses with git's own no-credential-helper text.
+  hook="$TMP_REPO/.bare-aa.git/hooks/pre-receive"
+  printf '%s\n' '#!/bin/sh' \
+    "echo \"fatal: could not read Username for 'https://github.com': terminal prompts disabled\" >&2" \
+    'exit 1' > "$hook"
+  chmod +x "$hook"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$output$stderr" == *"pushing tier 'aa' failed, and not because of divergence"* ]]
+  [[ "$output$stderr" == *"gh auth setup-git"* ]]
+  [[ "$output$stderr" != *"<owner>"* ]]
+  # The printed command runs as printed, from any directory, on this tier.
+  fix=$(printf '%s\n' "$output$stderr" | sed -n 's/.*put the clone back on SSH: //p')
+  [ -n "$fix" ]
+  (cd / && eval "$fix")
+  [ "$(git -C memory/aa config --get remote.origin.url)" = "git@github.com:acme/aa-memory.git" ]
+}

@@ -149,9 +149,9 @@ push has to reach for it unprompted, and only a description is matched against
 context. The body makes one call — `gitlore-push` — and reads the exit: `0`
 relays the report, a non-zero carrying `gitlore: memory merge prepared` loops
 through `/gitlore:resolve` and pushes again, any other non-zero is surfaced
-verbatim. A store whose remote is ahead exits `0` with a notice naming
-`/gitlore:merge`: it has nothing of its own to publish, and the commit the
-memory pointer records is already contained in the remote, so the lockstep
+verbatim. A store whose remote is ahead is taken in the run rather than left as
+a `/gitlore:merge` errand: it has nothing of its own to publish, and the commit
+the memory pointer records is already contained in the remote, so the lockstep
 holds.
 
 Every store is checked for HEAD and `live` naming the same commit *before*

@@ -47,12 +47,13 @@ data loss rather than dormancy. Each loop guards `[ -e "$tierpath/.git" ]`
 before any `git -C` — into an unchecked-out submodule that escapes to the
 enclosing repo, which would have committed *memory* under the tier's name and
 pushed memory's `live` to the tier's remote. Tier divergence surfaces at both
-gates — the pending commit against the tier's local `live` (`head-vs-live`) and
-local `live` against the tier's own remote (`head-vs-remote`) — is reported by
-tier name with git's own reason, and resolves through the same merge path as
-memory: each gate yields to `gitlore_yield_merge`, the state file names the
-store the merge was prepared in, and the continuation finds it by walking the
-stores ([workflows.md](workflows.md)).
+points — the pending commit against the tier's local `live` (`head-vs-live`,
+found by the reconcile in merge and push) and local `live` against the tier's
+own remote (`head-vs-remote`) — is reported by tier name with git's own reason,
+and resolves through the same merge path as memory: each yields to
+`gitlore_yield_merge`, the state file names the store the merge was prepared in,
+and the continuation finds it by walking the stores
+([workflows.md](workflows.md)).
 
 **D43 — A tier is pinned at its gitlink; advancing one is a merge**
 

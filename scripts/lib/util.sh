@@ -119,7 +119,7 @@ gitlore_has_submodule() {
 readonly GITLORE_PENDING_REF="refs/gitlore/pending"
 
 # Print abs path to the `.claude/` dir in the PARENT working tree that hosts the
-# memory IPC files (message, commit trigger, notified marker). Resolves the
+# memory IPC file (the add-tier intent). Resolves the
 # superproject working tree; falls back to the memory worktree's parent dir when
 # memory is not a registered submodule (or is detached). Relocated 2026-07-16
 # from the submodule gitdir so the agent can write these under auto mode — the

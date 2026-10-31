@@ -62,3 +62,31 @@ load helpers/commit-memory
   [ "$status" -eq 0 ]
   [ "$(git -C "$outer/proj/memory" log -1 --pretty=%s)" = "memory: add notes from a nested project" ]
 }
+
+# A hook-spawned or `!`-mode shell carries CLAUDE_PROJECT_DIR: it names the
+# launch repo, whatever directory the shell sits in.
+@test "a set CLAUDE_PROJECT_DIR wins over a cwd outside any worktree" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  elsewhere="$BATS_TEST_TMPDIR/elsewhere"
+  mkdir -p "$elsewhere"
+  cd "$elsewhere"
+  run ! git rev-parse --show-toplevel
+
+  CLAUDE_PROJECT_DIR="$TMP_REPO" run --separate-stderr commit_with "== memory ==
+memory: add notes via the project dir"
+  [ "$status" -eq 0 ]
+  [ "$(git -C "$TMP_REPO/memory" log -1 --pretty=%s)" = "memory: add notes via the project dir" ]
+}
+
+@test "a CLAUDE_PROJECT_DIR that cannot be entered commits nothing and says so" {
+  make_parent_with_memory
+  echo dirty > memory/notes.md
+  head_before=$(git -C memory rev-parse HEAD)
+
+  CLAUDE_PROJECT_DIR="$BATS_TEST_TMPDIR/no-such-project" run --separate-stderr commit_with "== memory ==
+memory: add notes"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"nothing was committed: the project directory '$BATS_TEST_TMPDIR/no-such-project' cannot be entered"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+}

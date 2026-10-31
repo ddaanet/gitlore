@@ -7,6 +7,11 @@ set -euo pipefail
 # `cd` echoes its resolved target on stdout and the capture takes two lines.
 unset CDPATH
 
+# commit-memory.sh and the hooks enter CLAUDE_PROJECT_DIR when it is set, so a
+# value inherited from the caller's shell would take a run out of its fixture
+# into that project. A test that needs it sets it itself.
+unset CLAUDE_PROJECT_DIR
+
 # The suites assert with `[[ … == *glob* ]]`, and under bash < 4.1 a failing
 # non-final `[[ ]]` does not fail a bats test, so a run there reports green for
 # assertions it never checked. Refused here, where every suite loads, rather

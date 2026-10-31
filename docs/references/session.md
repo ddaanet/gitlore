@@ -75,9 +75,7 @@ has no memory submodule entry, no-op.
 2. **Re-pin the plugin-path key** `gitlore.hooksDir`, so a plugin upgrade heals
    itself.
 3. **Emit the wrapper** `gitlore-pre-push` and the `gitlore-pre-commit` stub
-   into the git common dir, and remove the retired store gate's `pre-commit`
-   wrapper from the memory store and each tier (D70). Idempotent and
-   worktree-agnostic (D11).
+   into the git common dir. Idempotent and worktree-agnostic (D11).
 4. **Replay the hook-manager sentinel** to reinstate wiring after a clone or a
    new machine (`direct` and `manual` are keywords; the three manager commands
    are matched as literals and nothing else is run, D45 — see Hook Manager
@@ -88,9 +86,11 @@ has no memory submodule entry, no-op.
    since the branch model references `live` as a local ref — never from
    `origin/live`, which may be ahead of the gitlink (D59).
 6. **Detach in place and report where memory stands.** HEAD is detached without
-   moving, and `report_memory_position` states where it sits against local
-   `live` and against the remote's `live` (D59, below). It moves nothing and is
-   never fatal; the pass continues whatever it reports.
+   moving. The retired store gate's `pre-commit` wrapper is then removed from
+   the memory store and each checked-out tier (D70). `report_memory_position`
+   states where it sits against local `live` and against the remote's `live`
+   (D59, below). It moves nothing and is never fatal; the pass continues
+   whatever it reports.
 7. **Repair a missing root index.** A store with no `MEMORY.md` — an install
    seeded from an auto-memory dir that existed but held nothing committed an
    empty tree — gets the `# Memory Index` scaffold written back as an

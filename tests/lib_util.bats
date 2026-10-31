@@ -118,12 +118,29 @@ EOF
   done
 }
 
-@test "gitlore_push_credentials_hint names both fixes and the clone's path" {
+@test "gitlore_push_credentials_hint prints both fixes, the SSH one runnable as printed" {
+  git init -q "my memory"
+  git -C "my memory" remote add origin https://github.com/acme/team-memory.git
   run gitlore_push_credentials_hint "my memory"
   [ "$status" -eq 0 ]
   [[ "$output" == *"gh auth setup-git"* ]]
-  [[ "$output" == *'git -C "my memory" remote set-url origin git@github.com:<owner>/<repo>.git'* ]]
   [[ "$output" != *"gh auth status"* ]]
+  [[ "$output" != *"<owner>"* ]]
+  fix=${output#*put the clone back on SSH: }
+  [ "$fix" != "$output" ]
+  # Owner and repo come from the store's own origin; the path is absolute, so
+  # the command works from anywhere.
+  (cd / && eval "$fix")
+  [ "$(git -C "my memory" config --get remote.origin.url)" = "git@github.com:acme/team-memory.git" ]
+}
+
+@test "gitlore_push_credentials_hint offers no SSH command it cannot fill in" {
+  git init -q store
+  git -C store remote add origin https://example.com/acme/team-memory.git
+  run gitlore_push_credentials_hint store
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gh auth setup-git"* ]]
+  [[ "$output" != *"set-url"* ]]
 }
 
 @test "gitlore_parent_visibility defaults to private with no origin" {

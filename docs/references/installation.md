@@ -239,10 +239,13 @@ one `.gitmodules` value that is matched, by basename, because
 `git submodule sync` or a fresh clone sets the submodule's remote to the https
 `.gitmodules` url; that is the clone's own remote, and pushing from it needs
 https credentials, which an SSH key does not supply and a passing
-`gh auth status` does not imply. The memory push-failure hint names the two
-fixes: `gh auth setup-git`, which registers gh as git's credential helper, or
+`gh auth status` does not imply. The push-failure hint, for memory and for each
+tier, names the two fixes: `gh auth setup-git`, which registers gh as git's
+credential helper, or
 `git -C <path> remote set-url origin git@github.com:<owner>/<repo>.git`, which
-puts that clone back on SSH. Nothing rewrites a clone's remote automatically.
+puts that clone back on SSH and is printed only when the store's origin is a
+GitHub https url, with the store's absolute path and the owner and repo read
+from that url filled in. Nothing rewrites a clone's remote automatically.
 Existing installs keep the url they have; nothing rewrites a `.gitmodules` after
 the install that wrote it.
 

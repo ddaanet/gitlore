@@ -34,7 +34,7 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 
 if [ $# -gt 0 ]; then
-  echo "usage: push-memory.sh   (no arguments; FR11 approval happened at commit time)" >&2
+  echo "usage: gitlore-push   (no arguments; FR11 approval happened at commit time)" >&2
   exit 2
 fi
 

@@ -170,7 +170,7 @@ gitlore_push_stores() {
               # below; one to a later tier goes out with that tier's own push.
               if ! git -C "$tierpath" merge-base --is-ancestor live origin/live; then
                 if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
-                  gitlore_report_tier_push_failure "$tier" "$tier_err"
+                  gitlore_report_tier_push_failure "$tier" "$tier_err" "$tierpath"
                   return 1
                 fi
               fi
@@ -187,13 +187,13 @@ gitlore_push_stores() {
               # origin/live, or with a ref that could not be read. Nothing here
               # is a merge: preparing one against a stale authority would send
               # out a merge missing the work that caused the refusal.
-              gitlore_report_tier_push_failure "$tier" "$tier_err"
+              gitlore_report_tier_push_failure "$tier" "$tier_err" "$tierpath"
               return 1
               ;;
           esac
           ;;
         *)
-          gitlore_report_tier_push_failure "$tier" "$tier_err"
+          gitlore_report_tier_push_failure "$tier" "$tier_err" "$tierpath"
           ;;
       esac
       return 1
@@ -215,7 +215,7 @@ gitlore_push_stores() {
     git -C "$tierpath" rev-parse -q --verify live >/dev/null || continue
     if ! git -C "$tierpath" merge-base --is-ancestor live origin/live; then
       if ! tier_err=$(gitlore_git -C "$tierpath" push -q origin live 2>&1); then
-        gitlore_report_tier_push_failure "$tier" "$tier_err"
+        gitlore_report_tier_push_failure "$tier" "$tier_err" "$tierpath"
         return 1
       fi
     fi
@@ -326,9 +326,17 @@ $push_err" >&2
 # divergence (fetch first / non-fast-forward) reaches here only once ancestry
 # has left nothing to merge, so it means the remote moved during the push, or
 # the fetch before it failed; anything else is not divergence.
-# Args: $1 = tier name, $2 = git's stderr from the failed push.
+# A credentials failure gets the same hint as memory's push: a fresh clone's
+# tier remotes are https too, and the tiers are pushed first.
+# Args: $1 = tier name, $2 = git's stderr from the failed push,
+#       $3 = the tier's path.
 gitlore_report_tier_push_failure() {
-  local tier="$1" tier_err="$2"
+  local tier="$1" tier_err="$2" tierpath="$3"
+  case "$tier_err" in
+    *"could not read Username"*|*"Authentication failed"*|*"terminal prompts disabled"*)
+      tier_err="$tier_err
+$(gitlore_push_credentials_hint "$tierpath")" ;;
+  esac
   case "$tier_err" in
     *"(fetch first)"*|*"(non-fast-forward)"*)
       gitlore_say_for_agent_or_user \
