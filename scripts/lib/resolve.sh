@@ -10,8 +10,9 @@
 #
 # The library is split into resolve-*.sh parts, each function-only and safe
 # to source twice, that this file sources after its own two lines above:
-#   resolve-recovery.sh     repair a stale merge-state file (lost MERGE_HEAD,
+#   resolve-recovery.sh     classify a stale merge-state file (lost MERGE_HEAD,
 #                            a checkout-cleared staged merge)
+#   resolve-recovery-repair.sh repair the landed, adopted and staged outcomes
 #   resolve-merge-state.sh  merge-state file IO and the sub-agent directive
 #   resolve-merge-prepare.sh prepare a memory merge against its authority,
 #                            then yield it to the merger
@@ -31,6 +32,8 @@ source "${BASH_SOURCE[0]%/*}/index-compose.sh"
 source "${BASH_SOURCE[0]%/*}/index-merge.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-recovery.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-recovery-repair.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-merge-state.sh"
 # shellcheck disable=SC1091
