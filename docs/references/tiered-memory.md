@@ -216,9 +216,13 @@ directly, the intent in its existing `key=value` format on stdin through a
 quoted heredoc, as `gitlore-commit` takes its summary. The intent file and
 `add-tier-batch.sh` retire. D32's mount/create convergence and its
 activate-as-last-step stand; the script keeps the url scheme allowlist, because
-the input is still agent-supplied, and composes and reports itself. After its
-compose it refreshes the compose stamp, so the `PostToolBatch` index-compose
-hook does not report the same manifest change again at the end of the batch.
+the input is still agent-supplied, and composes and reports itself. The mount's
+compose report reaches the agent once per mount, though the `PostToolBatch`
+index-compose hook still sees the manifest change at the end of the batch. How
+that is achieved is open, settled when the script is written: the compose stamp
+the hook keys on is named by an agent id that reaches hooks only
+(`scripts/lib/index-sync.sh`), so a script called from Bash cannot refresh it
+for a subagent.
 
 *The network and the sandbox (probe, Claude Code 2.1.316).* From the agent's
 command sandbox, `git submodule add` of a GitHub https url, `git submodule add`
