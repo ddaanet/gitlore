@@ -1,6 +1,6 @@
 # add-tier as a direct call with a canned commit — plan
 
-Status: awaiting approval by my human partner. Base: `dev`.
+Status: done. Base: `dev`.
 
 ## Why
 

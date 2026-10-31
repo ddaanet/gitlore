@@ -7,6 +7,10 @@ design is [design.md](design.md).
 Newest first. Entries older than 2026-07-31 are indexed in
 [changelog-archive.md](changelog-archive.md).
 
+- [2026-10-31 — add-tier is a direct call that commits a clean mount](changelog/2026-10-31-add-tier-is-a-direct-call-that-commits-a-clean-mount.md)
+  — `/gitlore:add-tier` runs `gitlore-add-tier` sandboxed with the intent on
+  stdin; a mount into a clean store commits itself under a canned message; the
+  intent file and the add-tier `PostToolBatch` hook retire (D71, D32's routing)
 - [2026-10-30 — Memory commits take the summary in the call](changelog/2026-10-30-memory-commits-take-the-summary-in-the-call.md)
   — the agent commits memory through the `gitlore:commit` skill, the summary on
   `gitlore-commit`'s stdin, one section per store (D70); D4, D12, D53, D54 and
