@@ -195,7 +195,6 @@ empirical work that established it, which is why they stay whole.
 [cc-platform.md](references/cc-platform.md)
 
 - **D15** — an in-process-worktree memory-drift guard
-- **D18** — active recall is a skill the agent runs itself: no hook, no state
 - **D23** — the `Edit` weld defect is contained by a pair that computes the
   intended result, repairs, and reports its own obsolescence
 - **D51** — a hook's output inside a subagent reaches that subagent alone, so
@@ -204,16 +203,22 @@ empirical work that established it, which is why they stay whole.
 - **D60** — a `PostToolBatch` hook that dies reports on both channels and exits
   0; when it cannot report, it exits non-zero but never 2
 
+*Rejected:* leaving a subagent's hook report to the subagent's own narration ·
+one shared marker per agent that each reporting hook merges into · a drain
+inside each reporting hook · claim-by-rename before reading · folding another
+session's stranded reports at `SessionStart` · relaying in place of the
+subagent's own emission · exit 1 passthrough alone · a fixed message with no
+capture · per-site `|| exit 0` · a wrapper script in `hooks.json` · rewriting
+every non-zero status to 1 · a mount report with a line saying composition did
+not run, via `gitlore_compose_and_report` under `if !`.
+
+**Active recall** — why recall is a skill the agent runs itself, not a hook.
+[active-recall.md](references/active-recall.md)
+
+- **D18** — active recall is a skill the agent runs itself: no hook, no state
+
 *Rejected:* hook-side injection of the bodies from a request file the agent
-writes · a `PreToolUse` deny on the first durable write of an episode · leaving
-a subagent's hook report to the subagent's own narration · one shared marker per
-agent that each reporting hook merges into · a drain inside each reporting hook
-· claim-by-rename before reading · folding another session's stranded reports at
-`SessionStart` · relaying in place of the subagent's own emission · exit 1
-passthrough alone · a fixed message with no capture · per-site `|| exit 0` · a
-wrapper script in `hooks.json` · rewriting every non-zero status to 1 · a mount
-report with a line saying composition did not run, via
-`gitlore_compose_and_report` under `if !`.
+writes · a `PreToolUse` deny on the first durable write of an episode.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
 the opening summary of each node: retrieval and routing (D26–D28, D32, D33, D71)
