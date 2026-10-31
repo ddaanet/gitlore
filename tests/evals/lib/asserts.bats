@@ -18,7 +18,7 @@ source "$BATS_TEST_DIRNAME/../../helpers/eval-asserts.bash"
 # The end state after the user approved the `== memory ==` summary: the staged
 # mount committed through the skill and gitlore-commit.
 _make_add_tier_committed_state() {
-  _make_add_tier_end_state
+  _make_add_tier_end_state pending
   SUMMARY='== memory ==
 memory: mount the acme tier'
   _commit_approved
@@ -69,7 +69,7 @@ memory: mount the acme tier'
 }
 
 @test "add-tier: fails when the mount was never committed" {
-  _make_add_tier_end_state
+  _make_add_tier_end_state pending
   _write_commit_transcript "$_SKILL_COMMIT" "$_BASH_COMMIT"
   _run_assert add-tier
   assert_fails "memory never moved"
@@ -78,7 +78,7 @@ memory: mount the acme tier'
 # Memory moved, but without the mount: the commit carries an unrelated file and
 # the mount's staged paths are left behind.
 @test "add-tier: fails when a commit left the mount out" {
-  _make_add_tier_end_state
+  _make_add_tier_end_state pending
   git -C "$EVAL_REPO/memory" reset -q -- .gitmodules .gitlore-tiers acme
   printf 'x\n' > "$EVAL_REPO/memory/other.md"
   git -C "$EVAL_REPO/memory" add other.md

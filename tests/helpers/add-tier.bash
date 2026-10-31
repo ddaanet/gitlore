@@ -17,8 +17,10 @@ setup() {
 }
 teardown() { teardown_tmp_repo; }
 
-# Write the add-tier intent file where the script looks for it.
+# Write the add-tier intent to a file outside the repo; the suites hand it to
+# the script on stdin (`run bash "$ADD_TIER" < "$INTENT"`), as the agent's
+# quoted heredoc does.
 write_intent() {
-  mkdir -p .claude
-  printf '%s\n' "$@" > .claude/gitlore-add-tier
+  INTENT="$BATS_TEST_TMPDIR/intent"
+  printf '%s\n' "$@" > "$INTENT"
 }

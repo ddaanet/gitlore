@@ -41,7 +41,7 @@ route_to_bare() {
   route_to_bare "git@github.com:acme/ddaanet-memory.git" "$bare"
   write_intent "mode=mount" "name=ddaanet" "url=git@github.com:acme/ddaanet-memory.git"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   [ "$(git config --file memory/.gitmodules --get submodule.ddaanet.url)" = "https://github.com/acme/ddaanet-memory.git" ]
@@ -58,7 +58,7 @@ route_to_bare() {
   route_to_bare "https://github.com/acme/ddaanet-memory.git" "$bare"
   write_intent "mode=mount" "name=ddaanet" "url=https://github.com/acme/ddaanet-memory.git"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [ "$(git config --file memory/.gitmodules --get submodule.ddaanet.url)" = "https://github.com/acme/ddaanet-memory.git" ]
   [ "$(git -C memory/ddaanet config --get remote.origin.url)" = "https://github.com/acme/ddaanet-memory.git" ]
@@ -70,7 +70,7 @@ route_to_bare() {
   route_to_bare "git@git.example.org:acme/ddaanet-memory.git" "$bare"
   write_intent "mode=mount" "name=ddaanet" "url=git@git.example.org:acme/ddaanet-memory.git"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [ "$(git config --file memory/.gitmodules --get submodule.ddaanet.url)" = "git@git.example.org:acme/ddaanet-memory.git" ]
 }
@@ -84,7 +84,7 @@ route_to_bare() {
   route_to_bare "$GH_MOCK_REMOTE_URL" "$bare"
   write_intent "mode=create" "name=orgwide" "description=org facts"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   [ "$(git config --file memory/.gitmodules --get submodule.orgwide.url)" = "https://github.com/alice/orgwide-memory.git" ]
@@ -102,7 +102,7 @@ route_to_bare() {
   route_to_bare "$GH_MOCK_REMOTE_URL" "$bare"
   write_intent "mode=create" "name=orgwide" "description=org facts"
 
-  run --separate-stderr bash "$ADD_TIER"
+  run --separate-stderr bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$stderr" | grep -c 'is private but this repository is public')" -eq 1 ]
   [[ "$stderr" == *"git@github.com:alice/orgwide-memory.git"* ]]
@@ -118,7 +118,7 @@ route_to_bare() {
   route_to_bare "$GH_MOCK_REMOTE_URL" "$bare"
   write_intent "mode=create" "name=orgwide" "description=org facts"
 
-  run --separate-stderr bash "$ADD_TIER"
+  run --separate-stderr bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [[ "$stderr" != *"is private but this repository is public"* ]]
 }
@@ -131,7 +131,7 @@ route_to_bare() {
   route_to_bare "git@github.com:acme/ddaanet-memory.git" "$bare"
   write_intent "mode=mount" "name=ddaanet" "url=git@github.com:acme/ddaanet-memory.git"
 
-  run --separate-stderr bash "$ADD_TIER"
+  run --separate-stderr bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$stderr" | grep -c 'is private but this repository is public')" -eq 1 ]
 }
@@ -144,7 +144,7 @@ route_to_bare() {
   route_to_bare "git@github.com:acme/ddaanet-memory.git" "$bare"
   write_intent "mode=mount" "name=ddaanet" "url=git@github.com:acme/ddaanet-memory.git"
 
-  run --separate-stderr bash "$ADD_TIER"
+  run --separate-stderr bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [[ "$stderr" != *"is private but this repository is public"* ]]
 }
@@ -157,7 +157,7 @@ route_to_bare() {
   route_to_bare "git@github.com:acme/ddaanet-memory.git" "$bare"
   write_intent "mode=mount" "name=ddaanet" "url=git@github.com:acme/ddaanet-memory.git"
 
-  run --separate-stderr bash "$ADD_TIER"
+  run --separate-stderr bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [[ "$stderr" != *"is private but this repository is public"* ]]
 }

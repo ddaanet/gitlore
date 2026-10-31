@@ -21,13 +21,11 @@ source "$BATS_TEST_DIRNAME/../../helpers/eval-asserts.bash"
 @test "tier-write: fails when the fact went to project memory instead of the tier" {
   _make_memory
   ( cd "$EVAL_REPO" && bash "$SETUPS/tier-remote.sh" ) >/dev/null
-  cat > "$EVAL_REPO/.claude/gitlore-add-tier" <<EOF
+  ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" bash "$PLUGIN_ROOT/scripts/add-tier.sh" ) >/dev/null <<EOF
 mode=mount
 name=acme
 url=$EVAL_REPO/.tier-remote.git
 EOF
-  ( cd "$EVAL_REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" bash "$PLUGIN_ROOT/scripts/add-tier.sh" ) >/dev/null
-  rm -f "$EVAL_REPO/.claude/gitlore-add-tier"
 
   printf -- '---\nname: x\n---\n\nbody\n' > "$EVAL_REPO/memory/reference_sentry_dsn.md"
   _run_assert tier-write

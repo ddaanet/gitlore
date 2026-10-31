@@ -68,7 +68,7 @@ intent=$(gitlore_add_tier_file "$mempath")
 agent_id=$(jq -r '.agent_id // empty' <<<"$payload") || agent_id=""
 
 rc=0
-out=$(bash "$PLUGIN_ROOT/scripts/add-tier.sh" 2>&1) || rc=$?
+out=$(bash "$PLUGIN_ROOT/scripts/add-tier.sh" < "$intent" 2>&1) || rc=$?
 rm -f "$intent"
 
 if [ "$rc" -eq 0 ]; then

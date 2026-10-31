@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # scripts/add-tier.sh — mount (or create then mount) a memory tier. D17 3-iii.
-# Intent-file parsing, validation, and url transport bounds.
+# Intent parsing (stdin), validation, and url transport bounds.
 # Each @test is its own subshell; per-test exports are consumed within that same
 # test, so SC2030/SC2031 are false positives here.
 # shellcheck disable=SC2030,SC2031
@@ -19,7 +19,7 @@ load helpers/add-tier
   write_intent "mode=mount" "name=ddaanet" "url=$bare" \
     "description=facts where a=b holds, spaces and all"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 }
 
@@ -28,7 +28,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare" "descripton=typo"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"unknown intent key"* ]]
   [ ! -e memory/ddaanet ]
@@ -38,7 +38,7 @@ load helpers/add-tier
   make_parent_with_memory
   write_intent "mode=mount" "just some prose"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"line 2"* ]]
 }
@@ -48,16 +48,60 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "# what this tier is for" "" "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [ -e memory/ddaanet/.git ]
 }
 
-@test "add-tier: a missing intent file fails without touching the store" {
+@test "add-tier: an empty intent on stdin fails naming the heredoc form, without touching the store" {
   make_parent_with_memory
-  run bash "$ADD_TIER"
+  before=$(git -C memory rev-parse HEAD)
+
+  run bash "$ADD_TIER" </dev/null
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no add-tier intent file"* ]]
+  [[ "$output" == *"<<'"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$before" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+}
+
+# A terminal on stdin means the caller forgot the heredoc; a read would hang the
+# call waiting for typed input. The script runs under a pty so `[ -t 0 ]` holds.
+@test "add-tier: a terminal on stdin fails naming the heredoc form instead of waiting" {
+  make_parent_with_memory
+  before=$(git -C memory rev-parse HEAD)
+
+  # A deadline inside the driver (no `timeout` on macOS): a script that reads
+  # the terminal instead of refusing it is killed and fails the test, rather
+  # than hanging the gate.
+  run python3 -I -c '
+import os, pty, select, sys, time
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp("bash", ["bash", sys.argv[1]])
+deadline = time.time() + float(sys.argv[2])
+out = b""
+while True:
+    left = deadline - time.time()
+    if left <= 0 or not select.select([fd], [], [], left)[0]:
+        os.kill(pid, 9)
+        os.waitpid(pid, 0)
+        sys.stdout.write("TIMEOUT: script waited on the terminal\n")
+        sys.exit(124)
+    try:
+        chunk = os.read(fd, 4096)
+    except OSError:
+        break
+    if not chunk:
+        break
+    out += chunk
+_, st = os.waitpid(pid, 0)
+sys.stdout.buffer.write(out)
+sys.exit(os.WEXITSTATUS(st))
+' "$ADD_TIER" 10
+  [ "$status" -ne 124 ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"<<'"* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$before" ]
 }
 
 # --- validation ------------------------------------------------------------
@@ -65,7 +109,7 @@ load helpers/add-tier
 @test "add-tier: an unknown mode is refused" {
   make_parent_with_memory
   write_intent "mode=borrow" "name=ddaanet" "url=x"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"unknown mode"* ]]
 }
@@ -73,7 +117,7 @@ load helpers/add-tier
 @test "add-tier: mount without a url is refused" {
   make_parent_with_memory
   write_intent "mode=mount" "name=ddaanet"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"url="* ]]
 }
@@ -81,7 +125,7 @@ load helpers/add-tier
 @test "add-tier: create without a description is refused" {
   make_parent_with_memory
   write_intent "mode=create" "name=ddaanet" "url=x"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"description="* ]]
 }
@@ -89,7 +133,7 @@ load helpers/add-tier
 @test "add-tier: a name containing a slash is refused" {
   make_parent_with_memory
   write_intent "mode=mount" "name=org/ddaanet" "url=x"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"slash"* ]]
 }
@@ -97,7 +141,7 @@ load helpers/add-tier
 @test "add-tier: a name containing whitespace is refused (the manifest could never list it)" {
   make_parent_with_memory
   write_intent "mode=mount" "name=two words" "url=x"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"whitespace"* ]]
   [ ! -e "memory/two words" ]
@@ -108,7 +152,7 @@ load helpers/add-tier
   make_tier_in_memory ddaanet
   write_intent "mode=mount" "name=ddaanet" "url=$TMP_REPO/.bare-ddaanet.git"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"already"* ]]
 }
@@ -117,7 +161,7 @@ load helpers/add-tier
   make_parent_with_memory
   mkdir memory/ddaanet
   write_intent "mode=mount" "name=ddaanet" "url=x"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"already exists"* ]]
 }
@@ -133,7 +177,7 @@ load helpers/add-tier
   make_parent_with_memory
   write_intent "mode=mount" "name=ddaanet" "url=ext::sh -c 'touch $TMP_REPO/PWNED'"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"transport helper"* ]]
   [ ! -e "$TMP_REPO/PWNED" ]
@@ -143,7 +187,7 @@ load helpers/add-tier
 @test "add-tier: an unknown url scheme is refused" {
   make_parent_with_memory
   write_intent "mode=mount" "name=ddaanet" "url=ftp://example.com/repo.git"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"scheme"* ]]
 }
@@ -151,7 +195,7 @@ load helpers/add-tier
 @test "add-tier: a url starting with '-' is refused (git would read it as an option)" {
   make_parent_with_memory
   write_intent "mode=mount" "name=ddaanet" "url=--upload-pack=touch"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"option"* ]]
 }
@@ -160,7 +204,7 @@ load helpers/add-tier
   make_parent_with_memory
   write_intent "mode=create" "name=orgwide" "url=ext::sh -c 'touch $TMP_REPO/PWNED'" \
     "description=org facts"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"transport helper"* ]]
   [ ! -e "$TMP_REPO/PWNED" ]
@@ -175,7 +219,7 @@ load helpers/add-tier
   for u in "https://127.0.0.1:1/x.git" "ssh://git@127.0.0.1:1/x.git" \
            "git@127.0.0.1:x.git" "git://127.0.0.1:1/x.git"; do
     write_intent "mode=mount" "name=t" "url=$u"
-    run bash "$ADD_TIER"
+    run bash "$ADD_TIER" < "$INTENT"
     [ "$status" -ne 0 ]                       # connection refused, of course
     [[ "$output" == *"submodule add failed"* ]]   # …but it got past the guard
   done
@@ -185,7 +229,7 @@ load helpers/add-tier
   make_parent_with_memory
   write_intent "mode=mount" "name=ddaanet" "url=$TMP_REPO/.no-such-remote.git"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"submodule add failed"* ]]
   [ ! -e memory/ddaanet ]
@@ -195,9 +239,8 @@ load helpers/add-tier
 
 @test "add-tier: refuses when the repo has no memory submodule" {
   # Bare repo from setup_tmp_repo, no memory.
-  mkdir -p .claude
-  printf 'mode=mount\nname=x\nurl=y\n' > .claude/gitlore-add-tier
-  run bash "$ADD_TIER"
+  write_intent "mode=mount" "name=x" "url=y"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"memory submodule"* ]]
 }

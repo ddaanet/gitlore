@@ -204,37 +204,10 @@ if [ "$root_content" = "1" ]; then
   grep -Fqx -- memory <<<"$headers" || refuse "the root store has changes beyond its tiers and no 'memory' section"
 fi
 
-# Stage the memory gitlink into the superproject index (D58) when this run moved
-# memory HEAD. A no-op run stages nothing. The staging is skipped during a replay
-# (rebase, cherry-pick, revert): a replayed commit must keep the pointer it
-# recorded, and the memory worktree does not move when the parent's HEAD does.
-stage_memory_pointer() {
-  local mempath="$1" super top rel p name op err
-  super=$(git -C "$mempath" rev-parse --show-superproject-working-tree)
-  [ -n "$super" ] || return 0
-  top=$(git -C "$mempath" rev-parse --show-toplevel)
-  rel="${top#"$super"/}"
-  # Marker list: path:operation. A merge is deliberately absent — it is authored now.
-  for marker in rebase-merge:rebase rebase-apply:rebase \
-                CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert; do
-    name="${marker%%:*}"
-    p=$(git -C "$super" rev-parse --git-path "$name")
-    case "$p" in /*) ;; *) p="$super/$p" ;; esac
-    if [ -e "$p" ]; then
-      op="${marker##*:}"
-      echo "gitlore: $op in progress — skipping the staging of the memory pointer; stage it yourself once the $op is done." >&2
-      return 0
-    fi
-  done
-  if ! err=$(git -C "$super" add -- "$rel" 2>&1); then
-    echo "gitlore: memory was committed, but its pointer could not be staged in the parent (git: $err). The pointer floats until you stage it." >&2
-  fi
-}
-
 memory_before=$(git -C "$mempath" rev-parse HEAD)
 gitlore_sync_memory_to_live "$mempath" "$summary" || exit 1
 memory_after=$(git -C "$mempath" rev-parse HEAD)
 if [ "$memory_before" != "$memory_after" ]; then
-  stage_memory_pointer "$mempath"
+  gitlore_stage_memory_pointer "$mempath"
 fi
 exit 0

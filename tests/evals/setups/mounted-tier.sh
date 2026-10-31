@@ -6,7 +6,7 @@
 # lockstep with memory.
 #
 # The mount goes through the production scripts/add-tier.sh, driven by the same
-# intent file the agent writes. A hand-rolled `submodule add` here would be a
+# stdin intent the agent passes. A hand-rolled `submodule add` here would be a
 # second, drifting definition of what a mounted tier looks like; if add-tier.sh
 # breaks, this fixture should fail loudly rather than paper over it.
 set -euo pipefail
@@ -17,14 +17,11 @@ PLUGIN_ROOT="${PLUGIN_ROOT:-$(cd "$SETUPS_DIR/../../.." && pwd)}"
 
 bash "$SETUPS_DIR/tier-remote.sh"
 
-cat > .claude/gitlore-add-tier <<EOF
+CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" bash "$PLUGIN_ROOT/scripts/add-tier.sh" >/dev/null <<EOF
 mode=mount
 name=acme
 url=$PWD/.tier-remote.git
 EOF
-
-CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" bash "$PLUGIN_ROOT/scripts/add-tier.sh" >/dev/null
-rm -f .claude/gitlore-add-tier
 
 [ -e memory/acme/.git ] || { echo "fixture: acme tier did not mount" >&2; exit 1; }
 
@@ -59,6 +56,9 @@ fi
 git -C memory/acme branch -f live HEAD
 git -C memory/acme checkout -q --detach live
 
+# A clean store already holds the mount: add-tier.sh committed it (D71).
 git -C memory add -A
-git -C memory commit -q -m "Mount and activate the acme tier"
+if ! git -C memory diff --cached --quiet; then
+  git -C memory commit -q -m "Mount and activate the acme tier"
+fi
 git -C memory branch -f live HEAD

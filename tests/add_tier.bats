@@ -24,7 +24,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   [ -e memory/ddaanet/.git ]
@@ -39,7 +39,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   git -C memory/ddaanet show-ref --verify --quiet refs/heads/live
@@ -62,27 +62,10 @@ load helpers/add-tier
   push_tier_fact ddaanet "- [x](x.md) — from live" >/dev/null
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
-}
-
-@test "add-tier: mount makes NO commit inside the memory store" {
-  make_parent_with_memory
-  before=$(git -C memory rev-parse HEAD)
-  bare=$(make_tier_remote ddaanet)
-  write_intent "mode=mount" "name=ddaanet" "url=$bare"
-
-  run bash "$ADD_TIER"
-  [ "$status" -eq 0 ]
-
-  # Nothing is committed in memory; the staged .gitmodules is already
-  # enough for discovery, which reads the working tree.
-  [ "$(git -C memory rev-parse HEAD)" = "$before" ]
-  run gitlore_tier_paths memory
-  [ "$status" -eq 0 ]
-  [ "$output" = "ddaanet" ]
 }
 
 @test "add-tier: mount activates the tier as its own final step" {
@@ -90,7 +73,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   # The intent already named this exact tier — no separate deliberate edit
@@ -107,7 +90,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   # Lowest precedence: never outranks a tier this repo already trusted.
@@ -123,7 +106,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   [ "$(cat memory/.gitlore-tiers)" = "$(printf 'existing\nddaanet')" ]
@@ -137,7 +120,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"org-wide facts for ddaanet projects"* ]]
 }
@@ -147,7 +130,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet live shared)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   # Repo-root relative, so appending it verbatim to CLAUDE.md resolves.
@@ -160,7 +143,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   # A dangling `@` import loads nothing and says nothing, so the line is
@@ -174,23 +157,11 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet live shared)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   # Same tier as the positive above; only CLAUDE.md differs.
   [[ "$output" != *"Append to CLAUDE.md"* ]]
-}
-
-@test "add-tier: mount consumes nothing — the caller owns the intent file" {
-  make_parent_with_memory
-  bare=$(make_tier_remote ddaanet)
-  write_intent "mode=mount" "name=ddaanet" "url=$bare"
-
-  run bash "$ADD_TIER"
-  [ "$status" -eq 0 ]
-  # The hook consumes it; keeping that in one place means a direct run is
-  # repeatable and the hook's one-shot rule is testable on its own.
-  [ -f .claude/gitlore-add-tier ]
 }
 
 @test "add-tier: a tier remote with no live branch mounts with a warning, not a failure" {
@@ -198,7 +169,7 @@ load helpers/add-tier
   bare=$(make_tier_remote ddaanet nolive)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [ -e memory/ddaanet/.git ]
   [[ "$output" == *"warnings"* ]]
@@ -214,7 +185,7 @@ load helpers/add-tier
   write_intent "mode=create" "name=orgwide" "url=$TMP_REPO/.new-tier.git" \
     "description=Cross-project facts shared by all org repositories"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   # Default branch main with live alongside — a live default would be checked
@@ -241,7 +212,7 @@ load helpers/add-tier
   write_intent "mode=create" "name=orgwide" "url=$TMP_REPO/.new-tier.git" \
     "description=$desc"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   run gitlore_get_frontmatter_description memory/orgwide/MEMORY.md
   [ "$status" -eq 0 ]
@@ -255,7 +226,7 @@ load helpers/add-tier
   write_intent "mode=create" "name=orgwide" "url=$TMP_REPO/.new-tier.git" \
     "description=org facts"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
   [ "$(cat memory/.gitlore-tiers)" = "orgwide" ]
   [[ "$output" == *"activated"* ]]
@@ -266,7 +237,7 @@ load helpers/add-tier
   write_intent "mode=create" "name=orgwide" "url=$TMP_REPO/.no-such-remote.git" \
     "description=org facts"
 
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"could not push"* ]]
   [ ! -e memory/orgwide ]
@@ -278,7 +249,7 @@ load helpers/add-tier
   make_parent_with_memory
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
-  run bash "$ADD_TIER"
+  run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -eq 0 ]
 
   run gitlore_active_tiers memory

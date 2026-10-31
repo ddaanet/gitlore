@@ -50,9 +50,19 @@ run_bare() {
   [[ "$output" == *"nothing to reconcile"* ]]
 }
 
-@test "bin: the retired -memory names are gone and exactly the three short names ship" {
+@test "bin: gitlore-add-tier is executable and reaches add-tier.sh" {
+  [ -x "$PLUGIN_ROOT/bin/gitlore-add-tier" ]
+  # A non-gitlore repo with no stdin: add-tier.sh's own refusal.
+  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-add-tier"
+  [ "$status" -ne 126 ]
+  [ "$status" -ne 127 ]
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gitlore: add-tier failed"* ]]
+}
+
+@test "bin: the retired -memory names are gone and exactly the four short names ship" {
   for old in gitlore-commit-memory gitlore-push-memory gitlore-merge-memory; do
     [ ! -e "$PLUGIN_ROOT/bin/$old" ]
   done
-  [ "$(find "$PLUGIN_ROOT/bin" -mindepth 1 -maxdepth 1 -exec basename {} \; | LC_ALL=C sort | paste -sd, -)" = "gitlore-commit,gitlore-merge,gitlore-push" ]
+  [ "$(find "$PLUGIN_ROOT/bin" -mindepth 1 -maxdepth 1 -exec basename {} \; | LC_ALL=C sort | paste -sd, -)" = "gitlore-add-tier,gitlore-commit,gitlore-merge,gitlore-push" ]
 }

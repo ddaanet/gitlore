@@ -2,9 +2,10 @@
 # Mount (or create then mount) a memory tier: a submodule inside the memory
 # submodule. D17 slice 3-iii, the doer behind `/gitlore:add-tier`.
 #
-# Reads the intent from the add-tier IPC file so the agent never runs git — the
-# same route as the FR11 commit path, and doubly necessary here because mounting
-# CLONES and the agent's command sandbox has no network.
+# The intent arrives on stdin from a direct agent call: a quoted heredoc to
+# gitlore-add-tier. The agent runs this in its command sandbox, with the url's
+# host in allowed_domains (D71), because mounting clones the tier over the
+# network. The agent never runs git itself.
 #
 # Activates the tier as its own final step — appends it to
 # memory/.gitlore-tiers, lowest precedence (bottom of the file). The intent
@@ -14,10 +15,11 @@
 # presence means it should be active). Reordering afterward, or listing a tier
 # mounted by hand, stays a plain manual edit to the file.
 #
-# It also makes no commit inside the memory store: gitlore_tier_paths reads
-# memory/.gitmodules from the WORKING TREE, so a staged `submodule add` is
-# already discoverable and nothing is committed here — the
-# manifest write is the same kind of working-tree-only edit.
+# Then it composes the root index and reports the size, and commits itself on a
+# clean memory store: one canned `== memory ==` commit on live, with the memory
+# gitlink staged in the parent. A store with pending work keeps the mount staged
+# for the next gitlore:commit. The compose baselines a batch hook took for this
+# run are refreshed last, so the hooks do not report the same mount twice.
 set -euo pipefail
 unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
 
@@ -27,59 +29,46 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # gitlore_get_frontmatter_description, to echo the tier's routing guidance back.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
+# gitlore_compose_and_report, gitlore_sync_memory_to_live, gitlore_stage_memory_pointer.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
+# check_url.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/add-tier-url.sh"
+
+# Temp paths this run owns: the create branch's seed repo and the pre-run copy
+# of MEMORY.md. One EXIT trap covers both on every exit, including the die paths.
+seed=""
+pre_index=""
+# shellcheck disable=SC2317  # reached only through the EXIT trap set below
+cleanup() {
+  [ -z "$seed" ] || rm -rf "$seed"
+  [ -z "$pre_index" ] || rm -f "$pre_index"
+}
+trap cleanup EXIT
 
 die() { printf 'gitlore: add-tier failed — %s\n' "$1" >&2; exit 1; }
-
-# Refuse any url that is not a plain transport or a local path.
-#
-# Not a shell-injection guard — the url is a quoted argument after `--`, never
-# interpolated. It bounds which git TRANSPORT the url can select. Git's own
-# `protocol.ext.allow` already defaults to `never` (2.47.3: `fatal: transport
-# 'ext' not allowed`), so `ext::sh -c …` is dead out of the box; this makes that
-# independent of the user's git config, and closes the same class for any other
-# `helper::address` transport.
-#
-# It matters here more than in an ordinary script because this runs from a HOOK,
-# outside the agent's command sandbox and with network. A url the agent hands us
-# would otherwise reach further than one the agent could use itself, which is
-# exactly the escalation the sandbox exists to prevent.
-check_url() {
-  local url="$1" head rest
-  case "$url" in
-    "")   die "empty url." ;;
-    -*)   die "url '$url' starts with '-'; git would read it as an option." ;;
-    /*|./*|../*) return 0 ;;                     # local path
-  esac
-  case "$url" in
-    *:*) head="${url%%:*}"; rest="${url#*:}" ;;
-    *)   die "url '$url' is neither a path nor a remote; use https://, ssh://, git@host:path, or an absolute path." ;;
-  esac
-  case "$rest" in
-    //*)
-      head=$(printf '%s' "$head" | tr '[:upper:]' '[:lower:]')
-      case "$head" in
-        http|https|ssh|git|file) return 0 ;;
-        *) die "url scheme '$head' is not allowed; use https, ssh, git, or file." ;;
-      esac ;;
-    :*)
-      # `helper::address` — git's remote-helper form, of which `ext::` runs a
-      # shell command. Never needed to reach a tier remote.
-      die "url '$url' selects the git transport helper '$head'; that form is not allowed." ;;
-    *)
-      # scp-like [user@]host:path — a host has no slash and no whitespace.
-      case "$head" in
-        ""|*[/[:space:]]*) die "url '$url' is not a usable remote." ;;
-        *) return 0 ;;
-      esac ;;
-  esac
+no_intent() {
+  die "no intent on stdin; pass it through a quoted heredoc: gitlore-add-tier <<'EOF' ... EOF"
 }
 
 gitlore_has_submodule || die "this repo has no gitlore memory submodule; run /gitlore:install first."
 mempath=$(gitlore_memory_path)
 [ -e "$mempath/.git" ] || die "the memory submodule is not checked out here."
 
-intent=$(gitlore_add_tier_file "$mempath")
-[ -f "$intent" ] || die "no add-tier intent file at $intent."
+# A terminal on stdin means no intent was piped: refuse rather than block on it.
+if [ -t 0 ]; then no_intent; fi
+
+# Before any write: whether the store was clean (a clean store gets the canned
+# commit below), and the compose baselines this run must account for.
+pending=$(git -C "$mempath" status --porcelain)
+pre_stamp=$(gitlore_compose_stamp "$mempath/MEMORY.md" "$mempath/.gitlore-tiers")
+pre_index_ok=0
+if [ -f "$mempath/MEMORY.md" ]; then
+  pre_index=$(mktemp "${TMPDIR:-/tmp}/gitlore-add-tier-index.XXXXXX")
+  cp "$mempath/MEMORY.md" "$pre_index"
+  pre_index_ok=1
+fi
 
 # ---------------------------------------------------------------- parse intent
 # `key=value`, value is the REST OF THE LINE verbatim — a description carries
@@ -87,13 +76,14 @@ intent=$(gitlore_add_tier_file "$mempath")
 # trimmed. Unknown keys are an error, not a silent drop: a typo'd `descripton=`
 # would otherwise seed a tier with no routing guidance at all.
 mode="" name="" url="" description=""
-lineno=0
+lineno=0 seen=0
 while IFS= read -r line || [ -n "$line" ]; do
   lineno=$((lineno + 1))
   line="${line#"${line%%[![:space:]]*}"}"
   line="${line%"${line##*[![:space:]]}"}"
   [ -n "$line" ] || continue
   case "$line" in \#*) continue ;; esac
+  seen=1
   case "$line" in
     *=*) key="${line%%=*}"; value="${line#*=}" ;;
     *)   die "intent line $lineno is not key=value: $line" ;;
@@ -107,7 +97,8 @@ while IFS= read -r line || [ -n "$line" ]; do
     description) description="$value" ;;
     *)           die "unknown intent key '$key' on line $lineno." ;;
   esac
-done < "$intent"
+done
+[ "$seen" = 1 ] || no_intent
 
 # ------------------------------------------------------------------ validation
 case "$mode" in
@@ -167,11 +158,6 @@ if [ "$mode" = "create" ]; then
   fi
 
   seed=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-tier-seed.XXXXXX")
-  # Covers every exit from here on, not just the two explicit failure branches
-  # below: `git init`/`add`/`commit`/`branch`/`remote add` are unchecked under
-  # top-level `set -e`, so any of them failing would otherwise abort with $seed
-  # leaked.
-  trap 'rm -rf "$seed"' EXIT
   # `-b main`: the tier remote's default branch MUST stay `main` with `live`
   # alongside. A `live` default gets checked out AS A BRANCH by the mount, and
   # the ff-only `fetch origin live:live` then refuses to update a checked-out
@@ -201,7 +187,7 @@ if [ "$mode" = "create" ]; then
     die "pushed main but not live to $url. git said: $push_err"
   fi
   rm -rf "$seed"
-  trap - EXIT
+  seed=""
 fi
 
 # ---------------------------------------------------------------- mount branch
@@ -315,4 +301,60 @@ fi
 printf '%s\n' "$name" >> "$manifest"
 printf 'gitlore: activated — appended to %s/.gitlore-tiers (lowest precedence; reorder the file by hand to change that).\n' \
   "$mempath"
+
+# Compose the root index over the new active set. Measured after the compose,
+# so the size is the file the session will load.
+gitlore_compose_and_report "$mempath" 1
+if [ -n "$GITLORE_COMPOSE_SYSMSG" ]; then printf '%s\n' "$GITLORE_COMPOSE_SYSMSG"; fi
+if [ -n "$GITLORE_COMPOSE_CTX" ]; then printf '%s\n' "$GITLORE_COMPOSE_CTX"; fi
+size_line=$(gitlore_index_mount_size_line "$mempath/MEMORY.md") || size_line=""
+if [ -n "$size_line" ]; then printf '%s\n' "$size_line"; fi
+
+# Commit on a clean store, as the one canned commit the mount owes: the mount
+# message, the tier's routing description, then the memory gitlink staged in the
+# parent. A store with pending work keeps the mount staged for its own commit.
+if [ -z "$pending" ]; then
+  if [ "$mode" = "create" ]; then
+    head_line="create $name tier at $url"
+  else
+    head_line="mount $name tier from $url"
+  fi
+  summary="== memory ==
+$head_line"
+  if [ -n "$desc" ]; then summary="$summary
+
+$desc"; fi
+  gitlore_sync_memory_to_live "$mempath" "$summary" || \
+    die "the mount is staged, but its commit was refused. See the message above."
+  gitlore_stage_memory_pointer "$mempath"
+else
+  git -C "$mempath" add -- .gitlore-tiers || \
+    die "could not stage $manifest after the mount."
+  printf 'gitlore: the memory store held uncommitted work before this mount, so the mount is left staged for the next gitlore:commit.\n'
+fi
+
+# Refresh the compose baselines this run's batch took, keyed by an agent id this
+# script cannot see. The PostToolBatch hooks would otherwise report the mount a
+# second time. A baseline equal to the pre-run state was taken by the batch
+# running this call, so it is moved to the post-run state: that stops the second
+# report, and still catches that agent's later edits. A differing baseline
+# belongs to another batch and is left alone. Only existing files are rewritten:
+# none is created or deleted.
+gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir)
+post_stamp=$(gitlore_compose_stamp "$mempath/MEMORY.md" "$mempath/.gitlore-tiers")
+# The unmatched-glob case: a pattern with no file stays literal and fails -f.
+for f in "$gitdir/gitlore-compose-stamp" "$gitdir/gitlore-compose-stamp-"*; do
+  [ -f "$f" ] || continue
+  if printf '%s\n' "$pre_stamp" | cmp -s - "$f"; then
+    printf '%s\n' "$post_stamp" > "$f"
+  fi
+done
+if [ "$pre_index_ok" = 1 ] && [ -f "$mempath/MEMORY.md" ]; then
+  for f in "$gitdir/gitlore-index-preimage" "$gitdir/gitlore-index-preimage-"*; do
+    [ -f "$f" ] || continue
+    if cmp -s "$pre_index" "$f"; then
+      cp "$mempath/MEMORY.md" "$f"
+    fi
+  done
+fi
 exit 0
