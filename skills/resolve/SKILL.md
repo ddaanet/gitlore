@@ -10,7 +10,7 @@ You are resolving a gitlore memory submodule from divergence.
 
 ## Entry mode
 
-**Commit-triggered**: A merge path already emitted a merge directive — `gitlore-merge` or `gitlore-push`, whose reconcile prepares the merge — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
+**Commit-triggered**: A merge path already emitted a merge directive — `gitlore-merge` or `gitlore-push`, whose reconcile prepares the merge, or the `pre-push` hook on a store diverged from its remote — and it is visible in the output that caused you to invoke this skill. Proceed directly to **Parse directive**.
 
 **Standalone** (user ran `/gitlore:resolve` or state is unclear): Run the resolver:
 

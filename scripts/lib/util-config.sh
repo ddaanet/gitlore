@@ -173,7 +173,7 @@ gitlore_push_credentials_hint() {
     */*) ;;
     *) printf '.'; return 0 ;;
   esac
-  abs=$(cd "$store" && pwd -P) || abs="$store"
+  abs=$(git -C "$store" rev-parse --show-toplevel) || abs="$store"
   printf ', or put the clone back on SSH: git -C %q remote set-url origin git@github.com:%s.git' "$abs" "$path"
 }
 
