@@ -32,7 +32,7 @@ An inverted or retired decision follows the same rule. It is deleted from
 keeps the text. The decision's number is not reused, so a gap in the D-numbers
 is a retirement and nothing else. A reader looking for a deleted decision finds
 it with `git log -S` on its number, and a deleted record with
-`git log -- docs/changelog/`, then
+`git log -- docs/changelog.md docs/changelog-archive.md docs/changelog/`, then
 `git show <deleting-commit>^:docs/changelog/<file>`, the deleting commit being
 the one whose body gives that recovery.
 

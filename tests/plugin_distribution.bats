@@ -111,8 +111,8 @@ load helpers/setup
   grep -qF 'Skill(gitlore:memory-writing)' "$PLUGIN_ROOT/commands/add-tier.md"
 }
 
-# Regression: resolve is a SELF-TRIGGERING skill, not a command (design.md:181 has said
-# so since it gained its commit-triggered entry mode; only the file location
+# Regression: resolve is a SELF-TRIGGERING skill, not a command (the Skills bullet
+# of design.md's Architecture has said so since it gained its commit-triggered entry mode; only the file location
 # lagged). A command is invoked deliberately by
 # the user, but resolve's dominant entry is mechanical -- the agent must reach for
 # it on its own when a commit or push emits `gitlore: memory merge prepared`, and

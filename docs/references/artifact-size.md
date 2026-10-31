@@ -116,8 +116,8 @@ run on every commit would need the network and a key, and its verdict would
 shift under a tokenizer version with no edit to the tree. Lines are exact, free
 and reproducible, and the wrap already ties them to tokens for prose.
 
-**Leaving the rule outside `docs/` a convention with no checker.** Nothing
-notices when a script crosses 400 lines again. Every file that regressed would
+**Leaving the rule outside `docs/` a convention with no checker.** Nothing would
+notice when a script crossed 400 lines again. Every file that regressed would
 regress silently, and the next reader to hit one would have no evidence a rule
 had ever applied.
 
