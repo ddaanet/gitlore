@@ -217,9 +217,9 @@ report with a line saying composition did not run, via
 `gitlore_compose_and_report` under `if !`.
 
 **Tiered memory** — D17 is the call; the subsystem's own decisions conclude in
-the opening summary of each node: retrieval and routing (D26–D28, D32, D33) in
-[tiered-memory.md](references/tiered-memory.md), composition (D29–D31, D34–D37,
-D57) in [index-composition.md](references/index-composition.md), the
+the opening summary of each node: retrieval and routing (D26–D28, D32, D33, D71)
+in [tiered-memory.md](references/tiered-memory.md), composition (D29–D31,
+D34–D37, D57) in [index-composition.md](references/index-composition.md), the
 authoring-time sync (D38–D40) in
 [index-authoring-sync.md](references/index-authoring-sync.md), the authoring
 guidance with its invocation and its owner inventory (D47, D48, D69) in
@@ -256,7 +256,10 @@ directories on the next repair (tier-arrival-repair.md) · leaving the
 pointer-removal rule to recall from D36 (index-drift-fixes.md) · listing the
 sibling repositories' plugins at each gate instead of holding a list · the route
 alone, with no inventory · an index line for the inventory fact · a general
-memory reviewer (memory-authoring-guidance.md).
+memory reviewer (memory-authoring-guidance.md) · keeping the add-tier intent
+file and hook with a canned commit added · the agent running `gitlore-commit`
+with a canned mount summary · a rubric-graded mount summary · the add-tier
+intent as `--options` or JSON arguments (tiered-memory.md).
 
 **Artifact size** — the 400-line cap over everything a reader takes in at one
 go, and the check that gates it.

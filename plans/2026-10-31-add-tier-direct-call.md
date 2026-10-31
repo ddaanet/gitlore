@@ -22,9 +22,11 @@ commits applies: no unapproved content, intention already expressed.
 
 ## Decisions to record (D71, in `docs/references/tiered-memory.md`)
 
-- `/gitlore:add-tier` calls `gitlore-add-tier` directly, the intent on its
-  arguments; the intent file and `add-tier-batch.sh` retire. Supersedes D32's
-  routing; D32's mount/create convergence and activate-as-last-step stand.
+- `/gitlore:add-tier` calls `gitlore-add-tier` directly, the intent in its
+  existing `key=value` format on stdin through a quoted heredoc, as
+  `gitlore-commit` takes its summary; the intent file and `add-tier-batch.sh`
+  retire. Supersedes D32's routing; D32's mount/create convergence and
+  activate-as-last-step stand.
 - The mount commits itself in the memory root under a canned message, and stages
   the moved memory gitlink in the parent like the commit path does. Subject
   `mount <tier> tier from <url>` (create: `create <tier> tier at <url>`), body
@@ -38,7 +40,8 @@ commits applies: no unapproved content, intention already expressed.
   commit added (a hook commit sits against D70's wording for no gain) · the
   agent running `gitlore-commit` with a canned summary (an approval round with
   no content) · a rubric-graded mount summary (grades behaviour the skill does
-  not specify).
+  not specify) · the intent as `--options` or JSON arguments (shell quoting of a
+  free-text description, and a new parser for the one that exists).
 
 ## Probe before step 1
 
@@ -57,14 +60,14 @@ Each step is one commit, gated by `just precommit`, reviewed at medium.
    lines and rejected names) and its argument into `tiered-memory.md`; mark
    D32's routing paragraph superseded. `docs/design.md` Architecture lines that
    describe the intent file and the `PostToolBatch` add-tier hook are restated.
-2. **Script.** `bin/gitlore-add-tier` entry point; `scripts/add-tier.sh` takes
-   the intent from arguments instead of the IPC file, keeps the url scheme
-   allowlist (input is still agent-supplied), composes and reports itself (the
-   helper `add-tier-batch.sh` calls today), and ends with the canned commit
+2. **Script.** `bin/gitlore-add-tier` entry point; `scripts/add-tier.sh` reads
+   the intent from stdin instead of the IPC file, same parser, keeps the url
+   scheme allowlist (input is still agent-supplied), composes and reports itself
+   (the helper `add-tier-batch.sh` calls today), and ends with the canned commit
    carrying only its own staged paths, then stages the parent gitlink. Red tests
-   first, per behaviour: arguments drive the mount; pending memory work is left
-   uncommitted; the commit carries exactly the mount; the parent gitlink is
-   staged; the url refusal still fires.
+   first, per behaviour: the stdin intent drives the mount; pending memory work
+   is left uncommitted; the commit carries exactly the mount; the parent gitlink
+   is staged; the url refusal still fires.
 3. **Retire the hook.** Delete `add-tier-batch.sh`, its `hooks/hooks.json`
    entry, the intent filename in `.gitignore`, and every reference: the
    `git grep -E 'gitlore-add-tier|add-tier-batch'` list outside

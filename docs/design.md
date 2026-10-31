@@ -177,11 +177,9 @@ activation flag, the launcher shim and `.envrc`, the hook-manager sentinel, the
 tier manifest (D30) — travels with the repo. The one git-config key,
 `gitlore.hooksDir`, is per-clone and machine-local, points at the installed
 plugin, and is re-pinned every `SessionStart`, which is what makes it
-self-healing (D5). The one IPC file, the add-tier intent, is a transient
-handshake between the agent and a hook, and sits in the parent working tree
-rather than a gitdir because a gitdir write is blocked by the CC sandbox and
-read as self-configuration by the auto-mode classifier. Every file and key is in
-[configuration.md](references/configuration.md).
+self-healing (D5). No IPC file remains: every agent-to-script hand-off, the
+add-tier intent included, travels as stdin to a `bin/` entry point (D70, D71).
+Every file and key is in [configuration.md](references/configuration.md).
 
 ### Memory Redirect Launcher
 
@@ -201,16 +199,17 @@ path and launches unredirected, with one stderr line saying why, when
 The components divide by who invokes them: the user or the agent reach the
 commands and skills, git fires the one git hook, Claude Code fires the rest, and
 the two entry points are callable by any of them. What they share is the
-NFR1/NFR4 split — the agent writes prose or an intent file, a script does the
-git and decides (D7).
+NFR1/NFR4 split — the agent writes prose or an intent on stdin, a script does
+the git and decides (D7).
 
 - **Commands** — `/gitlore:install`, one-time idempotent setup that runs from
   the **main worktree** only and leaves the remote, submodule, settings keys,
   launcher and hook wiring staged for the user to commit
   ([installation.md](references/installation.md)); and `/gitlore:add-tier`,
-  which mounts an existing shared tier or creates a new one by writing an intent
-  file a `PostToolBatch` hook acts on, because the agent can do neither half
-  itself (D32, in [tiered-memory.md](references/tiered-memory.md)); and
+  which mounts an existing shared tier or creates a new one by calling
+  `gitlore-add-tier` directly, the intent as `key=value` lines on stdin through
+  a quoted heredoc; the mount commits itself under a canned message (D32, D71,
+  in [tiered-memory.md](references/tiered-memory.md)); and
   `/gitlore:index-audit`, the store-wide curation pass, a command because a
   human decides to run it (D47, in
   [memory-authoring-guidance.md](references/memory-authoring-guidance.md)).
@@ -233,13 +232,12 @@ git and decides (D7).
   most work; it is also where a new worktree's memory worktree is created,
   lazily, so worktree support is uniform however the worktree came to be (no
   `WorktreeCreate` hook; `WorktreeRemove` tears it down, advisory only). The
-  rest are single-purpose: `PostToolBatch` acts on the add-tier intent file and
-  reports a mid-session plugin upgrade (D21), the `PreToolUse`/`PostToolBatch`
-  index pair keys on what changed rather than on what the call declared (D31),
-  per agent so a parent batch cannot consume a subagent's baseline, a
-  `PostToolBatch` relay drainer delivers — as `SessionStart` does at a
-  compaction or resume — the reports hooks write from inside a subagent, whose
-  own output reaches nobody else (D51), and
+  rest are single-purpose: `PostToolBatch` reports a mid-session plugin upgrade
+  (D21), the `PreToolUse`/`PostToolBatch` index pair keys on what changed rather
+  than on what the call declared (D31), per agent so a parent batch cannot
+  consume a subagent's baseline, a `PostToolBatch` relay drainer delivers — as
+  `SessionStart` does at a compaction or resume — the reports hooks write from
+  inside a subagent, whose own output reaches nobody else (D51), and
   `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
   drift (D15); `SessionStart(startup|clear|compact)` re-arms the
   once-per-episode notices. Each `PostToolBatch` hook calls one shared guard

@@ -1,4 +1,4 @@
-# Tiered memory — decisions D17, D26–D28, D32, D33
+# Tiered memory — decisions D17, D26–D28, D32, D33, D71
 
 The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17 points
 at. Motivation, FR15 itself and the Architecture overview live in `design.md`;
@@ -20,7 +20,7 @@ and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
 gitlore's *composition* of the root index. The mechanism is a subsystem rather
 than a single call, so its decisions are recorded individually as
-**D26–D40, D42–D44, D47, D48, D52, D57 and D69**, across this node and five
+**D26–D40, D42–D44, D47, D48, D52, D57, D69 and D71**, across this node and five
 siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
@@ -28,6 +28,9 @@ siblings:
 - Retrieval and routing, here — **D26** the root index one-liner is canonical ·
   **D27** materialization by enclosure · **D28** routing without a content
   classifier · **D32** mount and create · **D33** a tier's always-on conventions
+  · **D71** add-tier is a direct call with the intent on stdin, run sandboxed
+  with the url's host in `allowed_domains`, the mount committing itself under a
+  canned message
 - Composition, in [index-composition.md](index-composition.md) — **D29**
   composition is placement · **D30** the tier manifest · **D31** compose
   triggers and validation · **D34** presence authority · **D35** the welded-line
@@ -142,18 +145,18 @@ stands up `ddaanet`): init an empty module, seed its `MEMORY.md` + frontmatter
 path. The window where the module exists but does not yet self-describe is
 unobservable outside the script, since both modes converge before either commits
 to the manifest. `/gitlore:add-tier` performs the mount, with a `mode=create`
-path for the creation flow. It routes its git through the same trigger-file
-pattern as the FR11 commit path — the agent writes `.claude/gitlore-add-tier`
-(`key=value` lines: `mode`, `name`, `url`, `description`) and a `PostToolBatch`
-hook runs `scripts/add-tier.sh` on its behalf. Two independent reasons the agent
-cannot run it itself: the auto-mode classifier reads a submodule mutation as
-self-modification, **and** mounting clones while the agent's command sandbox has
-no network — a hook runs outside both. The intent is one-shot (consumed whether
-it succeeds or fails), because an add-tier failure is a bad url or a taken name,
-not a transient lock worth retrying. Because the hook has network and no
-sandbox, the url is bounded to a scheme allowlist before git sees it — the
-`helper::address` transport form (`ext::`, which runs a shell command) is
-refused outright rather than left to git's `protocol.ext.allow` default.
+path for the creation flow (`key=value` lines: `mode`, `name`, `url`,
+`description`).
+
+*Routing superseded by D71.* D32 routed the git through an intent file
+`.claude/gitlore-add-tier` and a `PostToolBatch` hook that ran
+`scripts/add-tier.sh`, on two reasons: the auto-mode classifier reads a
+submodule mutation as self-modification, and the agent's command sandbox has no
+network. D71 retires that route; the convergence, the activation and the url
+allowlist stand. The url is bounded to a scheme allowlist before git sees it —
+the `helper::address` transport form (`ext::`, which runs a shell command) is
+refused outright rather than left to git's `protocol.ext.allow` default, since
+the url is agent-supplied.
 
 **The url the mount records (D64, D65).** `submodule add` runs on the url as
 given, so the tier's own `remote.origin.url` — the one pushes go through — keeps
@@ -172,16 +175,13 @@ Changing visibility is never done from here.
 Both modes end by **appending `name` to `memory/.gitlore-tiers`** — activating
 the tier at the bottom, the lowest precedence, the position that cannot outrank
 a tier this repo already trusts, and reorderable by hand afterwards. Neither
-mode commits inside memory: `gitlore_tier_paths` reads `memory/.gitmodules` from
-the working tree, so a staged `submodule add` is already discoverable and the
-FR11 gate stays the sole committer — the manifest write is the same kind of
-working-tree-only edit. `add-tier-batch.sh` calls `gitlore_compose_and_report`
-directly on a successful mount, folding the recompose and the post-mount triage
-nudge into the one JSON response it emits, then drops the compose stamp so the
-same manifest change is not reported twice in one batch. The nudge names the
-`memory-writing` skill rather than restating its tier test, and fires on any
-manifest change — including a hand edit that never ran the command, which is why
-the trigger lives there and not only in the command body (D48).
+mode makes the mount discoverable by committing: `gitlore_tier_paths` reads
+`memory/.gitmodules` from the working tree, so a staged `submodule add` is
+already discoverable, and the manifest write is the same kind of working-tree
+edit. The commit that records the mount is D71's. The post-mount triage nudge
+names the `memory-writing` skill rather than restating its tier test, and fires
+on any manifest change — including a hand edit that never ran the command, which
+is why the trigger lives in the hook and not only in the command body (D48).
 
 **D33 — A tier may carry always-on conventions, and the mount reports the import
 line rather than writing it**
@@ -202,6 +202,47 @@ file and drop the rules the repo's own `CLAUDE.md` now duplicates — the shared
 file occupies the scope between a repo's `CLAUDE.md` and the user's
 `~/.claude/CLAUDE.md` — and that is judgement, not detection.
 
+**D71 — add-tier is a direct call, and the mount commits itself under a canned
+message**
+
+D32 justified the intent-file route by two reasons. D70 already answered both
+for push and commit. The classifier objection does not survive an explicit
+command: `/gitlore:add-tier` is what the user asked for. A denied call has moved
+nothing, so recovery is one turn. The intent file strands nothing a denial could
+lose, and it is one-shot anyway. So `/gitlore:add-tier` calls `gitlore-add-tier`
+directly, the intent in its existing `key=value` format on stdin through a
+quoted heredoc, as `gitlore-commit` takes its summary. The intent file and
+`add-tier-batch.sh` retire. D32's mount/create convergence and its
+activate-as-last-step stand; the script keeps the url scheme allowlist, because
+the input is still agent-supplied, and composes and reports itself.
+
+*The network and the sandbox (probe, Claude Code 2.1.316).* From the agent's
+command sandbox, `git submodule add` of a GitHub https url, `git submodule add`
+of an ssh url, and `git push --dry-run` to a GitHub ssh remote are each denied
+by the sandbox's network proxy (`github.com:443` or `github.com:22`) unless the
+Bash call lists the host in `allowed_domains`, and all succeed with it listed.
+Writes to `.git` and the memory store's git dir succeed sandboxed. So the call
+runs sandboxed, with the url's host in `allowed_domains`, and a run denied on
+another host is re-run with that host added; `dangerouslyDisableSandbox` is not
+needed. `allowed_domains` applies in auto mode; in other modes the denial goes
+through the ordinary sandbox-retry permission prompt.
+
+*The canned commit.* The mount then handed off to `gitlore:commit` for an
+approved summary that had nothing to say: every staged change (`.gitmodules`,
+`.gitlore-tiers`, the tier gitlink, composed index lines the tier's publishers
+already approved) follows mechanically from the request. D49's argument for
+canned merge commits applies: no unapproved content, intention already
+expressed. The mount commits itself in the memory root under a canned message
+and stages the moved memory gitlink in the parent, as the commit path does. The
+subject is `mount <tier> tier from <url>` (create:
+`create <tier> tier at <url>`), the body the tier's routing description.
+
+*Only what the mount staged.* The canned commit carries exactly the paths the
+mount staged. Memory work pending before the call stays pending for the ordinary
+approved commit — D43's staged-pair discipline, as D49 applies it. Step 3 triage
+moves, local facts routed into the tier, are judgement and keep the
+`gitlore:commit` approval path.
+
 ## Rejected alternatives
 
 **A flat merge-everything store** (one shared directory for all repos). Blows
@@ -214,3 +255,18 @@ into the root index (D29).
 reasoning on the write path to inspect a fact's content. Where to file a fact
 you are already authoring is a generation choice: the agent picks the directory,
 the directory is the submodule (D28).
+
+**Keeping the add-tier intent file and hook, with a canned commit added.** A
+commit made by a hook sits against D70's wording — no hook makes an authoring
+commit — for no gain, since the direct call already runs.
+
+**The agent running `gitlore-commit` with a canned mount summary.** An approval
+round with no content: the summary would restate the request that was already
+approved.
+
+**A rubric-graded mount summary.** Grades behaviour the skill does not specify,
+once the mount no longer asks the agent for a summary.
+
+**The add-tier intent as `--options` or JSON arguments.** Shell quoting of a
+free-text description, and a new parser, for an intent whose `key=value` parser
+already exists.
