@@ -29,18 +29,19 @@ each consumer verifies the resolved path before using it rather than trusting
 the key (D5). The three entry points are reached by the plugin `bin/` names
 `gitlore-commit`, `gitlore-push` and `gitlore-merge`, which need no key (D70).
 
-**Hook-owned state — the store's gitdir.** The agent must *not* write it, so it
-lives in the store's gitdir, which the agent's tools cannot write: the
-once-per-session `gitlore-budget-nudged-<session>` and
-`gitlore-upgrade-nudged-<session>` markers, the merge-state file, the index
-pair's per-batch baselines `gitlore-index-preimage[-<agent>]` and
-`gitlore-compose-stamp[-<agent>]` (D31, suffixed by the agent id inside a
-subagent), a tier's `gitlore-tier-landing` record of the commit a tier commit
-started from (D50), and the relay reports
-`gitlore-relay-<session>-<agent>-<epoch>-<pid>-<tag>` — one per report a hook
-staged from inside a subagent, built at `<name>.tmp`, removed by the drain that
-delivers it to the parent (`relay-drain.sh`, or `SessionStart` folding it into
-its own report) or by the seven-day sweep (D51).
+**Hook-owned state — the store's gitdir.** The hooks and the `bin/` scripts
+write it and the agent never edits it directly, so it lives in the store's
+gitdir rather than the working tree: the once-per-session
+`gitlore-budget-nudged-<session>` and `gitlore-upgrade-nudged-<session>`
+markers, the merge-state file, the index pair's per-batch baselines
+`gitlore-index-preimage[-<agent>]` and `gitlore-compose-stamp[-<agent>]` (D31,
+suffixed by the agent id inside a subagent; `add-tier.sh` moves any it finds
+equal to its pre-run state to the post-mount state), a tier's
+`gitlore-tier-landing` record of the commit a tier commit started from (D50),
+and the relay reports `gitlore-relay-<session>-<agent>-<epoch>-<pid>-<tag>` —
+one per report a hook staged from inside a subagent, built at `<name>.tmp`,
+removed by the drain that delivers it to the parent (`relay-drain.sh`, or
+`SessionStart` folding it into its own report) or by the seven-day sweep (D51).
 
 > **No `autoMemoryDirectory` in project settings.** Project-level
 > `.claude/settings.json` and `.claude/settings.local.json` honor only an

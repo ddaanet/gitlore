@@ -89,9 +89,11 @@ batch end if either stamp moved. A tool call is a poor proxy in both directions
 names its target at all, which is why the `PreToolUse` matcher is
 `Write|Edit|Bash` and a Bash call takes the baseline unconditionally. Two paths
 reach the same `gitlore_compose_and_report` call: that stamp comparison, and
-`/gitlore:add-tier`'s activation write, which happens inside `add-tier.sh` after
-the baseline was taken and so cannot be attributed to a tool call —
-`add-tier.sh` calls the function directly, right after a successful mount.
+`/gitlore:add-tier`'s mount, where `add-tier.sh` calls the function directly
+right after a successful mount. The mount runs inside a Bash call, so the stamp
+comparison would catch it too: `add-tier.sh` then moves the baselines its own
+batch took to the post-mount state, so `index-compose.sh` does not report the
+mount a second time.
 
 The recompose **validates and is fail-safe**: it refuses — reporting on
 `systemMessage` (user) + `additionalContext` (agent) without clobbering the
@@ -323,9 +325,9 @@ recomposition with no size line at all — that session learned its index was
 truncating by measuring it by hand.
 
 `gitlore_index_mount_size_line` closes it, and three things about it are the
-decision. The measurement is taken **after** the mount hook's own compose, never
-inside `add-tier.sh`: the mount appends a submodule and a manifest line, and it
-is composition that splices the tier's pointer block into the root index, so a
+decision. The measurement is taken **after** `add-tier.sh`'s own compose, never
+before it: the mount appends a submodule and a manifest line, and it is
+composition that splices the tier's pointer block into the root index, so a
 count taken any earlier describes a file the session never loads. The loud arm
 names the **cutoff, never the percentage** — the advisory budget (25,600) sits
 *above* the cutoff (~24,985), so 100% of budget is already truncating and 97% of
