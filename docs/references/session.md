@@ -36,8 +36,8 @@ has no memory submodule entry, no-op.
    [hook-wrappers.md](hook-wrappers.md)).
 4. **Replay the hook-manager sentinel** to reinstate wiring after a clone or a
    new machine (`direct` and `manual` are keywords; the three manager commands
-   are matched as literals and nothing else is run, D45 — see Hook Manager
-   Support above).
+   are matched as literals and nothing else is run, D45 — see
+   [Hook Manager Support](installation.md#hook-manager-support)).
 5. **Materialize the store.** Initialize the submodule if needed; add a memory
    worktree for a linked parent worktree; create local `live` from the
    checked-out gitlink (HEAD) after a clone without `--recurse-submodules`,
