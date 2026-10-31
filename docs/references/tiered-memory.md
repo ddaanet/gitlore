@@ -2,7 +2,7 @@
 
 The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17 points
 at. Motivation, FR15 itself and the Architecture overview live in `design.md`;
-the decision-level detail is here and in seven sibling nodes. Most of it is
+the decision-level detail is here and in eight sibling nodes. Most of it is
 needed only when touching this subsystem; the exception is the tier-store
 decisions D42–D44 and D52, which the commit and merge paths reach from outside
 it.
@@ -21,7 +21,7 @@ Anthropic's memory structure — index, files, agentic recall — and upgrades o
 gitlore's *composition* of the root index. The mechanism is a subsystem rather
 than a single call, so its decisions are recorded individually as
 **D26–D40, D42–D44, D47, D48, D52, D57, D69 and D71**, across this node and
-seven siblings:
+eight siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -47,10 +47,11 @@ seven siblings:
   authoring guidance as a skill, curation as a command · **D48** its invocation
   at the moments that act on facts already written · **D69** the owned-projects
   inventory and the per-fact existence question at the gate
-- Stores and merges, in [tier-stores.md](tier-stores.md) — **D42** tier lockstep
-  · **D43** tier pinning · **D44** tier merges. All three assume the
-  detached-at-`live` branch model, which is D41, in
-  [branch-model.md](branch-model.md).
+- Stores, in [tier-stores.md](tier-stores.md) — **D42** tier lockstep · **D43**
+  tier pinning. Both assume the detached-at-`live` branch model, which is D41,
+  in [branch-model.md](branch-model.md).
+- Tier merges, in [tier-conflicts.md](tier-conflicts.md) — **D44** shared-tier
+  conflicts resolve semantically; memory merges as prose, indexes entry-wise.
 - Defective arriving indexes, in
   [tier-arrival-repair.md](tier-arrival-repair.md) — **D52** the take repairs an
   arrival the root cannot adopt, and a merged index that fails the check does
