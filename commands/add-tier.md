@@ -95,7 +95,9 @@ Relay the script's report. It ends one of two ways:
 Read the composition report:
 
 - **Refused** — the store is left untouched and the reason is named. Fix it,
-  by hand, and run the script again.
+  by hand, then retrigger composition with any edit to `memory/MEMORY.md` or
+  `memory/.gitlore-tiers`. Do not run the script again: the tier is already
+  mounted, and a second call refuses it.
 - **Composed** — done. Do not re-read the indexes to verify; composition moves
   lines, it never rewrites them.
 
@@ -132,6 +134,6 @@ they resolve nowhere from another consumer, so strip them as part of the move.
 ## 4. Report
 
 Tell the user the tier's name, its remote, its routing guidance, and where it
-now ranks. Triage moves from step 3 are memory changes the mount's commit did
-not carry: commit them through the `gitlore:commit` skill, with a
+now ranks. Any memory change made after the script returned is not in the
+mount's commit: commit it through the `gitlore:commit` skill, with a
 `== memory ==` section in the summary the user approves.
