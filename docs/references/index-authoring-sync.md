@@ -5,8 +5,8 @@ kept in step by a hook pair, what that pass reports about a thin routing key,
 how pre-existing drift is healed, and the relay that carries a subagent's report
 to the side that can show it. Where the guidance for writing a fact and curating
 the index lives and is invoked is in
-[memory-authoring-guidance.md](memory-authoring-guidance.md). One of the six
-nodes of the tiered-memory subsystem (FR15), whose entry point is
+[memory-authoring-guidance.md](memory-authoring-guidance.md). A node of the
+tiered-memory subsystem (FR15), whose entry point is
 [tiered-memory.md](tiered-memory.md).
 
 - The authoring-time sync — **D38** authoring-time sync is one-way, index →

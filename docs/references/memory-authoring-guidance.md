@@ -2,10 +2,10 @@
 
 Where the guidance for writing a fact and curating the index lives and where it
 is invoked: a skill that fires on the write, a command a human starts, and the
-three moments that act on facts already written. One of the six nodes of the
-tiered-memory subsystem (FR15), whose entry point is
-[tiered-memory.md](tiered-memory.md). The hook pair that syncs the index with
-frontmatter, the routing-key advisories (D39) and the drift sweep (D40) are in
+three moments that act on facts already written. A node of the tiered-memory
+subsystem (FR15), whose entry point is [tiered-memory.md](tiered-memory.md). The
+hook pair that syncs the index with frontmatter, the routing-key advisories
+(D39) and the drift sweep (D40) are in
 [index-authoring-sync.md](index-authoring-sync.md).
 
 - The authoring guidance — **D47** authoring guidance is a skill and curation is

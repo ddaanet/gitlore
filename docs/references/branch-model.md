@@ -89,10 +89,10 @@ watching either copy. Neither store carries one. The payoff is
 authoritative `live`, local then remote", and every resolution re-detaches at
 the new `live`.
 
-The model is the reason D1, D6 and D3 (in
-[merge-and-resolve.md](merge-and-resolve.md)) read as they do, and the reason
-the tier decisions that build on it (D42, D43) can assume one shape of store
-rather than two.
+The model is the reason D1 and D6 above and D3 in
+[merge-and-resolve.md](merge-and-resolve.md) read as they do, and the reason the
+tier decisions that build on it (D42, D43) can assume one shape of store rather
+than two.
 
 ## Rejected alternatives
 

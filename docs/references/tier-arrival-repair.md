@@ -1,8 +1,8 @@
 # Tier arrival repair — decision D52
 
 What a take does with an arriving tier index the root cannot adopt, and what a
-merge continuation does with a merged index that fails the same check. One of
-the six nodes of the tiered-memory subsystem (FR15), whose entry point is
+merge continuation does with a merged index that fails the same check. A node of
+the tiered-memory subsystem (FR15), whose entry point is
 [tiered-memory.md](tiered-memory.md). The take, the pin and the resting state
 this builds on are in [tier-stores.md](tier-stores.md); the check's rules are in
 [index-composition.md](index-composition.md).
