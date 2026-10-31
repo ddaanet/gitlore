@@ -57,7 +57,7 @@ Fixtures reach no network — every remote in here is a local bare repo, and `GI
 | Scenario | Assertion | What only an eval sees |
 |---|---|---|
 | 01 basic memory commit | `memory-commit` | SessionStart orientation → `gitlore:commit` skill → sectioned summary → approval → `gitlore-commit` → memory pointer staged in the parent |
-| 03 add tier | `add-tier` | intent file → PostToolBatch hook mounts (agent runs no git) → manifest edit recomposes the root index |
+| 03 add tier | `add-tier` | intent file → PostToolBatch hook mounts (agent runs no git) → manifest edit recomposes the root index → approved `== memory ==` summary commits the mount through `gitlore:commit` |
 | 04 tier write | `tier-write` | routing a portable fact to the tier, the mirror-down, and one approved summary committing memory *and* the tier |
 | 05 active recall | `recall` | a probe surfaces the trigger mid-task → the agent Reads the body *after* it → the answer uses it |
 | 06 fact edit reason | `memory-commit` | the summary carries the cause of a fact edit, not the new body or the diff's own change |

@@ -2,14 +2,24 @@
 # Assertion: the /gitlore:add-tier round trip reached its end state.
 #
 # The whole chain in one flow: the agent writes the intent file and runs no git;
-# the PostToolBatch hook mounts the tier out in the network-capable world; the
-# agent activates it in the manifest; that edit retriggers composition, which
+# the PostToolBatch hook mounts the tier out in the network-capable world and
+# activates it in the manifest; that edit retriggers composition, which
 # splices the tier's pointer lines up into the always-loaded root index.
+#
+# The flow ends in a commit: the agent reports the staged mount, drafts a
+# `== memory ==` summary through the gitlore:commit skill and stops for approval;
+# on approval (turn 2) it commits the mount with gitlore-commit. The assertion
+# grades that hand-off — memory unmoved before approval, the skill ahead of
+# gitlore-commit, the mount in the commit, live fast-forwarded and the parent
+# pointer staged.
 #
 # See asserts/memory-commit.sh for the shared contract.
 set -uo pipefail
 
 fail() { printf '%s\n' "$1"; exit 1; }
+
+# shellcheck disable=SC1091  # dynamic path resolved at runtime
+source "$LIB_DIR/finish-commit.sh"
 
 TIER=acme
 MEM="$EVAL_REPO/memory"
@@ -56,15 +66,37 @@ grep -qx "$TIER" "$MEM/.gitlore-tiers" || \
 grep -q "($TIER/reference_acme_staging_db.md)" "$MEM/MEMORY.md" || \
   fail "root index carries no '$TIER/'-prefixed line for the tier's seeded fact; composition did not run"
 
-# 7. Nothing was committed inside the memory store. The mount is staged and
-#    rides the next ordinary memory commit — the agent commits
-#    nothing itself, and add-tier.sh is not a committer either.
-baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
-now=$(git -C "$MEM" rev-parse HEAD)
-[ "$now" = "$baseline" ] || \
-  fail "memory store advanced from $baseline to $now — something committed inside memory during add-tier"
+# 7. The mount was committed through the approved-summary path. Memory did not
+#    move before the user approved, and the commit that followed went through
+#    the gitlore:commit skill.
+baseline=""
+[ -f "$EVAL_OUT_DIR/memory-baseline" ] && baseline=$(cat "$EVAL_OUT_DIR/memory-baseline")
+[ -n "$baseline" ] || fail "no memory baseline captured; the harness did not record where the store started"
 
-# 8. …but the mount IS staged, which is what lets it ride that next commit.
-git -C "$MEM" diff --cached --quiet -- .gitmodules "$TIER" && \
-  fail "the mount is not staged in the memory index; it would be lost at the next commit"
+check_no_commit_before_approval "$baseline"
+
+path_taken=""   # set by settle_commit_path
+settle_commit_path "$MEM" "$baseline"
+check_commit_trace
+
+# 8. The commits from the baseline carry the whole mount: the registration, the
+#    activation and the tier's gitlink.
+committed=$(git -C "$MEM" diff --name-only "$baseline" HEAD)
+for path in .gitmodules .gitlore-tiers "$TIER"; do
+  printf '%s\n' "$committed" | grep -qxF "$path" || \
+    fail "the mount commit does not include '$path' ($path_taken; committed: ${committed//$'\n'/ })"
+done
+
+# 9. Nothing of the mount is left staged but uncommitted.
+leftover=$(git -C "$MEM" diff --cached --name-only -- .gitmodules .gitlore-tiers "$TIER")
+[ -z "$leftover" ] || \
+  fail "the mount is still staged but uncommitted in memory: ${leftover//$'\n'/ }"
+
+# 10. live fast-forwarded to the commit.
+head=$(git -C "$MEM" rev-parse HEAD)
+live=$(git -C "$MEM" rev-parse live)
+[ "$head" = "$live" ] || fail "live not ff-pushed (HEAD=$head live=$live)"
+
+# 11. The parent records the new memory pointer.
+check_memory_pointer_staged
 exit 0

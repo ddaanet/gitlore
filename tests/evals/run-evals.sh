@@ -107,7 +107,7 @@ for scenario_file in "$SCENARIOS_DIR"/*.json; do
     fi
 
     # Eval runner. Two turns when the scenario carries an approval message
-    # (the memory-commit gate), one when it does not (add-tier, recall).
+    # (the memory-commit gate), one when it does not (recall).
     #
     # {{EVAL_REPO}} in a prompt expands to the throwaway repo's path. A scenario
     # that has to name something the fixture created — a tier remote's URL — can

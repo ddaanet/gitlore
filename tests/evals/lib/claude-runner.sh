@@ -15,7 +15,7 @@
 #            approval, as the SessionStart commit protocol tells it to.
 #   Turn 2 — eval sends the approval message; agent commits memory.
 #
-# --approval is optional: a scenario with no approval gate (add-tier, recall) is
+# --approval is optional: a scenario with no approval gate (recall) is
 # one turn, and inventing a second "ok" message for it would put the agent's
 # reply to a message the flow never sends into the transcript the assertions read.
 #
