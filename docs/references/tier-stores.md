@@ -9,8 +9,8 @@ reads standalone; the subsystem's entry point is
   a tier is pinned at its gitlink, and advancing one is a merge · **D44**
   shared-tier conflicts resolve semantically. All three assume the
   detached-at-`live` branch model, which is D41, in
-  [merge-and-resolve.md](merge-and-resolve.md). How a take repairs an arrival
-  the root index cannot adopt is D52, in
+  [branch-model.md](branch-model.md). How a take repairs an arrival the root
+  index cannot adopt is D52, in
   [tier-arrival-repair.md](tier-arrival-repair.md).
 
 ---

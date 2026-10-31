@@ -50,7 +50,7 @@ seven siblings:
 - Stores and merges, in [tier-stores.md](tier-stores.md) — **D42** tier lockstep
   · **D43** tier pinning · **D44** tier merges. All three assume the
   detached-at-`live` branch model, which is D41, in
-  [merge-and-resolve.md](merge-and-resolve.md).
+  [branch-model.md](branch-model.md).
 - Defective arriving indexes, in
   [tier-arrival-repair.md](tier-arrival-repair.md) — **D52** the take repairs an
   arrival the root cannot adopt, and a merged index that fails the check does

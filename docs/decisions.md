@@ -13,23 +13,29 @@ there and every argument there a conclusion here.
 
 ## Design Decisions
 
-**Merge and resolve** — the branch model and the divergence path.
-[merge-and-resolve.md](references/merge-and-resolve.md)
+**Branch model** — what `live` is, how a store sits on it, and which side of a
+merge is first parent. [branch-model.md](references/branch-model.md)
 
 - **D1** — `live` is the memory trunk, decoupled from the parent's default
   branch
-- **D3** — ordinary checkout during resolve, not git plumbing
 - **D6** — merge direction: the more-authoritative side is the first parent
+- **D41** — detached at `live`: one branch model, one commit path, every store
+
+*Rejected:* `live` as a working branch.
+
+**Merge and resolve** — the divergence path.
+[merge-and-resolve.md](references/merge-and-resolve.md)
+
+- **D3** — ordinary checkout during resolve, not git plumbing
 - **D7** — scripts decide, the agent handles language
 - **D9** — a sub-agent synthesizes the merge (requires the experimental flag)
 - **D13** — a lock-contention retry wrapper guards mutating memory git calls
 - **D24** — a directive that names a sub-agent carries its own authorization
-- **D41** — detached at `live`: one branch model, one commit path, every store
 - **D49** — canned unprompted merge commits; takes commit their bookkeeping
 
-*Rejected:* `live` as a working branch · `git commit-tree` plus `git update-ref`
-for the resolve merge · a temporary worktree for resolve · `claude --print` for
-conflict resolution · single-agent resolve with a post-hoc context refresh.
+*Rejected:* `git commit-tree` plus `git update-ref` for the resolve merge · a
+temporary worktree for resolve · `claude --print` for conflict resolution ·
+single-agent resolve with a post-hoc context refresh.
 
 **History rewrites** — what a rewritten store publishes, and what a clone on the
 old history does. [history-rewrites.md](references/history-rewrites.md)

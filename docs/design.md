@@ -164,8 +164,8 @@ again, and no parent commit is ever rewritten to re-pin memory (D46).
 The session-start detach and its report, the advance after a commit, the two
 divergence gates that reduce to one shape (D6, D41), and why the parent's ref
 layout is no concern of memory's are in
-[merge-and-resolve.md](references/merge-and-resolve.md); the gitlink invariant
-is in [git-hooks.md](references/git-hooks.md).
+[branch-model.md](references/branch-model.md); the gitlink invariant is in
+[git-hooks.md](references/git-hooks.md).
 
 A store whose remote history was rewritten publishes a rewrite record beside
 `live`, and a clone still on the old history is refused at the divergence gate
