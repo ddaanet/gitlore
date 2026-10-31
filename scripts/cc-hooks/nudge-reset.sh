@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# SessionStart(startup|clear|compact): drop the once-per-episode nudge markers
+# (index byte budget, mid-session plugin upgrade, missing root index). hooks.json
+# filters the sources by matcher.
+#
+# A marker says "this session has already been told". That claim is only valid
+# for as long as the context that holds the telling, and a source that starts a
+# fresh context ends it:
+#
+#  - startup and clear start a fresh context.
+#  - compact. A compaction is followed by SessionStart(compact). What survives it
+#    is a summary, not the tool results, and re-injection after /compact is
+#    guaranteed only for the project-root CLAUDE.md. A notice the summarizer
+#    dropped would otherwise never be repeated, so the markers are re-armed
+#    wholesale: repeating a notice the session still holds costs a line, while
+#    withholding one it has lost is silent.
+#  - resume and fork keep the conversation history, so the notices the session
+#    was given are still in context and the markers are not re-armed.
+#
+# Never fatal. A nudge marker that fails to clear must not break a session.
+
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
+
+payload=$(cat)
+gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
+
+gitlore_has_submodule || exit 0
+mempath=$(gitlore_memory_path)
+[ -e "$mempath/.git" ] || exit 0
+
+session=$(jq -r '.session_id // ""' <<<"$payload")
+gitlore_index_budget_nudge_reset "$mempath" "$session"
+gitlore_upgrade_nudge_reset "$mempath" "$session"
+gitlore_rootless_nudge_reset "$mempath" "$session"
+exit 0

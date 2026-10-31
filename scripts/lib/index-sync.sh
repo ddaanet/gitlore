@@ -1,0 +1,322 @@
+#!/usr/bin/env bash
+# One-way index→frontmatter sync helpers (D17). Sourced by the Pre/Post hooks
+# and unit-tested directly. No side effects except the one write in the setter.
+#
+# The relay-marker group lives in index-sync-relay.sh, sourced below.
+
+# Print "path<TAB>hook" for every root-index bullet of the form
+#   - [title](path) — hook
+# Lines lacking the ") — " separator are skipped. All width arithmetic uses
+# length() so byte-vs-char counting stays self-consistent across awk flavors.
+gitlore_index_pairs() {
+  awk '
+    /^- \[/ {
+      sep = ") — "
+      d = index($0, sep)
+      if (d == 0) next
+      left = substr($0, 1, d)              # "...(path)"
+      hook = substr($0, d + length(sep))   # everything after the first ") — "
+      lp = index(left, "](")
+      if (lp == 0) next
+      rest = substr(left, lp + 2)          # "path)"
+      rp = index(rest, ")")
+      if (rp == 0) next
+      path = substr(rest, 1, rp - 1)
+      print path "\t" hook                 # awk "\t" is a real tab, portably
+    }
+  ' "$1"
+}
+
+# Print the effective value of the first `description:` line in a file's
+# leading frontmatter block; return 1 if there is none. A double-quoted scalar
+# is unquoted, mirroring the setter's JSON quoting, so a value that round-trips
+# through the setter compares equal to the hook it came from — otherwise every
+# already-synced file would look like a fresh replacement.
+gitlore_get_frontmatter_description() {
+  local raw
+  raw=$(awk '
+    BEGIN { dashes = 0 }
+    /^---[[:space:]]*$/ { dashes++; if (dashes == 2) exit; next }
+    (dashes == 1 && /^description:/) {
+      sub(/^description:[[:space:]]*/, ""); print; exit
+    }
+  ' "$1") || return 1
+  [ -n "$raw" ] || return 1
+  case "$raw" in
+    # jq parses the setter's own output; a value that only looks quoted (stray
+    # inner quotes, say) falls back to verbatim rather than vanishing.
+    '"'*'"') jq -r . <<<"$raw" 2>/dev/null || printf '%s\n' "$raw" ;;
+    *) printf '%s\n' "$raw" ;;
+  esac
+}
+
+# Rewrite the first `description:` line inside a file's leading frontmatter
+# block to a JSON-quoted (=> YAML-safe) scalar of $2. In place.
+gitlore_set_frontmatter_description() {
+  local file="$1" newdesc="$2" quoted repl tmp status
+  quoted=$(jq -Rn --arg d "$newdesc" '$d')   # e.g. "has \"quote\": ..."
+  repl="description: $quoted"
+  # Inside the store's own gitdir, not beside the target — matches
+  # gitlore_weld_repair's (edit-weld.sh) own scratch-file placement. The `else`
+  # below already removes $tmp on a caught failure, but that cannot run at all
+  # if the process is killed mid-write; placing it outside the tracked
+  # worktree bounds that window to "leftover in the gitdir", never "untracked
+  # neighbour a later `git add -A` sweeps up". `--absolute-git-dir`,
+  # not `--git-path`: the latter is relative to the `-C` dir for a plain repo.
+  tmp=$(git -C "$(dirname -- "$file")" rev-parse --absolute-git-dir) \
+    && tmp="$tmp/gitlore-frontmatter.tmp.$$" || return 1
+  # Pass repl via ENVIRON so awk does no escape processing on it. Both the
+  # awk call and the mv are the condition of this `if`, so either one
+  # failing (awk itself, the redirect that creates $tmp, or the mv) is
+  # caught here instead of tripping errexit; on failure the (possibly
+  # empty or partially-written) $tmp is removed. The original failing
+  # command's status is preserved and returned so callers' `if !` guard
+  # still fires.
+  if GITLORE_REPL="$repl" awk '
+    BEGIN { dashes = 0; done = 0 }
+    /^---[[:space:]]*$/ { dashes++; print; next }
+    (dashes == 1 && !done && /^description:/) {
+      print ENVIRON["GITLORE_REPL"]; done = 1; next
+    }
+    { print }
+  ' "$file" > "$tmp" && mv "$tmp" "$file"; then
+    return 0
+  else
+    # $? after a bare `if cond; then ...; fi` with no branch taken is 0, not
+    # the condition's status (POSIX) — capture it here, in the else branch,
+    # while it is still live.
+    status=$?
+    rm -f "$tmp"
+    return "$status"
+  fi
+}
+
+# Abs/relative path of the pre-edit MEMORY.md stash, inside the submodule
+# gitdir (untracked). $1 = memory path;
+# $2 = agent id, optional. Absent or empty yields today's unsuffixed name, so
+# the main thread's files do not migrate; non-empty appends `-<agent_id>` —
+# see _gitlore_agent_suffix for the exact suffix and why it is sanitized.
+gitlore_index_preimage_file() {
+  git -C "$1" rev-parse --git-path "gitlore-index-preimage$(_gitlore_agent_suffix "${2:-}")"
+}
+
+# Abs/relative path of the compose hook's own pre-batch stamp. A second,
+# independently-owned file rather than a field in the sync's stash: each
+# PostToolBatch hook consumes and deletes its own baseline, so neither depends
+# on running before or after the other. $1 = memory path; $2 = agent id,
+# optional — same absent/empty-vs-non-empty contract as
+# gitlore_index_preimage_file.
+gitlore_compose_stamp_file() {
+  git -C "$1" rev-parse --git-path "gitlore-compose-stamp$(_gitlore_agent_suffix "${2:-}")"
+}
+
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-sync-relay.sh"
+
+# Sanitize an id — an agent id or a session id — for use as a filename
+# component: every byte outside `[A-Za-z0-9-]` collapses to `_`, folding an
+# embedded newline too so the result stays a single line. The id is a raw
+# hook-payload field spliced into a `rev-parse --git-path` argument (which
+# does no normalising of its own) or directly into a relay filename, so a `/`
+# or a `..` component would otherwise walk the result out of the gitdir, to
+# somewhere the consumers `cp` onto and `rm -f`. `tr -c` rather than
+# `_gitlore_nudge_file`'s line-oriented `sed`, so a newline is folded too.
+# Not a live exploit today — Claude Code mints both ids and uses the agent
+# one as a filename itself (`agent-<id>.jsonl`) — but a hook must not write
+# outside the gitdir because an upstream id format changed, and it would fail
+# silently if it did.
+#
+# The mapping is not injective, so two ids differing only outside that class
+# collide. Real agent and session ids are `[A-Za-z0-9-]` and pass through
+# byte for byte, so the collision is reachable only from an id shape that
+# does not occur.
+_gitlore_sanitize_id() {
+  printf '%s' "$1" | LC_ALL=C tr -c 'A-Za-z0-9-' '_'
+}
+
+# The `-<agent id>` suffix gitlore_index_preimage_file and
+# gitlore_compose_stamp_file append; empty for an empty or absent id, which
+# is what keeps the main thread on today's names.
+_gitlore_agent_suffix() {
+  [ -n "${1:-}" ] || return 0
+  printf -- '-%s' "$(_gitlore_sanitize_id "$1")"
+}
+
+# Print the compose trigger's stamp: one `key<TAB>checksum` line per watched
+# file, with a literal `absent` for one that is not there — so a file appearing
+# or vanishing registers as a change like any other. Cheap by design: it runs
+# ahead of every Bash call, where keeping whole copies would not be.
+# Args: $1 = root index path, $2 = tier manifest path.
+gitlore_compose_stamp() {
+  printf 'index\t%s\n' "$(_gitlore_file_stamp "$1")"
+  printf 'manifest\t%s\n' "$(_gitlore_file_stamp "$2")"
+}
+
+_gitlore_file_stamp() {
+  if [ -f "$1" ]; then cksum < "$1"; else printf 'absent'; fi
+}
+
+# Print the checksum a stamp records for key $1. Reads the stamp on stdin, so
+# the same reader serves the file on disk and the one just computed.
+gitlore_compose_stamp_get() {
+  awk -F'\t' -v k="$1" '$1==k { sub(/^[^\t]*\t/, ""); print; exit }'
+}
+
+# --- routing-key advisories --------------------------------------------------
+# The index one-liner is what CC's recall classifier matches against, and the
+# sync above then overwrites the file's own `description:` with it — so a hook
+# that carries no trigger degrades BOTH match surfaces at once, silently. The
+# two checks below give that silence a voice. Neither can decide whether a hook
+# is GOOD; each measures one thing that is countable.
+
+# Advisory byte budget of the always-loaded index blob (25 KiB) and the fraction
+# at which to speak up. Both overridable so a test drives the threshold instead
+# of writing a 20KB fixture. This budget only reports; Claude Code's own loader
+# is the hard cap, and it truncates lower — see commands/index-audit.md.
+: "${GITLORE_INDEX_BUDGET_BYTES:=25600}"
+: "${GITLORE_INDEX_BUDGET_WARN_PCT:=80}"
+
+# Claude Code's own loader cutoff, which sits BELOW the advisory budget: the
+# index is truncated from 100% of budget down to about 97.6% of it. Empirical,
+# and only to one decimal — the loader reports `MEMORY.md is 25.8KB (limit:
+# 24.4KB) — Only part of it was loaded`, so 24.4 KiB is all that display
+# settles and the true cutoff lies somewhere near it. Treat as approximate and
+# never as a refusal threshold. Overridable so a test drives it.
+: "${GITLORE_INDEX_LOADER_CUTOFF_BYTES:=24985}"
+
+# Percent of that budget the index occupies, floored. BYTES, not lines: the
+# blob is loaded verbatim, so a handful of paragraph-length lines costs more
+# than fifty terse ones.
+gitlore_index_budget_pct() {
+  local bytes
+  bytes=$(wc -c < "$1") || return 1
+  printf '%s\n' "$(( bytes * 100 / GITLORE_INDEX_BUDGET_BYTES ))"
+}
+
+# One size line for a *mount*, or nothing. Mounting is the one operation that
+# adds tens of KB of index in a single step, and the only one whose report is
+# not a `PostToolBatch` pass over an index the agent edited — so it never
+# reaches the advisory in index-sync-post.sh, and a mount that lands past the
+# cutoff is otherwise silent. It needs no once-per-episode marker: the intent
+# file is consumed, so the mount reports once by construction, and writing no
+# `budget` marker leaves a later edit-time advisory in the same session free to
+# fire. Past the cutoff the percentage is the wrong number to print — 97% of
+# budget is already truncating — so the cutoff, not the budget, is what the
+# loud arm names. Args: $1 = index path. Silent below the warn fraction.
+gitlore_index_mount_size_line() {
+  local index="$1" bytes pct
+  bytes=$(wc -c < "$index") || return 1
+  bytes=$((bytes))   # strip the leading whitespace BSD wc pads its count with
+  if [ "$bytes" -gt "$GITLORE_INDEX_LOADER_CUTOFF_BYTES" ]; then
+    printf 'gitlore: memory/MEMORY.md is %s bytes after the mount, past Claude Code'\''s ~%s-byte loader cutoff — the tail of the index is dropped from every session, silently, and the tail is this repo'\''s own most specific memory. Curating it store-wide is /gitlore:index-audit; a tier that is over budget on its own is the tier owner'\''s to fix, not this repo'\''s.\n' \
+      "$bytes" "$GITLORE_INDEX_LOADER_CUTOFF_BYTES"
+    return 0
+  fi
+  pct=$(( bytes * 100 / GITLORE_INDEX_BUDGET_BYTES ))
+  [ "$pct" -ge "$GITLORE_INDEX_BUDGET_WARN_PCT" ] || return 0
+  printf 'gitlore: memory/MEMORY.md is %s bytes after the mount, %s%% of the %s-byte always-loaded budget and under the ~%s-byte loader cutoff — a size notice, nothing to act on.\n' \
+    "$bytes" "$pct" "$GITLORE_INDEX_BUDGET_BYTES" "$GITLORE_INDEX_LOADER_CUTOFF_BYTES"
+}
+
+# Once-per-episode markers. A nudge that fires on every batch is noise, so each
+# advisory drops a marker keyed by session in the memory gitdir — hook-owned
+# state the agent must never write — and checks for it before speaking.
+# Args: $1 = memory worktree path; $2 = session id; $3 = marker kind.
+_gitlore_nudge_file() {
+  local safe
+  safe=$(printf '%s' "${2:-nosession}" | LC_ALL=C sed 's/[^A-Za-z0-9-]/_/g')
+  git -C "$1" rev-parse --git-path "gitlore-$3-nudged-$safe"
+}
+
+# Clear this session's marker of that kind, and sweep markers left by sessions
+# that ended without one. Args as _gitlore_nudge_file.
+_gitlore_nudge_reset() {
+  local mempath="$1" kind="$3" marker dir
+  marker=$(_gitlore_nudge_file "$mempath" "$2" "$kind")
+  rm -f "$marker"
+  dir=$(dirname -- "$marker")
+  [ -d "$dir" ] || return 0
+  # `|| true`: `-delete` exits non-zero when the gitdir refuses the unlink.
+  # Sweeping markers other sessions left behind is best-effort, and must not
+  # abort a caller running under errexit — the same degrade-don't-abort trade
+  # gitlore_relay_sweep makes on the same directory. The marker this call was
+  # asked to clear is already gone by here.
+  find "$dir" -maxdepth 1 -name "gitlore-$kind-nudged-*" -type f -mtime +7 -delete || true
+  return 0
+}
+
+# Has the index byte-budget advisory already fired this episode?
+# Args: $1 = memory worktree path; $2 = session id.
+gitlore_index_budget_nudge_file() { _gitlore_nudge_file "$1" "$2" budget; }
+
+# Re-arm the byte-budget advisory. Called on SessionStart for startup, clear and
+# compact, the sources that end the context a marker's "already told" claim
+# rests on.
+gitlore_index_budget_nudge_reset() { _gitlore_nudge_reset "$1" "$2" budget; }
+
+# Has the mid-session plugin-upgrade notice already fired this episode (D21)?
+# Args: $1 = memory worktree path; $2 = session id.
+gitlore_upgrade_nudge_file() { _gitlore_nudge_file "$1" "$2" upgrade; }
+
+# Re-arm the upgrade notice. A compaction re-arms it deliberately: what survives
+# is a summary, and the session is still running the old plugin root.
+gitlore_upgrade_nudge_reset() { _gitlore_nudge_reset "$1" "$2" upgrade; }
+
+# Has the missing-root-index notice already fired this episode? The condition is
+# a property of the store rather than of a batch, so nothing about it changes
+# between two batches — one telling per episode is the whole of what there is to
+# say.
+# Args: $1 = memory worktree path; $2 = session id.
+gitlore_rootless_nudge_file() { _gitlore_nudge_file "$1" "$2" rootless; }
+
+# Re-arm the missing-root-index notice. Args as above.
+gitlore_rootless_nudge_reset() { _gitlore_nudge_reset "$1" "$2" rootless; }
+
+# Return 0 when $1 carries at least one LITERAL token — the kind of thing a
+# future query actually contains: a backticked span, a flag, a path, a dotfile,
+# a filename, $VAR, a key=value, a version, snake_case, camelCase, an acronym.
+#
+# Word-at-a-time rather than one big ERE because ERE word boundaries are not
+# portable (GNU \b vs BSD [[:<:]]); splitting on whitespace makes the boundary
+# safe by construction, so `well-known` is prose while `--flag` is a flag.
+gitlore_index_has_literal() {
+  awk '
+    {
+      n = split($0, w, /[[:space:]]+/)
+      for (i = 1; i <= n; i++) {
+        t = w[i]
+        gsub(/^[[("]+/, "", t); gsub(/[])".,;:?!]+$/, "", t)
+        if (t == "") continue
+        if (index(t, "`") > 0)   { hit = 1; break }   # `backticked span`
+        if (index(t, "/") > 0)   { hit = 1; break }   # a/path or 2>/dev/null
+        if (index(t, "=") > 0)   { hit = 1; break }   # key=value
+        if (t ~ /^--?[A-Za-z]/)  { hit = 1; break }   # --flag, -C
+        if (t ~ /^\.[A-Za-z]/)   { hit = 1; break }   # .gitmodules
+        if (t ~ /^\$/)           { hit = 1; break }   # $VAR
+        if (t ~ /^[0-9]+\.[0-9]/) { hit = 1; break }  # 2.47.3
+        if (t ~ /\.(md|sh|json|py|bats|toml|ya?ml|lock|git|txt)$/) { hit = 1; break }
+        if (t ~ /[A-Za-z0-9]_[A-Za-z0-9]/) { hit = 1; break }   # snake_case
+        if (t ~ /[a-z][A-Z]/)    { hit = 1; break }   # camelCase
+        if (t ~ /^[A-Z][A-Z0-9]+$/) { hit = 1; break }          # CC, FR11, API
+      }
+    }
+    END { exit !hit }
+  ' <<<"$1"
+}
+
+# Print the effective `type:` from a memory file's leading frontmatter — the
+# indented `metadata:` form and the older top-level one both. Return 1 if
+# absent. `node_type:` does not match: the pattern anchors `type:` to the start
+# of the line modulo indentation.
+gitlore_frontmatter_type() {
+  local raw
+  raw=$(awk '
+    BEGIN { dashes = 0 }
+    /^---[[:space:]]*$/ { dashes++; if (dashes == 2) exit; next }
+    (dashes == 1 && /^[[:space:]]*type:[[:space:]]/) {
+      sub(/^[[:space:]]*type:[[:space:]]*/, ""); print; exit
+    }
+  ' "$1") || return 1
+  [ -n "$raw" ] || return 1
+  printf '%s\n' "$raw"
+}

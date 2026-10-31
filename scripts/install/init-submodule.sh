@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+set -euo pipefail
+unset CDPATH   # else `cd "$mempath"` below may search elsewhere and land in
+               # the wrong repository — run.sh/add-tier.sh/resolve.sh all
+               # unset it, but this script is also invoked directly.
+
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../lib/util.sh"
+
+mempath="$1"
+parent_root=$(git rev-parse --show-toplevel)
+
+# Append the memory submodule entry to .gitmodules unless it is already present.
+# Plan 02 rewrites the placeholder URL to a real remote. Idempotent.
+register_in_gitmodules() {
+  if [ -f .gitmodules ] && grep -q '\[submodule "gitlore-memory"\]' .gitmodules; then
+    return 0
+  fi
+  {
+    printf '[submodule "gitlore-memory"]\n'
+    printf '\tpath = %s\n' "$mempath"
+    printf '\turl = %s\n' "$GITLORE_PLACEHOLDER_URL"
+  } >> .gitmodules
+}
+
+# Idempotency: three states —
+#   fully registered (.gitmodules has the entry)  → already_registered=1
+#   partial install (module store + gitfile, .gitmodules missing) → partial_install=1
+#   not started                                   → both 0
+already_registered=0
+partial_install=0
+if git config --file .gitmodules "submodule.gitlore-memory.path" | grep -qxF -- "$mempath"; then
+  already_registered=1
+elif [ -d "$(git rev-parse --git-common-dir)/modules/gitlore-memory" ] && [ -f "$mempath/.git" ]; then
+  partial_install=1
+fi
+
+if [ "$already_registered" -eq 0 ] && [ "$partial_install" -eq 0 ]; then
+  # 1. Plain init at the target path.
+  git init -q "$mempath"
+
+  # 2. Seed content: migrate an auto-memory dir, then scaffold the root index
+  #    if what landed has none.
+  #    Skip the copy when $src holds nothing to migrate: an empty dir, or the
+  #    migration stub a prior install/run left, which would carry
+  #    "Do not add memory here" into the store.
+  src=$(gitlore_cc_memory_dir "$parent_root")
+  if [ -d "$src" ] && [ -n "$(find "$src" -mindepth 1 -print -quit)" ] \
+     && ! gitlore_is_migration_stub "$src"; then
+    cp -R "$src"/. "$mempath/"
+    # Announced so the install command can run the migrated facts past the
+    # authoring discipline: they were written under CC's generic memory
+    # instructions, with no review gate and no index cap. A scaffolded store has
+    # nothing to review, so only a migration reports.
+    echo "gitlore: migrated auto-memory from $src into $mempath" >&2
+    # Replace the migrated source with a stub recording the move in-tree, so a
+    # session later launched without the shim (writing to this default dir) finds
+    # a breadcrumb rather than silently re-seeding stranded memory.
+    gitlore_mark_migrated "$src"
+  fi
+  # Every later compose, index check and merge path keys on the root index, and
+  # each is silent about it being absent. An auto-memory dir can hold facts and
+  # no `MEMORY.md` — a session interrupted before Claude Code wrote one, or one
+  # whose index was deleted — so the scaffold is owed to a migrated store as
+  # much as to one with nothing to migrate. The migrated facts keep their own
+  # index when they brought one.
+  if [ ! -f "$mempath/MEMORY.md" ]; then
+    cat > "$mempath/MEMORY.md" <<'EOF'
+# Memory Index
+
+(populated by Claude over time)
+EOF
+  fi
+
+  # 3. Initial commit.
+  (
+    cd "$mempath"
+    gitlore_git add -A
+    gitlore_git commit -q --allow-empty -m "Initial memory"
+  )
+
+  # 4. Absorb gitdir manually: move <mempath>/.git into .git/modules/gitlore-memory
+  #    and replace it with a gitfile pointer. This mirrors what `git submodule add`
+  #    would do, but works in a parent repo with no commits yet.
+  #
+  #    (git submodule absorbgitdirs requires the submodule to already be tracked in
+  #    the index, which needs at least one commit in the parent repo.)
+  mkdir -p .git/modules/gitlore-memory
+  cp -a "$mempath/.git/." .git/modules/gitlore-memory/
+  rm -rf "$mempath/.git"
+  # The gitfile's "gitdir:" target is relative to the gitfile itself, so it
+  # depends on how many components $mempath has — "../.git/..." for a
+  # one-component path like "memory", but "../../.git/..." for a documented,
+  # supported multi-component path like ".claude/memory". core.worktree below
+  # does NOT need this: it is relative to the fixed-depth
+  # .git/modules/gitlore-memory/config (the module NAME's path, not $mempath's),
+  # so "../../../$mempath" already resolves correctly at any $mempath depth.
+  slashes="${mempath//[^\/]/}"
+  components=$(( ${#slashes} + 1 ))
+  updir="" ; i=0
+  while [ "$i" -lt "$components" ]; do updir="../$updir"; i=$((i + 1)); done
+  printf 'gitdir: %s.git/modules/gitlore-memory\n' "$updir" > "$mempath/.git"
+  git config -f .git/modules/gitlore-memory/config core.worktree "../../../$mempath"
+
+  # 5. Register in .gitmodules with a local placeholder URL.
+  register_in_gitmodules
+
+fi
+
+# Partial install: steps 1–4 already ran (module store absorbed, gitfile in place),
+# but .gitmodules was never written (e.g. sandbox blocked the write).  Repair it.
+if [ "$partial_install" -eq 1 ]; then
+  register_in_gitmodules
+fi
+
+# Steps 6-7 operate on the submodule via `git -C "$mempath"` / `cd "$mempath"`.
+# If it is registered (already_registered=1) but not checked out here — e.g. a
+# fresh clone before SessionStart, or after `git submodule deinit` — $mempath
+# has no .git and every such op walks up to the PARENT repo, staging the
+# parent's HEAD as the memory gitlink (unclonable superproject) and creating
+# branches in the parent. Refuse rather than corrupt. (On a first-time install
+# the init block above created $mempath/.git, so this never trips there.)
+if [ ! -e "$mempath/.git" ]; then
+  echo "gitlore: '$mempath' is registered as a submodule but not checked out here." >&2
+  echo "gitlore: start a Claude Code session (SessionStart checks it out) or run 'git submodule update --init -- $mempath', then re-run install." >&2
+  exit 1
+fi
+
+# 6. Stage parent-side artifacts. Runs on every install — including idempotent
+#    re-runs after a reset — so the install's "leave it staged" contract holds
+#    regardless of working-tree state. The submodule gitlink is written via
+#    `git update-index --cacheinfo` (mode 160000) rather than `git add` so we
+#    don't trip git's "embedded git repository" advice, which fires on `git add
+#    <dir>` for any directory containing a .git/ entry and, in modern git,
+#    actually refuses to stage the directory as a submodule.
+if git check-ignore -q .gitmodules; then
+  if [ -f .gitignore ] && grep -qx '\.gitmodules' .gitignore; then
+    # Some repos gitignore .gitmodules to quiet sandbox-induced churn. With a
+    # real submodule, .gitmodules must be tracked — drop the ignore line.
+    # `grep -v` exits 1 when nothing survives the filter (a .gitignore whose
+    # only line is .gitmodules) — a correct, empty result, not a failure; `|| :`
+    # keeps the chain going so $tmp gets moved into place instead of leaking.
+    tmp=$(mktemp) && { grep -vx '\.gitmodules' .gitignore > "$tmp" || :; } && mv "$tmp" .gitignore
+  fi
+fi
+gitlore_git add .gitmodules
+mem_sha=$(git -C "$mempath" rev-parse HEAD)
+gitlore_git update-index --add --cacheinfo "160000,${mem_sha},${mempath}"
+
+# 7. `live` trunk, checked out detached (idempotent). The branch model is
+# detached-at-live (D17): `live` is the only branch memory ever carries, and it
+# is never checked out AS a branch, so any number of parent worktrees can share
+# one memory gitdir.
+cd "$mempath"
+git show-ref --verify --quiet refs/heads/live || git branch live
+git checkout -q --detach live

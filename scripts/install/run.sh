@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) captures below
+
+mempath="${1:-memory}"
+remote_mode="${2:-auto}"
+remote_url="${3:-}"
+
+# Self-locate: the tree this script ships in, never a CLAUDE_PLUGIN_ROOT that may
+# name another (it is injected for hooks, not for Bash commands, and a session
+# that froze at an older root keeps the older value). Export it so the child
+# install scripts, global-shim.sh among them, inherit this tree.
+PLUGIN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+
+# Must be at repo root. `pwd -P`, not `$PWD`: git reports the toplevel with its
+# symlinks resolved, and a caller standing at the root through a symlinked path
+# — macOS `$TMPDIR` is one, and a symlinked home or checkout is another — would
+# otherwise be told to go to the directory it is already in.
+toplevel=$(git rev-parse --show-toplevel)
+[ "$(pwd -P)" = "$toplevel" ] || { echo "Run /gitlore:install from the repo root ($toplevel)." >&2; exit 1; }
+
+# Must be the main worktree. In a linked worktree the memory submodule is
+# usually unchecked-out, and every `git -C memory` op below would silently walk
+# up to the parent repo — staging the parent's HEAD as the memory gitlink and
+# creating branches in the parent. A linked worktree's per-worktree git dir
+# differs from the common git dir; the main worktree's matches.
+git_dir=$(cd "$(git rev-parse --git-dir)" && pwd)
+common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+if [ "$git_dir" != "$common_dir" ]; then
+  echo "gitlore: run /gitlore:install from the main worktree, not a linked worktree ($PWD)." >&2
+  echo "gitlore: the main worktree is at $(dirname "$common_dir")." >&2
+  exit 1
+fi
+
+# Sandbox probe: the install writes .gitmodules at the repo root and absorbs the
+# submodule gitdir under the git common dir, then pushes a remote. Under the
+# Claude Code command sandbox these writes fail with a raw "Permission denied"
+# mid-run, leaving partial state. Detect it up front and fail with the exact
+# command to re-run sandbox-disabled.
+common_dir_abs=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+for probe_dir in "$toplevel" "$common_dir_abs"; do
+  if ! gitlore_probe_writable "$probe_dir"; then
+    {
+      echo "gitlore: cannot write to '$probe_dir' — the command sandbox is blocking install."
+      echo "gitlore: re-run with the sandbox disabled:"
+      echo "  bash '${BASH_SOURCE[0]}' '$mempath'"
+    } >&2
+    exit 3
+  fi
+done
+
+bash "$PLUGIN_ROOT/scripts/install/preflight.sh"
+
+# Refuse non-empty existing path that isn't already our submodule.
+if [ -e "$mempath" ] && ! git config --file .gitmodules "submodule.gitlore-memory.path" | grep -qxF -- "$mempath"; then
+  # Partial prior install: module store absorbed + gitfile in place, but .gitmodules not yet written.
+  # init-submodule.sh repairs .gitmodules; fall through rather than refusing.
+  _common_dir=$(git rev-parse --git-common-dir)
+  if [ -d "$_common_dir/modules/gitlore-memory" ] && [ -f "$mempath/.git" ]; then
+    echo "gitlore: partial prior install detected at '$mempath' — resuming." >&2
+  # `find -print -quit` rather than `ls -A`: parsing ls is unsafe for names with
+  # whitespace or newlines, and its stderr was suppressed, so an unreadable
+  # directory read as "empty" and the install proceeded into it. This surfaces
+  # that error and stops at the first entry found.
+  elif [ -n "$(find "$mempath" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+    echo "gitlore: '$mempath' exists and is not empty. Choose another path." >&2
+    exit 2
+  fi
+fi
+
+bash "$PLUGIN_ROOT/scripts/install/init-submodule.sh" "$mempath"
+bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath" "$remote_mode" "$remote_url"
+bash "$PLUGIN_ROOT/scripts/install/write-settings.sh"
+bash "$PLUGIN_ROOT/scripts/install/emit-launcher.sh"
+bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
+
+manager=$(bash "$PLUGIN_ROOT/scripts/hook-manager/detect.sh")
+case "$manager" in
+  lefthook)   bash "$PLUGIN_ROOT/scripts/hook-manager/wire-lefthook.sh"   ;;
+  husky)      bash "$PLUGIN_ROOT/scripts/hook-manager/wire-husky.sh"      ;;
+  overcommit) bash "$PLUGIN_ROOT/scripts/hook-manager/wire-overcommit.sh" ;;
+  direct)     bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"     ;;
+  manual)         bash "$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh" ;;
+  multi:*)        bash "$PLUGIN_ROOT/scripts/hook-manager/wire-manual.sh" "${manager#multi:}" ;;
+esac
+
+# Catch-all for a stale Claude Code project-scoped auto-memory dir that
+# init-submodule.sh did NOT migrate (re-run, or a pre-registered submodule where
+# seeding was skipped). First-install migration is handled in init-submodule.sh,
+# which already leaves the stub. Only act on an existing dir — never create one
+# under the user's real ~/.claude when there was nothing to migrate. An empty
+# dir still gets the stub — a session launched without the shim would otherwise
+# write there silently — but nothing was migrated, so it is not announced.
+_old_memory=$(gitlore_cc_memory_dir "$toplevel")
+if [ -d "$_old_memory" ]; then
+  if ! gitlore_is_migration_stub "$_old_memory" \
+     && [ -n "$(find "$_old_memory" -mindepth 1 -print -quit)" ]; then
+    echo "gitlore: migrated stale auto-memory at $_old_memory" >&2
+  fi
+  gitlore_mark_migrated "$_old_memory"
+fi
+
+# Stage the tracked artifacts written by write-settings.sh and wire-*.sh so the
+# install's contract (commands/install.md) holds: everything we promise
+# as "staged for review" actually is. .gitmodules and $mempath are staged by
+# init-submodule.sh; settings.local.json is gitignored by design.
+git add .claude/settings.json .claude/gitlore-hook-setup .gitignore .gitlore/bin/claude .envrc
+
+if command -v direnv >/dev/null 2>&1; then
+  direnv allow || true
+else
+  bash "$PLUGIN_ROOT/scripts/install/global-shim.sh"
+fi
+
+echo "gitlore: install complete." >&2
+echo "Review the staged changes (.gitmodules, $mempath/, .claude/settings.json, .claude/gitlore-hook-setup, .gitignore, .gitlore/bin/claude, .envrc) and commit when ready." >&2

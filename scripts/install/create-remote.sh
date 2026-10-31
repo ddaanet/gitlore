@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Create the memory submodule's GitHub remote and rewire .gitmodules.
+# Idempotent: no-op when remote.origin.url is already a real URL.
+# Args: $1 = mempath (relative to repo root)
+#       $2 = mode: auto (default) | url | local
+#       $3 = remote URL (required for url mode)
+set -euo pipefail
+unset CDPATH   # else `cd` may echo its target into the $(cd … && pwd) capture below
+
+mempath="$1"
+
+PLUGIN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+
+mode="${2:-auto}"
+url_arg="${3:-}"
+
+# Idempotency: a real (non-placeholder) origin already wired → nothing to do. A
+# placeholder origin is a local-only install a `git submodule sync` has copied
+# out of `.gitmodules`; it names no repository, so the slot is still ours.
+existing=$(git -C "$mempath" config --get remote.origin.url || true)
+if [ -n "$existing" ] && ! gitlore_is_placeholder_url "$existing"; then
+  exit 0
+fi
+
+wire_and_push() {
+  # Args: $1 = remote URL. Wires origin, pushes live, rewrites .gitmodules URL.
+  # origin keeps $1 as given, so pushes use the transport the person chose; the
+  # tracked .gitmodules records its https form, which a clone fetches with no
+  # GitHub SSH key.
+  local remote_url="$1"
+  # `remote add` fails outright on an existing origin, which is exactly the
+  # placeholder case reaching here — set-url is what repoints it.
+  if git -C "$mempath" remote get-url origin >/dev/null 2>&1; then
+    git -C "$mempath" remote set-url origin "$remote_url"
+  else
+    git -C "$mempath" remote add origin "$remote_url"
+  fi
+  if ! gitlore_git -C "$mempath" push -u origin live; then
+    echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:resolve to retry." >&2
+    exit 1
+  fi
+  git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" \
+    "$(gitlore_github_https_url "$remote_url")"
+  git add .gitmodules
+}
+
+local_only_notice() {
+  echo "gitlore: installed local-only — memory is versioned in-repo with no remote." >&2
+  echo "gitlore: add a remote later by re-running /gitlore:install and supplying a URL." >&2
+}
+
+case "$mode" in
+  url)
+    [ -n "$url_arg" ] || { echo "gitlore: url mode requires a remote URL." >&2; exit 1; }
+    wire_and_push "$url_arg"
+    # Auto mode creates the remote with the parent's visibility, so only a url
+    # the person supplied can put a private memory under a public parent.
+    gitlore_warn_private_under_public "memory remote" "$url_arg"
+    ;;
+
+  local)
+    local_only_notice
+    ;;
+
+  auto)
+    # Opportunistic gh: only when present AND authenticated.
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+      owner=$(gh api user -q .login)
+      repo_name=$(gitlore_memory_remote_name)
+      visibility=$(gitlore_parent_visibility)
+      full_name="${owner}/${repo_name}"
+      # Create, resolve, wire, push as four steps — do NOT collapse this into
+      # `gh repo create --source=. --push`. That form rejects the memory
+      # submodule outright ("current directory is not a git repository", gh
+      # 2.88.1): its working tree has a `.git` *file*, not a directory, and gh's
+      # source discovery does not follow the gitdir pointer even though
+      # `git rev-parse --is-inside-work-tree` says true from the same directory.
+      # Resolving the URL via `gh repo view` also respects the user's
+      # gh-configured protocol, which `--push` would decide for them.
+      if ! gh repo create "$full_name" --"$visibility"; then
+        echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover, or re-run install with a remote URL." >&2
+        exit 1
+      fi
+      remote_url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl || true)
+      if [ -z "$remote_url" ]; then
+        echo "gitlore: created remote $full_name but could not resolve its URL. Run /gitlore:resolve to recover." >&2
+        exit 1
+      fi
+      wire_and_push "$remote_url"
+    else
+      # No usable gh → local-only (the agent offers the copy-paste URL path
+      # interactively in install.md before reaching this non-interactive script).
+      local_only_notice
+    fi
+    ;;
+
+  *)
+    echo "gitlore: unknown remote mode '$mode'." >&2
+    exit 1
+    ;;
+esac
+
+exit 0
