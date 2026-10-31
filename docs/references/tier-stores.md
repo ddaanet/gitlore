@@ -152,11 +152,11 @@ recomposed root index land in a canned bookkeeping commit
 (`Update MEMORY.md for <tier> tier merge.`) that advances memory's local `live`,
 so an explicit take leaves the store clean. The parent-level gitlink still
 floats to the next parent commit, as every memory advance leaves it (a commit
-through `gitlore-commit` is the one advance that stages it). One path degrades:
-a root store that held unapproved work *before* the take gets no canned commit —
-the pair includes `MEMORY.md`, whose recompose folds in whatever unapproved
-index edits the episode already held — and falls back to the staged-pair
-discipline below.
+through `gitlore-commit` and the canned mount commit `gitlore-add-tier` makes
+are the advances that stage it, D71). One path degrades: a root store that held
+unapproved work *before* the take gets no canned commit — the pair includes
+`MEMORY.md`, whose recompose folds in whatever unapproved index edits the
+episode already held — and falls back to the staged-pair discipline below.
 
 **A take whose up projection fails records nothing and walks the tier back.**
 Staging the gitlink would put the tier on its pin while root still holds the

@@ -51,7 +51,9 @@ the mechanism it argues. Plans and specs live in `plans/`.
     effective control over what reaches the remote. Merge and take-bookkeeping
     commits are its stated exemption: both sides already passed this gate
     *(D49)*. So is a take's repair of an arriving index, which restructures
-    lines upstream already approved and adds no text *(D52)*.
+    lines upstream already approved and adds no text *(D52)*. So is the commit
+    `/gitlore:add-tier` makes to record a mount or a create in a store with no
+    unapproved work, whose content follows from the user's request *(D71)*.
 12. **Coexistence.** Repos without a memory submodule are unaffected when the
     plugin is present; every hook no-ops silently when it is not registered.
 13. **Recovery.** If memory enters a broken state (missing `live`, partial
@@ -177,9 +179,9 @@ activation flag, the launcher shim and `.envrc`, the hook-manager sentinel, the
 tier manifest (D30) — travels with the repo. The one git-config key,
 `gitlore.hooksDir`, is per-clone and machine-local, points at the installed
 plugin, and is re-pinned every `SessionStart`, which is what makes it
-self-healing (D5). No IPC file remains: every agent-to-script hand-off, the
-add-tier intent included, travels as stdin to a `bin/` entry point (D70, D71).
-Every file and key is in [configuration.md](references/configuration.md).
+self-healing (D5). No IPC file remains: the add-tier intent, like the commit
+summary, travels as stdin to a `bin/` entry point (D70, D71). Every file and key
+is in [configuration.md](references/configuration.md).
 
 ### Memory Redirect Launcher
 
@@ -208,10 +210,11 @@ the git and decides (D7).
   ([installation.md](references/installation.md)); and `/gitlore:add-tier`,
   which mounts an existing shared tier or creates a new one by calling
   `gitlore-add-tier` directly, the intent as `key=value` lines on stdin through
-  a quoted heredoc; the mount commits itself under a canned message (D32, D71,
-  in [tiered-memory.md](references/tiered-memory.md)); and
-  `/gitlore:index-audit`, the store-wide curation pass, a command because a
-  human decides to run it (D47, in
+  a quoted heredoc; into a memory store with no unapproved work, the mount
+  commits itself under a canned message (D32, D71, in
+  [tiered-memory.md](references/tiered-memory.md)); and `/gitlore:index-audit`,
+  the store-wide curation pass, a command because a human decides to run it
+  (D47, in
   [memory-authoring-guidance.md](references/memory-authoring-guidance.md)).
 - **Skills** — `resolve`, the semantic merge of a diverged store, split across a
   gate, a fresh-context sub-agent (D9), the parent's approval and a continuation

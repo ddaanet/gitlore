@@ -27,13 +27,15 @@ commits applies: no unapproved content, intention already expressed.
   `gitlore-commit` takes its summary; the intent file and `add-tier-batch.sh`
   retire. Supersedes D32's routing; D32's mount/create convergence and
   activate-as-last-step stand.
-- The mount commits itself in the memory root under a canned message, and stages
-  the moved memory gitlink in the parent like the commit path does. Subject
-  `mount <tier> tier from <url>` (create: `create <tier> tier at <url>`), body
-  the tier's routing description.
-- The canned commit carries only what the mount staged. Memory work pending
-  before the call stays pending for the ordinary approved commit (D43's
-  staged-pair discipline, as D49 applies it).
+- On a clean store, the mount commits itself in the memory root under a canned
+  message, and stages the moved memory gitlink in the parent like the commit
+  path does. Subject `mount <tier> tier from <url>` (create:
+  `create <tier> tier at <url>`), body the tier's routing description.
+- A clean store gets the canned commit, carrying exactly the mount. A store with
+  unapproved work pending before the call gets no canned commit, and the mount
+  is left staged for the next approved `gitlore:commit`: the recomposed
+  `MEMORY.md` would fold the unapproved index edits in (D49's guard, D43's
+  staged-pair discipline).
 - Step 3 triage moves (local facts routed into the tier) are judgement and keep
   the `gitlore:commit` approval path.
 - Rejected alternatives to name: keeping the intent file and hook with a canned
@@ -63,15 +65,21 @@ Each step is one commit, gated by `just precommit`, reviewed at medium.
 2. **Script.** `bin/gitlore-add-tier` entry point; `scripts/add-tier.sh` reads
    the intent from stdin instead of the IPC file, same parser, keeps the url
    scheme allowlist (input is still agent-supplied), composes and reports itself
-   (the helper `add-tier-batch.sh` calls today), and ends with the canned commit
-   carrying only its own staged paths, then stages the parent gitlink. Red tests
-   first, per behaviour: the stdin intent drives the mount; pending memory work
-   is left uncommitted; the commit carries exactly the mount; the parent gitlink
-   is staged; the url refusal still fires.
+   (the helper `add-tier-batch.sh` calls today), and on a clean store ends with
+   the canned commit carrying exactly the mount, then stages the parent gitlink.
+   Red tests first, per behaviour: the stdin intent drives the mount; a clean
+   store gets the canned commit carrying exactly the mount; a store with pending
+   work gets no canned commit and the mount left staged; the parent gitlink is
+   staged; the url refusal still fires.
 3. **Retire the hook.** Delete `add-tier-batch.sh`, its `hooks/hooks.json`
    entry, the intent filename in `.gitignore`, and every reference: the
    `git grep -E 'gitlore-add-tier|add-tier-batch'` list outside
-   `docs/changelog/` is the sweep's input (`craft:removing-cleanly`).
+   `docs/changelog/` is the sweep's input (`craft:removing-cleanly`). The grep
+   misses the D57 report-once text in `docs/references/index-composition.md`,
+   which is restated too: the mount size line measured "after the mount hook's
+   own compose", "keyed by nothing: the intent file is consumed", and the
+   rejected alternative's "the intent file being consumed when it fires". Its
+   once-only basis becomes the script's compose-stamp refresh (D71).
 4. **Command and eval.** Rewrite `commands/add-tier.md` steps 2 and 4: call the
    script, relay its report, no `gitlore:commit` hand-off for the mount; triage
    moves still go through it. Return scenario `03-add-tier` to a single turn and

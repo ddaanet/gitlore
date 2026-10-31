@@ -132,7 +132,11 @@ content — FR11 names both as its exemptions — so neither is what this decisi
 removes. No hook path commits anything else: `SessionStart` moves nothing (D59),
 `add-tier-batch.sh` commits only the seed of a tier it is creating, in a scratch
 repository before any clone mounts it, and the index hooks write files without
-committing them.
+committing them. Outside the hooks, one script commit skips the approval path:
+`gitlore-add-tier` records a mount or a create under a canned message when the
+memory store held no unapproved work, and that commit's content follows from the
+request the user made (D71, in
+[tiered-memory.md](tiered-memory.md)).
 
 **Callers reach the entry points by name, not by a config key.** The plugin
 ships `bin/gitlore-commit`, `bin/gitlore-push` and `bin/gitlore-merge`, each a

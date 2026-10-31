@@ -30,7 +30,7 @@ siblings:
   classifier · **D32** mount and create · **D33** a tier's always-on conventions
   · **D71** add-tier is a direct call with the intent on stdin, run sandboxed
   with the url's host in `allowed_domains`, the mount committing itself under a
-  canned message
+  canned message when the memory store held no unapproved work
 - Composition, in [index-composition.md](index-composition.md) — **D29**
   composition is placement · **D30** the tier manifest · **D31** compose
   triggers and validation · **D34** presence authority · **D35** the welded-line
@@ -181,7 +181,8 @@ already discoverable, and the manifest write is the same kind of working-tree
 edit. The commit that records the mount is D71's. The post-mount triage nudge
 names the `memory-writing` skill rather than restating its tier test, and fires
 on any manifest change — including a hand edit that never ran the command, which
-is why the trigger lives in the hook and not only in the command body (D48).
+is why the trigger lives in the `PostToolBatch` index-compose hook and not only
+in the command body (D48).
 
 **D33 — A tier may carry always-on conventions, and the mount reports the import
 line rather than writing it**
@@ -202,19 +203,22 @@ file and drop the rules the repo's own `CLAUDE.md` now duplicates — the shared
 file occupies the scope between a repo's `CLAUDE.md` and the user's
 `~/.claude/CLAUDE.md` — and that is judgement, not detection.
 
-**D71 — add-tier is a direct call, and the mount commits itself under a canned
-message**
+**D71 — add-tier is a direct call, and a mount into a clean store commits itself
+under a canned message**
 
-D32 justified the intent-file route by two reasons. D70 already answered both
-for push and commit. The classifier objection does not survive an explicit
-command: `/gitlore:add-tier` is what the user asked for. A denied call has moved
-nothing, so recovery is one turn. The intent file strands nothing a denial could
-lose, and it is one-shot anyway. So `/gitlore:add-tier` calls `gitlore-add-tier`
+D32 justified the intent-file route by two reasons. D70 already answered the
+first for push and commit; the probe below answers the second. The classifier
+objection does not survive an explicit command: `/gitlore:add-tier` is what the
+user asked for. A mount denied before it reaches the network has moved nothing,
+so recovery is one turn. The intent file strands nothing a denial could lose,
+and it is one-shot anyway. So `/gitlore:add-tier` calls `gitlore-add-tier`
 directly, the intent in its existing `key=value` format on stdin through a
 quoted heredoc, as `gitlore-commit` takes its summary. The intent file and
 `add-tier-batch.sh` retire. D32's mount/create convergence and its
 activate-as-last-step stand; the script keeps the url scheme allowlist, because
-the input is still agent-supplied, and composes and reports itself.
+the input is still agent-supplied, and composes and reports itself. After its
+compose it refreshes the compose stamp, so the `PostToolBatch` index-compose
+hook does not report the same manifest change again at the end of the batch.
 
 *The network and the sandbox (probe, Claude Code 2.1.316).* From the agent's
 command sandbox, `git submodule add` of a GitHub https url, `git submodule add`
@@ -222,26 +226,42 @@ of an ssh url, and `git push --dry-run` to a GitHub ssh remote are each denied
 by the sandbox's network proxy (`github.com:443` or `github.com:22`) unless the
 Bash call lists the host in `allowed_domains`, and all succeed with it listed.
 Writes to `.git` and the memory store's git dir succeed sandboxed. So the call
-runs sandboxed, with the url's host in `allowed_domains`, and a run denied on
-another host is re-run with that host added; `dangerouslyDisableSandbox` is not
-needed. `allowed_domains` applies in auto mode; in other modes the denial goes
-through the ordinary sandbox-retry permission prompt.
+runs sandboxed and lists every host the mode reaches in `allowed_domains` on the
+first call. A mount reaches the url's host, plus `api.github.com` for the `gh`
+visibility comparison, which stays silent when `gh` cannot reach it. A create
+without a `url=` runs `gh` against `api.github.com` to make the remote, then
+pushes the seed to and mounts the ssh url `gh` returns, on `github.com`. That
+create is not one-turn recoverable: a push denied after `gh repo create` leaves
+the remote made, and the re-run sets `url=` to the repo it created. In auto mode
+the call runs sandboxed with the hosts in `allowed_domains`, and
+`dangerouslyDisableSandbox` is not needed; in other modes `allowed_domains` is
+ignored and a denial is retried unsandboxed through the permission prompt.
 
 *The canned commit.* The mount then handed off to `gitlore:commit` for an
 approved summary that had nothing to say: every staged change (`.gitmodules`,
-`.gitlore-tiers`, the tier gitlink, composed index lines the tier's publishers
-already approved) follows mechanically from the request. D49's argument for
-canned merge commits applies: no unapproved content, intention already
-expressed. The mount commits itself in the memory root under a canned message
-and stages the moved memory gitlink in the parent, as the commit path does. The
-subject is `mount <tier> tier from <url>` (create:
-`create <tier> tier at <url>`), the body the tier's routing description.
+`.gitlore-tiers`, the tier gitlink, composed index lines) follows mechanically
+from the request. For a mount, the composed lines are ones the tier's publishers
+already approved, so D49's argument for canned merge commits applies: no
+unapproved content, intention already expressed. For a create, the only text is
+the routing description, settled with the user in the command's first step, so
+the commit carries the user's stated request and nothing else. FR11 names the
+mount commit as an exemption on these grounds. On a clean store the mount
+commits itself in the memory root under a canned message and stages the moved
+memory gitlink in the parent, as the commit path does. The subject is
+`mount <tier> tier from <url>` (create: `create <tier> tier at <url>`), the body
+the tier's routing description.
 
-*Only what the mount staged.* The canned commit carries exactly the paths the
-mount staged. Memory work pending before the call stays pending for the ordinary
-approved commit — D43's staged-pair discipline, as D49 applies it. Step 3 triage
-moves, local facts routed into the tier, are judgement and keep the
-`gitlore:commit` approval path.
+*A store with unapproved work gets no canned commit.* A memory store that held
+unapproved work before the call gets no canned commit: the mount stays staged,
+and the next approved `gitlore:commit` carries it with the pending work. The
+mount's changes include the recomposed `MEMORY.md`, whose recompose folds in
+whatever unapproved index edits the episode already held, so a canned commit
+would land them unprompted. This is the guard D49 keeps for a take, falling back
+to D43's staged-pair discipline
+([merge-and-resolve.md](merge-and-resolve.md),
+[tier-stores.md](tier-stores.md)). A clean store gets the canned commit,
+carrying exactly the mount. Step 3 triage moves, local facts routed into the
+tier, are judgement and keep the `gitlore:commit` approval path.
 
 ## Rejected alternatives
 
