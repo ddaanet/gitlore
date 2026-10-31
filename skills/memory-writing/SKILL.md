@@ -42,28 +42,8 @@ nobody tracks.
    while the copy drifts and pays index bytes every session to say it worse.
    Accuracy is not the test — an accurate fact in the wrong home is still a
    category error. The owners:
-   - **A skill.** The body reduces to "when using \<skill\>, do X". Delete it
-     and let the skill say X; if X is missing from the skill, fix the skill.
-   - **A design doc.** A `project` memory logging decisions, supersessions and
-     dated status. The living design doc is the memory of the design.
-   - **The code.** A rule about how one call site must behave belongs in a
-     comment there, read by whoever edits that line.
-   - **CLAUDE.md.** A convention binding on all work in one repo, or a shared
-     tier's always-loaded conventions file. Those load whole every session —
-     exactly the scope such a rule wants, and the wrong scope for a fact that
-     should be *found* on meeting a symptom.
-   - **A hook or tool that prints the diagnosis when it fires.** Runtime output
-     is an owner too, and the better teacher: it arrives with the offending
-     input named, at the moment of the failure, and costs nothing on every
-     unrelated session. A memory restating what a hook's own stderr already
-     says reaches the reader later and says it worse.
-   - **A sibling project's skill body or agent definition**, not only its name
-     and description. A fix at an owner my human partner owns is preferred to
-     a note; a brief in the owning repo's `inbox/` is a destination in its own
-     right. Read the inventory (`owned-projects.md` in each mounted tier) here;
-     an owner it does not list is asked about at the commit review and recorded
-     in the same change
-     ([owner-inventory.md](references/owner-inventory.md)).
+   Open [owners.md](references/owners.md) once a candidate owner is in view: the
+   list of owners and how to read the inventory.
    Grep the owner for the load-bearing terms before accepting a pointer that
    claims coverage.
 3. **Would the reader reach it unaided?** A fact restating common sense, or one
@@ -125,72 +105,22 @@ something.
 
 ## 3. A new file, or a section in one that exists
 
-Files with distinct HOW content and one shared WHEN are one memory split by
-topic, and per-file trigger clauses route the reader to a third of the material
-at the moment all of it applies. The tell is duplication: a split along a real
-seam does not repeat itself; one that followed topic headings states the same
-rule twice in near-identical words. Splitting further never helps — every
-fragment inherits the same trigger — and hanging the content off one agent's
-prompt couples a general fact to one consumer.
-
-Same moment clause for two files: merge and dedup, and check the residue for
-anything that fires at a *different* moment — relocate it, since the merged file
-inherits one trigger only. Merge for routing, never for headroom: the byte gain
-is near zero, because the merged line must still carry every distinctive
-literal both entries carried.
+Open [file-shape.md](references/file-shape.md) when a file with the same moment
+clause already exists.
 
 ## 4. Organising a file that holds many facts
 
-A merged file converges on a dozen independent facts under one trigger. Order
-sections by the literal a reader arrives holding, never by discovery order. One
-section per symptom; a symptom whose cases differ gets one section with a
-discriminator, not one section per case. State a shared remedy once and
-reference it — restated in four sections it drifts in four directions. Past
-roughly a screen of sections, lead with a symptom → section map. A fact that is
-a *cost of the remedy* files under the remedy, not under the symptom that led
-there.
-
-**Recall delivers the first 4096 bytes of a file and stops**, so a merged file
-has a ceiling and crosses it silently — the index line still points at
-something that looks complete. Measure with `wc -c` before adding a section,
-and measure the whole file: the `description:` frontmatter is synced from the
-index line (§7), so a line that routes well is charged twice, once in the
-capped index and again inside the fact's own 4096 bytes. A 670-character line
-leaves a frontmatter block of about 800 bytes — a fifth of the budget spent
-before a word of body. Since §7 forbids trimming a
-line to hit a byte target, the budget the body actually has is what argues for
-splitting early — never for a line that routes worse.
-Past the cap the file becomes a hub plus siblings: the hub keeps the trigger
-and the map, now symptom → file, and each section moves to its own file beside
-it, reachable by path once the hub is read. Splitting for size is not the split
-§3 warns against — that one gives each fragment its own index line and its own
-third of one trigger, while this one keeps a single line pointing at the hub.
+Open [file-shape.md](references/file-shape.md) when a file is filling toward
+recall's 4096-byte limit.
 
 ## 5. Which tier
 
-Ask whether the fact's *mechanism* depends on something unique to this repo, or
-only on this repo being a member of a class — a plugin, a hook-managed repo, a
-submodule-based store. Evidence naming the repo where it surfaced is not
-evidence the mechanism depends on that repo.
-
-Class membership is necessary, not sufficient. A mechanism can belong to the
-class and still have exactly one consumer: name the *other* member that will
-meet the symptom. Being true anywhere does not make it relevant everywhere. The
-asymmetry favours staying local: a tier line is loaded by every session in
-every mounting repo against a capped index, so a weak promotion crowds lines
-that route better, silently, in every repo; demotion later costs a file move.
-Separate behaviour from encoding — how this repo's code handles a mechanism is
-always project-local, and usually belongs in its design doc rather than memory.
+Open [tier-routing.md](references/tier-routing.md) when a tier is mounted and the
+fact might go up.
 
 ## 6. Links when a fact routes up
 
-`[[links]]` travel verbatim. Any that pointed at a project-local sibling
-resolve only in the repo that wrote them and are dead from every other consumer
-of the tier — not the acceptable write-it-later dangle, since the target stays
-local by design. Strip the pointer and keep the prose that names the incident;
-where the link *was* the whole reference, delete it — a tier fact stands on its
-own or it is not a tier fact. Also strip a link naming a skill rather than a
-memory, and one whose target the prose already names.
+Open [tier-routing.md](references/tier-routing.md) when a fact routes up to a tier.
 
 ## 7. The index line
 
@@ -228,9 +158,8 @@ lost, silently, with the file still there looking complete. Write the triggers
 the fact needs; an index over the cap is the retirement decision coming due,
 taken separately with `/gitlore:index-audit`.
 
-A fact written to override an installed skill sits on that skill's own topic,
-so a coverage scan flags it as owned. Check which way the claim points before
-counting an owner.
+Open [owners.md](references/owners.md) when a fact is written to override an
+installed skill.
 
 ## 8. Landing it
 
@@ -242,16 +171,6 @@ the parent commit carrying the change it documents.
 
 ## 9. Arriving here at a gate, over facts already written
 
-Three gitlore moments run this pass over facts that exist: the commit review,
-before the approval summary is drafted; `/gitlore:install`, over a store just
-migrated from Claude Code's own auto-memory; and a tier mount, over the local
-facts a new tier's scope may now cover. Nothing changes about the questions —
-what changes is that a verdict of *discard* or *relocate* is now an edit, and
-that the batch has an order. Take discard and relocate first, since a fact
-leaving the store needs no body or index work, then the survivors' bodies (§2),
-then their index lines (§7). Land every edit before the summary is written: the
-summary states what the facts claim as committed, so a fix that follows it
-describes a commit that no longer matches.
-
-An index over the loader cap is not this pass's business — retirement across
-the whole store is `/gitlore:index-audit`, taken as its own decision.
+Open [gate-pass.md](references/gate-pass.md) when a caller sends you here over facts
+already written: the `gitlore:commit` review (before the approval summary),
+`/gitlore:install`, or a tier mount.

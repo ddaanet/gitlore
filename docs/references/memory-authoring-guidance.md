@@ -109,11 +109,13 @@ finds; both name the skill. What the judgement needs is the skill's tier test
 and its rule about `[[links]]` that die when a fact leaves the repo, which the
 nudge names rather than restates.
 
-**Ordering at a gate is the skill's own business**, so §9 of `SKILL.md` carries
-it: discard and relocate first — a fact leaving the store needs no body or index
-work — then the survivors' bodies, then their index lines. An index over the
-loader cap is explicitly not the gate's business; retirement across the store
-stays `/gitlore:index-audit`, taken as its own decision.
+**Ordering at a gate is the skill's own business**, so
+`skills/memory-writing/references/gate-pass.md` (the node §9 of `SKILL.md`
+points at) carries it: discard and relocate first — a fact leaving the store
+needs no body or index work — then the survivors' bodies, then their index
+lines. An index over the loader cap is explicitly not the gate's business;
+retirement across the store stays `/gitlore:index-audit`, taken as its own
+decision.
 
 What the bats suites can hold is that each site names the skill, that the
 skill's directive precedes its summary format, and that the migration
