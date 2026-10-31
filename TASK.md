@@ -1,3 +1,0 @@
-## Current task
-
-Executing the approved plan plans/2026-10-31-add-tier-direct-call.md (D71: add-tier as a direct gitlore-add-tier call, intent as key=value on stdin through a quoted heredoc, canned mount commit on a clean store). The probe ran and step 1 (decision docs) landed with its review fixes. Next action: step 2, the script, red tests first per the plan's behaviour list; the red author and red reviewer are different agents, green goes to Haiku. Step 2 also settles how the mount's compose report stays single, since the compose stamp is keyed by an agent id only hooks receive (gitlore_compose_stamp_file in scripts/lib/index-sync.sh). Each step is one commit gated by just precommit and reviewed at medium.
