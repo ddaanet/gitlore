@@ -12,8 +12,9 @@
 # to source twice, that this file sources after its own two lines above:
 #   resolve-recovery.sh     repair a stale merge-state file (lost MERGE_HEAD,
 #                            a checkout-cleared staged merge)
-#   resolve-merge-state.sh  merge-state file IO, merge preparation, and the
-#                            sub-agent directive
+#   resolve-merge-state.sh  merge-state file IO and the sub-agent directive
+#   resolve-merge-prepare.sh prepare a memory merge against its authority,
+#                            then yield it to the merger
 #   rewrite-guard.sh        refuse a divergence on rewritten history (D62)
 #   resolve-sync-tiers.sh   commit dirty tiers and fast-forward their `live`
 #   resolve-sync-memory.sh  commit dirty memory itself (the FR11 commit path)
@@ -32,6 +33,8 @@ source "${BASH_SOURCE[0]%/*}/index-merge.sh"
 source "${BASH_SOURCE[0]%/*}/resolve-recovery.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-merge-state.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-merge-prepare.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/rewrite-guard.sh"
 # shellcheck disable=SC1091
