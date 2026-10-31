@@ -6,13 +6,15 @@ every memory commit passes a user-approved review gate, and portable facts are
 shared across repos through nested *tier* submodules.
 
 This is the living design: what the system does, how it is built, and why it is
-built that way. It is kept in the present tense — how it got here is in
-[changelog.md](changelog.md). [decisions.md](decisions.md) is the decisions
-index: one conclusion line per decision and every rejected alternative by name.
-`docs/references/` is a graph of nodes, one per mechanism, each holding the
-detail behind a section here and the decisions and rejected alternatives arguing
-for it. The sections here summarize; read the node before making a claim about
-the mechanism it argues. Plans and specs live in `plans/`.
+built that way. It is kept in the present tense, and git history is its
+changelog
+([design-history.md](references/design-history.md)).
+[decisions.md](decisions.md) is the decisions index: one conclusion line per
+decision and every rejected alternative by name. `docs/references/` is a graph
+of nodes, one per mechanism, each holding the detail behind a section here and
+the decisions and rejected alternatives arguing for it. The sections here
+summarize; read the node before making a claim about the mechanism it argues.
+Plans and specs live in `plans/`.
 
 **Created:** 2026-04-11
 
@@ -315,12 +317,6 @@ one hop further, in the node.
 
 Named on the *Rejected* line of each decision group in
 [decisions.md](decisions.md) and argued in the `## Rejected alternatives`
-section that closes the group's node. A decision that was later inverted lives
-in the changelog, not here.
-
----
-
-## Changelog
-
-How the design got here is recorded in [changelog.md](changelog.md), newest
-first.
+section that closes the group's node. A decision that is later inverted or
+retired is deleted from the index and its node, with its why in the deleting
+commit (D72, [design-history.md](references/design-history.md)).

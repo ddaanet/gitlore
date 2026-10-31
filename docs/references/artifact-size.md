@@ -116,11 +116,10 @@ run on every commit would need the network and a key, and its verdict would
 shift under a tokenizer version with no edit to the tree. Lines are exact, free
 and reproducible, and the wrap already ties them to tokens for prose.
 
-**Leaving the rule outside `docs/` a convention with no checker.** Its own
-changelog entry recorded the defect at the time — nothing will notice when a
-script crosses 400 lines again. Every file that regressed would regress
-silently, and the next reader to hit one would have no evidence a rule had ever
-applied.
+**Leaving the rule outside `docs/` a convention with no checker.** Nothing
+notices when a script crosses 400 lines again. Every file that regressed would
+regress silently, and the next reader to hit one would have no evidence a rule
+had ever applied.
 
 **A separate checker script for the source tree.** One rule split across two
 files, each with its own discovery, reporting convention, justfile wiring and

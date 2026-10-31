@@ -49,9 +49,9 @@ under `memory/`, an explicit invocation — so neither description carries routi
 surface; together they cost ~140 B of always-on context against the 1,459 B of
 capped index they free. Evidence and provenance were cut rather than relocated:
 the numbers that make a counterintuitive rule survive disagreement stay inline,
-compressed to the figure, and the rest is in the changelog. The one reusable
-artifact, the pair of auditor briefs, lives in the command as what it dispatches
-with.
+compressed to the figure, and the incidents behind them live in the tier's git
+history. The one reusable artifact, the pair of auditor briefs, lives in the
+command as what it dispatches with.
 
 **No write-time hook, and no index-size trigger.** A `PreToolUse` deny on writes
 under `memory/` would reach the pre-write moment at a turn's cost on every

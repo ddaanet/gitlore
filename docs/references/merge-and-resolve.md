@@ -7,10 +7,9 @@ directive has to authorize for itself. The conclusions open the node below; this
 file is what you need while running or changing a merge.
 
 - Trunk and direction — **D1** `live` is the memory trunk, independent of the
-  parent's default branch · **D2** superseded by D41's detached model, kept for
-  the record · **D41** detached at `live`: one branch model per store, one
-  commit path · **D6** merge direction: the more-authoritative side is the first
-  parent
+  parent's default branch · **D41** detached at `live`: one branch model per
+  store, one commit path · **D6** merge direction: the more-authoritative side
+  is the first parent
 - Doing the merge — **D3** ordinary checkout during resolve, not git plumbing ·
   **D7** scripts decide, the agent handles language · **D9** a sub-agent
   synthesizes the merge (requires the experimental flag) · **D13** a
@@ -170,7 +169,7 @@ synthesis on two sides that recorded the same fast-forward. Publishing keeps the
 opposite order for the opposite reason: a pointer must never go out ahead of
 what it points at.
 
-## Decisions — D1, D2, D3, D6, D7, D9, D13, D24, D41, D49
+## Decisions — D1, D3, D6, D7, D9, D13, D24, D41, D49
 
 **D1 — `live` branch as memory trunk, independent of parent's default branch**
 
@@ -179,14 +178,6 @@ memory trunk would put every session on the branch they all merge into, and
 would tie memory's ref layout to a name each project chooses for its own
 reasons. `live` is a dedicated trunk no session ever works on, which makes the
 merge target unambiguous in every store — memory and tiers alike.
-
-**D2 — Per-worktree named branches by default; detached HEAD when parent is
-detached**
-
-Superseded by D41's detached-at-`live` branch model; no store carries a named
-working branch. See
-[changelog: branch model unified](../changelog/2026-07-20-branch-model-unified-detached-live.md)
-for why.
 
 **D3 — Ordinary checkout during resolve, not git plumbing**
 
@@ -333,9 +324,9 @@ watching either copy. Neither store carries one. The payoff is
 authoritative `live`, local then remote", and every resolution re-detaches at
 the new `live`.
 
-The model is the reason D1, D2, D3 and D6 read as they do, and the reason the
-tier decisions that build on it (D42, D43) can assume one shape of store rather
-than two.
+The model is the reason D1, D3 and D6 read as they do, and the reason the tier
+decisions that build on it (D42, D43) can assume one shape of store rather than
+two.
 
 **D49 — Merge commits are canned and unprompted; an explicit take commits its
 own bookkeeping**

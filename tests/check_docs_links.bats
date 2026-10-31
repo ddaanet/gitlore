@@ -43,10 +43,10 @@ load helpers/check-docs-links
   [ "$status" -eq 0 ]
 }
 
-@test "broken link: a changelog entry is scanned too" {
-  mkdir -p docs/changelog
-  printf '# An entry\n\nSee [the design](../design.md) and [gone](gone.md).\n' \
-    > docs/changelog/2026-01-01-a.md
+@test "broken link: a file in a docs subdirectory is scanned too" {
+  mkdir -p docs/notes
+  printf '# A note\n\nSee [the design](../design.md) and [gone](gone.md).\n' \
+    > docs/notes/a.md
   plant_decisions 'Nothing here.'
   run "$CHECKER"
   [ "$status" -eq 1 ]

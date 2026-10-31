@@ -37,9 +37,8 @@ GIVEN_NAME = "David"
 
 # Directories whose citations are records rather than instructions. `tests/`
 # names `memory/notes.md` and `memory/a.md` by the hundred as fixtures;
-# `plans/` and `docs/changelog/` are dated history and cite the pre-rename
-# names because those were the names at the time. `plugin-dev/` is a vendored
-# subtree. None of them route a live agent anywhere.
+# `plans/` is dated history and cites the pre-rename names because those
+# were the names at the time. `plugin-dev/` is a vendored subtree. None of them route a live agent anywhere.
 REFERENCE_SCAN_EXCLUDES = ("tests", "plans", "docs", "plugin-dev", ".git")
 
 # Where a stale memory citation would actually misroute someone: the store

@@ -18,7 +18,6 @@ there and every argument there a conclusion here.
 
 - **D1** — `live` is the memory trunk, decoupled from the parent's default
   branch
-- **D2** — superseded by D41's detached-at-`live` model; kept for the record
 - **D3** — ordinary checkout during resolve, not git plumbing
 - **D6** — merge direction: the more-authoritative side is the first parent
 - **D7** — scripts decide, the agent handles language
@@ -261,6 +260,18 @@ file and hook with a canned commit added · the agent running `gitlore-commit`
 with a canned mount summary · a rubric-graded mount summary · the add-tier
 intent as `--options` or JSON arguments (tiered-memory.md).
 
+**Design history** — how the design's changelog is kept, and where a retired
+decision goes. [design-history.md](references/design-history.md)
+
+- **D72** — git history is the design's changelog: no dated records, a
+  design-significant change carries its why in the commit body or the node, and
+  an inverted or retired decision is deleted from the index and its node with
+  the why in the deleting commit; its number is not reused
+
+*Rejected:* keeping the existing records frozen while writing no new ones ·
+splitting `changelog.md` by period to pass the size check · a "retired
+decisions" section in `decisions.md`.
+
 **Artifact size** — the 400-line cap over everything a reader takes in at one
 go, and the check that gates it.
 [artifact-size.md](references/artifact-size.md)
@@ -278,4 +289,5 @@ source tree · counting only shell files, not python.
 
 Each is named on the *Rejected* line of its decision group above and argued in
 the `## Rejected alternatives` section that closes that group's node. A decision
-that was later inverted lives in the changelog, not here.
+that is later inverted or retired is deleted from the index and its node, with
+its why in the deleting commit (D72).

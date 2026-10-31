@@ -1,8 +1,7 @@
 # Claude Code auto-memory retrieval mechanism
 
 Background research for tiered memory (D17 and D26, both in
-`references/tiered-memory.md`). Source of the empirical claims cited there and
-in the 2026-07-14 changelog entry ("Designed tiered global/org memory"). The
+`references/tiered-memory.md`). Source of the empirical claims cited there. The
 conclusions below are restated as settled fact in `references/tiered-memory.md`
 (D26) and in D18's active-recall argument in `references/cc-platform.md`; this
 file keeps the underlying evidence trail. The delivery shape changed between the
