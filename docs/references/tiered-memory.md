@@ -218,11 +218,13 @@ quoted heredoc, as `gitlore-commit` takes its summary. The intent file and
 activate-as-last-step stand; the script keeps the url scheme allowlist, because
 the input is still agent-supplied, and composes and reports itself. The mount's
 compose report reaches the agent once per mount, though the `PostToolBatch`
-index-compose hook still sees the manifest change at the end of the batch. How
-that is achieved is open, settled when the script is written: the compose stamp
-the hook keys on is named by an agent id that reaches hooks only
-(`scripts/lib/index-sync.sh`), so a script called from Bash cannot refresh it
-for a subagent.
+index-compose hook still sees the manifest change at the end of the batch. The
+baselines the hooks key on (the compose stamp and the MEMORY.md pre-image) are
+named by an agent id that reaches hooks only (`scripts/lib/index-sync.sh`), so
+the script cannot pick its own caller's file. It records the pre-run state
+instead and, after the mount, moves every baseline file equal to that state to
+the post-run state; a differing baseline belongs to another batch and is left
+alone, and none is created or deleted (`scripts/add-tier.sh`).
 
 *The network and the sandbox (probe, Claude Code 2.1.316).* From the agent's
 command sandbox, `git submodule add` of a GitHub https url, `git submodule add`
