@@ -119,12 +119,13 @@ summary described and no session saw. `gitlore-commit` and
 computes what `gitlore_compose` would write through the same
 `gitlore_compose_pass`, each index rendered by the same `gitlore_compose_render`
 and only the last step differing: the write replaces the file, the check reports
-its path. Nothing is written, no scratch file is made and no mtime moves. A
+its path. It writes no index and no file in a store; a clean tier ahead of its
+pin is put back at the pin, as a tier merely ahead of its pin is below. A
 non-empty result aborts the commit before any store is committed, naming every
 index the pass would change and the remedy: `gitlore-compose` for an agent, the
 script's path for a terminal user. `gitlore-compose`
-(`scripts/compose-memory.sh`) is the one writer outside a session; on a composed
-store it writes nothing.
+(`scripts/compose-memory.sh`) runs the full down pass with the write, repeating
+it until a pass changes nothing; on a composed store it writes nothing.
 
 The check precedes the section check in `gitlore-commit`, so a summary is judged
 against the state the remedy leaves. It follows the prepared-merge guards, so a

@@ -26,6 +26,9 @@ unset CDPATH   # else `cd` may echo its target into a $(cd … && pwd) capture
 PLUGIN_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
+# gitlore_say_for_agent_or_user, which the sync's aborts report through.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # gitlore_get_frontmatter_description, to echo the tier's routing guidance back.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"

@@ -334,6 +334,39 @@ $result"
 
 
 # The whole in-session pass; return codes 0, 1 and 2 as documented above.
+#
+# One pass is not always a fixed point: the layout adopts a carrier into root
+# for a tier root had no line for, and only the next pass sees root holding the
+# tier and re-lays the carrier out (or re-orders it). So the pass repeats with
+# the write while it reports a change, at most three times, and each index is
+# named once however many passes wrote it. A refusal or a failed write from any
+# pass is returned as that pass reported it.
 gitlore_compose() {
-  gitlore_compose_pass "$1" gitlore_compose_write
+  local mempath="$1" passes=0 rc out all="" line
+  while [ "$passes" -lt 3 ]; do
+    passes=$((passes + 1))
+    rc=0
+    out=$(gitlore_compose_pass "$mempath" gitlore_compose_write) || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      # A failed write follows the indexes already written.
+      if [ "$rc" -eq 2 ] && [ -n "$all" ]; then printf '%s\n' "$all"; fi
+      printf '%s\n' "$out"
+      return "$rc"
+    fi
+    [ -n "$out" ] || break
+    if [ -z "$all" ]; then
+      all="$out"
+    else
+      while IFS= read -r line; do
+        case "$line" in
+          "composed "*) printf '%s\n' "$all" | grep -qxF -- "$line" || all="$all
+$line" ;;
+        esac
+      done <<EOF2
+$out
+EOF2
+    fi
+  done
+  if [ -n "$all" ]; then printf '%s\n' "$all"; fi
+  return 0
 }

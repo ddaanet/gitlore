@@ -13,9 +13,9 @@ set -euo pipefail
 # One `== <store> ==` section per store with changes, `memory` for root. Each
 # section is committed verbatim in its own store, tiers before root. Refused
 # (exit 2) when the summary is empty, has text before its first header, or does
-# not match the stores that have changes; no commit precedes a refusal. A
-# refused run may still have composed first: that writes the tier carriers and
-# the root MEMORY.md, the same writes the index-compose hook makes.
+# not match the stores that have changes; no commit precedes a refusal. It
+# composes nothing: a store whose indexes a compose pass would change aborts
+# the run, naming `gitlore-compose`.
 # It never prepares or takes a merge: a `live` that cannot fast-forward is
 # reported. Callers run it as `gitlore-commit`, the plugin `bin/` name.
 
@@ -122,8 +122,9 @@ done < <(gitlore_tier_paths "$mempath")
 # The commit writes no index. A store whose indexes a compose pass would change
 # aborts here, before the stores are judged: the pass would make a tier dirty
 # that the status below must see, and the section check would otherwise answer a
-# summary for a state the remedy changes. A pass that would refuse is the sync's
-# to report, and writes nothing either way.
+# summary for a state the remedy changes. The check writes no index and no file
+# in a store; a clean tier ahead of its pin is put back at the pin by its pin
+# check. A non-zero status from the check does not abort here.
 pending_rc=0
 pending=$(gitlore_compose_pending "$mempath") || pending_rc=$?
 if [ "$pending_rc" -eq 0 ] && [ -n "$pending" ]; then
@@ -167,8 +168,8 @@ if [ "$root_has" = "0" ] && [ -z "$dirty_tiers" ]; then
   exit 0
 fi
 
-# The section check. Every refusal here precedes the first commit (composition
-# above has already written, as its hook does).
+# The section check. Every refusal here precedes the first commit (the compose
+# check above has written no index).
 headers=$(gitlore_summary_headers "$summary")
 if [ -n "$(gitlore_summary_preamble "$summary")" ]; then
   refuse "text before the first '== <store> ==' header belongs to no store"

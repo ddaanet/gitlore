@@ -100,8 +100,9 @@ EOF2
   return 0
 }
 
-# Print the path of each index a compose pass would change, one per line, and
-# write nothing. Return 0 with no output when the store is composed; 1 when the
+# Print the path of each index a compose pass would change, one per line. It
+# writes no index and no file in a store; a clean tier ahead of its pin is put
+# back at the pin by the pin check. Return 0 with no output when the store is composed; 1 when the
 # pass would refuse (the problems on stdout, as gitlore_compose prints them); 2
 # when an index could not be read.
 gitlore_compose_pending() {

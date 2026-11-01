@@ -85,6 +85,9 @@ EOF
 ```
 
 4. Relay the command's output. If it exits non-zero, surface the output
-   verbatim and stop; do not retry with altered text.
+   verbatim and stop; do not retry with altered text. The one exception is an
+   abort that tells you to run `gitlore-compose`: run it. If a store with no
+   section in the approved summary is now dirty, redraft and get approval
+   again; otherwise retry with the same text.
 5. If the user asks for changes, redraft the summary, show it again, and end
    the turn. Each redraft needs its own approval.
