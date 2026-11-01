@@ -110,10 +110,10 @@ next run does the work again.
 and `test-integration`, so editing an integration suite leaves the unit verdict
 standing.
 
-`format-docs`, `check-memory-hygiene.py`, `check-docs-links.py` and
-`check-version` run uncached and write no gate file, so four fresh gates are not
-the same thing as a green `precommit`. `PLUGIN_DEV_GATE_FORCE=1` runs a gate
-whatever its sentinel says.
+`format-docs`, `check-refs`, `check-size`, `check-memory-hygiene.py`,
+`check-docs-links.py` and `check-version` run uncached and write no gate file,
+so four fresh gates are not the same thing as a green `precommit`.
+`PLUGIN_DEV_GATE_FORCE=1` runs a gate whatever its sentinel says.
 
 `tools/lint-shell.sh` discovers from the set the hash enumerates — tracked files
 plus untracked, non-ignored ones — so a brand-new script that moves the `lint`

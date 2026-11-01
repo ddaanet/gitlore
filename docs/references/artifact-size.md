@@ -1,8 +1,9 @@
 # Artifact size — decision D73
 
 The byte cap over every artifact a reader takes in at one go — a `docs/` node, a
-shell script, a hook, a bats suite, a plan — and the toolkit check that makes it
-a gate. Enforced by `plugin-dev/check-size.sh`, wired into `precommit` as
+shell script, a hook, a bats suite — and the toolkit check that makes it a gate.
+A plan is held to the same cap in self-review only: the check skips root
+`plans/`. Enforced by `plugin-dev/check-size.sh`, wired into `precommit` as
 `check-size`.
 
 - **D73** — the cap is 20000 bytes per file, 10000 for a `SKILL.md`, counted by
@@ -39,7 +40,8 @@ whole, into one context window it shares with everything else the task needs.
 The cap is a claim about that window, not about how documentation ought to be
 organized, so the file's language decides nothing. The corollary is that the cap
 follows the reading, not the artifact type: it covers plans, PRs and design docs
-for the same reason.
+for the same reason, though only design docs are inside the gate's walk; a plan
+or a PR is held to it in self-review.
 
 ## Splitting along a need-time seam
 
@@ -63,7 +65,7 @@ a moved function pointing at its new file.
 The judgement is soft. A bounded overage on one cohesive document beats a
 reflexive split whose cross-referencing costs the reader more than the overage
 saved, and a file parked at exactly its cap has stopped emitting the signal the
-count exists to emit. Satisfying it quietly — long lines, shaved docstrings — is
+count exists to emit. Satisfying it quietly — shaved prose and docstrings — is
 borrowing against the split rather than making it.
 
 The gate is binary: a file over its cap blocks. What the gate buys is that the
@@ -89,8 +91,9 @@ refused. One toolkit check covers every file, so the rule has one
 implementation, one discovery and one report, and `check-docs-links.py` carries
 no size check of its own.
 
-`check-size` runs uncached as a `precommit` dependency: a pass over the tree's
-file sizes costs less than the bookkeeping of a gate file.
+`check-size` runs uncached as a `precommit` dependency because it reads every
+file git does not ignore, a set no sentinel's input hash covers whole: a cached
+pass could let through a file the check never read.
 
 ## Rejected alternatives
 
