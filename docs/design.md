@@ -263,8 +263,8 @@ the git and decides (D7).
   absent store, and divergence prepares a merge and yields to
   `/gitlore:resolve`. A parent commit touches no memory: `commit-memory.sh`, run
   as `gitlore-commit`, is the one commit path (D70). It takes the summary on
-  stdin, composes the store before it commits, so the carrier a tier's remote
-  receives matches the root index, and aborts on a compose problem in an index
+  stdin, writes no index and aborts when a compose pass would change one
+  (`gitlore-compose` is the remedy), and aborts on a compose problem in an index
   file the commit changes, which committing would publish (D50); it commits
   every dirty tier, then memory, advances each store's local `live`, and stages
   the memory gitlink into the parent index, so the next parent commit records

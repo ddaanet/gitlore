@@ -155,13 +155,18 @@ gitlore: composing would have overwritten what that tier holds. Open this projec
     return 1
   fi
 
-  # Compose before the tier commit below: composition writes carrier files
-  # inside the tiers, so it must land before the tiers' gitlinks move, or the
-  # gitlink pins the pre-compose content.
+  # The commit writes no index: a store whose indexes a compose pass would
+  # change aborts, so composition has landed (gitlore-compose, or a batch)
+  # before the tiers' gitlinks move.
   local compose_result compose_rc=0
-  compose_result=$(gitlore_compose "$mempath") || compose_rc=$?
+  compose_result=$(gitlore_compose_pending "$mempath") || compose_rc=$?
   case "$compose_rc" in
-    0) ;;
+    0)
+      if [ -n "$compose_result" ]; then
+        gitlore_say_compose_pending "$compose_result" >&2
+        return 1
+      fi
+      ;;
     1)
       # A refusal writes nothing (D31, D36): projecting root's older text over
       # an unadopted carrier would destroy approved upstream facts. The commit
@@ -205,31 +210,18 @@ gitlore: the commit was aborted because a problem is in an index file this commi
       fi
       gitlore_say_for_agent_or_user \
         "$refusal
-gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand — composition runs again at the next memory commit. This commit also stages each tier at the commit its worktree is on now." \
+gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand. This commit also stages each tier at the commit its worktree is on now." \
         "$refusal
 gitlore: the commit went ahead with the memory indexes as they stand. Open this project in Claude Code and ask it to repair the memory store." >&2
       ;;
-    2)
-      # A write failed partway, leaving a half-written carrier — that must not
-      # be committed, so this aborts before any store is committed.
-      local partial="gitlore: tier composition could not write an index — the memory indexes are only partly composed:
-$compose_result"
-      gitlore_say_for_agent_or_user \
-        "$partial
-gitlore: the commit was aborted so the half-written carrier is not committed. Investigate that path (permissions, disk space, a read-only worktree), then retry the commit." \
-        "$partial
-gitlore: the commit was aborted so the half-written carrier is not committed. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
-      return 1
-      ;;
     *)
-      # Unreachable from gitlore_compose, which returns 0, 1 or 2 and nothing
-      # else. Kept because silently proceeding on an unknown status is the
-      # failure the case exists to remove.
-      local unknown="gitlore: tier composition exited with an unrecognised status ($compose_rc), so what it wrote is unknown:
+      # Status 2: an index could not be read, so what a pass would change is
+      # unknown. Nothing is written by the check, and nothing is committed.
+      local unknown="gitlore: tier composition could not be checked, so what it would change is unknown:
 $compose_result"
       gitlore_say_for_agent_or_user \
         "$unknown
-gitlore: the commit was aborted rather than commit a memory store in an unknown state. Establish what gitlore_compose did, then retry the commit." \
+gitlore: the commit was aborted rather than commit a memory store in an unknown state. Investigate that path (permissions, a missing file), then retry the commit." \
         "$unknown
 gitlore: the commit was aborted rather than commit a memory store in an unknown state. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
       return 1

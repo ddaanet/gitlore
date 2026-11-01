@@ -21,6 +21,7 @@ load helpers/commit-memory
   commit_memory_state
   seed_tier_bullet ddaanet shared.md "fresh hook"
 
+  gitlore_compose memory >/dev/null
   run --separate-stderr commit_with "== ddaanet ==
 memory: record the shared fact"
   [ "$status" -eq 0 ]
@@ -38,6 +39,7 @@ memory: record the shared fact"
   commit_memory_state   # local.md tracked, so only the index line is a root change
   seed_tier_bullet ddaanet shared.md "fresh hook"
   seed_root_bullet "local.md" "a local fact"
+  gitlore_compose memory >/dev/null
   root_head=$(git -C memory rev-parse HEAD)
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)
 
@@ -58,6 +60,7 @@ memory: record the shared fact"
   commit_memory_state
   seed_tier_bullet ddaanet shared.md "fresh hook"
   printf 'Hand-edited note, no link.\n' >> memory/MEMORY.md
+  gitlore_compose memory >/dev/null
   root_head=$(git -C memory rev-parse HEAD)
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)
 
@@ -84,6 +87,7 @@ memory: record the note"
   commit_memory_state
   seed_tier_bullet "my tier" shared.md "fresh hook"
 
+  gitlore_compose memory >/dev/null
   run --separate-stderr commit_with "== my tier ==
 memory: record the shared fact"
   [ "$status" -eq 0 ]
@@ -105,6 +109,7 @@ memory: record the shared fact"
   seed_tier_bullet ddaanet shared.md "fresh hook"
   seed_root_bullet "other/fact.md" "a fact"
 
+  gitlore_compose memory >/dev/null
   run --separate-stderr commit_with "== ddaanet ==
 memory: record the shared fact"
   [ "$status" -eq 0 ]
@@ -112,9 +117,11 @@ memory: record the shared fact"
   [ -z "$(git -C memory status --porcelain)" ]
 }
 
-@test "a root tier-line edit that composition writes into a tier needs that tier's section" {
-  # The tier is clean when the summary is drafted; composition, which the commit
-  # runs, rewrites its carrier. The section check reads the post-compose state.
+@test "a root tier-line edit that a compose writes into a tier aborts the commit, then needs that tier's section" {
+  # The tier is clean when the summary is drafted; a compose rewrites its carrier.
+  # The commit path no longer composes: with the compose pending it aborts and
+  # leaves the store as found. Once gitlore_compose has run, the carrier is
+  # dirty and the same summary, now naming the tier's section, commits.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -127,6 +134,20 @@ memory: record the shared fact"
   rm memory/MEMORY.md.bak
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 
+  root_head=$(git -C memory rev-parse HEAD)
+  tier_head=$(git -C memory/ddaanet rev-parse HEAD)
+  carrier_before=$(cksum < memory/ddaanet/MEMORY.md)
+  run --separate-stderr commit_with "== ddaanet ==
+memory: take the fresh hook"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md"* ]] || false
+  [[ "$stderr" == *"gitlore-compose"* ]] || false
+  [ "$(git -C memory rev-parse HEAD)" = "$root_head" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
+  [ "$(cksum < memory/ddaanet/MEMORY.md)" = "$carrier_before" ]
+  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
+
+  gitlore_compose memory >/dev/null
   run --separate-stderr commit_with "== ddaanet ==
 memory: take the fresh hook"
   [ "$status" -eq 0 ]

@@ -27,6 +27,7 @@ make_two_dirty_stores() {
   commit_memory_state
   echo "root fact" > memory/notes.md
   seed_tier_bullet ddaanet shared.md "fresh hook"
+  gitlore_compose memory >/dev/null
   root_head=$(git -C memory rev-parse HEAD)
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)
 }
@@ -86,6 +87,7 @@ assert_refused() {
   # a commit that landed would have advanced.
   git -C memory/ddaanet branch -f live
   seed_tier_bullet ddaanet shared.md "fresh hook"
+  gitlore_compose memory >/dev/null
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)
   tier_live=$(git -C memory/ddaanet rev-parse live)
   root_head=$(git -C memory rev-parse HEAD)
@@ -197,8 +199,7 @@ memory: record the shared fact"
 }
 
 @test "a MEMORY.md change rides in root's own commit beside a memory section" {
-  make_two_dirty_stores
-  seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  make_two_dirty_stores   # composed: root already carries the tier line
   root_before=$(git -C memory rev-parse HEAD)
 
   run --separate-stderr commit_with "== ddaanet ==

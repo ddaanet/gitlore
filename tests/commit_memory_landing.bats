@@ -84,6 +84,7 @@ load helpers/commit-memory
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet shared.md "stale hook"
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  gitlore_compose memory >/dev/null
   hook="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/hooks/pre-commit"
   mkdir -p "$(dirname "$hook")"
   # shellcheck disable=SC2016  # $0 is the generated hook's own, not this shell's

@@ -79,12 +79,12 @@ load helpers/commit-memory
   [[ "$stderr" != *"moved off the commit the memory store records for it"* ]]
 }
 
-@test "a compose write failure aborts the commit" {
+@test "a pending compose aborts the commit without a write, even where a write would fail" {
   [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
-  # Reuses the induction at tests/index_compose_dangling.bats: chmod a-w on the
-  # carrier's directory fails the `mv` gitlore_compose_write makes into it (the
-  # temp file itself lands in the tier's own gitdir, never here). A half-written
-  # carrier must not be committed, and the aborted run leaves no file behind.
+  # The induction that used to fail the write: chmod a-w on the carrier's
+  # directory. The commit path writes nothing now, so the unwritable directory
+  # changes nothing about the abort: it names the pending index and the remedy,
+  # leaves no file behind, and never reports a failed write.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -92,45 +92,35 @@ load helpers/commit-memory
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
 
   head_before=$(git -C memory rev-parse HEAD)
+  carrier_before=$(cksum < memory/ddaanet/MEMORY.md)
   chmod a-w memory/ddaanet
   CLAUDECODE=1 run --separate-stderr commit_sections "memory: record the shared fact"
   chmod u+w memory/ddaanet
   [ "$status" -ne 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(cksum < memory/ddaanet/MEMORY.md)" = "$carrier_before" ]
   [ -z "$(claude_files)" ]
-  # The exit code alone would pass against a silent abort, which is the worse
-  # failure: a refused commit with nothing said about why. Header plus the
-  # forwarded problem line, for the same two-faults reason as the rc-1 case.
-  [[ "$stderr" == *"tier composition could not write an index"* ]]
-  [[ "$stderr" == *"could not write memory/ddaanet/MEMORY.md"* ]]
-  # The agent arm's remedy sentence. The header above proves the branch fired
-  # and the problem line proves the forwarding, but neither pins what the agent
-  # is told to do about it, and the two arms differ only here.
-  [[ "$stderr" == *"Investigate that path (permissions, disk space, a read-only worktree)"* ]]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md"* ]] || false
+  # A failed write names its scratch file, gitlore-compose.tmp.<pid>, so the
+  # command is looked for with that name taken out.
+  [[ "${stderr//gitlore-compose.tmp/}" == *"gitlore-compose"* ]] || false
+  [[ "$stderr" != *"could not write"* ]] || false
 }
 
-@test "an unrecognised compose status aborts and says which status it met" {
-  # gitlore_compose returns only 0, 1 or 2 (index-compose.sh:324-377), so the
-  # `*)` arm is unreachable through the real function. Drive it directly with a
-  # stub that redefines gitlore_compose after sourcing the real libs, in the
-  # order gitlore_sync_memory_to_live's own header names (util, log, resolve).
+@test "a store with nothing pending commits and leaves no file behind" {
+  # Was the unreachable `*)` arm for an unrecognised gitlore_compose status. The
+  # commit path has no compose status to meet, so the case is what it does with
+  # a store nothing pends on: it commits the local fact and adds nothing else.
   make_parent_with_memory
   printf -- '---\nname: local\ndescription: ""\n---\n\na local fact\n' > memory/local.md
   seed_root_bullet "local.md" "a local fact"
-  stub_commit_script 'gitlore_compose() {
-  printf "stub: could not write memory/MEMORY.md\n"
-  touch memory/MEMORY.md
-  return 7
-}'
 
   head_before=$(git -C memory rev-parse HEAD)
   run --separate-stderr commit_sections "memory: record a local fact"
-  [ "$status" -ne 0 ]
-  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
-  # The whole arm text, not a bare "7": stderr carries tmpdir paths whose
-  # mktemp suffix can contain the digit, so a substring match on it alone would
-  # go vacuous without ever proving the `*)` arm was reached.
-  [[ "$stderr" == *"unrecognised status (7)"* ]]
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD)" != "$head_before" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+  [ "$(git -C memory show --name-only --format= HEAD | LC_ALL=C sort | paste -sd, -)" = "MEMORY.md,local.md" ]
   [ -z "$(claude_files)" ]
 }
 
@@ -163,12 +153,11 @@ load helpers/commit-memory
   [[ "$stderr" != *"repair the memory store, then retry"* ]]
 }
 
-@test "the rc-2 user arm tells a user to retry" {
-  # Slice 3's write-failure induction verbatim, CLAUDECODE unset. Own case
-  # rather than an addition to the test above: the inductions are different
-  # fixtures, and a bats body runs under errexit, so a second scenario
-  # appended to the first would only ever run when the first already held.
-  [ "$(id -u)" -eq 0 ] && skip "root ignores permission bits"
+@test "the pending-compose abort tells a user to run gitlore-compose and retry" {
+  # The user arm of the pending-compose abort (it replaces the rc-2 write-failure
+  # arm, which the commit path can no longer reach). CLAUDECODE is unset
+  # explicitly: a subagent dispatch exports it as 1, and the user arm is the one
+  # read here. Only the index and the command are pinned; the commit never ran.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -176,16 +165,12 @@ load helpers/commit-memory
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
 
   head_before=$(git -C memory rev-parse HEAD)
-  chmod a-w memory/ddaanet
-  # A bats run inherits CLAUDECODE from the invoking shell, and a subagent
-  # dispatch exports it as 1, so it is unset explicitly here to read the user arm
-  # regardless of the ambient environment.
   unset CLAUDECODE
   run --separate-stderr commit_sections "memory: record the shared fact"
-  chmod u+w memory/ddaanet
   [ "$status" -ne 0 ]
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
-  [[ "$stderr" == *"ask it to repair the memory store, then retry."* ]]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md"* ]] || false
+  [[ "$stderr" == *"gitlore-compose"* ]] || false
 }
 
 @test "the pin-abort user arm tells a user to retry" {

@@ -74,20 +74,20 @@ pointer invariant that rests on it.
 [git-hooks.md](references/git-hooks.md)
 
 - **D46** — a parent commit is never rewritten to re-pin memory
-- **D50** — the commit path composes a dirty store before it commits; a pin
+- **D50** — the commit path writes no index: a store whose indexes a compose
+  pass would change aborts the commit, naming them and `gitlore-compose`; a pin
   refusal aborts, a compose problem in an index file the commit changes aborts,
   and every other compose refusal reports; a tier merely ahead of its pin is put
   back on it for `/gitlore:merge` to adopt, and a retry that skips that take
   commits — the residual is accepted, costing one later merge and no fact
 
-*Rejected:* a tip amend to re-pin memory · a refusal that instructs the agent to
-run compose · reporting an off-pin tier and committing through it · recognising
-gitlore's own landed tier commit by its message · staging each tier gitlink
-right after its commit · composing a clean store · reporting a non-empty
-commit-path compose · leaving a tier whose adoption failed ahead of an unstaged
-pin · a blanket refusal for every tier ahead of its pin · refusing the commit
-while a tier's local `live` is ahead of its pin · adopting inside the pin guard
-rather than directing to `/gitlore:merge`.
+*Rejected:* a tip amend to re-pin memory · composing at the commit · reporting
+an off-pin tier and committing through it · recognising gitlore's own landed
+tier commit by its message · staging each tier gitlink right after its commit ·
+leaving a tier whose adoption failed ahead of an unstaged pin · a blanket
+refusal for every tier ahead of its pin · refusing the commit while a tier's
+local `live` is ahead of its pin · adopting inside the pin guard rather than
+directing to `/gitlore:merge`.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.

@@ -119,12 +119,17 @@ while IFS= read -r tier; do
   gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
 done < <(gitlore_tier_paths "$mempath")
 
-# Composition runs before the stores are judged: it writes tier carriers, so a
-# root tier-line edit it propagates makes a tier dirty that the status below
-# must see. A refusal or a failed write is reported by the sync's own compose,
-# which runs again; a refusal writes nothing, so the state read here is the
-# state the sync starts from.
-gitlore_compose "$mempath" >/dev/null || true
+# The commit writes no index. A store whose indexes a compose pass would change
+# aborts here, before the stores are judged: the pass would make a tier dirty
+# that the status below must see, and the section check would otherwise answer a
+# summary for a state the remedy changes. A pass that would refuse is the sync's
+# to report, and writes nothing either way.
+pending_rc=0
+pending=$(gitlore_compose_pending "$mempath") || pending_rc=$?
+if [ "$pending_rc" -eq 0 ] && [ -n "$pending" ]; then
+  gitlore_say_compose_pending "$pending" >&2
+  exit 1
+fi
 
 # What has changes. Tier-only root changes (a gitlink moving, MEMORY.md lines
 # under a tier prefix) need no section; any other root change does.

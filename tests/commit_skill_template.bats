@@ -43,6 +43,7 @@ make_two_dirty_stores() {
   commit_memory_state
   echo "root fact" > memory/notes.md
   seed_tier_bullet ddaanet shared.md "fresh hook"
+  gitlore_compose memory >/dev/null
 }
 
 @test "the skill's template is extractable and fills to a summary with no placeholder left" {

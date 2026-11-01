@@ -306,6 +306,7 @@ gitlore_relay_drain() {
   git -C memory/ddaanet checkout -q --detach live
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
   commit_sections "memory: record the org fact"
   merge_gate || true
   [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
@@ -329,6 +330,7 @@ gitlore_relay_drain() {
   git -C memory/ddaanet checkout -q --detach live
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
   commit_sections "memory: record the org fact"
 
   pre Bash

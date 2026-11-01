@@ -54,6 +54,7 @@ memory: add notes"
   git -C memory/ddaanet checkout -q --detach live
   advance_branch_with_file "memory/ddaanet" live other.md body "sideways" live
   echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
   commit_sections "memory: add notes"
 
   # The commit path prepares no merge; /gitlore:merge does.

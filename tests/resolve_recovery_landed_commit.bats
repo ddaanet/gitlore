@@ -127,6 +127,7 @@ load helpers/resolve-recovery
   # A fact both indexes carry, established through the real commit path so
   # root's block holds root's own copy of the line.
   seed_tier_bullet ddaanet shared.md "ours"
+  gitlore_compose memory >/dev/null
   run --separate-stderr commit_sections 'memory: record the shared fact'
   [ "$status" -eq 0 ]
   assert_bullets memory/MEMORY.md '- [shared](ddaanet/shared.md) — ours'

@@ -26,6 +26,8 @@
 #   index-compose-dangling.sh the dangling-pointer report and its fix lines
 #   index-compose-project.sh  the orphan report and the down/up projection
 #                              between root and a tier's carrier
+#   index-compose-pending.sh  the compose pass, its index rendering, and the
+#                              read-only check that shares both with the write
 
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-check.sh"
@@ -35,6 +37,8 @@ source "${BASH_SOURCE[0]%/*}/index-compose-repair.sh"
 source "${BASH_SOURCE[0]%/*}/index-compose-dangling.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-project.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-compose-pending.sh"
 
 # Print the path of a pointer bullet; return 1 if $1 is not one. A bullet is
 # `- [` ... `](` PATH `)` ... — the hook (if any) is irrelevant here. Pure
@@ -171,7 +175,7 @@ EOF
 # trailer. Writes only when the result differs, so an already-canonical index
 # produces no churn; prints "composed <file>" when it did write.
 gitlore_compose_write() {
-  local file="$1" tmp bullets
+  local file="$1" tmp
   # Inside the store's own gitdir, not beside the target: the same reason
   # gitlore_weld_repair (edit-weld.sh) gives for its own scratch file — a kill
   # between this write and the mv/rm below would otherwise leave an untracked
@@ -181,21 +185,7 @@ gitlore_compose_write() {
   # dir for a plain repo, and the caller's cwd is not that dir.
   tmp=$(git -C "$(dirname -- "$file")" rev-parse --absolute-git-dir) \
     && tmp="$tmp/gitlore-compose.tmp.$$" || return 1
-  bullets=$(cat)
-  gitlore_index_part "$file" preamble > "$tmp" || { rm -f "$tmp"; return 1; }
-  # A bulletless index is ALL preamble, emitted verbatim — so one that arrived
-  # unterminated would take the first bullet onto the end of its last line, and a
-  # glued line is not a bullet: the pointer would be lost on write. Only ever a
-  # separator, never normalisation — with no bullets there is nothing to separate
-  # and the file is left exactly as it came.
-  if [ -n "$bullets" ] && [ -s "$tmp" ] &&
-     [ "$(tail -c 1 "$tmp" | wc -l | tr -d ' ')" = 0 ]; then
-    printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
-  fi
-  {
-    [ -n "$bullets" ] && printf '%s\n' "$bullets"
-    gitlore_index_part "$file" trailer
-  } >> "$tmp" || { rm -f "$tmp"; return 1; }
+  gitlore_compose_render "$file" > "$tmp" || { rm -f "$tmp"; return 1; }
   if cmp -s "$tmp" "$file"; then
     rm -f "$tmp"
     return 0
@@ -343,57 +333,7 @@ $result"
 }
 
 
+# The whole in-session pass; return codes 0, 1 and 2 as documented above.
 gitlore_compose() {
-  local mempath="$1"
-  local root="$mempath/MEMORY.md"
-  local active tier changed="" out
-  [ -f "$root" ] || return 0
-
-  # Both checks run before either verdict is read, so one refusal carries the
-  # whole list. Rule 7 is here rather than in gitlore_compose_check because it
-  # guards the down projection specifically (see gitlore_compose_check_pins).
-  local refused=0
-  gitlore_compose_check "$mempath" || refused=1
-  gitlore_compose_check_pins "$mempath" || refused=1
-  [ "$refused" -eq 0 ] || return 1
-
-  active=$(gitlore_active_tiers "$mempath")
-
-  # Down first, then the root layout. The layout pass adopts a carrier for any
-  # active tier root has no line for, and the down pass skips that tier, so
-  # deleting a tier's last root line brings its whole block back: deactivating
-  # the tier is what drops it from a repo (D36).
-  #
-  # ACTIVE tiers only. Root does not represent a dormant tier — it holds no line
-  # for one — so it has no authority over that tier's carrier, and projecting an
-  # empty opinion down would delete a whole store's index.
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    # Root with no line at all for this tier states nothing about it — the same
-    # condition the layout pass adopts on, and projecting an absence down here
-    # would empty the carrier a moment before the layout reads it. That is what
-    # a mount, and a deactivate/reactivate round trip, both look like.
-    gitlore_index_has_tier "$root" "$tier" || continue
-    if ! out=$(gitlore_compose_down "$mempath" "$tier" \
-      | gitlore_compose_write "$mempath/$tier/MEMORY.md"); then
-      [ -n "$changed" ] && printf '%s' "$changed"
-      printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
-      return 2
-    fi
-    changed="$changed$out
-"
-  done <<EOF
-$active
-EOF
-
-  if ! out=$(gitlore_compose_root_bullets "$mempath" | gitlore_compose_write "$root"); then
-    [ -n "$changed" ] && printf '%s' "$changed"
-    printf 'could not write %s\n' "$root"
-    return 2
-  fi
-  changed="$changed$out"
-
-  [ -n "$changed" ] && printf '%s\n' "$changed"
-  return 0
+  gitlore_compose_pass "$1" gitlore_compose_write
 }

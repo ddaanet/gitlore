@@ -39,6 +39,7 @@ prepare_tier_merge_with_new_lines() {
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
   commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
   bash "$preparer" && return 1

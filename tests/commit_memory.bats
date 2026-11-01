@@ -97,17 +97,28 @@ memory: add notes"
   [ -n "$(git -C memory status --porcelain)" ]
 }
 
-@test "commit-memory composes the carrier into the commit it makes" {
+@test "commit-memory commits the carrier as composed beforehand and aborts on one that is not" {
   # A carrier whose bullet text disagrees with the root index line that projects
-  # onto it. Composition re-texts the carrier line from the root's, so the
-  # committed carrier must read "fresh hook"; without a compose on the commit
-  # path the store ships "stale hook" to the tier's remote.
+  # onto it. The commit path no longer composes: it aborts on the pending
+  # re-text and leaves the store as found. Once gitlore-compose (here its
+  # library form) has settled the store, the committed carrier reads "fresh
+  # hook" — without it the store would ship "stale hook" to the tier's remote.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet shared.md "stale hook"
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
 
+  head_before=$(git -C memory rev-parse HEAD)
+  carrier_before=$(cksum < memory/ddaanet/MEMORY.md)
+  run --separate-stderr commit_sections "memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"memory/ddaanet/MEMORY.md"* ]] || false
+  [[ "$stderr" == *"gitlore-compose"* ]] || false
+  [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
+  [ "$(cksum < memory/ddaanet/MEMORY.md)" = "$carrier_before" ]
+
+  gitlore_compose memory >/dev/null
   run commit_sections "memory: record the shared fact"
   [ "$status" -eq 0 ]
 

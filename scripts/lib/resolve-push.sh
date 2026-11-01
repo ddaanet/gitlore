@@ -24,8 +24,8 @@ gitlore: the commit was aborted because git could not read the status of $file. 
 # transient index.lock) or the run died between the two. That tier sits ahead of
 # its pin, the shape gitlore_compose_check_pins refuses for a tier moved behind
 # gitlore's back, so without this the retry of the commit is refused for good.
-# Staging it overwrites nothing: the commit path composed that carrier from the
-# root index just before committing it.
+# Staging it overwrites nothing: that carrier was composed before the run began,
+# as the commit path requires.
 #
 # Recognised by the landing record written just before that commit — HEAD's
 # parent must be the commit the record names, and memory's index must still pin

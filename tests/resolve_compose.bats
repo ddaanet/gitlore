@@ -55,6 +55,7 @@ load helpers/resolve-compose
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
   commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
 
@@ -101,6 +102,7 @@ prepare_tier_merge_head_vs_live() {
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
   commit_sections "memory: record the org fact"
   resolve_gate && return 1
   return 0
@@ -271,6 +273,7 @@ prepare_tier_merge_head_vs_live() {
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
   printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
   commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs- [their other](u.md) — also theirs" >/dev/null
   run bash "$PRE_PUSH"

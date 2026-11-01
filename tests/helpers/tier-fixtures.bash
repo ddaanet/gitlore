@@ -206,8 +206,8 @@ strand_live_ahead_of_pin() {
 }
 
 # A memory store with one tier whose next commit lands and then fails on memory's
-# own index: the carrier and the root line disagree, so the commit path composes
-# and commits inside the tier, and a one-shot tier `post-commit` hook takes
+# own index: the carrier and the root line disagree, so the commit path
+# commits inside the tier, and a one-shot tier `post-commit` hook takes
 # memory's index.lock before memory's `add -A` can stage the moved gitlink.
 # Sets $lock to that lock's path, for the caller to assert on and clear.
 half_landed_tier_fixture() {
@@ -217,6 +217,8 @@ half_landed_tier_fixture() {
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet shared.md "stale hook"
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
+  # Composed here, not by the commit: the commit path aborts on a pending compose.
+  gitlore_compose memory >/dev/null
   lock="$(git -C memory rev-parse --absolute-git-dir)/index.lock"
   hook="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/hooks/post-commit"
   mkdir -p "$(dirname "$hook")" || return 1

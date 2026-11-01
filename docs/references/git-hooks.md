@@ -12,9 +12,10 @@ and the hook call. The approval gate the commit path carries out is in
 
 - The pointer — **D46** a parent commit is never rewritten to re-pin memory; a
   push refused by divergence is resolved and pushed again
-- The commit path — **D50** the store is composed before it is committed; a pin
-  refusal is fatal, and so is a compose problem in an index file the commit
-  changes, while every other compose refusal is reported
+- The commit path — **D50** the commit writes no index and aborts when a compose
+  pass would change one; a pin refusal is fatal, and so is a compose problem in
+  an index file the commit changes, while every other compose refusal is
+  reported
 
 ---
 
@@ -106,22 +107,30 @@ the merge is resolved. The loop that replaces it — resolve, push again, until
 the push lands — is the one the `push` skill already runs (D20), and a gitlink
 behind memory's tip is the same resting state every other memory advance leaves.
 
-**D50 — The commit path composes before it commits; a pin refusal, or a compose
-problem in an index file the commit changes, is fatal**
+**D50 — The commit path writes no index and aborts on a pending compose; a pin
+refusal, or a compose problem in an index file the commit changes, is fatal**
 
-Composition otherwise runs from the session surfaces alone, so a carrier left
-stale by a missed in-session compose self-heals at the next `SessionStart` but
-**ships** if a memory commit lands first — and the carrier is what a tier's
-remote serves. `gitlore_sync_memory_to_live` composes before it commits, and
-ahead of `gitlore_sync_tiers_to_live`: composition writes carrier files inside
-the tiers, so a later pass would pin every gitlink to pre-compose content.
+The commit path publishes what the session composed; it never composes. Anything
+`PostToolBatch` did not compose is assumed to be an exterior change — a human in
+an editor, a dead hook, a manifest edit in a terminal — and failing on it beats
+silently fixing it: a repair at the commit would publish a tier carrier no
+summary described and no session saw. `gitlore-commit` and
+`gitlore_sync_memory_to_live` therefore run `gitlore_compose_pending`, which
+computes what `gitlore_compose` would write through the same
+`gitlore_compose_pass`, each index rendered by the same `gitlore_compose_render`
+and only the last step differing: the write replaces the file, the check reports
+its path. Nothing is written, no scratch file is made and no mtime moves. A
+non-empty result aborts the commit before any store is committed, naming every
+index the pass would change and the remedy: `gitlore-compose` for an agent, the
+script's path for a terminal user. `gitlore-compose`
+(`scripts/compose-memory.sh`) is the one writer outside a session; on a composed
+store it writes nothing.
 
-**Dirty stores only.** Composing a clean store manufactures a dirty state no
-approved summary covers, and the gate would refuse the commit for a change the
-agent never made. A committed carrier already diverging from the committed root
-index waits for `SessionStart`, whose compose rides the next commit that has a
-summary. This holds the FR11 boundary: a carrier projects root index lines an
-approved summary already covered, never new content.
+The check precedes the section check in `gitlore-commit`, so a summary is judged
+against the state the remedy leaves. It follows the prepared-merge guards, so a
+tier holding a prepared merge is answered by the merge's directive. The sync
+runs it ahead of `gitlore_sync_tiers_to_live`, so no gitlink is staged against a
+carrier a later compose would rewrite.
 
 **The two refusals are not interchangeable, and what separates them is what
 committing past one destroys or publishes.** A `gitlore_compose_check` refusal
@@ -144,10 +153,10 @@ remove the condition it refused on: the next compose projects root's older text
 over the carrier with nothing left to refuse, `gitlore_sync_tiers_to_live`
 commits that inside the tier, and `pre-push` ships it to the tier's own remote,
 so the approved upstream fact is destroyed one commit after the warning. The pin
-check therefore runs ahead of compose and aborts, naming no remedy of its own —
-every branch of `gitlore_compose_check_pins` prints the one its own cause takes,
-and a single abort can carry several tiers with different causes. A write
-failure aborts too — a half-written carrier must not be committed.
+check therefore runs ahead of the pending check and aborts, naming no remedy of
+its own — every branch of `gitlore_compose_check_pins` prints the one its own
+cause takes, and a single abort can carry several tiers with different causes. A
+check that cannot read an index aborts too.
 
 **A tier merely ahead of its pin is put back on it, and the take adopts from
 there.** A clean tier whose local `live` contains its `HEAD` has nothing to
@@ -192,9 +201,9 @@ gitdir just before each commit — the commit the tier sits on — and removes i
 when the commit fails or once `add -A` has staged every gitlink. Ahead of the
 pin check, `gitlore_stage_landed_tiers` stages the gitlink of any tier whose
 HEAD's parent is the recorded commit and still the pin. That overwrites nothing:
-the commit path composed that carrier from the root index just before committing
-it. The residual is a run killed between writing a record and its commit
-failing, followed by a commit made on the same pin by other means.
+that carrier was composed before the run began, as the commit path requires. The
+residual is a run killed between writing a record and its commit failing,
+followed by a commit made on the same pin by other means.
 
 **Staging a moved gitlink without projecting up first inverts that guard.**
 Staging alone returns the enclosing index to agreement with the tier's HEAD —
@@ -212,13 +221,6 @@ of the merge leave the tier where it is ([tier-stores.md](tier-stores.md)). The
 one exception to composing up is a tier commit the commit path itself made,
 whose carrier root already describes, so there is nothing to project up.
 
-**A successful compose here stays silent**, by argument rather than omission: on
-rc 0 the result is discarded, so a commit that repairs a stale carrier says
-nothing. A non-empty result here does mean the in-session compose was missed,
-and one `[ -n … ]` test would say so — but the in-session `PostToolBatch` report
-is the intended surface for that news, and repeating it puts a line on every
-commit that repairs anything, most of which the session has already seen.
-
 ## Rejected alternatives
 
 **Amending a tagged parent commit to re-pin memory after a `pre-push` merge.**
@@ -227,9 +229,10 @@ already an ancestor of `live` and public on the first successful push. Costs
 `tag -f` on an unpublished tag, a rewrite of a tagged commit, and a sequencing
 dependency on the stale-merge guard (D46).
 
-**A refusal that instructs the agent to run compose.** Composition needs no
-judgement, so a gate that stops and asks for it is overhead the harness should
-absorb instead (NFR4, D50).
+**Composing at the commit.** A carrier or root index left stale by an edit no
+batch composed would be repaired at once, but the repair ships content no
+approved summary covers and hides an exterior change from the session that made
+it. The commit fails on it instead and names `gitlore-compose` (D50).
 
 **Reporting an off-pin tier and committing through it.** The commit's own
 `add -A` adopts the moved gitlink, so the report is followed at the next compose
@@ -243,17 +246,6 @@ summary, the landed commit stops matching it, and the tier is refused for good
 **Staging each tier gitlink right after its commit.** Narrows the window without
 closing it: the staging is itself a write to memory's index, so the `index.lock`
 that stops `add -A` stops it too (D50).
-
-**Composing a clean store.** A carrier diverging from a committed root index
-would be repaired at once, but the compose leaves a dirty state no approved
-summary covers, and the gate refuses the commit for a change the agent never
-made. `SessionStart` repairs it instead, riding the next commit that has a
-summary (D50).
-
-**Reporting a non-empty commit-path compose.** It would say that the in-session
-compose was missed, but the in-session `PostToolBatch` report is the surface for
-that news, and repeating it puts a line on every commit that repairs anything,
-most of which the session has already seen (D50).
 
 **A blanket refusal for every tier ahead of its pin.** One message for the whole
 branch, with no state to establish and no store touched by a check. Its remedy

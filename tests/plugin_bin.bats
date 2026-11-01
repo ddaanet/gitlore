@@ -60,9 +60,18 @@ run_bare() {
   [[ "$output" == *"gitlore: add-tier failed"* ]]
 }
 
-@test "bin: the retired -memory names are gone and exactly the four short names ship" {
+@test "bin: gitlore-compose is executable and reaches its script" {
+  [ -x "$PLUGIN_ROOT/bin/gitlore-compose" ]
+  # A non-gitlore repo: whatever the script says there, it is not an exec failure.
+  run_bare "$(cd "$PLUGIN_ROOT" && pwd)/bin/gitlore-compose"
+  [ "$status" -ne 126 ]
+  [ "$status" -ne 127 ]
+  [ "$status" -eq 0 ]
+}
+
+@test "bin: the retired -memory names are gone and exactly the five short names ship" {
   for old in gitlore-commit-memory gitlore-push-memory gitlore-merge-memory; do
     [ ! -e "$PLUGIN_ROOT/bin/$old" ]
   done
-  [ "$(find "$PLUGIN_ROOT/bin" -mindepth 1 -maxdepth 1 -exec basename {} \; | LC_ALL=C sort | paste -sd, -)" = "gitlore-add-tier,gitlore-commit,gitlore-merge,gitlore-push" ]
+  [ "$(find "$PLUGIN_ROOT/bin" -mindepth 1 -maxdepth 1 -exec basename {} \; | LC_ALL=C sort | paste -sd, -)" = "gitlore-add-tier,gitlore-commit,gitlore-compose,gitlore-merge,gitlore-push" ]
 }
