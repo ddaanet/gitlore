@@ -31,9 +31,10 @@ that lands it in its owner — file and index line together.
    for each line of `<mempath>/.gitlore-tiers`, where `<mempath>` is
    `git config --file .gitmodules submodule.gitlore-memory.path` run from the repo
    root, skipping a tier without the file and a repo without `.gitlore-tiers`. An
-   owner no inventory lists is asked about at the memory gate before anything is
-   deleted. Move the fact to its owner even when the memory is accurate, and grep
-   the owner for the load-bearing terms before accepting that it covers the fact:
+   owner outside this repo that no inventory lists is asked about at the memory
+   gate before anything is deleted. Move the fact to its owner even when the memory
+   is accurate, and grep the owner for the load-bearing terms before accepting that
+   it covers the fact:
    - **A skill:** the fact reduces to "when using \<skill\>, do X". A fact written
      to override an installed skill sits on that skill's topic, so a coverage scan
      flags it as owned: check which way the claim points, and keep a fact that
@@ -50,8 +51,8 @@ that lands it in its owner — file and index line together.
    - **A hook or tool that prints the diagnosis when it fires:** delete a memory
      that restates its output; when the output lacks it, fix the output when this
      repo owns it, otherwise route the fact as the inventory says.
-   - **A sibling project's skill body, agent definition, hook or tool output:** route
-     the fact as the inventory says.
+   - **A sibling project's skill body, agent definition, hook or tool output:** Unless
+     the fact contradicts the skill (above), route the fact as the inventory says.
 3. **Would the reader reach it unaided?** Discard a fact restating common
    sense, or following in one step from an indexed memory. The tell: the body's
    general claim is unarguable and only its instance is interesting. Discard it,
