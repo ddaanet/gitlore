@@ -162,6 +162,40 @@ load helpers/index-compose
   [ -n "$(jq -r '.systemMessage // empty' <<<"$output")" ]
 }
 
+@test "the restore message says what to do with a tier's last root line" {
+  seed_tier_bullet ddaanet only.md "the only"
+  gitlore_compose memory >/dev/null
+  commit_memory_state
+  pre Bash
+  sed -i.bak '/only.md/d' memory/ddaanet/MEMORY.md && rm -f memory/ddaanet/MEMORY.md.bak
+  run feed
+  [ "$status" -eq 0 ]
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext // empty' <<<"$output")
+  [[ "$ctx" == *"If it is the tier's last line in the root index, delete it from both indexes in one batch."* ]] || false
+}
+
+@test "deleting a tier's last root line from both indexes in one batch stays deleted" {
+  seed_tier_bullet ddaanet only.md "the only"
+  gitlore_compose memory >/dev/null
+  commit_memory_state
+  pre Bash
+  sed -i.bak '/only.md/d' memory/ddaanet/MEMORY.md && rm -f memory/ddaanet/MEMORY.md.bak
+  run feed
+  [ "$status" -eq 0 ]
+  # The restore put the line back; now follow the message.
+  [ "$(grep -c only.md memory/MEMORY.md)" -eq 1 ]
+  pre Bash
+  sed -i.bak '/only.md/d' memory/MEMORY.md memory/ddaanet/MEMORY.md && rm -f memory/MEMORY.md.bak memory/ddaanet/MEMORY.md.bak
+  run feed
+  [ "$status" -eq 0 ]
+  [ "$(grep -c only.md memory/MEMORY.md)" -eq 0 ]
+  [ "$(grep -c only.md memory/ddaanet/MEMORY.md)" -eq 0 ]
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  [ "$(grep -c only.md memory/MEMORY.md)" -eq 0 ]
+  [ "$(grep -c only.md memory/ddaanet/MEMORY.md)" -eq 0 ]
+}
+
 @test "a batch that restored nothing emits no restore text" {
   seed_committed_tier_block
   pre "$PWD/memory/MEMORY.md"

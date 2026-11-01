@@ -320,3 +320,24 @@ gitlore_relay_drain() {
   [ "$(cksum < memory/ddaanet/MEMORY.md)" = "$edited" ]
   [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
 }
+
+@test "the batch that prepares a tier merge is not refused and leaves the carrier and merge intact" {
+  # Same fixture as above, but the pre stamp is taken BEFORE the gate prepares
+  # the merge, so the carrier key is in the pre stamp only. A key in one stamp
+  # is not a carrier edit: nothing composes, so rule 7 has nothing to refuse.
+  git -C memory/ddaanet fetch -q origin "live:live"
+  git -C memory/ddaanet checkout -q --detach live
+  advance_branch_with_file memory/ddaanet live other.md body "sideways" live
+  echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  commit_sections "memory: record the org fact"
+
+  pre Bash
+  run merge_gate
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+  carrier=$(cksum < memory/ddaanet/MEMORY.md)
+  run feed
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(cksum < memory/ddaanet/MEMORY.md)" = "$carrier" ]
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+}

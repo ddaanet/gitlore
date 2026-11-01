@@ -259,7 +259,7 @@ $result"
 }gitlore: restored $r tier index $runit deleted from the tier's own index"
       ctx="${ctx:+$ctx
 
-}These lines were deleted from a tier's own index while the root index still carries them, and the pass put them back ($r total). A removal starts in the root index: delete the line from $mempath/MEMORY.md, and the next pass drops the tier's copy.
+}These lines were deleted from a tier's own index while the root index still carries them, and the pass put them back ($r total). A removal starts in the root index: delete the line from $mempath/MEMORY.md, and the next pass drops the tier's copy. If it is the tier's last line in the root index, delete it from both indexes in one batch.
 $restored_capped"
     fi
 
