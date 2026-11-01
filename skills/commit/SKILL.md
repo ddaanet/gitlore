@@ -15,8 +15,9 @@ reply approves it.
 Before drafting the summary, invoke the `gitlore:memory-writing` skill and hold
 every pending memory change against it: whether the fact belongs in the store at
 all, what its body claims, which tier it sits in, and whether its index line
-carries the literal a future session arrives holding. Land those fixes first —
-the summary describes the facts as they will be committed.
+carries the literal a future session arrives holding, or for a HOW line the task
+condition. Land those fixes first — the summary describes the facts as they will
+be committed.
 
 ## Summary format
 
