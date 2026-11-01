@@ -25,9 +25,6 @@ EOF
 
 [ -e memory/acme/.git ] || { echo "fixture: acme tier did not mount" >&2; exit 1; }
 
-# Activate it. Listed = active, file order = precedence (D17).
-printf 'acme\n' > memory/.gitlore-tiers
-
 git -C memory/acme config user.email "eval@test.com"
 git -C memory/acme config user.name "Eval Test"
 
