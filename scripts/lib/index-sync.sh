@@ -146,10 +146,27 @@ _gitlore_agent_suffix() {
 # file, with a literal `absent` for one that is not there — so a file appearing
 # or vanishing registers as a change like any other. Cheap by design: it runs
 # ahead of every Bash call, where keeping whole copies would not be.
-# Args: $1 = root index path, $2 = tier manifest path.
+#
+# Watched: the root index (`index`), the activation manifest (`manifest`) and
+# each active tier's carrier (`carrier/<tier>`), since an edit to a carrier alone
+# is what the down projection restores. A tier holding a prepared merge is left
+# out: the merger edits its carrier, and a compose there would refuse on every
+# batch. The set of keys follows the manifest, so a tier appearing in or leaving
+# it moves the stamp too.
+# Args: $1 = memory path.
 gitlore_compose_stamp() {
-  printf 'index\t%s\n' "$(_gitlore_file_stamp "$1")"
-  printf 'manifest\t%s\n' "$(_gitlore_file_stamp "$2")"
+  local mempath="$1" tier
+  printf 'index\t%s\n' "$(_gitlore_file_stamp "$mempath/MEMORY.md")"
+  printf 'manifest\t%s\n' "$(_gitlore_file_stamp "$mempath/.gitlore-tiers")"
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    # An unmaterialized tier answers `git -C` for the enclosing repo, so it is
+    # never asked; it cannot hold a merge.
+    if [ -e "$mempath/$tier/.git" ] && gitlore_store_mid_merge "$mempath/$tier"; then
+      continue
+    fi
+    printf 'carrier/%s\t%s\n' "$tier" "$(_gitlore_file_stamp "$mempath/$tier/MEMORY.md")"
+  done < <(gitlore_active_tiers "$mempath")
 }
 
 _gitlore_file_stamp() {

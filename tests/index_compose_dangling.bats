@@ -224,7 +224,7 @@ drop_bullet() {
   run gitlore_compose_dangling memory
   [ "$status" -eq 0 ]
   # shellcheck disable=SC2016 # the backticks are report text, not a substitution
-  [ "$output" = 'memory/MEMORY.md: ddaanet/new.md names no file in the memory store — delete the `new.md` line from memory/ddaanet/MEMORY.md, then its line from memory/MEMORY.md; compose keeps a tier line the memory store has not committed' ]
+  [ "$output" = 'memory/MEMORY.md: ddaanet/new.md names no file in the memory store — delete its line from memory/MEMORY.md, then the `new.md` line from memory/ddaanet/MEMORY.md; compose keeps a tier line the memory store has not committed' ]
   drop_bullet new.md memory/ddaanet/MEMORY.md
   drop_bullet ddaanet/new.md memory/MEMORY.md
   gitlore_compose memory
@@ -250,9 +250,9 @@ drop_bullet() {
   # from the root empties the tier block and the layout adopts the carrier back.
   [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
   # shellcheck disable=SC2016 # the backticks are report text, not a substitution
-  [[ "$output" == *'ddaanet/two.md names no file in the memory store — settle any orphan reported in memory/ddaanet/MEMORY.md first, then delete the `two.md` line from it if present, then its line from memory/MEMORY.md; memory/MEMORY.md keeps no other live ddaanet/ line, and compose adopts the whole tier index, orphans included, into a root with none. To drop ddaanet from this repo instead, delete its line from memory/.gitlore-tiers'* ]]
+  [[ "$output" == *'ddaanet/two.md names no file in the memory store — settle any orphan reported in memory/ddaanet/MEMORY.md first, then delete the `two.md` line from it and its line from memory/MEMORY.md in one batch; memory/MEMORY.md keeps no other live ddaanet/ line, and compose adopts the whole tier index, orphans included, into a root with none. To drop ddaanet from this repo instead, delete its line from memory/.gitlore-tiers'* ]]
   # shellcheck disable=SC2016 # the backticks are report text, not a substitution
-  [[ "$output" == *'ddaanet/one.md names no file in the memory store — settle any orphan reported in memory/ddaanet/MEMORY.md first, then delete the `one.md` line from it if present'* ]]
+  [[ "$output" == *'ddaanet/one.md names no file in the memory store — settle any orphan reported in memory/ddaanet/MEMORY.md first, then delete the `one.md` line from it and its line from memory/MEMORY.md in one batch'* ]]
   drop_bullet stray.md memory/ddaanet/MEMORY.md
   drop_bullet one.md memory/ddaanet/MEMORY.md
   drop_bullet two.md memory/ddaanet/MEMORY.md

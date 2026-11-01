@@ -10,7 +10,9 @@ load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
 load helpers/cc-hook-index-compose
+load helpers/index-compose
 load helpers/hook-guard
+load helpers/divergence-fixtures
 
 @test "the hook is executable and registered on PostToolBatch" {
   [ -x "$HOOK" ]
@@ -227,4 +229,94 @@ gitlore_relay_drain() {
 
   run --separate-stderr feed
   assert_hook_died index-compose 1 "not recomposed"
+}
+
+# --- a tier's carrier is watched like the root index ---
+#
+# A line removed from the carrier alone, while root carries it and root at HEAD
+# carries it, is restored at batch end. Both tests change ONLY the carrier, so
+# the root index and the manifest stamps do not move: the compose below runs on
+# the carrier's stamp or not at all.
+
+@test "an Edit of only a tier's MEMORY.md composes at batch end and restores the line" {
+  seed_committed_tier_block
+  pre "$PWD/memory/ddaanet/MEMORY.md"
+  # The pre hook took a baseline for a carrier edit, as it does for the root index.
+  [ -f "$(gitlore_compose_stamp_file memory)" ]
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [c](c.md) — last'
+  run feed
+  [ "$status" -eq 0 ]
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [b](b.md) — middle' \
+    '- [c](c.md) — last'
+  # Root is untouched: the restore is carrier-ward only.
+  assert_bullets memory/MEMORY.md \
+    '- [a](ddaanet/a.md) — first' \
+    '- [b](ddaanet/b.md) — middle' \
+    '- [c](ddaanet/c.md) — last'
+}
+
+@test "a Bash sed on only a tier's MEMORY.md composes at batch end and restores the line" {
+  seed_committed_tier_block
+  pre Bash
+  sed -i.bak '/](b.md)/d' memory/ddaanet/MEMORY.md && rm -f memory/ddaanet/MEMORY.md.bak
+  # The fixture really removed the line, so the restore below has work to do.
+  run -1 grep -qF '](b.md)' memory/ddaanet/MEMORY.md
+  run feed
+  [ "$status" -eq 0 ]
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [b](b.md) — middle' \
+    '- [c](c.md) — last'
+}
+
+@test "a carrier edit that removes nothing keeps its added line and emits no restore text" {
+  seed_committed_tier_block
+  pre "$PWD/memory/ddaanet/MEMORY.md"
+  [ -f "$(gitlore_compose_stamp_file memory)" ]
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [b](b.md) — middle' \
+    '- [c](c.md) — last' \
+    '- [d](d.md) — written into the carrier'
+  run feed
+  [ "$status" -eq 0 ]
+  # The added line is reported as an orphan (the positive over this fixture), and
+  # the report carries no restore text, which would say "removal".
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext // empty' <<<"$output")
+  [[ "$ctx" == *"d.md is in the tier but not in the root index"* ]] || false
+  [[ "$ctx" != *"removal"* ]] || false
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [b](b.md) — middle' \
+    '- [c](c.md) — last' \
+    '- [d](d.md) — written into the carrier'
+}
+
+@test "a carrier edit in a tier with a prepared merge is not refused and stays as edited" {
+  # The tier at `live`, then the merge the gate prepares: the tier holds a staged
+  # merge whose carrier edit is the merger's, and it sits off the commit memory
+  # records for it. A compose here would refuse (rule 7), so the carrier stamp
+  # must leave such a tier out. Same fixture as tests/tier_divergence.bats's
+  # prepared-merge case: the two sides touch different files, so it merges clean.
+  git -C memory/ddaanet fetch -q origin "live:live"
+  git -C memory/ddaanet checkout -q --detach live
+  advance_branch_with_file memory/ddaanet live other.md body "sideways" live
+  echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  commit_sections "memory: record the org fact"
+  merge_gate || true
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+
+  pre "$PWD/memory/ddaanet/MEMORY.md"
+  echo "- [merged](m.md) — the merger's line" >> memory/ddaanet/MEMORY.md
+  edited=$(cksum < memory/ddaanet/MEMORY.md)
+  run feed
+  [ "$status" -eq 0 ]
+  # Nothing emitted: no refusal, and no report of any other kind either.
+  [ -z "$output" ]
+  [ "$(cksum < memory/ddaanet/MEMORY.md)" = "$edited" ]
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
 }

@@ -292,3 +292,108 @@ teardown() { teardown_tmp_repo; }
     '- [c](c.md) — last'
 }
 
+
+# --- gitlore_compose_down: the (b, o, t) state table ---
+#
+# For one tier path P: b = root carries P at the memory store's HEAD, o = root
+# carries P in its working tree, t = the carrier carries P in its working tree.
+# Neighbours `a.md` and `c.md` are in all three surfaces in every state, so the
+# printed block shows where P lands, not only whether it does. Root's text for P
+# and the carrier's differ, so the block shows whose text won.
+
+# Build state (b, o, t). Called bare, not under `run`, so a failing setup step aborts the test.
+# Args: $1 = b, $2 = o, $3 = t, each 0 or 1.
+down_setup() {
+  local b="$1" o="$2" t="$3" rows
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [c](c.md) — last'
+  rows=('- [a](ddaanet/a.md) — first')
+  [ "$b" = 1 ] && rows+=('- [p](ddaanet/p.md) — root text')
+  rows+=('- [c](ddaanet/c.md) — last')
+  set_bullets memory/MEMORY.md "${rows[@]}"
+  commit_memory_state
+
+  rows=('- [a](ddaanet/a.md) — first')
+  [ "$o" = 1 ] && rows+=('- [p](ddaanet/p.md) — root text')
+  rows+=('- [c](ddaanet/c.md) — last')
+  set_bullets memory/MEMORY.md "${rows[@]}"
+
+  rows=('- [a](a.md) — first')
+  [ "$t" = 1 ] && rows+=('- [p](p.md) — carrier text')
+  rows+=('- [c](c.md) — last')
+  set_bullets memory/ddaanet/MEMORY.md "${rows[@]}"
+
+}
+
+@test "compose_down (b,o,t)=(1,1,0): a line only the carrier lost is root's, at root's offset" {
+  down_setup 1 1 0
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [p](p.md) — root text
+- [c](c.md) — last' ]
+}
+
+@test "compose_down (b,o,t)=(0,0,0): absent everywhere stays absent" {
+  down_setup 0 0 0
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [c](c.md) — last' ]
+}
+
+@test "compose_down (b,o,t)=(0,0,1): a carrier line root never carried is kept, at its offset" {
+  down_setup 0 0 1
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [p](p.md) — carrier text
+- [c](c.md) — last' ]
+}
+
+@test "compose_down (b,o,t)=(0,1,0): a root insertion is emitted with root's text" {
+  down_setup 0 1 0
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [p](p.md) — root text
+- [c](c.md) — last' ]
+}
+
+@test "compose_down (b,o,t)=(0,1,1): root's text wins over the carrier's" {
+  down_setup 0 1 1
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [p](p.md) — root text
+- [c](c.md) — last' ]
+}
+
+@test "compose_down (b,o,t)=(1,0,0): a line deleted from both is absent" {
+  down_setup 1 0 0
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [c](c.md) — last' ]
+}
+
+@test "compose_down (b,o,t)=(1,0,1): a root deletion drops the carrier copy" {
+  down_setup 1 0 1
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [c](c.md) — last' ]
+}
+
+@test "compose_down (b,o,t)=(1,1,1): root's text for a line all three carry" {
+  down_setup 1 1 1
+  run gitlore_compose_down memory ddaanet
+  [ "$status" -eq 0 ]
+  [ "$output" = '- [a](a.md) — first
+- [p](p.md) — root text
+- [c](c.md) — last' ]
+}

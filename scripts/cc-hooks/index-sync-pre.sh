@@ -29,11 +29,17 @@ manifest="$mempath/.gitlore-tiers"
 if [ "$tool" != "Bash" ]; then
   file=$(jq -r '.tool_input.file_path // empty' <<<"$payload")
   [ -n "$file" ] || exit 0
-  # Only the project index or the tier manifest; identity via -ef (portable, no
-  # realpath). A Write to either is what the two post hooks act on.
+  # The project index, the tier manifest or a tier's carrier; identity via -ef
+  # (portable, no realpath). A Write to any of them is what the post hooks act
+  # on. A carrier is any `<dir>/MEMORY.md` one level under the memory path, a
+  # dormant tier's too: the batch-end comparison decides whether it matters.
   target=""
   [ "$file" -ef "$index" ] && target=1
   [ -e "$manifest" ] && [ "$file" -ef "$manifest" ] && target=1
+  for carrier in "$mempath"/*/MEMORY.md; do
+    [ -e "$carrier" ] || continue
+    [ "$file" -ef "$carrier" ] && target=1
+  done
   [ -n "$target" ] || exit 0
 fi
 
@@ -66,7 +72,7 @@ stamp=$(gitlore_compose_stamp_file "$mempath" "$agent_id")
 # subagent, not unbounded growth — the same bound index-sync-post.sh already puts
 # on a stale pre-image.
 if [ ! -f "$stamp" ]; then
-  gitlore_compose_stamp "$index" "$manifest" > "$stamp" || \
+  gitlore_compose_stamp "$mempath" > "$stamp" || \
     printf 'gitlore: failed to stamp the pre-edit index state (%s)\n' "$stamp" >&2
 fi
 

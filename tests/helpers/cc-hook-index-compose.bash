@@ -95,3 +95,14 @@ seed_root_fact() {
   seed_root_bullet "$1" "$2"
   printf -- '---\nname: %s\ndescription: ""\n---\n\nbody\n' "$(basename "${1%.md}")" > "memory/$1"
 }
+
+# A tier whose three facts are in root and carrier alike, with root at the memory
+# store's HEAD carrying all three: the state in which a line removed from the
+# carrier alone is a (1,1,0) line. Facts: a.md, b.md, c.md.
+seed_committed_tier_block() {
+  seed_tier_bullet ddaanet a.md "first"
+  seed_tier_bullet ddaanet b.md "middle"
+  seed_tier_bullet ddaanet c.md "last"
+  gitlore_compose memory >/dev/null
+  commit_memory_state
+}

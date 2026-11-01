@@ -23,13 +23,16 @@
 #   index-compose-check.sh    gitlore_compose_check's four rules, welded-line
 #                              detection, and rule 7 (a tier off its pin)
 #   index-compose-repair.sh   the mechanical rewrite for a compose-check problem
-#   index-compose-project.sh  the dangling/orphan reports and the down/up
-#                              projection between root and a tier's carrier
+#   index-compose-dangling.sh the dangling-pointer report and its fix lines
+#   index-compose-project.sh  the orphan report and the down/up projection
+#                              between root and a tier's carrier
 
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-check.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-repair.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-compose-dangling.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-project.sh"
 
@@ -230,8 +233,10 @@ gitlore_compose_write() {
 # Args: $1 = mempath, $2 = non-empty when the manifest changed this batch.
 gitlore_compose_and_report() {
   local mempath="$1" manifest_touched="$2"
-  local sysmsg="" ctx="" compose_rc=0 result
+  local sysmsg="" ctx="" compose_rc=0 result restores
 
+  # Read before the pass: once it has written, the loss is no longer visible.
+  restores=$(gitlore_compose_restores "$mempath")
   result=$(gitlore_compose "$mempath") || compose_rc=$?
   if [ "$compose_rc" -eq 0 ]; then
     if [ -n "$result" ]; then
@@ -241,6 +246,21 @@ gitlore_compose_and_report() {
       sysmsg="gitlore: recomposed tier pointers ($n $unit)"
       ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and projected root-authored tier lines down into their carrier — including deletions of a line the memory store has committed, whose carrier copy goes in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition places, drops and re-texts carrier lines to match the root index; the root index's own lines are only reordered, never re-texted.
 $result"
+    fi
+
+    # A line the carrier lost and the pass put back. The agent deleted it from
+    # the wrong surface, so the context says where a removal starts.
+    if [ -n "$restores" ]; then
+      local r runit restored_capped
+      r=$(printf '%s\n' "$restores" | grep -c .)
+      if [ "$r" -eq 1 ]; then runit="line"; else runit="lines"; fi
+      restored_capped=$(printf '%s\n' "$restores" | gitlore_cap_list)
+      sysmsg="${sysmsg:+$sysmsg
+}gitlore: restored $r tier index $runit deleted from the tier's own index"
+      ctx="${ctx:+$ctx
+
+}These lines were deleted from a tier's own index while the root index still carries them, and the pass put them back ($r total). A removal starts in the root index: delete the line from $mempath/MEMORY.md, and the next pass drops the tier's copy.
+$restored_capped"
     fi
 
     # Carrier lines the root index does not carry. Reported, never resolved:

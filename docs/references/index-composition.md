@@ -67,15 +67,14 @@ by hand, stays a deliberate manual edit.
 
 Composition runs at four points. At `SessionStart`, after the tier pin, so the
 lines each pinned carrier holds surface in the always-loaded root. Mid-session
-on
-**`PostToolBatch` when the root index or `memory/.gitlore-tiers` is written**,
-so the agent can edit the manifest, see the regenerated index, and adjust
-ordering within one session. In the **merge continuation, before it commits**: a
-merge synthesizes an index outside any tool edit, the one write path the session
-triggers cannot see, and composing there puts the composed bytes in the merge
-commit itself rather than in a later, unrelated one. That pass is **up-only**
-(Rejected alternatives, below). And on the
-**commit path, on a dirty store, before the commit**: the carrier is what a
+on **`PostToolBatch` when the root index, `memory/.gitlore-tiers` or an active
+tier's carrier is written**, so the agent can edit the manifest, see the
+regenerated index, and adjust ordering within one session. In the
+**merge continuation, before it commits**: a merge synthesizes an index outside
+any tool edit, the one write path the session triggers cannot see, and composing
+there puts the composed bytes in the merge commit itself rather than in a later,
+unrelated one. That pass is **up-only** (Rejected alternatives, below). And on
+the **commit path, on a dirty store, before the commit**: the carrier is what a
 tier's remote serves, so one left stale by a missed in-session pass would ship
 rather than wait for the next `SessionStart` (D50,
 [git-hooks.md](git-hooks.md)).
@@ -190,6 +189,15 @@ line added *and* deleted inside one uncommitted window reads as never-authored
 and lingers in the carrier — reported, never silently destroyed. One `git show`
 against a commit git already holds, and no reconciliation state that can outlive
 what it describes.
+
+**A line only the carrier lost is root's, and comes back.** A carrier path root
+lacks is a deletion only when root made it. The converse — root still carries
+the path and the carrier does not — means the carrier alone lost the line,
+whatever root at `HEAD` says: root is canonical, so the line is root's insertion
+and is written at root's offset with root's text. A removal therefore starts in
+the root index. The batch reports the restored path and says so, because the
+files show no trace of the pass; a tier holding a prepared merge is not watched,
+since the merger edits its carrier and the pin rule would refuse every batch.
 
 **A path that arrived from upstream reaches `HEAD` only with the recompose that
 took it.** The up projection writes root's block from the merged carrier as an

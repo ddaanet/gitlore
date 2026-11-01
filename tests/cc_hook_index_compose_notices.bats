@@ -10,6 +10,7 @@ load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
 load helpers/cc-hook-index-compose
+load helpers/index-compose
 
 # --- Post-mount triage nudge (D17 triage-automation design) ---
 
@@ -132,4 +133,47 @@ load helpers/cc-hook-index-compose
   run feed
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+# --- a restored line is reported ---
+#
+# A line removed from a carrier alone is restored at batch end (see
+# tests/cc_hook_index_compose.bats). The restore is silent in the files, so the
+# batch says what it did: which line came back, and that a removal starts in the
+# root index. Asserted on the two facts, not on the sentence.
+
+@test "a batch that restores a carrier-deleted line names its path and says a removal starts in the root index" {
+  seed_committed_tier_block
+  pre "$PWD/memory/ddaanet/MEMORY.md"
+  set_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [c](c.md) — last'
+  run feed
+  [ "$status" -eq 0 ]
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [b](b.md) — middle' \
+    '- [c](c.md) — last'
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext // empty' <<<"$output")
+  [[ "$ctx" == *"b.md"* ]] || false
+  [[ "$ctx" == *"removal"* ]] || false
+  [[ "$ctx" == *"root index"* ]] || false
+  # Both channels carry it: the user sees a restore too.
+  [ -n "$(jq -r '.systemMessage // empty' <<<"$output")" ]
+}
+
+@test "a batch that restored nothing emits no restore text" {
+  seed_committed_tier_block
+  pre "$PWD/memory/MEMORY.md"
+  # A root-authored removal: the carrier copy goes in this pass. A real compose
+  # with a report, so the silence below is not an empty batch's.
+  sed -i.bak '/ddaanet\/b.md/d' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
+  run feed
+  [ "$status" -eq 0 ]
+  assert_bullets memory/ddaanet/MEMORY.md \
+    '- [a](a.md) — first' \
+    '- [c](c.md) — last'
+  ctx=$(jq -r '.hookSpecificOutput.additionalContext // empty' <<<"$output")
+  [ -n "$ctx" ]
+  [[ "$ctx" != *"removal"* ]] || false
 }

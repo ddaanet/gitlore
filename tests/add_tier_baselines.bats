@@ -49,7 +49,7 @@ mount_with_facts() {
 
 # The compose stamp as index-sync-pre.sh takes it, from the project root.
 current_stamp() {
-  gitlore_compose_stamp memory/MEMORY.md memory/.gitlore-tiers
+  gitlore_compose_stamp memory
 }
 
 # One Bash call of the batch: pre hook, the script, then the two PostToolBatch
@@ -192,4 +192,49 @@ mount_in_batch() {
   [ "$status" -eq 0 ]
   [ ! -e "$(gitlore_compose_stamp_file memory)" ]
   [ ! -e "$(gitlore_index_preimage_file memory)" ]
+}
+
+# --- the carrier is in the stamp, and the mount's baseline matches it ---
+#
+# The compose stamp watches each active tier's carrier as well as the root index
+# and the manifest. A mount activates a tier and writes its carrier in the same
+# call, so a baseline add-tier.sh moved without the carrier would differ from the
+# stamp the next pre hook takes, and the batch-end comparison would read the
+# mount as a carrier edit and compose a second time.
+
+# Takes a fresh stamp, edits the active tier's carrier alone, takes another, and
+# requires they differ: the stamp covers the carrier's content, whatever its key.
+carrier_edit_moves_stamp() {
+  local stamp before
+  stamp=$(gitlore_compose_stamp_file memory)
+  rm -f "$stamp"
+  pre Bash
+  before=$(cat "$stamp")
+  rm -f "$stamp"
+  echo '- [z](z.md) — written into the carrier only' >> memory/ddaanet/MEMORY.md
+  pre Bash
+  [ "$(cat "$stamp")" != "$before" ]
+}
+
+@test "add-tier baselines: the stamp of a store with an active tier moves when only its carrier changes" {
+  mount_with_facts
+  run bash "$ADD_TIER" < "$INTENT"
+  [ "$status" -eq 0 ]
+  [ -f memory/ddaanet/MEMORY.md ]
+  carrier_edit_moves_stamp
+}
+
+@test "add-tier baselines: the baseline the mount leaves equals the stamp the next call takes" {
+  mount_with_facts
+  pre Bash
+  stamp=$(gitlore_compose_stamp_file memory)
+  run bash "$ADD_TIER" < "$INTENT"
+  [ "$status" -eq 0 ]
+  moved=$(cat "$stamp")
+  rm -f "$stamp"
+  pre Bash
+  [ "$(cat "$stamp")" = "$moved" ]
+  # Equality alone holds for two stamps that both ignore the carrier the mount
+  # wrote; the carrier is part of what was compared when an edit to it moves it.
+  carrier_edit_moves_stamp
 }

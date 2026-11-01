@@ -72,7 +72,7 @@ if [ -t 0 ]; then no_intent; fi
 # Before any write: whether the store was clean (a clean store gets the canned
 # commit below), and the compose baselines this run must account for.
 pending=$(git -C "$mempath" status --porcelain)
-pre_stamp=$(gitlore_compose_stamp "$mempath/MEMORY.md" "$mempath/.gitlore-tiers")
+pre_stamp=$(gitlore_compose_stamp "$mempath")
 pre_index_ok=0
 if [ -f "$mempath/MEMORY.md" ]; then
   pre_index=$(mktemp "${TMPDIR:-/tmp}/gitlore-add-tier-index.XXXXXX")
@@ -355,7 +355,7 @@ fi
 # belongs to another batch and is left alone. Only existing files are rewritten:
 # none is created or deleted.
 gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir)
-post_stamp=$(gitlore_compose_stamp "$mempath/MEMORY.md" "$mempath/.gitlore-tiers")
+post_stamp=$(gitlore_compose_stamp "$mempath")
 # The unmatched-glob case: a pattern with no file stays literal and fails -f.
 for f in "$gitdir/gitlore-compose-stamp" "$gitdir/gitlore-compose-stamp-"*; do
   [ -f "$f" ] || continue
