@@ -1,7 +1,7 @@
 # Cut the memory-writing hub to acts — plan
 
-Status: done. Base: `dev`. One commit, shown to my human
-partner as a diff before it lands.
+Status: done. Base: `dev`. One commit, shown to my human partner as a diff
+before it lands.
 
 Edits 1 and 2 are approved wording: write them verbatim. Edit 4 is a contract.
 

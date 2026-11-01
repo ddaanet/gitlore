@@ -5,4 +5,3 @@
 - Plugin-creation should add new projects to `ddaanet/owned-projects.md`; wire it in when it lands.
 - Delete each `gitlore/archive/2026-10-15` branch (tier and memory store) on or after 2026-11-15.
 - MEMORY.md sits at 95% of its 25600-byte budget; run /gitlore:index-audit when my human partner asks.
-- No suite runs `tests/evals/setups/mounted-tier.sh`: add a bats case that runs it on a `make_parent_with_memory` fixture and asserts a clean store with the tier mounted and active.
