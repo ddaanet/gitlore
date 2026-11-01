@@ -142,8 +142,8 @@ line, because the only moment that needs it is question 2, which the skill
 fires; an index line would spend capped bytes in every session to route to a
 fact one pass reads. A project the inventory does not list is asked about at the
 memory gate and nowhere else, and the answer is a row added to the inventory in
-the same memory change, so the question is asked once. The detail is the skill's
-`references/owner-inventory.md`.
+the same memory change, so the question is asked once. The routing is in the
+tier's `owned-projects.md`; the skill's Q2 says how to locate it.
 
 **The rejections came from questions the skill already asks.** The incident and
 the unaided-reach questions did not produce a verdict when stated as rules; they
