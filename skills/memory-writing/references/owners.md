@@ -1,6 +1,6 @@
 # Owners and overriding a skill
 
-Open this once a candidate owner is in view (Q2 of the hub) or a fact is written to override an installed skill.
+Open this to judge whether a candidate owner covers the fact (Q2 of the hub) or a fact is written to override an installed skill.
 
    - **A skill.** The body reduces to "when using \<skill\>, do X". Delete it
      and let the skill say X; if X is missing from the skill, fix the skill.

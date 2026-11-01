@@ -41,9 +41,10 @@ nobody tracks.
    owns is in the wrong place: the owner states it at the moment it matters,
    while the copy drifts and pays index bytes every session to say it worse.
    Accuracy is not the test — an accurate fact in the wrong home is still a
-   category error. The owners:
-   Open [owners.md](references/owners.md) once a candidate owner is in view: the
-   list of owners and how to read the inventory.
+   category error. The owners: a skill, a design doc, a code comment, CLAUDE.md
+   or a conventions file, a hook or tool's own output, a sibling project's skill
+   or agent. Read the `owned-projects.md` inventory in each mounted tier. Open
+   [owners.md](references/owners.md) to judge whether a candidate covers the fact.
    Grep the owner for the load-bearing terms before accepting a pointer that
    claims coverage.
 3. **Would the reader reach it unaided?** A fact restating common sense, or one
@@ -110,8 +111,8 @@ clause already exists.
 
 ## 4. Organising a file that holds many facts
 
-Open [file-shape.md](references/file-shape.md) when a file is filling toward
-recall's 4096-byte limit.
+Open [file-shape.md](references/file-shape.md) before adding a section to an
+existing file.
 
 ## 5. Which tier
 

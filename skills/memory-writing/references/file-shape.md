@@ -1,6 +1,6 @@
 # File shape: a new file or a section, and a file filling up
 
-Open this when a file with the same moment clause already exists, or a file is filling toward recall's 4096-byte limit.
+Open this when a file with the same moment clause already exists, or before adding a section to an existing file.
 
 ## 3. A new file, or a section in one that exists
 
