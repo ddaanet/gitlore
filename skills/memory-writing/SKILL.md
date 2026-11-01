@@ -111,8 +111,8 @@ clause already exists.
 
 ## 4. Organising a file that holds many facts
 
-Open [file-shape.md](references/file-shape.md) before adding a section to an
-existing file.
+Open [file-shape.md](references/file-shape.md) before adding to an existing
+file.
 
 ## 5. Which tier
 
