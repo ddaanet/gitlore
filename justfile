@@ -66,7 +66,7 @@ reads_all_suites := "tests/bsd_portability.bats"
 # own sentinel, so a red integration run does not un-cache a green lint;
 # `check-version` stays uncached beside the two doc checks below — cheap, and
 # it reads the version files fresh every time.
-precommit: format-docs check-distribution check-refs
+precommit: format-docs check-distribution check-refs check-size
     #!{{ bash_prolog }}
     # Uncached, ahead of the gates: the checker's largest input is
     # `memory/`, a gitlink here, so `git ls-files` yields one path and nothing
@@ -95,15 +95,13 @@ check-distribution:
     plugin-dev/run-bats.sh tests/plugin_distribution.bats tests/plugin_distribution_commands.bats
     record-sentinel
 
-# Hard-wraps prose in docs/ and plans/ so a line count means something. No
+# Hard-wraps prose in docs/ and plans/. No
 # sentinel: a full pass is ~0.4s, less than the bookkeeping would cost. rumdl
 # comes from uv.lock via `uv sync`, on PATH through `.envrc`; the pin check
 # turns a stale `.venv` into a message instead of a differently wrapped tree.
 #
 # `plans/*/reports/` is out: a report is a record of a run that has finished,
-# so wrapping it rewrites a file its author is no longer there to read, and it
-# escapes no check by staying unwrapped — the line cap `check-docs-links.py`
-# enforces covers `docs/` only.
+# so wrapping it rewrites a file its author is no longer there to read.
 format-docs:
     #!{{ bash_prolog }}
     have=$({{ rumdl }} --version) || { echo "format-docs: rumdl not on PATH — run 'uv sync' and let direnv load .envrc" >&2; exit 1; }

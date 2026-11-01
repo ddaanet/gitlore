@@ -139,6 +139,16 @@ teardown_file() {
   [[ "$output" == *"precommit"* ]]
 }
 
+@test "precommit depends on check-size" {
+  # The size cap is enforced at the gate. Match whole recipe names, one per
+  # line, so a recipe named check-sizes or check-size-x cannot satisfy it.
+  run just_here --dump --dump-format json
+  [ "$status" -eq 0 ]
+  run jq -r '.recipes.precommit.dependencies[].recipe' <<<"$output"
+  [ "$status" -eq 0 ]
+  grep -qxF check-size <<<"$output"
+}
+
 @test "every gate names its sentinel after its own recipe" {
   # The sentinel file is keyed by the name `sentinel-guard` is handed, so a
   # recipe naming another's would report that one's pass as its own. Recipe

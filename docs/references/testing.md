@@ -84,9 +84,7 @@ narrow that cost to what a change reaches; the figure above predates both.
 
 `format-docs` hard-wraps `docs/` and `plans/` apart from `plans/*/reports/`. A
 report records a run that has finished, so wrapping it rewrites a file its
-author is no longer there to read, and nothing is lost by leaving it: the
-`oversized-file` cap `check-docs-links.py` enforces reaches `docs/`, the scripts
-and hooks and the bats suites, but not `plans/` (D55).
+author is no longer there to read, and nothing is lost by leaving it.
 
 ## What a sentinel vouches for
 

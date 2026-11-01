@@ -66,7 +66,8 @@ from the script the node names.
   A gate file holds a content hash of that recipe's declared inputs, so it is
   valid when re-hashing them reproduces it; mtime settles nothing, and an input
   edited mid-run leaves no pass recorded, saying so on stderr. `format-docs`,
-  `check-memory-hygiene.py`, `check-docs-links.py` and `check-version` run
+  `check-memory-hygiene.py`, `check-docs-links.py`, `check-version` and
+  `check-size` run
   uncached and write no gate file, so four fresh gates are not a green
   `precommit`. Neither `ps` nor stdout settles a run either: a fresh Bash call
   cannot see another background task's processes, and `plugin-dev/run-bats.sh`

@@ -126,11 +126,11 @@ Plans and specs live in `plans/`.
     user instructions (`CLAUDE.md` and equivalents) can relax them, so a user
     who wants auto-commit or auto-push can document the override.
 12. **Bounded artifacts.** Every artifact a reader takes in at one go stays
-    under 400 lines — a `docs/` node, a script, a hook, a bats suite alike —
-    because the cap rations a context window rather than tidying documentation,
-    and `tools/check-docs-links.py` blocks past it. What the count stands in for
-    where no formatter wraps a script, the need-time seam a split follows, and
-    why the rule outside `docs/` needed a gate (D55) in
+    under 20000 bytes (10000 for a `SKILL.md` hub) — a `docs/` node, a script, a
+    hook, a bats suite alike — because the cap rations a context window rather
+    than tidying documentation, and the toolkit's `check-size` blocks past it
+    (D73). What the count stands in for, the need-time seam a split follows, and
+    why the rule outside `docs/` needed a gate are in
     [artifact size](references/artifact-size.md).
 
 ---

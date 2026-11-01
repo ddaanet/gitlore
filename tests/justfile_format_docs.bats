@@ -36,11 +36,10 @@ EOF
 
 @test "the wrap set spares plans/*/reports/ and nothing else under plans/" {
   # A report is written once and read once, by an agent that has already left;
-  # wrapping it rewrites a file nobody is going to read again, and the line cap
-  # `check-docs-links.py` enforces covers `docs/` only, so an unwrapped report
-  # escapes no check. The recipe's own argument list is replayed through the
-  # real rumdl against a fixture tree: a stub would only prove the flag was
-  # passed, not that the pattern matches what it is meant to.
+  # wrapping it rewrites a file nobody is going to read again.
+  # The recipe's own argument list is replayed through the real rumdl against
+  # a fixture tree: a stub would only prove the flag was passed,
+  # not that the pattern matches what it is meant to.
   command -v rumdl > /dev/null || {
     echo "rumdl is not on PATH; run 'uv sync' and let direnv load .envrc" >&2
     return 1

@@ -297,16 +297,18 @@ decision goes. [design-history.md](references/design-history.md)
 splitting `changelog.md` by period to pass the size check · a "retired
 decisions" section in `decisions.md`.
 
-**Artifact size** — the 400-line cap over everything a reader takes in at one
-go, and the check that gates it.
+**Artifact size** — the byte cap over everything a reader takes in at one go,
+and the toolkit check that gates it.
 [artifact-size.md](references/artifact-size.md)
 
-- **D55** — the 400-line cap is a context budget, so it binds scripts, hooks and
-  suites as well as `docs/`
+- **D73** — the cap is 20000 bytes a file, 10000 for a `SKILL.md`, checked by
+  the toolkit's `check-size` over every file git does not ignore; it binds
+  scripts, hooks and suites as well as `docs/`
 
-*Rejected:* raising the cap · gating tokens instead of lines · leaving the rule
-outside `docs/` a convention with no checker · a separate checker script for the
-source tree · counting only shell files, not python.
+*Rejected:* raising the cap · gating tokens instead of bytes · leaving the rule
+a convention with no checker · a separate checker script for the source tree ·
+counting only shell files, not python · keeping the line check beside the byte
+check.
 
 ---
 

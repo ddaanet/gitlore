@@ -94,7 +94,7 @@ file lives and not by a list that has to stay current. A per-file exclude or
 allowlist drifts silently when a file is added; leaving the files in `scripts/`
 with docstrings saying they do not ship leaves the shipping to the author's
 memory. The runtime scripts stay in `scripts/`; the checkers scan `tools/` for
-the line cap and citations.
+citations.
 
 ## Rejected alternatives
 
