@@ -131,11 +131,10 @@ rejected a fact outright. A reviewer holding only the written rules matched most
 fact-to-skill moves and none of the moves to a tool, hook or template, and
 reproduced almost none of the rejections.
 
-**What the owners list lacked was inventory.** Question 2 of the skill names the
-kinds of owner but not which projects exist, that my human partner owns them,
-that a fix there beats a note, or that a sibling's skill body or agent
-definition can hold the fact. The inventory is the fact `owned-projects.md` at
-the root of each mounted shared tier, read by name: `<mempath>` from
+**What the owners list lacked was inventory.** A list of owner kinds does not
+say which projects exist, that my human partner owns them, or that a fix there
+beats a note. The inventory is the fact `owned-projects.md` at the root of each
+mounted shared tier, read by name: `<mempath>` from
 `git config --file .gitmodules submodule.gitlore-memory.path`, the tiers from
 `<mempath>/.gitlore-tiers`, a tier without the file skipped. It has no index
 line, because the only moment that needs it is question 2, which the skill

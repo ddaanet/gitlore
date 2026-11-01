@@ -27,11 +27,17 @@ that lands it in its owner — file and index line together.
    or CLAUDE.md included. When a rule must exist, state it positively in the
    step where it acts ("the commit lands before this file is written"), not as
    a prohibition on the agent.
-2. **Does another artifact own it?** Move the fact to its owner even when the
-   memory is accurate, and grep the owner for the load-bearing terms before
+2. **Does another artifact own it?** Read `<mempath>/<tier>/owned-projects.md`
+   for each line of `<mempath>/.gitlore-tiers`, where `<mempath>` is
+   `git config --file .gitmodules submodule.gitlore-memory.path` run from the repo
+   root, skipping a tier without the file. Move the fact to its owner even when
+   the memory is accurate, and grep the owner for the load-bearing terms before
    accepting that it covers the fact:
-   - **A skill:** the fact reduces to "when using \<skill\>, do X". Delete it; if
-     the skill lacks X, fix the skill.
+   - **A skill:** the fact reduces to "when using \<skill\>, do X". Check which way
+     the claim points before counting the skill as its owner: a fact written to
+     override an installed skill sits on that skill's topic, so a coverage scan
+     flags it as owned. Then delete the fact; if the skill lacks X, fix the skill
+     when this repo owns it, otherwise route the fact as the inventory says.
    - **A design doc:** a decision, a supersession, a dated status. Record it in the
      living design doc.
    - **The code:** how one call site must behave. Write it as a comment at that
@@ -40,26 +46,24 @@ that lands it in its owner — file and index line together.
      work in one repo or tier. A fact meant to be found on meeting a symptom stays
      in memory.
    - **A hook or tool that prints the diagnosis when it fires:** delete a memory
-     that restates its output; when the output lacks it, fix the output.
-   - **A sibling project's skill body or agent definition:** read
-     `<mempath>/<tier>/owned-projects.md` for each line of
-     `<mempath>/.gitlore-tiers`, where `<mempath>` is
-     `git config --file .gitmodules submodule.gitlore-memory.path`, skipping a tier
-     without the file, and route the fact as the inventory says.
+     that restates its output; when the output lacks it, fix the output when this
+     repo owns it, otherwise route the fact as the inventory says.
+   - **A sibling project's skill body, agent definition, hook or tool output:** route
+     the fact as the inventory says.
 3. **Would the reader reach it unaided?** Discard a fact restating common
    sense, or following in one step from an indexed memory. The tell: the body's
-   general claim is unarguable and only its instance is interesting; the instance
-   does not generalise either, so discard.
+   general claim is unarguable and only its instance is interesting. Discard it,
+   unless a reader meeting that instance again would not reach it unaided; then
+   cut the general claim and keep the instance.
 4. **Who reconstructs it?** A script or the harness recomputing it: drop and
    defer. A model inferring it from a paraphrase, with the failure silent:
    carry it.
 5. **What moment does it fire at?** State the moment in one clause. The same
    clause as a file already in the store means a section in that file (§3).
-   The clause must name a *literal* — a string a tool result surfaces — not an
-   activity ("writing a design doc"). An activity-only fact goes to the skill
-   owning the activity (Q2), or stays once its index line names a symptom it
-   fires on; a symptom with no string needs a checkpoint inside a skill that
-   owns the surrounding moment.
+   Prefer a *literal* — a string a tool result surfaces. An activity ("writing a
+   design doc") goes to the skill owning it (Q2); with no such skill it stays as a
+   HOW line (§7) whose condition names the task. A symptom with no string needs a
+   checkpoint inside a skill that owns the surrounding moment.
 6. **Which tier?** Mechanism scoped to this repo, or to the class of repo (§5).
 7. **Does the body survive the strip?** Incident out, first person out,
    deictics out, present tense in, an ageing observation version-stamped (§2).
@@ -77,8 +81,8 @@ Write from the reader's vantage, in the present tense. Lead with the rule; give
 the reasoning that makes it decidable in a new situation; cut every sentence
 that is narration. Never write:
 
-- *What used to be*, or a snapshot of which repos have migrated or which
-  version is current.
+- *What used to be or what just changed*, or a snapshot of which repos have
+  migrated or which version is current.
 - *The author's present* — "I did X and was corrected".
 - *Pending or temporal framing* — work that "needs a fresh session".
 - *Deictics* — *now*, *here*, *today*, *currently*, *recently*, *this session*.
@@ -135,10 +139,6 @@ naming a count rather than a thing.
 
 Write the triggers the fact needs even when the index is over the byte cap;
 take the overage to `/gitlore:index-audit` separately.
-
-A fact written to override an installed skill sits on that skill's topic, so a
-coverage scan flags it as owned: check which way the claim points before
-counting the skill as its owner.
 
 ## 8. Landing it
 
