@@ -1,6 +1,6 @@
 # Retire the dated changelog; adopt the toolkit size check — plan
 
-Status: approved by my human partner. Base: `dev`.
+Status: done. Base: `dev`.
 
 A retired or inverted decision is deleted from the index and its node, the
 deleting commit says why, and the D-number gap stays — my human partner's call,

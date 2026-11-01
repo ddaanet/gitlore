@@ -1,6 +1,5 @@
 ## Remaining
 
-- Plan steps 1-11 of plans/2026-10-31-size-check-and-changelog-retirement.md: retire the changelog (D72), six node splits, two resolve-library splits, the memory-writing hub split, then wire check-size and retire the line check (D73); afterwards mark the plan done.
 - Leftover D70 keys: installs predating D70 keep `gitlore.commitCommand`, `pushCommand`, `mergeCommand` and `memoryApprovalClauseFile` in `.git/config`; left in place by decision.
 - Postponed: propose a design for the silent tier-line loss (tier-index-only deletion accepted by gitlore_compose_down's union merge, no report).
 - Plugin-creation should add new projects to `ddaanet/owned-projects.md`; wire it in when it lands.
