@@ -65,19 +65,19 @@ by hand, stays a deliberate manual edit.
 
 **D31 — Compose triggers and validation**
 
-Composition runs at four points. At `SessionStart`, after the tier pin, so the
-lines each pinned carrier holds surface in the always-loaded root. Mid-session
-on **`PostToolBatch` when the root index, `memory/.gitlore-tiers` or an active
-tier's carrier is written**, so the agent can edit the manifest, see the
-regenerated index, and adjust ordering within one session. In the
+Composition runs at two points, and only where an edit happens (D74).
+Mid-session on **`PostToolBatch` when the root index, `memory/.gitlore-tiers` or
+an active tier's carrier is written**, so the agent can edit the manifest, see
+the regenerated index, and adjust ordering within one session. And in the
 **merge continuation, before it commits**: a merge synthesizes an index outside
 any tool edit, the one write path the session triggers cannot see, and composing
 there puts the composed bytes in the merge commit itself rather than in a later,
-unrelated one. That pass is **up-only** (Rejected alternatives, below). And on
-the **commit path, on a dirty store, before the commit**: the carrier is what a
-tier's remote serves, so one left stale by a missed in-session pass would ship
-rather than wait for the next `SessionStart` (D50,
-[git-hooks.md](git-hooks.md)).
+unrelated one. That pass is **up-only** (Rejected alternatives, below). The
+mount composes too, by calling the batch's reporting function directly.
+`SessionStart` and the commit path compose nothing: an index that is off there
+changed outside a batch, and is reported (D74, [session.md](session.md)) or
+aborts the commit (D50, [git-hooks.md](git-hooks.md)), and `gitlore-compose`
+clears it.
 
 The mid-session trigger keys on
 **what changed, not on what the batch declared**: `index-sync-pre.sh` stamps the
@@ -101,32 +101,32 @@ line **welds two pointer bullets** onto one physical line, if the manifest
 **active tier is checked out off the gitlink** the memory store's index records
 for it. That last rule guards the down projection alone (D36), so it lives
 outside the shared check and only the down-projecting passes run it:
-`gitlore_compose` itself, so every compose on `PostToolBatch`, at `SessionStart`
-and after a tier mount, and the commit path, which also checks it ahead of its
-compose so an off-pin tier aborts the commit (D50). The merge continuation's
-adoption is up-only and runs while the tier is legitimately ahead of the pin,
-before that path stages the moved gitlink. The pin is read from the memory
-store's **index** rather than its `HEAD`, because the index is what
-`submodule update` checks a tier out at and what every advancing path stages the
-move into (D43) — a landed merge is not a defect for as long as the memory
-commit recording it is pending. A tier that is mid-merge gets the remedy its own
-state needs, `/gitlore:resolve`, rather than the return-to-the-pin checkout,
-which would unlink `MERGE_HEAD` and destroy the prepared merge. A tier merely
-ahead of its pin — clean, its local `live` holding every commit its `HEAD` does
-— is checked out at the pin and sent to `/gitlore:merge`, which adopts from
-`live` ([git-hooks.md](git-hooks.md)). A mounted tier *absent* from the manifest
-is not an error, only inactive; the asymmetry is deliberate —
-listed-but-absent = broken, present-but-unlisted = dormant. In the continuation,
-a problem in the merged index itself blocks the landing — in the tier's carrier
-for a tier merge, and a duplicate, interleaved or welded line in root's
-`MEMORY.md` for a memory-root merge. Nothing is committed, the merge stays
-prepared, and the merger re-synthesizes with the problem lines in hand: the
-defect is in text this repo is authoring, and an edit to the named lines clears
-it (D52, in [tier-arrival-repair.md](tier-arrival-repair.md)). Any other refusal
-is reported and does not block, because the merge is synthesized and approved by
-then, and stranding it over a problem outside what it merged is the worse
-outcome. A memory-root merge then commits uncomposed and says so; a tier merge
-lands in the tier, which rests on its pin unadopted (D43).
+`gitlore_compose` itself, so every compose on `PostToolBatch` and after a tier
+mount, and the commit path, which also checks it ahead of its read-only pass so
+an off-pin tier aborts the commit (D50). The merge continuation's adoption is
+up-only and runs while the tier is legitimately ahead of the pin, before that
+path stages the moved gitlink. The pin is read from the memory store's **index**
+rather than its `HEAD`, because the index is what `submodule update` checks a
+tier out at and what every advancing path stages the move into (D43) — a landed
+merge is not a defect for as long as the memory commit recording it is pending.
+A tier that is mid-merge gets the remedy its own state needs,
+`/gitlore:resolve`, rather than the return-to-the-pin checkout, which would
+unlink `MERGE_HEAD` and destroy the prepared merge. A tier merely ahead of its
+pin — clean, its local `live` holding every commit its `HEAD` does — is checked
+out at the pin and sent to `/gitlore:merge`, which adopts from `live`
+([git-hooks.md](git-hooks.md)). A mounted tier *absent* from the manifest is not
+an error, only inactive; the asymmetry is deliberate — listed-but-absent =
+broken, present-but-unlisted = dormant. In the continuation, a problem in the
+merged index itself blocks the landing — in the tier's carrier for a tier merge,
+and a duplicate, interleaved or welded line in root's `MEMORY.md` for a
+memory-root merge. Nothing is committed, the merge stays prepared, and the
+merger re-synthesizes with the problem lines in hand: the defect is in text this
+repo is authoring, and an edit to the named lines clears it (D52, in
+[tier-arrival-repair.md](tier-arrival-repair.md)). Any other refusal is reported
+and does not block, because the merge is synthesized and approved by then, and
+stranding it over a problem outside what it merged is the worse outcome. A
+memory-root merge then commits uncomposed and says so; a tier merge lands in the
+tier, which rests on its pin unadopted (D43).
 
 **A store with no root `MEMORY.md` composes nothing and is checked by nothing,
 and says so once an episode.** Every pass keys on that file, so its absence
@@ -145,7 +145,7 @@ scaffold — including to an auto-memory dir migrated with facts and no index
 Composition spans the whole memory tree, so from the continuation it can also
 write a store *other* than the one being committed — the root index when a tier
 merged, a carrier when memory did. Those writes stay dirty and ride the next
-FR11 commit, the same float the `SessionStart` recompose produces.
+FR11 commit.
 
 **The `Bash` arm is measured, not assumed**: ~45 ms on every shell call buys the
 memory mutations no `Write|Edit` matcher can see — a `git checkout` names no
@@ -165,10 +165,10 @@ destroys approved upstream facts while reporting a successful compose, so the
 down pass refuses onto a tier that is off its pin (D31). It runs two projections
 instead:
 
-- **Down**, on `PostToolBatch`, at `SessionStart` and on the commit path: root's
-  lines for each ACTIVE tier are written into that tier's carrier, de-prefixed,
-  with root's text and root's order. Root is canonical, so this is what carries
-  a locally-authored line into the store that travels.
+- **Down**, on `PostToolBatch` and at the mount: root's lines for each ACTIVE
+  tier are written into that tier's carrier, de-prefixed, with root's text and
+  root's order. Root is canonical, so this is what carries a locally-authored
+  line into the store that travels.
 - **Up**, once, at the tier-adoption step of a landed merge: the merged carrier
   becomes root's block for that tier. This is the one moment a carrier outranks
   root's text — it is the artifact the user just approved, line by line — and it

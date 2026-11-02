@@ -71,14 +71,14 @@ gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; 
   elif git -C "$mempath" merge-base --is-ancestor "$live" "$remote"; then
     n=$(git -C "$mempath" rev-list --count live.."$remote")
     if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
-    add_report "gitlore: $n upstream memory $unit — run /gitlore:merge."
+    add_report "gitlore: $n upstream memory $unit — run /gitlore:merge: it fast-forwards, may record a canned commit, and needs no push."
   elif git -C "$mempath" merge-base --is-ancestor "$remote" "$live"; then
     return 0 # local live is ahead of the remote: a push's business
   else
     rc=0
     out=$(gitlore_rewrite_hit "$mempath" origin/live live) || rc=$?
     case "$rc" in
-      0) add_report "gitlore: upstream memory has diverged from live — run /gitlore:merge to reconcile it." ;;
+      0) add_report "gitlore: upstream memory has diverged from live — run /gitlore:push to reconcile and publish it." ;;
       1)
         crossing=$(gitlore_cross_rewrite_script "$mempath")
         add_report "gitlore: memory's live holds commits its remote rewrote (record gitlore/rewrites: $out is superseded), so merging upstream memory would re-import the old history. Nothing was merged. Run $crossing to cross this store." ;;

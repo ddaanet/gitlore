@@ -258,7 +258,7 @@ handles, and that checkout discards nothing (D50).
 
 **Adopting inside the pin guard rather than directing to `/gitlore:merge`.**
 Would finish the job in one pass instead of two. But the guard runs from every
-compose — `SessionStart`, `PostToolBatch`, the commit path — and adoption writes
+down-projecting compose — `PostToolBatch` and the mount — and adoption writes
 the root index and stages a gitlink, which inside a check would land work no
 approval covers in the next approved commit. The take owns that adoption
 together with its failure handling: the walk-back, the arrival repair (D52), the

@@ -164,8 +164,11 @@ teardown() {
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has upstream facts waiting")'
+  # Behind the remote is a take: /gitlore:merge, which needs no push, and no
+  # offer of /gitlore:push.
   echo "$output" | jq -e '.systemMessage | test("/gitlore:merge")'
-  echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
+  echo "$output" | jq -e '.systemMessage | test("no push"; "i")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:push") | not'
   echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
 }
 
@@ -202,8 +205,10 @@ teardown() {
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
+  # Diverged needs a publish: /gitlore:push, and no offer of /gitlore:merge.
   echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has diverged")'
-  echo "$output" | jq -e '.systemMessage | test("/gitlore:merge")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:merge") | not'
   echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
 }
 
@@ -275,11 +280,10 @@ teardown() {
   run -1 jq -e '.hookSpecificOutput.additionalContext | test("ddaanet")' <<< "$output"
 }
 
-@test "SessionStart composes the memory store's indexes" {
-  # A pinned tier takes nothing from its remote at SessionStart, so the pass
-  # that still has to run here is composition itself: a root-authored tier line
-  # written in a session that ended without one reaches the carrier at the start
-  # of the next.
+@test "SessionStart does not compose: a root-authored tier line stays out of the carrier" {
+  # A root-authored tier line written outside a session leaves a pending compose.
+  # SessionStart reports position and writes no index; the carrier waits for a
+  # batch or gitlore-compose.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -287,21 +291,64 @@ teardown() {
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   export GITLORE_LAUNCHED=1
+  root_before=$(cat memory/MEMORY.md)
+  carrier_before=$(cat memory/ddaanet/MEMORY.md)
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
+  [ "$(cat memory/MEMORY.md)" = "$root_before" ]
+  [ "$(cat memory/ddaanet/MEMORY.md)" = "$carrier_before" ]
+  run grep -qF -- '- [authored](authored.md)' memory/ddaanet/MEMORY.md
+  [ "$status" -ne 0 ]
+  # The fixture holds a real pending compose: composing it is what writes the
+  # line, so the untouched carrier above is the hook's doing.
+  gitlore_compose memory
   grep -qF -- '- [authored](authored.md) — written in the root index' memory/ddaanet/MEMORY.md
 }
 
-@test "SessionStart survives a store that fails composition" {
+@test "SessionStart leaves a pending compose byte-identical and still reports the dangling pointer" {
+  # A carrier-only deletion (root and root at HEAD carry the line, the carrier
+  # lost it) and a root line added since HEAD: two pending composes at once.
   make_parent_with_memory
   make_tier_in_memory ddaanet
-  set_tier_manifest ghost
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet kept.md "carried by both"
+  seed_root_bullet "ddaanet/kept.md" "carried by both"
+  gitlore_compose memory
+  commit_memory_state
+  grep -qF -- '(ddaanet/kept.md)' memory/MEMORY.md
+  sed -i.bak '/kept\.md/d' memory/ddaanet/MEMORY.md && rm memory/ddaanet/MEMORY.md.bak
+  seed_root_bullet "ddaanet/gone.md" "root line for an absent file"
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   export GITLORE_LAUNCHED=1
+  before=$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain; git -C memory/ddaanet status --porcelain)
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"ghost"* ]]
+  hook_json="$output"
+  after=$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain; git -C memory/ddaanet status --porcelain)
+  [ "$after" = "$before" ]
+  run grep -qF 'kept.md' memory/ddaanet/MEMORY.md
+  [ "$status" -ne 0 ]
+  # The dangling report runs whatever compose would do, and names the file.
+  echo "$hook_json" | jq -e '.systemMessage | test("gone\\.md")'
+}
+
+@test "SessionStart on a store whose manifest names an unmounted tier starts, reports the tier and leaves the store alone" {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ghost
+  # Committed, so the store is clean and the position report is "memory ready".
+  commit_memory_state
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  export GITLORE_LAUNCHED=1
+  before=$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain)
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("memory ready")'
+  # The report names the unmounted tier.
+  echo "$output" | jq -e '.systemMessage | test("ghost")'
+  [ "$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain)" = "$before" ]
 }
 
 @test "SessionStart reports a dangling pointer without touching the index" {

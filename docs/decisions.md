@@ -194,9 +194,16 @@ nowhere. [session.md](references/session.md)
 - **D14** — user-facing SessionStart output goes on `systemMessage`
 - **D59** — SessionStart moves memory nowhere; every advance is an explicit take
   or push
+- **D74** — compose only where the edit happens: `PostToolBatch` and the mount
+  are the only writers of an index, `gitlore-compose` run by hand clears what no
+  batch will, and the commit aborts on a pending compose; SessionStart reports
+  position and store diagnostics and writes no index, because anything
+  `PostToolBatch` did not compose is assumed to be an exterior change and
+  failing on it beats silently fixing it
 
 *Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
-start.
+start · composing at `SessionStart` · composing at the commit · splitting the
+compose pass for a read-only caller.
 
 **The plugin-upgrade notice** — what a session does when the plugin moves under
 it. [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md)

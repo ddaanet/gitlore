@@ -93,12 +93,12 @@ gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset
     if git -C "$tierpath" merge-base --is-ancestor "$tier_remote" "$tier_head"; then
       :
     elif git -C "$tierpath" merge-base --is-ancestor "$tier_head" "$tier_remote"; then
-      add_sysmsg "gitlore: tier '$tier' has upstream facts waiting — its remote 'live' is ahead of the pinned commit. Run /gitlore:merge to take them, or /gitlore:push to take them and publish."
+      add_sysmsg "gitlore: tier '$tier' has upstream facts waiting — its remote 'live' is ahead of the pinned commit. Run /gitlore:merge to take them; it needs no push."
     else
       rc=0
       out=$(gitlore_rewrite_hit "$tierpath" "$tier_remote" HEAD) || rc=$?
       case "$rc" in
-        0) add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:merge to reconcile them, or /gitlore:push to reconcile and publish." ;;
+        0) add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:push to reconcile and publish." ;;
         1)
           crossing=$(gitlore_cross_rewrite_script "$tierpath")
           add_sysmsg "gitlore: tier '$tier' holds commits its remote rewrote (record gitlore/rewrites: $out is superseded). Nothing was merged. Run $crossing to cross this tier." ;;

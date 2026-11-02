@@ -26,6 +26,21 @@ assert_report_on_both_channels() {
   echo "$output" | jq -e --arg re "$1" '.hookSpecificOutput.additionalContext | test($re)'
 }
 
+# Assert a jq regex does not match one hook channel. Reads the hook JSON from
+# $output. Args: $1 = jq path (.systemMessage or .hookSpecificOutput.additionalContext),
+# $2 = regex.
+# shellcheck disable=SC2154   # $output is bats' `run` capture, set by the caller
+assert_channel_lacks() {
+  echo "$output" | jq -e --arg re "$2" "$1 | test(\$re) | not"
+}
+
+# Assert a regex is absent from BOTH channels. Pair each use with a positive
+# assertion over the same fixture, or an absent message passes too.
+assert_lacks_on_both_channels() {
+  assert_channel_lacks .systemMessage "$1"
+  assert_channel_lacks .hookSpecificOutput.additionalContext "$1"
+}
+
 # Publish `live` to the memory remote (the fixture's origin is a bare repo that
 # carries only `main`) so a later fetch of `origin live` has something to find.
 publish_live_to_remote() {

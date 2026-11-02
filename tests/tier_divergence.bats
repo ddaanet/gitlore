@@ -208,12 +208,10 @@ load helpers/tier-divergence
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("Do not check it out, reset it, or commit into it")'
 }
 
-# A mid-merge tier is skipped by the pin loop above and then met again by the
-# compose that follows: the tier's own commit moved it off the gitlink memory
-# records, so rule 7 refuses the pass (D36). Refusing is right — projecting
-# root's index onto a carrier holding a staged merge would dirty the merge — so
-# what has to hold is that the two notices agree about the remedy.
-@test "SessionStart's compose refuses a mid-merge tier with the same remedy the pin loop gave" {
+# A mid-merge tier is skipped by the pin loop above, and SessionStart does not
+# compose, so the pin loop's notice is the only one: the store is left exactly
+# as the merge staged it, and no second notice offers another remedy.
+@test "SessionStart on a mid-merge tier gives the pin loop's notice alone and writes no index" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   set_tier_manifest ddaanet
@@ -226,13 +224,18 @@ load helpers/tier-divergence
 
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  before=$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain; git -C memory/ddaanet status --porcelain)
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
 
   echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has an unfinished merge")'
-  echo "$output" | jq -e '.systemMessage | test("tier composition refused")'
-  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. is mid-merge")'
-  # One remedy on the whole message, not two contradictory ones: the
-  # return-to-the-pin checkout would unlink MERGE_HEAD and lose the merge.
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:resolve")'
+  echo "$output" | jq -e '.systemMessage | test("tier composition") | not'
+  echo "$output" | jq -e '.systemMessage | test("is mid-merge") | not'
   echo "$output" | jq -e '.systemMessage | test("checkout --detach") | not'
+  # Alone: no diagnostic offers gitlore-compose to a mid-merge tier, on either channel.
+  echo "$output" | jq -e '.systemMessage | test("gitlore-compose") | not'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("gitlore-compose") | not'
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain; git -C memory/ddaanet status --porcelain)" = "$before" ]
 }

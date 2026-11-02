@@ -27,6 +27,9 @@ source "$PLUGIN_ROOT/scripts/lib/session-tiers.sh"
 # report_memory_position, the "where memory stands" stage below.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/session-memory.sh"
+# report_store_diagnostics, the "Store diagnostics" stage below.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/session-diagnostics.sh"
 # gitlore_retire_store_gates, the retired-gate cleanup stage below.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/session-gate-cleanup.sh"
@@ -222,42 +225,34 @@ fi
 # whole stage; it calls add_sysmsg and appends to protocol_ctx directly.
 gitlore_sync_nested_tiers "$mempath"
 
-# Compose after the tier pin, so the lines each pinned carrier holds surface in
-# the always-loaded root index this session rather than next (D17 3-ii). Never
-# fatal: a store that fails validation is reported and left alone — SessionStart
-# must always finish.
-compose_rc=0
-compose_problems=$(gitlore_compose "$mempath") || compose_rc=$?
-if [ "$compose_rc" -eq 2 ]; then
-  # Not a refusal: a write failed partway, so some indexes are composed and one
-  # is not. The fail-safe wording below would misdescribe the store.
-  add_sysmsg "gitlore: tier composition could not write an index; the memory indexes are only partly composed:
-$compose_problems"
-elif [ "$compose_rc" -ne 0 ]; then
-  add_sysmsg "gitlore: tier composition refused; the memory indexes were left untouched:
-$compose_problems"
-else
-  # The fifth validation reports rather than refuses — a bullet whose file is
-  # absent leaves the composed output correct, so it is named, not acted on.
-  dangling=$(gitlore_compose_dangling "$mempath")
-  if [ -n "$dangling" ]; then
-    # One synthetic notice, capped: a whole tier's worth of stale pointers must
-    # not flood the user's systemMessage (nor get UI-truncated to "and many more
-    # lines"). List a few, count the rest.
-    dangling_count=$(printf '%s\n' "$dangling" | grep -c .)
-    if [ "$dangling_count" -eq 1 ]; then dangling_unit="file"; else dangling_unit="files"; fi
-    dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
-    add_sysmsg "gitlore: the memory index points at $dangling_count missing $dangling_unit. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
-$dangling_capped"
-    # The agent gets a matching, equally-capped additionalContext: the
-    # systemMessage is user-only (D14), so without this the agent has no idea the
-    # always-loaded index it is about to trust is stale. Terse on purpose — enough
-    # to know it is broken and what to do, not the whole list.
-    protocol_ctx="$protocol_ctx
+# Store diagnostics (D74): the rule problems of the indexes and a pending
+# compose, reported after the tier pin and written nowhere. SessionStart composes
+# no index: PostToolBatch and the mount compose where an edit happens, so an
+# index that is off here changed outside them and is reported, not repaired.
+# Never fatal: the report is read-only and SessionStart must always finish.
+report_store_diagnostics "$mempath"
 
-gitlore: the memory index is STALE — $dangling_count root MEMORY.md pointer $dangling_unit name a target absent from the memory store (composition still produced a correct index; nothing was deleted). Likely another consumer merged or renamed those facts in a shared tier. Reconcile the root index: drop each stale line, or redirect it to where the fact now lives.
+# The fifth validation reports rather than refuses, and it runs on every store,
+# refused or not: a bullet whose file is absent leaves the composed output
+# correct, so it is named, not acted on.
+dangling=$(gitlore_compose_dangling "$mempath")
+if [ -n "$dangling" ]; then
+  # One synthetic notice, capped: a whole tier's worth of stale pointers must
+  # not flood the user's systemMessage (nor get UI-truncated to "and many more
+  # lines"). List a few, count the rest.
+  dangling_count=$(printf '%s\n' "$dangling" | grep -c .)
+  if [ "$dangling_count" -eq 1 ]; then dangling_unit="file"; else dangling_unit="files"; fi
+  dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
+  add_sysmsg "gitlore: the memory index points at $dangling_count missing $dangling_unit. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
 $dangling_capped"
-  fi
+  # The agent gets a matching, equally-capped additionalContext: the
+  # systemMessage is user-only (D14), so without this the agent has no idea the
+  # always-loaded index it is about to trust is stale. Terse on purpose — enough
+  # to know it is broken and what to do, not the whole list.
+  protocol_ctx="$protocol_ctx
+
+gitlore: the memory index is STALE — $dangling_count root MEMORY.md pointer $dangling_unit name a target absent from the memory store (nothing was deleted). Likely another consumer merged or renamed those facts in a shared tier. Reconcile the root index: drop each stale line, or redirect it to where the fact now lives.
+$dangling_capped"
 fi
 
 # Routing guidance (D17): advertise each ACTIVE tier (listed in the manifest)

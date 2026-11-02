@@ -233,19 +233,19 @@ the git and decides (D7).
   than a command because each has an entry no user types — a hook's stderr, a
   session start, an ending session, a token in a tool result, a write under
   `memory/`. Steps in [merge-and-resolve.md](references/merge-and-resolve.md).
-- **Claude Code hooks** — `SessionStart` is the self-healing pass and does the
-  most work; it is also where a new worktree's memory worktree is created,
-  lazily, so worktree support is uniform however the worktree came to be (no
-  `WorktreeCreate` hook; `WorktreeRemove` tears it down, advisory only). The
-  rest are single-purpose: `PostToolBatch` reports a mid-session plugin upgrade
-  (D21), the `PreToolUse`/`PostToolBatch` index pair keys on what changed rather
-  than on what the call declared (D31), per agent so a parent batch cannot
-  consume a subagent's baseline, a `PostToolBatch` relay drainer delivers — as
-  `SessionStart` does at a compaction or resume — the reports hooks write from
-  inside a subagent, whose own output reaches nobody else (D51), and
-  `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
-  drift (D15); `SessionStart(startup|clear|compact)` re-arms the
-  once-per-episode notices. Each `PostToolBatch` hook calls one shared guard
+- **Claude Code hooks** — `SessionStart` re-pins and reports, writes no index
+  (D74), and does the most work; it is also where a new worktree's memory
+  worktree is created, lazily, so worktree support is uniform however the
+  worktree came to be (no `WorktreeCreate` hook; `WorktreeRemove` tears it down,
+  advisory only). The rest are single-purpose: `PostToolBatch` reports a
+  mid-session plugin upgrade (D21), the `PreToolUse`/`PostToolBatch` index pair
+  keys on what changed rather than on what the call declared (D31), per agent so
+  a parent batch cannot consume a subagent's baseline, a `PostToolBatch` relay
+  drainer delivers — as `SessionStart` does at a compaction or resume — the
+  reports hooks write from inside a subagent, whose own output reaches nobody
+  else (D51), and `PostToolUse(EnterWorktree|ExitWorktree)` guards against
+  in-process worktree drift (D15); `SessionStart(startup|clear|compact)` re-arms
+  the once-per-episode notices. Each `PostToolBatch` hook calls one shared guard
   that turns its death into a report on both channels with exit 0, since exit 2
   there ends the turn and exit 1 tells the agent nothing (D60, in
   [cc-platform.md](references/cc-platform.md)).

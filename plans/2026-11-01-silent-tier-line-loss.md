@@ -1,7 +1,7 @@
 # Compose only where the edit happens — plan
 
-Status: approved by my human partner. Base: `dev`. Supersedes the
-restore-or-report choice: restore, with a message.
+Status: done. Base: `dev`. Supersedes the restore-or-report choice: restore,
+with a message.
 
 ## The defect this started from
 
@@ -102,5 +102,11 @@ arms, the fetch failures and the uncommitted line.
 
 1. `bin/gitlore-compose` clears a pending compose when no batch will, and the
    commit abort names it.
-2. `SessionStart` keeps its dangling report, which writes nothing.
+2. `SessionStart` reports store diagnostics and writes no index: the rule
+   problems (an unmounted manifest tier among them), a pending compose naming
+   `gitlore-compose`, and dangling pointers. The diagnostics move nothing, so
+   the pin check's put-back stays out of them. A mid-merge tier gets the pin
+   loop's notice alone. A tier whose local `live` is ahead of its pin takes
+   `/gitlore:merge`, not `gitlore-compose`: composing first dirties the tier and
+   the take refuses.
 3. Ahead of the remote stays silent.

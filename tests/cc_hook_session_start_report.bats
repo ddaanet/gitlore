@@ -82,11 +82,17 @@ load helpers/cc-hook-session-start
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   assert_report_on_both_channels '2 upstream.*/gitlore:merge'
+  # Behind the remote is a fast-forward: the report says so, says a canned commit
+  # may be recorded, and says no push is needed, and does not offer /gitlore:push.
+  assert_report_on_both_channels 'fast-forward'
+  assert_report_on_both_channels 'canned'
+  assert_report_on_both_channels '(?i)no push'
+  assert_lacks_on_both_channels '/gitlore:push'
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
 }
 
-@test "origin/live diverged from live is reported naming /gitlore:merge; local refs do not move (D59)" {
+@test "origin/live diverged from live is reported naming /gitlore:push, not /gitlore:merge; local refs do not move (D59)" {
   make_parent_with_memory
   publish_live_to_remote
   push_remote_commits 1
@@ -98,9 +104,26 @@ load helpers/cc-hook-session-start
   live_before=$(git -C memory rev-parse live)
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_report_on_both_channels 'diverged.*/gitlore:merge'
+  assert_report_on_both_channels 'diverged.*/gitlore:push'
+  assert_lacks_on_both_channels '/gitlore:merge'
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
+}
+
+@test "memory ahead of its remote stays silent: no upstream, merge or push report (D59)" {
+  make_parent_with_memory
+  publish_live_to_remote
+  # A local commit that HEAD and live share, absent from the remote.
+  git -C memory -c user.email=t@t -c user.name=t commit -q --allow-empty -m "local fact"
+  git -C memory update-ref refs/heads/live HEAD
+  enable_gitlore
+  # The fixture is ahead: the remote tip is contained in live and is not live.
+  [ "$(git -C memory rev-parse origin/live)" != "$(git -C memory rev-parse live)" ]
+  git -C memory merge-base --is-ancestor origin/live live
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | test("memory ready")'
+  assert_lacks_on_both_channels 'upstream|diverged|/gitlore:merge|/gitlore:push|/gitlore:resolve'
 }
 
 @test "an unfetchable remote is named on both channels, exit 0, local refs do not move (D59)" {

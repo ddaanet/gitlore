@@ -1,16 +1,18 @@
-# Session and hook wiring — decisions D14, D59
+# Session and hook wiring — decisions D14, D59, D74
 
 What every `SessionStart` does — followed by the decisions that argue for that
-shape (D14, D59). The hook wrapper files gitlore writes into the git common dir,
-and the decisions about where they live and how they are anchored (D5, D11), are
-in [hook-wrappers.md](hook-wrappers.md). The mid-session plugin-upgrade notice
-(D21) has its own node, [plugin-upgrade-notice.md](plugin-upgrade-notice.md).
-The install command that wires them is in
+shape (D14, D59, D74). The hook wrapper files gitlore writes into the git common
+dir, and the decisions about where they live and how they are anchored (D5,
+D11), are in [hook-wrappers.md](hook-wrappers.md). The mid-session
+plugin-upgrade notice (D21) has its own node,
+[plugin-upgrade-notice.md](plugin-upgrade-notice.md). The install command that
+wires them is in
 [installation.md](installation.md).
 
 - The session — **D14** user-facing SessionStart output goes on `systemMessage`
   · **D59** SessionStart moves memory nowhere; every advance is an explicit take
-  or push
+  or push · **D74** compose only where the edit happens; SessionStart reports
+  and writes no index
 
 ---
 
@@ -65,9 +67,9 @@ has no memory submodule entry, no-op.
    `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported by
    name, never silently skipped, because a tier that stops talking to its remote
    looks exactly like one with nothing to say.
-9. **Compose the indexes**, then run the dangling-pointer report (D34). A
-   refusal writes nothing and says why; a partial write says which indexes are
-   composed.
+9. **Report the store's diagnostics** and write no index (D74, below): the rule
+   problems of the indexes, a pending compose, then the dangling-pointer report
+   (D34), which runs on every store.
 10. **Drain this session's relay reports, then sweep by age.** A hook firing
    inside a subagent reports only to that subagent, so it writes its report to a
    file keyed by session and agent (D51, [cc-platform.md](cc-platform.md)). This
@@ -152,10 +154,10 @@ own matcher group of `hooks.json`, so the script never runs on `resume` or
 `worktree-drift.sh` warns when an in-process worktree switch has moved the
 session's cwd away from the repo whose memory is redirected. See D15.
 
-## Decisions — D14, D59
+## Decisions — D14, D59, D74
 
 Why the wiring above has this shape: what SessionStart says to whom, and why it
-moves memory nowhere.
+moves memory nowhere and writes no index.
 
 **D14 — User-facing SessionStart output on `systemMessage`**
 
@@ -230,7 +232,61 @@ unreachable remote looks exactly like one with nothing to say. git's own message
 rides the user's channel only: its stderr can carry `remote:` lines the remote
 chose, and the agent's context gets a fixed sentence saying the user has it.
 
+**D74 — Compose only where the edit happens; SessionStart reports and writes no
+index**
+
+`PostToolBatch` and the mount are the only writers of an index. The merge
+continuation's up-only adoption is the take's own bookkeeping, and
+`gitlore-compose`, run by hand, clears what no batch will. The commit aborts on
+a pending compose (D50, in [git-hooks.md](git-hooks.md)). `SessionStart` reports
+position and store diagnostics and writes no index.
+
+The reason is the one D50 gives for the commit: anything `PostToolBatch` did not
+compose is assumed to be an exterior change — a human in an editor, a dead hook,
+a manifest edit in a terminal — and failing on it beats silently fixing it. A
+compose at session start writes a carrier no summary described and no session
+saw, and the next commit publishes it.
+
+**The diagnostics** are read-only, each on `systemMessage` and
+`additionalContext` (`add_report`), so the agent holds the command that clears
+it:
+
+- *Rule problems* — `gitlore_compose_check`: a duplicate, welded or interleaved
+  line, an unattributable prefix, a manifest tier that is not mounted.
+- *A pending compose* — `gitlore_compose_pending`: the indexes a pass would
+  change, with `gitlore-compose`.
+- *Dangling pointers* (D34) — on every store, refused or not.
+
+`gitlore_compose_pending` runs the pin check, which puts a clean tier that is
+ahead of its pin back on it, and the diagnostics move nothing. The pending
+report therefore runs only when every active tier's `HEAD` is its pin and none
+is mid-merge (`gitlore_store_mid_merge`, which also covers a state file);
+otherwise it is skipped and the rule problems alone are reported. A mid-merge
+tier gets the pin loop's notice alone. A tier whose local `live` strictly
+contains its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`:
+composing first dirties the tier, and the take then refuses it. The cost is that
+a store with one off-pin tier gets no pending report for its other tiers; the
+off-pin tier is reported by name, and the report returns once it is back.
+
 ## Rejected alternatives
+
+**Composing at `SessionStart`.** A store that arrives with an index off its
+composition was changed outside a batch. Composing it at session start repairs
+it silently: a line deleted from a carrier alone, or a line added to the root
+outside a session, is rewritten without anything saying so, and the repair ships
+in the next commit under a summary that does not describe it. Composing a tier
+whose local `live` is ahead of its pin also dirties it, and the take then
+refuses it (D74).
+
+**Composing at the commit.** The commit is the last point at which an exterior
+change can be told apart from the session's own edits, and composing there hides
+it from the session that made it (D50, D74).
+
+**Splitting `gitlore_compose_pass` for a read-only caller.** Lifting the part
+after the refusal check into its own function would let the pending report skip
+the pin check and run beside an off-pin tier. It buys a report for a store that
+already has a louder one, and needs the off-pin and mid-merge tiers filtered out
+of a second copy of the loop by hand (D74).
 
 **The clean-only fast-forward at session start.** It does no work in a single
 checkout, where HEAD equals `live` already. In the multi-checkout case a take

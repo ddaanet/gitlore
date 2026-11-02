@@ -39,11 +39,6 @@ session_start() {
   [ "$status" -eq 0 ]
 }
 
-# Assert a jq regex does not match a channel. Args: $1=jq path  $2=regex
-assert_channel_lacks() {
-  echo "$output" | jq -e --arg re "$2" "$1 | test(\$re) | not"
-}
-
 # --- memory ---
 
 @test "session start: memory on a recorded old commit names the crossing on both channels" {
@@ -55,19 +50,21 @@ assert_channel_lacks() {
   assert_channel_lacks .hookSpecificOutput.additionalContext '/gitlore:merge'
 }
 
-@test "session start: record present, clone in fresh position — ordinary /gitlore:merge divergence (control)" {
+@test "session start: record present, clone in fresh position — ordinary /gitlore:push divergence (control)" {
   mem_setup fresh
   session_start
-  assert_report_on_both_channels 'diverged from live.*/gitlore:merge'
+  assert_report_on_both_channels 'diverged from live.*/gitlore:push'
+  assert_lacks_on_both_channels '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
   assert_channel_lacks .hookSpecificOutput.additionalContext 'cross-rewrite'
 }
 
-@test "session start: old position, record absent — ordinary /gitlore:merge divergence (matched control)" {
+@test "session start: old position, record absent — ordinary /gitlore:push divergence (matched control)" {
   mem_setup old
   git --git-dir="$TMP_REPO/.bare-memory.git" update-ref -d refs/heads/gitlore/rewrites
   session_start
-  assert_report_on_both_channels 'diverged from live.*/gitlore:merge'
+  assert_report_on_both_channels 'diverged from live.*/gitlore:push'
+  assert_lacks_on_both_channels '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
   assert_channel_lacks .hookSpecificOutput.additionalContext 'cross-rewrite'
 }
@@ -117,20 +114,22 @@ assert_channel_lacks() {
   assert_channel_lacks .systemMessage '/gitlore:push'
 }
 
-@test "session start: a tier with a record but a fresh position — ordinary divergence (control)" {
+@test "session start: a tier with a record but a fresh position — ordinary divergence names /gitlore:push (control)" {
   tier_setup fresh
   session_start
   echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has diverged from its remote")'
-  echo "$output" | jq -e '.systemMessage | test("/gitlore:merge")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
+  assert_channel_lacks .systemMessage '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
 }
 
-@test "session start: a tier on old position, record absent — ordinary divergence (matched control)" {
+@test "session start: a tier on old position, record absent — ordinary divergence names /gitlore:push (matched control)" {
   tier_setup old
   git --git-dir="$TMP_REPO/.bare-ddaanet.git" update-ref -d refs/heads/gitlore/rewrites
   session_start
   echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has diverged from its remote")'
-  echo "$output" | jq -e '.systemMessage | test("/gitlore:merge")'
+  echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
+  assert_channel_lacks .systemMessage '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
 }
 
