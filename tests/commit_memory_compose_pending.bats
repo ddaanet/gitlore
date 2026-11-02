@@ -392,3 +392,16 @@ abort_then_commit() {
   exec_target=$(sed -n 's|.*exec "\$root/\(scripts/[^"]*\)".*|\1|p' "$PLUGIN_ROOT/bin/gitlore-compose")
   [ -x "$PLUGIN_ROOT/$exec_target" ]
 }
+
+@test "a fact edit commits past a tier with no checkout and keeps its root lines" {
+  settled_store
+  add_project_fact
+  gitlore_compose memory >/dev/null
+  commit_sections "memory: a project fact"
+  unmaterialize_tier ddaanet
+  printf 'edited\n' >> memory/proj.md
+  commit_sections "memory: proj edited"
+  grep -qxF 'edited' <<<"$(git -C memory show HEAD:proj.md)"
+  grep -qF '](ddaanet/a.md)' <<<"$(git -C memory show HEAD:MEMORY.md)"
+  [ -z "$(git -C memory diff HEAD~1 HEAD -- MEMORY.md)" ]
+}

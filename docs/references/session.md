@@ -262,17 +262,19 @@ it:
 `gitlore_compose_pending` runs the pin check, which puts a clean tier that is
 ahead of its pin back on it, and the diagnostics move nothing. The pending
 report therefore runs only when every active tier's `HEAD` is its pin and none
-is mid-merge (`gitlore_store_mid_merge`, which also covers a state file). It
-also runs only when every active tier is checked out, because a compose drops
-the root lines of a tier with no checkout and those lines are not stale;
+is mid-merge (`gitlore_store_mid_merge`, which also covers a state file);
 otherwise it is skipped and the rule problems alone are reported. A mid-merge
-tier gets the pin loop's notice alone. So does a registered tier with no
-checkout: its "could not be checked out" notice is its report, and the dangling
-report leaves out its root lines. A tier whose local `live` strictly contains
-its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`: composing first
-dirties the tier, and the take then refuses it. The cost is that a store with
-one off-pin tier gets no pending report for its other tiers; the off-pin tier is
-reported by name, and the report returns once it is back.
+tier gets the pin loop's notice alone. A tier whose local `live` strictly
+contains its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`:
+composing first dirties the tier, and the take then refuses it. The cost is that
+a store with one off-pin tier gets no pending report for its other tiers; the
+off-pin tier is reported by name, and the report returns once it is back.
+
+A registered tier with no checkout does not hold the pending report back: a
+compose keeps its root lines and writes no carrier for it. The dangling report
+leaves those lines out, because they are not stale. The pin loop's "could not be
+checked out" notice is its report, on both channels: the agent's line says the
+tier's facts are not available in this session and its index lines stay.
 
 ## Rejected alternatives
 

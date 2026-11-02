@@ -128,6 +128,15 @@ seed_tier_bullet() {
   printf -- '---\nname: %s\ndescription: ""\n---\n\nbody\n' "${file%.md}" > "memory/$tier/$file"
 }
 
+# Leave tier $1 registered with no checkout, the state of a clone that cannot
+# reach the tier's remote: empty directory, no module dir, remote out of reach, so
+# SessionStart's `submodule update --init` fails rather than restoring it.
+unmaterialize_tier() {
+  git -C memory submodule deinit -q -f "$1"
+  rm -rf "$(git -C memory rev-parse --absolute-git-dir)/modules/$1"
+  mv "$TMP_REPO/.bare-$1.git" "$TMP_REPO/.bare-$1.git.gone"
+}
+
 # Commit the memory store's current tree. The down projection reads root at HEAD
 # to tell a line root DELETED from one it never carried, so a test about a
 # deletion has to establish that HEAD first. Args: $1 = commit subject (optional, hence most

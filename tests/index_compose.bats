@@ -222,3 +222,50 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 0 ]
 }
 
+# A composed, committed store with a project line, then its tier left registered
+# with no checkout. Root's copy is what the assertions compare against.
+store_with_unreachable_tier() {
+  make_parent_with_memory
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  seed_tier_bullet ddaanet kept.md "carried by both"
+  printf 'x\n' > memory/proj.md
+  seed_root_bullet "proj.md" "a project fact"
+  gitlore_compose memory
+  git -C memory/ddaanet add -A
+  git -C memory/ddaanet commit -q -m "tier fact"
+  commit_memory_state
+  unmaterialize_tier ddaanet
+  grep -qF '](ddaanet/kept.md)' memory/MEMORY.md
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root-before"
+}
+
+@test "compose keeps root's lines for a tier with no checkout and writes nothing" {
+  store_with_unreachable_tier
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  cmp memory/MEMORY.md "$BATS_TEST_TMPDIR/root-before"
+  [ -z "$(ls -A memory/ddaanet)" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+}
+
+@test "the adoption and the orphan and restore reports leave a tier with no checkout alone" {
+  store_with_unreachable_tier
+  # The restore is read before a pass and the orphans after one; neither has a
+  # carrier to read here.
+  [ -z "$(gitlore_compose_restores memory)$(gitlore_compose_orphans memory)" ]
+  # "" is a merge of the memory store itself, as the continuation runs it.
+  run gitlore_compose_up memory ""
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  cmp memory/MEMORY.md "$BATS_TEST_TMPDIR/root-before"
+  [ -z "$(ls -A memory/ddaanet)" ]
+}
+
+@test "a tier with no checkout leaves no compose pending" {
+  store_with_unreachable_tier
+  run gitlore_compose_pending memory
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}

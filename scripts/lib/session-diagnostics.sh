@@ -12,11 +12,10 @@
 # The pending report goes through gitlore_compose_pending, whose pin check puts a
 # clean tier that is ahead of its pin back on it. That is a move, so the pending
 # report runs only when no tier can be moved by it: every active tier's HEAD is
-# its pin, and none is mid-merge. It also runs only when every active tier is
-# checked out: a compose drops the root lines of a tier with no checkout, and
-# those lines are not stale. A mid-merge tier and a tier with no checkout are
-# the pin loop's notice alone (gitlore_sync_nested_tiers), and the rule problems
-# are still reported.
+# its pin, and none is mid-merge. A mid-merge tier is the pin loop's notice alone
+# (gitlore_sync_nested_tiers), and the rule problems are still reported. A tier
+# with no checkout has no pin to leave and a compose keeps its root lines, so it
+# does not hold the report back.
 #
 # A tier whose local `live` strictly contains its HEAD is taken with
 # /gitlore:merge, not composed: composing first dirties the tier and the take
@@ -30,10 +29,7 @@ report_store_diagnostics() {
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
     # `git -C` into an unmaterialized submodule answers for the enclosing repo.
-    if [ ! -e "$tierpath/.git" ]; then
-      movable=1
-      continue
-    fi
+    [ -e "$tierpath/.git" ] || continue
     if gitlore_store_mid_merge "$tierpath"; then
       movable=1
       continue

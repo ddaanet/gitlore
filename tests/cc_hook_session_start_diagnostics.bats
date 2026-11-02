@@ -32,15 +32,6 @@ composed_store() {
   [ -z "$(git -C memory status --porcelain)" ]
 }
 
-# Leave tier $1 registered with no checkout, the state of a clone that cannot
-# reach the tier's remote: empty directory, no module dir, remote out of reach, so
-# SessionStart's `submodule update --init` fails rather than restoring it.
-unmaterialize_tier() {
-  git -C memory submodule deinit -q -f "$1"
-  rm -rf "$(git -C memory rev-parse --absolute-git-dir)/modules/$1"
-  mv "$TMP_REPO/.bare-$1.git" "$TMP_REPO/.bare-$1.git.gone"
-}
-
 # Every byte a compose could write, and the state around it.
 store_bytes() {
   cat memory/MEMORY.md memory/ddaanet/MEMORY.md memory/.gitlore-tiers
@@ -165,6 +156,8 @@ session_start_over_store() {
   session_start_over_store
   [ ! -e memory/ddaanet/MEMORY.md ]
   [[ "$sys" == *"tier 'ddaanet' could not be checked out"* ]] || false
+  [[ "$ctx" == *"tier 'ddaanet' could not be checked out"* ]] || false
+  [[ "$ctx" == *"do not delete"* ]] || false
   [[ "$sys" == *"gone.md names no file"* ]] || false
   [[ "$sys" != *"ddaanet/kept.md"* ]] || false
   [[ "$ctx" != *"ddaanet/kept.md"* ]] || false

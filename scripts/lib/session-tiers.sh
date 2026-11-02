@@ -65,7 +65,16 @@ gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset
     # `--init` covers materialization in the same call.
     gitlore_git -C "$mempath" submodule update --init -- "$tier" >&2 \
       || add_sysmsg "gitlore: tier '$tier' could not be checked out at its recorded commit; skipped."
-    [ -e "$tierpath/.git" ] || continue
+    # The agent's own line, as for a mid-merge tier: systemMessage is user-only
+    # (D14), and a pointer to an absent file reads as stale to an agent told nothing.
+    # Only with no checkout: a failed update can leave a tier on disk at another
+    # commit, whose facts are still there.
+    if [ ! -e "$tierpath/.git" ]; then
+      protocol_ctx="$protocol_ctx
+
+gitlore: tier '$tier' could not be checked out, so its facts are not available in this session. Its lines in $mempath/MEMORY.md stay: do not delete them."
+      continue
+    fi
     # Detach in place (no ref argument, so the commit does not move) when the tier
     # arrived on a named branch — a mount checks the remote's default branch out
     # attached, and `submodule update` leaves it that way whenever that branch's

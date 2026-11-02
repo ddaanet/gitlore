@@ -157,8 +157,9 @@ gitlore_index_has_tier() {
 # already have.
 #
 # A tier's lines are taken from ROOT, which is what keeps the in-session pass
-# placement-only — it moves lines, it never rewrites one. Two cases read the
-# carrier instead:
+# placement-only — it moves lines, it never rewrites one. A tier with no carrier
+# file, a registered tier with no checkout among them, always is: nothing else
+# holds its lines. With a carrier, two cases read it instead:
 #
 #   - $2 names the tier. An explicit adoption (gitlore_compose_up), run once when
 #     a merge lands a carrier the user has approved: there the carrier is the
@@ -180,8 +181,8 @@ gitlore_compose_root_bullets() {
 
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
-    [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    if [ "$tier" = "$adopt" ] || ! gitlore_index_has_tier "$root" "$tier"; then
+    if [ -f "$mempath/$tier/MEMORY.md" ] \
+       && { [ "$tier" = "$adopt" ] || ! gitlore_index_has_tier "$root" "$tier"; }; then
       while IFS= read -r line || [ -n "$line" ]; do
         [ -n "$line" ] || continue
         gitlore_bullet_reprefix "$line" "$tier" || continue
