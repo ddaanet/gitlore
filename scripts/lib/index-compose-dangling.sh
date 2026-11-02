@@ -51,6 +51,7 @@ gitlore_cap_rest_note() {
 gitlore_compose_dangling() {
   local mempath="$1" mounted active head tier file line path all="" reported=""
 
+  mounted=$(gitlore_tier_paths "$mempath")
   file="$mempath/MEMORY.md"
   if [ -f "$file" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
@@ -63,7 +64,9 @@ gitlore_compose_dangling() {
     done < "$file"
   fi
   if [ -n "$reported" ]; then
-    active=$(gitlore_active_tiers "$mempath")
+    # Only a mounted tier has a carrier to name: a manifest tier that is not
+    # mounted falls to the project-line fix.
+    active=$(gitlore_mounted_active_tiers "$mempath" "$mounted")
     head=$(gitlore_index_head_paths "$mempath")
     while IFS= read -r path; do
       [ -n "$path" ] || continue
@@ -76,7 +79,6 @@ EOF
 
   # Carrier lines too: a DORMANT tier's bullets never reach the root, so a
   # root-only scan would leave them unchecked for as long as the tier sleeps.
-  mounted=$(gitlore_tier_paths "$mempath")
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     file="$mempath/$tier/MEMORY.md"
@@ -94,6 +96,17 @@ EOF
   done <<EOF
 $mounted
 EOF
+  return 0
+}
+
+# Print the manifest's active tiers that are also in $2, the newline-separated
+# mounted tiers, in manifest order. $1 = mempath.
+gitlore_mounted_active_tiers() {
+  local tier
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    if grep -qxF -- "$tier" <<<"$2"; then printf '%s\n' "$tier"; fi
+  done <<<"$(gitlore_active_tiers "$1")"
   return 0
 }
 

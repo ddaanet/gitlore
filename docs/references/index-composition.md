@@ -81,12 +81,13 @@ clears it.
 
 The mid-session trigger keys on
 **what changed, not on what the batch declared**: `index-sync-pre.sh` stamps the
-root index and the manifest before the call, and `index-compose.sh` composes at
-batch end if either stamp moved. A tool call is a poor proxy in both directions
-— an `Edit` can rewrite a line to itself, and a `sed -i` under `Bash` never
-names its target at all, which is why the `PreToolUse` matcher is
-`Write|Edit|Bash` and a Bash call takes the baseline unconditionally. Two paths
-reach the same `gitlore_compose_and_report` call: that stamp comparison, and
+root index, the manifest and each active tier's carrier before the call (a tier
+with a prepared merge is left out), and `index-compose.sh` composes at batch end
+if any of those stamps moved. A tool call is a poor proxy in both directions —
+an `Edit` can rewrite a line to itself, and a `sed -i` under `Bash` never names
+its target at all, which is why the `PreToolUse` matcher is `Write|Edit|Bash`
+and a Bash call takes the baseline unconditionally. Two paths reach the same
+`gitlore_compose_and_report` call: that stamp comparison, and
 `/gitlore:add-tier`'s mount, where `add-tier.sh` calls the function directly
 right after a successful mount. The mount runs inside a Bash call, so the stamp
 comparison would catch it too: `add-tier.sh` then moves the baselines its own

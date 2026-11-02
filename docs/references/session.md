@@ -223,14 +223,16 @@ names an act, on `additionalContext` (`add_report`):
 **The remote.** For a real remote (not the install placeholder, not none) the
 hook then runs `fetch origin live` — read-only, with no refspec, so it moves no
 local branch and updates only `origin/live`. `origin/live` strictly ahead
-reports N upstream commits, run `/gitlore:merge`; diverged from `live` reports
-that upstream has diverged, run `/gitlore:merge` to reconcile; equal, or `live`
-ahead (a push's business), is silent. A remote that has no `live` ref is silent:
-there is nothing upstream to take, and the report would otherwise fire in every
-store that was never published. Any other fetch failure is named, because an
-unreachable remote looks exactly like one with nothing to say. git's own message
-rides the user's channel only: its stderr can carry `remote:` lines the remote
-chose, and the agent's context gets a fixed sentence saying the user has it.
+reports N upstream commits, run `/gitlore:merge`, which fast-forwards, may
+record a canned commit and needs no push; diverged from `live` reports that
+upstream has diverged, run `/gitlore:push` to reconcile and publish it; equal,
+or `live` ahead (a push's business), is silent. A remote that has no `live` ref
+is silent: there is nothing upstream to take, and the report would otherwise
+fire in every store that was never published. Any other fetch failure is named,
+because an unreachable remote looks exactly like one with nothing to say. git's
+own message rides the user's channel only: its stderr can carry `remote:` lines
+the remote chose, and the agent's context gets a fixed sentence saying the user
+has it.
 
 **D74 — Compose only where the edit happens; SessionStart reports and writes no
 index**

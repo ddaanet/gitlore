@@ -83,13 +83,15 @@ session_start_over_store() {
 @test "a non-bullet line inside the bullet region is reported by file" {
   composed_store
   printf '\nSome interleaved prose\n\n' >> memory/MEMORY.md
-  # A real file, so the file name can only come from the rule report and not
-  # from the dangling report.
+  # A real file, so the file name cannot come from the dangling report. The
+  # pending report also prints MEMORY.md, so the negative is what excludes it:
+  # a refused store names no compose remedy, a pending one does.
   printf 'x\n' > memory/kept2.md
   seed_root_bullet "kept2.md" "after the prose"
   commit_memory_state
   session_start_over_store
   [[ "$sys" == *"MEMORY.md"* ]] || false
+  [[ "$sys" != *"gitlore-compose"* ]] || false
   [[ "$sys" == *"memory ready"* ]] || false
 }
 
@@ -132,6 +134,16 @@ session_start_over_store() {
   session_start_over_store
   [[ "$sys" == *"ghost"* ]] || false
   [[ "$sys" == *"gone.md"* ]] || false
+}
+
+@test "a dangling root line of an unmounted manifest tier names no carrier" {
+  composed_store
+  printf 'ddaanet\nghost\n' > memory/.gitlore-tiers
+  seed_root_bullet "ghost/x.md" "left by a hand removal"
+  commit_memory_state
+  session_start_over_store
+  [[ "$sys" == *"ghost/x.md"* ]] || false
+  [[ "$sys" != *"ghost/MEMORY.md"* ]] || false
 }
 
 @test "a clean tier left off its pin is not put back by the diagnostics" {
