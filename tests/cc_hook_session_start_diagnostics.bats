@@ -32,6 +32,15 @@ composed_store() {
   [ -z "$(git -C memory status --porcelain)" ]
 }
 
+# Leave tier $1 registered with no checkout, the state of a clone that cannot
+# reach the tier's remote: empty directory, no module dir, remote out of reach, so
+# SessionStart's `submodule update --init` fails rather than restoring it.
+unmaterialize_tier() {
+  git -C memory submodule deinit -q -f "$1"
+  rm -rf "$(git -C memory rev-parse --absolute-git-dir)/modules/$1"
+  mv "$TMP_REPO/.bare-$1.git" "$TMP_REPO/.bare-$1.git.gone"
+}
+
 # Every byte a compose could write, and the state around it.
 store_bytes() {
   cat memory/MEMORY.md memory/ddaanet/MEMORY.md memory/.gitlore-tiers
@@ -142,8 +151,25 @@ session_start_over_store() {
   seed_root_bullet "ghost/x.md" "left by a hand removal"
   commit_memory_state
   session_start_over_store
-  [[ "$sys" == *"ghost/x.md"* ]] || false
+  # "names no file" and the fix: the rule report names the path as well.
+  [[ "$sys" == *"ghost/x.md names no file in the memory store — delete its line from memory/MEMORY.md"* ]] || false
   [[ "$sys" != *"ghost/MEMORY.md"* ]] || false
+}
+
+@test "a registered tier with no checkout gets its notice and no edit or compose directive" {
+  composed_store
+  # A dangling project line, so a silent dangling report cannot pass the negatives.
+  seed_root_bullet "gone.md" "stale line"
+  commit_memory_state
+  unmaterialize_tier ddaanet
+  session_start_over_store
+  [ ! -e memory/ddaanet/MEMORY.md ]
+  [[ "$sys" == *"tier 'ddaanet' could not be checked out"* ]] || false
+  [[ "$sys" == *"gone.md names no file"* ]] || false
+  [[ "$sys" != *"ddaanet/kept.md"* ]] || false
+  [[ "$ctx" != *"ddaanet/kept.md"* ]] || false
+  [[ "$sys" != *"gitlore-compose"* ]] || false
+  [[ "$ctx" != *"gitlore-compose"* ]] || false
 }
 
 @test "a clean tier left off its pin is not put back by the diagnostics" {

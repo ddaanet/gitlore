@@ -37,8 +37,9 @@ gitlore_cap_rest_note() {
     "$GITLORE_DANGLING_CAP" "$2/MEMORY.md"
 }
 
-# Print one report line per pointer bullet whose target file is absent; return 0
-# either way. This is the fifth compose validation, and the only one that
+# Print one report line per pointer bullet whose target file is absent, a root
+# line under a registered tier with no checkout excepted; return 0 either way.
+# This is the fifth compose validation, and the only one that
 # REPORTS instead of refusing: a dangling line does not make the composed output
 # wrong, and refusing would block every later index write over a stale line the
 # agent can fix in one edit.
@@ -59,6 +60,12 @@ gitlore_compose_dangling() {
       all="$all$path
 "
       [ -e "$mempath/$path" ] && continue
+      # A registered tier with no checkout: the line is not stale, and the pin
+      # loop's "could not be checked out" notice is the report for it. The root
+      # fix's per-tier count never runs for such a tier, since nothing is reported.
+      if tier=$(gitlore_tier_of "$path" "$mounted") && [ ! -e "$mempath/$tier/.git" ]; then
+        continue
+      fi
       reported="$reported$path
 "
     done < "$file"

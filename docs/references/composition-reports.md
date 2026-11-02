@@ -44,7 +44,8 @@ duplication impossible, so it guards nothing anywhere in the system.
 What the rule *does* leave open is a non-destructive **dangling-pointer report**
 — a fifth compose validation, after the four in D31
 ([index-composition.md](index-composition.md)), naming any bullet whose target
-file is absent. It reports and does not refuse: unlike the other four, a
+file is absent, except a root line under a registered tier with no checkout,
+which is not stale. It reports and does not refuse: unlike the other four, a
 dangling line does not make the composed output wrong, and refusing the pass
 would block every later write over a stale line the agent fixes in one edit.
 That makes it a *separate pass* (`gitlore_compose_dangling`) which every compose
