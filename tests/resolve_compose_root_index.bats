@@ -224,7 +224,8 @@ leave_conflict_markers_in() {
   [[ "$stderr" == *"these files still hold conflict markers"* ]]
   [ -f "$statefile" ]
   [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
-  # The field describes the synthesis in hand, which no longer fails the index check.
+  # Emptied, not a verdict: the refusal ran before the index gate, so `[]` here
+  # means unchecked. This fixture's synthesis happens to be clean.
   [ "$(jq -c '.index_problems' "$statefile")" = "[]" ]
 }
 

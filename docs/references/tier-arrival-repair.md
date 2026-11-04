@@ -150,13 +150,15 @@ merger never staged, which the continuation's own `git add -A` would otherwise
 mark resolved. On a hit it exits 1, printing
 `gitlore: these files still hold conflict markers, so the merge was not committed; the merge stays prepared for a new synthesis:`
 and each file name. The merge state and `MERGE_HEAD` stay and root's index stays
-as it was, and the refusal clears the index problems the merge state recorded:
-the field describes the synthesis in hand, and the next continuation run checks
-the index again. The resolve skill answers with `rejected:` and the file names.
-A file the merge left unchanged is not read, so it may document markers; one the
-merge changed that documents them at column 0 is refused too, and the merger
-rewords it. The scan runs first so a tier merge writes nothing into root's
-`MEMORY.md` for a merge that did not land.
+as it was, and the refusal empties the index problems the merge state recorded.
+It runs before the index gate, so it has no verdict on this synthesis: the field
+is emptied so that no earlier verdict is carried onto a synthesis nobody
+checked, and the next continuation run checks the index and records what it
+finds. Empty means unchecked, not clean. The resolve skill answers with
+`rejected:` and the file names. A file the merge left unchanged is not read, so
+it may document markers; one the merge changed that documents them at column 0
+is refused too, and the merger rewords it. The scan runs first so a tier merge
+writes nothing into root's `MEMORY.md` for a merge that did not land.
 
 **A landed merge rests its tier only onto a `live` that holds it.** The
 continuation's pushes return a status rather than exit, so a push refused for
