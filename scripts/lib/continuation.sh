@@ -87,10 +87,12 @@ load_continuation_state() {
 # needs it after the commit to stage the moved gitlink, and this is where it is
 # already derived. `tier_unadopted`: 1 when a tier merge's up projection failed,
 # after emitting, and empty otherwise.
-# EXITS 1, before staging anything, when the merge fails its own check (see
-# above; a store with no root index runs no check), with the merge state kept
-# for a new synthesis — an exit rather than a
-# return, because the caller cannot check a status without an `||` on the call.
+# EXITS 1, before composing or staging anything, in two cases, each with the
+# merge state kept for a new synthesis: a file the merge changed still holds
+# conflict markers (refuse_leftover_conflict_markers), and the merged index fails
+# its own check (see above; a store with no root index runs no check). An exit
+# rather than a return, because the caller cannot check a status without an `||`
+# on the call.
 # Returns 0 otherwise. A failed staging command aborts the continuation under
 # errexit, before the merge commit, which keeps the merge state for a rerun —
 # with git's own text on stderr and no `gitlore:` line of its own. The caller
@@ -101,6 +103,10 @@ compose_merged_indexes() {
   local memroot="$1" store="$2" memroot_abs composed dangling merged_index index_problems rc=0
   merged_tier=""
   tier_unadopted=""
+  # First, ahead of the compose write and of every `add -A` below: the scan reads
+  # the working tree those calls stage, and a refusal must leave root's index as
+  # it was.
+  refuse_leftover_conflict_markers "$store"
   # The state file records an absolute store path while `memroot` is the
   # submodule path as `.gitmodules` spells it, so the two are compared in one
   # form. `-ef` rather than string equality: this decides whether a tier is
@@ -182,6 +188,37 @@ compose_merged_indexes() {
   else
     echo "gitlore: the memory root $memroot_abs has no MEMORY.md, so no tier lines can compose into it. The merge is committed regardless; create the root index (\`# Memory Index\`) and edit it to trigger composition." >&2
   fi
+}
+
+# Refuse to commit a merge whose files still hold conflict markers.
+#
+# The merger stages by explicit path, so the continuation's own `add -A` is what
+# would mark a conflict git left in an unstaged path as resolved, and what would
+# commit markers the merger staged. The scan therefore reads the working tree
+# against HEAD, plus untracked files, and not the index. Only files the merge
+# changed are read: a file both sides carried unchanged may document markers.
+# Deleted paths and tier gitlinks are not files and are skipped. A line of
+# `<<<<<<<` or `>>>>>>>` followed by a space or the end of the line at column 0
+# counts; `=======` is left out because a markdown heading underline is the same
+# text. A merge-changed file that documents markers at column 0 is refused too.
+#
+# EXITS 1 naming each file, with the merge state kept — an exit rather than a
+# return, for the reason compose_merged_indexes gives. A failing `git` inside the
+# listing is not seen; the scan then covers what it did list.
+# Args: $1 = the store being committed.
+refuse_leftover_conflict_markers() {
+  local store="$1" f marked=""
+  while IFS= read -r -d '' f; do
+    [ -f "$store/$f" ] || continue
+    if grep -qE '^(<<<<<<<|>>>>>>>)( |$)' "$store/$f"; then
+      marked="$marked$f"$'\n'
+    fi
+  done < <(git -C "$store" diff -z --name-only HEAD
+           git -C "$store" ls-files -z -o --exclude-standard)
+  [ -n "$marked" ] || return 0
+  echo "gitlore: these files still hold conflict markers, so the merge was not committed; the merge stays prepared for a new synthesis:" >&2
+  printf '%s' "$marked" | sed 's/^/gitlore:   /' >&2
+  exit 1
 }
 
 # Rest a landed tier merge the root index could not adopt: the tier back on the

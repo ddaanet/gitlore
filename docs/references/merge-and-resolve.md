@@ -62,12 +62,13 @@ The division of labour is D7's: the script decides, the agent writes prose.
    prompted: both sides of the merge already passed an approval gate, so the
    resolution is automated from their perspective (D49).
 4. **The continuation** (`resolve.sh continue-after-merge`) composes the indexes
-   — refusing to commit, and keeping the merge prepared, while the merged index
-   itself fails the check, so the parent rejects with the problem lines and the
-   sub-agent re-synthesizes (D52) — runs the dangling-pointer report, commits
-   under the canned merge message (D49), commits a tier merge's bookkeeping in
-   the root store, and pushes when the flavor calls for it; a push refused for
-   any reason but divergence exits 1 once an unadopted tier is rested
+   — refusing to commit, and keeping the merge prepared, while a file the merge
+   changed still holds conflict markers or the merged index itself fails the
+   check, so the parent rejects with the problem lines and the sub-agent
+   re-synthesizes (D52) — runs the dangling-pointer report, commits under the
+   canned merge message (D49), commits a tier merge's bookkeeping in the root
+   store, and pushes when the flavor calls for it; a push refused for any reason
+   but divergence exits 1 once an unadopted tier is rested
    ([tier-stores.md](tier-stores.md)). It finds the prepared merge by walking
    the stores rather than assuming memory, and refuses outright if two are
    prepared at once. Only its exit 0 means the merge landed: every exit before
@@ -75,13 +76,13 @@ The division of labour is D7's: the script decides, the agent writes prose.
    message that cannot be built and a refused merge commit each print
    `… so the merge was not committed; the merge stays prepared.` after the
    failing command's own text, and a rerun once that cause is fixed lands the
-   merge. The sub-agent and the skill route those lines, the merged-index
-   refusal, a fresh `gitlore: memory merge prepared` and a post-landing
-   `gitlore: pushing '…' failed, and not because of divergence` by name, and
-   report any other non-zero outcome as unrecognised rather than landed. The
-   last two both follow a landed merge: the fresh directive goes back through
-   the loop, while the push failure ends in the summary, with any rest remedy it
-   printed still to run.
+   merge. The sub-agent and the skill route those lines, the merged-index and
+   conflict-marker refusals, a fresh `gitlore: memory merge prepared` and a
+   post-landing `gitlore: pushing '…' failed, and not because of divergence` by
+   name, and report any other non-zero outcome as unrecognised rather than
+   landed. The last two both follow a landed merge: the fresh directive goes
+   back through the loop, while the push failure ends in the summary, with any
+   rest remedy it printed still to run.
 5. **The skill loops** until `resolve.sh` exits 0 (a second flavor can be
    waiting; the script gates every tier before memory, the order publishing
    keeps, so memory's pointer never goes out ahead of a tier it records), then

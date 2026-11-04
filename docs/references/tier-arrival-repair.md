@@ -142,6 +142,20 @@ applies to it — which the composition hook reports once an episode rather than
 leaving silent
 ([index-composition.md](index-composition.md)).
 
+**A merge continuation refuses to commit files that still hold conflict
+markers.** Before composing or staging anything, `compose_merged_indexes` scans
+the files the merge changed, in the working tree, for `<<<<<<<` or `>>>>>>>` at
+column 0 followed by a space or the end of the line. That covers a conflict the
+merger never staged, which the continuation's own `git add -A` would otherwise
+mark resolved. On a hit it exits 1, printing
+`gitlore: these files still hold conflict markers, so the merge was not committed; the merge stays prepared for a new synthesis:`
+and each file name. The merge state, `MERGE_HEAD` and root's index stay as they
+were, and the resolve skill answers with `rejected:` and the file names. A file
+the merge left unchanged is not read, so it may document markers; one the merge
+changed that documents them at column 0 is refused too, and the merger rewords
+it. The scan runs first so a tier merge writes nothing into root's `MEMORY.md`
+for a merge that did not land.
+
 **A landed merge rests its tier only onto a `live` that holds it.** The
 continuation's pushes return a status rather than exit, so a push refused for
 any reason but divergence rests an unadopted tier first, and the continuation
