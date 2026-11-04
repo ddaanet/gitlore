@@ -200,6 +200,34 @@ leave_conflict_markers_in() {
   [ "$(git -C memory show HEAD:LIVE.md)" = "resolved" ]
 }
 
+@test "a conflict-marker refusal clears the index problems an earlier refusal recorded" {
+  make_parent_with_memory
+  diverge_memory_with_index '# Memory Index
+
+- [P](p.md) — one
+- [P again](p.md) — two'
+  run resolve_gate
+  [ "$status" -ne 0 ]
+  statefile=$(gitlore_merge_state_file memory)
+
+  # The first synthesis leaves the duplicate: the index gate refuses and records it.
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"the merged index fails the check"* ]]
+  [[ "$(jq -r '.index_problems[]' "$statefile")" == *"duplicate pointer path p.md"* ]]
+
+  # The second clears the index but leaves markers in a changed file.
+  printf '%s\n' '# Memory Index' '' '- [P](p.md) — one' > memory/MEMORY.md
+  leave_conflict_markers_in LIVE.md memory
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"these files still hold conflict markers"* ]]
+  [ -f "$statefile" ]
+  [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  # The field describes the synthesis in hand, which no longer fails the index check.
+  [ "$(jq -c '.index_problems' "$statefile")" = "[]" ]
+}
+
 @test "a tier merge whose merger left conflict markers in a changed file is not committed" {
   prepare_tier_merge_with_new_lines
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)

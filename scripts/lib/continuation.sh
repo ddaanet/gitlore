@@ -202,7 +202,9 @@ compose_merged_indexes() {
 # counts; `=======` is left out because a markdown heading underline is the same
 # text. A merge-changed file that documents markers at column 0 is refused too.
 #
-# EXITS 1 naming each file, with the merge state kept — an exit rather than a
+# EXITS 1 naming each file, with the merge state kept and its recorded index
+# problems cleared: the synthesis refused here is not the one that last failed
+# the index check, and the next run checks the index again. An exit rather than a
 # return, for the reason compose_merged_indexes gives. A failing `git` inside the
 # listing is not seen; the scan then covers what it did list.
 # Args: $1 = the store being committed.
@@ -216,6 +218,10 @@ refuse_leftover_conflict_markers() {
   done < <(git -C "$store" diff -z --name-only HEAD
            git -C "$store" ls-files -z -o --exclude-standard)
   [ -n "$marked" ] || return 0
+  # The empty answer, as the index gate records it: the field describes the
+  # synthesis in hand, and this refusal comes before that gate reads it.
+  gitlore_record_merge_index_problems "$store" "" \
+    || echo "gitlore: the merged-index check could not be cleared in the merge state in $store, so a directive emitted for this merge later may carry lines a new synthesis has already cleared." >&2
   echo "gitlore: these files still hold conflict markers, so the merge was not committed; the merge stays prepared for a new synthesis:" >&2
   printf '%s' "$marked" | sed 's/^/gitlore:   /' >&2
   exit 1

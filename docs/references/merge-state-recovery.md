@@ -31,7 +31,10 @@ merge kept prepared is routinely met again by a session that never saw them — 
 briefing the next sub-agent gets. Recording the empty answer is what keeps a
 merge held back for some other reason, a refused commit or a message that would
 not build, from briefing against an objection a later synthesis already cleared.
-A file written before the field existed reads as carrying none.
+The conflict-marker refusal clears the field the same way, since it exits before
+the gate reads the synthesis it refuses: the lines describe the synthesis in
+hand, and the next continuation run checks the index again. A file written
+before the field existed reads as carrying none.
 
 With `MERGE_HEAD` present the store sits exactly where `gitlore_prepare_merge`
 leaves one, so the directive is the ordinary `continue-after-merge` and the
