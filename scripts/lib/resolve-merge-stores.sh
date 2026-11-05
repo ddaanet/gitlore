@@ -50,13 +50,16 @@ gitlore_merge_stores() {
   gitlore_compose_moved_tiers "$mempath"
 }
 
-# Answer a half-finished merge in any store before a take or a publish moves one.
+# The preflight of every take and every publish, run before either moves, pushes
+# or prepares anything: answer a half-finished merge in any store, then refuse a
+# dirty tier that has something to take.
 # Args: $1 = memory worktree path.
 gitlore_guard_every_store() {
   local mempath="$1" store
   while IFS= read -r store; do
     gitlore_guard_stale_merge_state "$store" || return 1
   done < <(gitlore_memory_stores "$mempath")
+  gitlore_refuse_dirty_tiers "$mempath"
 }
 
 # Print 1 when a store holds uncommitted work a take must not move over, 0

@@ -74,8 +74,9 @@ gitlore_stage_landed_tiers() {
 gitlore_push_stores() {
   local mempath="$1" remote_url tier tierpath tier_err push_err
 
-  # Never publish on top of a half-finished merge, at any level.
-  gitlore_guard_stale_merge_state "$mempath" || return 1
+  # Never publish on top of a half-finished merge, at any level, nor past a dirty
+  # tier that has something to take: the same preflight every take runs.
+  gitlore_guard_every_store "$mempath" || return 1
 
   # Resolved here but acted on AFTER the tiers: memory having no remote says
   # nothing about theirs. A repo whose memory is deliberately local can still

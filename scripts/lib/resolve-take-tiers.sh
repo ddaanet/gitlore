@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
-# The tier half of a take: the dirty-tier refusal, then each mounted tier's
-# reconcile, take and carrier repair, before root's own. Called from
-# gitlore_merge_stores and from push-memory.sh.
+# The tier half of a take: each mounted tier's reconcile, take and carrier
+# repair, before root's own, called from gitlore_merge_stores and from
+# push-memory.sh; and the dirty-tier refusal, which gitlore_guard_every_store
+# runs ahead of every take and every publish.
 # Part of lib/resolve.sh; source that, not this file.
 
 # Every mounted tier's reconcile and take, in order, the part of a take that
-# precedes root's reconcile. Stops at the first store that yields or refuses. The
-# dirty-tier refusal opens it, so /gitlore:merge, /gitlore:push and the pre-push
-# hook meet the same preamble.
+# precedes root's reconcile. Stops at the first store that yields or refuses.
 # Args: $1 = memory worktree path.
 gitlore_take_tiers() {
   local mempath="$1" tier
-  gitlore_refuse_dirty_tiers "$mempath" || return 1
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
@@ -33,11 +31,17 @@ gitlore_take_tier() {
   gitlore_repair_moved_carrier "$mempath" "$tier"
 }
 
-# True when a tier's local `live` or its remote's holds commits its HEAD does not.
+# True when a tier's HEAD does not contain its local `live` or its remote's
+# `live`: ahead of HEAD, forked from it or diverged, each is something to take.
 # Args: $1 = tier worktree.
 gitlore_tier_has_arrivals() {
-  local tierpath="$1" remote
-  if gitlore_live_ahead_of_head "$tierpath"; then return 0; fi
+  local tierpath="$1" live remote
+  # `-q --verify` is silent on the expected miss: a tier never fetched has no
+  # local `live`.
+  if live=$(git -C "$tierpath" rev-parse -q --verify live) &&
+     ! git -C "$tierpath" merge-base --is-ancestor "$live" HEAD; then
+    return 0
+  fi
   # Redirected because failure is an answer here, and the publish that follows
   # reports the same remote in its own words.
   git -C "$tierpath" fetch -q --no-recurse-submodules origin live >/dev/null 2>&1 || return 1
@@ -45,8 +49,8 @@ gitlore_tier_has_arrivals() {
   ! git -C "$tierpath" merge-base --is-ancestor "$remote" HEAD
 }
 
-# Refuse a take while any mounted tier has uncommitted changes and something to
-# take, naming each. Something to take is what the take itself decides by.
+# Refuse while any mounted tier has uncommitted changes and something to take,
+# naming each. Something to take is what the take itself decides by.
 # Args: $1 = memory worktree path. Returns 1 after emitting.
 gitlore_refuse_dirty_tiers() {
   local mempath="$1" tier refused=0
