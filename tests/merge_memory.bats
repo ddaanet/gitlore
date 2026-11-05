@@ -230,7 +230,9 @@ strand_live_behind_head() {
     git add -A
     git commit -q -m "on HEAD only"
   )
-  # A take refuses a dirty tier before anything moves, root's reconcile included.
+  # A take refuses a dirty tier that has something to take before anything
+  # moves, root's reconcile included.
+  push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo' >/dev/null
   printf 'tier edit\n' >> memory/ddaanet/MEMORY.md
   [ -n "$(git -C memory status --porcelain)" ]
 

@@ -22,6 +22,8 @@
 #   resolve-push.sh         publish every store to its own remote
 #   resolve-merge-stores.sh take whatever each store's remote holds, without
 #                            publishing
+#   resolve-take-tiers.sh   the tier half of a take: the dirty-tier refusal and
+#                            each tier's reconcile, take and repair
 #   resolve-adopt.sh        move a tier onto what its local `live` holds, and
 #                            repair a carrier that arrived defective
 #   resolve-adopt-report.sh the end of a take: one root write and one bookkeeping
@@ -50,6 +52,8 @@ source "${BASH_SOURCE[0]%/*}/resolve-sync-memory.sh"
 source "${BASH_SOURCE[0]%/*}/resolve-push.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-merge-stores.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-take-tiers.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-adopt.sh"
 # shellcheck disable=SC1091

@@ -146,15 +146,20 @@ load helpers/take-order
   [ "$(git -C memory/alpha rev-parse HEAD)" = "$a" ]
 }
 
-@test "a dirty tier with nothing to take still refuses the take before the other tier moves" {
+@test "a dirty tier with nothing to take does not refuse the run and the other tier is taken" {
   take_base_store alpha beta
-  push_tier_fact alpha '- [a-up](a-up.md) — published upstream' >/dev/null
+  up=$(push_tier_fact alpha '- [a-up](a-up.md) — published upstream')
   seed_tier_bullet beta mine.md "an uncommitted fact"
-  a=$(git -C memory/alpha rev-parse HEAD)
+  b=$(git -C memory/beta rev-parse HEAD)
 
   run --separate-stderr bash "$CMD"
-  [ "$status" -eq 1 ]
-  [ "$(git -C memory/alpha rev-parse HEAD)" = "$a" ]
+  [ "$status" -eq 0 ]
+  [[ "$stderr" != *"uncommitted changes"* ]]
+  [ "$(git -C memory/alpha rev-parse HEAD)" = "$up" ]
+  [ "$(git -C memory rev-parse HEAD:alpha)" = "$up" ]
+  # The dirty tier is untouched and its work is still there.
+  [ "$(git -C memory/beta rev-parse HEAD)" = "$b" ]
+  [ -f memory/beta/mine.md ]
 }
 
 @test "a yield on the second tier leaves root unwritten, the first tier already taken" {
