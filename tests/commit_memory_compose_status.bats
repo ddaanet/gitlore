@@ -176,14 +176,15 @@ load helpers/commit-memory
 @test "the pin-abort user arm tells a user to retry" {
   # The pin abort gets its own user-arm case, where a retry IS the right
   # instruction — unlike the rc-1 manifest refusal above, this commit never
-  # went through. Slice 1's off-pin fixture verbatim, CLAUDECODE unset so this
+  # went through. A tier moved sideways off its pin, CLAUDECODE unset so this
   # reads the USER arm rather than the agent one.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet shared.md "stale hook"
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
-  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
+  git -C memory/ddaanet checkout -q --orphan gitlore-sideways-test
+  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge, sideways"
 
   head_before=$(git -C memory rev-parse HEAD)
   # A bats run inherits CLAUDECODE from the invoking shell, and a subagent

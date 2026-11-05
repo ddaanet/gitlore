@@ -126,28 +126,15 @@ committed_carrier_defect_store() {
   # gitlore_compose_check_pins refuses when a tier's worktree HEAD has moved off
   # the commit the memory store's INDEX records for it (D31, D36): projecting
   # root's text over an unadopted carrier would destroy approved upstream facts.
-  # Item 1.2 makes that refusal abort the commit outright, rather than letting
+  # The refusal aborts the commit outright, rather than letting
   # the commit's own `add -A` stage the moved gitlink and erase the very
   # condition the refusal fired on. The carrier and the root line disagree as
   # well, so the refusal has real work to withhold rather than being a no-op.
   #
-  # Repointed at Item 1.3 slice 2 onto a SIDEWAYS move: an orphan commit shares
-  # no history with the pin in either direction (neither ancestor nor
-  # descendant), unlike a fast-forward `commit --allow-empty` (which stays a
-  # descendant, i.e. ahead) — the sideways case is the one whose wording and
-  # `checkout --detach` remedy stay unchanged, which is what this test's
-  # assertions below actually pin. The ahead case gets its own test next,
-  # "the pin-abort's ahead wording reaches both the agent arm and the user
-  # arm".
-  #
-  # Born-green: today ahead and sideways abort identically, so this cannot go
-  # red by writing it — its red is owed to the test review's mutation:
-  # implement slice 2's branch WITHOUT the `merge-base --is-ancestor` test
-  # (unconditionally, for every off-pin tier). "is checked out at" stays green
-  # under that mutation — the ahead wording (index-compose-check.sh:267) carries
-  # the same phrase — so what goes red is the negative `!= *"ahead"*` assertion
-  # near the end of this case, once every off-pin tier gets the ahead wording
-  # instead of the sideways one. Restore the ancestry test afterward.
+  # A SIDEWAYS move: an orphan commit shares no history with the pin in either
+  # direction, unlike a fast-forward `commit --allow-empty`, which stays a
+  # descendant and is recorded by the commit. The sideways case is the one
+  # refused with the `checkout --detach` remedy this test's assertions pin.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -179,78 +166,7 @@ committed_carrier_defect_store() {
   # branch already printed. That the sideways line is a runnable command stays
   # pinned on the producer, in tests/index_compose_pins.bats.
   [[ "$stderr" == *"Follow the remedy on each line above, then retry the commit"* ]]
-  # And not the ahead branch's words: for a sideways tier the return-to-the-pin
-  # remedy above is the right one.
+  # And not a tier ahead's: for a sideways tier the return-to-the-pin remedy
+  # above is the right one.
   [[ "$stderr" != *"ahead"* ]]
-}
-
-@test "the pin-abort's ahead wording reaches both the agent arm and the user arm" {
-  # resolve.sh's abort wrapper (gitlore_sync_memory_to_live) embeds
-  # gitlore_compose_check_pins' own $pin_problems verbatim in BOTH branches of
-  # gitlore_say_for_agent_or_user, so whatever index-compose.sh says for an
-  # ahead tier reaches stderr regardless of CLAUDECODE — this fixture proves
-  # it for the ahead case, complementing the sideways one above. A
-  # fast-forward `commit --allow-empty` stays a descendant of the tier's
-  # current HEAD (the pin the memory store still records): ahead, not
-  # sideways.
-  #
-  # The mount leaves the tier no local `live`, so this is the ahead tier whose
-  # commits HEAD alone holds — refused where it stands, its remedy the push
-  # that puts them where /gitlore:merge can adopt them.
-  #
-  # What is asserted is what tests/index_compose_pins.bats' ahead-of-pin test
-  # asserts, minus the shas: this test's job is that the wording CROSSES the
-  # wrapper into both arms, not to re-pin the message's content. Both positives
-  # are read off the tier's own report line, because the wrapper's agent arm
-  # wraps $pin_problems in remedy prose of its own and a whole-stderr match
-  # could be satisfied by that instead.
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet shared.md "stale hook"
-  seed_root_bullet "ddaanet/shared.md" "fresh hook"
-  git -C memory/ddaanet commit -q --allow-empty -m "moved outside /gitlore:merge"
-  # The fixture's shape, asserted rather than assumed: a fast-forward
-  # `commit --allow-empty` stays a descendant of the commit the memory store
-  # still records, i.e. ahead.
-  git -C memory/ddaanet merge-base --is-ancestor \
-    "$(git -C memory rev-parse ":ddaanet")" HEAD
-
-  # The second run reuses this fixture, so what the first run leaves behind is
-  # snapshotted rather than assumed: a first run that left a file under
-  # .claude/, staged the gitlink or left merge state would make the second run's
-  # result mean something other than "the user arm says the same thing".
-  pin_before=$(git -C memory rev-parse ":ddaanet")
-  tier_head_before=$(git -C memory/ddaanet rev-parse HEAD)
-  tier_state_before=$(git -C memory/ddaanet status --porcelain)
-  mem_state_before=$(git -C memory status --porcelain)
-
-  CLAUDECODE=1 run --separate-stderr commit_sections "memory: record the shared fact"
-  [ "$status" -ne 0 ]
-  agent_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
-  [[ "$agent_line" == *"ahead"* ]]
-  [[ "$agent_line" == *"leave nothing uncommitted"* ]]
-  [[ "$stderr" != *"checkout --detach"* ]]
-  [ -z "$(claude_files)" ]
-
-  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head_before" ]
-  [ "$(git -C memory/ddaanet status --porcelain)" = "$tier_state_before" ]
-  [ "$(git -C memory status --porcelain)" = "$mem_state_before" ]
-
-  unset CLAUDECODE
-  run --separate-stderr commit_sections "memory: record the shared fact"
-  [ "$status" -ne 0 ]
-  user_line=$(printf '%s\n' "$stderr" | grep -F "tier 'ddaanet'")
-  [[ "$user_line" == *"ahead"* ]]
-  [[ "$user_line" == *"leave nothing uncommitted"* ]]
-  [[ "$stderr" != *"checkout --detach"* ]]
-  # The report line is $pin_problems verbatim, so the two arms carry it
-  # unchanged; the arms themselves differ only in the remedy prose around it.
-  [ "$user_line" = "$agent_line" ]
-  # And the second run really was the other arm: scripts/lib/log.sh branches on
-  # CLAUDECODE, which a subagent dispatch sets in the ambient environment, so
-  # without a positive read of the user arm's own sentence this test could pass
-  # with the agent arm answering twice.
-  [[ "$stderr" == *"Open this project in Claude Code"* ]]
 }

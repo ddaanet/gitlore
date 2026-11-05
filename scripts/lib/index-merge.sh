@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Entry-wise three-way merge for index files (`MEMORY.md`). Source; do not exec.
-# Depends on scripts/lib/index-compose.sh for gitlore_bullet_path,
-# gitlore_index_part and gitlore_compose_pick — callers must source it first.
+# Sourced by scripts/lib/index-compose.sh, whose gitlore_bullet_path,
+# gitlore_index_part and gitlore_compose_pick it depends on; source that.
 #
 # An index is a LIST OF ENTRIES, not prose: each pointer bullet is an
 # independent record keyed by its path. A line-wise merge reads it as prose and

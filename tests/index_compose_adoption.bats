@@ -6,19 +6,33 @@ load helpers/fixtures
 load helpers/tier-fixtures
 load helpers/index-compose
 
-# Header as in tests/index_compose.bats. Covers adoption: the up projection
-# a landed merge runs.
+# Header as in tests/index_compose.bats. Covers adoption: the three-way up
+# projection a landed merge runs.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 
 setup()    { setup_tmp_repo; }
+
+# Commit each tier's seeded carrier, then memory, so memory's gitlink holds the
+# carrier root was composed against.
+commit_seeded_tiers() {
+  local tier
+  for tier in memory/*/; do
+    [ -e "$tier.git" ] || continue
+    git -C "$tier" add -A
+    git -C "$tier" diff --cached --quiet || git -C "$tier" commit -qm "seed"
+  done
+  commit_memory_state
+}
 teardown() { teardown_tmp_repo; }
 
 # --- adoption: the up projection a landed merge runs ---
 #
 # Taking an upstream commit is a merge, and the merged carrier is what the user
 # approved. Adoption is how it reaches the root index — the only surface CC
-# recalls from — and it is the one moment the carrier outranks root's text.
+# recalls from — three-way from the carrier at the gitlink memory's index holds,
+# so a line only the tier changed is adopted. The carrier is the tier's commit,
+# so each fixture commits it there.
 
 @test "adoption replaces the root's tier block with the merged carrier" {
   make_parent_with_memory
@@ -26,7 +40,7 @@ teardown() { teardown_tmp_repo; }
   set_tier_manifest ddaanet
   seed_tier_bullet ddaanet existing.md "already here"
   gitlore_compose memory
-  commit_memory_state
+  commit_seeded_tiers
   grep -qF 'ddaanet/existing.md' memory/MEMORY.md
 
   # What a landed merge leaves in the carrier: one fact retracted upstream, one
@@ -34,12 +48,13 @@ teardown() { teardown_tmp_repo; }
   set_bullets memory/ddaanet/MEMORY.md \
     '- [existing](existing.md) — reworded by the merge' \
     '- [arrived](arrived.md) — new from another repo'
+  git -C memory/ddaanet commit -qam "the merge lands"
   cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
 
-  run gitlore_compose_up memory ddaanet
+  run gitlore_compose_up memory ddaanet :
   [ "$status" -eq 0 ]
-  # The carrier's TEXT wins: root's own wording for the same path is replaced,
-  # not preserved as it is in every other pass.
+  # The carrier's TEXT is adopted: root never changed the line, so the tier's
+  # rewording stands.
   assert_bullets memory/MEMORY.md \
     '- [existing](ddaanet/existing.md) — reworded by the merge' \
     '- [arrived](ddaanet/arrived.md) — new from another repo'
@@ -57,14 +72,16 @@ teardown() { teardown_tmp_repo; }
   seed_tier_bullet ddaanet kept.md "survives the merge"
   seed_tier_bullet ddaanet retracted.md "here until upstream drops it"
   gitlore_compose memory
-  commit_memory_state
+  commit_seeded_tiers
   grep -qF 'ddaanet/retracted.md' memory/MEMORY.md
 
   # The merge landed a carrier from which another consumer removed the fact.
   sed -i.bak '/retracted\.md/d' memory/ddaanet/MEMORY.md && rm -f memory/ddaanet/MEMORY.md.bak
   rm -f memory/ddaanet/retracted.md
+  git -C memory/ddaanet add -A
+  git -C memory/ddaanet commit -qm "the merge lands"
 
-  run gitlore_compose_up memory ddaanet
+  run gitlore_compose_up memory ddaanet :
   [ "$status" -eq 0 ]
   run ! grep -qF 'retracted.md' memory/MEMORY.md
   grep -qF 'ddaanet/kept.md' memory/MEMORY.md
@@ -82,10 +99,11 @@ teardown() { teardown_tmp_repo; }
   seed_tier_bullet lore l.md "lore fact"
   seed_root_bullet "project_overview.md" "the project"
   gitlore_compose memory
-  commit_memory_state
+  commit_seeded_tiers
 
   set_bullets memory/ddaanet/MEMORY.md '- [d](d.md) — merged wording'
-  run gitlore_compose_up memory ddaanet
+  git -C memory/ddaanet commit -qam "the merge lands"
+  run gitlore_compose_up memory ddaanet :
   [ "$status" -eq 0 ]
   grep -qF -- '- [d](ddaanet/d.md) — merged wording' memory/MEMORY.md
   grep -qF -- '- [l](lore/l.md) — lore fact' memory/MEMORY.md

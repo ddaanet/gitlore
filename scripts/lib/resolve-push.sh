@@ -19,46 +19,6 @@ gitlore: the commit was aborted because git could not read the status of $file, 
 gitlore: the commit was aborted because git could not read the status of $file. Open this project in Claude Code and ask it to repair the memory store, then retry the commit." >&2
 }
 
-# Stage the gitlink of each tier whose HEAD is the commit gitlore_sync_tiers_to_live
-# made and a stopped run never recorded: memory's `add -A` failed after it (a
-# transient index.lock) or the run died between the two. That tier sits ahead of
-# its pin, the shape gitlore_compose_check_pins refuses for a tier moved behind
-# gitlore's back, so without this the retry of the commit is refused for good.
-# Staging it overwrites nothing: that carrier was composed before the run began,
-# as the commit path requires.
-#
-# Recognised by the landing record written just before that commit — HEAD's
-# parent must be the commit the record names, and memory's index must still pin
-# it. Not by the commit's message: a session that edits memory before the retry
-# lands approves a new summary, and the old commit no longer matches it.
-# Residual: a run killed after writing the record and before its commit failed
-# leaves the record behind, and a commit later made on that same pin by other
-# means would be adopted.
-# Returns 1, after git's own message, when a gitlink cannot be staged.
-# Args: $1 = memory worktree path.
-gitlore_stage_landed_tiers() {
-  local mempath="$1" tier tierpath landing recorded pinned parent
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    tierpath="$mempath/$tier"
-    # `git -C` into an unmaterialized submodule walks up to the enclosing repo.
-    [ -e "$tierpath/.git" ] || continue
-    landing=$(gitlore_tier_landing_file "$tierpath") || continue
-    [ -f "$landing" ] || continue
-    recorded=""
-    IFS= read -r recorded < "$landing" || [ -n "$recorded" ] || continue
-    # `-q --verify` is silent on the expected misses: no gitlink in the index
-    # (mid-mount), and a HEAD that is a root commit.
-    pinned=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
-    parent=$(git -C "$tierpath" rev-parse -q --verify "HEAD^") || continue
-    [ "$recorded" = "$pinned" ] || continue
-    [ "$parent" = "$recorded" ] || continue
-    gitlore_git -C "$mempath" add -- "$tier" || return 1
-    rm -f "$landing"
-  done < <(gitlore_tier_paths "$mempath")
-  return 0
-}
-
 # Publish every store to its own remote: each tier's `live` first, then memory's.
 # Assumes the memory worktree exists (caller guards `[ -e "$mempath/.git" ]`).
 # Returns 0 when everything is published (already-up-to-date included, and a

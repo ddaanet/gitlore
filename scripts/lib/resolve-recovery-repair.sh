@@ -47,24 +47,15 @@ gitlore: restore it with: git -C \"$abs\" checkout --detach $landed, then re-run
   return 0
 }
 
-# Adopt the merge gitlore_recover_landed_merge just restored: project the tier's
-# carrier UP into the root index, then stage the pair. A tier commit that landed
-# outside /gitlore:merge's continuation skips the tail every advancing path
-# shares (D43's staging-as-last-act), so the recovery owes it.
+# Adopt the merge gitlore_recover_landed_merge just restored: compose the tier
+# UP into the root index three-way, then stage the pair. A tier commit that
+# landed outside /gitlore:merge's continuation skips the end of the take that
+# would record it, so the recovery owes it.
 #
-# The up projection is not bookkeeping alongside the staging, it is what makes
-# the staging safe. Staging alone puts the enclosing store's index back in
-# agreement with the tier's HEAD — exactly the disagreement
-# gitlore_compose_check_pins refuses on — so the next pass composes, and its
-# down projection writes root's older text over a carrier holding the merged-in
-# facts root has never seen. The refusal exists to stop that, and staging alone
-# turns it into a silent overwrite. The one shape in which a tier ahead of its pin
-# may be adopted is gitlore_compose_moved_tiers's: compose up first, then stage
-# MEMORY.md and the tier together.
-#
-# So a failed up projection stages nothing. Leaving the gitlink where it is
-# keeps the pin guard's refusal, which is the right answer for a store whose
-# root index could not take the carrier.
+# A failed up projection stages nothing: the tier stays ahead of its pin, which
+# the next pass or take composes again. One that leaves a diff3 chunk in root
+# stages the tier alone, and the markers stop every pass and commit until a
+# person resolves them.
 #
 # Fires only when the recovered store is a tier. `--show-superproject-working-tree`
 # alone does not decide that: the memory root is itself a real submodule of the
@@ -118,9 +109,13 @@ gitlore_adopt_recovered_merge() {
   pinned=$(git -C "$super" rev-parse -q --verify ":$rel") || pinned=""
   [ -n "$tier_head" ] && [ "$tier_head" = "$pinned" ] && return 0
 
-  composed=$(gitlore_compose_up "$super" "$rel") || rc=$?
+  composed=$(gitlore_compose_up "$super" "$rel" :) || rc=$?
+  if [ "$rc" -eq 3 ]; then
+    gitlore_report_compose_markers "$super" "tier '$rel'" "$composed"
+    return 0
+  fi
   if [ "$rc" -ne 0 ]; then
-    printf 'gitlore: the root index could not take %s'\''s lines, so the merge was left unrecorded rather than composed over — the next gate refuses the tier instead:\n' "$rel" >&2
+    printf 'gitlore: the root index could not take %s'\''s lines, so the merge was left unrecorded rather than composed over:\n' "$rel" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
     return 0
   fi

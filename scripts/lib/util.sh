@@ -191,14 +191,6 @@ warning for how to activate it.
 EOF
 }
 
-# Print abs path to a tier's landing record: the commit the tier sat on when the
-# commit path last began a commit inside it (gitlore_sync_tiers_to_live), read
-# back by gitlore_stage_landed_tiers. Lives in the tier's gitdir, so it is
-# invisible to `git status`.
-# Args: $1 = tier worktree path.
-gitlore_tier_landing_file() {
-  git -C "$1" rev-parse --git-path gitlore-tier-landing
-}
 
 # Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
 # callers should compare with `[ "$(gitlore_memory_dirty PATH)" = "1" ]`.

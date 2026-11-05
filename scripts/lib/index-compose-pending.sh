@@ -40,24 +40,68 @@ gitlore_compose_would_write() {
   printf 'composed %s\n' "$file"
 }
 
-# The whole pass: validate, project root's lines DOWN into every active tier's
-# carrier, then lay out the root index. $2 names the function that receives each
+# The whole pass: validate, compose every active tier ahead of its pin UP into
+# root three-way, project root's lines DOWN into every active tier's carrier,
+# then lay out the root index. $2 names the function that receives each
 # computed index on stdin and its path as $1: gitlore_compose_write for the pass
 # itself, gitlore_compose_would_write for the check. Return codes are those of
 # gitlore_compose.
 gitlore_compose_pass() {
   local mempath="$1" writer="$2"
   local root="$mempath/MEMORY.md"
-  local active tier changed="" out
+  local active tier changed="" out ahead dir mrc=0
   [ -f "$root" ] || return 0
 
   # Both checks run before either verdict is read, so one refusal carries the
-  # whole list. Rule 7 is here rather than in gitlore_compose_check because it
-  # guards the down projection specifically (see gitlore_compose_check_pins).
+  # whole list. Rule 7 is here rather than in gitlore_compose_check because the
+  # end of a take composes a tier whatever its pin (see gitlore_compose_check_pins).
   local refused=0
   gitlore_compose_check "$mempath" || refused=1
   gitlore_compose_check_pins "$mempath" || refused=1
   [ "$refused" -eq 0 ] || return 1
+
+  # Up first, so the down projection reads root with what a tier another
+  # checkout or a killed take moved already merged in. The check stops at the
+  # first change, since root is what it would write. A chunk ends the pass with
+  # root written and the tiers staged: projecting a block holding three versions
+  # of one line down would push whichever the projection picked into the
+  # carrier.
+  ahead=$(gitlore_tiers_off_pin "$mempath" :)
+  if [ -n "$ahead" ]; then
+    if ! dir=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-compose-up.XXXXXX"); then
+      printf 'could not make a scratch directory to compose %s\n' "$root"
+      return 2
+    fi
+    out=$(gitlore_compose_merge_tiers "$mempath" "$ahead" "$dir" :) || mrc=$?
+    if [ "$mrc" -ge 2 ]; then
+      rm -rf "$dir"
+      printf '%s\n' "$out"
+      return 1
+    fi
+    if ! out=$(gitlore_compose_root_bullets "$mempath" "$dir" | "$writer" "$root"); then
+      rm -rf "$dir"
+      printf 'could not write %s\n' "$root"
+      return 2
+    fi
+    if [ -n "$out" ] && [ "$writer" != gitlore_compose_write ]; then
+      rm -rf "$dir"
+      printf '%s\n' "$out"
+      return 0
+    fi
+    if [ "$mrc" -eq 1 ]; then
+      printf '%s\n' "$out"
+      if ! gitlore_stage_merged_tiers "$mempath" "$dir"; then
+        rm -rf "$dir"
+        return 2
+      fi
+      rm -rf "$dir"
+      gitlore_index_marker_lines "$root"
+      return 3
+    fi
+    rm -rf "$dir"
+    [ -z "$out" ] || changed="$out
+"
+  fi
 
   active=$(gitlore_active_tiers "$mempath")
 
@@ -94,17 +138,19 @@ EOF2
     printf 'could not write %s\n' "$root"
     return 2
   fi
-  changed="$changed$out"
+  # Root written by the up step above is named once.
+  if [ -n "$out" ] && ! grep -qxF -- "$out" <<<"$changed"; then
+    changed="$changed$out"
+  fi
 
   [ -n "$changed" ] && printf '%s\n' "$changed"
   return 0
 }
 
 # Print the path of each index a compose pass would change, one per line. It
-# writes no index and no file in a store; a clean tier ahead of its pin is put
-# back at the pin by the pin check. Return 0 with no output when the store is composed; 1 when the
-# pass would refuse (the problems on stdout, as gitlore_compose prints them); 2
-# when an index could not be read.
+# writes no index and no file in a store, and moves no tier. Return 0 with no
+# output when the store is composed; 1 when the pass would refuse (the problems
+# on stdout, as gitlore_compose prints them); 2 when an index could not be read.
 gitlore_compose_pending() {
   local out rc=0
   out=$(gitlore_compose_pass "$1" gitlore_compose_would_write) || rc=$?

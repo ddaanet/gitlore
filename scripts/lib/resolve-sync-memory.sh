@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Commit the memory store and its dirty tiers from the sectioned summary, and
 # fast-forward each committed store's local `live`: the FR11 commit path,
-# including tier composition, the pin guard and the landing record. It never
-# prepares or takes a merge; a `live` that cannot fast-forward is reported.
+# including the compose check and the pin guard. It never prepares or takes a
+# merge; a `live` that cannot fast-forward is reported.
 # Part of lib/resolve.sh; source that, not this file.
 
 # Say that a store has forked from its local `live` after a commit. Not an
@@ -78,13 +78,6 @@ gitlore_commit_root() {
   # Checked explicitly, for the same reason as the tier loop: a caller that
   # tests this function's status suspends errexit.
   gitlore_git -C "$mempath" add -A || return 1
-  # Every tier gitlink is staged now, so no landing record is left with a
-  # commit to vouch for.
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -e "$mempath/$tier/.git" ] || continue
-    rm -f "$(gitlore_tier_landing_file "$mempath/$tier")"
-  done < <(gitlore_tier_paths "$mempath")
   # Nothing staged: a store whose only change was a tier already committed, with
   # no pointer left to record. Nothing to commit is not a failure.
   if git -C "$mempath" diff --cached --quiet; then
@@ -129,29 +122,23 @@ gitlore_sync_memory_to_live() {
     gitlore_guard_stale_merge_state "$mempath/$tier" || return 1
   done < <(gitlore_tier_paths "$mempath")
 
-  # A previous run that committed inside a tier and stopped before memory's
-  # `add -A` recorded it left that tier ahead of its pin — the shape the pin
-  # guard below refuses — so it is adopted first.
-  gitlore_stage_landed_tiers "$mempath" || return 1
-
-  # A tier off its pin refuses composition itself (D31, D36), but leaving that
-  # refusal to gitlore_compose's own rc-1 arm would let the `add -A` below stage
-  # the moved gitlink anyway. Checked here, ahead of compose, so an off-pin tier
-  # aborts instead.
+  # The `add -A` below records each tier where it stands, so a tier behind or
+  # beside its pin, or mid-merge, aborts here instead. A tier ahead of its pin
+  # passes, and its HEAD is recorded.
   # The declaration stays on its own line: folded into `local pin_problems=$(…)`
   # the status read is `local`'s, always 0, and the refusal is swallowed.
   local pin_problems
   if ! pin_problems=$(gitlore_compose_check_pins "$mempath"); then
-    local pin_header="gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than adopt the move:
+    local pin_header="gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than record the move:
 $pin_problems"
     # The agent arm names no remedy of its own: every branch of
     # gitlore_compose_check_pins already printed the one its cause takes, and
     # $pin_problems can carry several tiers with different causes.
     gitlore_say_for_agent_or_user \
       "$pin_header
-gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit." \
+gitlore: Follow the remedy on each line above, then retry the commit." \
       "$pin_header
-gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
+gitlore: Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
     return 1
   fi
 

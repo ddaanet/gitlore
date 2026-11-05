@@ -250,10 +250,9 @@ move_tier_off_pin() {
 
 # The same advance with the tier's local `live` following HEAD — a tier commit
 # moves both refs together, and this is the state left when the memory side
-# then loses the moved gitlink. Nothing the tier carries lives in HEAD alone,
-# which is what makes returning HEAD to the pin lose nothing. The mount leaves
-# no local `live` behind (tests/helpers/tier-fixtures.bash), so move_tier_off_pin
-# above stands for the tier whose commits HEAD alone holds.
+# then loses the moved gitlink. The mount leaves no local `live` behind
+# (tests/helpers/tier-fixtures.bash), so move_tier_off_pin above stands for the
+# tier whose commits HEAD alone holds.
 move_tier_off_pin_into_live() {
   local tier="${1:-ddaanet}"
   move_tier_off_pin "$tier" || return 1

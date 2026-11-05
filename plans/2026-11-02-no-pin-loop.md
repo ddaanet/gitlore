@@ -100,16 +100,26 @@ per-tier commit that premise is gone.
   `/gitlore:merge`.
 - The compose-up is a three-way merge, not the overwrite `gitlore_compose_up`
   does today. For each tier, `gitlore_index_merge` over base = the carrier at
-  the gitlink root's `HEAD` records, prefixed as root carries it; ours = root's
-  block for the tier; theirs = the tier's carrier at its `HEAD`. Bullets merge
-  entry-wise by path, with a diff3 chunk only for a path both sides moved apart,
-  under the labels D44 gives. A tier on its pin composes as today, since base
-  equals theirs.
-- A compose-up left with markers writes root with them and commits nothing. The
-  run names the file and the lines and says to resolve the markers and commit
-  memory; nothing walks back, since every tier is already where its take put it.
-  `gitlore_compose_check_index` gains a marker rule, so the pending check, the
-  pass and the commit refuse root until the markers are gone.
+  the gitlink the memory index holds, prefixed as root carries it; ours = root's
+  block for the tier; theirs = the tier's carrier at its `HEAD`. The index, not
+  `HEAD`, because staging a gitlink is how root records that it has seen the
+  tier's version: a chunk resolved to either side or to neither then stands,
+  where a base read from `HEAD` would rebuild the same chunk at every pass and
+  commit. Bullets merge entry-wise by path, with a diff3 chunk only for a path
+  both sides moved apart, under the labels D44 gives. A tier on its pin composes
+  as today, since base equals theirs. Settled by my human partner: root's index
+  is recomposed from the tiers once tiers and memory are both merged, and no
+  carrier line is lost on the way. A root merge ends in the memory merge's
+  continuation, which recomposes before its commit, while `HEAD` still records
+  `OURS`, so base is the gitlink `OURS` held. After that commit the staged tier
+  `HEAD` reads as the pin, and a carrier line neither root side held would be
+  adopted by nothing.
+- A compose-up left with markers writes root with them, stages the gitlinks of
+  the tiers it merged and commits nothing. The run names the file and the lines
+  and says to resolve the markers and commit memory; nothing walks back, since
+  every tier is already where its take put it. `gitlore_compose_check_index`
+  gains a marker rule, so the pending check, the pass and the commit refuse root
+  until the markers are gone.
 - The continuation of a tier merge lands the merge and composes nothing. The
   carrier check that keeps a defective merged carrier from landing (D52) stays,
   on the carrier alone. The compose runs at the end of the `gitlore-merge` or

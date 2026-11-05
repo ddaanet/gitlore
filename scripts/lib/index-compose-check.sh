@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Compose-check: the four gitlore_compose_check rules (duplicate paths,
 # unmounted manifest entries, unattributable prefixes, interleaved lines),
-# welded-line detection, and rule 7 (a tier off its pin).
+# welded-line detection, conflict markers, and rule 7 (a tier behind or beside
+# its pin).
 # Part of lib/index-compose.sh; source that, not this file.
 
 # Print one problem per line and return 1 when $1's store cannot be composed
@@ -15,9 +16,9 @@
 #      prefix has no carrier to survive in, so dropping it would be data loss;
 #   4. no non-blank non-bullet line inside an index's bullet region — the
 #      layout rule would relocate it and lose its position.
-# Rule 6 (the welded line) is checked per index below; rule 7 (an active tier
-# off its pin) is the down pass's alone and lives in gitlore_compose_check_pins,
-# which this function does not call.
+# Rules 6 (the welded line) and 8 (a conflict marker) are checked per index
+# below; rule 7 (a mounted tier behind or beside its pin) lives in
+# gitlore_compose_check_pins, which this function does not call.
 gitlore_compose_check() {
   local mempath="$1" mounted active problems="" tier file found
   mounted=$(gitlore_tier_paths "$mempath")
@@ -119,12 +120,15 @@ gitlore_welded_path() {
   gitlore_bullet_path "$second"
 }
 
-# Rules 1, 4 and 6 for a single index file. Prints problems; always returns 0
+# Rules 1, 4, 6 and 8 for a single index file. Prints problems; always returns 0
 # (the caller aggregates). A rule added here gains a matching repair rule in
 # gitlore_repair_index in the same change — a problem this reports and
-# gitlore_repair_index cannot fix is a defect no take can adopt past.
+# gitlore_repair_index cannot fix is a defect no take can adopt past. Rule 8,
+# conflict markers, is the exception: which side of a chunk is right is a
+# judgement about the fact, so a person settles it and no rewrite does.
 gitlore_compose_check_index() {
   local file="$1" first last n=0 line path welded seen=""
+  gitlore_index_marker_lines "$file"
   read -r first last < <(gitlore_index_region "$file")
   [ "$first" -eq 0 ] && return 0
   while IFS= read -r line || [ -n "$line" ]; do
@@ -153,6 +157,25 @@ $path"
   return 0
 }
 
+# Rule 8 — print one problem per conflict-marker line in index $1, the whole file
+# read, so a chunk in the preamble or the trailer is named too. A compose-up
+# writes a diff3 chunk where root and a tier both changed one entry apart, and
+# every pass and commit stops here until it is settled. `=======` alone is left
+# out: a markdown heading underline is the same text, and the other three
+# markers already name every chunk.
+gitlore_index_marker_lines() {
+  local file="$1" n=0 line
+  [ -f "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    case "$line" in
+      '<<<<<<<' | '<<<<<<< '* | '|||||||' | '||||||| '* | '>>>>>>>' | '>>>>>>> '*)
+        printf '%s: line %d holds a conflict marker\n' "$file" "$n" ;;
+    esac
+  done < "$file"
+  return 0
+}
+
 # Print the lines of gitlore_compose_check output (stdin) that name index file
 # $1 — every line with the exact "$1: " prefix, no pattern interpretation of
 # $1. Return 0 when at least one matched, 1 otherwise.
@@ -169,36 +192,27 @@ gitlore_compose_problems_in() {
   return "$found"
 }
 
-# Rule 7 — every ACTIVE tier sits at the commit the memory store records for it.
-# Print one problem per moved tier and return 1; print nothing and return 0
-# otherwise. Depends on gitlore_active_tiers (util-config.sh) and
-# gitlore_merge_state_file (util-merge-state.sh); callers source util.sh,
-# which pulls in both.
+# Rule 7 — every MOUNTED tier, dormant ones included, sits on or ahead of the
+# commit the memory store records for it. Print one problem per tier that does
+# not and return 1; print nothing and return 0 otherwise. Depends on
+# gitlore_tier_paths (util-config.sh) and gitlore_store_mid_merge; callers
+# source util.sh, which pulls in both.
 #
-# The down projection is safe only because a pinned tier cannot have moved on
-# its own, which is what leaves one projection to move between passes (D36). A
-# tier advanced outside /gitlore:merge breaks that: nothing adopted the carrier's
-# newer text up into the root, so the next pass writes root's OLDER text over it
-# and reports a successful compose. That is a silent overwrite of approved
-# upstream facts, so this refuses rather than reports.
+# A tier ahead of its pin passes: the pass composes it up three-way, and the
+# commit's `add -A` records its HEAD. A tier behind its pin does not, dormant or
+# not, since that `add -A` would record the older commit and move the pin
+# backward with no one having asked. Neither does a tier beside its pin, whose
+# HEAD and pin each hold commits the other lacks.
 #
-# It lives OUTSIDE gitlore_compose_check, called by gitlore_compose and by the
-# commit path's pin guard ahead of it, because the rule belongs to the down pass
-# alone. gitlore_compose_up adopts a
-# carrier at the end of a landed merge, where the tier is legitimately ahead of
-# the pin and the staging that restores it comes after the adoption — a
-# parameter on the shared check would leave the merge path one argument away
-# from refusing the very state it exists to land, where a function the up path
-# never calls makes the scope structural.
+# It lives OUTSIDE gitlore_compose_check, called by the pass and by the commit
+# path's pin guard ahead of it, because the end of a take and the memory
+# merge's continuation compose a tier whatever its relation to the pin.
 #
 # The pin is read from the memory store's INDEX (`:$tier`), not from
-# `HEAD:$tier`: `submodule update` checks a tier out at the sha the index holds,
-# and every path that advances a tier stages the moved gitlink there as its last
-# act (D43). Reading HEAD would call a landed merge a defect for as long as the
-# memory commit recording it is pending.
+# `HEAD:$tier`: a gitlink staged for the next memory commit is what that commit
+# records.
 gitlore_compose_check_pins() {
-  local mempath="$1" active tier tierpath pinned head abs live checkout_err problems=""
-  active=$(gitlore_active_tiers "$mempath")
+  local mempath="$1" tier tierpath pinned head abs problems=""
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -211,70 +225,30 @@ gitlore_compose_check_pins() {
     pinned=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
     head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
     [ "$head" = "$pinned" ] && continue
-    # Mid-merge takes a different remedy: the return-to-the-pin checkout below
-    # unlinks MERGE_HEAD and destroys the prepared merge.
     if gitlore_store_mid_merge "$tierpath"; then
       problems="${problems}tier '$tier' is mid-merge and sits off the commit the memory store records for it; run /gitlore:resolve to land the merge before the indexes can be composed
 "
       continue
     fi
-    # A tier whose HEAD is a fast-forward descendant of the pin takes a
-    # different remedy from one moved sideways or diverged: HEAD already
-    # contains the pin, so the return-to-the-pin checkout the sideways branch
-    # names would discard real commits rather than recover lost ones.
-    # The `rev-parse -q --verify` guard removes the one expected failure of
-    # `merge-base --is-ancestor` here — a pin that is no object in this
-    # database at all, which the truncation comment below records as a normal
-    # state — rather than letting its rc-128 `fatal:` reach the terminal. It
-    # costs no coverage: a pin genuinely ancestral to HEAD is necessarily an
-    # object here already, so what the guard rejects was never ahead.
-    #
-    # Staging the gitlink is not a remedy on its own: it satisfies this rule and
-    # the next pass then projects root's older text over the carrier — the
-    # overwrite being refused. Adoption is the tooling's, never a hand edit of
-    # root's block: /gitlore:merge composes the carrier up into the root index
-    # and records the pair at the end of its run (gitlore_compose_moved_tiers). A tier
-    # gitlore's own commit path left ahead never reaches here: the commit path
-    # stages it first (gitlore_stage_landed_tiers).
-    if git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null \
-       && git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
-      # Absolute, so the printed command runs from anywhere; quoted, so a tier
-      # path containing whitespace survives being pasted into a shell.
-      abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
-      # The take reads the tier's local `live`, so a tier whose `live` already
-      # holds what HEAD holds reaches it: the checkout back to the pin loses
-      # nothing and leaves precisely the state gitlore_adopt_advanced_live
-      # adopts from — a clean tier on its pin with `live` ahead of it. A dirty
-      # tier is left where it is: the checkout would carry work no summary
-      # covers onto the pin, and the take refuses a dirty store anyway. So does
-      # a `live` short of HEAD, which would strand the commits HEAD alone holds.
-      if [ "$(gitlore_memory_dirty "$tierpath")" = "0" ] \
-         && live=$(git -C "$tierpath" rev-parse -q --verify live) \
-         && git -C "$tierpath" merge-base --is-ancestor "$head" "$live"; then
-        # One problem per line, so git's own message is folded onto this one.
-        if checkout_err=$(gitlore_git -C "$tierpath" checkout -q --detach "$pinned" 2>&1); then
-          problems="${problems}tier '$tier' was checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}, and its local 'live' holds those commits: it is back on the pin, so none of them is lost. Run /gitlore:merge to adopt them into the root index, then retry.
+    # A pin that is no object in the tier is one this checkout has not fetched,
+    # the shape a raw pull in memory leaves; the take fetches the tier.
+    if ! git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null; then
+      problems="${problems}tier '$tier' is checked out at ${head:0:12} and the memory store records ${pinned:0:12}, a commit this checkout of the tier does not hold. Run /gitlore:merge, which fetches the tier and fast-forwards it.
 "
-          continue
-        fi
-        problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}, and could not be returned to the pin for /gitlore:merge to adopt what its local 'live' holds. git said: $(printf '%s' "$checkout_err" | tr '\n' ' '). Return it with \`git -C \"$abs\" checkout --detach $pinned\` — 'live' holds the commits, so nothing is lost — then run /gitlore:merge.
-"
-        continue
-      fi
-      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the pin the memory store records at ${pinned:0:12}: it advanced without composing, and projecting the root index onto it would overwrite what it holds. Adoption is /gitlore:merge's, which takes a tier's commits from its local 'live' and only from a clean tier: put HEAD's commits there with \`git -C \"$abs\" push . HEAD:refs/heads/live\`, leave nothing uncommitted in $abs, then run this again — the tier goes back on its pin and /gitlore:merge adopts what 'live' holds. A push refused as a non-fast-forward means 'live' moved too: run /gitlore:resolve.
+      continue
+    fi
+    git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head" && continue
+    if git -C "$tierpath" merge-base --is-ancestor "$head" "$pinned"; then
+      problems="${problems}tier '$tier' is checked out at ${head:0:12}, behind the commit the memory store records at ${pinned:0:12}, and a commit would record the older one. Run /gitlore:merge, which fast-forwards it.
 "
       continue
     fi
     # Absolute, so the printed command runs from anywhere; quoted, so a tier path
     # containing whitespace survives being pasted into a shell.
     abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
-    # Truncated by parameter expansion rather than `rev-parse --short`: the
-    # pinned commit need not exist in either store's object database.
     problems="${problems}tier '$tier' is checked out at ${head:0:12} but the memory store records ${pinned:0:12}: it was moved outside /gitlore:merge, and projecting the root index onto it would overwrite what it holds. Return it to the pin with \`git -C \"$abs\" checkout --detach $pinned\`, then run /gitlore:merge to take upstream properly.
 "
-  done <<EOF
-$active
-EOF
+  done < <(gitlore_tier_paths "$mempath")
 
   [ -z "$problems" ] && return 0
   printf '%s' "$problems" | grep -v '^$'

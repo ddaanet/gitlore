@@ -20,7 +20,7 @@
 # `live` cannot be advanced for a reason other than divergence.
 # Args: $1 = memory worktree path, $2 = the summary text.
 gitlore_sync_tiers_to_live() {
-  local mempath="$1" summary="$2" tier tierpath body landing pre
+  local mempath="$1" summary="$2" tier tierpath body
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -39,20 +39,9 @@ gitlore_sync_tiers_to_live() {
       return 1
     fi
     gitlore_git -C "$tierpath" add -A || return 1
-    # Written before the commit, so no interruption can leave the commit without
-    # it, and dropped when the commit fails, so it never vouches for a commit
-    # made later by other means: gitlore_stage_landed_tiers reads it on the
-    # retry. A tier with no commit yet has no pin to compare, so records nothing.
-    landing=$(gitlore_tier_landing_file "$tierpath") || return 1
-    if pre=$(git -C "$tierpath" rev-parse -q --verify HEAD); then
-      printf '%s\n' "$pre" > "$landing" || return 1
-    fi
     # The message goes in as an argument: no file holds it, and gitlore_git's
     # lock retry has no stdin to re-read.
-    if ! gitlore_git -C "$tierpath" commit -q -m "$body"; then
-      rm -f "$landing"
-      return 1
-    fi
+    gitlore_git -C "$tierpath" commit -q -m "$body" || return 1
     gitlore_advance_live "$tierpath" "tier '$tier'" "$tier" || return 1
   done < <(gitlore_tier_paths "$mempath")
   return 0

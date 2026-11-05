@@ -11,7 +11,10 @@
 # nothing writes nothing.
 #
 # Refused by the compose, this records nothing and moves nothing back: every tier
-# stays where its take put it, and the next take retries the write.
+# stays where its take put it, and the next take retries the write. A compose
+# that leaves a diff3 chunk in root writes root with it, stages the moves and
+# commits nothing; the markers stop every pass and commit until they are
+# resolved, and the next approved memory commit carries the moves.
 #
 # A root store holding other uncommitted work gets the moves staged rather than
 # committed, for the next approved memory commit to carry (D43): a canned commit
@@ -34,7 +37,11 @@ gitlore_compose_moved_tiers() {
     paths+=("$tier")
   done <<<"$moved"
 
-  composed=$(gitlore_compose_up "$mempath" "$moved") || rc=$?
+  composed=$(gitlore_compose_up "$mempath" "$moved" :) || rc=$?
+  if [ "$rc" -eq 3 ]; then
+    gitlore_report_compose_markers "$mempath" "$(gitlore_tier_labels "$moved")" "$composed"
+    return 1
+  fi
   if [ "$rc" -ne 0 ]; then
     gitlore_adopt_report_refusal "$(gitlore_tier_labels "$moved")" "$composed" "Fix the store, then run /gitlore:merge again."
     return 1
@@ -150,6 +157,19 @@ gitlore_bookkeeping_message() {
     printf '%s:\n' "$tier"
     git -C "$mempath/$tier" log --format='%s' "$pin..HEAD" | sed 's/^/  /'
   done <<<"$moved"
+}
+
+# Report root written with a diff3 chunk and nothing committed. Args: $1 = memory
+# worktree, $2 = "tier '<name>'" or a list of them, $3 = gitlore_compose_up's
+# output: the composed line, then one line per marker.
+gitlore_report_compose_markers() {
+  local mempath="$1" label="$2" composed="$3" line
+  printf 'gitlore: the root index and %s changed the same lines apart, so %s/MEMORY.md now holds conflict markers; the tier moves are staged and nothing was committed:\n' "$label" "$mempath" >&2
+  while IFS= read -r line; do
+    case "$line" in "composed "* | "") continue ;; esac
+    printf 'gitlore:   %s\n' "$line" >&2
+  done <<<"$composed"
+  printf 'gitlore: resolve each chunk to the line the root index should carry, then commit memory.\n' >&2
 }
 
 # Print "tier 'a', tier 'b'" for the tiers listed one per line in $1.

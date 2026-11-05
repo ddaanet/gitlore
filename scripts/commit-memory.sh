@@ -122,14 +122,24 @@ done < <(gitlore_tier_paths "$mempath")
 # The commit writes no index. A store whose indexes a compose pass would change
 # aborts here, before the stores are judged: the pass would make a tier dirty
 # that the status below must see, and the section check would otherwise answer a
-# summary for a state the remedy changes. The check writes no index and no file
-# in a store; a clean tier ahead of its pin is put back at the pin by its pin
-# check. A non-zero status from the check does not abort here.
+# summary for a state the remedy changes. The check writes no index, no file in
+# a store, and moves no tier; a tier ahead of its pin is checked as the pass
+# would compose it, and its `add -A` below records its HEAD. A non-zero status
+# from the check does not abort here.
 pending_rc=0
 pending=$(gitlore_compose_pending "$mempath") || pending_rc=$?
 if [ "$pending_rc" -eq 0 ] && [ -n "$pending" ]; then
   gitlore_say_compose_pending "$pending" >&2
   exit 1
+fi
+# A line a tier holds and root does not changes nothing in a pass, so the check
+# above passes over it. Reported, never refused: which surface is right is a
+# judgement about the fact.
+if [ "$pending_rc" -eq 0 ]; then
+  orphans=$(gitlore_compose_orphans "$mempath")
+  if [ -n "$orphans" ]; then
+    printf 'gitlore: these lines are in a tier'\''s own index but not in the root index, so they are not recallable here. The commit goes ahead; each line names both edits, and either is final:\n%s\n' "$orphans" >&2
+  fi
 fi
 
 # What has changes. Tier-only root changes (a gitlink moving, MEMORY.md lines

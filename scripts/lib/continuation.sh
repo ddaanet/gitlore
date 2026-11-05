@@ -57,11 +57,12 @@ load_continuation_state() {
 # the gitlore-merge or push run that follows writes root and records the tier. A
 # carrier failing its own check is not landed (D52).
 #
-# A memory-store merge runs the pass, with no tier named: root's own `MEMORY.md`
-# is one of the files git merged, so the propagation is already in the merged
-# content, while the merge produced whatever order the two sides implied, and the
-# layout, the four validations and the dangling report all still have something
-# to say about it.
+# A memory-store merge composes up, before its commit, every tier whose HEAD is
+# ahead of the gitlink HEAD (OURS) records: root's own `MEMORY.md` is one of the
+# files git merged, but a carrier line neither side of root held reaches it only
+# here, three-way from that gitlink. The layout, the validations and the
+# dangling report all still have something to say about the merged root too. A
+# compose that leaves a diff3 chunk in root does not land, like a failing index.
 #
 # A refusal blocks a memory merge only when it targets the index the merge is about
 # to publish: a problem gitlore_compose_check attributes to root's own MEMORY.md
@@ -109,8 +110,11 @@ compose_merged_indexes() {
       index_problems=$(gitlore_compose_check_index "$memroot/$merged_tier/MEMORY.md")
     fi
   else
-    composed=$(gitlore_compose_up "$memroot" "") || rc=$?
-    if [ "$rc" -eq 1 ]; then
+    # HEAD still records OURS here, and the tiers the prepare staged at their
+    # HEADs read as on their pins once the merge commit lands, so the tiers
+    # ahead of what OURS records compose now or never.
+    composed=$(gitlore_compose_up "$memroot" "$(gitlore_tiers_off_pin "$memroot" HEAD:)" HEAD:) || rc=$?
+    if [ "$rc" -eq 1 ] || [ "$rc" -eq 3 ]; then
       index_problems=$(gitlore_compose_problems_in "$memroot/MEMORY.md" <<<"$composed") \
         || index_problems=""
     fi

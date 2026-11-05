@@ -31,8 +31,6 @@
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose.sh"
 # shellcheck disable=SC1091
-source "${BASH_SOURCE[0]%/*}/index-merge.sh"
-# shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-recovery.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-recovery-repair.sh"

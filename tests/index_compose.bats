@@ -255,8 +255,9 @@ store_with_unreachable_tier() {
   # The restore is read before a pass and the orphans after one; neither has a
   # carrier to read here.
   [ -z "$(gitlore_compose_restores memory)$(gitlore_compose_orphans memory)" ]
-  # "" is a merge of the memory store itself, as the continuation runs it.
-  run gitlore_compose_up memory ""
+  # Listed as the continuation lists a tier ahead of OURS: with no checkout it
+  # has no carrier to merge.
+  run gitlore_compose_up memory ddaanet HEAD:
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   cmp memory/MEMORY.md "$BATS_TEST_TMPDIR/root-before"
