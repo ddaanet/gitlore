@@ -135,7 +135,9 @@ exec "$real_git" "\$@"
 EOF
   chmod +x "$fakebin/git"
 
-  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  # Through pre-push: push-memory.sh takes every tier before its loop, so the
+  # behind arm runs only from the hook.
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 
   # Everything the wording rests on, asserted first: the push failed; exactly
   # two pushes named the tier, so the refused one is the arm's own retry and
@@ -153,11 +155,11 @@ EOF
   [[ "$output$stderr" != *"memory merge prepared"* ]]
 }
 
-@test "a repair resting on a root problem inside a push publishes nothing until it is fixed" {
-  # The take repairs the stranded arrival but root's own leftover line keeps it
-  # from adopting: the repair waits in the tier's local `live`, and neither the
-  # tier's remote nor memory's may learn of it. Once root is fixed, the next
-  # push adopts that same repair and publishes it, tier before memory.
+@test "a repair resting on a root problem inside a push reaches the tier's remote and not memory's until it is fixed" {
+  # The take repairs the stranded arrival but root's own leftover line keeps
+  # root from recording it: the tier publishes the repair, which is safe ahead
+  # of what records it, and memory's remote learns nothing. Once root is fixed,
+  # the next push records that same repair and publishes it.
   git init -q --bare "$MEMORY_REMOTE"
   make_parent_with_memory
   mount_tier_at_live ddaanet
@@ -181,11 +183,12 @@ EOF
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"gone/x.md"* ]]
   [[ "$output$stderr" == *"gitlore: repaired ddaanet's arrival: dropped a duplicate pointer line:"* ]]
-  [[ "$output$stderr" != *"publishes it"* ]]
   R=$(git -C memory/ddaanet rev-parse live)
   [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $stranded" ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
-  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$tier_remote_before" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$R" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
+  [ "$tier_remote_before" != "$R" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$R" ]
   [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" = "$memory_remote_before" ]
 
   sed -i.bak '/gone\/x\.md/d' memory/MEMORY.md
@@ -204,6 +207,8 @@ EOF
 }
 
 # --- a repair the mid-loop take makes to a DIFFERENT tier is published too ---
+# Through pre-push: push-memory.sh takes every tier before its loop, so a take
+# runs mid-loop only from the hook.
 
 # Everything the defect rests on, asserted before the defect itself so a red
 # can only mean the repair went unpublished: the push succeeded, the hook moved
@@ -224,7 +229,7 @@ assert_aa_repaired_mid_loop() {
   setup_repair_race_on_aa
   bb_fact=$(push_tier_fact bb "- [B](b.md) — y")
 
-  run --separate-stderr bash "$CMD"
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
   assert_aa_repaired_mid_loop "$status" "$output$stderr"
   # `bb`'s behind arm is what ran the take: `bb` took its remote's fact.
   git -C memory/bb merge-base --is-ancestor "$bb_fact" live
@@ -238,7 +243,7 @@ assert_aa_repaired_mid_loop() {
   strand_live_ahead_of_pin bb
   bb_stranded=$(git -C memory/bb rev-parse live)
 
-  run --separate-stderr bash "$CMD"
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
   assert_aa_repaired_mid_loop "$status" "$output$stderr"
   # `bb`'s ahead-of-HEAD arm is what ran the take: it adopted `bb`'s own
   # stranded commit and published it.

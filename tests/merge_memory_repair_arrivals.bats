@@ -81,7 +81,7 @@ push_tier_files() {
   [[ "$output$stderr" == *"gitlore: repaired ddaanet's arrival: moved a non-bullet line out of the pointer block: Stray line here"* ]]
 }
 
-@test "a repair beside a root problem lands in live and waits" {
+@test "a repair beside a root problem lands in the tier and waits for root" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -100,14 +100,14 @@ push_tier_files() {
   all="$output$stderr"
   [[ "$all" == *"gone/x.md"* ]]
   [[ "$all" == *"gitlore: repaired ddaanet's arrival: dropped a duplicate pointer line: - [A](a.md) — x"* ]]
-  [[ "$stderr" == *"its local 'live' keeps the repair."* ]]
-  [[ "$stderr" != *"keeps what arrived"* ]]
-  # What adoption waits on is the root problem alone: the first refusal's
-  # carrier problem, already repaired, is not reported.
+  [[ "$stderr" == *"Fix the store, then run /gitlore:merge again."* ]]
+  # What the root write waits on is the root problem alone: the carrier
+  # problem, already repaired, is not reported.
   run ! grep -qF 'duplicate pointer path' <<<"$all"
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
-  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   R=$(git -C memory/ddaanet rev-parse live)
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$R" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$gitlink" ]
+  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
   [ "$(git -C memory rev-parse HEAD)" = "$memhead" ]
 
@@ -124,7 +124,7 @@ push_tier_files() {
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$R" ]
 }
 
-@test "an arrival the repair cannot fix walks back and names upstream" {
+@test "an arrival the repair cannot fix stays where the take put it and names upstream" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -148,7 +148,7 @@ push_tier_files() {
   mkdir -p "$tmp_env"
 
   TMPDIR="$tmp_env" run --separate-stderr bash "$CMD"
-  # The unrepairable arm walks the tier back rather than falling through to a
+  # The unrepairable arm stops the run rather than falling through to a
   # commit: the root's own HEAD never moves for a take it refused.
   [ "$(git -C memory rev-parse HEAD)" = "$memory_head_before" ]
   [ "$status" -eq 1 ]
@@ -160,38 +160,15 @@ push_tier_files() {
   # carrier's own, already listed above in its live:MEMORY.md form.
   ! grep -Eq '^gitlore:   .*ddaanet/MEMORY\.md: ' <<<"$stderr" || false
   # The closing remedy points upstream too, never at this store's clean carrier.
-  [[ "$all" == *"its local 'live' keeps what arrived. Once the index is fixed where it was published, run /gitlore:merge again."* ]]
+  [[ "$all" == *"stays where the take put it. Once the index is fixed where it was published, run /gitlore:merge again."* ]]
   [[ "$all" != *"Fix the store"* ]]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$gitlink" ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
   run ! grep -qxF 'Repair the MEMORY.md structure ddaanet received' < <(git -C memory/ddaanet log --all --reflog --format=%s)
   [ "$(tier_gitdir_files ddaanet)" = "$gitdir_before" ]
   [ -z "$(repair_scratch_dirs "$tmp_env")" ]
-}
-
-@test "an arrival the repair cannot fix beside a root duplicate reports both and the two-fix remedy" {
-  wire_memory_remote
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  gitlore_compose memory
-  commit_memory_state
-  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [B](b.md) — y\n- [B](b.md) — y\n- [a](a.md) — a- [z](z.md) — z')")
-  run ! git --git-dir="$TMP_REPO/.bare-ddaanet.git" cat-file -e "$remote_sha:z.md"
-  # Root carries an uncommitted duplicate pointer alongside the unrepairable arrival.
-  seed_root_bullet "dup.md" "root dup"
-  seed_root_bullet "dup.md" "root dup"
-  [ "$(grep -cF '(dup.md)' memory/MEMORY.md)" -eq 2 ]
-  run ! git -C memory diff --quiet -- MEMORY.md
-
-  run --separate-stderr bash "$CMD"
-  [ "$status" -eq 1 ]
-  [[ "$stderr" == *$'\ngitlore:   live:MEMORY.md:'* ]]
-  [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/MEMORY.md: duplicate pointer path dup.md"* ]]
-  # Only the lines not naming the carrier go under that header: the carrier's
-  # are already listed in their live:MEMORY.md form.
-  [[ "$stderr" != *"memory/ddaanet/MEMORY.md:"* ]]
-  [[ "$stderr" == *"Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again." ]]
 }
 
 @test "a local live that ran ahead with a defective carrier is repaired" {
@@ -258,7 +235,7 @@ push_tier_files() {
   [[ "$all" == *"held commits the memory store never recorded; adopted them at"* ]]
   [[ "$all" == *"live.lock"* ]]
   [[ "$all" != *"repaired ddaanet's arrival:"* ]]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$stranded" ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$stranded" ]
   run ! grep -qxF 'Repair the MEMORY.md structure ddaanet received' < <(git -C memory/ddaanet log --all --reflog --format=%s)

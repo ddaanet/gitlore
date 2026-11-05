@@ -233,7 +233,7 @@ gitlore_compose_check_pins() {
     # the next pass then projects root's older text over the carrier — the
     # overwrite being refused. Adoption is the tooling's, never a hand edit of
     # root's block: /gitlore:merge composes the carrier up into the root index
-    # and stages the pair together (gitlore_adopt_advanced_live). A tier
+    # and records the pair at the end of its run (gitlore_compose_moved_tiers). A tier
     # gitlore's own commit path left ahead never reaches here: the commit path
     # stages it first (gitlore_stage_landed_tiers).
     if git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null \

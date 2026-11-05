@@ -58,9 +58,9 @@ gitlore: restore it with: git -C \"$abs\" checkout --detach $landed, then re-run
 # gitlore_compose_check_pins refuses on — so the next pass composes, and its
 # down projection writes root's older text over a carrier holding the merged-in
 # facts root has never seen. The refusal exists to stop that, and staging alone
-# turns it into a silent overwrite. gitlore_adopt_tier_into_root is the
-# precedent and the only shape in which a tier ahead of its pin may be adopted:
-# compose up first, then stage MEMORY.md and the tier together.
+# turns it into a silent overwrite. The one shape in which a tier ahead of its pin
+# may be adopted is gitlore_compose_moved_tiers's: compose up first, then stage
+# MEMORY.md and the tier together.
 #
 # So a failed up projection stages nothing. Leaving the gitlink where it is
 # keeps the pin guard's refusal, which is the right answer for a store whose
@@ -89,7 +89,7 @@ gitlore: restore it with: git -C \"$abs\" checkout --detach $landed, then re-run
 # HEAD — a continuation killed right after its own bookkeeping commit, then
 # re-run.
 #
-# Best-effort, like gitlore_adopt_tier_into_root's own staging: a failure here
+# Best-effort, like gitlore_compose_moved_tiers's own staging: a failure here
 # must not turn a landed recovery into a failed one. The named pair only, never
 # `add -A` — an over-broad stage would sweep unapproved worktree edits into the
 # enclosing store's index for the next approved commit to carry. And no

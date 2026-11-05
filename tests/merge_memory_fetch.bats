@@ -61,7 +61,7 @@ load helpers/merge-memory
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$fixed_sha" ]
 }
 
-@test "a failed fetch still adopts local live and reports the fetch failure" {
+@test "a failed fetch still adopts local live, reports the fetch failure, and records nothing until a take completes" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -77,16 +77,24 @@ load helpers/merge-memory
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
   [ "$live_sha" != "$pin" ]
 
+  url=$(git -C memory/ddaanet remote get-url origin)
   git -C memory/ddaanet remote set-url origin "$TMP_REPO/missing.git"
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"could not fetch tier 'ddaanet'"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
+  # Root is written once, at the end of a run that completes.
+  run ! grep -q 'ddaanet/local.md' memory/MEMORY.md
+
+  git -C memory/ddaanet remote set-url origin "$url"
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
   grep -q 'ddaanet/local.md' memory/MEMORY.md
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$live_sha" ]
 }
 
-@test "a tier with no remote still adopts local live and reports the missing remote" {
+@test "a tier with no remote still adopts local live, reports the missing remote, and records nothing" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -108,10 +116,12 @@ load helpers/merge-memory
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"tier 'ddaanet' has no remote configured"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
-  grep -q 'ddaanet/local.md' memory/MEMORY.md
+  # Root is written once, at the end of a run that completes.
+  run ! grep -q 'ddaanet/local.md' memory/MEMORY.md
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
 }
 
-@test "a failed adoption does not hide a failed fetch" {
+@test "a dirty tier is refused before any fetch or adoption" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -122,13 +132,13 @@ load helpers/merge-memory
   pin=$(git -C memory rev-parse ":ddaanet")
 
   strand_live_ahead_of_pin ddaanet
-  # A dirty tier refuses the adoption.
+  # A dirty tier refuses the whole take, ahead of the fetch that would fail.
   printf 'uncommitted\n' > memory/ddaanet/dirty.md
   git -C memory/ddaanet remote set-url origin "$TMP_REPO/missing.git"
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"has uncommitted changes, so nothing was adopted"* ]]
-  [[ "$output$stderr" == *"could not fetch tier 'ddaanet'"* ]]
+  [[ "$output$stderr" == *"tier 'ddaanet' has uncommitted changes, so nothing was taken"* ]]
+  [[ "$output$stderr" != *"could not fetch"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
 }

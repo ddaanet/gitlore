@@ -166,7 +166,7 @@ mount_pinned_tier() {
   [[ "$body" != *"remote fact"* ]]
 }
 
-@test "a tier divergence merge lands canned and leaves a committed root store" {
+@test "a tier divergence merge lands canned, and the next take commits the root store" {
   wire_memory_remote
   mount_pinned_tier
   # Local tier commit …
@@ -185,7 +185,9 @@ mount_pinned_tier() {
   subject="$(git -C memory/ddaanet log -1 --format=%s)"
   [ "$subject" = "merge .bare-ddaanet from $(basename "$TMP_REPO")" ]
   git -C memory/ddaanet log -1 --format=%b | grep -qF "local tier fact"
-  # The root store committed the moved gitlink and recomposed index.
+  # The next take's end compose commits the moved gitlink and recomposed index.
+  run --separate-stderr bash "$MERGE_CMD"
+  [ "$status" -eq 0 ]
   [ -z "$(git -C memory status --porcelain)" ]
   [ "$(git -C memory log -1 --format=%s)" = "Update MEMORY.md for ddaanet tier merge." ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]

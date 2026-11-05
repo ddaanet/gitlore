@@ -115,8 +115,9 @@ Stray line
   [ ! -e memory/gone.md ]
 }
 
-@test "a tier merge on a store with no root index commits, reports, and stages the gitlink" {
+@test "a tier merge on a store with no root index commits in the tier, and the next take records the gitlink" {
   make_parent_with_memory
+  git -C memory push -q origin live
   mount_tier_at_live ddaanet
   set_tier_manifest ddaanet
   git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
@@ -139,11 +140,12 @@ Stray line
 
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-[[ "$stderr" == *"no MEMORY.md"* ]]
-
-  # The tier merge landed, and the moved gitlink is staged in the root store.
+  # The tier merge landed; the next take records the moved gitlink and writes
+  # no root index.
   [ "$(git -C memory/ddaanet rev-parse HEAD)" != "$tier_before" ]
-  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
   [ ! -f memory/MEMORY.md ]
 }
 
@@ -250,7 +252,8 @@ leave_conflict_markers_in() {
   git -C memory/ddaanet add -A
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  [ "$(git -C memory/ddaanet rev-list --count --merges HEAD -1)" = "1" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
 }
 
 @test "conflict-marker text in a file the merge did not change does not block the merge" {

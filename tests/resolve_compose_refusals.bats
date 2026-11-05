@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Push refusals around the merge continuation: a policy decline on the tier's
-# remote, a refused local `live` update and its printed remedy, and the
-# default-mode gate on a policy refusal. Split out of resolve_compose.bats.
+# remote, a refused local `live` update and the take that recovers from it, and
+# the default-mode gate on a policy refusal. Split out of resolve_compose.bats.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
@@ -24,10 +24,8 @@ decline_pushes_to() {
   chmod +x "$1/hooks/pre-receive"
 }
 
-@test "an origin push declined for policy rests the unadopted tier and exits 1" {
+@test "an origin push declined for policy leaves the tier on its merge and exits 1" {
   prepare_tier_merge_with_new_lines
-  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
-  pin=$(git -C memory rev-parse :ddaanet)
   ours=$(git -C memory/ddaanet rev-parse HEAD)
   theirs=$(git -C memory/ddaanet rev-parse MERGE_HEAD)
   published=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
@@ -38,16 +36,14 @@ decline_pushes_to() {
   [[ "$stderr" == *"declined by policy"* ]]
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$published" ]
   # The local `. HEAD:live` push ran before the declined one, so the tier's
-  # `live` holds the merge of the two sides, and the tier rests on its pin.
+  # `live` holds the merge of the two sides, and the tier stays on it.
   [ "$(git -C memory/ddaanet rev-parse 'live^1')" = "$ours" ]
   [ "$(git -C memory/ddaanet rev-parse 'live^2')" = "$theirs" ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$(git -C memory/ddaanet rev-parse live)" ]
 }
 
-@test "a refused local live update leaves the unadopted tier on the merge with a runnable remedy" {
+@test "a refused local live update leaves the tier on the merge, and the next take records it" {
   prepare_tier_merge_with_new_lines
-  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
-  pin=$(git -C memory rev-parse :ddaanet)
   ours=$(git -C memory/ddaanet rev-parse HEAD)
   theirs=$(git -C memory/ddaanet rev-parse MERGE_HEAD)
   live_before=$(git -C memory/ddaanet rev-parse live)
@@ -63,70 +59,14 @@ decline_pushes_to() {
   # The merge commit lands before either push, and the tier stays on it.
   [ "$(git -C memory/ddaanet rev-parse 'HEAD^1')" = "$ours" ]
   [ "$(git -C memory/ddaanet rev-parse 'HEAD^2')" = "$theirs" ]
-  abs=$(CDPATH='' cd -- memory/ddaanet && pwd)
-  [[ "$stderr" == *"gitlore: tier 'ddaanet' stays on the merge commit because its local 'live' does not hold it. Run:
-gitlore:   git -C \"$abs\" push . HEAD:live
-gitlore:   git -C \"$abs\" merge-base --is-ancestor HEAD live && git -C \"$abs\" checkout --detach $pin
-gitlore: then fix the problems listed above and run /gitlore:merge."* ]]
-}
-
-@test "following the remedy adopts the merge" {
-  prepare_tier_merge_with_new_lines
-  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
-  pin=$(git -C memory rev-parse :ddaanet)
-  lock="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/refs/heads/live.lock"
-  : > "$lock"
-  export GITLORE_GIT_RETRY_SCHEDULE=0
-  run --separate-stderr bash "$RESOLVE" continue-after-merge
-  rm -f "$lock"
-  [ "$status" -eq 1 ]
   merged=$(git -C memory/ddaanet rev-parse HEAD)
 
-  # Line by line, so a spaced path stays inside the command that quotes it.
-  remedy=()
-  while IFS= read -r line; do
-    remedy+=("$line")
-  done < <(printf '%s\n' "$stderr" | sed -n 's/^gitlore:   \(git -C .*\)$/\1/p')
-  [ "${#remedy[@]}" -eq 2 ]
-  # From another directory, so a path the remedy leaves relative fails.
-  cd "$BATS_TEST_TMPDIR"
-  bash -c "${remedy[0]}"
-  bash -c "${remedy[1]}"
-  cd "$TMP_REPO"
-  [ "$(git -C memory/ddaanet rev-parse live)" = "$merged" ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
-
-  sed -i.bak '/gone\/x\.md/d' memory/MEMORY.md
-  rm -f memory/MEMORY.md.bak
+  # The take's reconcile advances the stranded `live`, and its end records the tier.
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"
   [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$merged" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$merged" ]
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
-}
-
-@test "the remedy keeps the tier on the merge while its local live update is still refused" {
-  prepare_tier_merge_with_new_lines
-  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
-  lock="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/refs/heads/live.lock"
-  : > "$lock"
-  export GITLORE_GIT_RETRY_SCHEDULE=0
-  run --separate-stderr bash "$RESOLVE" continue-after-merge
-  [ "$status" -eq 1 ]
-  merged=$(git -C memory/ddaanet rev-parse HEAD)
-
-  remedy=()
-  while IFS= read -r line; do
-    remedy+=("$line")
-  done < <(printf '%s\n' "$stderr" | sed -n 's/^gitlore:   \(git -C .*\)$/\1/p')
-  [ "${#remedy[@]}" -eq 2 ]
-  # The lock still held: the push fails again, and running the next line
-  # regardless must not move the tier off a merge no ref holds.
-  run bash -c "${remedy[0]}"
-  [ "$status" -ne 0 ]
-  run bash -c "${remedy[1]}"
-  rm -f "$lock"
-  [ "$status" -ne 0 ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
 }
 
 @test "default-mode gates exit 1 on a policy refusal" {

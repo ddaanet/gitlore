@@ -92,7 +92,7 @@ assert_prepared_head_vs_live() {
   [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
 }
 
-@test "merge refuses a diverged root while a tier sits off the gitlink root records" {
+@test "merge prepares a diverged root while a tier sits ahead of the gitlink root records, staging the tier's HEAD" {
   wire_memory_remote
   mount_tier_at_live ddaanet
   # Root records the tier at its current HEAD, so only the commit below moves it.
@@ -106,7 +106,8 @@ assert_prepared_head_vs_live() {
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *"memory has uncommitted changes"* ]]
-  # No merge was prepared, so the continuation's `add -A` cannot adopt the move.
-  [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  [[ "$stderr" != *"uncommitted changes"* ]]
+  # The tier moves first, so the root merge is prepared with its HEAD staged.
+  [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 }

@@ -123,11 +123,9 @@ gitlore_push_stores() {
     # sitting at the pin holds approved commits the memory store never recorded,
     # and moving HEAD onto it alone would take the tier off that pin (D43), which
     # is what the next composition refuses. The whole take pass, not this tier
-    # alone, and for the reason the behind-tier branch below gives: it runs
-    # root-first, and a tier take writes a bookkeeping commit that would meet an
-    # equally-behind root's upstream one as a divergence. No `continue` after it
-    # — unlike a take from the remote, what was adopted here has never been
-    # published, so this tier's push is exactly what has to happen next.
+    # alone, and for the reason the behind-tier branch below gives. No `continue`
+    # after it — unlike a take from the remote, what was adopted here has never
+    # been published, so this tier's push is exactly what has to happen next.
     #
     # This take and the behind arm's run marked as inside a push, so a repair
     # names this push as what publishes it rather than /gitlore:push — also
@@ -157,9 +155,8 @@ gitlore_push_stores() {
               # loop guarantees is untouched. A take that cannot fast-forward
               # yields a prepared merge and returns non-zero, as everywhere else.
               #
-              # The whole take pass, not this tier alone: it runs root-first, and
-              # a tier take writes a bookkeeping commit that would meet an
-              # equally-behind root's upstream one as a divergence.
+              # The whole take pass, not this tier alone: every tier, then root,
+              # then the one root write that records them all.
               GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores "$mempath" || return 1
               # The take can repair a defective arrival, committing on top of
               # what it fetched, and memory's push below records that commit —
@@ -228,6 +225,7 @@ gitlore_push_stores() {
   # instead would make memory's local-only-ness withhold the tiers — the one part
   # other repositories actually read.
   if [ -z "$remote_url" ]; then
+    gitlore_compose_moved_tiers "$mempath" || return 1
     gitlore_say_for_agent_or_user \
       "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published. Run /gitlore:resolve to give memory a remote if it is meant to be shared." \
       "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published." >&2
@@ -242,7 +240,9 @@ gitlore_push_stores() {
 
   # No redirect: `-q` already silences progress, so anything fetch writes here is a
   # real problem. Non-fatal (`|| true`) — the push below is the operation that counts.
-  git -C "$mempath" fetch -q origin live || true
+  git -C "$mempath" fetch -q --no-recurse-submodules origin live || true
+
+  gitlore_compose_moved_tiers_for_push "$mempath" || return 1
 
   # Capture rather than discard the push error: the two branches below diagnose
   # only "unreachable" and "divergence", and a push can fail for neither reason

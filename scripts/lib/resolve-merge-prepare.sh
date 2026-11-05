@@ -20,12 +20,17 @@
 # vs the `live` branch), `live` for head-vs-remote (HEAD can be displaced by a
 # prior interruption; the local `live` branch is untouched by a checkout onto
 # some other authority).
+# Every mounted tier's gitlink on both sides is checked ahead of the checkout, so
+# a stop moves nothing, and staged once the merge exists: the tier's HEAD is the
+# answer whichever way git merged the gitlink, and the merger is asked nothing
+# about it. The stage precedes the state file, which then lists no tier.
 # Args: $1 = memory worktree path, $2 = authority ref (`live` or `origin/live`),
 #       $3 = pending ref (`HEAD` or `live`).
 # Stdout: `<base_sha>:<pending_sha>`.
+# Returns 1 after git's words, 2 after a stop that has said all there is to say.
 gitlore_prepare_merge() {
   local mempath="$1" authority="$2" pending_ref="$3"
-  local pending base merge_err restore_err
+  local pending base merge_err restore_err tiers
   pending=$(git -C "$mempath" rev-parse "$pending_ref")
   # Nothing to merge: the authority already contains the pending commit, so the
   # merge below would report "Already up to date." and leave no MERGE_HEAD.
@@ -39,6 +44,9 @@ gitlore_prepare_merge() {
     printf 'gitlore: %s already contains HEAD, so there is no merge to prepare.\n' "$authority" >&2
     return 1
   fi
+  # Read before the merge, which can leave `.gitmodules` holding conflict markers.
+  tiers=$(gitlore_tier_paths "$mempath")
+  gitlore_check_tier_gitlinks "$mempath" "$tiers" "$authority" "$pending" || return 2
   base=$(git -C "$mempath" merge-base "$pending" "$authority")
   gitlore_git -C "$mempath" update-ref "$GITLORE_PENDING_REF" "$pending"
   gitlore_git -C "$mempath" checkout -q --detach "$authority"
@@ -71,6 +79,11 @@ gitlore_prepare_merge() {
     fi
     return 1
   fi
+  if ! gitlore_stage_tier_heads "$mempath" "$tiers"; then
+    gitlore_git -C "$mempath" merge --abort || :
+    gitlore_git -C "$mempath" checkout -q --detach "$pending" || :
+    return 1
+  fi
   # Redo every index file entry-wise, over git's line-wise result. Unconditional:
   # the failure this catches — both sides adding the same pointer path at
   # different offsets, which merges CLEANLY into a duplicate — leaves no
@@ -87,7 +100,7 @@ gitlore_prepare_merge() {
 #       $4 = pending ref (see gitlore_prepare_merge).
 gitlore_yield_merge() {
   local mempath="$1" authority="$2" flavor="$3" pending_ref="$4"
-  local prep base pending statefile pending_sha
+  local prep base pending statefile pending_sha rc=0
   # Before anything is written: a refusal must leave no marker, state file or
   # merge behind for the next gate to classify.
   gitlore_refuse_rewritten "$mempath" "$authority" "$pending_ref" || return 1
@@ -103,10 +116,12 @@ gitlore_yield_merge() {
       "gitlore: no merge was started in $mempath because its merge state file could not be written, so nothing can record one. Inspect the memory worktree." >&2
     return 1
   fi
-  if ! prep=$(gitlore_prepare_merge "$mempath" "$authority" "$pending_ref"); then
+  prep=$(gitlore_prepare_merge "$mempath" "$authority" "$pending_ref") || rc=$?
+  if [ "$rc" -ne 0 ]; then
     # No merge was started, so the marker describes nothing. Dropped with the
     # pin, which the preparation may have set before it failed.
     gitlore_drop_merge_preparation "$mempath"
+    [ "$rc" -ne 2 ] || return 1
     gitlore_say_for_agent_or_user \
       "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." \
       "gitlore: could not prepare the memory merge against '$authority'. Inspect the memory worktree at $mempath." >&2
@@ -123,4 +138,77 @@ gitlore_yield_merge() {
   statefile=$(gitlore_merge_state_file "$mempath")
   gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
   return 0
+}
+
+# Stop a memory merge whose gitlink the tier cannot answer with its HEAD: a commit
+# neither the tier nor its remote holds, or one the tier holds and HEAD does not
+# descend. A tier merge commit and a fast-forward both descend each side.
+# Args: $1 = memory worktree, $2 = tier paths, one per line, $3 and $4 = the
+#       merge's two sides. Returns 1 after emitting.
+gitlore_check_tier_gitlinks() {
+  local mempath="$1" tiers="$2" tier tierpath head side sha msg
+  shift 2
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
+    [ -e "$tierpath/.git" ] || continue
+    head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
+    for side in "$@"; do
+      # `-q --verify` is silent on the expected miss: a side with no such gitlink.
+      sha=$(git -C "$mempath" rev-parse -q --verify "$side:$tier") || continue
+      gitlore_tier_holds_gitlink "$mempath" "$tier" "$sha" || return 1
+      git -C "$tierpath" merge-base --is-ancestor "$sha" "$head" && continue
+      msg="gitlore: tier '$tier' sits at ${head:0:12}, which does not contain ${sha:0:12}, the commit memory records for it, so no memory merge was prepared. Run /gitlore:merge, which takes the tier before memory."
+      gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+      return 1
+    done
+  done <<<"$tiers"
+}
+
+# Stage each mounted tier's HEAD into the pending merge, resolving an unmerged
+# gitlink. A tier the merged index no longer lists stays deleted.
+# Args: $1 = memory worktree, $2 = tier paths, one per line.
+gitlore_stage_tier_heads() {
+  local mempath="$1" tier
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -e "$mempath/$tier/.git" ] || continue
+    [ -n "$(git -C "$mempath" ls-files -- "$tier")" ] || continue
+    gitlore_git -C "$mempath" add -- "$tier" || return 1
+  done <<<"$2"
+}
+
+# Refuse root's fast-forward onto a commit recording a tier commit no repository
+# holds. Args: $1 = memory worktree, $2 = the incoming commit. Returns 1 after
+# emitting.
+gitlore_refuse_unresolvable_gitlinks() {
+  local mempath="$1" incoming="$2" tier sha
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -e "$mempath/$tier/.git" ] || continue
+    # `-q --verify` is silent on the expected miss: a commit with no such gitlink.
+    sha=$(git -C "$mempath" rev-parse -q --verify "$incoming:$tier") || continue
+    gitlore_tier_holds_gitlink "$mempath" "$tier" "$sha" || return 1
+  done < <(gitlore_tier_paths "$mempath")
+}
+
+# True when tier $2 holds commit $3, after one fetch of it from the tier's remote
+# if it does not yet. Refused otherwise, as an integrity error: the checkout that
+# recorded the commit is the one that can publish it. git's words go with the
+# refusal, since a remote that could not be reached says nothing about the commit.
+# Args: $1 = memory worktree, $2 = tier name, $3 = the recorded commit.
+# Returns 1 after emitting.
+gitlore_tier_holds_gitlink() {
+  local mempath="$1" tier="$2" sha="$3" tierpath="$1/$2" url err msg
+  git -C "$tierpath" rev-parse -q --verify "$sha^{commit}" >/dev/null && return 0
+  if err=$(git -C "$tierpath" fetch -q --no-recurse-submodules origin "$sha" 2>&1) \
+     && git -C "$tierpath" rev-parse -q --verify "$sha^{commit}" >/dev/null; then
+    return 0
+  fi
+  url=$(git -C "$tierpath" config --get remote.origin.url || true)
+  msg="gitlore: memory records ${sha:0:12} for tier '$tier', and neither the tier nor its remote ${url:-(none configured)} supplied that commit, so memory was neither moved nor composed. The checkout that recorded it runs /gitlore:push; /gitlore:merge then retries. git said:
+$err"
+  gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+  return 1
 }

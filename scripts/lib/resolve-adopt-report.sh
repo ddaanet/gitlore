@@ -1,136 +1,81 @@
 #!/usr/bin/env bash
-# Report an adoption refusal and walk the tier back to its pin, then — on the
-# landed path — stage the adopted pair and record it in a canned bookkeeping
-# commit.
+# The end of a take: write root's index once for every tier the run left ahead of
+# the commit root records, and record them in one canned bookkeeping commit. Also
+# the report of a refused adoption, shared with the arrival repair.
 # Part of lib/resolve.sh; source that, not this file.
 
-# Print the problems the up projection could not take, then walk the tier back.
-# Shared by a refusal naming nothing in the arriving carrier, by a repair that
-# fails on something the next take redoes, and by a repair's retry that still
-# finds root, the manifest or another tier refusing.
-# Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
-#       $4 = "tier '<name>'", $5 = the compose problems, $6 = the closing
-#       remedy and $7 = what the tier's local `live` keeps, both optional and
-#       passed to gitlore_adopt_walk_back_tier, whose default an empty one keeps.
-# Returns 1 after emitting.
-gitlore_adopt_report_refusal_and_walk_back() {
-  local mempath="$1" tier="$2" old_gitlink="$3" label="$4" composed="$5" remedy="${6:-}"
-  local live_holds="${7:-}"
-  gitlore_adopt_print_root_refusal "$label" "$composed"
-  gitlore_adopt_walk_back_tier "$mempath" "$tier" "$old_gitlink" "$label" "$remedy" "$live_holds" || :
-  return 1
-}
+# Project every tier ahead of its pin up into root's index, stage the moves and
+# record them in one commit naming those tiers. Whatever moved a tier counts, this
+# run's take or an earlier continuation that landed a tier merge: a tier off its
+# pin is all the state there is, so a killed run needs no marker. A run that moved
+# nothing writes nothing.
+#
+# Refused by the compose, this records nothing and moves nothing back: every tier
+# stays where its take put it, and the next take retries the write.
+#
+# A root store holding other uncommitted work gets the moves staged rather than
+# committed, for the next approved memory commit to carry (D43): a canned commit
+# would sweep that work up. Root `MEMORY.md` is outside that question on purpose,
+# since the compose rewrites it whatever it held (D31), and so are tier paths,
+# which a take is moving.
+#
+# Best-effort past the compose: a landed take must not become a failed one because
+# its bookkeeping could not be recorded, so a failure there names what it left.
+# Args: $1 = memory worktree. Returns 1 after emitting when nothing was recorded.
+gitlore_compose_moved_tiers() {
+  local mempath="$1" moved names="" tier composed rc=0 msgfile err abs
+  local -a paths=()
+  moved=$(gitlore_tiers_ahead_of_pin "$mempath") || return 1
+  [ -n "$moved" ] || return 0
 
-# Print the root-index-could-not-take header and the refused lines, each
-# prefixed for the reader, to stderr. Shared by the unrepairable arm's own
-# lines and the refusal-and-walk-back path's composed lines — one spelling of
-# the same user-visible message.
-# Args: $1 = "tier '<name>'" or whatever else names the arrival, $2 = the
-#       refused lines, one per line.
-gitlore_adopt_print_root_refusal() {
-  local label="$1" lines="$2"
-  printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
-  printf '%s\n' "$lines" | sed 's/^/gitlore:   /' >&2
-}
+  [ ! -f "$mempath/MEMORY.md" ] || paths+=(MEMORY.md)
+  while IFS= read -r tier; do
+    names="${names:+$names, }$tier"
+    paths+=("$tier")
+  done <<<"$moved"
 
-# Return the tier to the commit the memory store records, after a refusal left
-# nothing to adopt.
-# Args: $1 = memory worktree, $2 = tier name, $3 = the pre-take commit,
-#       $4 = "tier '<name>'", for the messages, $5 = the closing remedy when
-#       the store is not what needs fixing (optional; empty keeps "Fix the
-#       store, …"), $6 = what the tier's local `live` keeps (optional; empty
-#       keeps "what arrived").
-# Returns 1 after emitting, whether or not the checkout succeeded.
-gitlore_adopt_walk_back_tier() {
-  local mempath="$1" tier="$2" old_gitlink="$3" label="$4" err abs
-  local remedy="${5:-Fix the store, then run /gitlore:merge again.}"
-  local live_holds="${6:-what arrived}"
-  if ! err=$(gitlore_git -C "$mempath/$tier" checkout -q --detach "$old_gitlink" 2>&1); then
-    # Absolute, so the printed command runs from anywhere.
-    abs=$(CDPATH='' cd -- "$mempath/$tier" && pwd) || abs="$mempath/$tier"
-    # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
-    printf 'gitlore: nothing was recorded, but %s could not be returned to the commit the memory store records. git said:\n%s\ngitlore: run `git -C "%s" checkout --detach %s`, fix the store, then run /gitlore:merge again.\n' \
-      "$label" "$err" "$abs" "$old_gitlink" >&2
+  composed=$(gitlore_compose_up "$mempath" "$moved") || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    gitlore_adopt_report_refusal "$(gitlore_tier_labels "$moved")" "$composed" "Fix the store, then run /gitlore:merge again."
     return 1
   fi
-  printf 'gitlore: nothing was recorded, and %s is back on the commit the memory store records; its local '\''live'\'' keeps %s. %s\n' "$label" "$live_holds" "$remedy" >&2
-  return 1
-}
+  [ -z "$composed" ] || printf '%s\n' "$composed" | sed 's/^/gitlore: /'
 
-# Stage the tier's newly-adopted carrier pair and record it in a canned commit
-# — the tail a landed take and a landed repair share.
-# Args: $1 = memory worktree, $2 = tier name, $3 = "1" when the root store was
-#       dirty before the take, $4 = the pre-take commit, $5 = "tier '<name>'".
-gitlore_adopt_stage_pair_and_commit() {
-  local mempath="$1" tier="$2" root_dirty_before="$3" old_gitlink="$4" label="$5" abs
-  # Stage the pair the take just produced. `submodule update` reads the gitlink
-  # from the superproject's INDEX, so an unstaged one is walked back to the
-  # pre-take commit by the next SessionStart tier pass — and the composed root
-  # index, being an ordinary working-tree write, survives to describe facts the
-  # tier no longer holds. Staged, the unconditional pin is idempotent rather than
-  # destructive. Staging is best-effort: a failure here must not turn a landed
-  # take into a failed merge.
-  # The printed path is absolute, so the command runs from anywhere.
-  if ! gitlore_git -C "$mempath" add -- MEMORY.md "$tier"; then
+  # Written ahead of the staging, which moves the pins the body reads.
+  msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-tier-msg.XXXXXX") || msgfile=""
+  [ -z "$msgfile" ] || gitlore_bookkeeping_message "$mempath" "$names" "$moved" > "$msgfile"
+
+  if ! gitlore_git -C "$mempath" add -- "${paths[@]}"; then
+    # The printed path is absolute, so the command runs from anywhere.
     abs=$(CDPATH='' cd -- "$mempath" && pwd) || abs="$mempath"
     # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
-    printf 'gitlore: %s advanced, but its pointer could not be staged in the memory store. Run `git -C "%s" add -- MEMORY.md "%s"` before the next session, or the pointer will be reset to its previous commit.\n' "$label" "$abs" "$tier" >&2
-  fi
-  # Then commit the pair, so an explicit take leaves a clean store (D49). The
-  # dirty reading is the one taken BEFORE the tree moved: everything dirty now is
-  # this take's own work, and anything that was dirty before it is unapproved
-  # content the canned commit must not sweep up.
-  gitlore_commit_tier_bookkeeping "$mempath" "$tier" "$root_dirty_before" "$old_gitlink"
-}
-
-# Commit the root index and moved tier gitlink an explicit take just staged,
-# with a canned message, and fast-forward the store's local `live` onto it.
-# Unprompted by design (D49): both parents of the take passed an approval gate
-# already — the local side at its own FR11 commit, the upstream side in the repo
-# that published it — so the bookkeeping introduces no unapproved content.
-#
-# Refuses, leaving the staged pair for the next FR11 episode, when the root
-# store was dirty BEFORE the take: those edits are unapproved, and a canned
-# `commit` would carry whatever else is staged alongside the pair. That path is
-# D43's staged-pair discipline, which stays the degraded case rather than the
-# resting state.
-#
-# Best-effort throughout: a landed fast-forward must not become a failed take
-# because its bookkeeping could not be recorded. Every failure names the pair
-# and leaves it staged.
-# Args: $1 = memory worktree, $2 = tier name, $3 = "1" when the root store was
-#       already dirty before the take, $4 = the tier's pre-take commit.
-gitlore_commit_tier_bookkeeping() {
-  local mempath="$1" tier="$2" dirty_before="$3" old_gitlink="$4"
-  local msgfile err
-
-  if [ "$dirty_before" = "1" ]; then
-    printf 'gitlore: the memory store had uncommitted changes before this take, so the moved %s pointer and the recomposed root index were staged rather than committed. They ride the next memory commit (approved summary).\n' "$tier"
+    printf 'gitlore: %s advanced, but the pointer could not be staged in the memory store. Run `git -C "%s" add --%s` before the next session, or the pointer will be reset to its previous commit.\n' \
+      "$names" "$abs" "$(printf ' "%s"' "${paths[@]}")" >&2
+    [ -z "$msgfile" ] || rm -f "$msgfile"
     return 0
   fi
-  # Nothing staged: the root already records this exact state — a root commit
-  # taken from upstream carried the gitlink, and the tier loop's fast-forward
-  # then only caught the worktree up. An empty commit would fail, and reporting
-  # that failure would dress a healthy path as a broken one.
+
+  if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all -- . ":(exclude)MEMORY.md")" ]; then
+    [ -z "$msgfile" ] || rm -f "$msgfile"
+    printf 'gitlore: the memory store has other uncommitted changes, so the moved %s pointer and the recomposed root index were staged rather than committed. They ride the next memory commit (approved summary).\n' "$names"
+    return 0
+  fi
+  # Nothing staged: the compose changed nothing and the staged gitlinks match what
+  # root already records, so an empty commit would only fail.
   if git -C "$mempath" diff --cached --quiet; then
+    [ -z "$msgfile" ] || rm -f "$msgfile"
+    return 0
+  fi
+  if [ -z "$msgfile" ]; then
+    printf 'gitlore: %s advanced and the moves are staged, but no message file could be made for the bookkeeping commit, so they ride the next memory commit.\n' "$names" >&2
     return 0
   fi
 
-  msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-tier-msg.XXXXXX") || return 0
-  {
-    printf 'Update MEMORY.md for %s tier merge.\n\n' "$tier"
-    # The subjects the take brought in. A fast-forward creates no commit in the
-    # tier itself, so without this the root commit would be the only record and
-    # would say nothing about what arrived.
-    git -C "$mempath/$tier" log --format='%s' "$old_gitlink..HEAD" 2>/dev/null \
-      | sed 's/^/  /'
-  } > "$msgfile"
-
-  # Bare `commit`, never `-a` or an `add -A`: exactly the pair staged above goes
-  # in. A store clean before the take has nothing else staged to catch.
+  # Bare `commit`, never `-a` or an `add -A`: exactly what was staged above goes
+  # in. A store clean beyond those paths has nothing else staged to catch.
   if ! err=$(gitlore_git -C "$mempath" commit -q -F "$msgfile" 2>&1); then
     rm -f "$msgfile"
-    printf 'gitlore: %s advanced and its pointer is staged, but the bookkeeping commit failed, so it rides the next memory commit. git said:\n%s\n' "$tier" "$err" >&2
+    printf 'gitlore: %s advanced and the moves are staged, but the bookkeeping commit failed, so they ride the next memory commit. git said:\n%s\n' "$names" "$err" >&2
     return 0
   fi
   rm -f "$msgfile"
@@ -138,28 +83,95 @@ gitlore_commit_tier_bookkeeping() {
   # Same invariant every other memory commit restores: `live` holds the commit
   # the moment it exists. Refused only by a race, which the next gate re-reads.
   if ! err=$(gitlore_git -C "$mempath" push -q . HEAD:live 2>&1); then
-    printf 'gitlore: the %s bookkeeping commit landed but memory'\''s local '\''live'\'' could not follow it. git said:\n%s\n' "$tier" "$err" >&2
+    printf 'gitlore: the %s bookkeeping commit landed but memory'\''s local '\''live'\'' could not follow it. git said:\n%s\n' "$names" "$err" >&2
     return 0
   fi
-  printf 'gitlore: memory — recorded %s'\''s move in a bookkeeping commit; the store is clean.\n' "$tier"
-  return 0
+  printf 'gitlore: memory — recorded %s in a bookkeeping commit; the store is clean.\n' "$names"
 }
 
-# Print 1 when the root store holds a change beyond the pair a take is about to
-# commit — its own `MEMORY.md` and the tier gitlink — and 0 otherwise.
-#
-# The plain dirty reading cannot answer this from inside a landed merge: the
-# preparation has already moved the tier, so the root is dirty by construction
-# and every take would refuse. What the guard is actually asking is whether
-# somebody else's unapproved work would ride the canned commit, and that is a
-# question about the OTHER paths. Pathspec exclusions, not a filter over
-# porcelain output: a path with a space or a quote survives them intact.
-# Args: $1 = memory worktree, $2 = tier name.
-gitlore_root_dirty_beyond_pair() {
-  local mempath="$1" tier="$2"
-  if [ -z "$(git -C "$mempath" status --porcelain -- . ":(exclude)MEMORY.md" ":(exclude)$tier")" ]; then
-    printf '0\n'
-  else
-    printf '1\n'
+# The end compose of a push: root takes its remote first when it is merely behind,
+# so the bookkeeping commit lands on top. A diverged root composes nothing here:
+# the refused push that follows prepares the merge, which records each tier's HEAD.
+# Assumes `origin/live` has just been fetched. Args: $1 = memory worktree.
+# Returns 1 after emitting.
+gitlore_compose_moved_tiers_for_push() {
+  local mempath="$1" moved remote
+  moved=$(gitlore_tiers_ahead_of_pin "$mempath") || return 1
+  [ -n "$moved" ] || return 0
+  # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
+  if remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) \
+     && ! git -C "$mempath" merge-base --is-ancestor "$remote" live; then
+    git -C "$mempath" merge-base --is-ancestor live "$remote" || return 0
+    gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
   fi
+  gitlore_compose_moved_tiers "$mempath"
+}
+
+# Print each mounted tier whose HEAD strictly descends the commit root's INDEX
+# records, one per line. The index rather than HEAD: a pointer already staged for
+# the next memory commit has been recorded. A tier behind its pin is left out, so
+# a pin never moves backward, and the commit's own guard answers that tier. So is
+# a tier off to the side of its pin, which is reported, since nothing below can
+# say which of the two was meant.
+# Args: $1 = memory worktree. Returns 1, after the refusal, on a recorded commit
+# neither the tier nor its remote holds.
+gitlore_tiers_ahead_of_pin() {
+  local mempath="$1" tier tierpath pin head
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
+    [ -e "$tierpath/.git" ] || continue
+    # `-q --verify` is silent on the expected misses: no stage-0 gitlink in the
+    # index (mid-mount), and a tier with no commit.
+    pin=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
+    head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
+    [ "$head" != "$pin" ] || continue
+    gitlore_tier_holds_gitlink "$mempath" "$tier" "$pin" || return 1
+    if git -C "$tierpath" merge-base --is-ancestor "$pin" "$head"; then
+      printf '%s\n' "$tier"
+    elif ! git -C "$tierpath" merge-base --is-ancestor "$head" "$pin"; then
+      printf 'gitlore: tier '\''%s'\'' sits at %s, which does not contain the commit the memory store records (%s), so nothing was recorded for it. The next memory commit refuses that pin and names the remedy.\n' \
+        "$tier" "${head:0:12}" "${pin:0:12}" >&2
+    fi
+  done < <(gitlore_tier_paths "$mempath")
+}
+
+# The canned bookkeeping message on stdout: a subject naming the moved tiers, then
+# for each the subjects its move brought in. A fast-forward creates no commit in
+# the tier itself, so without these the root commit would be the only record and
+# would say nothing about what arrived. Args: $1 = memory worktree, $2 = the tier
+# names for the subject, $3 = the tiers, one per line.
+gitlore_bookkeeping_message() {
+  local mempath="$1" names="$2" moved="$3" tier pin
+  printf 'Update MEMORY.md for %s tier merge.\n\n' "$names"
+  while IFS= read -r tier; do
+    pin=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
+    printf '%s:\n' "$tier"
+    git -C "$mempath/$tier" log --format='%s' "$pin..HEAD" | sed 's/^/  /'
+  done <<<"$moved"
+}
+
+# Print "tier 'a', tier 'b'" for the tiers listed one per line in $1.
+gitlore_tier_labels() {
+  local tier labels=""
+  while IFS= read -r tier; do
+    labels="${labels:+$labels, }tier '$tier'"
+  done <<<"$1"
+  printf '%s\n' "$labels"
+}
+
+# Report what the root index could not take and that nothing was recorded.
+# Args: $1 = "tier '<name>'" or a list of them, $2 = the refused lines, one per
+# line, $3 = the closing remedy.
+gitlore_adopt_report_refusal() {
+  local label="$1" lines="$2" remedy="$3"
+  printf 'gitlore: the root index could not take %s'\''s lines:\n' "$label" >&2
+  printf '%s\n' "$lines" | sed 's/^/gitlore:   /' >&2
+  gitlore_adopt_report_nothing_recorded "$label" "$remedy"
+}
+
+# Args: $1 = "tier '<name>'" or a list of them, $2 = the closing remedy.
+gitlore_adopt_report_nothing_recorded() {
+  printf 'gitlore: nothing was recorded, and %s stays where the take put it. %s\n' "$1" "$2" >&2
 }

@@ -22,10 +22,10 @@
 #   resolve-push.sh         publish every store to its own remote
 #   resolve-merge-stores.sh take whatever each store's remote holds, without
 #                            publishing
-#   resolve-adopt.sh        adopt a tier's arrival into the root index, with
-#                            carrier repair on refusal
-#   resolve-adopt-report.sh report an adoption refusal, walk a tier back, and
-#                            record a landed adoption's bookkeeping commit
+#   resolve-adopt.sh        move a tier onto what its local `live` holds, and
+#                            repair a carrier that arrived defective
+#   resolve-adopt-report.sh the end of a take: one root write and one bookkeeping
+#                            commit for the tiers it moved
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose.sh"
 # shellcheck disable=SC1091
@@ -229,8 +229,8 @@ gitlore_classify_refusal() {
 # is pinned at the gitlink the memory store records (D43): the same checkout
 # takes it OFF that pin, and the next composition refuses — the two gates then
 # assert different invariants about one ref and obeying this one breaks the
-# store. A tier goes to the take, which moves HEAD, the root index and the
-# recorded pointer together.
+# store. A tier goes to the take, which moves HEAD and ends by recording it and
+# writing the root index.
 # Args: $1 = store, $2 = label, $3 = tier name ("" when the store is the memory
 # root). Returns 1 after emitting when they disagree.
 gitlore_check_head_live_agree() {

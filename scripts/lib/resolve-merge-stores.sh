@@ -4,9 +4,14 @@
 # Part of lib/resolve.sh; source that, not this file.
 
 # Take whatever each store's remote is holding, without publishing anything:
-# memory first, then every tier. The counterpart of gitlore_push_stores, and the
-# only path by which a pinned tier advances (D17) — SessionStart names an
-# upstream-ahead tier, this is what acts on it.
+# every mounted tier first, then memory, then one write of root's index. The
+# counterpart of gitlore_push_stores, and the only path by which a pinned tier
+# advances (D17) — SessionStart names an upstream-ahead tier, this is what acts
+# on it.
+#
+# Each store reconciles its HEAD against its local `live` immediately before its
+# take, so a root merge is only ever prepared with every tier already moved: the
+# prepare records the tier's HEAD and the merger is asked nothing about a gitlink.
 #
 # The memory root alone also takes its own local `live` (D59): one that strictly
 # contains HEAD — commits another checkout of the store made — is checked out
@@ -17,62 +22,125 @@
 #
 #   - the remote is already contained in HEAD → nothing to take. Local commits
 #     awaiting publication are /gitlore:push's business, not this one's.
-#   - HEAD is an ancestor of the remote → take it by fast-forward, then ADOPT:
-#     for a tier, its merged carrier becomes root's block for it. No sub-agent —
+#   - HEAD is an ancestor of the remote → take it by fast-forward. No sub-agent —
 #     nothing is in dispute, and spending a synthesis on a fast-forward would
 #     make taking upstream facts expensive enough to skip.
 #   - neither contains the other → prepare a merge and yield, exactly as a
 #     refused push does, but marked not-to-publish.
 #
-# A dirty store is refused rather than checked out over: the working tree may hold this
-# session's uncommitted facts, and a fast-forward would either fail mid-way or
-# carry them onto a commit nobody approved them against.
+# A dirty tier refuses the whole take before anything moves: the working tree may
+# hold this session's uncommitted facts, and a fast-forward would either fail
+# mid-way or carry them onto a commit nobody approved them against.
 #
 # Returns 0 when every store is reconciled (nothing-to-take included), 1 after
 # emitting a message otherwise — including the prepared-merge directive.
 # Args: $1 = memory worktree path.
 gitlore_merge_stores() {
-  local mempath="$1" tier tierpath
+  local mempath="$1"
 
-  gitlore_guard_stale_merge_state "$mempath" || return 1
+  gitlore_guard_every_store "$mempath" || return 1
+  gitlore_refuse_dirty_tiers "$mempath" || return 1
+  gitlore_take_tiers "$mempath" || return 1
 
-  # Root FIRST, the mirror of the publish order (D49). Taking goes top-down
-  # because the root commit arriving from upstream already records the tier
-  # commits it names, all of them on the tier's own remote: taking it costs
-  # nothing and leaves each tier merely behind. Tiers-first inverts that — the
-  # tier take writes a bookkeeping commit of its own, which meets the upstream
-  # root's equivalent commit as a DIVERGENCE and spends a synthesis on two
-  # sides that recorded the same fast-forward. Publishing keeps the opposite
-  # order for the opposite reason: a pointer must never go out ahead of what it
-  # points at.
+  gitlore_reconcile_one "$mempath" memory || return 1
   gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
 
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    tierpath="$mempath/$tier"
-    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
-    [ -e "$tierpath/.git" ] || continue
-    gitlore_guard_stale_merge_state "$tierpath" || return 1
-    gitlore_merge_one_store "$mempath" "$tierpath" "$tier" || return 1
-  done < <(gitlore_tier_paths "$mempath")
-
-  return 0
+  # After root's own take, so what it writes sits on top of whatever upstream
+  # root already recorded instead of meeting it as a divergence.
+  gitlore_compose_moved_tiers "$mempath"
 }
 
-# One store's reconcile. Args: $1 = memory worktree, $2 = store worktree,
-# $3 = tier name ("" when the store IS the memory root, which adopts nothing —
-# its own MEMORY.md moves with the fast-forward).
+# Every mounted tier's reconcile and take, in order, the part of a take that
+# precedes root's reconcile. Stops at the first store that yields or refuses.
+# Args: $1 = memory worktree path.
+gitlore_take_tiers() {
+  local mempath="$1" tier
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
+    [ -e "$mempath/$tier/.git" ] || continue
+    gitlore_take_tier "$mempath" "$tier" || return 1
+  done < <(gitlore_tier_paths "$mempath")
+}
+
+# One tier's reconcile, take and carrier repair. A tier inside a push is taken
+# only when it holds something to take: the publish that follows owns the reports
+# for a tier with no remote, a failed fetch and a remote with no `live`.
+# Args: $1 = memory worktree path, $2 = tier name.
+gitlore_take_tier() {
+  local mempath="$1" tier="$2" tierpath="$1/$2"
+  gitlore_reconcile_one "$tierpath" "tier '$tier'" || return 1
+  if [ -z "${GITLORE_TAKE_IN_PUSH:-}" ] || gitlore_tier_has_arrivals "$tierpath"; then
+    gitlore_merge_one_store "$mempath" "$tierpath" "$tier" || return 1
+  fi
+  gitlore_repair_moved_carrier "$mempath" "$tier"
+}
+
+# True when a tier's local `live` or its remote's holds commits its HEAD does not.
+# Args: $1 = tier worktree.
+gitlore_tier_has_arrivals() {
+  local tierpath="$1" remote
+  if gitlore_live_ahead_of_head "$tierpath"; then return 0; fi
+  # Redirected because failure is an answer here, and the publish that follows
+  # reports the same remote in its own words.
+  git -C "$tierpath" fetch -q --no-recurse-submodules origin live >/dev/null 2>&1 || return 1
+  remote=$(git -C "$tierpath" rev-parse -q --verify refs/remotes/origin/live) || return 1
+  ! git -C "$tierpath" merge-base --is-ancestor "$remote" HEAD
+}
+
+# Answer a half-finished merge in any store before a take or a publish moves one.
+# Args: $1 = memory worktree path.
+gitlore_guard_every_store() {
+  local mempath="$1" store
+  while IFS= read -r store; do
+    gitlore_guard_stale_merge_state "$store" || return 1
+  done < <(gitlore_memory_stores "$mempath")
+}
+
+# Refuse a take while any mounted tier has uncommitted changes, naming each.
+# Args: $1 = memory worktree path. Returns 1 after emitting.
+gitlore_refuse_dirty_tiers() {
+  local mempath="$1" tier refused=0
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -e "$mempath/$tier/.git" ] || continue
+    [ "$(gitlore_memory_dirty "$mempath/$tier")" = "1" ] || continue
+    refused=1
+    gitlore_say_for_agent_or_user \
+      "gitlore: tier '$tier' has uncommitted changes, so nothing was taken. Commit them (approved summary, then a memory commit) and run /gitlore:merge again." \
+      "gitlore: tier '$tier' has uncommitted changes, so nothing was taken. Commit them and merge again." >&2
+  done < <(gitlore_tier_paths "$mempath")
+  [ "$refused" -eq 0 ]
+}
+
+# Print 1 when a store holds uncommitted work a take must not move over, 0
+# otherwise. For the memory root that leaves out every tier gitlink: tiers move
+# first by design, and the root merge records their HEADs through the prepare.
+# Args: $1 = store worktree, $2 = tier name ("" = the memory root).
+gitlore_store_dirty_for_take() {
+  local store="$1" tier="$2"
+  if [ -n "$tier" ]; then
+    gitlore_memory_dirty "$store"
+  elif [ -z "$(git -C "$store" status --porcelain --ignore-submodules=all)" ]; then
+    printf '0\n'
+  else
+    printf '1\n'
+  fi
+}
+
+# One store's take. Args: $1 = memory worktree, $2 = store worktree,
+# $3 = tier name ("" when the store IS the memory root).
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
   local label remote_url fetched=0 fetch_err="" remote="" live head adopt_rc=0
-  local live_ahead_dirty=0 n unit ff_err root_dirty_before
+  local live_ahead_dirty=0 n unit ff_err
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
   remote_url=$(git -C "$store" config --get remote.origin.url || true)
   if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
     remote_url=""
-  elif fetch_err=$(git -C "$store" fetch -q origin live 2>&1); then
+  elif fetch_err=$(git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
     fetched=1
     # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
     remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || remote=""
@@ -99,7 +167,7 @@ gitlore_merge_one_store() {
   # claim a store finished that is not.
   live_ahead_dirty=0
   if [ -z "$tier" ] && gitlore_live_ahead_of_head "$store"; then
-    if [ "$(gitlore_memory_dirty "$store")" = "1" ]; then
+    if [ "$(gitlore_store_dirty_for_take "$store" "")" = "1" ]; then
       n=$(git -C "$store" rev-list --count HEAD..live)
       if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
       printf 'gitlore: memory has uncommitted changes, so HEAD was not moved onto live (%s %s ahead) — commit memory, then run /gitlore:merge again.\n' "$n" "$unit"
@@ -160,7 +228,7 @@ $fetch_err" >&2
     return 0
   fi
 
-  if [ "$(gitlore_memory_dirty "$store")" = "1" ]; then
+  if [ "$(gitlore_store_dirty_for_take "$store" "$tier")" = "1" ]; then
     gitlore_say_for_agent_or_user \
       "gitlore: $label has uncommitted changes, so its remote was left untouched. Commit them (approved summary, then a memory commit) and run /gitlore:merge again." \
       "gitlore: $label has uncommitted changes, so its remote was left untouched. Commit them and merge again." >&2
@@ -169,18 +237,23 @@ $fetch_err" >&2
 
   if ! git -C "$store" merge-base --is-ancestor "$head" "$remote"; then
     # Diverged. Same preparation a refused push yields, marked not-to-publish so
-    # the continuation stops after the local `HEAD:live` fast-forward.
-    GITLORE_MERGE_NO_PUBLISH=1 gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || return 1
+    # the continuation stops after the local `HEAD:live` fast-forward. Only a tier
+    # inside a push keeps the publish: landing its merge sends the tier alone, and
+    # a tier may go out ahead of what records it.
+    if [ -n "$tier" ] && [ -n "${GITLORE_TAKE_IN_PUSH:-}" ]; then
+      gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || return 1
+    else
+      GITLORE_MERGE_NO_PUBLISH=1 gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || return 1
+    fi
     return 1
   fi
 
-  # Read before anything moves: what matters is whether the root store already
-  # held work the canned commit would sweep up. Asked of the paths OUTSIDE the
-  # pair — a root whose own take just landed shows the tier lagging its new
-  # gitlink, which is this pass's business rather than someone else's edit. Root
-  # `MEMORY.md` is inside the pair on purpose: the adoption below rewrites it
-  # whatever it held, so composition already owns that file (D31).
-  root_dirty_before=$(gitlore_root_dirty_beyond_pair "$mempath" "$tier")
+  # Root's own move carries gitlinks whose tiers were taken a moment ago. One no
+  # repository holds is refused here, since a fast-forward never reaches the
+  # prepare's check.
+  if [ -z "$tier" ]; then
+    gitlore_refuse_unresolvable_gitlinks "$mempath" "$remote" || return 1
+  fi
 
   # Fast-forward: advance the local `live` (created here when the store never had
   # one), then move the working tree onto it. `push .` is ff-checked, so a race
@@ -202,10 +275,6 @@ $ff_err" >&2
     return 1
   fi
   printf 'gitlore: %s — fast-forwarded to %s\n' "$label" "$(git -C "$store" rev-parse --short HEAD)"
-
-  # Adopt: the carrier that just arrived becomes root's block for this tier. The
-  # memory root adopts nothing — its own index is one of the files that moved.
-  gitlore_adopt_tier_into_root "$mempath" "$tier" "$root_dirty_before" "$head" || return 1
   return 0
 }
 
@@ -278,29 +347,15 @@ gitlore_live_ahead_of_head() {
   git -C "$store" merge-base --is-ancestor "$head" "$live"
 }
 
-# Reconcile every store's checked-out branch with its local `live`, before the
+# Reconcile one store's checked-out branch with its local `live`, before its
 # remote step (the take or the publish): fast-forward when HEAD is ahead of
 # `live`, a prepared head-vs-live merge for `/gitlore:resolve` when the two have
 # forked. A HEAD behind `live` is left to the take and the publish preflight,
 # which own that direction.
-# Returns 0 when every store agrees or was advanced, 1 after a merge was
-# prepared, after a diverged store was refused for uncommitted changes, or when
-# a store could not be advanced.
-# Args: $1 = memory worktree path.
-gitlore_reconcile_stores() {
-  local mempath="$1" tier tierpath
-  gitlore_reconcile_one "$mempath" memory || return 1
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    tierpath="$mempath/$tier"
-    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
-    [ -e "$tierpath/.git" ] || continue
-    gitlore_reconcile_one "$tierpath" "tier '$tier'" || return 1
-  done < <(gitlore_tier_paths "$mempath")
-  return 0
-}
-
-# One store's reconcile. Args: $1 = store worktree, $2 = label for messages.
+# Returns 0 when the store agrees or was advanced, 1 after a merge was prepared,
+# after a diverged store was refused for uncommitted changes, or when the store
+# could not be advanced.
+# Args: $1 = store worktree, $2 = label for messages.
 gitlore_reconcile_one() {
   local store="$1" label="$2" live head push_err
   # A merge left dead by hand is disposed of, or a prepared one continued, before
@@ -320,10 +375,10 @@ gitlore_reconcile_one() {
     diverged)
       # The continuation commits with `add -A`, so uncommitted edits would ride
       # into the merge commit unapproved: refused first, as the take refuses.
-      # A tier's own uncommitted edits do not ride the root merge, so in-tier
-      # dirt is ignored; a tier HEAD moved off the gitlink this store records
-      # would be staged by that `add -A`, so it counts, as untracked files do.
-      if [ -n "$(git -C "$store" status --porcelain --ignore-submodules=dirty)" ]; then
+      # A tier's own uncommitted edits do not ride the root merge, and a tier HEAD
+      # off the gitlink this store records is what the prepare stages on purpose,
+      # so tier paths do not count; untracked files do.
+      if [ -n "$(git -C "$store" status --porcelain --ignore-submodules=all)" ]; then
         gitlore_say_for_agent_or_user \
           "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them (approved summary, then a memory commit) and run /gitlore:merge or /gitlore:push again." \
           "gitlore: $label has uncommitted changes and its HEAD and local 'live' have diverged, so no merge was prepared. Commit them and try again." >&2

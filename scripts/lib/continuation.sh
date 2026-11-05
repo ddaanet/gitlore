@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # The continuation-after-merge functions dispatched by
-# `resolve.sh continue-after-merge`: load the prepared merge state, compose
-# and adopt it into the root index, rest a tier the root could not adopt,
-# and push-with-divergence-routing. Sourced by scripts/resolve.sh only; its
-# functions set that script's globals (mempath, memroot, statefile, flavor,
-# publish, merged_tier, tier_unadopted) and exit on its behalf.
+# `resolve.sh continue-after-merge`: load the prepared merge state, gate and
+# compose what is about to land, and push-with-divergence-routing. Sourced by
+# scripts/resolve.sh only; its functions set that script's globals (mempath,
+# memroot, statefile, flavor, publish) and exit on its behalf.
 # Part of scripts/resolve.sh; source that, not this file.
 #
-# File-wide: flavor, publish and tier_unadopted are read by scripts/resolve.sh,
-# which shellcheck cannot see from here.
+# File-wide: flavor and publish are read by scripts/resolve.sh, which shellcheck
+# cannot see from here.
 # shellcheck disable=SC2034
 
 # Load shared continuation state: require an installed submodule and exactly one
@@ -52,41 +51,25 @@ load_continuation_state() {
   publish=$(jq -r '.publish // ""' "$statefile")
 }
 
-# Adopt a merged tier into the root index: project the merged carrier UP, so
-# root's block for that tier becomes what the merge produced.
+# Gate and stage what a landing merge commits.
 #
-# This is the step that makes a tier merge reach the surface CC recalls from. A
-# tier is pinned at its gitlink and composition projects the ROOT down, so
-# nothing else would ever move the merged lines into root — the in-session pass
-# would read them as carrier lines root chose not to carry, keep them where they
-# are, and report them. The adoption is also the one moment a carrier outranks
-# root's text: it is the artifact the user just approved, line by line.
+# A tier merge composes nothing: its carrier is checked on its own, and the end of
+# the gitlore-merge or push run that follows writes root and records the tier. A
+# carrier failing its own check is not landed (D52).
 #
-# Once, here, and in this direction only. Projecting down would write a carrier
-# the user never reviewed as a side effect of approving this merge.
+# A memory-store merge runs the pass, with no tier named: root's own `MEMORY.md`
+# is one of the files git merged, so the propagation is already in the merged
+# content, while the merge produced whatever order the two sides implied, and the
+# layout, the four validations and the dangling report all still have something
+# to say about it.
 #
-# A memory-store merge adopts nothing: root's own `MEMORY.md` is one of the files
-# git merged, so the propagation is already in the merged content. The pass still
-# runs, with no tier named — the merge produced whatever order the two sides
-# implied, and the layout, the four validations and the dangling report all still
-# have something to say about it.
-#
-# A refusal blocks the merge only when it targets the index the merge is about
-# to publish: a problem gitlore_compose_check attributes to the merged carrier
-# (tier merge) or to root's own MEMORY.md under rules 1, 4 and 6 (memory-root
-# merge) means that text fails its own check, so nothing is staged and the
-# merge stays prepared for a new synthesis. Every other refusal still lands:
-# compose is fail-safe (it writes nothing), and the merge is synthesized and
-# approved by this point — stranding it half-landed over a problem elsewhere in
-# the store is the worse outcome. Report, then commit what the merger produced.
-# A tier the root could not adopt is the one case the report is not the whole
-# answer: the root must then record nothing of the merge, so this sets
-# `tier_unadopted` and stages nothing in the root.
-# Sets two variables for the caller. `merged_tier`: the store's path relative to
-# the memory root, or empty when the merge is memory's own; the continuation
-# needs it after the commit to stage the moved gitlink, and this is where it is
-# already derived. `tier_unadopted`: 1 when a tier merge's up projection failed,
-# after emitting, and empty otherwise.
+# A refusal blocks a memory merge only when it targets the index the merge is about
+# to publish: a problem gitlore_compose_check attributes to root's own MEMORY.md
+# under rules 1, 4 and 6 means that text fails its own check, so nothing is staged
+# and the merge stays prepared for a new synthesis. Every other refusal still
+# lands: compose is fail-safe (it writes nothing), and the merge is synthesized and
+# approved by this point — stranding it half-landed over a problem elsewhere in the
+# store is the worse outcome. Report, then commit what the merger produced.
 # EXITS 1, before composing or staging anything, in two cases, each with the
 # merge state kept for a new synthesis: a file the merge changed still holds
 # conflict markers (refuse_leftover_conflict_markers), and the merged index fails
@@ -96,40 +79,41 @@ load_continuation_state() {
 # Returns 0 otherwise. A failed staging command aborts the continuation under
 # errexit, before the merge commit, which keeps the merge state for a rerun —
 # with git's own text on stderr and no `gitlore:` line of its own. The caller
-# calls it bare: an `||` on the call would suspend errexit across the whole
-# body, and a failed `add` would then read as a tier the root could not adopt.
+# calls it bare, because an `||` on the call would suspend errexit across the
+# whole body.
 # Args: $1 = memory root worktree path, $2 = the store being committed.
 compose_merged_indexes() {
-  local memroot="$1" store="$2" memroot_abs composed dangling merged_index index_problems rc=0
-  merged_tier=""
-  tier_unadopted=""
+  local memroot="$1" store="$2" memroot_abs merged_tier="" composed dangling index_problems rc=0
   # First, ahead of the compose write and of every `add -A` below: the scan reads
   # the working tree those calls stage, and a refusal must leave root's index as
   # it was.
   refuse_leftover_conflict_markers "$store"
   # The state file records an absolute store path while `memroot` is the
   # submodule path as `.gitmodules` spells it, so the two are compared in one
-  # form. `-ef` rather than string equality: this decides whether a tier is
-  # adopted at all, and a path spelled two ways would adopt a tier named after
-  # the memory root itself.
+  # form. `-ef` rather than string equality: this decides whether the merge is a
+  # tier's at all, and a path spelled two ways would read the memory root as a
+  # tier named after itself.
   memroot_abs=$(CDPATH='' cd -- "$memroot" && pwd) || memroot_abs="$memroot"
   if ! [ "$store" -ef "$memroot" ]; then
     merged_tier=${store#"$memroot_abs"/}
     if [ "$merged_tier" = "$store" ]; then
-      merged_tier=""
       echo "gitlore: the merged store $store is not inside the memory root $memroot_abs; the root index was left uncomposed." >&2
       gitlore_git -C "$store" add -A
       return 0
     fi
   fi
 
-  composed=$(gitlore_compose_up "$memroot" "$merged_tier") || rc=$?
   index_problems=""
-  if [ "$rc" -eq 1 ]; then
-    merged_index="$memroot/MEMORY.md"
-    [ -n "$merged_tier" ] && merged_index="$memroot/$merged_tier/MEMORY.md"
-    index_problems=$(gitlore_compose_problems_in "$merged_index" <<<"$composed") \
-      || index_problems=""
+  if [ -n "$merged_tier" ]; then
+    if [ -f "$memroot/$merged_tier/MEMORY.md" ]; then
+      index_problems=$(gitlore_compose_check_index "$memroot/$merged_tier/MEMORY.md")
+    fi
+  else
+    composed=$(gitlore_compose_up "$memroot" "") || rc=$?
+    if [ "$rc" -eq 1 ]; then
+      index_problems=$(gitlore_compose_problems_in "$memroot/MEMORY.md" <<<"$composed") \
+        || index_problems=""
+    fi
   fi
   # What the gate just read, into the merge state, on every run of it — the
   # empty answer included. The lines below reach only whoever ran this
@@ -144,6 +128,10 @@ compose_merged_indexes() {
     printf '%s\n' "$index_problems" | sed 's/^/gitlore:   /' >&2
     exit 1
   fi
+  if [ -n "$merged_tier" ]; then
+    gitlore_git -C "$store" add -A
+    return 0
+  fi
   if [ "$rc" -eq 0 ]; then
     [ -n "$composed" ] && printf '%s\n' "$composed" | sed 's/^/gitlore: /' >&2
     # The dangling pass reports rather than refuses, so it runs on the composed
@@ -153,15 +141,6 @@ compose_merged_indexes() {
       echo "gitlore: these index lines name files that are not there. Nothing was rewritten or deleted:" >&2
       printf '%s\n' "$dangling" | sed 's/^/gitlore:   /' >&2
     fi
-  elif [ -n "$merged_tier" ]; then
-    # A tier the root index could not adopt: the merge still lands, but the root
-    # records none of it — see rest_unadopted_tier for why, and for the remedy
-    # printed once the merge has landed.
-    echo "gitlore: the root index could not take tier '$merged_tier''s lines — the merge is being committed in the tier, and the memory store will record none of it:" >&2
-    printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
-    gitlore_git -C "$store" add -A
-    tier_unadopted=1
-    return 0
   elif [ "$rc" -eq 2 ]; then
     echo "gitlore: the root index could not be written — the merge is being committed uncomposed. Investigate the path named below, then edit MEMORY.md to retrigger composition:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
@@ -169,12 +148,8 @@ compose_merged_indexes() {
     echo "gitlore: tier composition refused — the merge is being committed uncomposed. Fix the store by hand, then edit MEMORY.md to retrigger it:" >&2
     printf '%s\n' "$composed" | sed 's/^/gitlore:   /' >&2
   fi
-  # The merger already ran `git add -A` in the store being committed; re-running
-  # it is how anything written there joins the same commit. Then the root index,
-  # which for a tier merge lives in a DIFFERENT store: staging it there is what
-  # puts it in the next FR11 commit rather than leaving it as an unexplained
-  # working-tree change. For a memory merge the two calls are the same repo, and
-  # the second is what stages the compose write the first ran too early to see.
+  # The merger already ran `git add -A` in this store; re-running it is what stages
+  # the compose write it ran too early to see.
   gitlore_git -C "$store" add -A
   # A store with no root index — migrated from an auto-memory dir that held no
   # MEMORY.md, or one whose index was deleted by hand — has nothing to stage;
@@ -183,9 +158,7 @@ compose_merged_indexes() {
   # the merge must not be blocked on it. Say so: nothing composes up into a
   # root index that does not exist, and that is the store's defect, not the
   # merge's.
-  if [ -f "$memroot/MEMORY.md" ]; then
-    gitlore_git -C "$memroot" add -- MEMORY.md
-  else
+  if [ ! -f "$memroot/MEMORY.md" ]; then
     echo "gitlore: the memory root $memroot_abs has no MEMORY.md, so no tier lines can compose into it. The merge is committed regardless; create the root index (\`# Memory Index\`) and edit it to trigger composition." >&2
   fi
 }
@@ -230,70 +203,11 @@ refuse_leftover_conflict_markers() {
   exit 1
 }
 
-# Rest a landed tier merge the root index could not adopt: the tier back on the
-# commit the memory store records, the merge kept in its local `live`.
-#
-# The same resting state a failed take leaves (gitlore_adopt_tier_into_root),
-# for the same reasons. Staging the moved gitlink alone puts the tier on its pin
-# while root still holds the older block, so the next compose writes that older
-# text over the merged carrier and reports success (D50). Leaving the tier on
-# the merge commit ahead of an unstaged pin has the pin guard refuse every
-# memory commit. On the pin with `live` ahead is the shape
-# gitlore_adopt_advanced_live adopts, so fixing the store and running the take
-# retries the adoption. The checkout loses nothing: the merge commit holds
-# everything the merger staged, and the up projection writes no carrier.
-#
-# Only onto a pin the merge contains. A pin off to the side is not this merge's
-# base, and checking it out would put the tier on history the merge never built
-# on; the tier stays on the merge, and the pin guard names that case's remedy.
-#
-# Only when the tier's local `live` already holds the merge. A refused local
-# `HEAD:live` push reaches here with `live` still short of HEAD; checking out
-# the pin then would strand the merge reachable only through the reflog, so
-# this leaves the tier on the merge commit instead and prints the two commands
-# that push `live` up to it and then repeat this rest by hand. The second one
-# re-asks the same ancestry question, so run after a push refused again it
-# leaves the tier where it is.
-#
-# Exit status stays the caller's either way: the merge landed, which is what
-# the continuation reports, and the next take or resolve run fails on this
-# state with the remedy printed here.
-# Args: $1 = memory root worktree path, $2 = tier name.
-rest_unadopted_tier() {
-  local memroot="$1" tier="$2" tierpath pin merged err abs
-  tierpath="$memroot/$tier"
-  abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
-  merged=$(git -C "$tierpath" rev-parse HEAD)
-  # `-q --verify` on both reads: no gitlink in the index at all, or a pin that is
-  # no object in this tier's database, are the expected misses, and each means
-  # the pin is not an ancestor.
-  if ! pin=$(git -C "$memroot" rev-parse -q --verify ":$tier") \
-     || ! git -C "$tierpath" rev-parse -q --verify "${pin}^{commit}" >/dev/null \
-     || ! git -C "$tierpath" merge-base --is-ancestor "$pin" "$merged"; then
-    echo "gitlore: tier '$tier' stays on the merge commit: the commit the memory store records for it is not one the merge contains. The next memory commit refuses that pin and names the remedy." >&2
-    return 0
-  fi
-  if ! git -C "$tierpath" rev-parse -q --verify live >/dev/null \
-     || ! git -C "$tierpath" merge-base --is-ancestor HEAD live; then
-    printf 'gitlore: tier '\''%s'\'' stays on the merge commit because its local '\''live'\'' does not hold it. Run:\ngitlore:   git -C "%s" push . HEAD:live\ngitlore:   git -C "%s" merge-base --is-ancestor HEAD live && git -C "%s" checkout --detach %s\ngitlore: then fix the problems listed above and run /gitlore:merge.\n' \
-      "$tier" "$abs" "$abs" "$abs" "$pin" >&2
-    return 0
-  fi
-  if ! err=$(gitlore_git -C "$tierpath" checkout -q --detach "$pin" 2>&1); then
-    # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
-    printf 'gitlore: tier '\''%s'\'' could not be returned to the commit the memory store records. git said:\n%s\ngitlore: run `git -C "%s" checkout --detach %s`, fix the store, then run /gitlore:merge to adopt the merge into the root index.\n' \
-      "$tier" "$err" "$abs" "$pin" >&2
-    return 0
-  fi
-  echo "gitlore: tier '$tier' is back on the commit the memory store records; its local 'live' keeps the merge. Fix the store, then run /gitlore:merge to adopt the merge into the root index." >&2
-}
-
 # Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on
 # success; returns 1 when git's parenthesized reason says the ref diverged,
 # which is the caller's cue to prepare a merge; reports git's own explanation
 # and returns 2 on any other refusal — a protected branch, a pre-receive
-# decline, a bad credential, a full quota. Never exits, so a caller holding a
-# landed tier merge can rest that tier before it exits on a status-2 refusal.
+# decline, a bad credential, a full quota. Never exits.
 #
 # The same discriminator `pre-push` and `gitlore_sync_memory_to_live` apply, and
 # for the same reason: only divergence is something a merge can fix. Without it

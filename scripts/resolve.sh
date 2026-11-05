@@ -33,16 +33,6 @@ if [ $# -ge 1 ]; then
       # Compose before committing, so what lands is composed: a merge is the one
       # write path into a memory store that no compose trigger sees.
       compose_merged_indexes "$memroot" "$mempath"
-      # Is the ROOT store carrying unapproved work this merge's bookkeeping
-      # would sweep up? Asked of the paths OUTSIDE the pair: the preparation has
-      # already moved the tier, so the root is dirty by construction here and a
-      # plain dirty reading would refuse every tier merge. Only meaningful for a
-      # tier merge — for a memory merge the store being committed IS the root.
-      if [ -n "$merged_tier" ]; then
-        root_dirty_before=$(gitlore_root_dirty_beyond_pair "$memroot" "$merged_tier")
-      else
-        root_dirty_before=1
-      fi
       # Commit the merge. The authority is HEAD, so it is the first parent (D6),
       # and the message is canned rather than git's MERGE_MSG: a merge whose two
       # sides both passed an approval gate needs no prompt, and the subject that
@@ -71,26 +61,6 @@ if [ $# -ge 1 ]; then
           exit 1
         }
       rm -f "$merge_msgfile"
-      # Stage the gitlink the commit above just moved — after it, because the
-      # merge commit does not exist until then and an earlier `add` would pin
-      # the pre-merge authority. Not cosmetic: `submodule update` checks a tier
-      # out at the sha the superproject's INDEX holds, so a gitlink left in the
-      # working tree alone is walked back to the pre-merge commit by the next
-      # SessionStart tier pass — silently, while the recomposed root index
-      # survives to describe facts the tier no longer carries. Staged, the
-      # unconditional pin is idempotent rather than destructive.
-      if [ -n "$merged_tier" ] && [ -z "$tier_unadopted" ]; then
-        # Read the pointer the root still records — the commit the tier sat at
-        # before this merge — for the bookkeeping body, before the `add` moves
-        # it in the index and the commit moves it in HEAD.
-        old_gitlink=$(git -C "$memroot" rev-parse "HEAD:$merged_tier") || old_gitlink=""
-        gitlore_git -C "$memroot" add -- "$merged_tier" \
-          || echo "gitlore: the merge landed, but $merged_tier's moved pointer could not be staged in the memory store. Stage it before the next session, or the tier will be reset to its pre-merge commit." >&2
-        # And record the pair, so a merge the user asked for leaves a clean
-        # store rather than dirt the next FR11 episode has to explain (D49).
-        [ -z "$old_gitlink" ] \
-          || gitlore_commit_tier_bookkeeping "$memroot" "$merged_tier" "$root_dirty_before" "$old_gitlink"
-      fi
       gitlore_clear_merge_state "$mempath"
       gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
       # Restore the invariant: fast-forward local `live` onto the merge commit,
@@ -102,32 +72,25 @@ if [ $# -ge 1 ]; then
         gitlore_yield_merge "$mempath" live head-vs-live HEAD || exit 1
         exit 1
       elif [ "$rc" -eq 2 ]; then
-        [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
         exit 1
       fi
       # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
       # gate leaves it empty, because a merge a refused push prepared exists to
       # let that push through.
-      # A yield above leaves a fresh merge prepared at the tier's HEAD, whose
-      # continuation retries the adoption; only a merge that has fully landed
-      # rests the tier.
       if [ "$publish" = "no" ]; then
         echo "gitlore: merged without publishing, as /gitlore:merge asks. Run /gitlore:push when you want these facts on the remote." >&2
-        [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
         exit 0
       fi
       if [ "$flavor" = "head-vs-remote" ]; then
         rc=0; push_or_report "$mempath" origin live || rc=$?
         if [ "$rc" -eq 1 ]; then
-          gitlore_git -C "$mempath" fetch -q origin live || true
+          gitlore_git -C "$mempath" fetch -q --no-recurse-submodules origin live || true
           gitlore_yield_merge "$mempath" origin/live head-vs-remote live || exit 1
           exit 1
         elif [ "$rc" -eq 2 ]; then
-          [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
           exit 1
         fi
       fi
-      [ -z "$tier_unadopted" ] || rest_unadopted_tier "$memroot" "$merged_tier"
       exit 0
       ;;
     *)
@@ -190,7 +153,7 @@ check_store_gates() {
   # the line; finding out beforehand would cost every resolve run a round trip
   # per tier.
   local store="$1" tier="${2-}" first_publish="${3-}" rc
-  [ -n "$first_publish" ] || gitlore_git -C "$store" fetch -q origin live || true
+  [ -n "$first_publish" ] || gitlore_git -C "$store" fetch -q --no-recurse-submodules origin live || true
   rc=0; push_or_report "$store" . HEAD:live || rc=$?
   if [ "$rc" -eq 2 ]; then
     exit 1

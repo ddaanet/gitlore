@@ -161,9 +161,9 @@ gitlore_index_has_tier() {
 # file, a registered tier with no checkout among them, always is: nothing else
 # holds its lines. With a carrier, two cases read it instead:
 #
-#   - $2 names the tier. An explicit adoption (gitlore_compose_up), run once when
-#     a merge lands a carrier the user has approved: there the carrier is the
-#     reviewed artifact and its text wins over whatever root still holds.
+#   - $2 lists the tier, one per line. An explicit adoption (gitlore_compose_up),
+#     run once when a take lands carriers the user has approved: there the carrier
+#     is the reviewed artifact and its text wins over whatever root still holds.
 #   - root carries no line at all for an active tier. That is what a freshly
 #     mounted or freshly activated tier looks like, and root has no opinion about
 #     it yet, so it takes the carrier's — the augmentation a mount owes the
@@ -182,7 +182,7 @@ gitlore_compose_root_bullets() {
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     if [ -f "$mempath/$tier/MEMORY.md" ] \
-       && { [ "$tier" = "$adopt" ] || ! gitlore_index_has_tier "$root" "$tier"; }; then
+       && { gitlore_line_listed "$tier" "$adopt" || ! gitlore_index_has_tier "$root" "$tier"; }; then
       while IFS= read -r line || [ -n "$line" ]; do
         [ -n "$line" ] || continue
         gitlore_bullet_reprefix "$line" "$tier" || continue
@@ -204,11 +204,11 @@ EOF
   done < <(gitlore_index_part "$root" bullets)
 }
 
-# Project tier $2's carrier UP into the root index and write it: root's block for
-# that tier becomes the carrier's lines, prefixed, and every other line stays
-# exactly where it is. This is the adoption step of a merge — the only moment a
-# carrier is authoritative over root's text, because it is the artifact the user
-# just approved.
+# Project the carriers of the tiers $2 lists, one per line, UP into the root index
+# and write it once: root's block for each becomes its carrier's lines, prefixed,
+# and every other line stays exactly where it is. This is the adoption step of a
+# take — the only moment a carrier is authoritative over root's text, because it
+# is the artifact the user just approved.
 #
 # Writes no carrier, so a merge in one store never propagates into another the
 # user did not review. Same three return codes as gitlore_compose.
@@ -226,6 +226,14 @@ gitlore_compose_up() {
   fi
   [ -n "$out" ] && printf '%s\n' "$out"
   return 0
+}
+
+# True when line $1 is one of the lines of $2. A tier path holds no newline.
+gitlore_line_listed() {
+  case $'\n'"$2"$'\n' in
+    *$'\n'"$1"$'\n'*) return 0 ;;
+  esac
+  return 1
 }
 
 # Print one report line per ACTIVE tier carrier path that the composed root index

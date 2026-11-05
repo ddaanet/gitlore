@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
-# The merge continuation's own staging, adoption and message-build failure
-# paths — split out of resolve_compose.bats.
+# The merge continuation's own staging and message-build failure paths, and the
+# take that records a landed tier merge — split out of resolve_compose.bats.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
@@ -16,12 +16,11 @@ load helpers/divergence-fixtures
 load helpers/stub-synth
 load helpers/resolve-compose
 
-@test "a tier merge the root index cannot adopt lands, records nothing in the root, and is adopted by the next take" {
+@test "a landed tier merge the root index refuses at the next take records nothing, and the fixed store's take does" {
   # Staging the moved gitlink without the up projection puts the tier on its pin
   # while root still holds the older block, so the next compose writes that
-  # older text over the merged carrier and reports success. The merge itself
-  # still lands; the root records nothing, and the tier rests on its pin with
-  # the merge in `live`, the shape the next take adopts.
+  # older text over the merged carrier and reports success. The end compose
+  # therefore records nothing while it is refused, and the tier stays on the merge.
   prepare_tier_merge_with_new_lines
   pin=$(git -C memory rev-parse :ddaanet)
   mem_before=$(git -C memory rev-parse HEAD)
@@ -30,24 +29,22 @@ load helpers/resolve-compose
 
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  # Held across the `run`s below: bats >= 1.13 unsets `$stderr` on a merged
-  # one, so a later assertion reads an unbound variable, not this capture.
-  err="$stderr"
-  [[ "$err" == *"gone/x.md"* ]]
   # The merge landed and was published...
   merged=$(git -C memory/ddaanet rev-parse live)
   [ "$(git -C memory/ddaanet rev-list --count --merges "$merged" -1)" = "1" ]
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$merged" ]
   [ ! -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
+
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"gone/x.md"* ]]
+  [[ "$stderr" == *"/gitlore:merge"* ]]
   # ...the root recorded nothing: no gitlink staged, no bookkeeping commit...
   [ "$(git -C memory rev-parse :ddaanet)" = "$pin" ]
   [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
   run ! grep -qF 'ddaanet/t.md' memory/MEMORY.md
-  # ...and the tier is back on its pin, so no compose can project over it.
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
-  # Editing MEMORY.md retriggers nothing that adopts a tier; the take does.
-  [[ "$err" == *"/gitlore:merge"* ]]
-  [[ "$err" != *"edit MEMORY.md"* ]]
+  # ...and the tier stays on the merge.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
 
   # The printed remedy: fix the store, take again.
   sed -i.bak '/gone\/x\.md/d' memory/MEMORY.md
@@ -59,47 +56,30 @@ load helpers/resolve-compose
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
 }
 
-@test "an unadopted tier merge landed by /gitlore:merge also rests the tier on its pin" {
-  # The `publish: no` exit is the continuation's second exit 0.
-  prepare_tier_merge_with_new_lines "$PLUGIN_ROOT/scripts/merge-memory.sh"
-  pin=$(git -C memory rev-parse :ddaanet)
-  remote_before=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
-  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
-
-  run --separate-stderr bash "$RESOLVE" continue-after-merge
-  [ "$status" -eq 0 ]
-  [[ "$stderr" == *"merged without publishing"* ]]
-  [ "$(git -C memory rev-parse :ddaanet)" = "$pin" ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
-  [ "$(git -C memory/ddaanet rev-list --count --merges live -1)" = "1" ]
-  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$remote_before" ]
-}
-
-@test "an unadopted tier merge whose pin the merge does not contain stays on the merge and says so" {
-  # Returning the tier to a pin that is not an ancestor of the merge would put
-  # it on a commit the merge never built on. It stays put; the pin guard at the
-  # next memory commit is what names the remedy, and this run says as much.
+@test "a tier whose pin its landed merge does not contain is reported and not recorded by the next take" {
+  # Recording it would move the pin off a commit the merge never built on. It
+  # stays put; the pin guard at the next memory commit names the remedy.
   prepare_tier_merge_with_new_lines
   sideways=$(git -C memory/ddaanet commit-tree -m sideways "$(git -C memory/ddaanet write-tree)")
   git -C memory update-index --cacheinfo "160000,$sideways,ddaanet"
-  seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
-
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
   merged=$(git -C memory/ddaanet rev-parse live)
+
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"
+  [ "$status" -eq 0 ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
   [ "$(git -C memory rev-parse :ddaanet)" = "$sideways" ]
-  [[ "$stderr" == *"stays on the merge"* ]]
+  [[ "$stderr" == *"tier 'ddaanet' sits at"*"nothing was recorded for it"* ]]
 }
 
 @test "a staging failure in the continuation aborts before the commit, and a rerun lands the merge" {
-  # A memory index.lock that outlasts gitlore_git's retries fails the root
-  # index's staging after an adopted up projection. The continuation stops
-  # there, before the merge commit, and keeps the merge state; it does not
-  # read the failure as a tier the root could not adopt.
+  # An index.lock in the merged store that outlasts gitlore_git's retries fails
+  # the continuation's `add -A`. The continuation stops there, before the merge
+  # commit, and keeps the merge state.
   prepare_tier_merge_with_new_lines
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)
-  lock="$(git -C memory rev-parse --absolute-git-dir)/index.lock"
+  lock="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/index.lock"
   : > "$lock"
   # Exported, not a prefix on `run`, and not empty: `${…:-default}` turns an
   # empty value into the default schedule of several seconds.
@@ -109,18 +89,17 @@ load helpers/resolve-compose
   rm -f "$lock"
   [ "$status" -ne 0 ]
   [[ "$stderr" == *"index.lock"* ]]
-  [[ "$stderr" != *"could not take tier"* ]]
   # HEAD rather than MERGE_HEAD: "no merge commit" is a statement about HEAD,
   # and the abort comes before `commit`, so the tier still sits on the commit
   # the preparation left it on.
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
   [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
 
-  # With the lock gone, rerunning the continuation lands and adopts the merge.
+  # With the lock gone, rerunning the continuation lands the merge.
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
-  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+  [ "$(git -C memory/ddaanet rev-list --count --merges HEAD -1)" = "1" ]
+  [ ! -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
 }
 
 @test "a refused merge commit leaves no message file behind and keeps the merge for a rerun" {
@@ -147,16 +126,15 @@ load helpers/resolve-compose
   [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
   [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
   git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
-  # The synthesis the merger staged survives a refused commit, in both stores:
+  # The synthesis the merger staged survives a refused commit:
   # `commit` leaves the index alone when a hook declines it, so the rerun below
   # lands the same content rather than a recomposed approximation of it.
   [ -n "$(git -C memory/ddaanet diff --cached --name-only -- MEMORY.md)" ]
-  [ -n "$(git -C memory diff --cached --name-only -- MEMORY.md)" ]
 
   rm -f "$hook"
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+  git -C memory/ddaanet show HEAD:MEMORY.md | grep -qxF -- '- [their fact](t.md) — theirs'
 }
 
 @test "a message build failure leaves no message file behind and keeps the merge prepared" {
@@ -194,7 +172,6 @@ EOF
   git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
   [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
   [ -n "$(git -C memory/ddaanet diff --cached --name-only -- MEMORY.md)" ]
-  [ -n "$(git -C memory diff --cached --name-only -- MEMORY.md)" ]
   [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
   [[ "$stderr" == *"gitlore: the merge message could not be built, so the merge was not committed; the merge stays prepared."* ]]
   # The build arm, not the refused-commit arm, which the run never reaches.
@@ -209,7 +186,7 @@ EOF
   rm -f "$fakebin/git"
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+  git -C memory/ddaanet show HEAD:MEMORY.md | grep -qxF -- '- [their fact](t.md) — theirs'
 }
 
 @test "a failed mktemp for the merge message file leaves the merge prepared" {
@@ -250,7 +227,6 @@ EOF
   git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
   [ -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
   [ -n "$(git -C memory/ddaanet diff --cached --name-only -- MEMORY.md)" ]
-  [ -n "$(git -C memory diff --cached --name-only -- MEMORY.md)" ]
   [ -z "$(find "$TMPDIR" -name 'gitlore-merge-msg.*' -print -quit)" ]
   [[ "$stderr" == *"gitlore: the merge message file could not be created, so the merge was not committed; the merge stays prepared."* ]]
   # Order, checked as one glob so a missing line fails on its own assertion
@@ -265,5 +241,5 @@ EOF
   rm -f "$fakebin/mktemp"
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+  git -C memory/ddaanet show HEAD:MEMORY.md | grep -qxF -- '- [their fact](t.md) — theirs'
 }

@@ -108,7 +108,9 @@ exec "$real_git" "\$@"
 EOF
   chmod +x "$fakebin/git"
 
-  PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
+  # Through pre-push: push-memory.sh takes every tier before its loop, so a
+  # take runs mid-loop only from the hook.
+  PATH="$fakebin:$PATH" run --separate-stderr bash "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 
   # Everything the wording rests on, asserted first: the push failed; `aa`'s
   # push of P, `bb`'s refused push, then the pass's push of `aa` is the one
@@ -158,7 +160,8 @@ HOOK
   : > "$ledger"
   decline_tier_pushes_after_first aa "$ledger"
 
-  run --separate-stderr bash "$CMD"
+  # Through pre-push, for the reason the test above gives.
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/git-hooks/pre-push"
 
   # Everything the wording rests on, asserted first: the push failed; `bb`
   # took its remote's fact, the take that repaired `aa` on top of D; `aa`'s

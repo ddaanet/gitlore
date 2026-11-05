@@ -215,7 +215,7 @@ strand_live_behind_head() {
   [ -f memory/UNAPPROVED.md ]
 }
 
-@test "a diverged root whose only uncommitted edit is inside a tier is still reconciled" {
+@test "a diverged root whose only uncommitted edit is inside a tier is refused for the tier, before root is reconciled" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   base=$(git -C memory rev-parse HEAD)
@@ -230,15 +230,15 @@ strand_live_behind_head() {
     git add -A
     git commit -q -m "on HEAD only"
   )
-  # A tier edit rides no root merge: the root only sees a modified submodule.
+  # A take refuses a dirty tier before anything moves, root's reconcile included.
   printf 'tier edit\n' >> memory/ddaanet/MEMORY.md
   [ -n "$(git -C memory status --porcelain)" ]
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"memory merge prepared"* ]]
-  [[ "$output$stderr" != *"uncommitted changes"* ]]
-  [ -e "$(gitlore_merge_state_file memory)" ]
+  [[ "$output$stderr" == *"tier 'ddaanet' has uncommitted changes"* ]]
+  [[ "$output$stderr" != *"memory merge prepared"* ]]
+  [ ! -e "$(gitlore_merge_state_file memory)" ]
 }
 
 @test "leaves a store whose remote it is ahead of alone" {

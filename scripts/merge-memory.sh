@@ -55,20 +55,17 @@ if [ ! -e "$mempath/.git" ]; then
   exit 0
 fi
 
-# Each store's branch against its local `live` first: fast-forward, or a prepared
-# merge for /gitlore:resolve. A commit leaves those two free to part (D70), and
-# the take refuses a store whose HEAD and `live` have forked, so the reconcile
-# has to answer that before the take runs. A merge prepared here publishes
-# nothing once it lands (the take's own rule).
-GITLORE_MERGE_NO_PUBLISH=1 gitlore_reconcile_stores "$mempath"
-
-gitlore_merge_stores "$mempath"
+# Each store's branch is reconciled against its local `live` right before its
+# take, tiers first and memory last: a commit leaves those two free to part (D70),
+# and the take refuses a store whose HEAD and `live` have forked. A merge prepared
+# here publishes nothing once it lands (the take's own rule).
+GITLORE_MERGE_NO_PUBLISH=1 gitlore_merge_stores "$mempath"
 
 # Reached only on success: gitlore_merge_stores returns non-zero on every failure
 # and on a prepared merge, and `set -e` stops us above.
 #
 # A take commits its own bookkeeping (D49), so a dirty store here is the
-# degraded path — the root held unapproved work, and the pair was staged
+# degraded path — the root held unapproved work, and the moved tiers were staged
 # instead. Say so rather than leaving the user to discover it.
 if [ "$(gitlore_memory_dirty "$mempath")" = "1" ]; then
   printf 'gitlore: the memory store has uncommitted changes. Anything this take staged rides the next memory commit (approved summary), and reaches the remote on the next /gitlore:push.\n'

@@ -49,40 +49,6 @@ load helpers/resolve-compose
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 }
 
-@test "a tier merge splices its merged carrier lines up into the root index" {
-  make_parent_with_memory
-  mount_tier_at_live ddaanet
-  set_tier_manifest ddaanet
-  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
-  printf -- '- [org fact](f.md) — ours\n' >> memory/ddaanet/MEMORY.md
-  gitlore_compose memory >/dev/null
-  commit_sections "memory: record the org fact"
-  push_tier_fact ddaanet "- [their fact](t.md) — theirs" >/dev/null
-
-  run bash "$PRE_PUSH"
-  [ "$status" -eq 1 ]
-  mem_before=$(git -C memory rev-parse HEAD)
-
-  # Stand in for the memory-merger sub-agent: synthesize both sides, then add.
-  printf -- '---\ndescription: "org-wide facts"\n---\n\n# ddaanet tier index\n\n- [org fact](f.md) — ours\n- [their fact](t.md) — theirs\n' \
-    > memory/ddaanet/MEMORY.md
-  git -C memory/ddaanet add -A
-
-  run --separate-stderr bash "$RESOLVE" continue-after-merge
-  [ "$status" -eq 0 ]
-
-  # The merged carrier reached the root index, prefixed.
-  grep -qxF -- '- [org fact](ddaanet/f.md) — ours' memory/MEMORY.md
-  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
-  # The tier carries the merge commit; the root carries a bookkeeping commit of
-  # its own for the recomposed index and the moved gitlink, so an explicit
-  # operation leaves a clean store (D49).
-  [ "$(git -C memory rev-parse HEAD)" != "$mem_before" ]
-  [ -z "$(git -C memory status --porcelain)" ]
-  [ "$(git -C memory log -1 --format=%s)" = "Update MEMORY.md for ddaanet tier merge." ]
-  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
-}
-
 # Rewrite the synthesized ddaanet carrier with one pointer twice, so the merged
 # index fails the check on the carrier itself.
 duplicate_tier_carrier() {
@@ -236,8 +202,7 @@ prepare_tier_merge_head_vs_live() {
   merged=$(git -C memory/ddaanet rev-parse HEAD)
   git -C memory/ddaanet rev-parse -q --verify "$merged^2" >/dev/null
   run ! git -C memory/ddaanet rev-parse -q --verify "$merged^3"
-  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$merged" ]
-  grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$merged" ]
 }
 
 @test "a refused tier merge answers an unapproved parent commit with its continuation directive" {
@@ -294,5 +259,4 @@ prepare_tier_merge_head_vs_live() {
   [ "$status" -eq 0 ]
   git --git-dir="$TMP_REPO/.bare-ddaanet.git" show live:MEMORY.md > "$BATS_TEST_TMPDIR/published"
   grep -qxF -- '- [their other](u.md) — also theirs' "$BATS_TEST_TMPDIR/published"
-  grep -qxF -- '- [their other](ddaanet/u.md) — also theirs' memory/MEMORY.md
 }

@@ -43,9 +43,9 @@ load helpers/merge-memory
 @test "a tier take the root index cannot adopt records nothing and is retaken once the store is fixed" {
   # Staging the gitlink without the up projection puts the tier back on its pin
   # while root still holds the older block, so the next compose writes that
-  # older text over the carrier and reports success. A failed adoption therefore
-  # leaves the tier where the store records it and keeps the arrival in `live`,
-  # the shape the next take adopts.
+  # older text over the carrier and reports success. A refused end compose
+  # therefore records nothing and moves nothing back: the tier stays off its pin,
+  # the shape the next take records.
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -63,9 +63,8 @@ load helpers/merge-memory
   # Nothing recorded: neither staged nor committed...
   [ "$(git -C memory rev-parse ":ddaanet")" = "$gitlink" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$gitlink" ]
-  # ...the tier is back on that pin, so no compose can project over it...
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
-  # ...and the arrival is kept where the next take looks for it.
+  # ...and the tier stays on the arrival, in HEAD and `live`.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
   run ! grep -qF 'ddaanet/upstream.md' memory/MEMORY.md
 

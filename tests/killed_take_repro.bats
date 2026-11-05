@@ -9,8 +9,8 @@
 # the memory store's INDEX still pins the tier at its old commit.
 #
 # Real take shape (scripts/lib/resolve-adopt.sh): gitlore_adopt_advanced_live starts
-# from a CLEAN tier ON its pin whose LOCAL `live` is ahead of HEAD, checks the
-# tier out at `live`, then gitlore_adopt_tier_into_root runs gitlore_compose_up
+# from a CLEAN tier ON its pin whose LOCAL `live` is ahead of HEAD and checks the
+# tier out at `live`; gitlore_compose_moved_tiers then runs gitlore_compose_up
 # and stages the pair. `strand_live_ahead_of_pin` (tests/helpers/tier-fixtures.bash,
 # reused by the same-shaped tests in tests/merge_memory_tiers.bats and
 # tests/merge_memory_repair_arrivals.bats) builds exactly that starting state,
@@ -99,13 +99,13 @@ _tier_live_ahead_of_pin() {
   # --- Drive the real take, killed inside the pair-staging window. ---
   PATH="$bin:$PATH" run --separate-stderr bash "$CMD"
   # BENIGN: the take's own staging call is best-effort
-  # (gitlore_adopt_stage_pair_and_commit in scripts/lib/resolve-adopt-report.sh reports and
+  # (gitlore_compose_moved_tiers in scripts/lib/resolve-adopt-report.sh reports and
   # continues on a failed `add`), so the take script itself does not fail even
   # though nothing was staged, and it prints the exact hand-recovery command.
   [ "$status" -eq 0 ]
   [[ "$output$stderr" == *"killed-take-stub: refusing the pair-staging add"* ]]
   [[ "$output$stderr" == *"held commits the memory store never recorded; adopted them at $(git -C memory/ddaanet rev-parse --short "$live_sha")."* ]]
-  [[ "$output$stderr" == *"pointer could not be staged in the memory store. Run \`git -C \"$(cd memory && pwd)\" add -- MEMORY.md \"ddaanet\"\`"* ]]
+  [[ "$output$stderr" == *"pointer could not be staged in the memory store. Run \`git -C \"$(cd memory && pwd)\" add -- \"MEMORY.md\" \"ddaanet\"\`"* ]]
 
   # On-disk state the kill leaves:
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]      # tier moved to the arrival
@@ -202,7 +202,7 @@ _killed_take_then_session_start() {
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"tier 'ddaanet' — its local 'live' holds commits the memory store never recorded, but the tier has uncommitted changes, so nothing was adopted."* ]] || false
+  [[ "$output$stderr" == *"tier 'ddaanet' has uncommitted changes, so nothing was taken."* ]] || false
   [ -n "$(git -C memory/ddaanet status --porcelain)" ]
   [ "$(git -C memory rev-parse ":ddaanet")" = "$pin" ]
 
@@ -218,15 +218,9 @@ _killed_take_then_session_start() {
   [ "$(git -C memory/ddaanet rev-parse live)" = "$live_sha" ]      # the arrival is still held
 }
 
-@test "killed take retried immediately, with no SessionStart in between, neither heals nor worsens" {
-  # The other branch: no reset happens between the
-  # kill and the retry, merge-memory.sh never calls the down-projection/pin
-  # guard on its own, and the tier is
-  # already at `live` (nothing left ahead of HEAD to adopt) — so the retry is
-  # a pure no-op. BENIGN: it neither heals the unstaged pair nor makes
-  # anything worse; the half-landed state just sits, exactly as the take's own
-  # printed remedy after the kill said it would, until SessionStart or a hand
-  # `git add` moves it.
+@test "killed take retried immediately, with no SessionStart in between, records the tier" {
+  # A tier off its pin is all the state a killed take leaves, and all the retry
+  # needs: its end compose writes root and commits what the kill left unrecorded.
   _tier_live_ahead_of_pin
   pin=$(git -C memory rev-parse ":ddaanet")
   live_sha=$(git -C memory/ddaanet rev-parse live)
@@ -241,12 +235,8 @@ _killed_take_then_session_start() {
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
   [[ "$output$stderr" == *"tier 'ddaanet' — already holds everything its remote does."* ]]
-  [[ "$output$stderr" == *"the memory store has uncommitted changes. Anything this take staged rides the next memory commit"* ]]
-  # BENIGN: neither ref moved and neither store's dirt changed shape — the
-  # retry is a genuine no-op, not a second silent write.
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
-  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin" ]
-  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
-  [ -n "$(git -C memory status --porcelain -- MEMORY.md)" ]
-  [ -n "$(git -C memory status --porcelain -- ddaanet)" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$live_sha" ]
+  git -C memory show HEAD:MEMORY.md | grep -qxF -- '- [local](ddaanet/local.md) — committed here, never recorded'
+  [ -z "$(git -C memory status --porcelain)" ]
 }

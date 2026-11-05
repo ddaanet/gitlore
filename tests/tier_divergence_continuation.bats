@@ -32,37 +32,27 @@ load helpers/tier-divergence
   [ "$(git -C memory/ddaanet rev-list --count --merges "$head" -1)" = "1" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$head" ]
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$head" ]
-  # Memory took no merge commit of its own — only the canned bookkeeping commit
-  # recording the moved gitlink and recomposed index (D49), leaving it clean.
-  [ "$(git -C memory rev-parse HEAD)" != "$mem_before" ]
-  [ "$(git -C memory rev-list --count --merges HEAD)" = "0" ]
-  [ "$(git -C memory log -1 --format=%s)" = "Update MEMORY.md for ddaanet tier merge." ]
-  [ -z "$(git -C memory status --porcelain)" ]
+  # Memory took no commit at all: the run that follows records the tier.
+  [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
   [ ! -f "$(tier_state_file ddaanet)" ]
 }
 
-# The window between "merge landed" and "memory commit records it". The tier
-# pass pins every tier unconditionally and on purpose (a clone made before tiers
-# were pinned sits ahead already), and `submodule update` reads the gitlink from
-# the superproject's INDEX — so the continuation staging the moved one is the
-# only thing standing between a landed merge and a silent revert to the commit
-# memory still records. Nothing reports the revert: /gitlore:merge exited 0, and
-# the next session calls the tier synced.
-@test "a landed tier merge survives the next SessionStart's unconditional pin" {
+# The window between "merge landed" and "the next run records it". The tier pass
+# still pins every tier to the gitlink in the superproject's INDEX, and a landed
+# merge has staged nothing, so the tier goes back on its pin. `live` keeps the
+# merge, and the next take adopts it.
+@test "a landed tier merge a SessionStart re-pins is kept in live and recorded by the next take" {
   make_parent_with_memory
+  git -C memory push -q origin live
   mount_tier_at_live ddaanet
   diverge_tier_from_remote ddaanet
   pinned=$(git -C memory rev-parse HEAD:ddaanet)
   bash "$PRE_PUSH" || true
   git -C memory/ddaanet add -A
-  # Unapproved work in the root store: the one path that still leaves the pair
-  # staged rather than committed (D49), which is the window this test pins.
-  printf 'unapproved\n' > memory/pending-fact.md
   bash "$RESOLVE" continue-after-merge
   merged=$(git -C memory/ddaanet rev-parse HEAD)
-  # The fixture has to give the pin something destructive to do: the tier is off
-  # the commit memory records, and memory has NOT committed the move. Without
-  # both, the pin is a no-op and this test passes with the staging deleted.
+  # The fixture has to give the pin something to do: the tier is off the commit
+  # memory records, and memory has not committed the move.
   [ "$merged" != "$pinned" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pinned" ]
 
@@ -70,11 +60,12 @@ load helpers/tier-divergence
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$merged" ]
 
-  # Asserted against the commit, not a clean `git status` — the store is dirty
-  # either way, so status passes in both worlds.
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"
+  [ "$status" -eq 0 ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
-  # And the merged content is what the revert would have taken back.
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$merged" ]
   grep -qF -- '- [org fact](f.md) — ours' memory/ddaanet/MEMORY.md
   grep -qF -- '- [their fact](t.md) — theirs' memory/ddaanet/MEMORY.md
 }

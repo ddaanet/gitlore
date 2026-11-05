@@ -9,8 +9,9 @@ load helpers/tier-fixtures
 load helpers/merge-memory
 
 # A take's repair of a defective arrival: duplicate pointers, CRLF
-# preservation, and the walk-back arms when the commit build, the scratch
-# directory, the checkout follow, or the local `live` advance each fail.
+# preservation, and the arms that leave the tier where the take put it when the
+# commit build, the scratch directory, the checkout follow, or the local `live`
+# advance each fail.
 
 @test "a take repairs a duplicate pointer that arrived and adopts the repair" {
   wire_memory_remote
@@ -79,14 +80,14 @@ load helpers/merge-memory
   [ "$(tr -dc '\r' < "$BATS_TEST_TMPDIR/repaired.md" | wc -c | tr -d ' ')" -eq 1 ]
 }
 
-@test "a repair whose commit build fails walks back and points upstream" {
+@test "a repair whose commit build fails stays on the arrival, says to retry, and the retry records it" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   gitlore_compose memory
   commit_memory_state
   pin=$(git -C memory/ddaanet rev-parse HEAD)
-  push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')" >/dev/null
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
 
   fakebin="$BATS_TEST_TMPDIR/fakebin"
   mkdir -p "$fakebin"
@@ -107,10 +108,18 @@ EOF
   [[ "$stderr" == *"shim refuses commit-tree"* ]]
   [[ "$stderr" == *"building the repair commit failed"* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
-  [[ "$stderr" == *"its local 'live' keeps what arrived. Run /gitlore:merge again."* ]]
+  [[ "$stderr" == *"stays where the take put it. Run /gitlore:merge again."* ]]
   [[ "$stderr" != *"Fix the store"* ]]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
   [ -z "$(repair_scratch_dirs "$tmp_env")" ]
+
+  # Nothing new to fetch, and the retry still repairs: the tier is off its pin.
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  R=$(git -C memory/ddaanet rev-parse HEAD)
+  [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$R" ]
 }
 
 # The scratch directory is removed once the commit is built, so it is observed
@@ -159,14 +168,14 @@ EOF
   [ "$(grep -cxF -- '- [A](ddaanet/a.md) — x' memory/MEMORY.md)" -eq 1 ]
 }
 
-@test "a repair whose scratch directory cannot be made walks back and points upstream" {
+@test "a repair whose scratch directory cannot be made stays on the arrival and says to retry" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
   gitlore_compose memory
   commit_memory_state
   pin=$(git -C memory/ddaanet rev-parse HEAD)
-  push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')" >/dev/null
+  remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
 
   fakebin="$BATS_TEST_TMPDIR/fakebin"
   mkdir -p "$fakebin"
@@ -186,12 +195,13 @@ EOF
   [ -e "$BATS_TEST_TMPDIR/mktemp-hit" ]
   [[ "$stderr" == *"no scratch directory could be made"* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
-  [[ "$stderr" == *"its local 'live' keeps what arrived. Run /gitlore:merge again."* ]]
+  [[ "$stderr" == *"stays where the take put it. Run /gitlore:merge again."* ]]
   [[ "$stderr" != *"Fix the store"* ]]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
 }
 
-@test "a repair whose checkout follow fails walks back and keeps the repair" {
+@test "a repair whose checkout follow fails stays on the arrival and keeps the repair in live" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -231,15 +241,16 @@ EOF
   # is the repair arm's line.
   [[ "$stderr" == *"its repair advanced its local 'live' but its working tree could not follow"* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
-  [[ "$stderr" == *"its local 'live' keeps the repair. Run /gitlore:merge again."* ]]
+  [[ "$stderr" == *"stays where the take put it. Run /gitlore:merge again."* ]]
   [[ "$stderr" != *"Fix the store"* ]]
   R=$(git -C memory/ddaanet rev-parse live)
   [ "$(git -C memory/ddaanet rev-list --parents -n 1 "$R")" = "$R $remote_sha" ]
   [ "$(git -C memory/ddaanet log -1 --format=%s "$R")" = "Repair the MEMORY.md structure ddaanet received" ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
 }
 
-@test "a repair whose live advance fails walks back and keeps the arrival" {
+@test "a repair whose live advance fails stays on the arrival" {
   export GITLORE_GIT_RETRY_SCHEDULE=0
   wire_memory_remote
   make_tier_in_memory ddaanet
@@ -249,10 +260,9 @@ EOF
   pin=$(git -C memory/ddaanet rev-parse HEAD)
   remote_sha=$(push_tier_fact ddaanet "$(printf -- '- [A](a.md) — x\n- [A](a.md) — x')")
 
-  # Root's own stranded-`live` repair and the tier's take fast-forward each make
-  # one `push -q . …:refs/heads/live` call ahead of the repair, so the repair's
-  # own advance is the THIRD such call; every other call forwards to the real
-  # git.
+  # The tier's take fast-forward makes one `push -q . …:refs/heads/live` call
+  # ahead of the repair, so the repair's own advance is the SECOND such call;
+  # every other call forwards to the real git.
   fakebin="$BATS_TEST_TMPDIR/fakebin"
   mkdir -p "$fakebin"
   real_git=$(command -v git)
@@ -264,8 +274,8 @@ case " \$* " in
     n=\$(cat "$count_file" 2>/dev/null || echo 0)
     n=\$((n + 1))
     printf '%s' "\$n" > "$count_file"
-    if [ "\$n" -eq 3 ]; then
-      echo "fatal: shim refuses the third live advance" >&2
+    if [ "\$n" -eq 2 ]; then
+      echo "fatal: shim refuses the second live advance" >&2
       exit 1
     fi
     ;;
@@ -277,13 +287,14 @@ EOF
   PATH="$fakebin:$PATH" run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
   # Premise: the stub actually ran on the repair's own advance.
-  [ "$(cat "$count_file")" -eq 3 ]
-  [[ "$stderr" == *"shim refuses the third live advance"* ]]
+  [ "$(cat "$count_file")" -eq 2 ]
+  [[ "$stderr" == *"shim refuses the second live advance"* ]]
   [[ "$stderr" == *"its repair could not advance its local 'live'"* ]]
   [[ "$stderr" == *"gitlore: the root index could not take tier 'ddaanet''s lines:"$'\n'"gitlore:   memory/ddaanet/MEMORY.md: duplicate pointer path a.md"* ]]
-  [[ "$stderr" == *"its local 'live' keeps what arrived. Run /gitlore:merge again."* ]]
+  [[ "$stderr" == *"stays where the take put it. Run /gitlore:merge again."* ]]
   [[ "$stderr" != *"Fix the store"* ]]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
   # The advance never landed: `live` still holds the arrival, not the repair.
   [ "$(git -C memory/ddaanet rev-parse live)" = "$remote_sha" ]
 }

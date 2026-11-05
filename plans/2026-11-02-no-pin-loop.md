@@ -90,6 +90,14 @@ per-tier commit that premise is gone.
   answer is the tier's current `HEAD`, which the prepare stages into the pending
   merge after an ancestry check, before the merger is briefed (question 4), so
   the gitlink asks no judgement of the merger.
+- The reconcile of a store's `HEAD` against its local `live` follows the same
+  order, since it prepares root merges through the same function:
+  `gitlore-merge` and `gitlore-push` reconcile and take each tier before root's
+  reconcile. The check stays in `gitlore_prepare_merge`, so a root merge
+  `/gitlore:resolve` prepares without visiting a tier gets it too: a gitlink the
+  tier does not hold gets one fetch of the tier and is then unresolvable, and a
+  tier `HEAD` that does not descend a gitlink it holds stops the prepare naming
+  `/gitlore:merge`.
 - The compose-up is a three-way merge, not the overwrite `gitlore_compose_up`
   does today. For each tier, `gitlore_index_merge` over base = the carrier at
   the gitlink root's `HEAD` records, prefixed as root carries it; ours = root's
