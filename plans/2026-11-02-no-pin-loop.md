@@ -1,7 +1,8 @@
 # No pin loop — plan
 
-Status: revised after probes, awaiting my human partner's call on "Open". Runs
-after `plans/2026-11-01-silent-tier-line-loss.md`. Base: `dev`. Evidence:
+Status: revised after probes; every question under "Questions" is settled and
+the plan is ready to execute. Runs after
+`plans/2026-11-01-silent-tier-line-loss.md`. Base: `dev`. Evidence:
 `/tmp/claude/nopin-probes.md`.
 
 ## Design
@@ -13,15 +14,10 @@ carries a directive that works when followed, and nothing is fixed silently.
 | State | At `SessionStart` |
 |---|---|
 | Module not materialized | `--init` it, so "clone the repo and run claude" works |
-| Root ahead of the parent's pin | Silent: the latest is kept and nothing is lost |
-| Root behind the parent's pin | The existing upstream-commits report: `/gitlore:merge` |
-| Tier `HEAD` strictly descends root's pin | Silent: not a fault in itself. The next commit records the gitlink |
-| Tier's take-in-progress marker matches `HEAD` | Report: `/gitlore:merge` finishes the interrupted take |
-| Root's tier lines would change in a compose pass | The existing pending report: `gitlore-compose` |
+| Local against the authority's `live` | See "What a module reports" |
+| Root's tier lines would change in a compose pass, a tier off its pin included | The existing pending report: `gitlore-compose` |
 | A tier's index holds a line root does not | The existing orphan report, reporting without refusing |
-| Tier behind or diverged from root's pin, pin reachable | Report: `/gitlore:merge` |
 | Module mid-merge | Report the command that completes the merge and the one that aborts it |
-| Pin diverged from `live`, or its object absent | Report an invariant violation naming `/gitlore:resolve` |
 
 A store is detached. A store attached to any branch, `live` included, breaks a
 precondition and gets no handling: all 38 real stores on this machine are
@@ -39,8 +35,15 @@ detached, and `init-submodule.sh` and `add-tier.sh` both detach. A missing local
   (`scripts/lib/index-compose-check.sh:255`). This also fixes the half-landed
   commit retry, which today rewinds the tier at `commit-memory.sh:129` and
   silently loses the carrier's line (p4i); the existing fixture misses it for
-  want of a local `live`, so red pins it.
+  want of a local `live`, so red pins it. The tier-behind branch stays and
+  widens from the manifest's tiers to every mounted tier (question 4, p1i).
+- `rest_unadopted_tier` in `scripts/lib/continuation.sh`, its call sites in
+  `scripts/resolve.sh` and the continuation's "could not take tier's lines"
+  branch (question 5).
 - The on-pin guard around `gitlore_compose_pending` in the diagnostics.
+- The per-tier root write, stage-pair commit and walk-back in
+  `scripts/lib/resolve-adopt.sh` and `resolve-adopt-report.sh`: one compose and
+  one commit at the end of the run replace them ("Take order and compose").
 
 `add-tier`'s detach stays: the mount is what establishes the precondition.
 
@@ -52,9 +55,12 @@ detached, and `init-submodule.sh` and `add-tier.sh` both detach. A missing local
   `MERGE_HEAD`), `checkout -q --detach <pending>`,
   `gitlore_drop_merge_preparation`. This restored the store in every flavor
   tested. It reports any untracked file a merger left, which it does not remove.
-- Take order is root first. Correct `scripts/merge-memory.sh`, the
-  `scripts/lib/resolve-merge-stores.sh` header and the merge skill's
-  description.
+- Take order becomes tiers first, root last ("Take order and compose"). The
+  headers of `scripts/merge-memory.sh` and `scripts/lib/resolve-merge-stores.sh`
+  and the merge skill's description already say so. The root-first comment in
+  `gitlore_merge_stores`, the two in `scripts/lib/resolve-push.sh:127,160`, the
+  paragraph in `docs/references/merge-and-resolve.md` and the sentence in
+  `tier-stores.md` go with their premise.
 - Messages and comments that assume the loop or the put-back: the ahead-of-pin
   line in `index-compose-check.sh`, and the comments at `commit-memory.sh:126`,
   `index-compose-pending.sh`, `resolve-adopt.sh:14,79`,
@@ -64,100 +70,194 @@ detached, and `init-submodule.sh` and `add-tier.sh` both detach. A missing local
   (`/tmp/claude/nopin-sim/tests/probe_*.bats`, `helpers/probe-lib.bash`) are the
   red author's starting point.
 
+## Take order and compose
+
+Settled by my human partner. A take visits every tier first and the root last,
+and writes root's index once, at the end of the run, in one bookkeeping commit
+naming the tiers it moved. Today the root goes first and each tier take writes
+root and commits the pair. Root-first exists only so that a per-tier bookkeeping
+commit does not meet upstream root's equivalent commit as a divergence; with no
+per-tier commit that premise is gone.
+
+- Each tier still fast-forwards or merges on its own, and D52's arrival repair
+  still runs per tier, before the root moves: the arrived carrier is checked
+  alone with `gitlore_compose_check_index`, and the repair's retry rechecks the
+  carrier, not a compose. Only the root write and the bookkeeping commit move to
+  the end. The end compose writes root and no carrier; the next pass mirrors
+  down as today.
+- The root take meets each gitlink after its tier already moved. A gitlink only
+  upstream moved git takes silently; one both sides moved conflicts; in both the
+  answer is the tier's current `HEAD`, which the prepare stages into the pending
+  merge after an ancestry check, before the merger is briefed (question 4), so
+  the gitlink asks no judgement of the merger.
+- The compose-up is a three-way merge, not the overwrite `gitlore_compose_up`
+  does today. For each tier, `gitlore_index_merge` over base = the carrier at
+  the gitlink root's `HEAD` records, prefixed as root carries it; ours = root's
+  block for the tier; theirs = the tier's carrier at its `HEAD`. Bullets merge
+  entry-wise by path, with a diff3 chunk only for a path both sides moved apart,
+  under the labels D44 gives. A tier on its pin composes as today, since base
+  equals theirs.
+- A compose-up left with markers writes root with them and commits nothing. The
+  run names the file and the lines and says to resolve the markers and commit
+  memory; nothing walks back, since every tier is already where its take put it.
+  `gitlore_compose_check_index` gains a marker rule, so the pending check, the
+  pass and the commit refuse root until the markers are gone.
+- The continuation of a tier merge lands the merge and composes nothing. The
+  carrier check that keeps a defective merged carrier from landing (D52) stays,
+  on the carrier alone. The compose runs at the end of the `gitlore-merge` or
+  push run that follows.
+- The pass `gitlore-compose` runs the same three-way for each tier off its pin,
+  so a tier another checkout or a killed take moved composes like an arrival.
+
 ## Tier ahead of its pin
 
 Settled by my human partner. A tier `HEAD` that strictly descends its pin is not
 a fault. What is wrong, when anything is, is root's lines for the tier
-disagreeing with the tier's index. Root is authoritative because it is what
-memory recall reads; a tier's index only carries lines between projects.
-PostToolBatch handles propagation and merges handle `gitlore_compose_up`, so a
-tier ahead with an index out of sync takes an act outside the system, and root
-winning is the right answer to it. `/gitlore:merge` brings in changes from
-`live` and stays out of this: its adoption is not widened, and there is no
-`gitlore-compose --up`.
+disagreeing with the tier's index, and the three-way compose answers it: base is
+the carrier at the pin, so a line only the tier changed is adopted, a line only
+root changed stands, and one both changed carries a diff3 chunk. Neither side
+wins by fiat. `/gitlore:merge` brings in changes from `live` and gains no
+adoption step, and there is no `gitlore-compose --up`.
 
 - The commit commits through a tier ahead and its `add -A` records the gitlink,
   which reverses an alternative D50 rejected. The tier's commits are recorded
-  and published with no approved summary.
+  and published with no approved summary. A commit that a pass would change
+  aborts and names `gitlore-compose`, as D50 has it; the pass runs the
+  three-way.
 - `gitlore_compose_pending` runs at commit and SessionStart with no ref test in
   front of it for this state. The orphan report
   (`scripts/lib/index-compose.sh:259`) also runs at both, because a line the
   tier added changes nothing in a pass, so the pending check does not see it.
+- A killed take needs no marker: a tier it moved with root unwritten is a tier
+  off its pin whose carrier holds lines root lacks, and the three-way adopts
+  them at the next pass or take.
 
-**A killed take is the exception**, since its tier holds approved upstream lines
-root has not adopted, and root winning would lose them. It gets a marker naming
-the target commit, in the tier's gitdir beside `gitlore-merge-state`, written
-before the tier moves and removed once root's index is updated:
+## What a module reports
 
-- Marker matches `HEAD`: the tier's index is authoritative. The compose pass and
-  the commit refuse and name `/gitlore:merge`, and SessionStart reports it.
-- Marker does not match `HEAD`: the tier did not move, root is authoritative,
-  the gates ignore the marker and merge drops it.
-- Every tier move in a take writes it first: the fast-forward, the adoption from
-  local `live`, and the arrival repair, which rewrites it before moving past the
-  arrival. The landed-merge continuation needs none: its state-file recovery
-  re-adopts.
-- Recovery is the per-tier step of `/gitlore:merge`, ahead of its "already holds
-  everything" exit, through `gitlore_adopt_tier_into_root`. It does not refuse a
-  dirty tier: no checkout is needed and the commit is refused in this state, so
-  a refusal would be a dead end.
-- Recovery compares root's lines for the tier against root at `HEAD` and the
-  tier's index. Equal to the tier's index: the update already happened, so it
-  drops the marker. Equal to root at `HEAD`: it updates root. Different from
-  both: it refuses, lists the lines, and says to undo those edits, run
-  `/gitlore:merge` and make them again. An entry-wise three-way merge
-  (`gitlore_index_merge`) is not worth its code on a path this rare.
+Settled by my human partner, from the use case. After a successful fetch, each
+module compares what it holds locally, `HEAD` and local `live`, with its
+remote's `live`, not with the pin.
 
-## Open
+| Local against the authority's `live` | Report |
+|---|---|
+| Strictly behind | Hint `/gitlore:merge` |
+| Strictly ahead | Hint `/gitlore:push` |
+| Diverged | Hint `/gitlore:push`, which prepares the merge |
+| `HEAD` forked from local `live` | Hint `/gitlore:resolve`, which prepares the merge |
+| In sync | `in sync.`, and nothing else |
 
-2. **Invariant predicate.** "Pin not an ancestor of `live`" also matches every
-   behind state, including a plain parent `git pull`. Default: classify the pin
-   against `live`; descendant is the behind row, and only diverged or an absent
-   object is the violation.
-3. **Resolve's scope.** It reads no pin today, says "healthy" over the
-   violation, and publishes while doing so. Default: it detects the violation
-   and refuses, publishing nothing. It names `checkout --detach <pin>` then
-   `/gitlore:merge` when the object exists, the one path that lands it (p3t2),
-   and otherwise says the pin's commit is on no reachable remote. No automatic
-   repair.
-4. **Older gitlinks.** `gitlore-commit` records an older gitlink for a dormant
-   tier, and removing the loop strips its only protection (p1i). Default: the
-   pin guard covers every mounted tier, in this plan.
+A pin published on the remote needs no check of its own: a parent `git pull`
+over unpublished memory reads as diverged, and over none as behind. Being ahead
+of the pin says nothing, so memory published before the parent commit reads as
+in sync.
 
-   A memory merge moves a tier backward too, on an active tier, and that guard
-   does not reach it. You run `/gitlore:merge`, `/gitlore:resolve` or a push in
-   a checkout whose memory has diverged from a remote recording a newer commit
-   of a tier than this checkout holds. The merge lands with exit 0 and records
-   this checkout's older commit, undoing a tier move nobody asked to undo.
-   Nothing names this: you see an index line reported as pointing at a missing
-   file, with a remedy to delete the line, or nothing when the newer commit
-   added no line.
+Settled by my human partner: the authority is the remote's `live` when the fetch
+brought it, and local `live` otherwise, which covers no remote, a failed fetch
+and a remote with no `live` yet. The table stands against local `live` too,
+memory and tier alike. A `HEAD` forked from local `live` hints
+`/gitlore:resolve` whatever the authority: `check_store_gates` in
+`scripts/resolve.sh` prepares the `head-vs-live` merge before it looks at any
+remote, while `gitlore_push_stores` refuses that fork naming `/gitlore:resolve`
+and, for a memory with no remote, returns before the check. Red probes the
+no-remote fork's hint. A failed fetch keeps its could-not-fetch line with git's
+reason in front of the table's line, and a tier that fails its fetch reports its
+position like memory does instead of its fetch alone. No remote adds no line.
 
-   The next `/gitlore:merge` repairs it when the tier's remote has the newer
-   commit, and so does a push when the tier has a local `live`. A fresh clone's
-   tier has none, so its push publishes the older commit as the memory remote's
-   tip, and a merge `/gitlore:resolve` prepares publishes it as it lands.
-   Another checkout that takes that tip then loses the fact's file from its tier
-   at its next session, until it runs `/gitlore:merge` again. When the tier's
-   remote lacks the newer commit, `/gitlore:merge` says it already holds
-   everything and the push publishes the older commit. A memory commit made
-   first records the older commit again. If the newer commit added an index
-   line, that commit is refused until compose writes the line into the old tier,
-   which forks the tier and costs a tier merge. A session started between
-   preparing and landing moves the tier forward, so the merge records the newer
-   commit; removing the loop strips that too.
+**An unresolvable pin is an integrity error at every level.** A recorded commit
+the repository that should hold it lacks, whether the parent's pin on memory or
+memory's gitlink on a tier, composes nothing and has nothing recorded under it:
+no compose reads it as a base, and no commit records the module below it at
+another commit, so the pin never moves backward silently. `SessionStart` and
+`/gitlore:resolve` name the commit and the remote that lacks it, plus the repo
+`.gitmodules` names when that is a different repo. The remedy is per level. For
+a tier gitlink the checkout that recorded it runs `/gitlore:push` (question 4).
+For the parent's pin the report says the memory holding it has not been merged
+upstream, with no command and no URL change: a contributor's PR carrying only
+the pin is out of reach until their memory is merged, and one carrying the URL
+too is reachable once `git submodule sync` moves origin to their repo, and
+accepting that URL, like whether the parent push refuses to publish such a pin,
+belongs to the multi-repo design. `/gitlore:resolve` does not say "healthy" over
+it. By D64 `.gitmodules` records https while a module's own remote can stay on
+ssh, so "a different repo" is not a string comparison. The commit's refusal
+stops printing `checkout --detach <pin>` for a pin it cannot check out.
 
-   Default: when this checkout's tier is behind the commit the other side of the
-   merge records, the merge keeps that newer commit, in this plan. The tier is
-   then behind its pin, the table's behind row, and `/gitlore:merge` takes it.
-   When the tier's remote lacks that commit, the state is question 3's
-   violation.
-5. **A tier on its pin with local `live` ahead** arises by a refused adoption or
-   an unadoptable merge, is silent today, and has no other prompt. Default: the
-   killed-take branch stays as this report, whether or not a compose is pending,
-   naming `/gitlore:merge`.
+## Questions
+
+All settled. Questions 1 to 3 are absorbed above: the tier-ahead remedies into
+"Tier ahead of its pin", the invariant predicate into "What a module reports",
+and resolve's scope into "An unresolvable pin".
+
+4. **Older gitlinks.** A memory commit does nothing special about a tier another
+   checkout moved: it leaves the pin alone, and what follows depends on `live`.
+   If `live` equals `HEAD`, the commit advances `live`. If `live` has the other
+   commit, the two have diverged and need a merge.
+
+   Settled by my human partner: tiers first settles the merge. The tier moves
+   before root does, so a pin only the other side moved is a tier fast-forward
+   followed by a root merge whose gitlink git takes silently, and a tier with
+   its own commit lands its tier merge first, after which the root merge records
+   the tier's `HEAD` and the end compose carries both facts' lines into root.
+   One `/gitlore:merge` loop takes everything, and the report names no line to
+   delete. Reasoned from step10.log and step11.log, not re-run: red probes it
+   first. A tier with uncommitted work is refused before anything moves, with
+   commit first as the remedy (step10.log).
+
+   Settled by my human partner: a tier gitlink on memory's `live` that does not
+   resolve in the tier, locally or on its remote, is a data integrity error and
+   propagates nowhere. `gitlore_push_stores` pushes every tier before memory and
+   stops on a tier failure, so only `--no-verify` or a raw push in memory
+   produces it. The take still takes the tiers, then refuses the root merge
+   without moving or composing anything, and names the commit, the tier and the
+   remote that lacks it, with the remedy that the checkout which recorded it
+   runs `/gitlore:push`; the next `/gitlore:merge` retries. The compose takes no
+   fallback base. For a holder that no longer exists, `/gitlore:resolve` reverts
+   the whole memory commit on `live`, never a reset, so the root lines the lost
+   tier commit carried go with it; a holder found alive afterwards sits ahead of
+   the reverted pin and the compose re-adopts its lines. One rule with the
+   parent's pin on memory, under "An unresolvable pin" above.
+
+   Settled by my human partner: a raw pull in memory that leaves a tier checkout
+   behind the pin (p1i) is refused at the commit for every mounted tier, dormant
+   included, since `add -A` would record the older commit silently. The guard
+   loops over mounted tiers, not the manifest, and refuses a tier whose `HEAD`
+   is a strict ancestor of the pin, naming `/gitlore:merge`, which fast-forwards
+   it; a tier on or ahead of its pin passes. `SessionStart` reports the same
+   state.
+
+   Settled by my human partner: how the root merge records the tier's `HEAD`.
+   After git's line-wise merge of `live`, for every mounted tier, the prepare
+   checks that both `OURS` and `THEIRS` of the gitlink are ancestors of the
+   tier's `HEAD`, which a tier merge commit and a fast-forward both satisfy,
+   then stages the tier path into the pending `--no-commit` merge, so the
+   unmerged entry is gone before the state file is written and the merger sees
+   index and fact text only; the continuation's merge commit carries it. A tier
+   failing the check stops the prepare before the merger is briefed, naming the
+   tier.
+5. **A tier on its pin with local `live` ahead** arises today by the
+   continuation resting a tier whose merged lines the D50 adopt refused, and is
+   silent afterwards. Settled by my human partner: dissolved. The continuation
+   of a tier merge composes nothing and the end three-way has no refusal to
+   fail, so the rest has nothing to produce it: `rest_unadopted_tier`, its call
+   sites in `scripts/resolve.sh` and the continuation's "could not take tier's
+   lines" branch go with the D50 adopt path. A tier found in that state anyway,
+   from an arrival or a rest made before this plan, has `HEAD` behind the
+   remote's `live`, which the report rule above hints `/gitlore:merge` for. No
+   report is added.
 
 ## Docs
 
 D17 (pin model), D50 and `docs/references/git-hooks.md` (the reversed
-alternative), D59, D74, and the merge and resolve skills.
+alternative), D59, D74, and the merge and resolve skills. The take order and
+compose: the root-first paragraph and D49's per-take bookkeeping commit in
+`merge-and-resolve.md`; D43's "composition places lines, it does not merge
+them", the walk-back and the staged pair in `tier-stores.md`; D44's compose-up
+call site in `tier-conflicts.md`; D52's continuation gate on the carrier alone
+in `tier-arrival-repair.md`; `gitlore_compose_up`'s contract in
+`index-composition.md`. From the questions: the unresolvable-pin rule and its
+per-level remedies, with the revert in `/gitlore:resolve`, as a decision of its
+own; the pin guard over mounted tiers in `git-hooks.md`; the rest's removal in
+`tier-stores.md` and `merge-and-resolve.md`; the report authority, remote `live`
+or local `live`, with the table, in the node the execution puts it in, since no
+node documents the `SessionStart` report lines today, `workflows.md` and
+`merge-and-resolve.md` only cite them; the prepare's gitlink stage in
+`merge-and-resolve.md`.
