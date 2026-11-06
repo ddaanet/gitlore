@@ -312,7 +312,7 @@ root_merge_prepared_dropping_scratch() {
 }
 
 # Where the restore would overwrite something, git refuses, by path, and the
-# abort relays that: the store is left as found, untracked content included.
+# abort relays that refusal; the untracked file survives it.
 @test "the abort relays git's refusal over an untracked file in the restore's way, and changes nothing" {
   root_merge_prepared_dropping_scratch
   printf 'merger scratch\n' > memory/scratch.md

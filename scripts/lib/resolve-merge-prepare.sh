@@ -220,7 +220,7 @@ gitlore_tier_holds_gitlink() {
     # A retry refuses identically while there is no remote to supply the
     # commit, so the tail is the remedy a take gives for the same state.
     shown="(none configured)"
-    tail="$tail Mount it against a remote or unmount it."
+    tail="$tail Mount the tier against a remote or unmount it."
     agent="the tier has no remote and does not hold it, so nothing $tail The user has git's words."
   fi
   gitlore_say_for_agent_or_user \

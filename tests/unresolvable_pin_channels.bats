@@ -200,7 +200,7 @@ tier_report_for_user() {
   for who in 1 ''; do
     CLAUDECODE=$who run --separate-stderr bash -c "$src"
     [ "$status" -eq 1 ]
-    [[ "$stderr" == *"Mount it against a remote or unmount it"* ]] || { printf 'no remedy (CLAUDECODE=%s):\n%s\n' "$who" "$stderr" >&2; return 1; }
+    [[ "$stderr" == *"Mount the tier against a remote or unmount it"* ]] || { printf 'no remedy (CLAUDECODE=%s):\n%s\n' "$who" "$stderr" >&2; return 1; }
     [[ "$stderr" != *"/gitlore:merge"* ]] || { printf 'a retry is offered that refuses identically (CLAUDECODE=%s):\n%s\n' "$who" "$stderr" >&2; return 1; }
     [[ "$stderr" != *"/gitlore:push"* ]] || { printf 'the push tail survived (CLAUDECODE=%s):\n%s\n' "$who" "$stderr" >&2; return 1; }
   done
