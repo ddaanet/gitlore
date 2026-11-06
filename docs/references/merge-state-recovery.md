@@ -1,4 +1,4 @@
-# Merge-state recovery
+# Merge-state recovery — decision D81
 
 What a gate does when it meets a merge state file it did not just write: the
 marker-before-prepare discipline, and the classification of every shape a
@@ -97,21 +97,52 @@ no unmerged entry for checkout to refuse over).
 **A landed tier merge is adopted, not only cleared.** Whether HEAD already
 carries the merge or is put back onto it, the enclosing store's index still
 names the commit the tier sat on before it, so `gitlore_adopt_recovered_merge`
-composes the recovered tier's carrier up into the root index and stages
-`MEMORY.md` and the tier together — the shape D50 requires of every adoption of
-a tier ahead of its pin but the commit path's own landed tier commit, and what
-keeps the staging from inverting the pin guard ([git-hooks.md](git-hooks.md)). A
-failed up projection therefore stages nothing and leaves the gitlink where it
-is, so the refusal the next gate owes that tier survives. When the enclosing
-index already records the tier's HEAD, the adoption is a no-op, so a re-run
-after a completed bookkeeping commit does not project the carrier over
-root-index edits made since. The adoption fires for a tier alone: the memory
-root's own recovery would otherwise write and stage in the user's project index,
-outside every approval gate. Nothing is committed here — the staged pair rides
-the next approved memory commit, which is D43's own degraded case rather than a
-fault.
+composes the recovered tier's carrier up into the root index three-way (D78) and
+stages `MEMORY.md` and the tier together. A recovery runs inside a gate and
+never reaches the end of a take, so it owes the record itself. A failed up
+projection stages nothing and leaves the gitlink where it is, so the tier stays
+ahead of its pin for the next pass or take to compose; one that leaves a chunk
+stages the tier alone and the markers stop every pass and commit until they are
+resolved. When the enclosing index already records the tier's HEAD, the adoption
+is a no-op, so a re-run after a completed bookkeeping commit does not project
+the carrier over root-index edits made since. The adoption fires for a tier
+alone: the memory root's own recovery would otherwise write and stage in the
+user's project index, outside every approval gate. Nothing is committed here —
+the staged pair rides the next approved memory commit.
 
 The artifacts are deleted rather than moved aside because the next preparation
 recomputes each of them from the two sides. One dead end remains: a state file
 that names no pending commit, with the pin gone too, leaves nothing that can say
 whether the merge landed, and the message says so.
+
+## The deliberate abort — D81
+
+- Abort — **D81** `resolve.sh abort-merge` restores a prepared merge under git's
+  `reset --merge` contract, aimed at the pending commit
+
+`SessionStart`'s mid-merge report names two commands for the memory root: the
+continuation that lands the prepared merge and `resolve.sh abort-merge`, which
+puts the store back on the commit the merge started from. It reads the pending
+commit first, since dropping the preparation deletes the pin that names it, and
+refuses, changing nothing, when the store holds no merge gitlore prepared or no
+pending commit is left to return to. It detaches `HEAD` when a branch holds it,
+because `reset` would carry the branch along, runs
+`git reset --merge <pending>`, then drops the preparation the way a dead merge's
+is dropped. The same reset serves a preparation whose `MERGE_HEAD` a checkout
+unlinked, which `git merge --abort` alone cannot restore.
+
+**D81 — Abort restores under git's `reset --merge` contract**
+
+`git reset --merge` is what `git merge --abort` runs, and what it keeps, drops
+or refuses over uncommitted work is git's contract (git-reset(1)), which this
+design does not restate. The directive text defers to it as well. The abort is
+aimed at the pending commit instead of the commit the merge began on, so one
+command covers both the `MERGE_HEAD`-present and the checkout-cleared shape.
+
+## Rejected alternatives
+
+**A hand-rolled keep, drop or refuse list for the merger's work.** A list of
+which uncommitted files an abort keeps, drops or refuses over is a restatement
+of `reset --merge`, and it did not close: three review rounds each found a case
+the list missed, because the cases are git's index states, not a set this design
+enumerates (D81).

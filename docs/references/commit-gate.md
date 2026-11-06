@@ -1,4 +1,4 @@
-# Approval wording and repo gates
+# Approval wording and repo gates — decisions D19, D22, D67, D82
 
 The wording of the FR11 approval, and the repo's own gate and tooling. The
 commit the agent makes once the user approves a summary, and why no gate stands
@@ -8,14 +8,15 @@ hook that carries a push out is in [git-hooks.md](git-hooks.md). FR11 itself
 stays in `design.md`.
 
 - Approval — **D19** one canonical approval wording, held in the
-  `gitlore:commit` skill and nowhere else
+  `gitlore:commit` skill and nowhere else · **D82** the skill triggers on a
+  request to commit memory, not on an edited store
 - Repo gates — **D22** the memory-hygiene checker is a repo-local gate, not
   shipped surface · **D67** the repo's own gate and dev tooling lives in
   `tools/`, outside `dist.include`
 
 ---
 
-## Decisions — D19, D22, D67
+## Decisions — D19, D22, D67, D82
 
 Why the approval has one wording, why the hygiene checker stays repo-local, and
 where the repo's own tooling lives.
@@ -56,6 +57,22 @@ the bold prefix is what makes the body scannable in the approval summary.
 parses, so the two cannot be allowed to drift apart:
 `tests/commit_skill_template.bats` fills the skill's template and pipes it to
 `bin/gitlore-commit`, which must accept it.
+
+**D82 — The `gitlore:commit` skill triggers on a request to commit memory, not
+on an edited store**
+
+A skill description that names a *state* — memory edited and not yet committed —
+reads as a trigger, and every memory edit produces that state, so each edit
+would start a commit attempt. A commit is an act the user initiates, or a
+skill's directive does, and the `memory-writing` skill treats writing a fact and
+committing it as separate acts. The description therefore triggers on a request
+to commit memory, from the user or from a skill's directive (a wrap-up skill's
+memory directive is one). The ordering rule it also carries — invoke the skill
+before drafting any summary, since it holds the format and the show-then-stop
+protocol — governs *how* to answer that request, not *when* to act.
+
+The `SessionStart` orientation says "to commit memory, invoke the skill before
+drafting anything", which is a how and needs no change.
 
 **D22 — The memory-hygiene checker is a repo-local gate, not shipped surface**
 
@@ -103,3 +120,7 @@ silently when a file is added (D67).
 
 **Tooling left in `scripts/` with its docstrings fixed.** Leaves the shipping to
 the author's memory (D67).
+
+**A state condition as the skill's trigger.** "Memory files were edited and are
+not yet committed" holds after every edit, so it starts a commit attempt the
+user did not ask for (D82).

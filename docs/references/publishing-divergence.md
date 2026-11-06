@@ -32,23 +32,61 @@ state to resolve and publish, not as a fault to prevent.
 
 ## What a module reports
 
-After a successful fetch, each module (memory, and each checked-out tier)
-compares what it holds locally, `HEAD` and local `live`, with the authority's
-`live`, not with the pin. The authority is the remote's `live` when the fetch
-brought it, and local `live` otherwise, which covers no remote, a failed fetch
-and a remote with no `live` yet. The report is one line per module:
+`SessionStart` moves no module (D59). A module is the memory store or a tier. It
+clones one that is not materialized, at the commit memory records
+(`submodule update --init`, so "clone the repo and run claude" works), fetches
+read-only, and reports; every report carries a directive that works when
+followed, and nothing is fixed silently. A store is detached; one attached to a
+branch breaks a precondition that install and the mount establish and gets no
+handling. A missing local `live` is normal on a fresh clone, where it is made
+from `HEAD`.
 
-- Local strictly newer than the authority: hint `/gitlore:push`.
-- Local strictly older: hint `/gitlore:merge`.
-- Equal: `in sync.`, and nothing else.
-- Diverged: hint `/gitlore:push`.
-- `HEAD` forked from local `live`: hint `/gitlore:push`, whatever the authority
-  and with or without a remote.
+| State | Report |
+|---|---|
+| Not materialized | Cloned at its recorded commit; a failed checkout is named, and the agent is told the tier's facts are unavailable and its root lines stay |
+| Mid-merge | Tier: its notice alone, naming `/gitlore:resolve`. Memory: the command that lands the prepared merge and the one that aborts it, `resolve.sh continue-after-merge` and `abort-merge` |
+| Recorded commit no repository holds | The unresolvable-pin report ([unresolvable-pin.md](unresolvable-pin.md)) |
+| Local against the authority's `live` | The position lines below |
+| Root's tier lines would change in a compose pass | The pending report, `gitlore-compose`; a tier off its pin is included |
+| A tier's index holds a line root does not | The orphan report, reported and never refused |
+
+A prepared merge moved `HEAD` onto its authority, so a position read would
+describe the preparation: a mid-merge module reports the notice alone.
+
+### The position
+
+After a successful fetch, each module compares what it holds locally, `HEAD` and
+local `live`, with the authority's `live`, not with the pin. The authority is
+the remote's `live` when the fetch brought it, and local `live` otherwise, which
+covers no remote, a failed fetch and a remote with no `live` yet. The table
+stands against local `live` too, memory and tier alike
+(`gitlore_module_position`).
+
+| Local against the authority's `live` | Report |
+|---|---|
+| Strictly behind | Hint `/gitlore:merge`, which fast-forwards and needs no push |
+| Strictly ahead | Hint `/gitlore:push` |
+| Diverged | Hint `/gitlore:push`, which reconciles and publishes; a rewritten history instead names the crossing script ([history-rewrites.md](history-rewrites.md)) |
+| `HEAD` forked from local `live` | Hint `/gitlore:push`, which prepares the merge, whatever the authority and with or without a remote |
+| In sync | `memory in sync.` or `tier '<name>' in sync.`, on the user channel, and nothing else |
+
+When local `live` is itself the authority and `HEAD` is behind it, memory reads
+"N commits on live not checked out here" and a tier says its commits are on its
+local `live` and not checked out; both hint `/gitlore:merge`, and a dirty memory
+store says only that it is dirty, since a take will not move a dirty `HEAD`.
 
 A failed fetch keeps its could-not-fetch line, with git's reason in front of the
-position line. No remote adds no line. The pin takes no part: memory published
-before the parent commit that records it reads as in sync, and a parent
-`git pull` over unpublished memory reads as diverged.
+position line, on the user channel only because git's stderr can carry text the
+remote chose; the agent gets a fixed sentence saying the user has it. A tier
+that fails its fetch reports its position like memory does instead of its fetch
+alone. No remote adds no line.
+
+The pin takes no part: a parent `git pull` over unpublished memory reads as
+diverged, and over none as behind. Being ahead of the pin says nothing, so
+memory published before the parent commit that records it reads as in sync.
+
+The only exception to "a divergence hints `/gitlore:push`" is a take that is a
+fast-forward plus the canned bookkeeping commit.
 
 ## Decisions — D75, D76
 

@@ -10,9 +10,9 @@ wires them is in
 [installation.md](installation.md).
 
 - The session — **D14** user-facing SessionStart output goes on `systemMessage`
-  · **D59** SessionStart moves memory nowhere; every advance is an explicit take
-  or push · **D74** compose only where the edit happens; SessionStart reports
-  and writes no index
+  · **D59** SessionStart moves no module; every advance is an explicit take or
+  push · **D74** compose only where the edit happens; SessionStart reports and
+  writes no index
 
 ---
 
@@ -45,12 +45,11 @@ has no memory submodule entry, no-op.
    checked-out gitlink (HEAD) after a clone without `--recurse-submodules`,
    since the branch model references `live` as a local ref — never from
    `origin/live`, which may be ahead of the gitlink (D59).
-6. **Detach in place and report where memory stands.** HEAD is detached without
-   moving. The retired store gate's `pre-commit` wrapper is then removed from
-   the memory store and each checked-out tier (D70). `report_memory_position`
-   states where it sits against local `live` and against the remote's `live`
-   (D59, below). It moves nothing and is never fatal; the pass continues
-   whatever it reports.
+6. **Report where memory stands.** The retired store gate's `pre-commit` wrapper
+   is removed from the memory store and each checked-out tier (D70).
+   `report_memory_position` states where it sits against the authority's `live`,
+   the remote's or else its own (D59, below). It moves nothing, detaches nothing
+   and is never fatal; the pass continues whatever it reports.
 7. **Repair a missing root index.** A store with no `MEMORY.md` — an install
    seeded from an auto-memory dir that existed but held nothing committed an
    empty tree — gets the `# Memory Index` scaffold written back as an
@@ -58,12 +57,13 @@ has no memory submodule entry, no-op.
    than in a commit of its own, and `systemMessage` says so. Every step below
    assumes the file exists: composition places tier lines into it, a merge
    continuation stages it, and the dangling report reads pointers out of it.
-8. **Pin the tiers.** A tier holding an unfinished merge is left as it is and
-   named, because the checkout below would clear its `MERGE_HEAD`. Every other
-   mounted tier is initialized and checked out at the gitlink the memory store's
-   index records, detached in place if it arrived on a branch, and its remote
-   `live` is fetched read-only to name what is waiting — upstream facts, or a
-   divergence — without moving anything: a tier advances only through
+8. **Report the tiers.** A tier that is not checked out is cloned at the commit
+   the memory store's index records. A tier holding an unfinished merge is left
+   as it is and named. Every other mounted tier stays on the commit it is on,
+   its remote `live` is fetched read-only, and it reports its position against
+   the authority's `live` and any recorded commit no repository holds
+   ([publishing-divergence.md](publishing-divergence.md),
+   [unresolvable-pin.md](unresolvable-pin.md)). A tier advances only through
    `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported by
    name, never silently skipped, because a tier that stops talking to its remote
    looks exactly like one with nothing to say.
@@ -192,56 +192,42 @@ exists only for the git hook (`pre-push`) and the commit and push scripts, which
 run where `CLAUDECODE` may be unset; SessionStart always runs in-session, so its
 notices are written directly for the user.
 
-**D59 — SessionStart moves memory nowhere; every advance is an explicit take or
+**D59 — SessionStart moves no module; every advance is an explicit take or
 push**
 
-The hook used to fast-forward a clean HEAD onto `live`. A single checkout never
-has work for it: the store is sized for one clone per project, HEAD and `live`
-agree by construction there (a commit advances both, D41), and a fresh clone
-makes `live` from the gitlink HEAD. The one case it served is a separately
-launched linked worktree, whose HEAD lags a `live` another checkout advanced —
-and a move the user did not see changes the checkout under their edits without a
-word. So the hook reports and `/gitlore:merge` takes (the local move is in
+A module is the memory store or a tier. A hook that fast-forwarded a clean HEAD
+onto `live` has no work in a single checkout: the store is sized for one clone
+per project, HEAD and `live` agree by construction there (a commit advances
+both, D41), and a fresh clone makes `live` from the gitlink HEAD. The one case
+it served is a separately launched linked worktree, whose HEAD lags a `live`
+another checkout advanced — and a move the user did not see changes the checkout
+under their edits without a word. A tier re-pinned to its gitlink at every
+session, or advanced to its remote's `live`, has the same fault, and the first
+is also the loop that made a tier ahead of its gitlink unreachable: the session
+discarded the position a take or a commit had just put it in. So the hook
+reports and `/gitlore:merge` takes (the local move is in
 [merge-and-resolve.md](merge-and-resolve.md)); a parent push still takes a
-behind remote (D49).
+behind remote (D49). It clones a module that is not materialized, which moves
+nothing that exists.
 
-**The report.** Each position is one line, on `systemMessage` and, where it
-names an act, on `additionalContext` (`add_report`):
-
-- *Dirty* — uncommitted changes present.
-- *`live` strictly ahead of HEAD, clean* — N commits on `live` not checked out
-  here, run `/gitlore:merge`. A dirty store says only the dirty line, because
-  merge will not move a dirty HEAD.
-- *HEAD and `live` diverged* — run `/gitlore:resolve`, then start a fresh
-  session.
-- *HEAD at `live`, clean* — `memory ready (detached at live).`, user channel
-  only.
-- *HEAD ahead of `live`, clean* — `memory ready.`, user channel only: nothing
-  for this session to take, yet a state a store legitimately rests in, and
-  saying nothing would leave the `systemMessage` empty.
-
-**The remote.** For a real remote (not the install placeholder, not none) the
-hook then runs `fetch origin live` — read-only, with no refspec, so it moves no
-local branch and updates only `origin/live`. `origin/live` strictly ahead
-reports N upstream commits, run `/gitlore:merge`, which fast-forwards, may
-record a canned commit and needs no push; diverged from `live` reports that
-upstream has diverged, run `/gitlore:push` to reconcile and publish it; equal,
-or `live` ahead (a push's business), is silent. A remote that has no `live` ref
-is silent: there is nothing upstream to take, and the report would otherwise
-fire in every store that was never published. Any other fetch failure is named,
-because an unreachable remote looks exactly like one with nothing to say. git's
-own message rides the user's channel only: its stderr can carry `remote:` lines
-the remote chose, and the agent's context gets a fixed sentence saying the user
-has it.
+**The report.** Each module's position against the authority's `live` is one
+line, on `systemMessage` and, where it names an act, on `additionalContext`
+(`add_report`); the authority is the remote's `live` when the fetch brought it
+and local `live` otherwise. The table, the lines and the fetch-failure arms are
+in [publishing-divergence.md](publishing-divergence.md) (D76). A remote's git
+stderr can carry `remote:` lines the remote chose, so it rides the user's
+channel only and the agent's context gets a fixed sentence saying the user has
+it.
 
 **D74 — Compose only where the edit happens; SessionStart reports and writes no
 index**
 
-`PostToolBatch` and the mount are the only writers of an index. The merge
-continuation's up-only adoption is the take's own bookkeeping, and
-`gitlore-compose`, run by hand, clears what no batch will. The commit aborts on
-a pending compose (D50, in [git-hooks.md](git-hooks.md)). `SessionStart` reports
-position and store diagnostics and writes no index.
+`PostToolBatch` and the mount are the only writers of an index in a session. The
+end of an explicit take and a memory merge's continuation write root up from the
+tiers, which is the take's own bookkeeping (D77), and `gitlore-compose`, run by
+hand, clears what no batch will. The commit aborts on a pending compose (D50, in
+[git-hooks.md](git-hooks.md)). `SessionStart` reports position and store
+diagnostics and writes no index.
 
 The reason is the one D50 gives for the commit: anything `PostToolBatch` did not
 compose is assumed to be an exterior change — a human in an editor, a dead hook,
@@ -259,22 +245,25 @@ it:
   change, with `gitlore-compose`.
 - *Dangling pointers* (D34) — on every store, refused or not.
 
-`gitlore_compose_pending` runs the pin check, which puts a clean tier that is
-ahead of its pin back on it, and the diagnostics move nothing. The pending
-report therefore runs only when every active tier's `HEAD` is its pin and none
-is mid-merge (`gitlore_store_mid_merge`, which also covers a state file);
-otherwise it is skipped and the rule problems alone are reported. A mid-merge
-tier gets the pin loop's notice alone. A tier whose local `live` strictly
+`gitlore_compose_pending` runs over every tier wherever it sits: the check is
+read-only, and a tier off its pin composes three-way like an arrival. Two states
+hold it back, and only the rule problems are reported over them: a prepared
+merge in memory or any tier, whose own notice is the report and whose merged
+index is the merger's business (`gitlore_store_mid_merge`, which also covers a
+state file), and a tier whose recorded commit no repository holds, which
+composes nothing and has its own report
+([unresolvable-pin.md](unresolvable-pin.md)). A tier behind or beside its pin is
+a rule problem the pass reports by name. A tier whose local `live` strictly
 contains its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`:
-composing first dirties the tier, and the take then refuses it. The cost is that
-a store with one off-pin tier gets no pending report for its other tiers; the
-off-pin tier is reported by name, and the report returns once it is back.
+composing first dirties the tier, and the take then refuses it. When the pass
+would change nothing, the orphan report runs instead, since a line the tier
+added changes nothing in a pass; it is reported and never refused.
 
 A registered tier with no checkout does not hold the pending report back: a
 compose keeps its root lines and writes no carrier for it. The dangling report
-leaves those lines out, because they are not stale. The pin loop's "could not be
-checked out" notice is its report, on both channels: the agent's line says the
-tier's facts are not available in this session and its index lines stay.
+leaves those lines out, because they are not stale. The tier stage's "could not
+be checked out" notice is its report, on both channels: the agent's line says
+the tier's facts are not available in this session and its index lines stay.
 
 ## Rejected alternatives
 
@@ -292,14 +281,20 @@ it from the session that made it (D50, D74).
 
 **Splitting `gitlore_compose_pass` for a read-only caller.** Lifting the part
 after the refusal check into its own function would let the pending report skip
-the pin check and run beside an off-pin tier. It buys a report for a store that
-already has a louder one, and needs the off-pin and mid-merge tiers filtered out
-of a second copy of the loop by hand (D74).
+the pin check and run beside a tier behind its pin. It buys a report for a store
+that already has a louder one, and needs the mid-merge and lost-pin tiers
+filtered out of a second copy of the loop by hand (D74).
 
 **The clean-only fast-forward at session start.** It does no work in a single
 checkout, where HEAD equals `live` already. In the multi-checkout case a take
 the user sees beats a move they cannot: the report names the commits and the
 command, and the checkout changes when they run it (D59).
+
+**Moving a tier at `SessionStart`.** Re-pinning each tier to its gitlink, or
+advancing it, changes a checkout under the user's edits and discards the
+position a take or a commit just put the tier in; a tier ahead of its gitlink is
+no fault (D78), so there is nothing to put back. The hook clones a missing tier
+and reports the rest (D59).
 
 **A `WorktreeCreate` hook to set up the memory worktree.** It is an override
 hook — it fires before the worktree exists, must create it, and must print only

@@ -19,12 +19,12 @@ walk it and the decisions about how it is carried out are in
 
 ### What each phase does with `live`
 
-- **Session start.** SessionStart detaches in place and then reports where HEAD
-  stands against `live` and `origin/live`; it moves nothing (D59, with the
-  report in [session.md](session.md)). A local `live` ahead of HEAD is named,
-  and `/gitlore:merge` is what checks HEAD out at it. A store that arrives on a
-  named branch (an install predating this model) is migrated by the same
-  in-place detach.
+- **Session start.** SessionStart reports where HEAD stands against `live` and
+  `origin/live`; it moves nothing (D59, with the report in
+  [session.md](session.md)). A local `live` ahead of HEAD is named, and
+  `/gitlore:merge` is what checks HEAD out at it. A store attached to a named
+  branch breaks a precondition that install and the mount establish, and gets no
+  handling.
 - **After commit.** The commit path advances `live` immediately
   (`push . HEAD:live`, fast-forward only), so `live` holds every commit the
   moment it exists and memory is repo-global rather than branch-scoped. A commit

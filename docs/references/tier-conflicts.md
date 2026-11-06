@@ -3,7 +3,7 @@
 How two writers' concurrent changes to a shared tier are merged: the semantic
 merger for memory files, the entry-wise pass for index files, and the briefing
 the merger sub-agent is given. Read it while debugging a tier merge, the
-index-merge pass or the merger's inputs. The tier's commit, push and pinning are
+index-merge pass or the merger's inputs. The tier's commit, push and gitlink are
 in [tier-stores.md](tier-stores.md); the divergence path that calls the merge is
 in [merge-and-resolve.md](merge-and-resolve.md).
 
@@ -64,6 +64,19 @@ never presents the sub-agent with two namings of the same two sides. That is one
 argument at the call site, against a sentence in `agents/memory-merger.md`
 reconciling the two: a configuration that removes the need for agent-facing
 prose beats the prose.
+
+**The entry-wise pass has a second call site: the compose-up of a tier into
+root.** Root's block for a tier and the tier's carrier are two writers' changes
+to one list of records, so `gitlore_compose_merge_tiers` runs the same
+`gitlore_index_merge` over them, with the carrier at the gitlink memory's index
+records as base, root's lines as ours and the carrier at the tier's `HEAD` as
+theirs (D78, in [take-and-compose.md](take-and-compose.md)). The presence rule
+and the diff3 chunk for a path both sides moved apart are the same, and the
+labels are git's own for the three commits: `HEAD`, the base commit and the
+tier's `HEAD`. Outside a merge no sub-agent reads that chunk: it is written into
+root's `MEMORY.md` with its markers and resolved by whoever commits memory. In a
+memory merge's continuation a chunk keeps the merge prepared for a new synthesis
+(D52).
 
 **The merger sub-agent is briefed with both side diffs and the tree.** Alongside
 the state file, `gitlore_prepare_merge` writes three read-only artifacts into

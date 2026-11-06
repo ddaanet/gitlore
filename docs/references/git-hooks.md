@@ -13,9 +13,9 @@ and the hook call. The approval gate the commit path carries out is in
 - The pointer — **D46** a parent commit is never rewritten to re-pin memory; a
   push refused by divergence is resolved and pushed again
 - The commit path — **D50** the commit writes no index and aborts when a compose
-  pass would change one; a pin refusal is fatal, and so is a compose problem in
-  an index file the commit changes, while every other compose refusal is
-  reported
+  pass would change one; a tier behind or beside its pin is fatal, and so is a
+  compose problem in an index file the commit changes, while every other compose
+  refusal is reported; a tier ahead of its pin is committed through
 
 ---
 
@@ -60,9 +60,8 @@ the pending commit reachable as its second parent (D6). A gitlink behind
 memory's HEAD is therefore the resting state — ` M memory` in the parent's
 porcelain — not drift: it floats between parent commits, the next one records
 the move, and nothing walks memory back to it. `SessionStart` runs
-`submodule update` on memory only when its worktree is absent; the
-pin-to-the-gitlink discipline (D43) is for tiers inside memory, not for memory
-in the parent.
+`submodule update` on a module only when its worktree is absent; the gitlink
+record of D43 is for tiers inside memory, not for memory in the parent.
 
 The invariant is what NFR5 rests on at publish time: the reconcile that precedes
 `gitlore-push` lands a head-vs-live merge first, which keeps the staged commit
@@ -107,8 +106,9 @@ the merge is resolved. The loop that replaces it — resolve, push again, until
 the push lands — is the one the `push` skill already runs (D20), and a gitlink
 behind memory's tip is the same resting state every other memory advance leaves.
 
-**D50 — The commit path writes no index and aborts on a pending compose; a pin
-refusal, or a compose problem in an index file the commit changes, is fatal**
+**D50 — The commit path writes no index and aborts on a pending compose; a tier
+behind or beside its pin, or a compose problem in an index file the commit
+changes, is fatal**
 
 The commit path publishes what the session composed; it never composes. Anything
 `PostToolBatch` did not compose is assumed to be an exterior change — a human in
@@ -119,13 +119,14 @@ summary described and no session saw. `gitlore-commit` and
 computes what `gitlore_compose` would write through the same
 `gitlore_compose_pass`, each index rendered by the same `gitlore_compose_render`
 and only the last step differing: the write replaces the file, the check reports
-its path. It writes no index and no file in a store; a clean tier ahead of its
-pin is put back at the pin, as a tier merely ahead of its pin is below. A
-non-empty result aborts the commit before any store is committed, naming every
-index the pass would change and the remedy: `gitlore-compose` for an agent, the
-script's path for a terminal user. `gitlore-compose`
-(`scripts/compose-memory.sh`) runs the full down pass with the write, repeating
-it until a pass changes nothing; on a composed store it writes nothing.
+its path. It writes no index and no file in a store and moves no tier; a tier
+ahead of its pin is checked as the pass would compose it. A non-empty result
+aborts the commit before any store is committed, naming every index the pass
+would change and the remedy: `gitlore-compose` for an agent, the script's path
+for a terminal user. `gitlore-compose` (`scripts/compose-memory.sh`) runs the
+full pass with the write, repeating it until a pass changes nothing; on a
+composed store it writes nothing. The orphan report runs after the check, since
+a line a tier added changes nothing in a pass; it is reported and never refuses.
 
 The check precedes the section check in `gitlore-commit`, so a summary is judged
 against the state the remedy leaves. It follows the prepared-merge guards, so a
@@ -148,79 +149,42 @@ no index file; all of those are reported and the commit goes ahead. The line
 this draws is the one D52 ([tier-arrival-repair.md](tier-arrival-repair.md))
 builds on: the wording of an index a tier publishes is upstream's to change, and
 a structural defect that arrives anyway — from a hand push, or an older gitlore
-— is the take's to repair. Proceeding past a `gitlore_compose_check_pins`
-refusal instead lets this function's own `add -A` adopt the moved gitlink and
-remove the condition it refused on: the next compose projects root's older text
-over the carrier with nothing left to refuse, `gitlore_sync_tiers_to_live`
-commits that inside the tier, and `pre-push` ships it to the tier's own remote,
-so the approved upstream fact is destroyed one commit after the warning. The pin
-check therefore runs ahead of the pending check and aborts, naming no remedy of
-its own — every branch of `gitlore_compose_check_pins` prints the one its own
-cause takes, and a single abort can carry several tiers with different causes. A
-check that cannot read an index aborts too.
+— is the take's to repair. A check that cannot read an index aborts too.
 
-**A tier merely ahead of its pin is put back on it, and the take adopts from
-there.** A clean tier whose local `live` contains its `HEAD` has nothing to
-lose: every commit `HEAD` holds is reachable from `live`, so
-`gitlore_compose_check_pins` checks it out at the pin — the commit the memory
-store's index already records, and the one `submodule update` would restore at
-the next `SessionStart` — and what is left is exactly the state
-`gitlore_adopt_advanced_live` takes, a clean tier on its pin with `live` ahead
-of it. The refusal stands over that, with `/gitlore:merge` as its remedy,
-because the root index still has to take the carrier before any pass composes
-down onto it, and that adoption is the tooling's: compose the carrier up, stage
-the pair (D43). Two states are left where they are. A dirty tier, because the
-checkout would carry work no approved summary covers onto the pin and the take
-refuses a dirty store in any case. And a tier whose `live` is short of `HEAD`,
-where the checkout would strand the commits `HEAD` alone holds; its remedy is
-the ff-checked `push . HEAD:refs/heads/live` — the move
-`gitlore_repair_stranded_live` makes wherever it runs — after which the guard
-returns the tier to its pin and the take adopts, and a push refused as a
-non-fast-forward is a divergence for `/gitlore:resolve`. A checkout that fails
-leaves the tier untouched and reports git's own words with the command that
-finishes the return.
+**The pin guard covers every mounted tier, dormant ones included, and refuses
+only a tier behind or beside its pin.** `gitlore_compose_check_pins` reads the
+pin from the memory store's *index*, since a gitlink staged for the next memory
+commit is what that commit records, and aborts before the pending check when a
+tier's `HEAD` is not its pin and either holds commits the other lacks. The guard
+loops over mounted tiers, not the manifest, because the commit's `add -A`
+records a dormant tier's `HEAD` too, and a raw pull in memory that leaves a tier
+checkout behind the pin would otherwise record the older commit silently and
+move the pin backward. Each cause prints its own remedy, so a single abort can
+carry several tiers:
 
-**A retry that skips the take commits, and that residual is accepted.** Once the
-guard has returned a tier to its pin nothing refuses: the tier is clean and on
-the commit the store records, so a retried commit that does not run
-`/gitlore:merge` first composes and commits normally while the arrival stays in
-the tier's local `live` alone. Nothing is lost — `live` holds every arrived
-commit and the guard's message names the take as the next command. The cost
-lands later: the next commit to that tier is made on the pin, its `HEAD:live`
-advance from `gitlore_sync_tiers_to_live` is refused as a non-fast-forward and
-reported as a fork, and the next `/gitlore:merge` or `/gitlore:push` reconcile
-prepares a `head-vs-live` merge that `/gitlore:resolve` lands. A skipped take
-therefore costs one merge later, never a fact.
+- **mid-merge** — `/gitlore:resolve` lands the merge; the return-to-the-pin
+  checkout would unlink `MERGE_HEAD` and destroy it;
+- **the pin is no object in the tier** — a commit this checkout has not fetched,
+  the shape a raw pull in memory leaves: `/gitlore:merge` fetches the tier and
+  fast-forwards it, and a commit no repository holds is the integrity error of
+  [unresolvable-pin.md](unresolvable-pin.md);
+- **behind the pin** — `/gitlore:merge` fast-forwards it;
+- **beside the pin**, each holding commits the other lacks — a checkout of the
+  pin, then `/gitlore:merge`, so projecting the root index onto the tier cannot
+  overwrite what it holds.
 
-**A tier commit the run could not record is adopted on the retry.** The tier
-commit moves the tier's HEAD, and only memory's later `add -A` stages the moved
-gitlink. A transient `index.lock` between the two — or a tier `live` that cannot
-advance, or a killed run — leaves the tier ahead of its pin, the shape the pin
-check refuses, and a retried commit would be refused for good.
-`gitlore_sync_tiers_to_live` therefore writes a landing record into the tier's
-gitdir just before each commit — the commit the tier sits on — and removes it
-when the commit fails or once `add -A` has staged every gitlink. Ahead of the
-pin check, `gitlore_stage_landed_tiers` stages the gitlink of any tier whose
-HEAD's parent is the recorded commit and still the pin. That overwrites nothing:
-that carrier was composed before the run began, as the commit path requires. The
-residual is a run killed between writing a record and its commit failing,
-followed by a commit made on the same pin by other means.
+`SessionStart` reports the same state.
 
-**Staging a moved gitlink without projecting up first inverts that guard.**
-Staging alone returns the enclosing index to agreement with the tier's HEAD —
-the disagreement the pin check reads — so nothing is left to refuse and the next
-down projection writes root's older text over facts root has never seen. Every
-path that adopts a tier ahead of its pin therefore composes the carrier up into
-the root index first and stages the pair, or stages nothing at all; the adoption
-a recovered merge owes is one of them
-([merge-state-recovery.md](merge-state-recovery.md)). A take that stages nothing
-also returns the tier to its pin, keeping what arrived — or the take's repair of
-it (D52) — in its local `live` for the next take to adopt, and so does a landed
-merge continuation that stages nothing, onto a pin the merge contains once its
-local `live` holds the merge; a yield, a pin off to the side and a `live` short
-of the merge leave the tier where it is ([tier-stores.md](tier-stores.md)). The
-one exception to composing up is a tier commit the commit path itself made,
-whose carrier root already describes, so there is nothing to project up.
+**A tier ahead of its pin is committed through, and the commit records it.** A
+tier whose `HEAD` strictly descends its pin passes the guard: the pending check
+composes it three-way (D78), and `add -A` records its `HEAD`, so the tier's
+commits are recorded and published with no approved summary of their own. They
+reached the tier through a gate already. A pass that would change an index still
+aborts the commit and names `gitlore-compose`, which runs the three-way; nothing
+puts the tier back on its pin, and nothing waits on a take to adopt it. A tier
+commit the run made itself needs no record of its own: a run interrupted between
+the tier's commit and memory's `add -A` leaves a tier ahead of its pin, the
+shape every other path leaves, and the retry records it.
 
 ## Rejected alternatives
 
@@ -235,47 +199,9 @@ batch composed would be repaired at once, but the repair ships content no
 approved summary covers and hides an exterior change from the session that made
 it. The commit fails on it instead and names `gitlore-compose` (D50).
 
-**Reporting an off-pin tier and committing through it.** The commit's own
-`add -A` adopts the moved gitlink, so the report is followed at the next compose
-by exactly the silent overwrite it warned about (D50).
-
-**Recognising gitlore's own landed tier commit by its message.** Needs no state,
-but a session that edits memory while the retry is still blocked approves a new
-summary, the landed commit stops matching it, and the tier is refused for good
-(D50).
-
-**Staging each tier gitlink right after its commit.** Narrows the window without
-closing it: the staging is itself a write to memory's index, so the `index.lock`
-that stops `add -A` stops it too (D50).
-
-**A blanket refusal for every tier ahead of its pin.** One message for the whole
-branch, with no state to establish and no store touched by a check. Its remedy
-had to be a hand rebuild of the root index's block for the tier followed by
-staging the gitlink — the adoption every other path performs mechanically, asked
-of a reader in prose, with a silent overwrite as the cost of getting the order
-wrong. The state it refused is one checkout away from the one the take already
-handles, and that checkout discards nothing (D50).
-
-**Adopting inside the pin guard rather than directing to `/gitlore:merge`.**
-Would finish the job in one pass instead of two. But the guard runs from every
-down-projecting compose — `PostToolBatch` and the mount — and adoption writes
-the root index and stages a gitlink, which inside a check would land work no
-approval covers in the next approved commit. The take owns that adoption
-together with its failure handling: the walk-back, the arrival repair (D52), the
-canned bookkeeping commit (D49). What the guard does instead is the one move
-that writes no index and needs no approval — a checkout to the commit the store
-already records (D50).
-
-**Refusing the commit while a tier's local `live` is ahead of its pin.** Would
-close the skipped-take residual by making the take mandatory before any memory
-commit. But `live` ahead of a clean, on-pin tier is also the resting state
-between an arrival and its take, and a refusal there blocks an approved commit
-over work that commit does not touch, for a cost the divergence path already
-absorbs with nothing lost (D50).
-
-**Leaving a tier whose adoption failed ahead of an unstaged pin.** Nothing is
-staged, so the root index is not composed over, but the pin guard then refuses
-every memory commit until `SessionStart` walks the tier back, and a take
-meanwhile finds nothing to take, the arrival being contained in the tier's HEAD.
-Walked back to the pin with the arrival kept in its local `live`, the tier is in
-the shape the next take adopts (D50).
+**A refusal for a tier ahead of its pin.** A tier ahead of its pin is the
+resting state after every take and every tier merge, and the three-way compose
+answers any disagreement between root's lines and its carrier (D78). Refusing
+the commit, or putting the tier back on its pin for a take to adopt, blocks an
+approved commit over a state that loses nothing, and asks the reader for an
+adoption the tooling performs mechanically (D50).

@@ -98,36 +98,35 @@ The recompose **validates and is fail-safe**: it refuses — reporting on
 `systemMessage` (user) + `additionalContext` (agent) without clobbering the
 existing index — if the result would carry a **duplicate** pointer line, if a
 line **welds two pointer bullets** onto one physical line, if the manifest
-**lists a tier that is not present**, or if an
-**active tier is checked out off the gitlink** the memory store's index records
-for it. That last rule guards the down projection alone (D36), so it lives
-outside the shared check and only the down-projecting passes run it:
-`gitlore_compose` itself, so every compose on `PostToolBatch` and after a tier
-mount, and the commit path, which also checks it ahead of its read-only pass so
-an off-pin tier aborts the commit (D50). The merge continuation's adoption is
-up-only and runs while the tier is legitimately ahead of the pin, before that
-path stages the moved gitlink. The pin is read from the memory store's **index**
-rather than its `HEAD`, because the index is what `submodule update` checks a
-tier out at and what every advancing path stages the move into (D43) — a landed
-merge is not a defect for as long as the memory commit recording it is pending.
-A tier that is mid-merge gets the remedy its own state needs,
-`/gitlore:resolve`, rather than the return-to-the-pin checkout, which would
-unlink `MERGE_HEAD` and destroy the prepared merge. A tier merely ahead of its
-pin — clean, its local `live` holding every commit its `HEAD` does — is checked
-out at the pin and sent to `/gitlore:merge`, which adopts from `live`
-([git-hooks.md](git-hooks.md)). A mounted tier *absent* from the manifest is not
-an error, only inactive; the asymmetry is deliberate — listed-but-absent =
-broken, present-but-unlisted = dormant. In the continuation, a problem in the
-merged index itself blocks the landing — in the tier's carrier for a tier merge,
-and a duplicate, interleaved or welded line in root's `MEMORY.md` for a
-memory-root merge. Nothing is committed, the merge stays prepared, and the
-merger re-synthesizes with the problem lines in hand: the defect is in text this
-repo is authoring, and an edit to the named lines clears it (D52, in
-[tier-arrival-repair.md](tier-arrival-repair.md)). Any other refusal is reported
-and does not block, because the merge is synthesized and approved by then, and
-stranding it over a problem outside what it merged is the worse outcome. A
-memory-root merge then commits uncomposed and says so; a tier merge lands in the
-tier, which rests on its pin unadopted (D43).
+**lists a tier that is not present**, or if a
+**mounted tier is checked out behind or beside the gitlink** the memory store's
+index records for it. That last rule lives outside the shared check and only the
+passes that read the pin run it: `gitlore_compose` itself, so every compose on
+`PostToolBatch` and after a tier mount, and the commit path, which also checks
+it ahead of its read-only pass so such a tier aborts the commit (D50). It covers
+every mounted tier, dormant ones included, because the commit's `add -A` records
+a dormant tier's `HEAD` too. A tier *ahead* of the gitlink passes: the pass
+composes it up three-way (D36, D78). The end of a take and the memory merge's
+continuation compose a tier whatever its relation to the pin, which is why the
+rule is not part of the shared check. The pin is read from the memory store's
+**index** rather than its `HEAD`, because a staged gitlink is what the next
+memory commit records, and a landed merge is not a defect for as long as the
+memory commit recording it is pending. A tier that is mid-merge gets the remedy
+its own state needs, `/gitlore:resolve`, rather than a checkout, which would
+unlink `MERGE_HEAD` and destroy the prepared merge. The remedies for a tier
+behind or beside its pin are in [git-hooks.md](git-hooks.md). A mounted tier
+*absent* from the manifest is not an error, only inactive; the asymmetry is
+deliberate — listed-but-absent = broken, present-but-unlisted = dormant. In the
+continuation, a problem in the merged index itself blocks the landing — in the
+tier's carrier for a tier merge, and a duplicate, interleaved or welded line in
+root's `MEMORY.md` for a memory-root merge. Nothing is committed, the merge
+stays prepared, and the merger re-synthesizes with the problem lines in hand:
+the defect is in text this repo is authoring, and an edit to the named lines
+clears it (D52, in [tier-arrival-repair.md](tier-arrival-repair.md)). Any other
+refusal is reported and does not block, because the merge is synthesized and
+approved by then, and stranding it over a problem outside what it merged is the
+worse outcome. A memory-root merge then commits uncomposed and says so; a tier
+merge lands in the tier, and the end of the run that follows records it (D77).
 
 **A store with no root `MEMORY.md` composes nothing and is checked by nothing,
 and says so once an episode.** Every pass keys on that file, so its absence
@@ -154,27 +153,36 @@ memory mutations no `Write|Edit` matcher can see — a `git checkout` names no
 corpus measurement and the timing are in
 [compose-bash-arm.md](compose-bash-arm.md).
 
-**D36 — Composition is two projections; the three-way lives in the merge**
+**D36 — Composition is two projections: down places lines, up merges them
+three-way**
 
-The root's tier block and the carrier are two projections of the same facts, and
-under a pinned tier only one of them can move between passes: the agent edits
-the root, and the carrier changes only when a merge lands a new commit. So
-composition needs no base and no merge of its own. The pin is a
-**precondition, not an assumption** — a tier moved outside `/gitlore:merge` has
-a carrier nothing adopted up, and projecting root's older text down over it
-destroys approved upstream facts while reporting a successful compose, so the
-down pass refuses onto a tier that is off its pin (D31). It runs two projections
-instead:
+The root's tier block and the carrier are two projections of the same facts. The
+agent edits the root; the carrier changes when a take or a merge lands a new
+tier commit, or when a session authors into it. So composition runs two
+projections:
 
 - **Down**, on `PostToolBatch` and at the mount: root's lines for each ACTIVE
   tier are written into that tier's carrier, de-prefixed, with root's text and
   root's order. Root is canonical, so this is what carries a locally-authored
-  line into the store that travels.
-- **Up**, once, at the tier-adoption step of a landed merge: the merged carrier
-  becomes root's block for that tier. This is the one moment a carrier outranks
-  root's text — it is the artifact the user just approved, line by line — and it
-  is the only thing that makes a merged tier fact reachable, since the root
-  index is the only surface CC recalls from.
+  line into the store that travels. It places lines and merges nothing.
+- **Up**, three-way, ahead of the down projection in every pass and at the end
+  of a take: a tier whose `HEAD` is ahead of the gitlink memory records has its
+  carrier merged into root's block for it, against the carrier at that gitlink
+  (D78, in [take-and-compose.md](take-and-compose.md)). A line only the tier
+  changed is adopted — this is how a merged tier fact becomes reachable, since
+  the root index is the only surface CC recalls from — a line only root changed
+  stands, and one both changed apart is a diff3 chunk. Root's block is never
+  projected down over a carrier before the carrier has been merged up, which is
+  why the down pass needs no refusal for a tier that moved.
+
+`gitlore_compose_up` is the up projection's entry point for a caller that holds
+the tier list itself. It takes the memory worktree, the tiers to compose, one
+per line, and where the base gitlink is read (`:` the index, `HEAD:` a merge's
+`OURS`). It checks the store first, merges the tiers three-way, writes root's
+`MEMORY.md` once and no carrier, and returns 0 composed, 1 refused by the check
+or by a base the tier does not hold, 2 unwritable, or 3 when the write left a
+diff3 chunk — then with the composed line and one line per marker on stdout, and
+the merged tiers' gitlinks staged so that root has recorded seeing them.
 
 Alongside the down projection the same pass rewrites root's **layout**: active
 tier blocks in manifest order, then the project's own lines. A reorder, so the
@@ -205,13 +213,13 @@ took it.** The up projection writes root's block from the merged carrier as an
 ordinary working-tree write, and what commits it is the take's own bookkeeping,
 which an explicit take records on a store that was clean before it (D49, in
 [merge-and-resolve.md](merge-and-resolve.md)); a take on a dirty store stages
-the pair instead, and a landed merge's compose leaves its write for the next
-FR11 commit. Until one of those lands, the arrived path is absent from root at
-`HEAD`, so the lookup reads it as one nobody authored in root — removing the
-line from the root index propagates nothing, and the carrier's copy goes in the
-same change or stays, reported as in the tier but not in the root index, and
-travels to every consumer of that tier. Root at `HEAD` is therefore what says
-whether a pointer removal is one edit or two.
+the moves instead, and a memory merge's compose lands in its merge commit. Until
+one of those lands, the arrived path is absent from root at `HEAD`, so the
+lookup reads it as one nobody authored in root — removing the line from the root
+index propagates nothing, and the carrier's copy goes in the same change or
+stays, reported as in the tier but not in the root index, and travels to every
+consumer of that tier. Root at `HEAD` is therefore what says whether a pointer
+removal is one edit or two.
 
 **Root with no line at all for an active tier states nothing about it**, so both
 halves defer: the down projection skips the tier entirely, and the layout adopts

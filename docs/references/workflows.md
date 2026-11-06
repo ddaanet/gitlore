@@ -48,8 +48,9 @@ bound for project memory.
 2. The skill runs `gitlore-push`.
 3. Each tier's `live` goes to its own remote, then memory's — the same order
    `pre-push` uses, from the same shared body.
-4. A store whose remote is ahead is taken in the run — fast-forward, adoption,
-   bookkeeping commit — rather than left as a `/gitlore:merge` errand (D49).
+4. A store whose remote is ahead is taken in the run — fast-forward, then the
+   end compose and one bookkeeping commit — rather than left as a
+   `/gitlore:merge` errand (D49).
 5. The skill relays which stores moved and how far, which were taken, and names
    any uncommitted memory as unpublished.
 6. On divergence: `/gitlore:resolve` merges the store that diverged, then the
@@ -61,13 +62,14 @@ bound for project memory.
    not checked out here, upstream memory commits, or a tier whose remote is
    ahead.
 2. The skill runs `gitlore-merge`.
-3. Memory's own store is taken first, then each tier's — the mirror of the
-   publish order (D49 in [merge-and-resolve.md](merge-and-resolve.md)). For
-   memory's own store a local `live` ahead of `HEAD` is taken first: a clean
+3. Each tier is taken first, then memory's own store, and root's index is
+   written once at the end (D77 in [take-and-compose.md](take-and-compose.md)).
+   For memory's own store a local `live` ahead of `HEAD` is taken first: a clean
    store is checked out at `live`, a dirty one is reported and left (D59).
-4. A tier take commits the moved gitlink and recomposed root index under the
-   canned bookkeeping message, leaving the store clean; a root store holding
-   unapproved work keeps the pair staged instead, and the run says which.
+4. The end of the run commits the moved gitlinks and recomposed root index in
+   one canned bookkeeping message (D49), leaving the store clean; a root store
+   holding unapproved work keeps the moves staged instead, and the run says
+   which.
 5. On divergence: `/gitlore:resolve`, with a merge marked not-to-publish; the
    skill reconciles again until the command exits 0. Nothing is published.
 
@@ -93,8 +95,7 @@ Code and run `/gitlore:resolve`. The primary path resumes from there.
 **Clone**
 
 `git clone --recurse-submodules <repo>` → the first `SessionStart` configures
-settings, detaches memory at `live`, reports where memory stands, and replays
-the hook-manager sentinel.
+settings, reports where memory stands, and replays the hook-manager sentinel.
 
 Without `--recurse-submodules`: `SessionStart` detects the uninitialized
 submodule and runs `git submodule update --init`. That leaves the memory

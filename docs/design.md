@@ -161,10 +161,10 @@ The gitlink a parent commit records is always an ancestor of memory's `live`, or
 the next parent commit, so a push refused by divergence is resolved and pushed
 again, and no parent commit is ever rewritten to re-pin memory (D46).
 
-The session-start detach and its report, the advance after a commit, the two
-divergence gates that reduce to one shape (D6, D41), and why the parent's ref
-layout is no concern of memory's are in
-[branch-model.md](references/branch-model.md); the gitlink invariant is in
+The session-start report, the advance after a commit, the two divergence gates
+that reduce to one shape (D6, D41), and why the parent's ref layout is no
+concern of memory's are in [branch-model.md](references/branch-model.md); the
+gitlink invariant is in
 [git-hooks.md](references/git-hooks.md).
 
 A store whose remote history was rewritten publishes a rewrite record beside
@@ -238,19 +238,20 @@ the git and decides (D7).
   `merge` only for a fast-forward take (D76), because an unpublished merge is
   redone at every upstream update
   ([publishing-divergence.md](references/publishing-divergence.md)).
-- **Claude Code hooks** — `SessionStart` re-pins and reports, writes no index
-  (D74), and does the most work; it is also where a new worktree's memory
-  worktree is created, lazily, so worktree support is uniform however the
-  worktree came to be (no `WorktreeCreate` hook; `WorktreeRemove` tears it down,
-  advisory only). The rest are single-purpose: `PostToolBatch` reports a
-  mid-session plugin upgrade (D21), the `PreToolUse`/`PostToolBatch` index pair
-  keys on what changed rather than on what the call declared (D31), per agent so
-  a parent batch cannot consume a subagent's baseline, a `PostToolBatch` relay
-  drainer delivers — as `SessionStart` does at a compaction or resume — the
-  reports hooks write from inside a subagent, whose own output reaches nobody
-  else (D51), and `PostToolUse(EnterWorktree|ExitWorktree)` guards against
-  in-process worktree drift (D15); `SessionStart(startup|clear|compact)` re-arms
-  the once-per-episode notices. Each `PostToolBatch` hook calls one shared guard
+- **Claude Code hooks** — `SessionStart` reports and writes no index and moves
+  no module (D59, D74), and does the most work; it is also where a new
+  worktree's memory worktree is created, lazily, so worktree support is uniform
+  however the worktree came to be (no `WorktreeCreate` hook; `WorktreeRemove`
+  tears it down, advisory only). The rest are single-purpose: `PostToolBatch`
+  reports a mid-session plugin upgrade (D21), the `PreToolUse`/`PostToolBatch`
+  index pair keys on what changed rather than on what the call declared (D31),
+  per agent so a parent batch cannot consume a subagent's baseline, a
+  `PostToolBatch` relay drainer delivers — as `SessionStart` does at a
+  compaction or resume — the reports hooks write from inside a subagent, whose
+  own output reaches nobody else (D51), and
+  `PostToolUse(EnterWorktree|ExitWorktree)` guards against in-process worktree
+  drift (D15); `SessionStart(startup|clear|compact)` re-arms the
+  once-per-episode notices. Each `PostToolBatch` hook calls one shared guard
   that turns its death into a report on both channels with exit 0, since exit 2
   there ends the turn and exit 1 tells the agent nothing (D60, in
   [cc-platform.md](references/cc-platform.md)).
@@ -303,11 +304,11 @@ The step lists are in [workflows.md](references/workflows.md): commit (prose
 summary, approval, `gitlore-commit`, then the parent commit); push (`pre-push`,
 tiers then memory); tier write (rides the commit flow, tier first, under one
 summary); publish without a parent push (`/gitlore:push` over `gitlore-push`);
-take without publishing (`/gitlore:merge`, root store first, D49); resolve,
-primary when the agent reads a gate's stderr and resolves inline, fallback when
-a plain terminal sends the user to Claude Code; clone (the first `SessionStart`
-restores settings, `live` and wiring); worktree creation (`SessionStart` adds
-the memory worktree, detached).
+take without publishing (`/gitlore:merge`, tiers first and root last, D49, D77);
+resolve, primary when the agent reads a gate's stderr and resolves inline,
+fallback when a plain terminal sends the user to Claude Code; clone (the first
+`SessionStart` restores settings, `live` and wiring); worktree creation
+(`SessionStart` adds the memory worktree, detached).
 
 ---
 

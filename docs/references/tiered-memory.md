@@ -2,10 +2,10 @@
 
 The entry node for FR15 (tiered memory) — the mechanism `design.md`'s D17 points
 at. Motivation, FR15 itself and the Architecture overview live in `design.md`;
-the decision-level detail is here and in eight sibling nodes. Most of it is
+the decision-level detail is here and in nine sibling nodes. Most of it is
 needed only when touching this subsystem; the exception is the tier-store
-decisions D42–D44 and D52, which the commit and merge paths reach from outside
-it.
+decisions D42–D44, D52, D77 and D78, which the commit and merge paths reach from
+outside it.
 
 ---
 
@@ -18,10 +18,19 @@ flat merge that would blow the always-loaded index budget. Across N sibling
 repos, `user`, CC-platform `reference` and portable `feedback` facts duplicate
 and drift, while `project` facts are correctly repo-local. The design keeps
 Anthropic's memory structure — index, files, agentic recall — and upgrades only
-gitlore's *composition* of the root index. The mechanism is a subsystem rather
-than a single call, so its decisions are recorded individually as
-**D26–D40, D42–D44, D47, D48, D52, D57, D69 and D71**, across this node and
-eight siblings:
+gitlore's *composition* of the root index.
+
+**The pin model.** A tier is a nested submodule, so memory's tree records a
+gitlink for it: the commit root's block for the tier was last composed against.
+The gitlink moves by an explicit act — a memory commit's `add -A`, a take —
+never at session start (D43, D59). A tier on its gitlink composes as placement;
+one ahead of it is merged into root three-way, against the carrier at the
+gitlink (D78); one behind or beside it is refused at the commit (D50).
+
+The mechanism is a subsystem rather than a single call, so its decisions are
+recorded individually as
+**D26–D40, D42–D44, D47, D48, D52, D57, D69, D71, D77 and D78**, across this
+node and nine siblings:
 
 - **D17** tiered memory (FR15): nested submodules plus structural index
   composition
@@ -48,8 +57,11 @@ eight siblings:
   at the moments that act on facts already written · **D69** the owned-projects
   inventory and the per-fact existence question at the gate
 - Stores, in [tier-stores.md](tier-stores.md) — **D42** tier lockstep · **D43**
-  tier pinning. Both assume the detached-at-`live` branch model, which is D41,
-  in [branch-model.md](branch-model.md).
+  the tier gitlink and the take. Both assume the detached-at-`live` branch
+  model, which is D41, in [branch-model.md](branch-model.md).
+- Take and compose, in [take-and-compose.md](take-and-compose.md) — **D77**
+  tiers first, root last, one end compose · **D78** the three-way compose-up
+  against the index's gitlink.
 - Tier merges, in [tier-conflicts.md](tier-conflicts.md) — **D44** shared-tier
   conflicts resolve semantically; memory merges as prose, indexes entry-wise.
 - Defective arriving indexes, in
@@ -265,11 +277,10 @@ and the next approved `gitlore:commit` carries it with the pending work. The
 mount's changes include the recomposed `MEMORY.md`, whose recompose folds in
 whatever unapproved index edits the episode already held, so a canned commit
 would land them unprompted. This is the guard D49 keeps for a take, falling back
-to D43's staged-pair discipline
-([merge-and-resolve.md](merge-and-resolve.md),
-[tier-stores.md](tier-stores.md)). A clean store gets the canned commit,
-carrying exactly the mount. Step 3 triage moves, local facts routed into the
-tier, are judgement and keep the `gitlore:commit` approval path.
+to staging the moves instead (D77, [take-and-compose.md](take-and-compose.md)).
+A clean store gets the canned commit, carrying exactly the mount. Step 3 triage
+moves, local facts routed into the tier, are judgement and keep the
+`gitlore:commit` approval path.
 
 ## Rejected alternatives
 

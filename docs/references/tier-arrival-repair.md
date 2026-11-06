@@ -3,8 +3,9 @@
 What a take does with an arriving tier index the root cannot adopt, and what a
 merge continuation does with a merged index that fails the same check. A node of
 the tiered-memory subsystem (FR15), whose entry point is
-[tiered-memory.md](tiered-memory.md). The take, the pin and the resting state
-this builds on are in [tier-stores.md](tier-stores.md); the check's rules are in
+[tiered-memory.md](tiered-memory.md). The take and the pin this builds on are in
+[tier-stores.md](tier-stores.md), the order of a take and its end compose in
+[take-and-compose.md](take-and-compose.md); the check's rules are in
 [index-composition.md](index-composition.md).
 
 - Defective indexes — **D52** a take repairs an arrival whose index structure
@@ -19,7 +20,7 @@ that fails the check does not land**
 
 A carrier that arrives with a duplicate pointer, a non-bullet line inside the
 pointer block or a welded line fails `gitlore_compose_check`. Left unrepaired,
-it wedges the tier: the take walks back with the arrival in `live`, every later
+it wedges the tier: the take refuses on the arrival held in `live`, every later
 take refuses the same way, and every push retakes and fails. Nothing local
 reaches it: the worktree carrier the refusal names is clean, a take refuses a
 dirty tier, the pin guard refuses a tier checked out at `live`, and a hand
@@ -38,7 +39,7 @@ repository, in a `mktemp -d` directory under `$TMPDIR` or, where that is unset,
 `commit-tree`, the arrival as its only parent, subject
 `Repair the MEMORY.md structure <tier> received` and one body line per edit. It
 advances the tier's local `live` with an ff-checked `push .`, checks the tier
-out at `live`, and retries the up projection. History stays linear (D6), nothing
+out at `live`, and rechecks the carrier. History stays linear (D6), nothing
 yields, and no merge machinery runs, so the entry-wise index pass never touches
 a line the rules do not name. The commit is unprompted under D49: it adds no
 text to lines that already passed an approval gate. Once `live` holds it, the
@@ -48,20 +49,19 @@ dropped line verbatim.
 **The worktree never holds the repair uncommitted**, because a carrier written
 there first would strand a killed take: `submodule update` cannot check the pin
 out over a modified `MEMORY.md`, the pin guard then refuses every commit, and
-the take refuses the dirty tier. As built, a take killed before root is written
-leaves the tier clean — on the arrival, the repair or its pin — with `live` on
-the arrival or the repair; `SessionStart` returns it to the pin, and the next
-take repairs again or adopts the repair. The repair is deterministic, so losing
-one costs nothing, and `commit-tree` runs no hook, so no sentinel is needed.
+the take refuses the dirty tier. As built, a take killed at any point leaves the
+tier clean — on the arrival or the repair — with `live` on the arrival or the
+repair; the next take repairs again or finds the repair already there. The
+repair is deterministic, so losing one costs nothing, and `commit-tree` runs no
+hook, so no sentinel is needed.
 
-**A failed repair walks back and says what `live` holds.** Each step that can
+**A failed repair leaves the tier where the take put it.** Each step that can
 fail — the scratch directory, the arrival and pin reads, the rewrite, the commit
 build, the `live` advance, the checkout that follows it — prints its own failure
 line, then the full refusal under
-`gitlore: the root index could not take tier '<t>''s lines:`, and walks the tier
-back to its pin; the take exits 1. The walk-back names what the tier's local
-`live` keeps: `what arrived`, or `the repair` once the advance has put it there
-— so a refused advance leaves the repair commit unreachable, the tier on its pin
+`gitlore: the root index could not take tier '<t>''s lines:`, and the line
+`nothing was recorded, and tier '<t>' stays where the take put it.`; the take
+exits 1. A refused advance leaves the repair commit unreachable, with the tier
 and `live` on the arrival. These failures are transient, so the remedy is
 `Run /gitlore:merge again.`: the next take repairs from scratch.
 
@@ -83,27 +83,25 @@ three rules, in this order:
 Every other line keeps its bytes and relative order. A wrong pick among
 duplicates is named in the report and corrected upstream as an ordinary edit. A
 rule added to `gitlore_compose_check_index` gains its repair rule in the same
-change, or the take walks back for that rule. This is the line D50 records: a
+change, or the take refuses for that rule. This is the line D50 records: a
 consumer leaves the wording of what upstream sent alone, and a structural defect
-the up projection cannot adopt is the take's to repair.
+the root cannot adopt is the take's to repair.
 
-**The carrier's lines are the repair's; everything else is this repo's.** A
-retry refused on root, the manifest or another tier walks the tier back with the
-repair in `live`, reporting those problems as what adoption waits on and closing
-with the walk-back's default remedy,
-`Fix the store, then run /gitlore:merge again.` — the store is what needs fixing
-here, unlike the transient arms above. The next take or push adopts the repair
-with no second one. With no problem naming the carrier nothing is repaired. When
-the recheck still fails — a weld whose second path names no file in the tier —
-nothing is committed, the report attributes the carrier's problems to
-`live:MEMORY.md` rather than the clean worktree carrier, and it closes
-`Once the index is fixed where it was published, run /gitlore:merge again.` Any
-refusal line naming another index follows under the root-index header, and the
-remedy then names both fixes:
-`Fix the problems listed above in this repo; once the index is fixed where it was published, run /gitlore:merge again.`
-That tier stays wedged, every take walking back and every push failing, until
-upstream edits the line. Tiers are taken one at a time and the first failure
-stops the pass, so several defective arrivals are repaired in turn.
+**The carrier's lines are the repair's; everything else is this repo's.** The
+repair runs per tier, on the carrier alone, ahead of root's write. A refusal at
+the end compose on root, the manifest or another tier leaves the tier on the
+repair, which is committed in its local `live` and checked out, records nothing,
+and closes `Fix the store, then run /gitlore:merge again.` — the store is what
+needs fixing here, unlike the transient arms above. The next take or push finds
+the tier ahead of its pin and composes it with no second repair. With no problem
+naming the carrier nothing is repaired. When the recheck still fails — a weld
+whose second path names no file in the tier — nothing is committed, the report
+attributes the carrier's problems to `live:MEMORY.md` rather than the clean
+worktree carrier, and it closes
+`Once the index is fixed where it was published, run /gitlore:merge again.` That
+tier stays wedged, every take refusing at the repair and every push failing,
+until upstream edits the line. Tiers are taken one at a time and the first
+failure stops the pass, so several defective arrivals are repaired in turn.
 
 **A repair publishes the way its take does.** A take inside a push publishes it
 in that push, ahead of memory's push recording its gitlink (D42). Two places in
@@ -115,12 +113,13 @@ not an ancestor of its `origin/live`, so a repair to a tier whose own iteration
 already finished goes out too. That take prints
 `gitlore: tier '<t>' — the repair is committed in its local 'live', and this push publishes it.`;
 under `/gitlore:merge` the line ends `; /gitlore:push publishes it.` A repair
-resting on local problems publishes nothing until they are fixed. A consumer
-resting with the arrival fetches before it adopts, so it fast-forwards onto a
-repair another consumer already published instead of making its own
-([tier-stores.md](tier-stores.md)); two that repair before either publishes meet
-as an ordinary divergence at the later push. `pre-push` publishes without the
-check, and the repair is what covers that downstream.
+whose record waits on local problems still reaches the tier's remote, and not
+memory's (D75). A consumer whose `live` holds the arrival fetches before it
+adopts, so it fast-forwards onto a repair another consumer already published
+instead of making its own ([tier-stores.md](tier-stores.md)); two that repair
+before either publishes meet as an ordinary divergence at the later push.
+`pre-push` publishes without the check, and the repair is what covers that
+downstream.
 
 **A merge continuation refuses to commit a merged index that fails the check.**
 Before staging, `compose_merged_indexes` exits 1 on any problem in the merged
@@ -134,12 +133,14 @@ re-emits them with the directive and a session that never saw the refusal briefs
 its sub-agent on them ([merge-state-recovery.md](merge-state-recovery.md)).
 Every such problem is in the named file's own text, inside the merger's store,
 so one edit clears it. A problem outside the merged index lets the merge land: a
-tier merge rests the tier (D43, in [tier-stores.md](tier-stores.md)), and a
-memory-root merge commits uncomposed. A defect arriving across a divergence
-therefore reaches the synthesis, never the repair. A store with no root
-`MEMORY.md` runs no index check, so none of the abort, the repair or this gate
-applies to it — which the composition hook reports once an episode rather than
-leaving silent
+tier merge lands in the tier and the end of the run records it (D77, in
+[take-and-compose.md](take-and-compose.md)), and a memory-root merge commits
+uncomposed. A tier merge's gate reads the carrier alone and composes nothing; a
+memory-root merge's compose-up that leaves a diff3 chunk counts as a failing
+index. A defect arriving across a divergence therefore reaches the synthesis,
+never the repair. A store with no root `MEMORY.md` runs no index check, so none
+of the abort, the repair or this gate applies to it — which the composition hook
+reports once an episode rather than leaving silent
 ([index-composition.md](index-composition.md)).
 
 **A merge continuation refuses to commit files that still hold conflict
@@ -159,16 +160,6 @@ finds. Empty means unchecked, not clean. The resolve skill answers with
 it may document markers; one the merge changed that documents them at column 0
 is refused too, and the merger rewords it. The scan runs first so a tier merge
 writes nothing into root's `MEMORY.md` for a merge that did not land.
-
-**A landed merge rests its tier only onto a `live` that holds it.** The
-continuation's pushes return a status rather than exit, so a push refused for
-any reason but divergence rests an unadopted tier first, and the continuation
-exits with status 1 after it. The rest checks the pin out only when the tier's
-local `live` contains the merge. After a refused local `HEAD:live` it leaves the
-tier on the merge and prints the commands that finish the rest by hand, since
-checking the pin out would leave the merge reachable only through the reflog.
-The resting state and the printed remedy are in
-[tier-stores.md](tier-stores.md).
 
 ## Rejected alternatives
 
@@ -197,7 +188,7 @@ mechanical pick would override the synthesis it exists to produce (D52).
 
 **Repairing only when every problem names the carrier.** An arrival beside a
 local problem would stay unrepaired, so fixing the local problem would still
-leave the take refusing on the carrier. Repairing first rests the repair in
+leave the take refusing on the carrier. Repairing first leaves the repair in
 `live`, and the local fix alone then lets the next take adopt it (D52).
 
 **A continuation that commits a defective merged index uncomposed.** It lands a

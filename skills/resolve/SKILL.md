@@ -21,7 +21,8 @@ You are resolving a gitlore memory submodule from divergence.
 Exit codes:
 - `0` — healthy or simple repair complete. Summarize and stop.
 - Non-zero + "memory merge prepared" on stderr → proceed to **Parse directive**.
-- Non-zero without that → surface stderr verbatim and stop.
+- Non-zero with `gitlore: memory records tier` or `gitlore: this repository records memory at` → a commit no repository holds. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
+- Non-zero without any of those → surface stderr verbatim and stop.
 
 ## Parse directive
 
@@ -53,7 +54,7 @@ gitlore:   <problem line>
 
 Extract them verbatim and pass them in the dispatch prompt. They are the objection a previous synthesis drew, against a merge this session may never have seen, and clearing them is what lets the continuation land it.
 
-The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip. Your own review still governs the merge the sub-agent proposes, below — but not the user's: both sides of the merge already passed an approval gate, so the whole resolution runs without prompting them (D49).
+The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip.
 
 The store line names which repository diverged: the project memory store, or a tier mounted inside it. One merge policy covers every level, so the flow below is identical either way — but say which store you merged when you summarize, because a tier is shared with other repositories and the project store is not.
 
@@ -116,9 +117,5 @@ output may carry index problems. Keep the two kinds apart. Problems in the merge
 index blocked the landing until a new synthesis cleared them; say which they were.
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
 index, index pointers naming files that are not there, a refused push with its
-remedy — came after the merge commit landed; relay it, because it is a problem only
-you can fix.
-A printed remedy (`gitlore: tier '<t>' stays on the merge commit … Run:` and the
-command lines under it) is outstanding whenever it was printed — on an outcome
-that never reaches **Loop** as much as on one where the **Loop**'s `resolve.sh`
-then reports the state healthy. Run those lines, or relay them as not yet run.
+remedy — came after the merge commit landed; relay it; only you can fix it.
+A remedy printed after the landing is still to run: run it, or relay it as not yet run.

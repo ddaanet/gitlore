@@ -36,12 +36,11 @@ gitdir rather than the working tree: the once-per-session
 markers, the merge-state file, the index pair's per-batch baselines
 `gitlore-index-preimage[-<agent>]` and `gitlore-compose-stamp[-<agent>]` (D31,
 suffixed by the agent id inside a subagent; `add-tier.sh` moves any it finds
-equal to its pre-run state to the post-mount state), a tier's
-`gitlore-tier-landing` record of the commit a tier commit started from (D50),
-and the relay reports `gitlore-relay-<session>-<agent>-<epoch>-<pid>-<tag>` —
-one per report a hook staged from inside a subagent, built at `<name>.tmp`,
-removed by the drain that delivers it to the parent (`relay-drain.sh`, or
-`SessionStart` folding it into its own report) or by the seven-day sweep (D51).
+equal to its pre-run state to the post-mount state), and the relay reports
+`gitlore-relay-<session>-<agent>-<epoch>-<pid>-<tag>` — one per report a hook
+staged from inside a subagent, built at `<name>.tmp`, removed by the drain that
+delivers it to the parent (`relay-drain.sh`, or `SessionStart` folding it into
+its own report) or by the seven-day sweep (D51).
 
 > **No `autoMemoryDirectory` in project settings.** Project-level
 > `.claude/settings.json` and `.claude/settings.local.json` honor only an

@@ -32,19 +32,22 @@ merge is first parent. [branch-model.md](references/branch-model.md)
 - **D13** — a lock-contention retry wrapper guards mutating memory git calls
 - **D24** — a directive that names a sub-agent carries its own authorization
 - **D49** — canned unprompted merge commits; takes commit their bookkeeping
-- **D75** — a push publishes each store as soon as it is ready: a tier repaired
-  or merged inside a push goes to its remote even when a later tier or memory
-  then fails, because races are not routine but must be expected, and an
-  unpushed resolution is remerged at every remote update instead of
-  fast-forwarded; pushing it is what puts the store back on `live`.
-  `/gitlore:merge` is for incoming and publishes nothing
+- **D75** — a push publishes each store as soon as it is ready, so a resolution
+  is not remerged at every remote update; `/gitlore:merge` is for incoming and
+  publishes nothing
   ([publishing-divergence.md](references/publishing-divergence.md))
 - **D76** — a module's position report hints `/gitlore:push` for any divergence,
   a `HEAD` forked from local `live` included, and `/gitlore:merge` only when the
-  take is a fast-forward plus the canned bookkeeping commit: a divergence makes
-  the fast-forward impossible, a tax on every later upstream update, and the
-  push prepares the merge and publishes it
+  take is a fast-forward plus the canned bookkeeping commit
   ([publishing-divergence.md](references/publishing-divergence.md))
+- **D79** — an unresolvable pin, a recorded commit its repository lacks, is an
+  integrity error at every level: nothing composes or is recorded over it; a
+  tier gitlink is published by the checkout that recorded it or reverted whole
+  by `/gitlore:resolve`, and the parent's pin on memory has no command
+  ([unresolvable-pin.md](references/unresolvable-pin.md))
+- **D81** — `resolve.sh abort-merge` restores a prepared merge under git's
+  `reset --merge` contract, aimed at the pending commit
+  ([merge-state-recovery.md](references/merge-state-recovery.md))
 
 *Rejected:* `git commit-tree` plus `git update-ref` for the resolve merge · a
 temporary worktree for resolve · `claude --print` for conflict resolution ·
@@ -52,7 +55,10 @@ single-agent resolve with a post-hoc context refresh · holding a repaired tier
 back until memory can record it · keeping a tier merge landed inside the
 pre-push hook unpublished · publishing from `/gitlore:merge` · hinting
 `/gitlore:merge` for a divergence · hinting `/gitlore:resolve` for a `HEAD`
-forked from local `live`.
+forked from local `live` · a fallback base for the compose · a reset of memory's
+`live` past the commit that recorded a lost pin · reverting only the gitlink
+line · a command or a url change for the parent's pin · a healthy report over an
+unresolvable pin · a hand-rolled keep, drop or refuse list for the abort.
 
 **History rewrites** — what a rewritten store publishes, and what a clone on the
 old history does. [history-rewrites.md](references/history-rewrites.md)
@@ -78,13 +84,16 @@ own gate and tooling. [commit-gate.md](references/commit-gate.md)
 
 - **D19** — one canonical approval wording, held in the `gitlore:commit` skill
   and nowhere else
+- **D82** — the `gitlore:commit` skill triggers on a request to commit memory,
+  not on a store that is edited and uncommitted
 - **D22** — the memory-hygiene checker is a repo-local gate, not shipped surface
 - **D67** — the repo's own gate, test and dev tooling lives in `tools/`, not
   `scripts/`: `dist.include` lists `scripts` whole, so anything there ships, and
   `tools/` is not listed
 
 *Rejected:* a per-file `dist.include` exclude or allowlist for the tooling ·
-tooling left in `scripts/` with its docstrings fixed.
+tooling left in `scripts/` with its docstrings fixed · a state condition as the
+commit skill's trigger.
 
 **Git hooks** — what `pre-push` does inside a parent git operation, and the
 pointer invariant that rests on it.
@@ -92,19 +101,13 @@ pointer invariant that rests on it.
 
 - **D46** — a parent commit is never rewritten to re-pin memory
 - **D50** — the commit path writes no index: a store whose indexes a compose
-  pass would change aborts the commit, naming them and `gitlore-compose`; a pin
-  refusal aborts, a compose problem in an index file the commit changes aborts,
-  and every other compose refusal reports; a tier merely ahead of its pin is put
-  back on it for `/gitlore:merge` to adopt, and a retry that skips that take
-  commits — the residual is accepted, costing one later merge and no fact
+  pass would change aborts, naming them and `gitlore-compose`; so does a tier
+  behind or beside its pin (every mounted tier) and a compose problem in an
+  index file the commit changes, while every other compose refusal reports; a
+  tier ahead of its pin is committed through, its `add -A` recording the gitlink
 
-*Rejected:* a tip amend to re-pin memory · composing at the commit · reporting
-an off-pin tier and committing through it · recognising gitlore's own landed
-tier commit by its message · staging each tier gitlink right after its commit ·
-leaving a tier whose adoption failed ahead of an unstaged pin · a blanket
-refusal for every tier ahead of its pin · refusing the commit while a tier's
-local `live` is ahead of its pin · adopting inside the pin guard rather than
-directing to `/gitlore:merge`.
+*Rejected:* a tip amend to re-pin memory · composing at the commit · a refusal
+for a tier ahead of its pin.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.
@@ -166,27 +169,26 @@ names.
   remote gets one stderr line, because a private repository anywhere in the
   chain aborts an anonymous recursive clone whatever the url form; visibility is
   never changed, and a visibility `gh` cannot read is silent
+- **D80** — a url is shown without credentials (an ssh login kept), compared in
+  https form with userinfo dropped, and a remote-chosen url never reaches the
+  agent channel
 
 *Rejected:* `gh repo create` as the only remote-creation method · making the
 memory push optional in v1 · recording the ssh url in `.gitmodules` · rewriting
 the remote to https as well · rewriting an existing install's `.gitmodules` from
 `SessionStart` or install · creating tiers public by default · refusing the
 mount over visibility · a new flag or command for the visibility check · warning
-on an unknown visibility.
+on an unknown visibility · showing a url as configured · stripping an ssh login
+with its password · comparing two urls as strings · a url on both channels.
 
 **Memory redirect** — [memory-redirect.md](references/memory-redirect.md)
 
 - **D10** — the redirect is a launch-time `--settings` shim, not a project
   setting
-- **D68** — the shim injects only the memory submodule's own path, refusing
-  cheapest first: a control character (the path unshown); an absolute path; a
-  `..` or `.` component; a `.git` or `.gitlore` component, or a `.claude`
-  component not followed directly by `memory`, all case-insensitive; a nearest
-  existing ancestor that does not resolve under the physical root, or whose
-  resolved path plus the part not yet created is the root or breaks the same
-  control-directory rule; a path the index does not hold only as mode-160000
-  entries, at any stage. A refusal is one stderr line, then claude launches
-  unredirected
+- **D68** — the shim injects only the memory submodule's own path, and refuses
+  cheapest first any path that could reach a control directory or that does not
+  resolve under the physical root; a refusal is one stderr line, then claude
+  launches unredirected
 
 *Rejected:* `autoMemoryDirectory` in project settings · the same key in global
 `~/.claude/settings.json` · `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` via `.envrc` ·
@@ -209,18 +211,17 @@ wrapper path · a per-worktree wrapper anchor.
 nowhere. [session.md](references/session.md)
 
 - **D14** — user-facing SessionStart output goes on `systemMessage`
-- **D59** — SessionStart moves memory nowhere; every advance is an explicit take
-  or push
-- **D74** — compose only where the edit happens: `PostToolBatch` and the mount
-  are the only writers of an index, `gitlore-compose` run by hand clears what no
-  batch will, and the commit aborts on a pending compose; SessionStart reports
-  position and store diagnostics and writes no index, because anything
-  `PostToolBatch` did not compose is assumed to be an exterior change and
-  failing on it beats silently fixing it
+- **D59** — SessionStart moves no module; every advance is an explicit take or
+  push
+- **D74** — compose only where the edit happens: `PostToolBatch`, the mount and
+  an explicit take are the only writers of an index, `gitlore-compose` clears
+  what no batch will, and the commit aborts on a pending compose; SessionStart
+  reports and writes no index, because anything `PostToolBatch` did not compose
+  is assumed to be an exterior change and failing on it beats silently fixing it
 
 *Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
-start · composing at `SessionStart` · composing at the commit · splitting the
-compose pass for a read-only caller.
+start · moving a tier at `SessionStart` · composing at `SessionStart` ·
+composing at the commit · splitting the compose pass for a read-only caller.
 
 **The plugin-upgrade notice** — what a session does when the plugin moves under
 it. [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md)
@@ -271,13 +272,16 @@ sync (D38–D40) in [index-authoring-sync.md](references/index-authoring-sync.md
 the authoring guidance with its invocation and its owner inventory (D47, D48,
 D69) in [memory-authoring-guidance.md](references/memory-authoring-guidance.md),
 the tier stores (D42, D43) in [tier-stores.md](references/tier-stores.md), the
-tier merges (D44) in [tier-conflicts.md](references/tier-conflicts.md), the
-repair of an arriving index and the merged-index gate (D52) in
+take order and compose (D77, D78) in
+[take-and-compose.md](references/take-and-compose.md), the tier merges (D44) in
+[tier-conflicts.md](references/tier-conflicts.md), the repair of an arriving
+index and the merged-index gate (D52) in
 [tier-arrival-repair.md](references/tier-arrival-repair.md), and the edit that
 removes a tier pointer (D66) in
 [index-drift-fixes.md](references/index-drift-fixes.md).
 
-- **D17** — FR15: nested tier submodules plus a structurally composed root index
+- **D17** — FR15: nested tier submodules plus a structurally composed root
+  index; a tier's gitlink is what root last composed against
 
 *Rejected:* a flat merge-everything store · a content classifier routing each
 new fact (tiered-memory.md) · propagating the root index down into the carriers
@@ -290,24 +294,26 @@ mount, or giving the mount one of its own (composition-reports.md) · frontmatte
 hook against its body, tf-idf style (index-authoring-sync.md) · a `PreToolUse`
 deny on writes under `memory/` · an index-size trigger for the audit · carrying
 the index lines' routing surface into the descriptions
-(memory-authoring-guidance.md) · a down projection that skips a root line whose
-file the tier does not hold · writing root and staging the pair atomically
-(tier-stores.md) · an append-only constraint on shared-tier indexes · a `merge`
-driver plus `.gitattributes` · `**/MEMORY.md merge=union` plus a dedup-by-path
-pass (tier-conflicts.md) · a message fix alone for an unadoptable arrival · a
-push that tolerates the defect · a `--no-ff` merge of the arrival onto the pin ·
-an agent-driven repair through the memory-merger · a mechanical repair of a
-merge synthesis · repairing only when every problem names the carrier · a
-continuation that commits a defective merged index uncomposed · a scratch
-directory in the tier's gitdir · a sweep of stale `gitlore-repair.*` directories
-on the next repair (tier-arrival-repair.md) · leaving the pointer-removal rule
-to recall from D36 (index-drift-fixes.md) · listing the sibling repositories'
-plugins at each gate instead of holding a list · the route alone, with no
-inventory · an index line for the inventory fact · a general memory reviewer
-(memory-authoring-guidance.md) · keeping the add-tier intent file and hook with
-a canned commit added · the agent running `gitlore-commit` with a canned mount
-summary · a rubric-graded mount summary · the add-tier intent as `--options` or
-JSON arguments (tiered-memory.md).
+(memory-authoring-guidance.md) · visiting root first with a per-tier bookkeeping
+commit · keeping the per-tier root write, staged pair and walk-back · a marker
+recording a killed take · an overwrite compose-up · a base read from `HEAD` · an
+adoption step in `/gitlore:merge` or `gitlore-compose --up`
+(take-and-compose.md) · an append-only constraint on shared-tier indexes · a
+`merge` driver plus `.gitattributes` · `**/MEMORY.md merge=union` plus a
+dedup-by-path pass (tier-conflicts.md) · a message fix alone for an unadoptable
+arrival · a push that tolerates the defect · a `--no-ff` merge of the arrival
+onto the pin · an agent-driven repair through the memory-merger · a mechanical
+repair of a merge synthesis · repairing only when every problem names the
+carrier · a continuation that commits a defective merged index uncomposed · a
+scratch directory in the tier's gitdir · a sweep of stale `gitlore-repair.*`
+directories on the next repair (tier-arrival-repair.md) · leaving the
+pointer-removal rule to recall from D36 (index-drift-fixes.md) · listing the
+sibling repositories' plugins at each gate instead of holding a list · the route
+alone, with no inventory · an index line for the inventory fact · a general
+memory reviewer (memory-authoring-guidance.md) · keeping the add-tier intent
+file and hook with a canned commit added · the agent running `gitlore-commit`
+with a canned mount summary · a rubric-graded mount summary · the add-tier
+intent as `--options` or JSON arguments (tiered-memory.md).
 
 **Design history** — how the design's changelog is kept, and where a retired
 decision goes. [design-history.md](references/design-history.md)

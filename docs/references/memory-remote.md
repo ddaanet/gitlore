@@ -1,17 +1,19 @@
-# The memory remote — decisions D8, D64, D65
+# The memory remote — decisions D8, D64, D65, D80
 
 How the memory submodule's remote is named, created and recorded: the creation
 methods and the install-time disclosure, why creating it waits for explicit
 confirmation (D8), which url `.gitmodules` records and which the submodule's
 remote keeps (D64), and the warning for a private remote under a public parent
-(D65). Read it while creating or debugging a memory remote or a clone that
-cannot reach one. The install command's own steps are in
+(D65), and how a url is shown and compared (D80). Read it while creating or
+debugging a memory remote or a clone that cannot reach one. The install
+command's own steps are in
 [installation.md](installation.md).
 
 - The remote — **D8** remote creation requires explicit user confirmation ·
   **D64** `.gitmodules` records the https url while the remote keeps the one
   given · **D65** a private remote under a public parent is warned about, never
-  changed
+  changed · **D80** a url is shown without credentials, compared in https form,
+  and never chosen by a remote on the agent channel
 
 ---
 
@@ -110,7 +112,7 @@ Per NFR5 (double-commit semantics): memory `live` is pushed before parent push
 on every `git push`. Parent remote always points at a submodule SHA reachable on
 the memory remote.
 
-## Decisions — D8, D64, D65
+## Decisions — D8, D64, D65, D80
 
 Why creating the memory remote asks first, and which url the tracked
 `.gitmodules` records.
@@ -153,6 +155,31 @@ Creating tiers public by default decides the owner's question for them; refusing
 the mount strands a legitimate private tier; a flag or command for the check
 adds surface for a one-line report.
 
+**D80 — A url is shown without credentials, compared in https form, and never
+reaches the agent channel when a remote or a contributor chose it**
+
+A url in the user's config can carry a credential, and a pull request can carry
+a url of its own, so a report that names one is a channel for both. Three rules
+(`gitlore_url_for_display`, `gitlore_url_without_userinfo` and
+`gitlore_same_repo_url`, in `scripts/lib/util-config.sh` and
+`scripts/lib/resolve-unresolvable.sh`):
+
+- **Shown.** In a `scheme://` url other than ssh, all userinfo goes, whatever
+  its shape (`user:token@host`, `TOKEN@host`). An ssh url, `ssh://` or the scp
+  form, keeps its login, which the reader needs to know which account reaches
+  the host, and loses the password. A url with no userinfo, a local path and an
+  `@` in a path or query print as given. A password holding `@` is not parsed:
+  the text after the authority's last `@` is the host.
+- **Compared.** Two urls name one repository when both, put through D64's https
+  form, lose their userinfo and then a trailing `/` and `.git`; any other pair
+  compares as written. `.gitmodules` records https while a module's own remote
+  can stay on ssh, so a string comparison reads the same repo as two.
+- **Placed.** The user's line shows the url; the agent's line says the user has
+  it. A url a remote or a contributor chose, and git's own words about it, reach
+  the user only, with the url as shown.
+
+The private-under-public warning (D65) shows its url through the same rule.
+
 ## Rejected alternatives
 
 **`gh repo create` as the only remote-creation method.** Locks out non-GitHub
@@ -160,3 +187,17 @@ users; the provider-agnostic copy-paste flow covers them.
 
 **Making the memory push optional in v1.** Gitlore without shared memory is a
 diminished product. An opt-out can be added later as a preference.
+
+**Showing a url as configured.** A credential in the configured url prints on
+whichever channel reads the line (D80).
+
+**Stripping an ssh login with the password.** The login names which account
+reaches the host, which the reader needs; only the password is a secret (D80).
+
+**Comparing two urls as strings.** `.gitmodules` records a GitHub repo in https
+form while the module's remote stays on ssh, so a string comparison calls one
+repo two (D80).
+
+**A url on both channels.** A url a remote or a contributor chose is text the
+agent has no use for and the user can read, so the agent's line says the user
+has it (D80).
