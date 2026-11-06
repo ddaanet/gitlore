@@ -9,6 +9,12 @@ lives in the `docs/references/` node its group names, one hop away, and
 `tools/check-docs-links.py` gates that every conclusion here has an argument
 there and every argument there a conclusion here.
 
+Two clusters are delegated, because each is read only while changing its own
+subsystem. The index keeps one entry naming the decisions and their nodes; for
+the install-time and platform surfaces each node opens with the conclusion lines
+and the rejected alternatives by name, in this file's form, and for tiered
+memory the nodes conclude in their openings while the rejected names stay here.
+
 ---
 
 ## Design Decisions
@@ -32,13 +38,18 @@ merge is first parent. [branch-model.md](references/branch-model.md)
 - **D13** — a lock-contention retry wrapper guards mutating memory git calls
 - **D24** — a directive that names a sub-agent carries its own authorization
 - **D49** — canned unprompted merge commits; takes commit their bookkeeping
-- **D75** — a push publishes each store as soon as it is ready, so a resolution
-  is not remerged at every remote update; `/gitlore:merge` is for incoming and
-  publishes nothing
+- **D75** — a push publishes each store as soon as it is ready: a tier repaired
+  or merged inside a push goes to its remote even when a later tier or memory
+  then fails, because races are not routine but must be expected, and an
+  unpushed resolution is remerged at every remote update instead of
+  fast-forwarded; pushing it is what puts the store back on `live`.
+  `/gitlore:merge` is for incoming and publishes nothing
   ([publishing-divergence.md](references/publishing-divergence.md))
 - **D76** — a module's position report hints `/gitlore:push` for any divergence,
   a `HEAD` forked from local `live` included, and `/gitlore:merge` only when the
-  take is a fast-forward plus the canned bookkeeping commit
+  take is a fast-forward plus the canned bookkeeping commit: a divergence makes
+  the fast-forward impossible, a tax on every later upstream update, and the
+  push prepares the merge and publishes it
   ([publishing-divergence.md](references/publishing-divergence.md))
 - **D79** — an unresolvable pin, a recorded commit its repository lacks, is an
   integrity error at every level: nothing composes or is recorded over it; a
@@ -147,48 +158,30 @@ working tree · unsetting `GIT_AUTHOR_*` and `GIT_COMMITTER_*` before every stor
 commit · keeping the `gitlore.*Command` discovery keys alongside the `bin/`
 names.
 
-**Install** — what one-time setup does and refuses.
-[installation.md](references/installation.md)
-
-- **D25** — direct wiring refuses rather than appends after an existing `exec`
-- **D45** — the sentinel replay is an allow-list, never `sh -c` on the tracked
-  file
-
-*Rejected:* a strictly non-empty initial commit · a separate
-`gitlore.memoryPath` config key · replaying the sentinel as a shell command.
-
-**The memory remote** — how it is created, and which url is recorded.
-[memory-remote.md](references/memory-remote.md)
-
-- **D8** — remote creation requires explicit user confirmation
-- **D64** — the tracked `.gitmodules` records
-  `https://github.com/<owner>/<repo>.git` for a GitHub ssh url, given or
-  resolved, while the submodule's own remote keeps the url as given, so pushes
-  stay on that transport
-- **D65** — a confirmed-public parent with a confirmed-private memory or tier
-  remote gets one stderr line, because a private repository anywhere in the
-  chain aborts an anonymous recursive clone whatever the url form; visibility is
-  never changed, and a visibility `gh` cannot read is silent
-- **D80** — a url is shown without credentials (an ssh login kept), compared in
-  https form with userinfo dropped, and a remote-chosen url never reaches the
-  agent channel
-
-*Rejected:* `gh repo create` as the only remote-creation method · making the
-memory push optional in v1 · recording the ssh url in `.gitmodules` · rewriting
-the remote to https as well · rewriting an existing install's `.gitmodules` from
-`SessionStart` or install · creating tiers public by default · refusing the
-mount over visibility · a new flag or command for the visibility check · warning
-on an unknown visibility · showing a url as configured · stripping an ssh login
-with its password · comparing two urls as strings · a url on both channels.
+**Install-time and platform surfaces** — read while changing install, the memory
+remote, the hook wrappers, the upgrade notice or a Claude Code workaround, not
+while reasoning about memory itself. Each node opens with its conclusions and
+names its rejected alternatives: install (D25, D45) in
+[installation.md](references/installation.md), the memory remote (D8, D64, D65,
+D80) in [memory-remote.md](references/memory-remote.md), the hook wrappers (D5,
+D11) in [hook-wrappers.md](references/hook-wrappers.md), the plugin-upgrade
+notice (D21) in [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md),
+and the Claude Code platform workarounds (D15, D23, D51, D60) in
+[cc-platform.md](references/cc-platform.md).
 
 **Memory redirect** — [memory-redirect.md](references/memory-redirect.md)
 
 - **D10** — the redirect is a launch-time `--settings` shim, not a project
   setting
-- **D68** — the shim injects only the memory submodule's own path, and refuses
-  cheapest first any path that could reach a control directory or that does not
-  resolve under the physical root; a refusal is one stderr line, then claude
-  launches unredirected
+- **D68** — the shim injects only the memory submodule's own path, refusing
+  cheapest first: a control character (the path unshown); an absolute path; a
+  `..` or `.` component; a `.git` or `.gitlore` component, or a `.claude`
+  component not followed directly by `memory`, all case-insensitive; a nearest
+  existing ancestor that does not resolve under the physical root, or whose
+  resolved path plus the part not yet created is the root or breaks the same
+  control-directory rule; a path the index does not hold only as mode-160000
+  entries, at any stage. A refusal is one stderr line, then claude launches
+  unredirected
 
 *Rejected:* `autoMemoryDirectory` in project settings · the same key in global
 `~/.claude/settings.json` · `CLAUDE_COWORK_MEMORY_PATH_OVERRIDE` via `.envrc` ·
@@ -197,15 +190,6 @@ canonicalizing the memory directory alone · a `*..*` glob for traversal · a
 silent passthrough on refusal · patching a consumer's generated copy ·
 containment under the root as the whole test · refusing every `.claude`
 component · requiring exactly one index entry.
-
-**The hook wrappers** — where the wrappers live and how they are anchored.
-[hook-wrappers.md](references/hook-wrappers.md)
-
-- **D5** — wrapper scripts live in the git common dir, untracked
-- **D11** — wrapper paths anchor at the git common dir, so linked worktrees work
-
-*Rejected:* tracked hook scripts in the repo · a literal `.git/gitlore-<hook>`
-wrapper path · a per-worktree wrapper anchor.
 
 **The session** — what SessionStart says to whom, and why it moves memory
 nowhere. [session.md](references/session.md)
@@ -222,37 +206,6 @@ nowhere. [session.md](references/session.md)
 *Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
 start · moving a tier at `SessionStart` · composing at `SessionStart` ·
 composing at the commit · splitting the compose pass for a read-only caller.
-
-**The plugin-upgrade notice** — what a session does when the plugin moves under
-it. [plugin-upgrade-notice.md](references/plugin-upgrade-notice.md)
-
-- **D21** — a mid-session plugin upgrade is a notice, not a self-healing config
-
-*Rejected:* a version-less plugin pointer resolved at hook runtime · wrappers
-self-healing from `CLAUDE_PLUGIN_ROOT` · a `PreCompact` registration of the
-nudge reset · re-arming on every `SessionStart` source.
-
-**Claude Code platform workarounds** — harness behaviours, each carrying the
-empirical work that established it, which is why they stay whole.
-[cc-platform.md](references/cc-platform.md)
-
-- **D15** — an in-process-worktree memory-drift guard
-- **D23** — the `Edit` weld defect is contained by a pair that computes the
-  intended result, repairs, and reports its own obsolescence
-- **D51** — a hook's output inside a subagent reaches that subagent alone, so
-  its report is a write-once file keyed by session and agent, drained by a
-  dedicated `PostToolBatch` hook
-- **D60** — a `PostToolBatch` hook that dies reports on both channels and exits
-  0; when it cannot report, it exits non-zero but never 2
-
-*Rejected:* leaving a subagent's hook report to the subagent's own narration ·
-one shared marker per agent that each reporting hook merges into · a drain
-inside each reporting hook · claim-by-rename before reading · folding another
-session's stranded reports at `SessionStart` · relaying in place of the
-subagent's own emission · exit 1 passthrough alone · a fixed message with no
-capture · per-site `|| exit 0` · a wrapper script in `hooks.json` · rewriting
-every non-zero status to 1 · a mount report with a line saying composition did
-not run, via `gitlore_compose_and_report` under `if !`.
 
 **Active recall** — why recall is a skill the agent runs itself, not a hook.
 [active-recall.md](references/active-recall.md)
@@ -344,7 +297,7 @@ check.
 
 ## Rejected Alternatives
 
-Each is named on the *Rejected* line of its decision group above and argued in
-the `## Rejected alternatives` section that closes that group's node. A decision
-that is later inverted or retired is deleted from the index and its node, with
-its why in the deleting commit (D72).
+Each is named on the *Rejected* line of its decision group above, or of its
+delegated node's opening for the install-time and platform surfaces, and argued
+in the node. A decision that is later inverted or retired is deleted from the
+index and its node, with its why in the deleting commit (D72).

@@ -9,11 +9,26 @@ debugging a memory remote or a clone that cannot reach one. The install
 command's own steps are in
 [installation.md](installation.md).
 
-- The remote — **D8** remote creation requires explicit user confirmation ·
-  **D64** `.gitmodules` records the https url while the remote keeps the one
-  given · **D65** a private remote under a public parent is warned about, never
-  changed · **D80** a url is shown without credentials, compared in https form,
-  and never chosen by a remote on the agent channel
+- **D8** — remote creation requires explicit user confirmation
+- **D64** — the tracked `.gitmodules` records
+  `https://github.com/<owner>/<repo>.git` for a GitHub ssh url, given or
+  resolved, while the submodule's own remote keeps the url as given, so pushes
+  stay on that transport
+- **D65** — a confirmed-public parent with a confirmed-private memory or tier
+  remote gets one stderr line, because a private repository anywhere in the
+  chain aborts an anonymous recursive clone whatever the url form; visibility is
+  never changed, and a visibility `gh` cannot read is silent
+- **D80** — a url is shown without credentials (an ssh login kept), compared in
+  https form with userinfo dropped, and a remote-chosen url never reaches the
+  agent channel
+
+*Rejected:* `gh repo create` as the only remote-creation method · making the
+memory push optional in v1 · recording the ssh url in `.gitmodules` · rewriting
+the remote to https as well · rewriting an existing install's `.gitmodules` from
+`SessionStart` or install · creating tiers public by default · refusing the
+mount over visibility · a new flag or command for the visibility check · warning
+on an unknown visibility · showing a url as configured · stripping an ssh login
+with its password · comparing two urls as strings · a url on both channels.
 
 ---
 

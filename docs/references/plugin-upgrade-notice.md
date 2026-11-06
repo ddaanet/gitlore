@@ -4,8 +4,11 @@ A plugin upgraded mid-session leaves the running session on the old version.
 This node holds the argument for reporting that and never repairing it; the
 `SessionStart` wiring it sits beside is in [session.md](session.md).
 
-- Plugin upgrade — **D21** a mid-session plugin upgrade is a notice, not a
-  self-healing config
+- **D21** — a mid-session plugin upgrade is a notice, not a self-healing config
+
+*Rejected:* a version-less plugin pointer resolved at hook runtime · wrappers
+self-healing from `CLAUDE_PLUGIN_ROOT` · a `PreCompact` registration of the
+nudge reset · re-arming on every `SessionStart` source.
 
 ---
 

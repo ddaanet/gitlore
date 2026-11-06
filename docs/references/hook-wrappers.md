@@ -9,9 +9,12 @@ or wired. What every `SessionStart` does around the emission is in
 [session.md](session.md); the install command and the per-manager wiring that
 name the wrapper are in [installation.md](installation.md).
 
-- Wrappers — **D5** wrapper scripts live in the git common dir, untracked ·
-  **D11** wrapper paths are gitlink-aware, anchored at the common dir, for
-  linked worktrees
+- **D5** — wrapper scripts live in the git common dir, untracked
+- **D11** — wrapper paths are gitlink-aware, anchored at the git common dir, so
+  linked worktrees work
+
+*Rejected:* tracked hook scripts in the repo · a literal `.git/gitlore-<hook>`
+wrapper path · a per-worktree wrapper anchor.
 
 ---
 

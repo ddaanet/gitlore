@@ -10,9 +10,12 @@ two placements are in [memory-redirect.md](memory-redirect.md); the hook wrapper
 files are in [hook-wrappers.md](hook-wrappers.md), and what every `SessionStart`
 does is in [session.md](session.md).
 
-- Install — **D25** direct wiring refuses rather than appends after an existing
-  `exec` · **D45** the sentinel replay is an allow-list, never `sh -c` on the
-  tracked file
+- **D25** — direct wiring refuses rather than appends after an existing `exec`
+- **D45** — the sentinel replay is an allow-list, never `sh -c` on the tracked
+  file
+
+*Rejected:* a strictly non-empty initial commit · a separate
+`gitlore.memoryPath` config key · replaying the sentinel as a shell command.
 
 ---
 
