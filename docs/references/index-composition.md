@@ -171,9 +171,10 @@ projections:
   (D78, in [take-and-compose.md](take-and-compose.md)). A line only the tier
   changed is adopted — this is how a merged tier fact becomes reachable, since
   the root index is the only surface CC recalls from — a line only root changed
-  stands, and one both changed apart is a diff3 chunk. Root's block is never
-  projected down over a carrier before the carrier has been merged up, which is
-  why the down pass needs no refusal for a tier that moved.
+  stands, and one both changed apart is a diff3 chunk (in the memory merge's
+  continuation, the tier's line). Root's block is never projected down over a
+  carrier before the carrier has been merged up, which is why the down pass
+  needs no refusal for a tier that moved.
 
 `gitlore_compose_up` is the up projection's entry point for a caller that holds
 the tier list itself. It takes the memory worktree, the tiers to compose, one

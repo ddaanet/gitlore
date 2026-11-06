@@ -257,3 +257,40 @@ root_diverged_tier_past_both() {
     return 1
   }
 }
+
+# memory remote: a commit rewording root's line $1 to $2 another way, so git
+# conflicts root's MEMORY.md in the merge.
+push_memory_reword() {
+  local work content
+  work="$(mktemp -d "$TMP_REPO/mwork.XXXXXX")"
+  git clone -q -b live "$MEMORY_REMOTE" "$work"
+  (
+    cd "$work" || exit 1
+    git config user.email "other@example.com"
+    git config user.name "Other"
+    content=$(cat MEMORY.md)
+    content=${content//"$1"/"$2"}
+    printf '%s\n' "$content" > MEMORY.md
+    git commit -qam "remote rewords the root line"
+    git push -q origin live
+  )
+  rm -rf "$work"
+}
+
+@test "a line root and the tier changed apart takes the tier's in the continuation, reported, and the merge lands" {
+  take_base_store
+  reword_root_and_commit "a portable fact" "reworded in root"
+  push_memory_reword "a portable fact" "reworded on memory remote"
+  push_tier_carrier_edit ddaanet "a portable fact" "reworded in tier" >/dev/null
+
+  drive_take_to_rest memory/ddaanet
+  [ "$TAKE_STATUS" -eq 0 ] || { cat "$BATS_TEST_TMPDIR"/take.*.err >&2; return 1; }
+  tierline='- [shared](ddaanet/shared.md) — reworded in tier'
+  grep -qxF -- "$tierline" memory/MEMORY.md
+  run ! grep -q "^<<<<<<< " memory/MEMORY.md
+  merge_commit=$(git -C memory rev-list --merges -n 1 HEAD)
+  [ -n "$merge_commit" ]
+  git -C memory show "$merge_commit:MEMORY.md" | grep -qxF -- "$tierline"
+  [ -z "$(git -C memory status --porcelain)" ]
+  cat "$BATS_TEST_TMPDIR"/take.*.err | grep -qF "tier 'ddaanet' replaced root's line for ddaanet/shared.md"
+}

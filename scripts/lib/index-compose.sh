@@ -24,8 +24,10 @@
 #                              detection, and rule 7 (a tier off its pin)
 #   index-compose-repair.sh   the mechanical rewrite for a compose-check problem
 #   index-compose-dangling.sh the dangling-pointer report and its fix lines
-#   index-compose-project.sh  the orphan report and the down/up projection
-#                              between root and a tier's carrier
+#   index-compose-project.sh  the down/up projection between root and a tier's
+#                              carrier
+#   index-compose-orphans.sh  the orphan report, the path-presence test and the
+#                              line picker
 #   index-compose-pending.sh  the compose pass, its index rendering, and the
 #                              read-only check that shares both with the write
 # and index-merge.sh, the entry-wise three-way merge the compose-up runs.
@@ -38,6 +40,8 @@ source "${BASH_SOURCE[0]%/*}/index-compose-repair.sh"
 source "${BASH_SOURCE[0]%/*}/index-compose-dangling.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-project.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-compose-orphans.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-pending.sh"
 # shellcheck disable=SC1091

@@ -12,7 +12,8 @@ yields to is in [merge-and-resolve.md](merge-and-resolve.md).
 - Take and compose — **D77** a take visits every tier first and root last, and
   writes root's index once, in one bookkeeping commit · **D78** a tier's lines
   compose up into root three-way, against the carrier at the gitlink memory's
-  index records, and a tier ahead of that gitlink is no fault
+  index records, and a tier ahead of that gitlink is no fault · in the memory
+  merge's continuation a line both sides changed takes the tier's
 
 ---
 
@@ -173,8 +174,11 @@ chunk stages the merged tiers.
 That rule is the scope of the take's compose and of every pass outside a memory
 merge. The memory merge's continuation is the standing exception: it reads the
 gitlinks `OURS` records from `HEAD:` (above), because the index there already
-holds the staged tier heads. The same rebuilt chunk is then possible there, and
-whether to keep that base is an open question recorded in `TODO.md`.
+holds the staged tier heads. That base cannot record what root has seen until
+the merge commits, so a line both the merged root and the tier changed apart
+takes the tier's line there, reported on stderr as
+`tier '<tier>' replaced root's line for <path>`, rather than a chunk that would
+recur on every rerun.
 
 `/gitlore:merge` brings in changes from `live` and gains no adoption step, and
 there is no `gitlore-compose --up`. The commit path commits through a tier ahead
@@ -220,7 +224,17 @@ changes and chunks only a line both moved apart (D78).
 **A base read from `HEAD`.** It rebuilds the same chunk at every pass and every
 commit, because nothing records that root has seen the tier's version (D78).
 Rejected for the take and the passes; the memory merge's continuation keeps it
-as D78's stated exception.
+as D78's stated exception, with the tier-wins rule above.
+
+**Recording in the merge state which tier commits the continuation has offered
+root as a chunk.** It would make the continuation's base depend on state and add
+a second base rule beside the gitlink, where a tier-wins line gives one
+consistent answer: a merge always takes in the index update from the tiers
+(D78).
+
+**Composing in the prepare.** `gitlore_compose_check` refuses a `MEMORY.md`
+holding git's markers (rules 8, 1 and 4), and composing over the entry-wise
+merge would nest a tier chunk inside a root chunk (D78).
 
 **An adoption step in `/gitlore:merge`, or `gitlore-compose --up`.** The
 three-way compose answers any disagreement between root and a tier, so a step

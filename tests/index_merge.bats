@@ -157,6 +157,18 @@ merge() { gitlore_index_merge base ours theirs "MINE" "BASE" "THEIRS"; }
   [[ "$output" == *'<<<<<<< MINE'$'\n''- [A](a.md) — mine'$'\n''||||||| BASE'$'\n''- [A](a.md) — old'$'\n''======='$'\n''- [A](a.md) — theirs'$'\n''>>>>>>> THEIRS'* ]]
 }
 
+@test "given a notes file and a tier, a both-changed bullet takes theirs' line and is noted, not chunked" {
+  idx base '- [A](a.md) — old'
+  idx ours '- [A](a.md) — mine'
+  idx theirs '- [A](a.md) — theirs'
+  run gitlore_index_merge base ours theirs HEAD BASE THEIRS "$BATS_TEST_TMPDIR/notes" ddaanet
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'- [A](a.md) — theirs'* ]]
+  [[ "$output" != *'<<<<<<<'* ]]
+  [[ "$output" != *'— mine'* ]]
+  [ "$(cat "$BATS_TEST_TMPDIR/notes")" = "tier 'ddaanet' replaced root's line for a.md" ]
+}
+
 @test "both sides adding the same NEW path with different text conflicts on an empty base" {
   idx base '- [A](a.md) — hook'
   idx ours '- [A](a.md) — hook' '- [N](n.md) — mine'

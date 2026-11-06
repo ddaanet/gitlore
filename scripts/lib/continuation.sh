@@ -62,7 +62,11 @@ load_continuation_state() {
 # files git merged, but a carrier line neither side of root held reaches it only
 # here, three-way from that gitlink. The layout, the validations and the
 # dangling report all still have something to say about the merged root too. A
-# compose that leaves a diff3 chunk in root does not land, like a failing index.
+# line both the merged root and the tier changed apart takes the tier's, and is
+# reported on stderr: the base is read from OURS, which cannot record that root
+# has seen the tier's version until the merge commits, so a chunk there would
+# recur on every rerun. A compose that leaves a diff3 chunk in root otherwise
+# does not land, like a failing index.
 #
 # A refusal blocks a memory merge only when it targets the index the merge is about
 # to publish: a problem gitlore_compose_check attributes to root's own MEMORY.md
@@ -113,7 +117,7 @@ compose_merged_indexes() {
     # HEAD still records OURS here, and the tiers the prepare staged at their
     # HEADs read as on their pins once the merge commit lands, so the tiers
     # ahead of what OURS records compose now or never.
-    composed=$(gitlore_compose_up "$memroot" "$(gitlore_tiers_off_pin "$memroot" HEAD:)" HEAD:) || rc=$?
+    composed=$(gitlore_compose_up "$memroot" "$(gitlore_tiers_off_pin "$memroot" HEAD:)" HEAD: tier-wins) || rc=$?
     if [ "$rc" -eq 1 ] || [ "$rc" -eq 3 ]; then
       index_problems=$(gitlore_compose_problems_in "$memroot/MEMORY.md" <<<"$composed") \
         || index_problems=""

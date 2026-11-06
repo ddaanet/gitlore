@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Compose-project: the down projection into a tier's carrier, the root's
-# composed bullet block, the three-way compose-up of a tier ahead of its pin,
-# and the orphan report — the per-index projection work gitlore_compose drives.
+# composed bullet block and the three-way compose-up of a tier ahead of its pin
+# — the per-index projection work gitlore_compose drives.
 # Part of lib/index-compose.sh; source that, not this file.
 
 # Print the root index's pointer paths at the memory store's HEAD, one per line.
@@ -205,7 +205,9 @@ EOF
 
 # Compose the tiers $2 lists, one per line, UP into the root index three-way and
 # write it once; every other line stays where it is. $3 says where the base
-# gitlink is read, as gitlore_compose_merge_tiers takes it. The end of a take
+# gitlink is read, as gitlore_compose_merge_tiers takes it; $4 is its optional
+# mode, `tier-wins`, under which a line both sides changed takes the tier's
+# instead of a chunk and is reported on stdout, one line per path. The end of a take
 # runs it for the tiers it left ahead of the memory index's gitlinks, and the
 # memory merge's continuation for the tiers ahead of the gitlinks OURS records.
 #
@@ -215,7 +217,7 @@ EOF
 # marker on stdout; the merged tiers' gitlinks are then staged
 # (gitlore_stage_merged_tiers).
 gitlore_compose_up() {
-  local mempath="$1" tiers="$2" at="$3"
+  local mempath="$1" tiers="$2" at="$3" mode="${4-}"
   local root="$mempath/MEMORY.md" dir out rc=0
   [ -f "$root" ] || return 0
   if ! gitlore_compose_check "$mempath"; then
@@ -225,7 +227,7 @@ gitlore_compose_up() {
     printf 'could not make a scratch directory to compose %s\n' "$root"
     return 2
   fi
-  out=$(gitlore_compose_merge_tiers "$mempath" "$tiers" "$dir" "$at") || rc=$?
+  out=$(gitlore_compose_merge_tiers "$mempath" "$tiers" "$dir" "$at" "$mode") || rc=$?
   if [ "$rc" -ge 2 ]; then
     rm -rf "$dir"
     printf '%s\n' "$out"
@@ -238,6 +240,7 @@ gitlore_compose_up() {
   fi
   [ -z "$out" ] || printf '%s\n' "$out"
   if [ "$rc" -eq 0 ]; then
+    [ ! -s "$dir/notes" ] || cat "$dir/notes"
     rm -rf "$dir"
     return 0
   fi
@@ -298,7 +301,8 @@ gitlore_tiers_off_pin() {
 # tier, theirs the carrier at the tier's HEAD, through
 # gitlore_index_merge (index-merge.sh): a line only the tier changed is adopted,
 # a line only root changed stands, and one both changed apart is a diff3 chunk
-# under git's labels — HEAD, the base commit, the tier's HEAD. A tier on its pin
+# under git's labels — HEAD, the base commit, the tier's HEAD — unless $5 is
+# `tier-wins`, which takes the tier's line and records it in $3/notes. A tier on its pin
 # merges to root's own lines, since base equals theirs. A tier root holds no
 # line for is left out, for the mount case of gitlore_compose_root_bullets.
 #
@@ -307,9 +311,13 @@ gitlore_tiers_off_pin() {
 # entry-wise. A base the tier does not hold composes nothing: an empty base
 # would read every line root dropped as one the tier added.
 gitlore_compose_merge_tiers() {
-  local mempath="$1" tiers="$2" dir="$3" at="$4"
+  local mempath="$1" tiers="$2" dir="$3" at="$4" mode="${5-}" notes=""
   local root="$mempath/MEMORY.md" tier tierpath base head line path n=0 rc=0 mrc problems=""
   : > "$dir/tiers" || return 2
+  if [ "$mode" = tier-wins ]; then
+    notes="$dir/notes"
+    : > "$notes" || return 2
+  fi
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -334,7 +342,7 @@ gitlore_compose_merge_tiers() {
       case "$path" in "$tier"/*) printf '%s\n' "$line" >> "$dir/ours" ;; esac
     done < <(gitlore_index_part "$root" bullets)
     mrc=0
-    gitlore_index_merge "$dir/base" "$dir/ours" "$dir/theirs" HEAD "$base" "$head" \
+    gitlore_index_merge "$dir/base" "$dir/ours" "$dir/theirs" HEAD "$base" "$head" "$notes" "$tier" \
       > "$dir/merged" || mrc=$?
     if [ "$mrc" -ge 2 ]; then
       problems="${problems}$tierpath/MEMORY.md: tier '$tier''s index at ${head:0:12} cannot be merged entry-wise into the root index
@@ -376,60 +384,4 @@ gitlore_line_number() {
     if [ "$line" = "$want" ]; then printf '%s\n' "$n"; return 0; fi
   done < "$file"
   return 1
-}
-
-# Print one report line per ACTIVE tier carrier path that the composed root index
-# does not carry; return 0 either way. Run AFTER a pass, like the dangling report
-# and for the same reason: it describes the store as it now stands.
-#
-# A carrier line reaches the root unless root already had a block for that tier
-# and never mentioned this path — a line written straight into the carrier, or
-# one left there while the tier slept. Nothing is rewritten or dropped over it:
-# it is a line whose two surfaces disagree about whether the fact is in play
-# here, and which way to settle that is the agent's call, not the pass's. Either
-# way is one edit, and the line names both: a carrier path that root at HEAD
-# carries never survives a pass (the down projection reads it as root's
-# deletion), so every orphan is one root never committed, and deleting it from
-# the carrier is final.
-gitlore_compose_orphans() {
-  local mempath="$1" active tier line path
-  active=$(gitlore_active_tiers "$mempath")
-  [ -f "$mempath/MEMORY.md" ] || return 0
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    while IFS= read -r line || [ -n "$line" ]; do
-      path=$(gitlore_bullet_path "$line") || continue
-      gitlore_index_has_path "$mempath/MEMORY.md" "$tier/$path" && continue
-      # shellcheck disable=SC2016 # the backticks are report text, not a substitution
-      printf '%s: %s is in the tier but not in the root index — delete its line from %s, or add `%s` to %s to recall it here\n' \
-        "$mempath/$tier/MEMORY.md" "$path" "$mempath/$tier/MEMORY.md" \
-        "$(gitlore_bullet_reprefix "$line" "$tier")" "$mempath/MEMORY.md"
-    done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
-  done <<EOF
-$active
-EOF
-  return 0
-}
-
-# Return 0 when index $1 carries a pointer line for exactly path $2.
-gitlore_index_has_path() {
-  local file="$1" want="$2" line path
-  [ -f "$file" ] || return 1
-  while IFS= read -r line || [ -n "$line" ]; do
-    path=$(gitlore_bullet_path "$line") || continue
-    [ "$path" = "$want" ] && return 0
-  done < "$file"
-  return 1
-}
-
-# Filter stdin (bullets) to the first one whose path is $1. Helper for the
-# merge above; keeps the path comparison out of a subshell-heavy inline loop.
-gitlore_compose_pick() {
-  local want="$1" line path
-  while IFS= read -r line || [ -n "$line" ]; do
-    path=$(gitlore_bullet_path "$line") || continue
-    if [ "$path" = "$want" ]; then printf '%s\n' "$line"; return 0; fi
-  done
-  return 0
 }

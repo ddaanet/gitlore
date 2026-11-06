@@ -75,8 +75,8 @@ and the diff3 chunk for a path both sides moved apart are the same, and the
 labels are git's own for the three commits: `HEAD`, the base commit and the
 tier's `HEAD`. Outside a merge no sub-agent reads that chunk: it is written into
 root's `MEMORY.md` with its markers and resolved by whoever commits memory. In a
-memory merge's continuation a chunk keeps the merge prepared for a new synthesis
-(D52).
+memory merge's continuation a line both sides changed takes the tier's, reported
+on stderr, so the merge lands (D78).
 
 **The merger sub-agent is briefed with both side diffs and the tree.** Alongside
 the state file, `gitlore_prepare_merge` writes three read-only artifacts into
