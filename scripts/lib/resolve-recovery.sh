@@ -162,10 +162,14 @@ gitlore_drop_merge_preparation() {
 # `resolve.sh abort-merge`: put store $1 back where a prepared merge found it.
 # Reads the pending commit first, since dropping the preparation deletes the
 # pin that names it; `git merge --abort` runs only while a MERGE_HEAD exists, so
-# a preparation interrupted after its checkout aborts the same way. An untracked
-# file a merger wrote is named and left in place: it is the merger's work, and
-# nothing here can tell it from the user's. Returns 1 after saying why on stderr
-# when the store was not restored.
+# a preparation interrupted after its checkout aborts the same way. The checkout
+# is forced: a checkout that unlinked MERGE_HEAD left the index as the merge
+# staged it, and with it whatever a merger staged or edited, which a plain
+# checkout would carry onto the pending commit as if the user had made it.
+# Dropped either way, as `merge --abort` drops it. An untracked file a merger
+# wrote is named and left in place: it is the merger's work, and nothing here
+# can tell it from the user's. Returns 1 after saying why on stderr when the
+# store was not restored.
 # Args: $1 = store worktree path.
 gitlore_abort_prepared_merge() {
   local store="$1" statefile pending err untracked abs
@@ -187,7 +191,7 @@ gitlore_abort_prepared_merge() {
       return 1
     fi
   fi
-  if ! err=$(gitlore_git -C "$store" checkout -q --detach "$pending" 2>&1); then
+  if ! err=$(gitlore_git -C "$store" checkout -q -f --detach "$pending" 2>&1); then
     printf 'gitlore: the merge in %s is aborted, but HEAD could not be put back on its pending commit %s. git said:\n%s\n' "$abs" "$pending" "$err" >&2
     return 1
   fi

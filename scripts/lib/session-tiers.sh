@@ -41,11 +41,13 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
         continue
       fi
     fi
-    # A prepared merge is said, not skipped over: an untouched tier that says
-    # nothing is indistinguishable from one that synced. `detect` rather than
-    # `guard_stale_merge_state`: the guard's directive tells the agent to abort
-    # and retry, which is wrong for a merge that is simply waiting to be landed,
-    # and it writes to stderr, which SessionStart does not show the user (D14).
+    # A prepared merge is said, and nothing else is: an untouched tier that says
+    # nothing is indistinguishable from one that synced, and a position read
+    # would describe the preparation, which moved HEAD onto its authority, and
+    # hint a second remedy. `detect` rather than `guard_stale_merge_state`: the
+    # guard's directive tells the agent to abort and retry, which is wrong for a
+    # merge that is simply waiting to be landed, and it writes to stderr, which
+    # SessionStart does not show the user (D14).
     if [ "$(gitlore_detect_stale_merge_state "$tierpath")" != "clean" ] \
        || git -C "$tierpath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
       add_sysmsg "gitlore: tier '$tier' has an unfinished merge, so its working tree was left as it is this session. Run /gitlore:resolve to land it."
@@ -55,6 +57,7 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
       protocol_ctx="$protocol_ctx
 
 gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset it, or commit into it. Run /gitlore:resolve to land the merge before writing anything to that tier."
+      continue
     fi
     # Fetch read-only: `origin live` with no refspec moves no local branch, and
     # the remote tip is still in hand to compare against. Non-fatal — a session
@@ -89,7 +92,8 @@ gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset
       if [ -n "$pin" ]; then
         unresolvable_tiers="$unresolvable_tiers$tier
 "
-        add_report "$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin")"
+        add_report_each "$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin" user)" \
+          "$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin" agent)"
       fi
     fi
     position=$(gitlore_module_position "$tierpath" "$auth") || continue

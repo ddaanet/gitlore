@@ -231,6 +231,11 @@ load helpers/tier-divergence
   echo "$output" | jq -e '.systemMessage | test("tier composition") | not'
   echo "$output" | jq -e '.systemMessage | test("is mid-merge") | not'
   echo "$output" | jq -e '.systemMessage | test("checkout --detach") | not'
+  # Alone, on the position too: a prepared merge moved the tier's HEAD onto its
+  # authority, so a position line would describe the preparation and hint a
+  # second remedy. Scoped to the paragraphs naming the tier — memory's own
+  # lines share the systemMessage.
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | all(.[]; (contains("ddaanet") and test("/gitlore:(push|merge)|in sync")) | not)'
   # Alone: no diagnostic offers gitlore-compose to a mid-merge tier, on either channel.
   echo "$output" | jq -e '.systemMessage | test("gitlore-compose") | not'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("gitlore-compose") | not'

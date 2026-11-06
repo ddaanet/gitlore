@@ -14,6 +14,16 @@ add_report() {
 $1"
 }
 
+# A report whose two channels differ: $1 to the user, $2 to the agent. For a
+# line carrying text a remote or a contributor chose (a url, git's own output),
+# which the user reads and the agent does not need.
+add_report_each() {
+  add_sysmsg "$1"
+  protocol_ctx="$protocol_ctx
+
+$2"
+}
+
 # Print where module $1 stands against authority commit $2: `forked` when HEAD
 # and local `live` each hold commits the other lacks, else the furthest of
 # HEAD's and `live`'s relations to the authority — `diverged`, `ahead`, `behind`
@@ -86,7 +96,8 @@ gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; 
   # failed fetch cannot tell an unfetched commit from a lost one.
   if [ "$fetched" -eq 1 ]; then
     pin=$(gitlore_parent_pin_absent "$mempath")
-    [ -n "$pin" ] && add_report "$(gitlore_unresolvable_parent_report "$mempath" "$pin")"
+    [ -n "$pin" ] && add_report_each "$(gitlore_unresolvable_parent_report "$mempath" "$pin" user)" \
+      "$(gitlore_unresolvable_parent_report "$mempath" "$pin" agent)"
   fi
 
   # A prepared merge moved HEAD onto its authority, so a position read now
@@ -146,13 +157,31 @@ gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched,
 
 # The root's mid-merge report: the command that completes the prepared merge
 # and the one that aborts it, on both channels, as `cd "<repo>" && …` lines the
-# agent runs verbatim. Both flavors complete through `continue-after-merge`.
+# agent runs verbatim. Both flavors complete through `continue-after-merge`. A
+# MERGE_HEAD with no state file is a merge gitlore did not prepare (a hand-run
+# `git merge`, or a push killed before it wrote its state), which neither
+# command can read: that report gives what /gitlore:resolve gives the same
+# store — look, then undo it — and names no state file.
 # Args: $1 = memory worktree path.
 report_memory_mid_merge() {
-  local mempath="$1" repo root statefile cont abort
+  local mempath="$1" repo root statefile cont abort mh look undo
   repo=$(git rev-parse --show-toplevel)
   root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
   statefile=$(gitlore_merge_state_file "$mempath")
+  if [ ! -f "$statefile" ]; then
+    mh=$(git -C "$mempath" rev-parse -q --verify MERGE_HEAD)
+    look="cd \"$repo\" && git -C \"$mempath\" status --short"
+    undo="cd \"$repo\" && git -C \"$mempath\" merge --abort"
+    add_sysmsg "gitlore: memory holds a merge gitlore did not prepare (MERGE_HEAD ${mh:0:12}, no merge state file), so nothing was changed. Finish it or undo it in the store:
+  $look
+  $undo"
+    protocol_ctx="$protocol_ctx
+
+gitlore: memory holds a merge gitlore did not prepare (MERGE_HEAD ${mh:0:12}, no merge state file). Do not commit memory or start another take over it. It may hold work in progress: look first, and undo it only if the user confirms:
+  $look
+  $undo"
+    return 0
+  fi
   cont="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" continue-after-merge"
   abort="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" abort-merge"
   add_sysmsg "gitlore: memory holds a prepared merge that has not landed. To land it, resolve and stage the merged files, then run:

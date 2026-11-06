@@ -36,43 +36,87 @@ gitlore_parent_pin_absent() {
 }
 
 # The report line for tier $2, whose recorded commit $3 neither the checkout nor
-# its remote holds. Carries the push remedy and the revert, and no command that
-# needs the commit: a checkout of it or a merge that fetches it both fail.
-# Args: $1 = memory worktree path, $2 = tier path, $3 = the recorded commit.
+# its remote holds, for channel $4. Carries the push remedy and the revert, and
+# no command that needs the commit: a checkout of it or a merge that fetches it
+# both fail. The urls — the tier's remote, and the one `.gitmodules` records
+# when that is a different repo — are text a contributor's PR or the user's
+# config chose: the `user` line shows them, their userinfo stripped, and the
+# `agent` line says the user has them.
+# Args: $1 = memory worktree path, $2 = tier path, $3 = the recorded commit,
+# $4 = `user` or `agent`.
 gitlore_unresolvable_tier_report() {
-  local mempath="$1" tier="$2" pin="$3" remote recorded where
+  local mempath="$1" tier="$2" pin="$3" channel="$4" remote recorded where
   remote=$(git -C "$mempath/$tier" config --get remote.origin.url || true)
-  if [ -n "$remote" ]; then
-    where="neither this checkout of the tier nor its remote $remote holds"
-  else
+  if [ -z "$remote" ]; then
     where="this checkout of the tier does not hold, and the tier has no remote"
+  elif [ "$channel" = agent ]; then
+    where="neither this checkout of the tier nor its remote holds (the user has the remote's url)"
+  else
+    where="neither this checkout of the tier nor its remote $(gitlore_url_for_display "$remote") holds"
   fi
   recorded=$(gitlore_gitmodules_url "$mempath/.gitmodules" "$tier")
   if [ -n "$recorded" ] && { [ -z "$remote" ] || ! gitlore_same_repo_url "$remote" "$recorded"; }; then
-    where="$where; $mempath/.gitmodules names $recorded for the tier, a different repo"
+    if [ "$channel" = agent ]; then
+      where="$where; $mempath/.gitmodules names a different repo for the tier (the user has its url)"
+    else
+      where="$where; $mempath/.gitmodules names $(gitlore_url_for_display "$recorded") for the tier, a different repo"
+    fi
   fi
   printf "gitlore: memory records tier '%s' at %s, a commit %s. Nothing composes over it. The checkout that recorded it publishes it with /gitlore:push; if that checkout no longer exists, /gitlore:resolve reverts the memory commit that recorded it.\n" \
     "$tier" "${pin:0:12}" "$where"
 }
 
 # The report line for the parent's pin $2 on memory, which memory's remote does
-# not hold. No command and no url change: whether to accept another repo's url
-# belongs to the multi-repo design, not to this report.
-# Args: $1 = memory worktree path, $2 = the recorded commit.
+# not hold, for channel $3. No command and no url change: whether to accept
+# another repo's url belongs to the multi-repo design, not to this report. The
+# urls go to the `user` line only, as in the tier report.
+# Args: $1 = memory worktree path, $2 = the recorded commit, $3 = `user` or `agent`.
 gitlore_unresolvable_parent_report() {
-  local mempath="$1" pin="$2" remote recorded where
+  local mempath="$1" pin="$2" channel="$3" remote recorded where
   remote=$(git -C "$mempath" config --get remote.origin.url || true)
-  if [ -n "$remote" ] && ! gitlore_is_placeholder_url "$remote"; then
-    where="a commit memory's remote $remote does not hold"
-  else
+  if [ -z "$remote" ] || gitlore_is_placeholder_url "$remote"; then
     where="a commit this memory store does not hold, and memory has no remote"
+  elif [ "$channel" = agent ]; then
+    where="a commit memory's remote does not hold (the user has the remote's url)"
+  else
+    where="a commit memory's remote $(gitlore_url_for_display "$remote") does not hold"
   fi
   recorded=$(gitlore_gitmodules_url .gitmodules "$mempath")
   if [ -n "$recorded" ] && { [ -z "$remote" ] || ! gitlore_same_repo_url "$remote" "$recorded"; }; then
-    where="$where; .gitmodules names $recorded for memory, a different repo"
+    if [ "$channel" = agent ]; then
+      where="$where; .gitmodules names a different repo for memory (the user has its url)"
+    else
+      where="$where; .gitmodules names $(gitlore_url_for_display "$recorded") for memory, a different repo"
+    fi
   fi
   printf 'gitlore: this repository records memory at %s, %s. The memory holding it has not been merged upstream, so its facts are not in this checkout.\n' \
     "${pin:0:12}" "$where"
+}
+
+# Print url $1 with its userinfo removed: `scheme://user:token@host/path` is
+# shown as `scheme://host/path`, so a credential embedded in a remote url is
+# never printed. Only the `scheme://` form carries one; an scp-like
+# `git@host:path` names an ssh user, not a secret, and is printed as is, as is
+# a url whose only `@` sits in its path.
+# Args: $1 = a url.
+gitlore_url_for_display() {
+  local url="$1" scheme rest authority path
+  case "$url" in
+    *://*@*) ;;
+    *) printf '%s\n' "$url"; return 0 ;;
+  esac
+  scheme=${url%%://*}
+  rest=${url#*://}
+  authority=${rest%%/*}
+  case "$authority" in
+    *@*) authority=${authority##*@} ;;
+    *) printf '%s\n' "$url"; return 0 ;;
+  esac
+  case "$rest" in
+    */*) path="/${rest#*/}" ;;
+    *) path="" ;;
+  esac
+  printf '%s://%s%s\n' "$scheme" "$authority" "$path"
 }
 
 # Print the url .gitmodules file $1 records for the submodule at path $2, or
@@ -99,11 +143,12 @@ gitlore_gitmodules_url() {
 # Exit 0 when urls $1 and $2 name one repository. By D64 `.gitmodules` records
 # a GitHub repo in its https form while the module's own remote can stay on ssh,
 # so both go through the same https form before a trailing `/` and `.git` are
-# dropped; any other pair compares as written.
+# dropped; a credential in either names no other repo, so userinfo goes first.
+# Any other pair compares as written.
 gitlore_same_repo_url() {
   local a b
-  a=$(gitlore_github_https_url "$1")
-  b=$(gitlore_github_https_url "$2")
+  a=$(gitlore_github_https_url "$(gitlore_url_for_display "$1")")
+  b=$(gitlore_github_https_url "$(gitlore_url_for_display "$2")")
   a=${a%/}
   a=${a%.git}
   b=${b%/}
@@ -117,7 +162,7 @@ gitlore_same_repo_url() {
 # its remote holds is a take's business, not an integrity error.
 # Args: $1 = memory worktree path.
 gitlore_resolve_check_pins() {
-  local mempath="$1" tier pin found=0 repo root msg
+  local mempath="$1" tier pin found=0 repo root revert
   repo=$(git rev-parse --show-toplevel)
   root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
   while IFS= read -r tier; do
@@ -130,10 +175,13 @@ gitlore_resolve_check_pins() {
     pin=$(gitlore_tier_pin_absent "$mempath" "$tier")
     [ -n "$pin" ] || continue
     found=1
-    msg="$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin")
-gitlore: once no checkout holds it, revert the memory commit that recorded it on live, keeping it in history:
+    revert="gitlore: once no checkout holds it, revert the memory commit that recorded it on live, keeping it in history:
 gitlore:   cd \"$repo\" && bash \"$root/scripts/resolve.sh\" revert-pin $(printf '%q' "$tier")"
-    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    gitlore_say_for_agent_or_user \
+      "$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin" agent)
+$revert" \
+      "$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin" user)
+$revert" >&2
   done < <(gitlore_tier_paths "$mempath")
 
   pin=$(gitlore_parent_pin_absent "$mempath")
@@ -143,8 +191,9 @@ gitlore:   cd \"$repo\" && bash \"$root/scripts/resolve.sh\" revert-pin $(printf
   fi
   if [ -n "$pin" ]; then
     found=1
-    msg=$(gitlore_unresolvable_parent_report "$mempath" "$pin")
-    gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+    gitlore_say_for_agent_or_user \
+      "$(gitlore_unresolvable_parent_report "$mempath" "$pin" agent)" \
+      "$(gitlore_unresolvable_parent_report "$mempath" "$pin" user)" >&2
   fi
   [ "$found" -eq 0 ]
 }

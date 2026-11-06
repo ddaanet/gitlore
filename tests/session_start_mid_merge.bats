@@ -222,3 +222,65 @@ merge_fingerprint() {
   }
   [ "$(git -C memory rev-parse HEAD)" = "$head0" ]
 }
+
+# A checkout over a clean staged merge — `git checkout --detach`, a parent-side
+# `submodule update` — unlinks MERGE_HEAD and MERGE_MSG and leaves the index as
+# the merge staged it. The abort must leave the same store either way: a
+# merger's staged or unstaged edit to a tracked file does not ride onto the
+# pending commit, which `git merge --abort` would have dropped.
+@test "the abort drops a merger's edits when a checkout unlinked MERGE_HEAD, as the MERGE_HEAD path does" {
+  root_merge_prepared_against_remote
+  printf 'merger synthesis\n' >> memory/MEMORY.md
+  git -C memory add MEMORY.md
+  printf 'unstaged\n' >> memory/local-only.md
+  git -C memory checkout -q --detach
+  [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  [ -f "$statefile" ]
+  [ -n "$(git -C memory status --porcelain)" ]
+  session_start_over_store
+  find_report_commands
+  run --separate-stderr bash -c "$abort_cmd"
+  [ "$status" -eq 0 ] || { printf 'abort failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
+  [ "$(git -C memory rev-parse HEAD)" = "$head0" ]
+  [ -z "$(git -C memory status --porcelain)" ] || {
+    printf 'edits rode onto the pending commit:\n%s\n' "$(git -C memory status --porcelain)" >&2
+    return 1
+  }
+  [ ! -f "$statefile" ]
+  [ -z "$(git -C memory rev-parse -q --verify refs/gitlore/pending)" ]
+}
+
+# --- a merge gitlore did not prepare ---------------------------------------------
+
+# A MERGE_HEAD with no state file is a merge something else began in the store —
+# a hand-run `git merge`, or a push killed before it wrote its state. Neither
+# `continue-after-merge` nor `abort-merge` has a state file to read, so the
+# report gives what /gitlore:resolve gives the same store: look, then undo it.
+@test "SessionStart over a merge gitlore did not prepare names git merge --abort and no command that needs a state file" {
+  wire_memory_remote
+  base=$(git -C memory rev-parse HEAD)
+  git -C memory checkout -q --detach
+  printf 'side\n' > memory/side.md
+  git -C memory add side.md
+  git -C memory commit -qm "a sideways commit"
+  side=$(git -C memory rev-parse HEAD)
+  git -C memory checkout -q --detach "$base"
+  git -C memory merge -q --no-commit --no-ff "$side"
+  [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
+  [ ! -f "$statefile" ]
+  session_start_over_store
+  for channel in "$sys" "$ctx"; do
+    [[ "$channel" == *"merge --abort"* ]] || { printf 'no merge --abort remedy; channel:\n%s\n' "$channel" >&2; return 1; }
+    [[ "$channel" != *"continue-after-merge"* ]] || { printf 'continue-after-merge offered with no state file:\n%s\n' "$channel" >&2; return 1; }
+    [[ "$channel" != *"abort-merge"* ]] || { printf 'abort-merge offered with no state file:\n%s\n' "$channel" >&2; return 1; }
+    [[ "$channel" != *"gitlore-merge-state"* ]] || { printf 'a state file that does not exist is named:\n%s\n' "$channel" >&2; return 1; }
+  done
+  # The command the report prints undoes the merge.
+  undo_cmd=$(report_commands "$ctx" | grep -F 'merge --abort' | head -n 1)
+  [ -n "$undo_cmd" ]
+  run --separate-stderr bash -c "$undo_cmd"
+  [ "$status" -eq 0 ] || { printf 'the printed undo failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
+  [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$base" ]
+}
