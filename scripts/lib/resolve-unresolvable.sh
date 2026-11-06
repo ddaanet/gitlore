@@ -93,32 +93,6 @@ gitlore_unresolvable_parent_report() {
     "${pin:0:12}" "$where"
 }
 
-# Print url $1 with its userinfo removed: `scheme://user:token@host/path` is
-# shown as `scheme://host/path`, so a credential embedded in a remote url is
-# never printed. Only the `scheme://` form carries one; an scp-like
-# `git@host:path` names an ssh user, not a secret, and is printed as is, as is
-# a url whose only `@` sits in its path.
-# Args: $1 = a url.
-gitlore_url_for_display() {
-  local url="$1" scheme rest authority path
-  case "$url" in
-    *://*@*) ;;
-    *) printf '%s\n' "$url"; return 0 ;;
-  esac
-  scheme=${url%%://*}
-  rest=${url#*://}
-  authority=${rest%%/*}
-  case "$authority" in
-    *@*) authority=${authority##*@} ;;
-    *) printf '%s\n' "$url"; return 0 ;;
-  esac
-  case "$rest" in
-    */*) path="/${rest#*/}" ;;
-    *) path="" ;;
-  esac
-  printf '%s://%s%s\n' "$scheme" "$authority" "$path"
-}
-
 # Print the url .gitmodules file $1 records for the submodule at path $2, or
 # nothing. `-z` keeps a name or path with spaces in one record.
 # Args: $1 = .gitmodules file, $2 = submodule path.
@@ -142,13 +116,13 @@ gitlore_gitmodules_url() {
 
 # Exit 0 when urls $1 and $2 name one repository. By D64 `.gitmodules` records
 # a GitHub repo in its https form while the module's own remote can stay on ssh,
-# so both go through the same https form before a trailing `/` and `.git` are
-# dropped; a credential in either names no other repo, so userinfo goes first.
-# Any other pair compares as written.
+# so both go through the same https form, then lose their userinfo — a login or
+# a credential names no other repo — before a trailing `/` and `.git` are
+# dropped. Any other pair compares as written.
 gitlore_same_repo_url() {
   local a b
-  a=$(gitlore_github_https_url "$(gitlore_url_for_display "$1")")
-  b=$(gitlore_github_https_url "$(gitlore_url_for_display "$2")")
+  a=$(gitlore_url_without_userinfo "$(gitlore_github_https_url "$1")" none)
+  b=$(gitlore_url_without_userinfo "$(gitlore_github_https_url "$2")" none)
   a=${a%/}
   a=${a%.git}
   b=${b%/}

@@ -158,10 +158,12 @@ gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched,
 # The root's mid-merge report: the command that completes the prepared merge
 # and the one that aborts it, on both channels, as `cd "<repo>" && …` lines the
 # agent runs verbatim. Both flavors complete through `continue-after-merge`. A
-# MERGE_HEAD with no state file is a merge gitlore did not prepare (a hand-run
-# `git merge`, or a push killed before it wrote its state), which neither
-# command can read: that report gives what /gitlore:resolve gives the same
-# store — look, then undo it — and names no state file.
+# MERGE_HEAD with no state file is a merge gitlore did not prepare — a hand-run
+# `git merge`, or an agent asked to merge by hand; gitlore writes the state
+# file before its own preparation starts (gitlore_yield_merge), so a push
+# killed mid-way leaves one — which neither command can read: that report
+# gives what /gitlore:resolve gives the same store — look, then undo it — and
+# names no state file.
 # Args: $1 = memory worktree path.
 report_memory_mid_merge() {
   local mempath="$1" repo root statefile cont abort mh look undo

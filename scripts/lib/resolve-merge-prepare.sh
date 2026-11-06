@@ -196,19 +196,30 @@ gitlore_refuse_unresolvable_gitlinks() {
 # True when tier $2 holds commit $3, after one fetch of it from the tier's remote
 # if it does not yet. Refused otherwise, as an integrity error: the checkout that
 # recorded the commit is the one that can publish it. git's words go with the
-# refusal, since a remote that could not be reached says nothing about the commit.
+# refusal, since a remote that could not be reached says nothing about the
+# commit — to the user only, with the remote's url as `gitlore_url_for_display`
+# shows it: the url is the user's config, and git repeats it as configured,
+# credential included.
 # Args: $1 = memory worktree, $2 = tier name, $3 = the recorded commit.
 # Returns 1 after emitting.
 gitlore_tier_holds_gitlink() {
-  local mempath="$1" tier="$2" sha="$3" tierpath="$1/$2" url err msg
+  local mempath="$1" tier="$2" sha="$3" tierpath="$1/$2" url err shown tail
   git -C "$tierpath" rev-parse -q --verify "$sha^{commit}" >/dev/null && return 0
   if err=$(git -C "$tierpath" fetch -q --no-recurse-submodules origin "$sha" 2>&1) \
      && git -C "$tierpath" rev-parse -q --verify "$sha^{commit}" >/dev/null; then
     return 0
   fi
   url=$(git -C "$tierpath" config --get remote.origin.url || true)
-  msg="gitlore: memory records ${sha:0:12} for tier '$tier', and neither the tier nor its remote ${url:-(none configured)} supplied that commit, so memory was neither moved nor composed. The checkout that recorded it runs /gitlore:push; /gitlore:merge then retries. git said:
-$err"
-  gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+  if [ -n "$url" ]; then
+    shown=$(gitlore_url_for_display "$url")
+    err=${err//"$url"/"$shown"}
+  else
+    shown="(none configured)"
+  fi
+  tail="supplied that commit, so memory was neither moved nor composed. The checkout that recorded it runs /gitlore:push; /gitlore:merge then retries."
+  gitlore_say_for_agent_or_user \
+    "gitlore: memory records ${sha:0:12} for tier '$tier', and neither the tier nor its remote $tail The user has the remote's url and git's words." \
+    "gitlore: memory records ${sha:0:12} for tier '$tier', and neither the tier nor its remote $shown $tail git said:
+$err" >&2
   return 1
 }

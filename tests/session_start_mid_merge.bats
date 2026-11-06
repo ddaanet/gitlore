@@ -17,7 +17,7 @@
 # the one containing `continue-after-merge`; the abort is the other.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
-# shellcheck disable=SC2154
+# shellcheck disable=SC2154,SC2030,SC2031
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -225,14 +225,14 @@ merge_fingerprint() {
 
 # A checkout over a clean staged merge — `git checkout --detach`, a parent-side
 # `submodule update` — unlinks MERGE_HEAD and MERGE_MSG and leaves the index as
-# the merge staged it. The abort must leave the same store either way: a
-# merger's staged or unstaged edit to a tracked file does not ride onto the
-# pending commit, which `git merge --abort` would have dropped.
-@test "the abort drops a merger's edits when a checkout unlinked MERGE_HEAD, as the MERGE_HEAD path does" {
+# the merge staged it. The abort must leave the same store either way: what is
+# staged is the merge's result, and a merger's staged edit on top of it is
+# indistinguishable from it, so it goes as `git merge --abort` drops it, and
+# does not ride onto the pending commit.
+@test "the abort drops a merger's staged edit when a checkout unlinked MERGE_HEAD, as the MERGE_HEAD path does" {
   root_merge_prepared_against_remote
   printf 'merger synthesis\n' >> memory/MEMORY.md
   git -C memory add MEMORY.md
-  printf 'unstaged\n' >> memory/local-only.md
   git -C memory checkout -q --detach
   [ -z "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
   [ -f "$statefile" ]
@@ -248,6 +248,67 @@ merge_fingerprint() {
   }
   [ ! -f "$statefile" ]
   [ -z "$(git -C memory rev-parse -q --verify refs/gitlore/pending)" ]
+}
+
+# What the abort removes, it names, except the merge's own staged result. An
+# edit nobody staged and an untracked file both post-date the preparation,
+# which runs on a clean store, and neither is the merge's: the abort refuses
+# over them, names them, and leaves the store as it found it.
+@test "the abort refuses over an unstaged edit to a tracked file, names it, and changes nothing" {
+  root_merge_prepared_against_remote
+  printf 'written during the window\n' >> memory/MEMORY.md
+  before=$(merge_fingerprint)
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" abort-merge
+  [ "$status" -eq 1 ] || { printf 'the abort did not refuse (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
+  [[ "$stderr" == *"MEMORY.md"* ]] || { printf 'the refusal names no path:\n%s\n' "$stderr" >&2; return 1; }
+  [[ "$stderr" == *"nothing was aborted"* ]]
+  [ "$(merge_fingerprint)" = "$before" ] || { printf 'the store changed:\n%s\n' "$(merge_fingerprint)" >&2; return 1; }
+  grep -q 'written during the window' memory/MEMORY.md
+}
+
+# Root diverged from its remote, with a base file the upstream commit deletes,
+# so the merge result lacks a path the pending commit tracks. Leaves $head0 and
+# $statefile.
+root_merge_prepared_dropping_scratch() {
+  wire_memory_remote
+  printf 'scratch v1\n' > memory/scratch.md
+  git -C memory add scratch.md
+  git -C memory commit -qm "a base file"
+  git -C memory push -q . HEAD:refs/heads/live
+  git -C memory push -q origin live
+  printf 'local only\n' > memory/local-only.md
+  git -C memory add local-only.md
+  git -C memory commit -qm "a root-only fact"
+  git -C memory push -q . HEAD:refs/heads/live
+  local work
+  work="$(mktemp -d "$TMP_REPO/clone.XXXXXX")"
+  (
+    cd "$work" || exit 1
+    git clone -q "$MEMORY_REMOTE" .
+    git checkout -q live
+    git rm -q scratch.md
+    git -c user.email=t@t -c user.name=t commit -q -m "remote drops the base file"
+    git push -q origin live
+  )
+  rm -rf "$work"
+  head0=$(git -C memory rev-parse HEAD)
+  run bash "$CMD"
+  [ "$status" -ne 0 ]
+  statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
+  [ -f "$statefile" ]
+  [ ! -e memory/scratch.md ]
+}
+
+@test "the abort refuses over an untracked file the pending commit has a path for, names it, and changes nothing" {
+  root_merge_prepared_dropping_scratch
+  printf 'merger scratch\n' > memory/scratch.md
+  before=$(merge_fingerprint)
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" abort-merge
+  [ "$status" -eq 1 ] || { printf 'the abort did not refuse (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
+  [[ "$stderr" == *"scratch.md"* ]] || { printf 'the refusal names no path:\n%s\n' "$stderr" >&2; return 1; }
+  [[ "$stderr" != *"left in place"* ]]
+  [ "$(merge_fingerprint)" = "$before" ] || { printf 'the store changed:\n%s\n' "$(merge_fingerprint)" >&2; return 1; }
+  [ "$(cat memory/scratch.md)" = "merger scratch" ]
 }
 
 # --- a merge gitlore did not prepare ---------------------------------------------

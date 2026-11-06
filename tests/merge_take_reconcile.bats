@@ -75,7 +75,8 @@ RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
   fork_root_from_live
   head_before=$(git -C memory rev-parse HEAD)
 
-  run --separate-stderr bash "$RESOLVE"
+  # The user's run: the remote's url is on the user channel only.
+  CLAUDECODE='' run --separate-stderr bash "$RESOLVE"
   [ "$status" -eq 1 ]
   err="$stderr"
   [[ "$output$err" != *"dispatch sub-agent"* ]]

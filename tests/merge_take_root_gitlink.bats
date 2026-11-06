@@ -122,7 +122,8 @@ load helpers/take-order
   root_before=$(git -C memory rev-parse HEAD)
   index_before=$(cat memory/MEMORY.md)
 
-  run --separate-stderr bash "$CMD"
+  # The user's run: the remote's url is on the user channel only.
+  CLAUDECODE='' run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
   # Root moved nothing and composed nothing.
   [ "$(git -C memory rev-parse HEAD)" = "$root_before" ]
@@ -150,7 +151,7 @@ load helpers/take-order
   tier_sha=$(push_tier_fact ddaanet '- [up](up.md) — published on live')
   root_before=$(git -C memory rev-parse HEAD)
 
-  run --separate-stderr bash "$CMD"
+  CLAUDECODE='' run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
   err="$stderr"
   [[ "$output$err" != *"dispatch sub-agent"* ]]

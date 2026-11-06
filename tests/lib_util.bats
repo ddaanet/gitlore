@@ -107,6 +107,29 @@ EOF
   [ "$(gitlore_github_https_url "git@github.com:acme/my.repo-memory.git")" = "https://github.com/acme/my.repo-memory.git" ]
 }
 
+@test "gitlore_url_for_display drops a credential and keeps an ssh login" {
+  [ "$(gitlore_url_for_display "https://user:tok3n@github.com/acme/tier.git")" = "https://github.com/acme/tier.git" ]
+  [ "$(gitlore_url_for_display "https://ghp_tok3n@github.com/acme/tier.git")" = "https://github.com/acme/tier.git" ]
+  [ "$(gitlore_url_for_display "https://user@host")" = "https://host" ]
+  [ "$(gitlore_url_for_display "ssh://user:tok3n@github.com/acme/tier.git")" = "ssh://user@github.com/acme/tier.git" ]
+  [ "$(gitlore_url_for_display "ssh://git@github.com/acme/tier.git")" = "ssh://git@github.com/acme/tier.git" ]
+  [ "$(gitlore_url_for_display "ssh://user@[::1]:2222/x")" = "ssh://user@[::1]:2222/x" ]
+  [ "$(gitlore_url_for_display "git@github.com:acme/tier.git")" = "git@github.com:acme/tier.git" ]
+  [ "$(gitlore_url_for_display "user:tok3n@host:acme/tier.git")" = "user@host:acme/tier.git" ]
+  [ "$(gitlore_url_for_display "https://host/p?x=a@b")" = "https://host/p?x=a@b" ]
+  [ "$(gitlore_url_for_display "host:path@x")" = "host:path@x" ]
+  [ "$(gitlore_url_for_display "/tmp/a@b/tier.git")" = "/tmp/a@b/tier.git" ]
+  [ "$(gitlore_url_for_display "https://u:p@h/a b/c")" = "https://h/a b/c" ]
+}
+
+@test "gitlore_same_repo_url compares the https form of each url with its userinfo removed" {
+  gitlore_same_repo_url "ssh://git@github.com/acme/tier.git" "https://github.com/acme/tier.git"
+  gitlore_same_repo_url "git@github.com:acme/tier.git" "https://github.com/acme/tier"
+  gitlore_same_repo_url "https://user:tok3n@github.com/acme/tier.git" "https://github.com/acme/tier.git"
+  gitlore_same_repo_url "ssh://alice@host/acme/tier.git" "ssh://bob@host/acme/tier.git"
+  if gitlore_same_repo_url "https://github.com/acme/tier.git" "https://github.com/acme/other.git"; then return 1; fi
+}
+
 @test "gitlore_github_https_url leaves every other url as given" {
   local u
   for u in "https://github.com/acme/project.git" "https://github.com/acme/project" \

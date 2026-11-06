@@ -162,17 +162,22 @@ gitlore_drop_merge_preparation() {
 # `resolve.sh abort-merge`: put store $1 back where a prepared merge found it.
 # Reads the pending commit first, since dropping the preparation deletes the
 # pin that names it; `git merge --abort` runs only while a MERGE_HEAD exists, so
-# a preparation interrupted after its checkout aborts the same way. The checkout
-# is forced: a checkout that unlinked MERGE_HEAD left the index as the merge
-# staged it, and with it whatever a merger staged or edited, which a plain
-# checkout would carry onto the pending commit as if the user had made it.
-# Dropped either way, as `merge --abort` drops it. An untracked file a merger
-# wrote is named and left in place: it is the merger's work, and nothing here
-# can tell it from the user's. Returns 1 after saying why on stderr when the
-# store was not restored.
+# a preparation interrupted after its checkout aborts the same way. What the
+# checkout drops is the index — the merge's staged result, and a merger's
+# staged edit on top of it, which nothing can tell from it — so it is forced,
+# as `merge --abort` drops that too; a plain checkout over the index a checkout
+# unlinked MERGE_HEAD from would carry it onto the pending commit as if the
+# user had made it. Anything else in the store post-dates the preparation,
+# which ran on a clean store, and is not the merge's: an edit nobody staged to
+# a tracked path that is not in conflict, or an untracked file at a path the
+# pending commit has, which the forced checkout would overwrite. Those are
+# refused up front, by path, so the store stays as found. An untracked file in
+# nobody's way is named and left in place: it is the merger's work, and nothing
+# here can tell it from the user's. Returns 1 after saying why on stderr when
+# the store was not restored.
 # Args: $1 = store worktree path.
 gitlore_abort_prepared_merge() {
-  local store="$1" statefile pending err untracked abs
+  local store="$1" statefile pending err untracked abs edits inway p
   statefile=$(gitlore_merge_state_file "$store")
   abs=$(git -C "$store" rev-parse --show-toplevel) || abs="$store"
   if [ ! -f "$statefile" ]; then
@@ -182,6 +187,25 @@ gitlore_abort_prepared_merge() {
   pending=$(gitlore_pending_commit "$store" "$statefile")
   if [ -z "$pending" ]; then
     echo "gitlore: the prepared merge in $abs names no pending commit still in the store, so HEAD has nowhere to go back to; nothing was aborted. Read $statefile." >&2
+    return 1
+  fi
+  edits=""
+  while IFS= read -r -d '' p; do
+    # A conflicted path's worktree is the merge's own: its index entries are unmerged.
+    [ -z "$(git -C "$store" ls-files -u -z -- ":(literal)$p")" ] || continue
+    edits="$edits  $p
+"
+  done < <(git -C "$store" diff --name-only -z --diff-filter=MT --ignore-submodules=all)
+  inway=""
+  while IFS= read -r -d '' p; do
+    git -C "$store" rev-parse -q --verify "$pending:$p" >/dev/null || continue
+    inway="$inway  $p
+"
+  done < <(git -C "$store" ls-files -z --others --exclude-standard)
+  if [ -n "$edits$inway" ]; then
+    printf "gitlore: abort-merge would discard work in %s that is not the merge's, so nothing was aborted. Commit, stash or remove it, then run it again.\n" "$abs" >&2
+    [ -z "$edits" ] || printf 'gitlore: edits nobody staged (one is dropped with: git -C "%s" checkout -- <path>):\n%s' "$abs" "$edits" >&2
+    [ -z "$inway" ] || printf 'gitlore: untracked files at a path the pending commit has (move them out of the store):\n%s' "$inway" >&2
     return 1
   fi
   untracked=$(git -c core.quotePath=false -C "$store" ls-files --others --exclude-standard)
