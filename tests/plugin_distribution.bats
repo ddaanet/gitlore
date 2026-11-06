@@ -318,8 +318,10 @@ load helpers/setup
   [ "$output" = "0" ]
 }
 
-# The commit skill is self-triggering: a pending memory change at the end of a
-# task, or a request to commit memory, must reach it from context alone.
+# The commit skill is self-triggering on a request to commit memory, from the
+# user or from another skill's directive. The edited-but-uncommitted state is
+# not a trigger: every memory edit produces it, and a commit is an act the user
+# initiates.
 @test "distribution: commit skill ships with a self-trigger description and Bash+Skill tools" {
   skill="$PLUGIN_ROOT/skills/commit/SKILL.md"
   [ -f "$skill" ]
@@ -331,6 +333,10 @@ load helpers/setup
   grep -qi 'pending' <<<"$desc"
   grep -qi 'memory' <<<"$desc"
   grep -qi 'commit' <<<"$desc"
+  grep -qi 'asks to commit memory' <<<"$desc"
+  grep -qi 'not for a bare memory edit' <<<"$desc"
+  run grep -iE 'written or edited|not yet committed' <<<"$desc"
+  [ "$status" -eq 1 ]
 }
 
 @test "distribution: commit skill body carries the review directive, section format and call" {

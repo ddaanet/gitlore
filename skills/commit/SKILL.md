@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Commit pending gitlore memory changes. Invoke it first, before any summary is drafted, whenever memory files were written or edited and are not yet committed, or when the user asks to commit memory; it gives the summary format and commits once the user approves the shown summary. Not for publishing memory to its remote — that is gitlore:push.
+description: Commit pending gitlore memory changes. Use when the user asks to commit memory, or a skill's directive says to; invoke it before drafting any summary — it gives the summary format and commits once the user approves the shown summary. Not for a bare memory edit, and not for publishing memory to its remote — that is gitlore:push.
 allowed-tools: ["Bash", "Skill"]
 ---
 
