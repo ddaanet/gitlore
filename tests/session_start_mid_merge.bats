@@ -5,10 +5,11 @@
 # can act on with /gitlore:resolve or /gitlore:push, which would only meet it
 # again. The report names the command that completes the merge
 # (`resolve.sh continue-after-merge`, the same for both flavors) and the one
-# that aborts it. The abort restores the store: it reads refs/gitlore/pending,
-# tolerates a missing MERGE_HEAD, checks the pending commit out detached and
-# drops the merge preparation, and it reports an untracked file a merger left
-# without removing it.
+# that aborts it. The abort restores the store under `git reset --merge`'s
+# contract: it reads refs/gitlore/pending, tolerates a missing MERGE_HEAD,
+# resets to the pending commit detached, dropping staged content and keeping
+# an unstaged edit the two commits agree on, relays git's refusal where the
+# restore would overwrite work, and drops the merge preparation.
 #
 # The plan names no entry point for the abort, so the tests run whichever
 # command the report prints. A command is a line of the report that, after an
@@ -207,7 +208,9 @@ merge_fingerprint() {
   [ -z "$(git -C memory status --porcelain)" ]
 }
 
-@test "the abort reports an untracked file a merger left and does not remove it" {
+# An untracked file in nobody's way is not the restore's to touch: it stays,
+# and the abort lists nothing.
+@test "the abort leaves an untracked file a merger wrote where it is" {
   root_merge_prepared_against_remote
   printf 'synthesized\n' > memory/synth-new.md
   session_start_over_store
@@ -216,10 +219,7 @@ merge_fingerprint() {
   [ "$status" -eq 0 ] || { printf 'abort failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
   [ -f memory/synth-new.md ]
   [ "$(cat memory/synth-new.md)" = "synthesized" ]
-  [[ "$output$stderr" == *"synth-new.md"* ]] || {
-    printf 'the abort never names the file it left:\n%s\n%s\n' "$output" "$stderr" >&2
-    return 1
-  }
+  [[ "$stderr" == *"staged content was dropped"* ]]
   [ "$(git -C memory rev-parse HEAD)" = "$head0" ]
 }
 
@@ -250,20 +250,32 @@ merge_fingerprint() {
   [ -z "$(git -C memory rev-parse -q --verify refs/gitlore/pending)" ]
 }
 
-# What the abort removes, it names, except the merge's own staged result. An
-# edit nobody staged and an untracked file both post-date the preparation,
-# which runs on a clean store, and neither is the merge's: the abort refuses
-# over them, names them, and leaves the store as it found it.
-@test "the abort refuses over an unstaged edit to a tracked file, names it, and changes nothing" {
+# The abort restores under `git reset --merge`'s contract: an unstaged edit to
+# a path the authority and the pending commit agree on is kept, in place.
+@test "the abort keeps an unstaged edit to a path the two commits agree on" {
   root_merge_prepared_against_remote
   printf 'written during the window\n' >> memory/MEMORY.md
-  before=$(merge_fingerprint)
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" abort-merge
-  [ "$status" -eq 1 ] || { printf 'the abort did not refuse (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
-  [[ "$stderr" == *"MEMORY.md"* ]] || { printf 'the refusal names no path:\n%s\n' "$stderr" >&2; return 1; }
-  [[ "$stderr" == *"nothing was aborted"* ]]
-  [ "$(merge_fingerprint)" = "$before" ] || { printf 'the store changed:\n%s\n' "$(merge_fingerprint)" >&2; return 1; }
+  [ "$status" -eq 0 ] || { printf 'the abort failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
+  [ "$(git -C memory rev-parse HEAD)" = "$head0" ]
+  [ ! -f "$statefile" ]
+  [ "$(git -C memory status --porcelain)" = " M MEMORY.md" ] || { printf 'unexpected store state:\n%s\n' "$(git -C memory status --porcelain)" >&2; return 1; }
   grep -q 'written during the window' memory/MEMORY.md
+}
+
+# `reset` moves the branch an attached HEAD names. The preparation detaches
+# HEAD, but a store found attached is put back detached, and the branch stays.
+@test "the abort leaves a branch HEAD was attached to where it was" {
+  root_merge_prepared_against_remote
+  authority=$(git -C memory rev-parse HEAD)
+  git -C memory branch probe "$authority"
+  git -C memory symbolic-ref HEAD refs/heads/probe
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" abort-merge
+  [ "$status" -eq 0 ] || { printf 'the abort failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
+  [ "$(git -C memory rev-parse HEAD)" = "$head0" ]
+  run git -C memory symbolic-ref -q HEAD
+  [ "$status" -ne 0 ]
+  [ "$(git -C memory rev-parse probe)" = "$authority" ]
 }
 
 # Root diverged from its remote, with a base file the upstream commit deletes,
@@ -299,16 +311,30 @@ root_merge_prepared_dropping_scratch() {
   [ ! -e memory/scratch.md ]
 }
 
-@test "the abort refuses over an untracked file the pending commit has a path for, names it, and changes nothing" {
+# Where the restore would overwrite something, git refuses, by path, and the
+# abort relays that: the store is left as found, untracked content included.
+@test "the abort relays git's refusal over an untracked file in the restore's way, and changes nothing" {
   root_merge_prepared_dropping_scratch
   printf 'merger scratch\n' > memory/scratch.md
   before=$(merge_fingerprint)
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" abort-merge
   [ "$status" -eq 1 ] || { printf 'the abort did not refuse (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
   [[ "$stderr" == *"scratch.md"* ]] || { printf 'the refusal names no path:\n%s\n' "$stderr" >&2; return 1; }
-  [[ "$stderr" != *"left in place"* ]]
+  [[ "$stderr" == *"nothing was aborted"* ]]
   [ "$(merge_fingerprint)" = "$before" ] || { printf 'the store changed:\n%s\n' "$(merge_fingerprint)" >&2; return 1; }
   [ "$(cat memory/scratch.md)" = "merger scratch" ]
+}
+
+@test "the abort relays git's refusal over an untracked directory where the pending commit has a file" {
+  root_merge_prepared_dropping_scratch
+  mkdir memory/scratch.md
+  printf 'merger note\n' > memory/scratch.md/note.md
+  before=$(merge_fingerprint)
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" abort-merge
+  [ "$status" -eq 1 ] || { printf 'the abort did not refuse (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
+  [[ "$stderr" == *"nothing was aborted"* ]]
+  [ "$(merge_fingerprint)" = "$before" ] || { printf 'the store changed:\n%s\n' "$(merge_fingerprint)" >&2; return 1; }
+  [ "$(cat memory/scratch.md/note.md)" = "merger note" ]
 }
 
 # --- a merge gitlore did not prepare ---------------------------------------------

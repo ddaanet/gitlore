@@ -203,22 +203,24 @@ gitlore_refuse_unresolvable_gitlinks() {
 # Args: $1 = memory worktree, $2 = tier name, $3 = the recorded commit.
 # Returns 1 after emitting.
 gitlore_tier_holds_gitlink() {
-  local mempath="$1" tier="$2" sha="$3" tierpath="$1/$2" url err shown tail
+  local mempath="$1" tier="$2" sha="$3" tierpath="$1/$2" url err shown tail agent
   git -C "$tierpath" rev-parse -q --verify "$sha^{commit}" >/dev/null && return 0
   if err=$(git -C "$tierpath" fetch -q --no-recurse-submodules origin "$sha" 2>&1) \
      && git -C "$tierpath" rev-parse -q --verify "$sha^{commit}" >/dev/null; then
     return 0
   fi
   url=$(git -C "$tierpath" config --get remote.origin.url || true)
+  tail="supplied that commit, so memory was neither moved nor composed. The checkout that recorded it runs /gitlore:push; /gitlore:merge then retries."
   if [ -n "$url" ]; then
     shown=$(gitlore_url_for_display "$url")
     err=${err//"$url"/"$shown"}
+    agent="neither the tier nor its remote $tail The user has the remote's url and git's words."
   else
     shown="(none configured)"
+    agent="the tier has no remote and does not hold it, so nothing $tail The user has git's words."
   fi
-  tail="supplied that commit, so memory was neither moved nor composed. The checkout that recorded it runs /gitlore:push; /gitlore:merge then retries."
   gitlore_say_for_agent_or_user \
-    "gitlore: memory records ${sha:0:12} for tier '$tier', and neither the tier nor its remote $tail The user has the remote's url and git's words." \
+    "gitlore: memory records ${sha:0:12} for tier '$tier', and $agent" \
     "gitlore: memory records ${sha:0:12} for tier '$tier', and neither the tier nor its remote $shown $tail git said:
 $err" >&2
   return 1

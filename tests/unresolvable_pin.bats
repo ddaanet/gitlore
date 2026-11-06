@@ -301,10 +301,10 @@ lists_path() {
   run ! grep -Fxe 'name.md' -e '  name.md' <<<"$resolve_said"
 }
 
-@test "the revert-pin message says how to see the full diff, with the memory path quoted" {
+@test "the revert-pin message says how to see the full diff, as a command runnable from any directory" {
   tier_gitlink_nobody_holds
   revert_pin_said 1
-  printf '%s\n' "$resolve_said" | grep -Fq -- "git -C \"memory\" show ${recording:0:12}" || {
+  printf '%s\n' "$resolve_said" | grep -Fq -- "cd \"$(git rev-parse --show-toplevel)\" && git -C \"memory\" show ${recording:0:12}" || {
     printf 'no show line; message:\n%s\n' "$resolve_said" >&2
     return 1
   }

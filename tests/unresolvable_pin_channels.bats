@@ -177,3 +177,16 @@ tier_report_for_user() {
   [[ "$stderr" == *"ssh://user@github.com/acme/tier.git"* ]] || { printf 'the user channel lacks the remote without its password:\n%s\n' "$stderr" >&2; return 1; }
   [[ "$stderr" != *"tok3n"* ]] || { printf 'a credential reached the user channel:\n%s\n' "$stderr" >&2; return 1; }
 }
+
+# With no remote configured there is no url for the user to hold: the agent is
+# told the tier has none, not sent to ask for one.
+@test "the tier gitlink refusal tells the agent the tier has no remote when none is configured" {
+  tier_gitlink_nobody_holds
+  git -C memory/ddaanet remote remove origin
+  src="cd '$PWD' && source '$PLUGIN_ROOT/scripts/lib/util.sh' && source '$PLUGIN_ROOT/scripts/lib/log.sh' && source '$PLUGIN_ROOT/scripts/lib/resolve.sh' && gitlore_tier_holds_gitlink memory ddaanet '$lost'"
+  CLAUDECODE=1 run --separate-stderr bash -c "$src"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"${lost:0:12}"* ]]
+  [[ "$stderr" == *"no remote"* ]] || { printf 'the agent is not told the tier has no remote:\n%s\n' "$stderr" >&2; return 1; }
+  [[ "$stderr" != *"has the remote's url"* ]] || { printf 'the agent is sent to the user for a url that does not exist:\n%s\n' "$stderr" >&2; return 1; }
+}
