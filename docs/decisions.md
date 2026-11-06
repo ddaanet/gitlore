@@ -32,10 +32,27 @@ merge is first parent. [branch-model.md](references/branch-model.md)
 - **D13** — a lock-contention retry wrapper guards mutating memory git calls
 - **D24** — a directive that names a sub-agent carries its own authorization
 - **D49** — canned unprompted merge commits; takes commit their bookkeeping
+- **D75** — a push publishes each store as soon as it is ready: a tier repaired
+  or merged inside a push goes to its remote even when a later tier or memory
+  then fails, because races are not routine but must be expected, and an
+  unpushed resolution is remerged at every remote update instead of
+  fast-forwarded; pushing it is what puts the store back on `live`.
+  `/gitlore:merge` is for incoming and publishes nothing
+  ([publishing-divergence.md](references/publishing-divergence.md))
+- **D76** — a module's position report hints `/gitlore:push` for any divergence,
+  a `HEAD` forked from local `live` included, and `/gitlore:merge` only when the
+  take is a fast-forward plus the canned bookkeeping commit: a divergence makes
+  the fast-forward impossible, a tax on every later upstream update, and the
+  push prepares the merge and publishes it
+  ([publishing-divergence.md](references/publishing-divergence.md))
 
 *Rejected:* `git commit-tree` plus `git update-ref` for the resolve merge · a
 temporary worktree for resolve · `claude --print` for conflict resolution ·
-single-agent resolve with a post-hoc context refresh.
+single-agent resolve with a post-hoc context refresh · holding a repaired tier
+back until memory can record it · keeping a tier merge landed inside the
+pre-push hook unpublished · publishing from `/gitlore:merge` · hinting
+`/gitlore:merge` for a divergence · hinting `/gitlore:resolve` for a `HEAD`
+forked from local `live`.
 
 **History rewrites** — what a rewritten store publishes, and what a clone on the
 old history does. [history-rewrites.md](references/history-rewrites.md)

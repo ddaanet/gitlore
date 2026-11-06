@@ -232,7 +232,12 @@ the git and decides (D7).
   inventory, and where it is invoked (D47, D48, D69). Each is a skill rather
   than a command because each has an entry no user types — a hook's stderr, a
   session start, an ending session, a token in a tool result, a write under
-  `memory/`. Steps in [merge-and-resolve.md](references/merge-and-resolve.md).
+  `memory/`. Steps in [merge-and-resolve.md](references/merge-and-resolve.md). A
+  divergence is published, not carried: `push` publishes each store as soon as
+  it is ready (D75), and a position report hints `push` for any divergence and
+  `merge` only for a fast-forward take (D76), because an unpublished merge is
+  redone at every upstream update
+  ([publishing-divergence.md](references/publishing-divergence.md)).
 - **Claude Code hooks** — `SessionStart` re-pins and reports, writes no index
   (D74), and does the most work; it is also where a new worktree's memory
   worktree is created, lazily, so worktree support is uniform however the

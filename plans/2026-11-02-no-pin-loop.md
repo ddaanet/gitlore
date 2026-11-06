@@ -161,8 +161,17 @@ remote's `live`, not with the pin.
 | Strictly behind | Hint `/gitlore:merge` |
 | Strictly ahead | Hint `/gitlore:push` |
 | Diverged | Hint `/gitlore:push`, which prepares the merge |
-| `HEAD` forked from local `live` | Hint `/gitlore:resolve`, which prepares the merge |
+| `HEAD` forked from local `live` | Hint `/gitlore:push`, which prepares the merge |
 | In sync | `in sync.`, and nothing else |
+
+`in sync.` replaces `gitlore: memory ready.` and its `(detached at live)` form.
+
+Settled by my human partner: a divergence always hints `/gitlore:push`, and
+`/gitlore:merge` is hinted only when the take is a fast-forward plus the canned
+bookkeeping commit. A divergence left unpublished makes every later upstream
+update a merge instead of a fast-forward; pushing it lands the merge and
+publishes it, and the next upstream update then reads as behind and hints
+`/gitlore:merge`. The rule is D76.
 
 A pin published on the remote needs no check of its own: a parent `git pull`
 over unpublished memory reads as diverged, and over none as behind. Being ahead
@@ -172,14 +181,13 @@ in sync.
 Settled by my human partner: the authority is the remote's `live` when the fetch
 brought it, and local `live` otherwise, which covers no remote, a failed fetch
 and a remote with no `live` yet. The table stands against local `live` too,
-memory and tier alike. A `HEAD` forked from local `live` hints
-`/gitlore:resolve` whatever the authority: `check_store_gates` in
-`scripts/resolve.sh` prepares the `head-vs-live` merge before it looks at any
-remote, while `gitlore_push_stores` refuses that fork naming `/gitlore:resolve`
-and, for a memory with no remote, returns before the check. Red probes the
-no-remote fork's hint. A failed fetch keeps its could-not-fetch line with git's
-reason in front of the table's line, and a tier that fails its fetch reports its
-position like memory does instead of its fetch alone. No remote adds no line.
+memory and tier alike. A `HEAD` forked from local `live` hints `/gitlore:push`
+whatever the authority: `gitlore_reconcile_one` prepares the `head-vs-live`
+merge inside the push, with or without a remote, while `/gitlore:resolve` on a
+memory with no remote first tries to create one and prepares nothing. A failed
+fetch keeps its could-not-fetch line with git's reason in front of the table's
+line, and a tier that fails its fetch reports its position like memory does
+instead of its fetch alone. No remote adds no line.
 
 **An unresolvable pin is an integrity error at every level.** A recorded commit
 the repository that should hold it lacks, whether the parent's pin on memory or
