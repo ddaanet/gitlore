@@ -239,7 +239,10 @@ and resolve's scope into "An unresolvable pin".
    fallback base. For a holder that no longer exists, `/gitlore:resolve` reverts
    the whole memory commit on `live`, never a reset, so the root lines the lost
    tier commit carried go with it; a holder found alive afterwards sits ahead of
-   the reverted pin and the compose re-adopts its lines. One rule with the
+   the reverted pin and the compose re-adopts its lines. Settled by my human
+   partner: the whole commit still goes when it carries fact edits or other
+   tiers' gitlinks too, and the success message lists every path the revert
+   changed; the full diff stays reachable from the reflog. One rule with the
    parent's pin on memory, under "An unresolvable pin" above.
 
    Settled by my human partner: a raw pull in memory that leaves a tier checkout

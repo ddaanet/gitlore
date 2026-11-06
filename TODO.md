@@ -14,6 +14,12 @@
 - skills/resolve/SKILL.md and the merge skill do not describe the unresolvable-pin report, `/gitlore:resolve`'s `revert-pin <tier>` or `abort-merge` (no-pin-loop slice (d)); the plan's Docs section covers them.
 - The diagnostics' "tiers hold commits on their local 'live' … Run /gitlore:merge" paragraph partly duplicates the tier stage's own behind-local-`live` hint since no-pin-loop slice (d).
 - A tier pin held only on a remote branch other than `live` reads as unresolvable at SessionStart and in `/gitlore:resolve`, since both fetch `origin live` only, as the no-pin-loop plan prescribes.
+- tests/evals/lib/judge.sh:25,32 reads the judge's verdict from line 1 of `claude --print … 2>&1`, so a CLI warning there (the sign-in expiry notice) fails every judged trial as unparseable; 14 of 15 such trials held `pass` behind it (/tmp/claude/commit-skill/evals-run.log).
+- No eval covers the commit skill's trigger beyond an explicit user request: none has a wrap-up skill's memory directive invoke it, and none edits memory unprompted and asserts the skill stays out (d3361aa's description change is untested there).
+- Eval 05 (recall) passed 1/5 on 299a524 plus the commit-skill patch: the agent read the memory file with `Bash cat`, the assertion wants `Read`. No baseline run; not attributed.
+- Git's own fetch and push error text can repeat a configured url, credential included, on the agent channel: the failure arms at scripts/lib/session-tiers.sh:79,112 and scripts/lib/resolve-push.sh:248-313 (both channels get git's words); session-memory.sh's memory fetch arm already routes it to the user only.
+- scripts/lib/resolve.sh:104-107 (`gitlore_detect_stale_merge_state`'s comment) still names a push killed between merge and state write as producing a bare MERGE_HEAD; `gitlore_yield_merge` writes the state file first, as resolve.sh:163-166 says.
+- tests/mutate_and_run.bats "a filter narrows the run, and one that selects no test is refused" fails under `just precommit`'s parallel load and passes alone; seen in two separate runs on 2026-11-06.
 - Delete each `gitlore/archive/2026-10-15` branch (tier and memory store) on or after 2026-11-15.
 - MEMORY.md sits at 96% of its 25600-byte budget; run /gitlore:index-audit.
 - xhigh release review of dev against main.
