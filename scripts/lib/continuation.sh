@@ -65,8 +65,7 @@ load_continuation_state() {
 # line both the merged root and the tier changed apart takes the tier's, and is
 # reported on stderr: the base is read from OURS, which cannot record that root
 # has seen the tier's version until the merge commits, so a chunk there would
-# recur on every rerun. A compose that leaves a diff3 chunk in root otherwise
-# does not land, like a failing index.
+# recur on every rerun.
 #
 # A refusal blocks a memory merge only when it targets the index the merge is about
 # to publish: a problem gitlore_compose_check attributes to root's own MEMORY.md

@@ -98,7 +98,8 @@ three-way:
   gitlinks `OURS` records (`HEAD:` rather than the index, because `HEAD` still
   records `OURS` there and the staged tier heads would read as on their pins
   once the merge commit lands, leaving a carrier line neither root side held
-  adopted by nothing). A chunk, like a failing index, keeps the merge prepared;
+  adopted by nothing). A line both sides changed takes the tier's there, so no
+  chunk is written;
 - the pass `gitlore-compose` and `PostToolBatch`'s pass
   (`gitlore_compose_pass`), for every active tier off its pin, so a tier another
   checkout or a killed take moved composes like an arrival; a chunk ends the
