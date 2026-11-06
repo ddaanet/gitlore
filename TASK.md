@@ -1,0 +1,3 @@
+## Current task
+
+The no-pin-loop plan (plans/2026-11-02-no-pin-loop.md) is implemented, reviewed and documented on dev, and memory is published. The next thread is the open question on the memory merge continuation's chunk loop (TODO.md's "No-pin-loop continuation loop" item): a MEMORY.md chunk the continuation writes into root, resolved to anything but the tier's text, recurs on the rerun because nothing records that root has seen the tier's version. First action: probe whether composing in the prepare, so the merger synthesizes the chunk, is sound when git conflicts MEMORY.md, then put the problem to my human partner as a design question opening with what the user does and sees.

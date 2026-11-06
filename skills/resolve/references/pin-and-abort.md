@@ -16,8 +16,10 @@ it, and the resolver does not say the state is healthy. Two shapes:
   or the tier has no remote, and names the repo `.gitmodules` records when that
   is a different one. Nothing composes over the commit. The checkout that
   recorded it runs `/gitlore:push`, which publishes it. If the user says that
-  checkout no longer exists, the report's second line holds the command that
-  reverts the memory commit which recorded it:
+  checkout no longer exists, `/gitlore:resolve`'s output carries, after the
+  report, a `once no checkout holds it` line and then, last, the command that
+  reverts the memory commit which recorded it; the `SessionStart` report
+  carries no command, so run `/gitlore:resolve` to get it. The command reads:
 
   ```bash
   cd "<repo>" && bash "${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh" revert-pin <tier>
@@ -25,10 +27,9 @@ it, and the resolver does not say the state is healthy. Two shapes:
 
   Run it only after the user confirms no checkout holds the commit. It reverts
   the whole memory commit on `live`, never a reset, so the commit stays in
-  history and the root lines it carried go with it; it refuses, changing nothing,
-  when memory has uncommitted changes, when `HEAD` is not on `live`, when a merge
-  is prepared, or when the recording commit is a merge commit (its message gives
-  the `git revert -m 1` form). Its success message lists every path the commit
+  history and the root lines it carried go with it. When it cannot revert, it
+  changes nothing and says so in its own message, which names the cause and the
+  next step: relay that message. Its success message lists every path the commit
   changed, including fact edits and other tiers' gitlinks; relay that list and
   tell the user to run `/gitlore:push` to publish the revert. A holder found
   alive afterwards sits ahead of the reverted pin, and the next compose re-adopts

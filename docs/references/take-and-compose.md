@@ -170,6 +170,12 @@ side or to neither then stands, where a base read from `HEAD` would rebuild the
 same chunk at every pass and commit. That is also why a compose-up that leaves a
 chunk stages the merged tiers.
 
+That rule is the scope of the take's compose and of every pass outside a memory
+merge. The memory merge's continuation is the standing exception: it reads the
+gitlinks `OURS` records from `HEAD:` (above), because the index there already
+holds the staged tier heads. The same rebuilt chunk is then possible there, and
+whether to keep that base is an open question recorded in `TODO.md`.
+
 `/gitlore:merge` brings in changes from `live` and gains no adoption step, and
 there is no `gitlore-compose --up`. The commit path commits through a tier ahead
 of its pin and its `add -A` records the gitlink (D50). The orphan report also
@@ -213,6 +219,8 @@ changes and chunks only a line both moved apart (D78).
 
 **A base read from `HEAD`.** It rebuilds the same chunk at every pass and every
 commit, because nothing records that root has seen the tier's version (D78).
+Rejected for the take and the passes; the memory merge's continuation keeps it
+as D78's stated exception.
 
 **An adoption step in `/gitlore:merge`, or `gitlore-compose --up`.** The
 three-way compose answers any disagreement between root and a tier, so a step

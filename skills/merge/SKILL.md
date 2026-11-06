@@ -105,11 +105,16 @@ take repairs from scratch.
   `gitlore:commit` skill. Until the markers are gone every compose and commit
   refuses root.
 - **A tier commit no repository holds.** `gitlore: memory records <sha> for tier
-  '<t>', and neither the tier nor its remote …` means the memory commit records a
-  tier commit its remote never received, and memory was neither moved nor
-  composed. The checkout that recorded it runs `/gitlore:push`; `/gitlore:merge`
-  then retries. If that checkout is gone, `/gitlore:resolve` reverts the memory
-  commit that recorded it. Relay the line; the user holds the urls.
+  '<t>', and …` means the incoming memory commit records a tier commit the tier
+  lacks, and memory was neither moved nor composed. When the line goes on
+  `neither the tier nor its remote …`, the checkout that recorded it runs
+  `/gitlore:push`; `/gitlore:merge` then retries. The pin is recorded only on
+  memory's remote, which `/gitlore:resolve` and `revert-pin` do not read, so if
+  that checkout is gone nothing in the plugin is known to revert it: say so
+  rather than sending the user to `/gitlore:resolve`. When it goes on `the tier
+  has no remote and does not hold it …`, no push can supply the commit: the user
+  mounts the tier against a remote or unmounts it. Relay the line; the user
+  holds the urls.
 
 ## Correcting what arrived
 

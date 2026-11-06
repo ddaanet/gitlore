@@ -62,8 +62,13 @@ The remedy is per level.
 
 - **A tier gitlink.** The checkout that recorded it runs `/gitlore:push`, which
   publishes the tier commit; the next `/gitlore:merge` then retries. When that
-  checkout no longer exists, `/gitlore:resolve` prints the revert command,
-  `resolve.sh revert-pin <tier>`.
+  checkout no longer exists and this checkout's memory index records the pin,
+  `/gitlore:resolve` prints the revert command, `resolve.sh revert-pin <tier>`.
+  A pin recorded only on memory's remote, the shape a take refuses, is not one
+  that `/gitlore:resolve` checks or `revert-pin` reverts, since both read the
+  local index and `live`: the recording checkout's `/gitlore:push` is the
+  remedy, and with that checkout gone nothing in the plugin is known to revert
+  it.
 - **The parent's pin on memory.** The report says the memory holding it has not
   been merged upstream, with no command and no url change. A contributor's pull
   request carrying only the pin is out of reach until their memory is merged;
