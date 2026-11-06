@@ -240,5 +240,5 @@ gitlore_warn_private_under_public() {
   [ -n "$vis" ] || vis=$(gitlore_repo_visibility "$url")
   [ "$vis" = "private" ] || return 0
   [ "$(gitlore_parent_visibility)" = "public" ] || return 0
-  echo "gitlore: warning: the $label $url is private but this repository is public, so an anonymous recursive clone of this repository fails at it whatever url .gitmodules records; making it public is the repository owner's call." >&2
+  echo "gitlore: warning: the $label $(gitlore_url_for_display "$url") is private but this repository is public, so an anonymous recursive clone of this repository fails at it whatever url .gitmodules records; making it public is the repository owner's call." >&2
 }

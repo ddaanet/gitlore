@@ -122,6 +122,14 @@ EOF
   [ "$(gitlore_url_for_display "https://u:p@h/a b/c")" = "https://h/a b/c" ]
 }
 
+@test "gitlore_warn_private_under_public shows the remote url through the display rule" {
+  gitlore_parent_visibility() { printf 'public\n'; }
+  run gitlore_warn_private_under_public "tier remote" "https://user:tok3n@github.com/alice/x.git" private
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"the tier remote https://github.com/alice/x.git is private"* ]] || { printf 'the remote is not shown clean:\n%s\n' "$output" >&2; return 1; }
+  [[ "$output" != *"tok3n"* ]]
+}
+
 @test "gitlore_same_repo_url compares the https form of each url with its userinfo removed" {
   gitlore_same_repo_url "ssh://git@github.com/acme/tier.git" "https://github.com/acme/tier.git"
   gitlore_same_repo_url "git@github.com:acme/tier.git" "https://github.com/acme/tier"
