@@ -7,9 +7,8 @@
 # (`resolve.sh continue-after-merge`, the same for both flavors) and the one
 # that aborts it. The abort restores the store under `git reset --merge`'s
 # contract: it reads refs/gitlore/pending, tolerates a missing MERGE_HEAD,
-# resets to the pending commit detached, dropping staged content and keeping
-# an unstaged edit the two commits agree on, relays git's refusal where the
-# restore would overwrite work, and drops the merge preparation.
+# resets to the pending commit detached, relays git's refusal when git refuses
+# the reset, and drops the merge preparation.
 #
 # The plan names no entry point for the abort, so the tests run whichever
 # command the report prints. A command is a line of the report that, after an
@@ -219,7 +218,8 @@ merge_fingerprint() {
   [ "$status" -eq 0 ] || { printf 'abort failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
   [ -f memory/synth-new.md ]
   [ "$(cat memory/synth-new.md)" = "synthesized" ]
-  [[ "$stderr" == *"staged content was dropped"* ]]
+  [[ "$stderr" == *"aborted"* ]]
+  [[ "$stderr" == *"$(git -C memory rev-parse --short HEAD)"* ]] || { printf 'the success line names no sha:\n%s\n' "$stderr" >&2; return 1; }
   [ "$(git -C memory rev-parse HEAD)" = "$head0" ]
 }
 

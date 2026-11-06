@@ -190,3 +190,18 @@ tier_report_for_user() {
   [[ "$stderr" == *"no remote"* ]] || { printf 'the agent is not told the tier has no remote:\n%s\n' "$stderr" >&2; return 1; }
   [[ "$stderr" != *"has the remote's url"* ]] || { printf 'the agent is sent to the user for a url that does not exist:\n%s\n' "$stderr" >&2; return 1; }
 }
+
+# A retry refuses identically while the tier has no remote, so both channels
+# give the remedy a take gives for the same state, not the push-then-retry tail.
+@test "the tier gitlink refusal with no remote names the mount-or-unmount remedy on both channels, not a retry" {
+  tier_gitlink_nobody_holds
+  git -C memory/ddaanet remote remove origin
+  src="cd '$PWD' && source '$PLUGIN_ROOT/scripts/lib/util.sh' && source '$PLUGIN_ROOT/scripts/lib/log.sh' && source '$PLUGIN_ROOT/scripts/lib/resolve.sh' && gitlore_tier_holds_gitlink memory ddaanet '$lost'"
+  for who in 1 ''; do
+    CLAUDECODE=$who run --separate-stderr bash -c "$src"
+    [ "$status" -eq 1 ]
+    [[ "$stderr" == *"Mount it against a remote or unmount it"* ]] || { printf 'no remedy (CLAUDECODE=%s):\n%s\n' "$who" "$stderr" >&2; return 1; }
+    [[ "$stderr" != *"/gitlore:merge"* ]] || { printf 'a retry is offered that refuses identically (CLAUDECODE=%s):\n%s\n' "$who" "$stderr" >&2; return 1; }
+    [[ "$stderr" != *"/gitlore:push"* ]] || { printf 'the push tail survived (CLAUDECODE=%s):\n%s\n' "$who" "$stderr" >&2; return 1; }
+  done
+}

@@ -210,13 +210,17 @@ gitlore_tier_holds_gitlink() {
     return 0
   fi
   url=$(git -C "$tierpath" config --get remote.origin.url || true)
-  tail="supplied that commit, so memory was neither moved nor composed. The checkout that recorded it runs /gitlore:push; /gitlore:merge then retries."
+  tail="supplied that commit, so memory was neither moved nor composed."
   if [ -n "$url" ]; then
     shown=$(gitlore_url_for_display "$url")
     err=${err//"$url"/"$shown"}
+    tail="$tail The checkout that recorded it runs /gitlore:push; /gitlore:merge then retries."
     agent="neither the tier nor its remote $tail The user has the remote's url and git's words."
   else
+    # A retry refuses identically while there is no remote to supply the
+    # commit, so the tail is the remedy a take gives for the same state.
     shown="(none configured)"
+    tail="$tail Mount it against a remote or unmount it."
     agent="the tier has no remote and does not hold it, so nothing $tail The user has git's words."
   fi
   gitlore_say_for_agent_or_user \

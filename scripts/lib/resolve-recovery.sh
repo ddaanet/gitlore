@@ -161,18 +161,13 @@ gitlore_drop_merge_preparation() {
 
 # `resolve.sh abort-merge`: put store $1 back where a prepared merge found it.
 # Reads the pending commit first, since dropping the preparation deletes the
-# pin that names it. The restore is `git reset --merge <pending>` — what
-# `git merge --abort` runs, aimed at the pending commit instead of the commit
-# the merge began on, so a preparation whose MERGE_HEAD a checkout unlinked
-# restores the same way, and git's contract for it is the whole rule: the
-# index is reset to the pending commit and the worktree rewritten wherever the
-# index differed from it, so the merge's staged result and anything staged
-# over it go; an unstaged edit to a path the index and the pending commit
-# agree on is kept; and where the restore would overwrite an unstaged edit or
-# an untracked file, git refuses, naming the paths, and the store is left as
-# found. HEAD is detached first when a branch holds it, since `reset` would
-# carry the branch along. Returns 1 after saying why on stderr when the store
-# was not restored.
+# pin that names it. The restore is `git reset --merge <pending>` in both
+# arms — what `git merge --abort` runs, aimed at the pending commit instead of
+# the commit the merge began on, so a preparation whose MERGE_HEAD a checkout
+# unlinked restores the same way. HEAD is detached first when a branch holds
+# it, since `reset` would carry the branch along. What the reset keeps, drops
+# or refuses is git's contract (git-reset(1), `--merge`), not restated here.
+# Returns 1 after saying why on stderr when the store was not restored.
 # Args: $1 = store worktree path.
 gitlore_abort_prepared_merge() {
   local store="$1" statefile pending err abs head
@@ -195,9 +190,9 @@ gitlore_abort_prepared_merge() {
     fi
   fi
   if ! err=$(gitlore_git -C "$store" reset -q --merge "$pending" 2>&1); then
-    printf "gitlore: restoring %s would overwrite work that is not the merge's, so nothing was aborted. git said:\n%s\n" "$abs" "$err" >&2
+    printf "gitlore: nothing was aborted in %s. git said:\n%s\n" "$abs" "$err" >&2
     return 1
   fi
   gitlore_drop_merge_preparation "$store"
-  echo "gitlore: the prepared merge in $abs is aborted; HEAD is back on $(git -C "$store" rev-parse --short "$pending") and staged content was dropped." >&2
+  echo "gitlore: the prepared merge in $abs is aborted; HEAD is back on $(git -C "$store" rev-parse --short "$pending")." >&2
 }
