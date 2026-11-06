@@ -82,6 +82,10 @@ tier_gitlink_nobody_holds() {
   printf -- '---\nname: proj\ndescription: ""\n---\n\nbody\n' > memory/proj.md
   seed_root_bullet "proj.md" "a project fact"
   git -C memory add proj.md
+  # Two more files whose names break a whitespace split: a space, and a newline.
+  printf 'x\n' > "memory/proj notes.md"
+  printf 'x\n' > "$(printf 'memory/odd\nname.md')"
+  git -C memory add "proj notes.md" "$(printf 'odd\nname.md')"
   git -C memory update-index --add --cacheinfo "160000,$lost,ddaanet"
   git -C memory add MEMORY.md
   git -C memory commit -qm "record a tier commit nobody holds"

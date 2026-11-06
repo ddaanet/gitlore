@@ -180,7 +180,7 @@ $revert" >&2
 # Returns 1 after saying why on stderr when nothing was reverted.
 # Args: $1 = memory worktree path, $2 = tier path.
 gitlore_revert_lost_pin() {
-  local mempath="$1" tier="$2" lost rec parents head live msg
+  local mempath="$1" tier="$2" lost rec parents head live msg paths
   if [ ! -e "$mempath/$tier/.git" ]; then
     echo "gitlore: tier '$tier' is not checked out in $mempath, so whether it holds its recorded commit cannot be told; nothing was reverted." >&2
     return 1
@@ -234,6 +234,14 @@ gitlore_revert_lost_pin() {
     return 1
   fi
   gitlore_git -C "$mempath" push -q . HEAD:refs/heads/live >&2
-  msg="gitlore: reverted memory commit ${rec:0:12}, which recorded tier '$tier' at ${lost:0:12}, on live; the commit stays in history. Run /gitlore:push to publish the revert."
+  # Every path the whole commit changed, one per line, as git prints them: a
+  # newline or control character comes out in git's quoted form, so a path
+  # cannot add a line of its own; UTF-8 stays unescaped. Paths are local store
+  # content, so both channels get them.
+  paths=$(git -c core.quotePath=false -C "$mempath" diff-tree --no-commit-id --name-only -r "$rec" | sed 's/^/  /')
+  msg="gitlore: reverted memory commit ${rec:0:12}, which recorded tier '$tier' at ${lost:0:12}, on live; the commit stays in history. Run /gitlore:push to publish the revert.
+The reverted commit changed these paths, the revert undoes them all:
+$paths
+See the full diff with: git -C \"$mempath\" show ${rec:0:12}"
   gitlore_say_for_agent_or_user "$msg" "$msg" >&2
 }

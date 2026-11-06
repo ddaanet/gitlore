@@ -253,3 +253,59 @@ reverted() {
   [ "$status" -ne 0 ]
   [ ! -e memory/proj.md ]
 }
+
+# --- the revert's success message lists every path the commit changed ----------
+
+# Run `resolve.sh revert-pin ddaanet` as agent ($1 = 1) or user ($1 = ''), and
+# leave everything it printed in $resolve_said.
+revert_pin_said() {
+  CLAUDECODE="$1" run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" revert-pin ddaanet
+  [ "$status" -eq 0 ] || { printf 'revert-pin failed:\n%s\n' "$stderr" >&2; return 1; }
+  resolve_said=$(said)
+}
+
+# Succeed when $resolve_said holds a line that is exactly "  <path>".
+lists_path() {
+  printf '%s\n' "$resolve_said" | grep -Fxq -- "  $1" || {
+    printf 'no line lists [%s]; message:\n%s\n' "$1" "$resolve_said" >&2
+    return 1
+  }
+}
+
+@test "the revert-pin message lists every path the reverted commit changed, the tier's gitlink and a fact file among them, to the agent" {
+  tier_gitlink_nobody_holds
+  revert_pin_said 1
+  lists_path ddaanet
+  lists_path MEMORY.md
+  lists_path proj.md
+}
+
+@test "the revert-pin message lists the same paths to the user" {
+  tier_gitlink_nobody_holds
+  revert_pin_said ''
+  lists_path ddaanet
+  lists_path MEMORY.md
+  lists_path proj.md
+}
+
+@test "the revert-pin message prints a path with a space intact" {
+  tier_gitlink_nobody_holds
+  revert_pin_said 1
+  lists_path "proj notes.md"
+}
+
+@test "the revert-pin message prints a path with a newline in git's quoted form, so it adds no line of its own" {
+  tier_gitlink_nobody_holds
+  revert_pin_said 1
+  lists_path '"odd\nname.md"'
+  run ! grep -Fxe 'name.md' -e '  name.md' <<<"$resolve_said"
+}
+
+@test "the revert-pin message says how to see the full diff, with the memory path quoted" {
+  tier_gitlink_nobody_holds
+  revert_pin_said 1
+  printf '%s\n' "$resolve_said" | grep -Fq -- "git -C \"memory\" show ${recording:0:12}" || {
+    printf 'no show line; message:\n%s\n' "$resolve_said" >&2
+    return 1
+  }
+}
