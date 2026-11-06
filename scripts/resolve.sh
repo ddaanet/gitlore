@@ -93,6 +93,20 @@ if [ $# -ge 1 ]; then
       fi
       exit 0
       ;;
+    abort-merge)
+      # The memory root's prepared merge, as SessionStart's mid-merge report
+      # names it: back to the commit the preparation started from.
+      gitlore_has_submodule || { echo "gitlore: not installed in this repo." >&2; exit 1; }
+      gitlore_abort_prepared_merge "$(gitlore_memory_path)" || exit 1
+      exit 0
+      ;;
+    revert-pin)
+      # A tier gitlink no repository holds, as the default run below names it.
+      [ $# -eq 1 ] || { echo "gitlore: revert-pin takes one tier path." >&2; exit 2; }
+      gitlore_has_submodule || { echo "gitlore: not installed in this repo." >&2; exit 1; }
+      gitlore_revert_lost_pin "$(gitlore_memory_path)" "$1" || exit 1
+      exit 0
+      ;;
     *)
       echo "gitlore: unknown resolve subcommand: $subcmd" >&2
       exit 2
@@ -206,6 +220,10 @@ check_store_gates() {
 while IFS= read -r store; do
   gitlore_guard_stale_merge_state "$store" || exit 1
 done < <(gitlore_memory_stores "$mempath")
+
+# A recorded commit no repository holds is an integrity error, not a state to
+# call healthy, and it goes before the gates so no push publishes past it.
+gitlore_resolve_check_pins "$mempath" || exit 1
 
 # Every mounted tier, through the identical pair of gates — one merge policy at
 # every level — and before memory's, the order gitlore_push_stores keeps too:

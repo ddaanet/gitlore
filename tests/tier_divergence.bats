@@ -167,15 +167,13 @@ load helpers/tier-divergence
 # --- a prepared merge must survive the next session start ---
 
 # A prepared merge leaves the tier detached AT live with the merge staged, and a
-# clean auto-merge stages no unmerged entries — so SessionStart's tier re-detach
-# had nothing to refuse over: `checkout --detach live` succeeded on the commit
-# HEAD was already on and `remove_branch_state()` unlinked MERGE_HEAD/MERGE_MSG.
-# The state file then survives without MERGE_HEAD. The stale-state guard can
-# repair that (tests/resolve_recovery.bats), but the repair reads the index to
-# decide how, so a session start that provokes the damage every time is what
-# turns a recovery path into the normal one. Cleanliness is what makes it bite,
-# so the fixture must merge cleanly — the two sides touch different files.
-@test "SessionStart leaves a tier's prepared merge intact instead of re-detaching over it" {
+# clean auto-merge stages no unmerged entries. Any checkout over it — `submodule
+# update`, `checkout --detach` — succeeds on the commit HEAD is already on and
+# `remove_branch_state()` unlinks MERGE_HEAD/MERGE_MSG, leaving a state file with
+# no MERGE_HEAD. SessionStart runs no checkout over a materialized tier, so the
+# merge is left as the merge staged it. Cleanliness is what makes a checkout
+# bite, so the fixture must merge cleanly — the two sides touch different files.
+@test "SessionStart leaves a tier's prepared merge intact" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   advance_branch_with_file memory/ddaanet live other.md body "sideways" live
@@ -195,8 +193,8 @@ load helpers/tier-divergence
 
   [ "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" = "$merge_head" ]
   [ -f "$(git -C memory/ddaanet rev-parse --git-path MERGE_MSG)" ]
-  # And the skipped re-detach is reported, not silent: an untouched tier that
-  # says nothing is indistinguishable from one that synced.
+  # And the merge is reported, not silent: an untouched tier that says nothing
+  # is indistinguishable from one that synced.
   echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has an unfinished merge")'
   echo "$output" | jq -e '.systemMessage | test("/gitlore:resolve")'
   # On BOTH channels: systemMessage is user-only (D14), and the acts that would
@@ -208,10 +206,10 @@ load helpers/tier-divergence
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("Do not check it out, reset it, or commit into it")'
 }
 
-# A mid-merge tier is skipped by the pin loop above, and SessionStart does not
-# compose, so the pin loop's notice is the only one: the store is left exactly
-# as the merge staged it, and no second notice offers another remedy.
-@test "SessionStart on a mid-merge tier gives the pin loop's notice alone and writes no index" {
+# A mid-merge tier gets the unfinished-merge notice, and SessionStart does not
+# compose: the store is left exactly as the merge staged it, and no second
+# notice offers another remedy.
+@test "SessionStart on a mid-merge tier gives the unfinished-merge notice alone and writes no index" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   set_tier_manifest ddaanet

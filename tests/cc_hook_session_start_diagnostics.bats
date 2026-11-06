@@ -15,6 +15,14 @@ load helpers/fixtures
 load helpers/tier-fixtures
 load helpers/cc-hook-session-start
 
+# Commit memory's tree and put its `live` on the commit, so the committed store
+# is level with its authority and not ahead of it (a module strictly ahead of its
+# live reports /gitlore:push, not in sync.).
+commit_memory_at_live() {
+  commit_memory_state || return 1
+  git -C memory update-ref refs/heads/live HEAD
+}
+
 # A composed, committed store: one active tier whose carrier and the root agree,
 # tier and memory clean. Proved composed, not assumed: the read-only check finds
 # nothing to write.
@@ -27,7 +35,10 @@ composed_store() {
   gitlore_compose memory
   git -C memory/ddaanet add -A
   git -C memory/ddaanet commit -q -m "tier fact"
-  commit_memory_state
+  # Published: the tier's commit is on its remote's `live` and its local `live`.
+  git -C memory/ddaanet push -q origin HEAD:refs/heads/live
+  git -C memory/ddaanet update-ref refs/heads/live HEAD
+  commit_memory_at_live
   [ -z "$(gitlore_compose_pending memory)" ]
   [ -z "$(git -C memory status --porcelain)" ]
 }
@@ -54,30 +65,38 @@ session_start_over_store() {
   [ "$(store_bytes)" = "$bytes_before" ]
 }
 
-@test "a composed store gets no diagnostic and keeps the in-sync line" {
+@test "a composed store gets no diagnostic and each module reports in sync." {
   composed_store
   session_start_over_store
-  [ "$sys" = "gitlore: memory ready." ]
+  # Memory and the one tier are each in sync with the authority's live, and
+  # that is all either says: no hint, no fetch line, no diagnostic.
+  [ "$(grep -c 'in sync\.' <<<"$sys")" -eq 2 ] || {
+    printf 'want one in sync. line per module (memory, ddaanet); systemMessage:\n%s\n' "$sys" >&2
+    return 1
+  }
+  [[ "$sys" == *"ddaanet"*"in sync."* ]] || false
+  [[ "$sys" != *"/gitlore:"* ]] || false
+  [[ "$sys" != *"fetch"* ]] || false
   [[ "$ctx" != *"gitlore-compose"* ]] || false
 }
 
 @test "a manifest naming an unmounted tier is reported by tier name" {
   composed_store
   printf 'ddaanet\nghost\n' > memory/.gitlore-tiers
-  commit_memory_state
+  commit_memory_at_live
   session_start_over_store
   assert_report_on_both_channels 'ghost'
-  [[ "$sys" == *"memory ready"* ]] || false
+  assert_memory_in_sync "$hook_json"
 }
 
 @test "a duplicate pointer in the root index is reported by file" {
   composed_store
   seed_root_bullet "ddaanet/kept.md" "again"
-  commit_memory_state
+  commit_memory_at_live
   session_start_over_store
   [[ "$sys" == *"MEMORY.md"* ]] || false
   [[ "$sys" == *"ddaanet/kept.md"* ]] || false
-  [[ "$sys" == *"memory ready"* ]] || false
+  assert_memory_in_sync "$hook_json"
 }
 
 @test "a non-bullet line inside the bullet region is reported by file" {
@@ -88,11 +107,11 @@ session_start_over_store() {
   # a refused store names no compose remedy, a pending one does.
   printf 'x\n' > memory/kept2.md
   seed_root_bullet "kept2.md" "after the prose"
-  commit_memory_state
+  commit_memory_at_live
   session_start_over_store
   [[ "$sys" == *"MEMORY.md"* ]] || false
   [[ "$sys" != *"gitlore-compose"* ]] || false
-  [[ "$sys" == *"memory ready"* ]] || false
+  assert_memory_in_sync "$hook_json"
 }
 
 @test "a root bullet with an unknown prefix is reported by its path" {
@@ -100,10 +119,10 @@ session_start_over_store() {
   mkdir -p memory/removed_tier
   printf 'x\n' > memory/removed_tier/orphan.md
   seed_root_bullet "removed_tier/orphan.md" "leftover"
-  commit_memory_state
+  commit_memory_at_live
   session_start_over_store
   [[ "$sys" == *"removed_tier/orphan.md"* ]] || false
-  [[ "$sys" == *"memory ready"* ]] || false
+  assert_memory_in_sync "$hook_json"
 }
 
 @test "a carrier-only deletion is a pending compose naming the carrier and gitlore-compose" {
@@ -130,7 +149,7 @@ session_start_over_store() {
   composed_store
   printf 'ddaanet\nghost\n' > memory/.gitlore-tiers
   seed_root_bullet "gone.md" "stale line"
-  commit_memory_state
+  commit_memory_at_live
   session_start_over_store
   [[ "$sys" == *"ghost"* ]] || false
   [[ "$sys" == *"gone.md"* ]] || false
@@ -140,7 +159,7 @@ session_start_over_store() {
   composed_store
   printf 'ddaanet\nghost\n' > memory/.gitlore-tiers
   seed_root_bullet "ghost/x.md" "left by a hand removal"
-  commit_memory_state
+  commit_memory_at_live
   session_start_over_store
   # "names no file" and the fix: the rule report names the path as well.
   [[ "$sys" == *"ghost/x.md names no file in the memory store — delete its line from memory/MEMORY.md"* ]] || false
@@ -151,7 +170,7 @@ session_start_over_store() {
   composed_store
   # A dangling project line, so a silent dangling report cannot pass the negatives.
   seed_root_bullet "gone.md" "stale line"
-  commit_memory_state
+  commit_memory_at_live
   unmaterialize_tier ddaanet
   session_start_over_store
   [ ! -e memory/ddaanet/MEMORY.md ]
@@ -165,11 +184,18 @@ session_start_over_store() {
   [[ "$ctx" != *"gitlore-compose"* ]] || false
 }
 
-@test "a clean tier left off its pin is not put back by the diagnostics" {
+@test "a clean tier left off its pin is not put back, and the pending compose over it is reported" {
   composed_store
   strand_live_ahead_of_pin ddaanet
   git -C memory/ddaanet checkout -q --detach live
-  # The pin loop leaves the tier where it is, so only a diagnostic can move it.
-  git -C memory config submodule.ddaanet.update none
+  # Nothing at SessionStart moves the tier, and the pending report has no on-pin
+  # guard in front of it: the tier's carrier holds a line root lacks, so a pass
+  # would adopt it. The store is read, not written (session_start_over_store).
   session_start_over_store
+  [[ "$sys" == *"gitlore-compose"* ]] || {
+    printf 'no pending-compose report over a tier off its pin; systemMessage:\n%s\n' "$sys" >&2
+    return 1
+  }
+  [[ "$ctx" == *"gitlore-compose"* ]] || false
+  [[ "$sys" == *"memory/MEMORY.md"* ]] || false
 }

@@ -115,9 +115,9 @@ assert_session_start_did_nothing() {
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  # D14 always-confirm: a clean start rides a success confirmation on systemMessage...
-  echo "$output" | jq -e '.systemMessage | test("ready")'
-  echo "$output" | jq -e '.systemMessage | test("detached at live")'
+  # D14 always-confirm: a clean start rides a success confirmation on systemMessage:
+  # the module's `in sync.` line, which replaces the old ready line...
+  assert_memory_in_sync "$output"
   # ...and it is NOT the launcher warning (shim ran).
   echo "$output" | jq -e '.systemMessage | test("direnv allow") | not'
   # The standing commit-protocol orientation (Fix B) is always present.
@@ -149,7 +149,7 @@ assert_session_start_did_nothing() {
   [ "$(git -C memory rev-parse HEAD)" = "$before" ]
   [ "$(git -C memory status --porcelain -- MEMORY.md)" = "?? MEMORY.md" ]
   echo "$output" | jq -e '.systemMessage | test("no root MEMORY.md")'
-  echo "$output" | jq -e '.systemMessage | test("detached at live")'
+  assert_memory_in_sync "$output"
 }
 
 # Observed failure: asked to "add a note and commit it to memory", agents
@@ -210,9 +210,10 @@ assert_session_start_did_nothing() {
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("git -C"; "i") | not'
 }
 
-@test "detaches memory HEAD when it arrives on a named branch" {
-  # Migration path off the retired per-parent-branch model: a memory worktree
-  # left attached to a branch must come back detached, at the same commit.
+@test "leaves memory HEAD on the named branch it arrives on" {
+  # SessionStart moves no module: a memory worktree attached to a branch stays
+  # attached, at the same commit. A store attached to a branch breaks a
+  # precondition and gets no handling; init-submodule and add-tier both detach.
   make_parent_with_memory
   (cd memory && git checkout -q -b legacy-branch)
   before=$(git -C memory rev-parse HEAD)
@@ -220,8 +221,7 @@ assert_session_start_did_nothing() {
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   run bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  run git -C memory symbolic-ref -q HEAD
-  [ "$status" -ne 0 ]
+  [ "$(git -C memory symbolic-ref -q --short HEAD)" = "legacy-branch" ]
   [ "$(git -C memory rev-parse HEAD)" = "$before" ]
 }
 
@@ -235,7 +235,7 @@ assert_session_start_did_nothing() {
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   echo "$output" | jq -e '.systemMessage | test("collides|rename"; "i")' && return 1
-  echo "$output" | jq -e '.systemMessage | test("memory ready")'
+  assert_memory_in_sync "$output"
 }
 
 @test "dangling index pointers: one capped systemMessage + a capped additionalContext (D14)" {

@@ -31,6 +31,9 @@ tier_setup() {
   rewrite_position_clone memory/ddaanet "$1"
   git -C memory add ddaanet
   git -C memory commit -q -m "record the tier commit"
+  # Memory's `live` at its HEAD: memory itself is level, so no /gitlore:push
+  # hint in the message can come from anything but the tier.
+  git -C memory update-ref refs/heads/live HEAD
   enable_gitlore
 }
 

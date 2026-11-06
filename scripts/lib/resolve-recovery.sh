@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Classify a stale merge-state file whose MERGE_HEAD is gone, from what a lost
 # MERGE_HEAD or a checkout-cleared merge left behind: landed, staged-but-unpointed,
-# or dead. The repair for each outcome is in resolve-recovery-repair.sh.
+# or dead. The repair for each outcome is in resolve-recovery-repair.sh. Also the
+# deliberate abort of a prepared merge (`resolve.sh abort-merge`), which drops a
+# preparation the same way a dead merge's is dropped.
 # Part of lib/resolve.sh; source that, not this file.
 
 # Repair — rather than report — a merge state file whose MERGE_HEAD is gone.
@@ -154,5 +156,45 @@ gitlore_drop_merge_preparation() {
   # existed, or one left by an interrupted preparation, has no ref to delete.
   if git -C "$store" rev-parse -q --verify "$GITLORE_PENDING_REF" >/dev/null; then
     gitlore_git -C "$store" update-ref -d "$GITLORE_PENDING_REF"
+  fi
+}
+
+# `resolve.sh abort-merge`: put store $1 back where a prepared merge found it.
+# Reads the pending commit first, since dropping the preparation deletes the
+# pin that names it; `git merge --abort` runs only while a MERGE_HEAD exists, so
+# a preparation interrupted after its checkout aborts the same way. An untracked
+# file a merger wrote is named and left in place: it is the merger's work, and
+# nothing here can tell it from the user's. Returns 1 after saying why on stderr
+# when the store was not restored.
+# Args: $1 = store worktree path.
+gitlore_abort_prepared_merge() {
+  local store="$1" statefile pending err untracked abs
+  statefile=$(gitlore_merge_state_file "$store")
+  abs=$(git -C "$store" rev-parse --show-toplevel) || abs="$store"
+  if [ ! -f "$statefile" ]; then
+    echo "gitlore: $abs holds no merge gitlore prepared; nothing was aborted." >&2
+    return 1
+  fi
+  pending=$(gitlore_pending_commit "$store" "$statefile")
+  if [ -z "$pending" ]; then
+    echo "gitlore: the prepared merge in $abs names no pending commit still in the store, so HEAD has nowhere to go back to; nothing was aborted. Read $statefile." >&2
+    return 1
+  fi
+  untracked=$(git -c core.quotePath=false -C "$store" ls-files --others --exclude-standard)
+  if git -C "$store" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    if ! err=$(gitlore_git -C "$store" merge --abort 2>&1); then
+      printf 'gitlore: git merge --abort failed in %s, so the merge stays prepared. git said:\n%s\n' "$abs" "$err" >&2
+      return 1
+    fi
+  fi
+  if ! err=$(gitlore_git -C "$store" checkout -q --detach "$pending" 2>&1); then
+    printf 'gitlore: the merge in %s is aborted, but HEAD could not be put back on its pending commit %s. git said:\n%s\n' "$abs" "$pending" "$err" >&2
+    return 1
+  fi
+  gitlore_drop_merge_preparation "$store"
+  echo "gitlore: the prepared merge in $abs is aborted; HEAD is back on $(git -C "$store" rev-parse --short "$pending")." >&2
+  if [ -n "$untracked" ]; then
+    printf 'gitlore: these untracked files were left in place; delete any the merger wrote:\n%s\n' \
+      "$(printf '%s\n' "$untracked" | sed 's/^/  /')" >&2
   fi
 }

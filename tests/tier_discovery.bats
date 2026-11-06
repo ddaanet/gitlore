@@ -107,14 +107,15 @@ teardown() {
 
 # --- SessionStart propagation-in ---
 
-@test "SessionStart leaves a tier pinned at its gitlink when the remote is ahead" {
-  # The tier is checked out at the commit the memory tree records and NOTHING
-  # advances it silently: root's index and the carrier are written by one commit
-  # and stay consistent by construction. Taking an upstream commit is a merge,
-  # which composition is no longer in a position to paper over.
+@test "SessionStart leaves a tier where it is when the remote is ahead" {
+  # No module moves at SessionStart. The tier stays at the commit it is on, on
+  # the branch it is on: the hook does not check the gitlink out and does not
+  # detach, and nothing advances the tier silently. Taking an upstream commit is
+  # a merge, which composition is no longer in a position to paper over.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   gitlink="$(git -C memory rev-parse HEAD:ddaanet)"
+  branch="$(git -C memory/ddaanet symbolic-ref -q --short HEAD)"
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   export GITLORE_LAUNCHED=1
@@ -123,19 +124,19 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" != "$remote_sha" ]
-  # Still detached — `submodule update` checks the gitlink out, it does not
-  # attach a branch — and the local `live` did not move either.
-  run git -C memory/ddaanet symbolic-ref -q HEAD
-  [ "$status" -ne 0 ]
+  # Still on the mount's named branch: the hook does not detach it, and the
+  # local `live` did not move either.
+  [ "$(git -C memory/ddaanet symbolic-ref -q --short HEAD)" = "$branch" ]
   run git -C memory/ddaanet rev-parse -q --verify live
   [ "$output" != "$remote_sha" ]
 }
 
-@test "SessionStart pins a tier that had outrun its gitlink" {
-  # Removing the fetch and the checkout pins nothing on its own: a clone from
-  # before the change already sits ahead of the gitlink, so the pass has to put
-  # it back. `submodule update` therefore runs on every session, not only when
-  # the tier was never checked out.
+@test "SessionStart does not put a tier that had outrun its gitlink back on it, and reports it in sync with its remote" {
+  # A tier ahead of the commit memory records is not a fault: the three-way
+  # compose answers any disagreement between root's lines and the carrier, and
+  # the commit records the tier's HEAD. SessionStart therefore leaves it there.
+  # The report compares HEAD and local `live` with the remote's `live`, not with
+  # the pin: this tier is past the pin and equal to its remote, so it is in sync.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   gitlink="$(git -C memory rev-parse HEAD:ddaanet)"
@@ -148,7 +149,12 @@ teardown() {
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$gitlink" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$gitlink" ]
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("ddaanet") and contains("in sync."))'
+  # No paragraph naming the tier reads the pin as the authority: no merge hint
+  # and no upstream facts waiting.
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | all(.[]; (contains("ddaanet") and (contains("/gitlore:merge") or contains("waiting"))) | not)'
 }
 
 @test "SessionStart names a tier whose remote is ahead, and how to take it" {
@@ -172,10 +178,11 @@ teardown() {
   echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
 }
 
-@test "SessionStart says nothing about a tier whose remote it already contains" {
+@test "SessionStart hints /gitlore:push for a tier that holds commits its remote lacks, and no upstream facts waiting" {
   # The other direction of the same comparison: local commits not yet published
-  # are the lockstep's business, not an upstream arrival. Reporting them as
-  # "waiting" would send the user to a merge that has nothing to merge.
+  # are not an upstream arrival, so "waiting" would send the user to a merge
+  # with nothing to merge. The tier is strictly ahead of its remote's `live`,
+  # which is /gitlore:push's business and is said so.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   git -C memory/ddaanet commit -q --allow-empty -m "local, unpublished"
@@ -186,6 +193,7 @@ teardown() {
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("ddaanet") and contains("/gitlore:push"))'
   echo "$output" | jq -e '.systemMessage | test("upstream facts waiting") | not'
   echo "$output" | jq -e '.systemMessage | test("has diverged") | not'
 }
@@ -233,7 +241,8 @@ teardown() {
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("memory ready")'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("in sync."))'
+  echo "$output" | jq -e '.systemMessage | (contains("memory ready") or contains("detached at live")) | not'
 }
 
 # --- gitlore_active_tiers: the activation manifest ---
@@ -337,7 +346,7 @@ teardown() {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ghost
-  # Committed, so the store is clean and the position report is "memory ready".
+  # Committed, so the store is clean and the position report is "in sync.".
   commit_memory_state
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
@@ -345,7 +354,8 @@ teardown() {
   before=$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain)
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("memory ready")'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("in sync.") and (contains("ghost") | not))'
+  echo "$output" | jq -e '.systemMessage | (contains("memory ready") or contains("detached at live")) | not'
   # The report names the unmounted tier.
   echo "$output" | jq -e '.systemMessage | test("ghost")'
   [ "$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain)" = "$before" ]

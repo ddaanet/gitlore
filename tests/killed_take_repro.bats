@@ -87,7 +87,7 @@ _tier_live_ahead_of_pin() {
   strand_live_ahead_of_pin ddaanet
 }
 
-@test "killed take: SessionStart resets the tier to its pin and leaves the carrier clean, then the later take succeeds" {
+@test "killed take: SessionStart leaves the tier on the arrival and reports no dangling pointer, then the later take records it" {
   _tier_live_ahead_of_pin
   pin=$(git -C memory rev-parse ":ddaanet")
   live_sha=$(git -C memory/ddaanet rev-parse live)
@@ -128,35 +128,30 @@ _tier_live_ahead_of_pin() {
   # shellcheck disable=SC2016  # $1 is bash -c's own positional param, expanded at run time, not here
   GITLORE_LAUNCHED=1 run --separate-stderr bash -c 'echo "{}" | bash "$1"' _ "$SESSION_START"
   [ "$status" -eq 0 ]
-  # BENIGN: `submodule update` reads the gitlink from memory's INDEX (still $pin,
-  # since the take's staging never moved it) and resets the tier's worktree to
-  # it — the ordinary "return an off-pin tier to its recorded commit" behavior
-  # (the tier-pin step of scripts/cc-hooks/session-start.sh).
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
-  # Reported: root's index is flagged as dangling, because ddaanet/local.md
-  # genuinely names no file in the (now reset-back) memory store.
-  [[ "$output$stderr" == *"ddaanet/local.md names no file in the memory store"* ]]
-  # THE GUARD: SessionStart does not compose, so the reset-back carrier is
-  # exactly what the pin holds. Root's carried-over line is not projected down
-  # into it, and the tier is clean.
-  run grep -qxF -- '- [local](local.md) — committed here, never recorded' memory/ddaanet/MEMORY.md
-  [ "$status" -ne 0 ]
+  # SessionStart moves no module: the tier stays on the arrival the take put it
+  # on, however far that is from the pin the kill left in the index.
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
+  # Root's carried-over line and the carrier it came from agree, so nothing is
+  # dangling and nothing is pending: the file the line names is in the tier.
+  [[ "$output$stderr" != *"ddaanet/local.md names no file in the memory store"* ]]
+  # The carrier keeps the line, and the tier is clean.
+  grep -qxF -- '- [local](local.md) — committed here, never recorded' memory/ddaanet/MEMORY.md
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 
-  # --- A later take, run again after SessionStart's reset. ---
-  # Real git this time: the kill shadow is gone. The tier is clean and `live` is
-  # ahead of its HEAD, which is the shape the take adopts.
+  # --- A later take, run again after SessionStart. ---
+  # Real git this time: the kill shadow is gone. The tier is where the killed
+  # take left it, off its pin, and the end compose records it.
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
-  [[ "$output$stderr" != *"has uncommitted changes, so nothing was adopted"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
-  [ "$(git -C memory rev-parse ":ddaanet")" = "$live_sha" ]        # the pair is staged now
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$live_sha" ]      # recorded now
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 }
 
-# The killed take, then the next SessionStart: the tier is back on its pin, local
-# `live` still holds the arrival, and root still carries the adopted line, so the
-# store has a pending compose. Leaves $pin, $live_sha, $bin and $hook_json.
+# The killed take, then the next SessionStart: the tier stays on the arrival the
+# take put it on, off the pin the index still records, and root carries the
+# adopted line, so root and carrier agree. Leaves $pin, $live_sha, $bin and
+# $hook_json.
 _killed_take_then_session_start() {
   _tier_live_ahead_of_pin
   pin=$(git -C memory rev-parse ":ddaanet")
@@ -171,49 +166,37 @@ _killed_take_then_session_start() {
   GITLORE_LAUNCHED=1 run --separate-stderr bash -c 'echo "{}" | bash "$1"' _ "$SESSION_START"
   [ "$status" -eq 0 ]
   hook_json="$output"
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
   [ "$(cat memory/MEMORY.md)" = "$root_before" ]
 }
 
-@test "killed take: SessionStart names /gitlore:merge for the tier and not gitlore-compose" {
+@test "killed take: SessionStart reports no dangling pointer and no pending compose for the tier it left on the arrival" {
   _killed_take_then_session_start
-  # Composing first dirties the tier and the take refuses, so the report sends
-  # the user to the take, on both channels.
-  echo "$hook_json" | jq -e '.systemMessage | test("/gitlore:merge")'
-  echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | test("/gitlore:merge")'
+  # Root's line and the carrier's agree, so a pass changes nothing: no compose
+  # command is named on either channel, and the file the line names is in the
+  # tier, so no pointer is reported missing.
   echo "$hook_json" | jq -e '.systemMessage | test("gitlore-compose") | not'
   echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | test("gitlore-compose") | not'
+  echo "$hook_json" | jq -e '.systemMessage | test("names no file") | not'
+  echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | test("names no file") | not'
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
-  # The state is the one the pending-compose diagnostic would otherwise fire on:
-  # a pass would write the carrier, so naming /gitlore:merge is what keeps it out.
-  [ -n "$(gitlore_compose_pending memory)" ]
+  [ -z "$(gitlore_compose_pending memory)" ]
 }
 
-@test "killed take: gitlore-compose between SessionStart and the take dirties the tier and the take refuses" {
-  # Pins today's behaviour on the route the report above steers away from: the
-  # compose projects root's carried-over line into the reset-back tier, and the
-  # take then refuses on dirt the compose produced. The recovery commit it asks
-  # for succeeds, reports divergence, prepares no merge, and `live` keeps the arrival.
+@test "killed take: gitlore-compose between SessionStart and the take changes nothing, and the take records the tier" {
+  # The tier stays on the arrival and carries the line root carries, so the
+  # compose projects nothing into it: it stays clean, and the take that follows
+  # does not refuse on dirt a compose produced.
   _killed_take_then_session_start
   run --separate-stderr "$PLUGIN_ROOT/bin/gitlore-compose"
   [ "$status" -eq 0 ]
-  grep -qxF -- '- [local](local.md) — committed here, never recorded' memory/ddaanet/MEMORY.md
-  [ -n "$(git -C memory/ddaanet status --porcelain)" ]
+  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 
   run --separate-stderr bash "$CMD"
-  [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"tier 'ddaanet' has uncommitted changes, so nothing was taken."* ]] || false
-  [ -n "$(git -C memory/ddaanet status --porcelain)" ]
-  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin" ]
-
-  # RECOVERY, and why the residual is accepted: the carrier line is committed
-  # on the pin, the tier's `live` cannot fast-forward because it still holds
-  # the arrival, and that is reported as divergence. The commit prepares no
-  # merge: /gitlore:merge or /gitlore:push joins the line to the file it names.
-  run --separate-stderr commit_sections "memory: follow the printed remedy"
   [ "$status" -eq 0 ]
-  [[ "$stderr" == *"/gitlore:merge"* || "$stderr" == *"/gitlore:push"* ]]
-  [ -z "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+  [[ "$output$stderr" != *"has uncommitted changes, so nothing was taken"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$live_sha" ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$live_sha" ]      # the arrival is still held
 }

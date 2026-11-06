@@ -26,6 +26,21 @@ assert_report_on_both_channels() {
   echo "$output" | jq -e --arg re "$1" '.hookSpecificOutput.additionalContext | test($re)'
 }
 
+# Assert the root memory store reports `in sync.` and the ready line is gone: a
+# systemMessage paragraph with `in sync.` that names no tier (a tier's line holds
+# its name, here `ddaanet`), and neither form of the old ready line ("memory
+# ready", "memory ready (detached at live)"). Args: $1 = the hook JSON.
+assert_memory_in_sync() {
+  jq -e '.systemMessage // "" | split("\n\n") | any(.[]; contains("in sync.") and (contains("ddaanet") | not))' <<<"$1" >/dev/null || {
+    printf 'no systemMessage paragraph reports memory in sync.; systemMessage:\n%s\n' "$(jq -r '.systemMessage // ""' <<<"$1")" >&2
+    return 1
+  }
+  jq -e '.systemMessage // "" | (contains("memory ready") or contains("detached at live")) | not' <<<"$1" >/dev/null || {
+    printf 'the ready line is still printed beside in sync.; systemMessage:\n%s\n' "$(jq -r '.systemMessage // ""' <<<"$1")" >&2
+    return 1
+  }
+}
+
 # Assert a jq regex does not match one hook channel. Reads the hook JSON from
 # $output. Args: $1 = jq path (.systemMessage or .hookSpecificOutput.additionalContext),
 # $2 = regex.

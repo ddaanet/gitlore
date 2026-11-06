@@ -37,11 +37,11 @@ load helpers/tier-divergence
   [ ! -f "$(tier_state_file ddaanet)" ]
 }
 
-# The window between "merge landed" and "the next run records it". The tier pass
-# still pins every tier to the gitlink in the superproject's INDEX, and a landed
-# merge has staged nothing, so the tier goes back on its pin. `live` keeps the
-# merge, and the next take adopts it.
-@test "a landed tier merge a SessionStart re-pins is kept in live and recorded by the next take" {
+# The window between "merge landed" and "the next run records it". A landed
+# merge has staged nothing, so the tier sits ahead of the gitlink in memory's
+# INDEX. SessionStart moves no module: the tier stays on the merge, `live` keeps
+# it, and the next take records it.
+@test "a landed tier merge a SessionStart finds ahead of the pin stays on the merge and is recorded by the next take" {
   make_parent_with_memory
   git -C memory push -q origin live
   mount_tier_at_live ddaanet
@@ -51,8 +51,8 @@ load helpers/tier-divergence
   git -C memory/ddaanet add -A
   bash "$RESOLVE" continue-after-merge
   merged=$(git -C memory/ddaanet rev-parse HEAD)
-  # The fixture has to give the pin something to do: the tier is off the commit
-  # memory records, and memory has not committed the move.
+  # The fixture has to give the session something to move: the tier is off the
+  # commit memory records, and memory has not committed the move.
   [ "$merged" != "$pinned" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pinned" ]
 
@@ -60,6 +60,7 @@ load helpers/tier-divergence
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$merged" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$merged" ]
 
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"

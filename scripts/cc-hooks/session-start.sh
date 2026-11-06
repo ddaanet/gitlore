@@ -17,8 +17,8 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
-# gitlore_detect_stale_merge_state, so the tier re-detach below can tell a store
-# with a merge prepared in it from one it may safely check out.
+# gitlore_detect_stale_merge_state for the tier stage's mid-merge notice, and
+# the unresolvable-pin reports of resolve-unresolvable.sh.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 # gitlore_sync_nested_tiers, the "Nested tiers" stage below.
@@ -152,7 +152,7 @@ if [ -f "$SENTINEL" ]; then
   esac
 fi
 
-# Branch model: submodule init, detach at live, report where it stands.
+# Branch model: submodule init, then report where it stands.
 # Memory working tree missing in this worktree. Two cases:
 #  - submodule never initialized (main worktree, fresh clone) → submodule update;
 #  - submodule initialized in the main repo but this is a *linked* worktree whose
@@ -184,18 +184,10 @@ if ! git -C "$mempath" show-ref --verify --quiet refs/heads/live; then
 fi
 
 # Branch model (D17): memory is checked out DETACHED — `live` is the sole
-# travelling ref and is never checked out as a branch, so one memory gitdir
-# serves any number of parent worktrees and every commit path reduces to
-# "pending HEAD vs live". Detaching is done *in place* (no ref argument), which
-# keeps the current commit and any uncommitted work. Nothing at session start
-# advances HEAD onto live: /gitlore:merge does that. A session that predates
-# this model arrives on a named branch and is migrated here, losing nothing —
-# the old model advanced `live` on every commit, so the branch never held
-# anything `live` did not.
-if git -C "$mempath" symbolic-ref -q HEAD >/dev/null; then
-  gitlore_git -C "$mempath" checkout -q --detach
-fi
-
+# travelling ref and is never checked out as a branch. SessionStart moves no
+# module, so nothing here detaches it or advances HEAD onto live: a store
+# attached to a branch breaks a precondition that the install and the mount
+# establish, and /gitlore:merge is what takes live.
 # Remove the retired store gate's pre-commit wrapper and hooksDir mirror (D70).
 gitlore_retire_store_gates "$mempath"
 
@@ -219,14 +211,16 @@ if [ ! -f "$mempath/MEMORY.md" ]; then
   fi
 fi
 
-# Nested tiers (D17 3-i-a): check each tier submodule inside the memory store out
-# at the commit the memory tree records for it, pin it, and report what its
-# remote holds. gitlore_sync_nested_tiers (scripts/lib/session-tiers.sh) is the
-# whole stage; it calls add_sysmsg and appends to protocol_ctx directly.
+# Nested tiers (D17 3-i-a): clone a tier that is not checked out, and report
+# where each stands and any recorded commit no repository holds.
+# gitlore_sync_nested_tiers (scripts/lib/session-tiers.sh) is the whole stage;
+# it calls add_sysmsg, appends to protocol_ctx and lists each tier whose pin is
+# unresolvable in unresolvable_tiers, which the two reports below read.
+unresolvable_tiers=""
 gitlore_sync_nested_tiers "$mempath"
 
 # Store diagnostics (D74): the rule problems of the indexes and a pending
-# compose, reported after the tier pin and written nowhere. SessionStart composes
+# compose, reported after the tier stage and written nowhere. SessionStart composes
 # no index: PostToolBatch and the mount compose where an edit happens, so an
 # index that is off here changed outside them and is reported, not repaired.
 # Never fatal: the report is read-only and SessionStart must always finish.
@@ -236,6 +230,7 @@ report_store_diagnostics "$mempath"
 # refused or not: a bullet whose file is absent leaves the composed output
 # correct, so it is named, not acted on.
 dangling=$(gitlore_compose_dangling "$mempath")
+dangling=$(gitlore_drop_unresolvable_dangling "$mempath" "$dangling")
 if [ -n "$dangling" ]; then
   # One synthetic notice, capped: a whole tier's worth of stale pointers must
   # not flood the user's systemMessage (nor get UI-truncated to "and many more

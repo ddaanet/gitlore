@@ -28,6 +28,8 @@
 #                            repair a carrier that arrived defective
 #   resolve-adopt-report.sh the end of a take: one root write and one bookkeeping
 #                            commit for the tiers it moved
+#   resolve-unresolvable.sh a recorded commit no repository holds: its report,
+#                            /gitlore:resolve's check and its revert
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose.sh"
 # shellcheck disable=SC1091
@@ -56,6 +58,8 @@ source "${BASH_SOURCE[0]%/*}/resolve-take-tiers.sh"
 source "${BASH_SOURCE[0]%/*}/resolve-adopt.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-adopt-report.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-unresolvable.sh"
 
 # Print every store under this memory tree — memory itself, then each mounted
 # tier — in the order the gates visit them. One merge policy applies at every

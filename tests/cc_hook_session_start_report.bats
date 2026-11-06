@@ -41,7 +41,7 @@ load helpers/cc-hook-session-start
   [ -f memory/scratch.md ]
 }
 
-@test "HEAD diverged from live names /gitlore:resolve on both channels, moves nothing, exit 0 (D59)" {
+@test "HEAD diverged from live names /gitlore:push on both channels, never /gitlore:resolve, moves nothing, exit 0 (D59)" {
   make_parent_with_memory
   make_diverged_head_vs_live
   enable_gitlore
@@ -49,7 +49,8 @@ load helpers/cc-hook-session-start
   live_before=$(git -C memory rev-parse live)
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_report_on_both_channels '/gitlore:resolve'
+  assert_report_on_both_channels '/gitlore:push'
+  assert_lacks_on_both_channels '/gitlore:(merge|resolve)'
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
 }
@@ -110,7 +111,7 @@ load helpers/cc-hook-session-start
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
 }
 
-@test "memory ahead of its remote stays silent: no upstream, merge or push report (D59)" {
+@test "memory ahead of its remote hints /gitlore:push and names no upstream, merge or resolve (D59)" {
   make_parent_with_memory
   publish_live_to_remote
   # A local commit that HEAD and live share, absent from the remote.
@@ -122,8 +123,9 @@ load helpers/cc-hook-session-start
   git -C memory merge-base --is-ancestor origin/live live
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("memory ready")'
-  assert_lacks_on_both_channels 'upstream|diverged|/gitlore:merge|/gitlore:push|/gitlore:resolve'
+  # Strictly ahead of the authority's live is a push's business, on both channels.
+  assert_report_on_both_channels '/gitlore:push'
+  assert_lacks_on_both_channels 'upstream|diverged|/gitlore:merge|/gitlore:resolve'
 }
 
 @test "an unfetchable remote is named on both channels, exit 0, local refs do not move (D59)" {
