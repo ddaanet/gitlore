@@ -49,7 +49,7 @@ gitlore_index_has_path() {
 }
 
 # Filter stdin (bullets) to the first one whose path is $1. Helper for the
-# merge above; keeps the path comparison out of a subshell-heavy inline loop.
+# entry-wise merge (index-merge.sh); keeps the path comparison out of a subshell-heavy inline loop.
 gitlore_compose_pick() {
   local want="$1" line path
   while IFS= read -r line || [ -n "$line" ]; do

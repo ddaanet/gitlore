@@ -69,7 +69,7 @@ The division of labour is D7's: the script decides, the agent writes prose.
    merge changed still holds conflict markers or the merged index itself fails
    the check, so the parent rejects with the problem lines and the sub-agent
    re-synthesizes (D52). A memory merge also composes up the tiers ahead of the
-   gitlinks `OURS` records, a diff3 chunk counting as a failing index; a tier
+   gitlinks `OURS` records, a line both sides changed taking the tier's; a tier
    merge composes nothing, and the end of the run that follows records it
    ([take-and-compose.md](take-and-compose.md)). It runs the dangling-pointer
    report, commits under the canned merge message (D49), and pushes when the

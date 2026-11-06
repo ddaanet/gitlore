@@ -177,8 +177,8 @@ gitlinks `OURS` records from `HEAD:` (above), because the index there already
 holds the staged tier heads. That base cannot record what root has seen until
 the merge commits, so a line both the merged root and the tier changed apart
 takes the tier's line there, reported on stderr as
-`tier '<tier>' replaced root's line for <path>`, rather than a chunk that would
-recur on every rerun.
+`tier '<tier>' replaced root's line for <path>: <root's line>`, rather than a
+chunk that would recur on every rerun.
 
 `/gitlore:merge` brings in changes from `live` and gains no adoption step, and
 there is no `gitlore-compose --up`. The commit path commits through a tier ahead

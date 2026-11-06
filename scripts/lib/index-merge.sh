@@ -67,8 +67,10 @@ _gitlore_index_merge_split() {
 # conflicts with an insertion beside it.
 # A both-changed bullet is a diff3 chunk, except when $5 names a notes file: it
 # then takes theirs' line and appends `tier '<$6>' replaced root's line for
-# <path>` to that file, so no chunk is written.
-# Always returns 0; the caller detects conflicts from the emitted markers.
+# <path>: <ours' line>` to that file, so no chunk is written and the replaced
+# text is on record.
+# Returns 0, the caller detecting conflicts from the emitted markers, and 1
+# only when the notes file cannot be written.
 # Args: $1 = tmpdir, $2/$3/$4 = ours/base/theirs labels,
 # $5 = notes file (optional), $6 = tier name (with $5).
 _gitlore_index_merge_bullets() {
@@ -94,7 +96,7 @@ _gitlore_index_merge_bullets() {
     if [ "$b" = 1 ] && [ "$tline" = "$bline" ]; then printf '%s\n' "$oline"; continue; fi
     if [ -n "$notes" ]; then
       printf '%s\n' "$tline"
-      printf "tier '%s' replaced root's line for %s\n" "$tier" "$path" >> "$notes" || return 1
+      printf "tier '%s' replaced root's line for %s: %s\n" "$tier" "$path" "$oline" >> "$notes" || return 1
       continue
     fi
     # Both sides moved this one entry, and apart. The base line is carried into

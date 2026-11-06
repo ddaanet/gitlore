@@ -166,7 +166,7 @@ merge() { gitlore_index_merge base ours theirs "MINE" "BASE" "THEIRS"; }
   [[ "$output" == *'- [A](a.md) — theirs'* ]]
   [[ "$output" != *'<<<<<<<'* ]]
   [[ "$output" != *'— mine'* ]]
-  [ "$(cat "$BATS_TEST_TMPDIR/notes")" = "tier 'ddaanet' replaced root's line for a.md" ]
+  [ "$(cat "$BATS_TEST_TMPDIR/notes")" = "tier 'ddaanet' replaced root's line for a.md: - [A](a.md) — mine" ]
 }
 
 @test "both sides adding the same NEW path with different text conflicts on an empty base" {

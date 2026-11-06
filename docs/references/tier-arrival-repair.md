@@ -136,11 +136,11 @@ so one edit clears it. A problem outside the merged index lets the merge land: a
 tier merge lands in the tier and the end of the run records it (D77, in
 [take-and-compose.md](take-and-compose.md)), and a memory-root merge commits
 uncomposed. A tier merge's gate reads the carrier alone and composes nothing; a
-memory-root merge's compose-up that leaves a diff3 chunk counts as a failing
-index. A defect arriving across a divergence therefore reaches the synthesis,
-never the repair. A store with no root `MEMORY.md` runs no index check, so none
-of the abort, the repair or this gate applies to it — which the composition hook
-reports once an episode rather than leaving silent
+memory-root merge's compose-up takes the tier's line where both sides changed
+one, and leaves no chunk. A defect arriving across a divergence therefore
+reaches the synthesis, never the repair. A store with no root `MEMORY.md` runs
+no index check, so none of the abort, the repair or this gate applies to it —
+which the composition hook reports once an episode rather than leaving silent
 ([index-composition.md](index-composition.md)).
 
 **A merge continuation refuses to commit files that still hold conflict

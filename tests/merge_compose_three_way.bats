@@ -292,5 +292,5 @@ push_memory_reword() {
   [ -n "$merge_commit" ]
   git -C memory show "$merge_commit:MEMORY.md" | grep -qxF -- "$tierline"
   [ -z "$(git -C memory status --porcelain)" ]
-  cat "$BATS_TEST_TMPDIR"/take.*.err | grep -qF "tier 'ddaanet' replaced root's line for ddaanet/shared.md"
+  cat "$BATS_TEST_TMPDIR"/take.*.err | grep -qF "tier 'ddaanet' replaced root's line for ddaanet/shared.md: - [shared](ddaanet/shared.md) — reworded on memory remote"
 }
