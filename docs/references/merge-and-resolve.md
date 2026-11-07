@@ -139,7 +139,9 @@ is a fast-forward, and a diverged one prepares a merge marked `publish: "no"`,
 which stops the continuation after the local `HEAD:live` fast-forward. Memory's
 own missing remote is reported as nothing to take rather than a failure: a tier
 with no remote is a misconfiguration worth stopping on, since it exists to be
-shared, and the memory root is not.
+shared, and the memory root is not. A remote that has no `live` yet is nothing
+to take for either store, read off git's refusal to fetch the missing ref, so a
+run that moved a tier still reaches its root write.
 
 Stores are visited **tiers first, root last**, and root's index is written once
 at the end of the run and recorded in one canned bookkeeping commit, so an

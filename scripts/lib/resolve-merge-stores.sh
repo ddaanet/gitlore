@@ -91,8 +91,13 @@ gitlore_merge_one_store() {
     remote_url=""
   elif fetch_err=$(git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
     fetched=1
-    # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
     remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || remote=""
+  else
+    # git refuses to fetch a ref the remote lacks, so a remote with no `live`
+    # yet is read off that refusal: the expected miss, not a failed fetch.
+    case "$fetch_err" in
+      *"couldn't find remote ref"*) fetched=1 ;;
+    esac
   fi
 
   # A tier's local `live` ahead of HEAD holds commits the ancestry tests below

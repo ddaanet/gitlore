@@ -142,3 +142,47 @@ load helpers/merge-memory
   [[ "$output$stderr" != *"could not fetch"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$pin" ]
 }
+
+# A remote that never received `live` is nothing to take, not a failed fetch:
+# git refuses the fetch of the missing ref, and the take reads that refusal as
+# the expected miss, so a run that moved a tier still reaches its root write.
+
+@test "a memory remote with no live yet is nothing to take, and the moved tier still reaches root" {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  git -C memory remote remove origin || true
+  git -C memory remote add origin "$MEMORY_REMOTE"
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  remote_sha=$(push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo')
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"memory — its remote has no 'live' branch yet; nothing to take"* ]]
+  [[ "$output$stderr" != *"couldn't find remote ref"* ]]
+  [[ "$output$stderr" != *"could not fetch"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  # The end-of-run root write: the move recorded, the index composed, the store clean.
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$remote_sha" ]
+  grep -q 'ddaanet/upstream.md' memory/MEMORY.md
+  [ -z "$(git -C memory status --porcelain)" ]
+}
+
+@test "a tier whose remote has no live yet is nothing to take, not a failed fetch" {
+  wire_memory_remote
+  bare=$(make_tier_remote ddaanet nolive)
+  git -C memory -c protocol.file.allow=always submodule add --name ddaanet "$bare" ddaanet >/dev/null 2>&1
+  git -C memory commit -q -m "Add ddaanet tier"
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tier 'ddaanet' — its remote has no 'live' branch yet; nothing to take"* ]]
+  [[ "$output$stderr" != *"could not fetch"* ]]
+  [[ "$output" == *"memory — already holds everything its remote does"* ]]
+}
