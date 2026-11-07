@@ -90,6 +90,45 @@ teardown() { teardown_tmp_repo; }
   [ -z "$output" ]
 }
 
+# --- the pass after an adoption: root's later edit to an adopted line stands ---
+#
+# gitlore_compose_up stages nothing itself; its callers stage the pair. The
+# pass is its own caller and stages the gitlink of each tier it merged, so the
+# next pass reads the tier's HEAD as base and root's edit is root's alone.
+
+@test "a root deletion of a line the pass adopted stands at the next pass" {
+  pinned_store_with_tier
+  move_tier_off_pin_into_live ddaanet
+  gitlore_compose memory
+  grep -qF 'ddaanet/upstream.md' memory/MEMORY.md
+  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+
+  sed -i.bak '/upstream\.md/d' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
+  # Nothing pending: the base now holds the line, so root dropping it is a
+  # root change, not a tier addition to adopt again.
+  [ -z "$(gitlore_compose_pending memory)" ]
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  run ! grep -qF 'upstream.md' memory/MEMORY.md
+  # The carrier keeps its line: a root deletion never deletes in a tier (D36);
+  # the orphan report names it.
+  grep -qF 'upstream.md' memory/ddaanet/MEMORY.md
+  [[ "$(gitlore_compose_orphans memory)" == *"upstream.md is in the tier but not in the root index"* ]]
+}
+
+@test "a root reword of a line the pass adopted projects down instead of chunking" {
+  pinned_store_with_tier
+  move_tier_off_pin_into_live ddaanet
+  gitlore_compose memory
+
+  sed -i.bak 's/arrived in another repo/reworded in root/' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
+  run gitlore_compose memory
+  [ "$status" -eq 0 ]
+  run ! grep -qE '^(<<<<<<<|>>>>>>>)' memory/MEMORY.md
+  grep -qxF -- '- [upstream](ddaanet/upstream.md) — reworded in root' memory/MEMORY.md
+  grep -qxF -- '- [upstream](upstream.md) — reworded in root' memory/ddaanet/MEMORY.md
+}
+
 @test "adoption leaves other tiers and the project's lines where they are" {
   make_parent_with_memory
   make_tier_in_memory ddaanet

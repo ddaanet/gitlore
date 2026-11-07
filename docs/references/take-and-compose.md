@@ -102,10 +102,10 @@ three-way:
   chunk is written;
 - the pass `gitlore-compose` and `PostToolBatch`'s pass
   (`gitlore_compose_pass`), for every active tier off its pin, so a tier another
-  checkout or a killed take moved composes like an arrival; a chunk ends the
-  pass with root written and the tiers staged, since projecting a block holding
-  three versions of one line down would push whichever the projection picked
-  into the carrier;
+  checkout or a killed take moved composes like an arrival; the pass stages the
+  gitlinks of the tiers it merged, and a chunk ends it with root written, since
+  projecting a block holding three versions of one line down would push
+  whichever the projection picked into the carrier;
 - the commit path's pending check, in its read-only form.
 
 A tier merge's continuation lands the merge and composes nothing: the carrier is
@@ -167,10 +167,19 @@ since is ahead of it, and the carrier at that gitlink is exactly what root's
 block was last composed against.
 
 The base is read from the *index*, not `HEAD`, because staging a gitlink is how
-root records that it has seen the tier's version. A chunk resolved to either
-side or to neither then stands, where a base read from `HEAD` would rebuild the
-same chunk at every pass and commit. That is also why a compose-up that leaves a
-chunk stages the merged tiers.
+root records that it has seen the tier's version. So every path that merges a
+tier up leaves its gitlink staged before it returns, clean merge or chunk; the
+pass (`gitlore_compose_pass`, in write mode only) is the one that stages without
+committing, since the commit is the user's or the take's to make. A chunk
+resolved to either side or to neither then stands, a line root deletes after
+adopting it stays deleted, and a root reword of an adopted line projects down,
+where a base left at the old pin would re-adopt the line, or rebuild the same
+chunk, at every pass and commit.
+
+The take decides whether a tier *moved* against the pin `HEAD` records, not the
+index, since a gitlink the pass staged is recorded by no commit until the
+bookkeeping one or the user's carries it; the ancestry of that move is still
+read against the index pin, the one the record would replace.
 
 That rule is the scope of the take's compose and of every pass outside a memory
 merge. The memory merge's continuation is the standing exception: it reads the
@@ -195,11 +204,6 @@ carrier. That is the overwrite D36 names, and the pass reports it only as
 `composed`. Resolving the chunk in the file, which the report asks for, is the
 path that loses nothing.
 
-A line a tier ahead of its pin added cannot be deleted from root, because the
-pass re-adopts it, and a reword in root of an adopted line comes back as a chunk
-with an empty base section. Staging the merged tiers after every compose-up, not
-only one leaving markers, would record what root has seen; whether to is an open
-question.
 
 ## Rejected alternatives
 
@@ -226,6 +230,16 @@ changes and chunks only a line both moved apart (D78).
 commit, because nothing records that root has seen the tier's version (D78).
 Rejected for the take and the passes; the memory merge's continuation keeps it
 as D78's stated exception, with the tier-wins rule above.
+
+**Staging the merged tiers only on a chunk.** A pass whose clean merge staged
+nothing left the base at the old pin, so a line root deleted after adopting it
+came back at the next pass, and a root reword of an adopted line came back as a
+chunk with an empty base section (D78).
+
+**Staging inside `gitlore_compose_up`.** Its callers all stage the pair they
+record, so the pass was the one gap; staging in the compose-up as well would
+move the take's and the recovery's staging-failure reports, which print the
+`git add` to run, across a function boundary (D78).
 
 **Recording in the merge state which tier commits the continuation has offered
 root as a chunk.** It would make the continuation's base depend on state and add

@@ -62,10 +62,13 @@ gitlore_compose_pass() {
 
   # Up first, so the down projection reads root with what a tier another
   # checkout or a killed take moved already merged in. The check stops at the
-  # first change, since root is what it would write. A chunk ends the pass with
-  # root written and the tiers staged: projecting a block holding three versions
-  # of one line down would push whichever the projection picked into the
-  # carrier.
+  # first change, since root is what it would write. The pass stages the
+  # gitlink of every tier it merged, chunk or not: the staged gitlink is the base
+  # the next pass reads, so a root edit to an adopted line stands instead of
+  # being merged against the old pin again (D78). The check stages nothing. A
+  # chunk ends the pass with root written and the tiers staged: projecting a
+  # block holding three versions of one line down would push whichever the
+  # projection picked into the carrier.
   ahead=$(gitlore_tiers_off_pin "$mempath" :)
   if [ -n "$ahead" ]; then
     if ! dir=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-compose-up.XXXXXX"); then
@@ -88,12 +91,12 @@ gitlore_compose_pass() {
       printf '%s\n' "$out"
       return 0
     fi
+    if [ "$writer" = gitlore_compose_write ] && ! gitlore_stage_merged_tiers "$mempath" "$dir"; then
+      rm -rf "$dir"
+      return 2
+    fi
     if [ "$mrc" -eq 1 ]; then
       printf '%s\n' "$out"
-      if ! gitlore_stage_merged_tiers "$mempath" "$dir"; then
-        rm -rf "$dir"
-        return 2
-      fi
       rm -rf "$dir"
       gitlore_index_marker_lines "$root"
       return 3

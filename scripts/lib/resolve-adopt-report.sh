@@ -48,7 +48,7 @@ gitlore_compose_moved_tiers() {
   fi
   [ -z "$composed" ] || printf '%s\n' "$composed" | sed 's/^/gitlore: /'
 
-  # Written ahead of the staging, which moves the pins the body reads.
+  # The body reads the pins HEAD records, which the staging below does not move.
   msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-tier-msg.XXXXXX") || msgfile=""
   [ -z "$msgfile" ] || gitlore_bookkeeping_message "$mempath" "$names" "$moved" > "$msgfile"
 
@@ -114,32 +114,36 @@ gitlore_compose_moved_tiers_for_push() {
   gitlore_compose_moved_tiers "$mempath"
 }
 
-# Print each mounted tier whose HEAD strictly descends the commit root's INDEX
-# records, one per line. The index rather than HEAD: a pointer already staged for
-# the next memory commit has been recorded. A tier behind its pin is left out, so
-# a pin never moves backward, and the commit's own guard answers that tier. So is
-# a tier off to the side of its pin, which is reported, since nothing below can
-# say which of the two was meant.
+# Print each mounted tier whose HEAD strictly descends the commit root's HEAD
+# records, one per line. HEAD, not the index, decides whether a tier moved: the
+# compose pass stages the gitlink of a tier it merged up without committing it,
+# and a pointer only staged is not recorded until a commit carries it, which is
+# what the bookkeeping commit is for. The index pin is the one the record would
+# move, so ancestry is read against it: a tier behind it is left out, so a pin
+# never moves backward, and the commit's own guard answers that tier. So is a
+# tier off to the side of it, which is reported, since nothing below can say
+# which of the two was meant.
 # Args: $1 = memory worktree. Returns 1, after the refusal, on a recorded commit
 # neither the tier nor its remote holds.
 gitlore_tiers_ahead_of_pin() {
-  local mempath="$1" tier tierpath pin head
+  local mempath="$1" tier tierpath pin staged head
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
     # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
     [ -e "$tierpath/.git" ] || continue
-    # `-q --verify` is silent on the expected misses: no stage-0 gitlink in the
-    # index (mid-mount), and a tier with no commit.
-    pin=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
+    # `-q --verify` is silent on the expected misses: no gitlink in HEAD or no
+    # stage-0 one in the index (mid-mount), and a tier with no commit.
+    pin=$(git -C "$mempath" rev-parse -q --verify "HEAD:$tier") || continue
+    staged=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
     head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
     [ "$head" != "$pin" ] || continue
-    gitlore_tier_holds_gitlink "$mempath" "$tier" "$pin" || return 1
-    if git -C "$tierpath" merge-base --is-ancestor "$pin" "$head"; then
+    gitlore_tier_holds_gitlink "$mempath" "$tier" "$staged" || return 1
+    if git -C "$tierpath" merge-base --is-ancestor "$staged" "$head"; then
       printf '%s\n' "$tier"
-    elif ! git -C "$tierpath" merge-base --is-ancestor "$head" "$pin"; then
+    elif ! git -C "$tierpath" merge-base --is-ancestor "$head" "$staged"; then
       printf 'gitlore: tier '\''%s'\'' sits at %s, which does not contain the commit the memory store records (%s), so nothing was recorded for it. The next memory commit refuses that pin and names the remedy.\n' \
-        "$tier" "${head:0:12}" "${pin:0:12}" >&2
+        "$tier" "${head:0:12}" "${staged:0:12}" >&2
     fi
   done < <(gitlore_tier_paths "$mempath")
 }
@@ -153,7 +157,7 @@ gitlore_bookkeeping_message() {
   local mempath="$1" names="$2" moved="$3" tier pin
   printf 'Update MEMORY.md for %s tier merge.\n\n' "$names"
   while IFS= read -r tier; do
-    pin=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
+    pin=$(git -C "$mempath" rev-parse -q --verify "HEAD:$tier") || continue
     printf '%s:\n' "$tier"
     git -C "$mempath/$tier" log --format='%s' "$pin..HEAD" | sed 's/^/  /'
   done <<<"$moved"

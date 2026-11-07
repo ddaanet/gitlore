@@ -253,11 +253,12 @@ gitlore_compose_up() {
   return 3
 }
 
-# Stage the gitlink of every tier gitlore_compose_merge_tiers listed in $2/tiers,
-# once root holds a diff3 chunk for them. The staged gitlink is the base every
-# later pass and commit reads, so this is how root records that it has seen the
-# tier's version: a chunk resolved to either side, or to neither, then stands
-# instead of being merged into the same chunk again. Commits nothing. Prints
+# Stage the gitlink of every tier gitlore_compose_merge_tiers listed in $2/tiers:
+# here once root holds a diff3 chunk for them, and in the pass after any merge.
+# The staged gitlink is the base every later pass and commit reads, so this is
+# how root records that it has seen the tier's version: a chunk resolved to
+# either side, or to neither, then stands instead of being merged into the same
+# chunk again, and a root edit to an adopted line stands too. Commits nothing. Prints
 # the tier it could not stage and returns 1.
 gitlore_stage_merged_tiers() {
   local mempath="$1" dir="$2" tier

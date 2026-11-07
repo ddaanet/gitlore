@@ -91,6 +91,21 @@ teardown() { teardown_tmp_repo; }
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
   grep -qxF -- '- [upstream](ddaanet/upstream.md) — arrived in another repo' memory/MEMORY.md
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
+  # The pass stages the merged tier's gitlink and commits nothing: the staged
+  # gitlink is the base the next pass reads (D78), and the commit that records
+  # it is the user's, or the take's bookkeeping one.
+  [ "$(git -C memory rev-parse :ddaanet)" = "$moved" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pinned" ]
+}
+
+@test "the check leaves the gitlink of a tier ahead of its pin unstaged" {
+  pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
+  move_tier_off_pin ddaanet
+
+  run gitlore_compose_pending memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "memory/MEMORY.md" ]
   [ "$(git -C memory rev-parse :ddaanet)" = "$pinned" ]
 }
 
