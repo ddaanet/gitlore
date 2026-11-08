@@ -292,3 +292,21 @@ add_memory_commit() {
   [[ "$msg" != *"''s"* ]]
 }
 
+
+@test "a diverged push on a memory root with uncommitted files prepares no merge" {
+  # The continuation commits with `add -A`, so an uncommitted file would ride the
+  # merge commit unapproved; the take refuses the same state, and the merge's
+  # pre-move gitlink reset relies on the root it meets being clean.
+  wire_memory_remote
+  advance_memory_remote
+  add_memory_commit LOCAL.md "local-only"
+  printf 'not yet approved\n' > memory/pending-fact.md
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  msg="$output$stderr"
+  [[ "$msg" == *"uncommitted changes"* ]]
+  [[ "$msg" != *"memory merge prepared"* ]]
+  run ! git -C memory rev-parse -q --verify MERGE_HEAD
+  [ -f memory/pending-fact.md ]
+}

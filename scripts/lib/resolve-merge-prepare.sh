@@ -6,13 +6,12 @@
 # later commit of the tier, before root moves: `merge` refuses an index entry
 # that differs from HEAD's, and `checkout` one the move changes. The compose
 # pass stages the gitlink of a tier it merged up without committing it (D78),
-# and the take's dirty gate leaves gitlinks out, so that staged gitlink is the
-# one uncommitted change a root move meets. On a root whose files are clean the
-# staged gitlink protects no edit of root's: it only records what root has seen
-# of the tier, and the commit the move lands on, or the end-of-take compose from
-# the tier's HEAD, records that again. A root with uncommitted files is left as
-# it is, the move fails on those files and the staged base stays for the pass
-# that follows. A gitlink the tier's HEAD does not contain is left for git to
+# and every gate ahead of a root move, the take's and the push's, refuses
+# uncommitted files but leaves gitlinks out, so that staged gitlink is the one
+# uncommitted change a root move meets. On that clean root the staged gitlink
+# protects no edit of root's: it only records what root has seen of the tier,
+# and the commit the move lands on, or the end-of-take compose from the tier's
+# HEAD, records that again. A gitlink the tier's HEAD does not contain is left for git to
 # refuse, since it was staged by hand or by a repair and no commit of the tier
 # stands behind it; one HEAD does not record, a mount left staged, is left too,
 # since resetting it would unstage the mount. A tier store has no gitlinks and
@@ -20,7 +19,6 @@
 # Args: $1 = store worktree.
 gitlore_unstage_tier_gitlinks_for_move() {
   local store="$1" tier staged pinned abs
-  [ -z "$(git -C "$store" status --porcelain --ignore-submodules=all)" ] || return 0
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
