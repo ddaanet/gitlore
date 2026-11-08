@@ -416,8 +416,12 @@ EOF
   # the tier.
   printf 'local-only\n' > memory/LOCAL.md
   git -C memory add -- LOCAL.md
-  git -C memory commit -qm "local fact"
+  # Path-scoped: a whole-index commit would record the staged gitlink and leave
+  # nothing staged for the prepare to meet.
+  git -C memory commit -qm "local fact" -- LOCAL.md
   push_memory_fact
+  [ "$(git -C memory rev-parse :ddaanet)" = "$t1" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" != "$t1" ]
 
   run --separate-stderr bash "$CMD"
   [[ "$output$stderr" == *"memory merge prepared"* ]]

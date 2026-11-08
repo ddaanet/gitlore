@@ -184,17 +184,17 @@ bookkeeping one or the user's carries it; a mount `HEAD` does not record yet
 reads its staged gitlink as the pin. The ancestry of that move is still read
 against the index pin, the one the record would replace.
 
-A root move, the fast-forward, the catch-up onto a stranded `live` and the
-prepare's checkout and merge, runs on a root whose files are clean, and git
-refuses it over an index entry that differs from `HEAD`'s where the move changes
-that path. A staged gitlink is the one uncommitted change those gates let
-through, and on a clean root it protects no edit: it records what root has seen
+A root move, the fast-forward, the catch-up onto a local `live` ahead of `HEAD`
+and the prepare's checkout and merge, meets the index: `merge` refuses an entry
+that differs from `HEAD`'s, and `checkout` one the move changes. A staged
+gitlink is the one uncommitted change the take's dirty gate lets through, and on
+a root whose files are clean it protects no edit: it records what root has seen
 of the tier, which the commit the move lands on, or the end-of-take compose from
 the tier's `HEAD`, records again. So each move first resets to `HEAD`'s every
 staged gitlink the tier's `HEAD` contains
-(`gitlore_unstage_tier_gitlinks_for_move`), rather than predicting which paths
-the move changes; a take that moves root nowhere resets nothing, and the staged
-base stands.
+(`gitlore_unstage_tier_gitlinks_for_move`). A root with uncommitted files is
+left as it is, since the move fails on those files and the staged base is what
+the next pass needs; a take that moves root nowhere resets nothing either.
 
 That rule is the scope of the take's compose and of every pass outside a memory
 merge. The memory merge's continuation is the standing exception: it reads the
@@ -250,6 +250,11 @@ as D78's stated exception, with the tier-wins rule above.
 nothing left the base at the old pin, so a line root deleted after adopting it
 came back at the next pass, and a root reword of an adopted line came back as a
 chunk with an empty base section (D78).
+
+**Resetting a staged gitlink only where the move changes it.** One rule per move
+kind, since `merge` refuses any differing entry and `checkout` only a changed
+one; on a clean root the staged gitlink protects nothing, so every move resets
+it (D78).
 
 **Staging inside `gitlore_compose_up`.** Its callers all stage the pair they
 record, so the pass was the one gap; staging in the compose-up as well would
