@@ -62,6 +62,37 @@ gitlore_guard_every_store() {
   gitlore_refuse_dirty_tiers "$mempath"
 }
 
+# Reset to HEAD's every tier gitlink the memory root's index holds at another
+# commit HEAD records. The compose pass stages the gitlink of a tier it merged up
+# without committing it (D78), and the dirty gate below leaves gitlinks out, so
+# that staged gitlink is what a root move meets: `checkout` refuses a path whose
+# index entry differs from both HEAD's and the target's. The tiers moved first
+# and the end compose re-derives each gitlink from the tier's HEAD, so a staged
+# one records nothing the root move needs. Only a gitlink the tier's HEAD
+# contains is reset, the shape the pass leaves; one off to the side of the tier
+# was staged by hand or by a repair and is the pin guard's to judge. A gitlink
+# HEAD does not record, a mount left staged, is kept: resetting it would unstage
+# the mount. Prints and returns 1 when a reset fails.
+gitlore_unstage_stale_tier_gitlinks() {
+  local store="$1" tier staged pinned
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    [ -e "$store/$tier/.git" ] || continue
+    staged=$(git -C "$store" rev-parse -q --verify ":$tier") || continue
+    pinned=$(git -C "$store" rev-parse -q --verify "HEAD:$tier") || continue
+    [ "$staged" != "$pinned" ] || continue
+    git -C "$store/$tier" rev-parse -q --verify "${staged}^{commit}" >/dev/null || continue
+    git -C "$store/$tier" merge-base --is-ancestor "$staged" HEAD || continue
+    if ! gitlore_git -C "$store" reset -q -- "$tier"; then
+      # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+      printf 'gitlore: memory — the staged pointer for tier '\''%s'\'' could not be reset to the commit HEAD records, so memory was not taken. Run `git -C "%s" reset -- "%s"`, then /gitlore:merge again.\n' \
+        "$tier" "$(CDPATH='' cd -- "$store" && pwd)" "$tier" >&2
+      return 1
+    fi
+  done < <(gitlore_tier_paths "$store")
+  return 0
+}
+
 # Print 1 when a store holds uncommitted work a take must not move over, 0
 # otherwise. For the memory root that leaves out every tier gitlink: tiers move
 # first by design, and the root merge records their HEADs through the prepare.
@@ -85,6 +116,7 @@ gitlore_merge_one_store() {
   local live_ahead_dirty=0 n unit ff_err
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
+  [ -n "$tier" ] || gitlore_unstage_stale_tier_gitlinks "$store" || return 1
 
   remote_url=$(git -C "$store" config --get remote.origin.url || true)
   if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then

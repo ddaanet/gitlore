@@ -168,13 +168,15 @@ block was last composed against.
 
 The base is read from the *index*, not `HEAD`, because staging a gitlink is how
 root records that it has seen the tier's version. So every path that merges a
-tier up leaves its gitlink staged before it returns, clean merge or chunk; the
-pass (`gitlore_compose_pass`, in write mode only) is the one that stages without
-committing, since the commit is the user's or the take's to make. A chunk
-resolved to either side or to neither then stands, a line root deletes after
-adopting it stays deleted, and a root reword of an adopted line projects down,
-where a base left at the old pin would re-adopt the line, or rebuild the same
-chunk, at every pass and commit.
+tier up, the take, the recovery, the continuation and the pass, leaves its
+gitlink staged, clean merge or chunk, before the next pass can read it;
+`gitlore_compose_up` itself stages only on a chunk, where its callers stop
+before their own staging, and the pass (`gitlore_compose_pass`, in write mode
+only) stages the tiers it merged and commits nothing, since the commit is the
+user's or the take's to make. A chunk resolved to either side or to neither then
+stands, a line root deletes after adopting it stays deleted, and a root reword
+of an adopted line projects down, where a base left at the old pin would
+re-adopt the line, or rebuild the same chunk, at every pass and commit.
 
 The take decides whether a tier *moved* against the pin `HEAD` records, not the
 index, since a gitlink the pass staged is recorded by no commit until the

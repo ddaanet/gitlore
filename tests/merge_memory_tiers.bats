@@ -241,3 +241,114 @@ EOF
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" != "$live_sha" ]
 }
 
+
+@test "a tier gitlink the compose pass staged does not block the root fast-forward that records the tier further on" {
+  # The pass stages the gitlink of a tier it merged up (D78) without committing.
+  # Root's remote then records the tier further on; the tier take moves the tier
+  # there first, and root's checkout meets a staged gitlink that differs from
+  # both HEAD's and the target's — which git refuses. The stale staged gitlink
+  # is re-derived from the tier's HEAD by the end compose, so the take drops it
+  # before moving root.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  push_tier_fact ddaanet '- [shared](shared.md) — a portable fact' >/dev/null
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  git -C memory push -q origin live
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  grep -qF -- 'ddaanet/shared.md' memory/MEMORY.md
+
+  # A killed take's shape: the tier on an arrival, the pin unmoved, then the
+  # hook's pass stages the gitlink at the arrival. The arrival touches a fact
+  # file and not the carrier, so the pass writes nothing to root: the staged
+  # gitlink is the only change, and the take's dirty gate, which ignores
+  # submodules, does not see it.
+  work="$(mktemp -d "$TMP_REPO/tierclone.XXXXXX")"
+  git clone -q "$TMP_REPO/.bare-ddaanet.git" "$work"
+  git -C "$work" checkout -q -B live origin/live
+  printf 'more\n' >> "$work/shared.md"
+  git -C "$work" add -- shared.md
+  git -C "$work" -c user.email=t@t -c user.name=t commit -qm "a fact body grows"
+  git -C "$work" push -q origin live
+  t1=$(git -C "$work" rev-parse HEAD)
+  rm -rf "$work"
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  root_before=$(cat memory/MEMORY.md)
+  gitlore_compose memory
+  [ "$(cat memory/MEMORY.md)" = "$root_before" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$t1" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
+
+  # Another repo takes a second arrival and records it in root.
+  t2=$(push_tier_fact ddaanet '- [second](second.md) — second arrival')
+  work="$(mktemp -d "$TMP_REPO/clone.XXXXXX")"
+  git clone -q "$MEMORY_REMOTE" "$work"
+  git -C "$work" checkout -q live
+  git -C "$work" update-index --cacheinfo "160000,$t2,ddaanet"
+  printf -- '- [second](ddaanet/second.md) — second arrival\n' >> "$work/MEMORY.md"
+  git -C "$work" add -- MEMORY.md
+  git -C "$work" -c user.email=t@t -c user.name=t commit -q -m "Update MEMORY.md for ddaanet tier merge."
+  git -C "$work" push -q origin live
+  rm -rf "$work"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" != *"could not follow"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$t2" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$t2" ]
+  grep -qF -- 'ddaanet/second.md' memory/MEMORY.md
+  [ -z "$(git -C memory status --porcelain)" ]
+}
+
+@test "the take records a tier the pass staged and that moved further, with the whole range in the bookkeeping body" {
+  # The pass staged the tier at T1 (D78); the tier then moved to T2 before any
+  # take. Moved is read against the pin HEAD records, so the take still makes
+  # the bookkeeping commit, and its body lists the subjects from that pin, not
+  # from the staged T1.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  push_tier_fact ddaanet '- [shared](shared.md) — a portable fact' >/dev/null
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  git -C memory push -q origin live
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+
+  # The first arrival touches a fact file only, so the pass stages the gitlink
+  # and writes nothing to root, which the take's dirty gate would refuse.
+  work="$(mktemp -d "$TMP_REPO/tierclone.XXXXXX")"
+  git clone -q "$TMP_REPO/.bare-ddaanet.git" "$work"
+  git -C "$work" checkout -q -B live origin/live
+  printf 'more\n' >> "$work/shared.md"
+  git -C "$work" add -- shared.md
+  git -C "$work" -c user.email=t@t -c user.name=t commit -qm "a fact body grows"
+  git -C "$work" push -q origin live
+  t1=$(git -C "$work" rev-parse HEAD)
+  rm -rf "$work"
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  gitlore_compose memory
+  [ "$(git -C memory rev-parse :ddaanet)" = "$t1" ]
+  t2=$(push_tier_fact ddaanet '- [second](second.md) — second arrival')
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$t2" ]
+  body=$(git -C memory log -1 --format=%B)
+  [[ "$body" == *"Update MEMORY.md for ddaanet tier merge."* ]]
+  [[ "$body" == *"a fact body grows"* ]]
+  [[ "$body" == *"remote tier fact"* ]]
+  grep -qF -- 'ddaanet/second.md' memory/MEMORY.md
+  [ -z "$(git -C memory status --porcelain)" ]
+}

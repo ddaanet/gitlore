@@ -132,17 +132,19 @@ gitlore_tiers_ahead_of_pin() {
     tierpath="$mempath/$tier"
     # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
     [ -e "$tierpath/.git" ] || continue
-    # `-q --verify` is silent on the expected misses: no gitlink in HEAD or no
-    # stage-0 one in the index (mid-mount), and a tier with no commit.
-    pin=$(git -C "$mempath" rev-parse -q --verify "HEAD:$tier") || continue
+    # `-q --verify` is silent on the expected misses: no stage-0 gitlink in
+    # the index (mid-mount), and a tier with no commit. A mount left staged on a
+    # store that held other work has no gitlink in HEAD yet; the staged one is
+    # its pin, since no earlier commit records the tier at all.
     staged=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
+    pin=$(git -C "$mempath" rev-parse -q --verify "HEAD:$tier") || pin="$staged"
     head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
     [ "$head" != "$pin" ] || continue
     gitlore_tier_holds_gitlink "$mempath" "$tier" "$staged" || return 1
     if git -C "$tierpath" merge-base --is-ancestor "$staged" "$head"; then
       printf '%s\n' "$tier"
     elif ! git -C "$tierpath" merge-base --is-ancestor "$head" "$staged"; then
-      printf 'gitlore: tier '\''%s'\'' sits at %s, which does not contain the commit the memory store records (%s), so nothing was recorded for it. The next memory commit refuses that pin and names the remedy.\n' \
+      printf 'gitlore: tier '\''%s'\'' sits at %s, which does not contain the commit the memory store'\''s index records (%s), so nothing was recorded for it. The next memory commit refuses that pin and names the remedy.\n' \
         "$tier" "${head:0:12}" "${staged:0:12}" >&2
     fi
   done < <(gitlore_tier_paths "$mempath")
@@ -157,7 +159,8 @@ gitlore_bookkeeping_message() {
   local mempath="$1" names="$2" moved="$3" tier pin
   printf 'Update MEMORY.md for %s tier merge.\n\n' "$names"
   while IFS= read -r tier; do
-    pin=$(git -C "$mempath" rev-parse -q --verify "HEAD:$tier") || continue
+    pin=$(git -C "$mempath" rev-parse -q --verify "HEAD:$tier") \
+      || pin=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
     printf '%s:\n' "$tier"
     git -C "$mempath/$tier" log --format='%s' "$pin..HEAD" | sed 's/^/  /'
   done <<<"$moved"

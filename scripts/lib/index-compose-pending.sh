@@ -91,7 +91,11 @@ gitlore_compose_pass() {
       printf '%s\n' "$out"
       return 0
     fi
-    if [ "$writer" = gitlore_compose_write ] && ! gitlore_stage_merged_tiers "$mempath" "$dir"; then
+    # Root is written at this point, so its `composed` line is out before the
+    # staging can fail: an rc 2 then lists it as written, which it was.
+    if [ "$writer" = gitlore_compose_write ] && ! gitlore_stage_merged_tiers "$mempath" "$dir" > "$dir/stage-problem"; then
+      [ -z "$out" ] || printf '%s\n' "$out"
+      cat "$dir/stage-problem"
       rm -rf "$dir"
       return 2
     fi
