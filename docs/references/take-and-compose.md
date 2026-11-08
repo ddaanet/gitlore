@@ -180,8 +180,14 @@ re-adopt the line, or rebuild the same chunk, at every pass and commit.
 
 The take decides whether a tier *moved* against the pin `HEAD` records, not the
 index, since a gitlink the pass staged is recorded by no commit until the
-bookkeeping one or the user's carries it; the ancestry of that move is still
-read against the index pin, the one the record would replace.
+bookkeeping one or the user's carries it; a mount `HEAD` does not record yet
+reads its staged gitlink as the pin. The ancestry of that move is still read
+against the index pin, the one the record would replace. A staged gitlink
+survives a take that leaves root where it is, so the base it records stands;
+only when root moves onto a commit that changes that gitlink is the staged entry
+reset to `HEAD`'s first (`gitlore_unstage_tier_gitlinks_for_move`), since git
+refuses the move over it and the moved-onto commit records the tier where its
+take just put it.
 
 That rule is the scope of the take's compose and of every pass outside a memory
 merge. The memory merge's continuation is the standing exception: it reads the

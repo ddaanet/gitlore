@@ -118,7 +118,8 @@ gitlore_compose_moved_tiers_for_push() {
 # records, one per line. HEAD, not the index, decides whether a tier moved: the
 # compose pass stages the gitlink of a tier it merged up without committing it,
 # and a pointer only staged is not recorded until a commit carries it, which is
-# what the bookkeeping commit is for. The index pin is the one the record would
+# what the bookkeeping commit is for. A mount HEAD does not record yet reads
+# its staged gitlink as the pin. The index pin is the one the record would
 # move, so ancestry is read against it: a tier behind it is left out, so a pin
 # never moves backward, and the commit's own guard answers that tier. So is a
 # tier off to the side of it, which is reported, since nothing below can say

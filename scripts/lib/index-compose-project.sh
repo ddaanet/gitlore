@@ -261,11 +261,13 @@ gitlore_compose_up() {
 # chunk again, and a root edit to an adopted line stands too. Commits nothing. Prints
 # the tier it could not stage and returns 1.
 gitlore_stage_merged_tiers() {
-  local mempath="$1" dir="$2" tier
+  local mempath="$1" dir="$2" tier abs
   while IFS= read -r tier || [ -n "$tier" ]; do
     [ -n "$tier" ] || continue
     if ! gitlore_git -C "$mempath" add -- "$tier" >&2; then
-      printf 'could not stage %s in %s\n' "$tier" "$mempath"
+      abs=$(CDPATH='' cd -- "$mempath" && pwd) || abs="$mempath"
+      # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+      printf 'could not stage the %s pointer in %s; the root index is written. Run `git -C "%s" add -- "%s"`\n' "$tier" "$mempath" "$abs" "$tier"
       return 1
     fi
   done < "$dir/tiers"

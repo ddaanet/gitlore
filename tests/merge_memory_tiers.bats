@@ -352,3 +352,33 @@ EOF
   grep -qF -- 'ddaanet/second.md' memory/MEMORY.md
   [ -z "$(git -C memory status --porcelain)" ]
 }
+
+@test "a take with nothing upstream keeps the gitlink the pass staged, so a root deletion of an adopted line stands" {
+  # The staged gitlink is the base the end compose reads (D78). A take that
+  # leaves root where it is must not reset it, or the end compose merges against
+  # the old pin and re-adopts the line root deleted.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  push_tier_fact ddaanet '- [shared](shared.md) — a portable fact' >/dev/null
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  git -C memory push -q origin live
+
+  t1=$(push_tier_fact ddaanet '- [first](first.md) — first arrival')
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  gitlore_compose memory
+  [ "$(git -C memory rev-parse :ddaanet)" = "$t1" ]
+  grep -qF -- 'ddaanet/first.md' memory/MEMORY.md
+  sed -i.bak '/first\.md/d' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$t1" ]
+  run ! grep -qF 'first.md' memory/MEMORY.md
+  run ! grep -qE '^(<<<<<<<|>>>>>>>)' memory/MEMORY.md
+}
