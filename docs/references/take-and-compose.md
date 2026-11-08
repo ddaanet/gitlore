@@ -182,12 +182,19 @@ The take decides whether a tier *moved* against the pin `HEAD` records, not the
 index, since a gitlink the pass staged is recorded by no commit until the
 bookkeeping one or the user's carries it; a mount `HEAD` does not record yet
 reads its staged gitlink as the pin. The ancestry of that move is still read
-against the index pin, the one the record would replace. A staged gitlink
-survives a take that leaves root where it is, so the base it records stands;
-only when root moves onto a commit that changes that gitlink is the staged entry
-reset to `HEAD`'s first (`gitlore_unstage_tier_gitlinks_for_move`), since git
-refuses the move over it and the moved-onto commit records the tier where its
-take just put it.
+against the index pin, the one the record would replace.
+
+A root move, the fast-forward, the catch-up onto a stranded `live` and the
+prepare's checkout and merge, runs on a root whose files are clean, and git
+refuses it over an index entry that differs from `HEAD`'s where the move changes
+that path. A staged gitlink is the one uncommitted change those gates let
+through, and on a clean root it protects no edit: it records what root has seen
+of the tier, which the commit the move lands on, or the end-of-take compose from
+the tier's `HEAD`, records again. So each move first resets to `HEAD`'s every
+staged gitlink the tier's `HEAD` contains
+(`gitlore_unstage_tier_gitlinks_for_move`), rather than predicting which paths
+the move changes; a take that moves root nowhere resets nothing, and the staged
+base stands.
 
 That rule is the scope of the take's compose and of every pass outside a memory
 merge. The memory merge's continuation is the standing exception: it reads the

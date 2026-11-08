@@ -382,3 +382,46 @@ EOF
   run ! grep -qF 'first.md' memory/MEMORY.md
   run ! grep -qE '^(<<<<<<<|>>>>>>>)' memory/MEMORY.md
 }
+
+@test "a diverged root prepares its merge over a gitlink the pass staged for a tier the remote left alone" {
+  # The prepare's `merge` refuses any index entry that differs from HEAD's, the
+  # staged gitlink included, whether or not the remote moved that tier. The
+  # move resets it first; the merge commit records the tier from its HEAD.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  push_tier_fact ddaanet '- [shared](shared.md) — a portable fact' >/dev/null
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  git -C memory push -q origin live
+
+  work="$(mktemp -d "$TMP_REPO/tierclone.XXXXXX")"
+  git clone -q "$TMP_REPO/.bare-ddaanet.git" "$work"
+  git -C "$work" checkout -q -B live origin/live
+  printf 'more\n' >> "$work/shared.md"
+  git -C "$work" add -- shared.md
+  git -C "$work" -c user.email=t@t -c user.name=t commit -qm "a fact body grows"
+  git -C "$work" push -q origin live
+  t1=$(git -C "$work" rev-parse HEAD)
+  rm -rf "$work"
+  git -C memory/ddaanet fetch -q origin live:live
+  git -C memory/ddaanet checkout -q --detach live
+  gitlore_compose memory
+  [ "$(git -C memory rev-parse :ddaanet)" = "$t1" ]
+
+  # Root diverges: a local commit here, a remote commit there, neither moving
+  # the tier.
+  printf 'local-only\n' > memory/LOCAL.md
+  git -C memory add -- LOCAL.md
+  git -C memory commit -qm "local fact"
+  push_memory_fact
+
+  run --separate-stderr bash "$CMD"
+  [[ "$output$stderr" == *"memory merge prepared"* ]]
+  [[ "$output$stderr" != *"could not prepare"* ]]
+  git -C memory rev-parse -q --verify MERGE_HEAD >/dev/null
+  [ "$(git -C memory rev-parse :ddaanet)" = "$t1" ]
+}

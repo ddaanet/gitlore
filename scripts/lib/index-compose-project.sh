@@ -267,7 +267,7 @@ gitlore_stage_merged_tiers() {
     if ! gitlore_git -C "$mempath" add -- "$tier" >&2; then
       abs=$(CDPATH='' cd -- "$mempath" && pwd) || abs="$mempath"
       # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
-      printf 'could not stage the %s pointer in %s; the root index is written. Run `git -C "%s" add -- "%s"`\n' "$tier" "$mempath" "$abs" "$tier"
+      printf 'could not stage the %s pointer; the root index is written. Run `git -C "%s" add -- "%s"`\n' "$tier" "$abs" "$tier"
       return 1
     fi
   done < "$dir/tiers"

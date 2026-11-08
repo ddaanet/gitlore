@@ -2,6 +2,44 @@
 # Prepare a memory merge against its authority, then yield it to the merger.
 # Part of lib/resolve.sh; source that, not this file.
 
+# Reset to HEAD's each tier gitlink the memory root's index holds staged at a
+# later commit of the tier, before root moves: a `checkout` or `merge` refuses a
+# path whose index entry differs from HEAD's where the move changes that path,
+# and the reset runs rather than predicting which paths a move changes. The
+# compose pass stages the
+# gitlink of a tier it merged up without committing it (D78), and the dirty
+# gates leave gitlinks out, so that staged gitlink is the one uncommitted change
+# a root move meets. A move runs on a root whose files are clean, so the staged
+# gitlink protects no edit of root's: it only records what root has seen of the
+# tier, and the commit the move lands on, or the end-of-take compose from the
+# tier's HEAD, records that again. A gitlink the tier's HEAD does not contain is
+# left for git to refuse, since it was staged by hand or by a repair and no
+# commit of the tier stands behind it; one HEAD does not record, a mount left
+# staged, is left too, since resetting it would unstage the mount. A tier store
+# has no gitlinks and is left as it is. Prints and returns 1 when a reset fails.
+# Args: $1 = store worktree.
+gitlore_unstage_tier_gitlinks_for_move() {
+  local store="$1" tier staged pinned abs
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
+    [ -e "$store/$tier/.git" ] || continue
+    staged=$(git -C "$store" rev-parse -q --verify ":$tier") || continue
+    pinned=$(git -C "$store" rev-parse -q --verify "HEAD:$tier") || continue
+    [ "$staged" != "$pinned" ] || continue
+    git -C "$store/$tier" rev-parse -q --verify "${staged}^{commit}" >/dev/null || continue
+    git -C "$store/$tier" merge-base --is-ancestor "$staged" HEAD || continue
+    if ! gitlore_git -C "$store" reset -q -- "$tier"; then
+      abs=$(CDPATH='' cd -- "$store" && pwd) || abs="$store"
+      # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
+      printf 'gitlore: memory — the staged pointer for tier '\''%s'\'' could not be reset to the commit HEAD records, so memory was not moved. Run `git -C "%s" reset -- "%s"`, then /gitlore:merge again.\n' \
+        "$tier" "$abs" "$tier" >&2
+      return 1
+    fi
+  done < <(gitlore_tier_paths "$store")
+  return 0
+}
+
 # Prepare a merge of the pending commit into the more authoritative side. One
 # shape serves both flavors (D17 unified branch model): memory is detached at
 # `live`, so the authority is reached with `checkout --detach` — no named branch
@@ -49,6 +87,7 @@ gitlore_prepare_merge() {
   gitlore_check_tier_gitlinks "$mempath" "$tiers" "$authority" "$pending" || return 2
   base=$(git -C "$mempath" merge-base "$pending" "$authority")
   gitlore_git -C "$mempath" update-ref "$GITLORE_PENDING_REF" "$pending"
+  gitlore_unstage_tier_gitlinks_for_move "$mempath" || return 2
   gitlore_git -C "$mempath" checkout -q --detach "$authority"
   # A conflicting merge is the EXPECTED outcome here — the conflicted worktree is
   # exactly what the merger sub-agent resolves — so a non-zero exit is not a
