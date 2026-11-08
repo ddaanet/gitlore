@@ -186,14 +186,14 @@ against the index pin, the one the record would replace.
 
 A root move, the fast-forward, the catch-up onto a local `live` ahead of `HEAD`
 and the prepare's checkout and merge, meets the index: `merge` refuses an entry
-that differs from `HEAD`'s, and `checkout` one the move changes. Every gate
-ahead of a move, the take's and the push's, refuses a root with uncommitted
-files, since the continuation's `add -A` would commit them unapproved, and
-leaves gitlinks out, so a staged gitlink is the one uncommitted change a move
-meets. On that clean root it protects no edit: it records what root has seen of
-the tier, which the commit the move lands on, or the end-of-take compose from
-the tier's `HEAD`, records again. So each move first resets to `HEAD`'s every
-staged gitlink the tier's `HEAD` contains
+that differs from `HEAD`'s, and `checkout` one the move changes. Every merge is
+prepared through one yield, whose gate refuses a store with uncommitted files,
+since the continuation's `add -A` would commit them unapproved, and the take
+refuses them before any move; both leave gitlinks out, so a staged gitlink is
+the one uncommitted change a move meets. On that clean root it protects no edit:
+it records what root has seen of the tier, which the commit the move lands on,
+or the end-of-take compose from the tier's `HEAD`, records again. So each move
+first resets to `HEAD`'s every staged gitlink the tier's `HEAD` contains
 (`gitlore_unstage_tier_gitlinks_for_move`); a take that moves root nowhere
 resets nothing, and the staged base stands.
 
@@ -257,10 +257,11 @@ kind, since `merge` refuses any differing entry and `checkout` only a changed
 one; a move runs on a clean root, where the staged gitlink protects nothing, so
 every move resets it (D78).
 
-**Skipping the reset on a dirty root instead of gating the push's prepare.** A
-root dirty with an untracked file or an edit the move leaves alone passes the
-move, and the merge then refuses on the gitlink the skip kept; the push's
-prepare gets the dirty gate the take already had (D78).
+**Skipping the reset on a dirty root, or a dirty gate per caller.** A root dirty
+with an untracked file or an edit the move leaves alone passes the move, and the
+merge then refuses on the gitlink the skip kept; a gate written at each yield
+site misses the next caller, as the push's and the resolve command's did, so the
+yield itself carries the one gate (D78).
 
 **Staging inside `gitlore_compose_up`.** Its callers all stage the pair they
 record, so the pass was the one gap; staging in the compose-up as well would

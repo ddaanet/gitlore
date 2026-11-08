@@ -79,3 +79,15 @@ teardown() { teardown_tmp_repo; }
   [ -f "$statefile" ]
   [ "$(jq -r .flavor "$statefile")" = "head-vs-remote" ]
 }
+
+@test "head-vs-remote: resolve prepares no merge over a memory root with uncommitted files" {
+  # The continuation commits with `add -A`, so the untracked file would ride
+  # the merge commit unapproved. The yield's gate refuses for every caller.
+  printf 'not yet approved\n' > memory/pending-fact.md
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"has uncommitted changes"* ]]
+  [[ "$output$stderr" != *"memory merge prepared"* ]]
+  run ! git -C memory rev-parse -q --verify MERGE_HEAD
+  [ -f memory/pending-fact.md ]
+}

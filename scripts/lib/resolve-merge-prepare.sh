@@ -6,8 +6,8 @@
 # later commit of the tier, before root moves: `merge` refuses an index entry
 # that differs from HEAD's, and `checkout` one the move changes. The compose
 # pass stages the gitlink of a tier it merged up without committing it (D78),
-# and every gate ahead of a root move, the take's and the push's, refuses
-# uncommitted files but leaves gitlinks out, so that staged gitlink is the one
+# and the gates ahead of a root move, the take's and the yield's, refuse
+# uncommitted files but leave gitlinks out, so that staged gitlink is the one
 # uncommitted change a root move meets. On that clean root the staged gitlink
 # protects no edit of root's: it only records what root has seen of the tier,
 # and the commit the move lands on, or the end-of-take compose from the tier's
@@ -141,6 +141,18 @@ gitlore_yield_merge() {
   local prep base pending statefile pending_sha rc=0
   # Before anything is written: a refusal must leave no marker, state file or
   # merge behind for the next gate to classify.
+  # A merge is prepared on a clean store only. The continuation commits with
+  # `add -A`, so uncommitted edits would ride into the merge commit unapproved,
+  # and the prepare's moves assume a clean root (gitlore_unstage_tier_gitlinks_for_move).
+  # Gated here, once, for every caller: the take, the push, the resolve command.
+  # Tier paths do not count, since a tier HEAD off the gitlink this store records
+  # is what the prepare stages on purpose; untracked files do.
+  if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all)" ]; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again." \
+      "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them and try again." >&2
+    return 1
+  fi
   gitlore_refuse_rewritten "$mempath" "$authority" "$pending_ref" || return 1
   # The marker goes down BEFORE the preparation, so every window inside it
   # leaves a state file for the next gate to classify (D7): a merge that staged

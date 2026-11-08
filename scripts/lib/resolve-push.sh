@@ -277,17 +277,7 @@ $push_err" >&2
       ;;
   esac
 
-  # HEAD-vs-remote divergence. The continuation commits with `add -A`, so
-  # uncommitted edits would ride into the merge commit unapproved: refused first,
-  # as the take and the head-vs-live arm refuse. Tier paths do not count, since a
-  # tier HEAD off the gitlink this store records is what the prepare stages on
-  # purpose; untracked files do. A merge is thus prepared on a clean root only.
-  if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all)" ]; then
-    gitlore_say_for_agent_or_user \
-      "gitlore: memory has uncommitted changes and has diverged from its remote, so no merge was prepared and nothing was published. Commit them (approved summary, then a memory commit) and run /gitlore:push again." \
-      "gitlore: memory has uncommitted changes and has diverged from its remote, so no merge was prepared and nothing was published. Commit them and push again." >&2
-    return 1
-  fi
+  # HEAD-vs-remote divergence. Prepare and yield; the yield refuses a dirty root.
   gitlore_yield_merge "$mempath" origin/live head-vs-remote live || return 1
   return 1
 }
