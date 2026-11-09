@@ -7,10 +7,10 @@
 
 # Every mounted tier's reconcile and take, in order, the part of a take that
 # precedes root's reconcile. Stops at the first store that yields or refuses
-# with 1. A tier left untaken with rc 2 (gitlore_merge_one_store: a failed
-# fetch, no remote, uncommitted changes) is passed over, so the tiers after it
-# are still taken and the end compose records the ones that moved; the run
-# then returns 2, and gitlore_merge_stores reads it to still fail the take.
+# with 1. A tier whose remote was left untaken with nothing prepared or to
+# resolve by hand (gitlore_merge_one_store's 2) is passed over, so the tiers
+# after it are still taken and the end compose records the ones that moved; the
+# run then returns 2, and gitlore_merge_stores reads it to still fail the take.
 # Returns 0 when every tier is reconciled, 2 when one was passed over, 1 after
 # emitting on a yield or any other refusal.
 # Args: $1 = memory worktree path.
@@ -34,8 +34,8 @@ gitlore_take_tiers() {
 # One tier's reconcile, take and carrier repair. A tier inside a push is taken
 # only when it holds something to take: the publish that follows owns the reports
 # for a tier with no remote, a failed fetch and a remote with no `live`.
-# Returns gitlore_merge_one_store's 2 as is: nothing arrived, so there is no
-# carrier to repair.
+# Returns gitlore_merge_one_store's 2 as is and skips the repair, though the
+# adoption of a local `live` ahead of HEAD may have moved the tier.
 # Args: $1 = memory worktree path, $2 = tier name.
 gitlore_take_tier() {
   local mempath="$1" tier="$2" tierpath="$1/$2" rc=0

@@ -33,14 +33,17 @@ the same five things, in this order.
    marked not-to-publish when the two diverged), then check the arrived carrier
    alone and repair it when it fails (D52). Inside a push a tier is taken only
    when it holds arrivals, and its merge is published on landing (D75). A tier
-   that yields a prepared merge stops the run.
+   that yields a prepared merge, or refuses with anything but an untaken remote,
+   stops the run.
 3. **Reconcile and take root.** A root fast-forward onto a commit recording a
    tier gitlink that no repository holds is refused; a diverged root prepares
    its merge, which records each tier's `HEAD` itself (below). A store, tier or
-   root, refused for uncommitted changes or a fetch that failed is left exactly
-   as it was, and the run still reaches step 4: the tiers step 2 moved are
-   recorded all the same, staged on a dirty root (D43) or committed on a clean
-   one, and the refusal stands.
+   root, whose remote is left untaken with nothing prepared or to resolve by
+   hand sits wherever the adoption or catch-up left it, and the run still
+   reaches step 4: the tiers step 2 moved are recorded all the same, staged on a
+   dirty root (D43) or committed on a clean one, and the refusal stands. The
+   push's own take (`scripts/push-memory.sh`) is the exception: it exits on such
+   a tier before any compose, which `TODO.md` records.
 4. **Compose and record once** (`gitlore_compose_moved_tiers`). Every mounted
    tier whose `HEAD` strictly descends the gitlink memory's *index* records is
    composed up into root's `MEMORY.md` in one write, the file and the moved
@@ -51,10 +54,11 @@ the same five things, in this order.
    nothing.
 5. **Advance `live`** to the bookkeeping commit with the ff-checked `push .`.
 
-A push composes only after root has taken its remote when merely behind, so the
-bookkeeping commit lands on top; a diverged root composes nothing there, because
-the refused push that follows prepares the merge, and the merge records the
-tiers.
+In a push, root takes its remote first when it is merely behind, so a
+bookkeeping commit lands on top of it; a root whose take is refused with its
+remote left untaken gets the moves staged or committed where it stands, and the
+refusal fails the push. A diverged root composes nothing there, because the
+refused push that follows prepares the merge, and the merge records the tiers.
 
 Three outcomes of step 4 other than the commit:
 

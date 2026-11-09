@@ -56,8 +56,8 @@ gitlore_merge_stores() {
 
   # After root's own take, so what it writes sits on top of whatever upstream
   # root already recorded instead of meeting it as a divergence. A tier or root
-  # left untaken with rc 2 — uncommitted changes, a failed fetch, a tier with no
-  # remote — still gets here: the tiers that did move are recorded all the same,
+  # whose remote was left untaken with nothing prepared or to resolve by hand
+  # (rc 2) still gets here: the tiers that did move are recorded all the same,
   # committed on a clean root, staged for the next memory commit on a dirty one,
   # since the commit's pin guard refuses a tier ahead of its pin naming this
   # take, and the commit the refusal asks for is what carries a staged record.
@@ -96,11 +96,12 @@ gitlore_store_dirty_for_take() {
 # One store's take. Args: $1 = memory worktree, $2 = store worktree,
 # $3 = tier name ("" when the store IS the memory root).
 # Returns 0 when the store is reconciled, 2 after emitting when its remote was
-# left untaken — uncommitted changes, a fetch that failed, or a tier with no
-# remote configured — and 1 after emitting on every other refusal, the prepared
-# merge included. A 2 says nothing about HEAD: the adoption of an advanced local
+# left untaken with nothing prepared or to resolve by hand, and 1 after emitting
+# when something was prepared or must be resolved by hand, the prepared merge
+# included. A 2 says nothing about HEAD: the adoption of an advanced local
 # `live` and root's catch-up onto its own (D59) run before the remote is read,
-# and may have moved it. gitlore_take_tiers, gitlore_merge_stores and
+# and may have moved it, so the store sits wherever they left it.
+# gitlore_take_tiers, gitlore_merge_stores and
 # gitlore_compose_moved_tiers_for_push read the 2 to still record the tiers
 # that moved; the push's behind arm collapses it with `|| return 1`.
 gitlore_merge_one_store() {

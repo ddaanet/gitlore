@@ -97,8 +97,10 @@ gitlore_compose_moved_tiers() {
 }
 
 # The end compose of a push: root takes its remote first when it is merely behind,
-# so the bookkeeping commit lands on top. A diverged root composes nothing here:
-# the refused push that follows prepares the merge, which records each tier's HEAD.
+# so a bookkeeping commit lands on top of it; a root whose take is refused with
+# its remote left untaken gets the moves staged or committed where it stands, and
+# the refusal fails the push. A diverged root composes nothing here: the refused
+# push that follows prepares the merge, which records each tier's HEAD.
 # Assumes `origin/live` has just been fetched. Args: $1 = memory worktree.
 # Returns 1 after emitting.
 gitlore_compose_moved_tiers_for_push() {
