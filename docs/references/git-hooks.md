@@ -194,11 +194,12 @@ takes a summary drafted for the stores as they stand — the landed tier is clea
 and has no section, which `/gitlore:commit` redrafts. A hand commit made on top
 of the landed one is ahead of the staged pin and is refused as above; a tier
 committed but not yet staged is the same shape, and ends at the take. A take or
-a push run before the retry refuses memory for its staged gitlink, naming the
-commit: the gate every merge preparation and root take runs
-(`gitlore_yield_merge`, `gitlore_store_dirty_for_take`) counts a staged entry as
-uncommitted work, since the record must reach a commit and git's merge refuses a
-staged entry in any case, unstaging it as it fails.
+a push that would move memory onto its remote before the retry refuses it for
+the staged gitlink, naming the commit, while one with nothing to take for memory
+leaves the staging as it stands: the gate every merge preparation and root move
+runs (`gitlore_yield_merge`, `gitlore_store_dirty_for_take`) counts a staged
+entry as uncommitted work, since the record must reach a commit and git's merge
+refuses a staged entry in any case, unstaging it as it fails.
 
 ## Rejected alternatives
 
