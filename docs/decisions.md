@@ -116,7 +116,9 @@ pointer invariant that rests on it.
   off its pin (every mounted tier; one ahead of it naming the take) and a
   compose problem in an index file the commit changes, while every other compose
   refusal reports; each tier's gitlink is staged as its commit lands, so a run
-  interrupted before memory's commit completes on retry
+  interrupted before memory's commit completes on a retry whose summary is
+  drafted for the stores as they stand, and a take or push run before it refuses
+  memory for the staged gitlink, naming the commit
 
 *Rejected:* a tip amend to re-pin memory · composing at the commit · committing
 through a tier ahead of its pin · a marker file recording landed tiers for the

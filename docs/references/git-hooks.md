@@ -187,12 +187,18 @@ names `/gitlore:merge`; nothing puts the tier back on its pin, since the take
 needs it where it stands. The commit path itself does not leave that shape: as
 each tier's commit lands, `gitlore_sync_tiers_to_live` stages the tier's gitlink
 in memory before advancing its `live`, and a staged gitlink is root's record of
-having seen the tier (D78). A run interrupted after that — memory's own `add -A`
-or commit dying — meets the retry's pin guard with the tier on its index pin,
-and the retry completes, memory's `add -A` carrying the staged gitlink into the
-commit; a hand commit made on top of the landed one is ahead of the staged pin
-and is refused as above. The bound is a kill between the tier's commit and that
-staging, which leaves the tier ahead of its pin and ends at the take.
+having seen the tier (D78). A retry completes when nothing has moved memory's
+index or the tier since that staging: its pin guard finds the tier on its index
+pin, and memory's `add -A` carries the staged gitlink into the commit. The retry
+takes a summary drafted for the stores as they stand — the landed tier is clean
+and has no section, which `/gitlore:commit` redrafts. A hand commit made on top
+of the landed one is ahead of the staged pin and is refused as above; a tier
+committed but not yet staged is the same shape, and ends at the take. A take or
+a push run before the retry refuses memory for its staged gitlink, naming the
+commit: the gate every merge preparation and root take runs
+(`gitlore_yield_merge`, `gitlore_store_dirty_for_take`) counts a staged entry as
+uncommitted work, since the record must reach a commit and git's merge refuses a
+staged entry in any case, unstaging it as it fails.
 
 ## Rejected alternatives
 

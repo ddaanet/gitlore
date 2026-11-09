@@ -15,10 +15,10 @@
 # Runs BEFORE memory's own `git add -A`, so the moved tier gitlink is part of
 # the memory commit. Each tier's gitlink is staged in memory as its commit
 # lands: a staged gitlink is root's record of having seen the tier (D78), so a
-# run interrupted before memory's commit meets its pin guard with the tier on
-# its pin and completes on retry, while a kill between the tier's commit and
-# that staging still ends at /gitlore:merge. Recursion is driver-side by
-# design; the memory store gets no recursing hook.
+# retry completes when nothing has moved memory's index or the tier since that
+# staging — its pin guard finds the tier on its index pin; a tier committed but
+# not yet staged is ahead of its pin and ends at /gitlore:merge. Recursion is
+# driver-side by design; the memory store gets no recursing hook.
 #
 # Returns 1 after emitting a message when a tier cannot be committed or its
 # `live` cannot be advanced for a reason other than divergence.

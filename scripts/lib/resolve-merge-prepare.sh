@@ -106,9 +106,13 @@ gitlore_yield_merge() {
   # A merge is prepared on a clean store only. The continuation commits with
   # `add -A`, so uncommitted edits would ride into the merge commit unapproved.
   # Gated here, once, for every caller: the take, the push, the resolve command.
-  # Tier paths do not count, since a tier HEAD off the gitlink this store records
-  # is what the prepare stages on purpose; untracked files do.
-  if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all)" ]; then
+  # A tier HEAD off the gitlink this store records does not count, since that
+  # is what the prepare stages on purpose; untracked files do, and so does
+  # anything staged, a gitlink included: a staged gitlink is root's record of a
+  # tier it has seen (D78), which must reach a commit, and git's merge refuses
+  # a staged entry in any case, unstaging it as it fails.
+  if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all)" ] \
+    || ! git -C "$mempath" diff --cached --quiet; then
     gitlore_say_for_agent_or_user \
       "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again." \
       "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them and try again." >&2

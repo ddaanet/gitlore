@@ -19,7 +19,9 @@ load helpers/commit-memory
 # on top of the landed one is still ahead of the staged pin and is refused
 # naming the take; a take (scripts/merge-memory.sh, what /gitlore:merge runs)
 # run between the attempts finds nothing to record and leaves the staging as it
-# stands.
+# stands, and one on a memory diverged from its remote is refused for the staged
+# gitlink naming the commit, as is a push, rather than let git's merge unstage
+# it.
 
 # The pin guard's refusal on stderr for tier $1 checked out at $2 over the pin
 # $3: its header, the verbatim pin-check line, the take as the remedy, and not
@@ -116,6 +118,71 @@ retry_completes() {
            "$(git -C memory rev-parse ":ddaanet")" "$landed" >&2; false; }
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$landed" ]
   git -C memory diff --cached --name-only | grep -Fqx -- ddaanet
+  retry_completes
+}
+
+# The half-landed fixture with root committed ahead of the attempt, so the tier
+# is the only dirty store and the summary is tier-only, and with memory diverged
+# from its remote: a remote-only commit on origin's `live`, a local one here.
+# After the first attempt root's only change is the staged gitlink, the one
+# shape `status --ignore-submodules=all` reads as clean.
+half_landed_on_diverged_memory() {
+  MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
+  git init -q --bare "$MEMORY_REMOTE"
+  half_landed_tier_fixture
+  git -C memory remote remove origin || true
+  git -C memory remote add origin "$MEMORY_REMOTE"
+  git -C memory push -q origin HEAD:refs/heads/live
+  local work
+  work="$(mktemp -d "$TMP_REPO/clone.XXXXXX")"
+  git clone -q "$MEMORY_REMOTE" "$work"
+  git -C "$work" checkout -q live
+  printf 'remote-only\n' > "$work/REMOTE.md"
+  git -C "$work" add -A
+  git -C "$work" -c user.email=t@t -c user.name=t commit -q -m "remote fact"
+  git -C "$work" push -q origin live
+  rm -rf "$work"
+  commit_memory_state "memory: the composed index"
+  git -C memory push -q . HEAD:refs/heads/live
+  [ -z "$(git -C memory status --porcelain --ignore-submodules=all)" ]
+  [ -n "$(git -C memory/ddaanet status --porcelain)" ]
+  first_attempt_half_lands
+  [ -z "$(git -C memory status --porcelain --ignore-submodules=all)" ]
+  [ "$(git -C memory status --porcelain)" = "M  ddaanet" ]
+}
+
+# After a refused take or push: the staged gitlink still records the landed
+# commit, no merge was prepared, memory's HEAD stands, and the refusal names the
+# commit as the remedy.
+assert_staging_kept_and_commit_named() {
+  [ "$status" -ne 0 ] || { printf 'the run went through:\n%s\n%s\n' "$output" "$stderr" >&2; false; }
+  [[ "$stderr" == *"has uncommitted changes"*"Commit them (approved summary, then a memory commit)"* ]] \
+    || { printf 'the refusal does not name the commit; stderr:\n%s\n' "$stderr" >&2; false; }
+  [[ "$stderr" != *"could not prepare the memory merge"* ]]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$landed" ] \
+    || { printf 'the staged gitlink is at %s, off the landed %s\n' \
+           "$(git -C memory rev-parse ":ddaanet")" "$landed" >&2; false; }
+  run ! git -C memory rev-parse -q --verify MERGE_HEAD
+  [ "$(git -C memory rev-parse HEAD)" = "$memory_before" ]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$landed" ]
+}
+
+@test "a take run between the attempts on a memory diverged from its remote is refused naming the commit, keeps the staged gitlink, and the retry completes" {
+  # Fails under a take gate that reads only `status --ignore-submodules=all`:
+  # the staged gitlink passes it, the prepare's `merge --no-commit --no-ff` is
+  # refused by git on the staged entry, and that failure unstages the gitlink —
+  # the retry is then refused naming the take.
+  half_landed_on_diverged_memory
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"
+  assert_staging_kept_and_commit_named
+  retry_completes
+}
+
+@test "a push run between the attempts on a memory diverged from its remote is refused naming the commit, keeps the staged gitlink, and the retry completes" {
+  # Same gate, reached through the push's divergence arm (gitlore_yield_merge).
+  half_landed_on_diverged_memory
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/push-memory.sh"
+  assert_staging_kept_and_commit_named
   retry_completes
 }
 
