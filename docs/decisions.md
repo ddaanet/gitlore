@@ -115,10 +115,12 @@ pointer invariant that rests on it.
   pass would change aborts, naming them and `gitlore-compose`; so does a tier
   off its pin (every mounted tier; one ahead of it naming the take) and a
   compose problem in an index file the commit changes, while every other compose
-  refusal reports
+  refusal reports; each tier's gitlink is staged as its commit lands, so a run
+  interrupted before memory's commit completes on retry
 
 *Rejected:* a tip amend to re-pin memory · composing at the commit · committing
-through a tier ahead of its pin.
+through a tier ahead of its pin · a marker file recording landed tiers for the
+retry.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.

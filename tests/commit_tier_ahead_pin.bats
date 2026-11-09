@@ -169,38 +169,42 @@ snapshot_stores() {
 
 # --- the half-landed retry ----------------------------------------------------
 
-@test "a half-landed tier commit retried with a local live is refused naming the take, and neither rewinds the tier nor loses the carrier's line" {
-  # The commit path committed inside the tier, then memory's `add -A` met the
-  # lock: the tier is one commit ahead of its pin, the shape a killed take
-  # leaves. The retry meets the pin guard. Fails under a retry that re-pins the
-  # tier (losing the landed carrier line) or records its HEAD through.
+@test "a half-landed tier commit retried with a local live completes, recording the landed commit and leaving live on it" {
+  # The commit path committed inside the tier, staged its gitlink, advanced its
+  # local `live`, then memory's `add -A` was refused: the tier sits on its
+  # staged pin, one commit past the gitlink HEAD records, with `live` on it.
+  # Fails under a commit path that stages no gitlink as the tier lands (the
+  # retry is then refused naming the take), under a retry that re-pins the tier
+  # from HEAD's gitlink (losing the landed carrier line), and under one that
+  # moves `live` again.
   half_landed_tier_with_live
   pin_before=$(git -C memory rev-parse ":ddaanet")
   memory_before=$(git -C memory rev-parse HEAD)
   [ "$(git -C memory/ddaanet rev-parse live)" = "$pin_before" ]
 
-  run --separate-stderr commit_sections "memory: record the shared fact"
+  PATH="$refuse_bin:$PATH" run --separate-stderr commit_sections "memory: record the shared fact"
   [ "$status" -ne 0 ]
   # The fixture's shape, asserted rather than assumed: the tier commit landed,
-  # memory's index still records the pin, and the lock is what stopped it.
-  [ -f "$lock" ]
+  # its gitlink is staged, `live` followed it, HEAD's gitlink is the old pin,
+  # and the refused `add -A` is what stopped the run.
+  [[ "$stderr" == *"$refused_msg"* ]]
   landed=$(git -C memory/ddaanet rev-parse HEAD)
   [ "$landed" != "$pin_before" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD^)" = "$pin_before" ]
-  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
-  snapshot_stores
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$landed" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin_before" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$landed" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$memory_before" ]
 
-  rm -f "$lock"
   run --separate-stderr commit_sections "memory: record the shared fact"
-  [ "$status" -ne 0 ] || { printf 'the retry went through; HEAD records the tier at %s\n' \
-    "$(git -C memory rev-parse HEAD:ddaanet)" >&2; false; }
-  assert_commit_refused_ahead ddaanet "$landed" "$pin_before"
-  assert_stores_untouched
+  [ "$status" -eq 0 ] || { printf 'the retry was refused:\n%s\n' "$stderr" >&2; false; }
+  [ "$(git -C memory rev-parse HEAD)" != "$memory_before" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$landed" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$landed" ] \
     || { printf 'the retry moved the tier to %s, expected it to stay at %s\n' \
            "$(git -C memory/ddaanet rev-parse HEAD)" "$landed" >&2; false; }
-  [ "$(git -C memory rev-parse HEAD)" = "$memory_before" ]
-  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin_before" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$landed" ]
+  [ -z "$(git -C memory status --porcelain)" ]
   # The landed commit and the working carrier both hold the composed line.
   git -C memory/ddaanet show HEAD:MEMORY.md > "$BATS_TEST_TMPDIR/carrier.md"
   assert_bullets "$BATS_TEST_TMPDIR/carrier.md" \

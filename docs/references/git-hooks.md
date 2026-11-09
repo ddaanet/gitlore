@@ -184,8 +184,15 @@ not taken; recording it with the commit's `add -A` would publish the tier's
 commits with those lines never composed into the root index. The take is the one
 path that composes them before it records the gitlink (D78), so the refusal
 names `/gitlore:merge`; nothing puts the tier back on its pin, since the take
-needs it where it stands. A commit interrupted between a tier's commit and
-memory's `add -A` leaves that shape, and the retry refuses it the same way.
+needs it where it stands. The commit path itself does not leave that shape: as
+each tier's commit lands, `gitlore_sync_tiers_to_live` stages the tier's gitlink
+in memory before advancing its `live`, and a staged gitlink is root's record of
+having seen the tier (D78). A run interrupted after that — memory's own `add -A`
+or commit dying — meets the retry's pin guard with the tier on its index pin,
+and the retry completes, memory's `add -A` carrying the staged gitlink into the
+commit; a hand commit made on top of the landed one is ahead of the staged pin
+and is refused as above. The bound is a kill between the tier's commit and that
+staging, which leaves the tier ahead of its pin and ends at the take.
 
 ## Rejected alternatives
 
@@ -205,3 +212,12 @@ whose lines the root index has not taken, with no approved summary of its own,
 and hide that the tier holds lines root has not taken; the three-way the take
 runs is what carries its lines into root before the gitlink is recorded (D78),
 and the refusal costs one `/gitlore:merge` (D50).
+
+**A marker file recording landed tiers for the retry.** A per-store file of
+`tier → landed commit`, written after each tier's commit, read by the pin guard
+to pass a tier whose `HEAD` matches its entry, cleared after memory's commit and
+after the take's record, and reported at SessionStart. It is a second record of
+the same fact the staged gitlink already carries, with its own reader in the pin
+guard, a clearer at every writer of the gitlink, a spent-entry sweep at every
+entry point a kill could leave one for, and a SessionStart line; staging the
+gitlink as the tier lands is one `add` and the record D78 already defines (D50).

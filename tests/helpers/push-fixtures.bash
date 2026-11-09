@@ -54,8 +54,7 @@ push_side_ref_child() {
 }
 
 # A one-shot post-receive hook on a tier's bare remote: on the next push it
-# receives, it snaps `live` onto $2 and removes itself — the idiom
-# half_landed_tier_fixture uses for a lock, here for a ref. Args: $1 = tier,
+# receives, it snaps `live` onto $2 and removes itself. Args: $1 = tier,
 # $2 = the sha `live` lands on.
 move_tier_remote_live_on_next_push() {
   local tier="$1" target="$2"

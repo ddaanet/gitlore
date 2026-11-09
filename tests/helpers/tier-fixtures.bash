@@ -215,12 +215,16 @@ strand_live_ahead_of_pin() {
 }
 
 # A memory store with one tier whose next commit lands and then fails on memory's
-# own index: the carrier and the root line disagree, so the commit path
-# commits inside the tier, and a one-shot tier `post-commit` hook takes
-# memory's index.lock before memory's `add -A` can stage the moved gitlink.
-# Sets $lock to that lock's path, for the caller to assert on and clear.
+# own commit: the carrier and the root line disagree, so the commit path
+# commits inside the tier and stages its gitlink, and a PATH-shadowed git
+# refuses memory's `add -A` — the one call it refuses, so the tier's `add -A`,
+# the gitlink staging `add -- <tier>` and every other call run for real. Sets
+# $refuse_bin to the shadow's directory, which the caller prefixes onto PATH for
+# the attempt that must die and leaves off the retry, and $refused_msg to the
+# line the shadow prints on stderr. The message names no lock, so gitlore_git
+# (gitlore_git_is_lock_error) fails at once instead of running its schedule.
 half_landed_tier_fixture() {
-  local hook
+  local real_git
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -228,13 +232,23 @@ half_landed_tier_fixture() {
   seed_root_bullet "ddaanet/shared.md" "fresh hook"
   # Composed here, not by the commit: the commit path aborts on a pending compose.
   gitlore_compose memory >/dev/null
-  lock="$(git -C memory rev-parse --absolute-git-dir)/index.lock"
-  hook="$(git -C memory/ddaanet rev-parse --absolute-git-dir)/hooks/post-commit"
-  mkdir -p "$(dirname "$hook")" || return 1
-  # One-shot: the hook removes itself, so a retry's tier pass is not locked again.
-  # shellcheck disable=SC2016  # $0 is the generated hook's own, not this shell's
-  printf '#!/bin/sh\n: > "%s"\nrm -f "$0"\n' "$lock" > "$hook" || return 1
-  chmod +x "$hook"
+  refuse_bin="$BATS_TEST_TMPDIR/refuse-memory-add"
+  refused_msg="half-landed-stub: refusing memory's add -A"
+  real_git=$(command -v git)
+  mkdir -p "$refuse_bin" || return 1
+  # The padded " $* " match takes `-C <path>/memory add -A` and not the tier's
+  # `-C <path>/memory/ddaanet add -A`, under a spaced project path too.
+  cat > "$refuse_bin/git" <<EOF
+#!/usr/bin/env bash
+case " \$* " in
+  *"memory add -A "*)
+    printf '%s\n' "$refused_msg" >&2
+    exit 1
+    ;;
+esac
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$refuse_bin/git"
 }
 
 # Advance a mounted tier one commit past the gitlink the memory store's index

@@ -13,8 +13,12 @@
 # dirty tier with no section, so a missing body here is a refusal, not a skip.
 #
 # Runs BEFORE memory's own `git add -A`, so the moved tier gitlink is part of
-# the memory commit. Recursion is driver-side by design; the memory store gets
-# no recursing hook.
+# the memory commit. Each tier's gitlink is staged in memory as its commit
+# lands: a staged gitlink is root's record of having seen the tier (D78), so a
+# run interrupted before memory's commit meets its pin guard with the tier on
+# its pin and completes on retry, while a kill between the tier's commit and
+# that staging still ends at /gitlore:merge. Recursion is driver-side by
+# design; the memory store gets no recursing hook.
 #
 # Returns 1 after emitting a message when a tier cannot be committed or its
 # `live` cannot be advanced for a reason other than divergence.
@@ -42,6 +46,7 @@ gitlore_sync_tiers_to_live() {
     # The message goes in as an argument: no file holds it, and gitlore_git's
     # lock retry has no stdin to re-read.
     gitlore_git -C "$tierpath" commit -q -m "$body" || return 1
+    gitlore_git -C "$mempath" add -- "$tier" || return 1
     gitlore_advance_live "$tierpath" "tier '$tier'" "$tier" || return 1
   done < <(gitlore_tier_paths "$mempath")
   return 0

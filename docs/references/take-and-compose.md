@@ -180,12 +180,15 @@ root records that it has seen the tier's version. The take, the recovery and the
 continuation leave the gitlink of every tier they merge staged or committed,
 clean merge or chunk, before the next pass reads it: the take in its bookkeeping
 commit, or staged on a root holding unapproved work (D43); the continuation in
-its merge commit; the recovery staged beside root. `gitlore_compose_up` itself
-stages only on a chunk, where its callers stop before their own staging. A chunk
-resolved to either side or to neither then stands, a line root deletes after
-adopting it stays deleted, and a root reword of an adopted line projects down,
-where a base left at the old pin would re-adopt the line, or rebuild the same
-chunk, at every pass and commit.
+its merge commit; the recovery staged beside root. The commit path
+(`gitlore_sync_tiers_to_live`) stages each tier's gitlink as its commit lands,
+ahead of memory's own `add -A`, so a run interrupted before memory's commit
+holds the record and completes on retry. `gitlore_compose_up` itself stages only
+on a chunk, where its callers stop before their own staging. A chunk resolved to
+either side or to neither then stands, a line root deletes after adopting it
+stays deleted, and a root reword of an adopted line projects down, where a base
+left at the old pin would re-adopt the line, or rebuild the same chunk, at every
+pass and commit.
 
 The pass composes no tier up and refuses one ahead of its pin. A tier whose
 `HEAD` strictly descends the gitlink the index records holds lines the root
