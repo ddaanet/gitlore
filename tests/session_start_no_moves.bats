@@ -83,7 +83,7 @@ detached_pinned_store() {
 
   session_start_over_store
   [ "$(store_fingerprint)" = "$before" ]
-  tierline="tier 'ddaanet' is checked out at ${head:0:12}, ahead of the commit the memory store records at ${pin:0:12}: it was moved outside a completed take, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."
+  tierline="tier 'ddaanet' is checked out at ${head:0:12}, ahead of the commit the memory store records at ${pin:0:12}, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."
   jq -e --arg l "$tierline" '.systemMessage | split("\n\n") | any(.[]; contains("gitlore: the memory indexes cannot be composed until these are fixed:") and contains($l))' <<<"$hook_json" >/dev/null || {
     printf 'no refusal paragraph for a tier ahead of its pin; systemMessage:\n%s\n' "$sys" >&2
     return 1
@@ -227,7 +227,7 @@ tier_ahead_with_a_chunk() {
   [ -z "$(git -C memory diff --cached --raw)" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_sha" ]
   # The refusal, not a chunk: the tier line with both shas and the take.
-  tierline="tier 'ddaanet' is checked out at ${tier_sha:0:12}, ahead of the commit the memory store records at ${old_pin:0:12}: it was moved outside a completed take, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."
+  tierline="tier 'ddaanet' is checked out at ${tier_sha:0:12}, ahead of the commit the memory store records at ${old_pin:0:12}, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."
   jq -e --arg l "$tierline" '.systemMessage | split("\n\n") | any(.[]; contains("gitlore: the memory indexes cannot be composed until these are fixed:") and contains($l))' <<<"$hook_json" >/dev/null || {
     printf 'no refusal paragraph over the tier ahead of its pin; systemMessage:\n%s\n' "$sys" >&2
     return 1

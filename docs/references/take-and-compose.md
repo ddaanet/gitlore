@@ -180,27 +180,30 @@ adopting it stays deleted, and a root reword of an adopted line projects down,
 where a base left at the old pin would re-adopt the line, or rebuild the same
 chunk, at every pass and commit.
 
-The pass composes no tier up and refuses one ahead of its pin, because no normal
-operation produces that state: the take records the tier it moves, the
+The pass composes no tier up and refuses one ahead of its pin, because no
+completed operation leaves that state: the take records the tier it moves, the
 continuation and the recovery stage what they compose, and the commit path
 records every tier with `add -A` only after the pin guard saw them on their
-pins. A tier ahead of its pin is a run killed between the tier's move and its
-record, a take or a commit, or hand git inside the tier: lines the root index
-has not taken, and the one path that composes before it records is the take. So
-the pin guard, run by the pass, the pending check and the commit, refuses it
-with one line per tier naming both commits, that it
-`was moved outside a completed take, so the root index has not taken its lines`,
-and `/gitlore:merge` as the remedy. A refusal that names the remedy beats a
-record that hides the cause, and refusing outside a take leaves the take as the
-one writer of the gitlink. The take reads the pin from the index as well, since
-a gitlink already staged by a take on a dirty root, the continuation or the
-recovery is recorded.
+pins. A tier ahead of its pin is the one transient — a tier merge's continuation
+lands the merge in the tier and composes nothing, so the tier sits ahead until
+the `/gitlore:merge` rerun the skill prescribes — or a run killed between the
+tier's move and its record, a take or a commit, or hand git inside the tier. In
+each case the tier holds lines the root index has not taken, and the one path
+that composes before it records is the take. So the pin guard, run by the pass,
+the pending check and the commit, refuses it with one line per tier naming both
+commits, that the tier is `ahead of the commit the memory store records`,
+`so the root index has not taken its lines`, and `/gitlore:merge` as the remedy;
+the line states no cause, since the same line covers the normal transient and
+the faults. A refusal that names the remedy beats a record that hides the state,
+and refusing outside a take leaves the take as the one writer of the gitlink.
+The take reads the pin from the index as well, since a gitlink already staged by
+a take on a dirty root, the continuation or the recovery is recorded.
 
 A root move, the fast-forward, the catch-up onto a local `live` ahead of `HEAD`
-and the prepare's checkout and merge, meets a clean root: every merge is
-prepared through one yield, whose gate refuses a store with uncommitted files,
-since the continuation's `add -A` would commit them unapproved, and the take
-refuses them before any move.
+and the prepare's checkout and merge, meets a root the gates found clean: every
+merge is prepared through one yield, whose gate refuses a store with uncommitted
+files, since the continuation's `add -A` would commit them unapproved, and the
+take refuses them before any move.
 
 That rule is the scope of the take's compose and of the recovery. The memory
 merge's continuation is the standing exception: it reads the gitlinks `OURS`

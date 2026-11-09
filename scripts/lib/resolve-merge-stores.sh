@@ -43,11 +43,22 @@ gitlore_merge_stores() {
   gitlore_take_tiers "$mempath" || return 1
 
   gitlore_reconcile_one "$mempath" memory || return 1
-  gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
+  local rc=0
+  gitlore_merge_one_store "$mempath" "$mempath" "" || rc=$?
+  case "$rc" in
+    0|2) ;;
+    *) return 1 ;;
+  esac
 
   # After root's own take, so what it writes sits on top of whatever upstream
-  # root already recorded instead of meeting it as a divergence.
-  gitlore_compose_moved_tiers "$mempath"
+  # root already recorded instead of meeting it as a divergence. A root refused
+  # for uncommitted changes or a failed fetch (rc 2) still gets here: the tiers
+  # taken above are recorded all the same — committed on a clean root, staged
+  # for the next memory commit on a dirty one — since the commit's pin guard
+  # refuses a tier ahead of its pin naming this take, and the commit the refusal
+  # asks for is what carries a staged record. The refusal itself still stands.
+  gitlore_compose_moved_tiers "$mempath" || return 1
+  [ "$rc" -eq 0 ]
 }
 
 # The preflight of every take and every publish, run before either moves, pushes
@@ -79,6 +90,11 @@ gitlore_store_dirty_for_take() {
 
 # One store's take. Args: $1 = memory worktree, $2 = store worktree,
 # $3 = tier name ("" when the store IS the memory root).
+# Returns 0 when the store is reconciled, 2 after emitting when its remote was
+# left untaken with the store exactly as it was — uncommitted changes, or a
+# fetch that failed — and 1 after emitting on every other refusal, the prepared
+# merge included. Callers that need only pass/fail collapse the 2 with
+# `|| return 1`; gitlore_merge_stores reads it to still record the moved tiers.
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
   local label remote_url fetched=0 fetch_err="" remote="" live head adopt_rc=0
@@ -159,7 +175,7 @@ $ff_err" >&2
 $fetch_err" \
       "gitlore: could not fetch $label from its remote. git said:
 $fetch_err" >&2
-    return 1
+    return 2
   fi
   if [ -z "$remote" ]; then
     printf 'gitlore: %s — its remote has no '\''live'\'' branch yet; nothing to take.\n' "$label"
@@ -186,7 +202,7 @@ $fetch_err" >&2
     gitlore_say_for_agent_or_user \
       "gitlore: $label has uncommitted changes, so its remote was left untouched. Commit them (approved summary, then a memory commit) and run /gitlore:merge again." \
       "gitlore: $label has uncommitted changes, so its remote was left untouched. Commit them and merge again." >&2
-    return 1
+    return 2
   fi
 
   if ! git -C "$store" merge-base --is-ancestor "$head" "$remote"; then

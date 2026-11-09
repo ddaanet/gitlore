@@ -93,11 +93,12 @@ the end compose on root, the manifest or another tier leaves the tier on the
 repair, which is committed in its local `live` and checked out, records nothing,
 and closes `Fix the store, then run /gitlore:merge again.` — the store is what
 needs fixing here, unlike the transient arms above. The next take or push finds
-the tier ahead of its pin and composes it with no second repair. With no problem
-naming the carrier nothing is repaired. When the recheck still fails — a weld
-whose second path names no file in the tier — nothing is committed, the report
-attributes the carrier's problems to `live:MEMORY.md` rather than the clean
-worktree carrier, and it closes
+the tier ahead of its pin and composes it with no second repair, and every pass
+and commit in between refuses it naming the take. With no problem naming the
+carrier nothing is repaired. When the recheck still fails — a weld whose second
+path names no file in the tier — nothing is committed, the report attributes the
+carrier's problems to `live:MEMORY.md` rather than the clean worktree carrier,
+and it closes
 `Once the index is fixed where it was published, run /gitlore:merge again.` That
 tier stays wedged, every take refusing at the repair and every push failing,
 until upstream edits the line. Tiers are taken one at a time and the first

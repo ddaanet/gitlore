@@ -123,9 +123,10 @@ gitlore_sync_memory_to_live() {
   done < <(gitlore_tier_paths "$mempath")
 
   # The `add -A` below records each tier where it stands, so a tier off its pin
-  # aborts here instead. One ahead of it is a killed take or hand git inside
-  # the tier, and the refusal names the take, which composes its lines into the
-  # root index and records it.
+  # aborts here instead. One ahead of it is a landed tier merge awaiting its
+  # /gitlore:merge rerun, a killed take or commit, or hand git inside the tier,
+  # and the refusal names the take, which composes its lines into the root
+  # index and records it.
   # The declaration stays on its own line: folded into `local pin_problems=$(…)`
   # the status read is `local`'s, always 0, and the refusal is swallowed.
   local pin_problems

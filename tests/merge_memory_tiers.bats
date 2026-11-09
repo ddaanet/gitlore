@@ -240,3 +240,63 @@ EOF
   # Taking still publishes nothing.
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" != "$live_sha" ]
 }
+
+@test "a tier ahead of its pin is staged when root's take is refused for uncommitted changes" {
+  # The commit's pin guard refuses a tier ahead of its pin naming the take, and
+  # the take refuses a dirty root whose remote moved naming the commit. The take
+  # still records the tier on its way out: the gitlink and the recomposed root
+  # index are staged (D43) for the commit the refusal asks for. Fails under a
+  # take whose root refusal returns before the end compose, leaving `:ddaanet`
+  # at the pin and the pending check still refusing the tier.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  move_tier_off_pin ddaanet
+  tier_sha=$(git -C memory/ddaanet rev-parse HEAD)
+  printf 'unapproved\n' > memory/pending-fact.md
+  # Memory's HEAD is already past the `live` wire_memory_remote published, so the
+  # remote fact makes root diverged; the dirt refusal comes before that reading.
+  push_memory_fact
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"memory has uncommitted changes, so its remote was left untouched"* ]]
+  [[ "$output" == *"staged rather than committed"* ]]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$tier_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
+  git -C memory diff --cached --name-only | grep -Fqx -- MEMORY.md
+  grep -qF -- '- [upstream](ddaanet/upstream.md) — arrived in another repo' memory/MEMORY.md
+  [ -f memory/pending-fact.md ]
+  # The pin guard reads the index, so the commit the refusal asks for goes through.
+  run gitlore_compose_pending memory
+  [[ "$output" != *"ahead of the commit the memory store records"* ]]
+}
+
+@test "a tier ahead of its pin is recorded when memory's remote cannot be fetched" {
+  # Offline: memory's fetch fails and its take is refused, but the tier taken
+  # before it is still recorded — root is clean, so in a bookkeeping commit.
+  # Fails under a take whose failed fetch returns before the end compose,
+  # leaving `HEAD:ddaanet` at the pin.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  move_tier_off_pin ddaanet
+  tier_sha=$(git -C memory/ddaanet rev-parse HEAD)
+  rm -rf "$MEMORY_REMOTE"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"could not fetch memory from its remote"* ]]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$tier_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" != "$pin" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+  git -C memory show HEAD:MEMORY.md | grep -qF -- 'ddaanet/upstream.md'
+  run gitlore_compose_pending memory
+  [ "$status" -eq 0 ]
+}

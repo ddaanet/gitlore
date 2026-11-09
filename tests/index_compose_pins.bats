@@ -15,10 +15,11 @@ teardown() { teardown_tmp_repo; }
 
 # --- rule 7: a tier must sit on its pin ---
 #
-# No normal operation leaves a tier ahead of its pin: the take composes the
+# No completed operation leaves a tier ahead of its pin: the take composes the
 # tier it moves up and records the gitlink. A tier ahead outside a take is a
-# killed take or hand git, and is refused naming the take, which composes its
-# lines into the root index three-way. One moved sideways or behind is refused
+# landed tier merge awaiting its /gitlore:merge rerun, a killed take or commit,
+# or hand git, and is refused naming the take, which composes its lines into
+# the root index three-way. One moved sideways or behind is refused
 # too: a down pass would write root's text over a carrier no compose has read,
 # and a commit would record a commit the pin has passed. Observed in the wild
 # after a hand-run `reset --hard origin/live`.
@@ -99,7 +100,7 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -eq 1 ]
   tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
   [[ "$tierline" == *"is checked out at ${moved:0:12}, ahead of the commit the memory store records at ${pinned:0:12}"* ]]
-  [[ "$tierline" == *"moved outside a completed take"* ]]
+  [[ "$tierline" == *"ahead of the commit the memory store records at"* ]]
   [[ "$tierline" == *"Run /gitlore:merge"* ]]
   # And NOT the sideways remedy: returning the tier to its pin would discard
   # what it holds.

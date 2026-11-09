@@ -114,20 +114,20 @@ is not part of the shared check. The pin is read from the memory store's
 memory commit records, and a landed merge is not a defect for as long as the
 memory commit recording it is pending. A tier that is mid-merge gets the remedy
 its own state needs, `/gitlore:resolve`, rather than a checkout, which would
-unlink `MERGE_HEAD` and destroy the prepared merge. The remedies for a tier
-behind or beside its pin are in [git-hooks.md](git-hooks.md). A mounted tier
-*absent* from the manifest is not an error, only inactive; the asymmetry is
-deliberate — listed-but-absent = broken, present-but-unlisted = dormant. In the
-continuation, a problem in the merged index itself blocks the landing — in the
-tier's carrier for a tier merge, and a duplicate, interleaved or welded line in
-root's `MEMORY.md` for a memory-root merge. Nothing is committed, the merge
-stays prepared, and the merger re-synthesizes with the problem lines in hand:
-the defect is in text this repo is authoring, and an edit to the named lines
-clears it (D52, in [tier-arrival-repair.md](tier-arrival-repair.md)). Any other
-refusal is reported and does not block, because the merge is synthesized and
-approved by then, and stranding it over a problem outside what it merged is the
-worse outcome. A memory-root merge then commits uncomposed and says so; a tier
-merge lands in the tier, and the end of the run that follows records it (D77).
+unlink `MERGE_HEAD` and destroy the prepared merge. The remedies for a tier off
+its pin are in [git-hooks.md](git-hooks.md). A mounted tier *absent* from the
+manifest is not an error, only inactive; the asymmetry is deliberate —
+listed-but-absent = broken, present-but-unlisted = dormant. In the continuation,
+a problem in the merged index itself blocks the landing — in the tier's carrier
+for a tier merge, and a duplicate, interleaved or welded line in root's
+`MEMORY.md` for a memory-root merge. Nothing is committed, the merge stays
+prepared, and the merger re-synthesizes with the problem lines in hand: the
+defect is in text this repo is authoring, and an edit to the named lines clears
+it (D52, in [tier-arrival-repair.md](tier-arrival-repair.md)). Any other refusal
+is reported and does not block, because the merge is synthesized and approved by
+then, and stranding it over a problem outside what it merged is the worse
+outcome. A memory-root merge then commits uncomposed and says so; a tier merge
+lands in the tier, and the end of the run that follows records it (D77).
 
 **A store with no root `MEMORY.md` composes nothing and is checked by nothing,
 and says so once an episode.** Every pass keys on that file, so its absence

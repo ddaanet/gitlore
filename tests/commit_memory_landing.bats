@@ -25,7 +25,7 @@ load helpers/commit-memory
 assert_commit_refused_ahead() {
   [[ "$stderr" == *"a tier was moved off the commit the memory store records for it"* ]] \
     || { printf 'no pin-guard header; stderr:\n%s\n' "$stderr" >&2; return 1; }
-  [[ "$stderr" == *"tier '$1' is checked out at ${2:0:12}, ahead of the commit the memory store records at ${3:0:12}: it was moved outside a completed take, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."* ]] \
+  [[ "$stderr" == *"tier '$1' is checked out at ${2:0:12}, ahead of the commit the memory store records at ${3:0:12}, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."* ]] \
     || { printf 'the refusal does not carry the tier line; stderr:\n%s\n' "$stderr" >&2; return 1; }
   [[ "$stderr" != *"gitlore-compose"* ]]
 }

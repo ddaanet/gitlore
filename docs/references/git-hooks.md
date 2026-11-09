@@ -168,10 +168,9 @@ a single abort can carry several tiers:
   the shape a raw pull in memory leaves: `/gitlore:merge` fetches the tier and
   fast-forwards it, and a commit no repository holds is the integrity error of
   [unresolvable-pin.md](unresolvable-pin.md);
-- **ahead of the pin** — it was moved outside a completed take, so the root
-  index has not taken its lines: `/gitlore:merge` composes them into the root
-  index and records the tier (D78, in
-  [take-and-compose.md](take-and-compose.md));
+- **ahead of the pin** — the root index has not taken its lines:
+  `/gitlore:merge` composes them into the root index and records the tier (D78,
+  in [take-and-compose.md](take-and-compose.md));
 - **behind the pin** — `/gitlore:merge` fast-forwards it;
 - **beside the pin**, each holding commits the other lacks — a checkout of the
   pin, then `/gitlore:merge`, so projecting the root index onto the tier cannot
@@ -179,17 +178,20 @@ a single abort can carry several tiers:
 
 `SessionStart` reports the same state.
 
-**A tier ahead of its pin is refused, naming the take.** No normal operation
+**A tier ahead of its pin is refused, naming the take.** No completed operation
 leaves a tier's `HEAD` ahead of the gitlink the index records: the take records
 the tier it moves, the memory merge's continuation and the recovery stage what
 they compose, and the commit records every tier after the guard saw them on
-their pins. What produces the state is a killed take or hand git inside the
-tier, and recording it silently would hide that cause and publish the tier's
-commits with their lines never composed into the root index. The take is the one
-path that composes before it records (D78), so the refusal names
-`/gitlore:merge`; nothing puts the tier back on its pin, since the take needs it
-where it stands. A commit interrupted between a tier's commit and memory's
-`add -A` leaves that shape too, and the retry refuses it the same way.
+their pins. What produces the state is the one transient — a tier merge's
+continuation lands the merge in the tier and composes nothing, so the tier sits
+ahead until the `/gitlore:merge` rerun — or a run killed between a tier's move
+and its record, a take or a commit, or hand git inside the tier; recording it
+silently would publish the tier's commits with their lines never composed into
+the root index. The take is the one path that composes before it records (D78),
+so the refusal names `/gitlore:merge`; nothing puts the tier back on its pin,
+since the take needs it where it stands. A commit interrupted between a tier's
+commit and memory's `add -A` leaves that shape too, and the retry refuses it the
+same way.
 
 ## Rejected alternatives
 
