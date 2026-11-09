@@ -61,7 +61,7 @@ load helpers/merge-memory
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$fixed_sha" ]
 }
 
-@test "a failed fetch still adopts local live, reports the fetch failure, and records nothing until a take completes" {
+@test "a failed fetch still adopts local live, reports the fetch failure, and the end compose records the adoption" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -84,17 +84,21 @@ load helpers/merge-memory
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"could not fetch tier 'ddaanet'"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
-  # Root is written once, at the end of a run that completes.
-  run ! grep -q 'ddaanet/local.md' memory/MEMORY.md
+  # A fetch that failed still reaches the end compose, so the tier adopted
+  # from its local live is recorded now rather than left ahead of its pin,
+  # where every pass and commit would refuse it until a later take. Fails
+  # under a run that stops at the fetch failure.
+  grep -q 'ddaanet/local.md' memory/MEMORY.md
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$live_sha" ]
+  [ -z "$(git -C memory status --porcelain)" ]
 
   git -C memory/ddaanet remote set-url origin "$url"
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
-  grep -q 'ddaanet/local.md' memory/MEMORY.md
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$live_sha" ]
 }
 
-@test "a tier with no remote still adopts local live, reports the missing remote, and records nothing" {
+@test "a tier with no remote still adopts local live, reports the missing remote, and the end compose records the adoption" {
   wire_memory_remote
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
@@ -116,9 +120,10 @@ load helpers/merge-memory
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"tier 'ddaanet' has no remote configured"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
-  # Root is written once, at the end of a run that completes.
-  run ! grep -q 'ddaanet/local.md' memory/MEMORY.md
-  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
+  # Same as the failed fetch: the missing remote does not stop the run short
+  # of the end compose, so the adoption is recorded.
+  grep -q 'ddaanet/local.md' memory/MEMORY.md
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$live_sha" ]
 }
 
 @test "a dirty tier is refused before any fetch or adoption" {

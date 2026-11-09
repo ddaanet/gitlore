@@ -15,11 +15,10 @@ teardown() { teardown_tmp_repo; }
 
 # --- rule 7: a tier must sit on its pin ---
 #
-# No completed operation leaves a tier ahead of its pin: the take composes the
-# tier it moves up and records the gitlink. A tier ahead outside a take is a
-# landed tier merge awaiting its /gitlore:merge rerun, a killed take or commit,
-# or hand git, and is refused naming the take, which composes its lines into
-# the root index three-way. One moved sideways or behind is refused
+# A tier ahead of its pin holds lines the root index has not taken, and a
+# record of it through `add -A` would publish them uncomposed, so outside a
+# take it is refused naming the take, which composes its lines into the root
+# index three-way and records the gitlink. One moved sideways or behind is refused
 # too: a down pass would write root's text over a carrier no compose has read,
 # and a commit would record a commit the pin has passed. Observed in the wild
 # after a hand-run `reset --hard origin/live`.
@@ -82,8 +81,8 @@ teardown() { teardown_tmp_repo; }
 
 @test "a tier ahead of its pin is refused naming /gitlore:merge, and nothing is written or staged" {
   # Fails under a pass that composes a tier ahead up three-way and stages its
-  # gitlink: that records a move no commit approved and hides the killed take
-  # or hand git that produced it. The take is the one path that composes a
+  # gitlink: that records a move no commit approved and hides that the tier
+  # holds lines root has not taken. The take is the one path that composes a
   # tier ahead, so the refusal names it.
   pinned_store_with_tier
   pinned=$(git -C memory rev-parse :ddaanet)

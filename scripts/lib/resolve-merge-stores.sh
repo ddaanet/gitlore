@@ -40,25 +40,30 @@ gitlore_merge_stores() {
   local mempath="$1"
 
   gitlore_guard_every_store "$mempath" || return 1
-  gitlore_take_tiers "$mempath" || return 1
+  local tiers_rc=0 root_rc=0
+  gitlore_take_tiers "$mempath" || tiers_rc=$?
+  case "$tiers_rc" in
+    0|2) ;;
+    *) return 1 ;;
+  esac
 
   gitlore_reconcile_one "$mempath" memory || return 1
-  local rc=0
-  gitlore_merge_one_store "$mempath" "$mempath" "" || rc=$?
-  case "$rc" in
+  gitlore_merge_one_store "$mempath" "$mempath" "" || root_rc=$?
+  case "$root_rc" in
     0|2) ;;
     *) return 1 ;;
   esac
 
   # After root's own take, so what it writes sits on top of whatever upstream
-  # root already recorded instead of meeting it as a divergence. A root refused
-  # for uncommitted changes or a failed fetch (rc 2) still gets here: the tiers
-  # taken above are recorded all the same — committed on a clean root, staged
-  # for the next memory commit on a dirty one — since the commit's pin guard
-  # refuses a tier ahead of its pin naming this take, and the commit the refusal
-  # asks for is what carries a staged record. The refusal itself still stands.
+  # root already recorded instead of meeting it as a divergence. A tier or root
+  # left untaken with rc 2 — uncommitted changes, a failed fetch, a tier with no
+  # remote — still gets here: the tiers that did move are recorded all the same,
+  # committed on a clean root, staged for the next memory commit on a dirty one,
+  # since the commit's pin guard refuses a tier ahead of its pin naming this
+  # take, and the commit the refusal asks for is what carries a staged record.
+  # The refusal itself still stands, so the run fails after the record.
   gitlore_compose_moved_tiers "$mempath" || return 1
-  [ "$rc" -eq 0 ]
+  [ "$tiers_rc" -eq 0 ] && [ "$root_rc" -eq 0 ]
 }
 
 # The preflight of every take and every publish, run before either moves, pushes
@@ -91,10 +96,13 @@ gitlore_store_dirty_for_take() {
 # One store's take. Args: $1 = memory worktree, $2 = store worktree,
 # $3 = tier name ("" when the store IS the memory root).
 # Returns 0 when the store is reconciled, 2 after emitting when its remote was
-# left untaken with the store exactly as it was — uncommitted changes, or a
-# fetch that failed — and 1 after emitting on every other refusal, the prepared
-# merge included. Callers that need only pass/fail collapse the 2 with
-# `|| return 1`; gitlore_merge_stores reads it to still record the moved tiers.
+# left untaken — uncommitted changes, a fetch that failed, or a tier with no
+# remote configured — and 1 after emitting on every other refusal, the prepared
+# merge included. A 2 says nothing about HEAD: the adoption of an advanced local
+# `live` and root's catch-up onto its own (D59) run before the remote is read,
+# and may have moved it. gitlore_take_tiers, gitlore_merge_stores and
+# gitlore_compose_moved_tiers_for_push read the 2 to still record the tiers
+# that moved; the push's behind arm collapses it with `|| return 1`.
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
   local label remote_url fetched=0 fetch_err="" remote="" live head adopt_rc=0
@@ -167,7 +175,7 @@ $ff_err" >&2
     gitlore_say_for_agent_or_user \
       "gitlore: $label has no remote configured, so there is nothing to take. Mount it against a remote or unmount it." \
       "gitlore: $label has no remote configured, so there is nothing to take." >&2
-    return 1
+    return 2
   fi
   if [ "$fetched" -eq 0 ]; then
     gitlore_say_for_agent_or_user \

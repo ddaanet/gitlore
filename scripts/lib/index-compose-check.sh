@@ -198,21 +198,14 @@ gitlore_compose_problems_in() {
 # (util-config.sh) and gitlore_store_mid_merge; callers source util.sh, which
 # pulls in both.
 #
-# No completed operation leaves a tier off its pin: the take records the tier
-# it moves, the memory merge's continuation and the recovery stage what they
-# compose, and the commit records every tier after this rule saw them on their
-# pins. A tier ahead of its pin is the one transient — a tier merge's
-# continuation lands the merge in the tier and composes nothing, so the tier
-# sits ahead until the /gitlore:merge rerun the skill prescribes — or a run
-# killed between the tier's move and its record, a take or a commit, or hand
-# git inside the tier. In every case the commit's `add -A` would record it with
-# its lines never composed into the root index, so it is refused naming the
-# take, which composes them up three-way and records the gitlink. The refusal
-# states no cause, since the transient is a normal one and the line is the same
-# for all three. A tier behind its pin is refused, dormant
-# or not, since that `add -A` would record the older commit and move the pin
-# backward with no one having asked. So is a tier beside its pin, whose HEAD
-# and pin each hold commits the other lacks.
+# A tier ahead of its pin holds lines the root index has not taken: the
+# commit's `add -A` would record it with those lines never composed into the
+# root index, so it is refused naming the take, which composes them up
+# three-way and records the gitlink. The refusal states no cause, since what
+# moved the tier is not what the reader acts on. A tier behind its pin is
+# refused, dormant or not, since that `add -A` would record the older commit
+# and move the pin backward with no one having asked. So is a tier beside its
+# pin, whose HEAD and pin each hold commits the other lacks.
 #
 # It lives OUTSIDE gitlore_compose_check, called by the pass and by the commit
 # path's pin guard ahead of it, because the end of a take, the memory merge's

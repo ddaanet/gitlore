@@ -300,3 +300,32 @@ EOF
   run gitlore_compose_pending memory
   [ "$status" -eq 0 ]
 }
+
+@test "a taken tier is recorded when a later tier's remote cannot be fetched" {
+  # Tiers are taken in order; aaa moves and bbb's fetch fails. The take still
+  # ends with the compose, so aaa is recorded in a bookkeeping commit and the
+  # pin guard lets the next memory commit through, while bbb's refusal fails
+  # the run. Fails under a take that stops at bbb before the end compose,
+  # leaving `HEAD:aaa` at the pin and every commit refused naming a take that
+  # refuses again at bbb.
+  wire_memory_remote
+  make_tier_in_memory aaa
+  make_tier_in_memory bbb
+  set_tier_manifest aaa bbb
+  gitlore_compose memory
+  commit_memory_state
+  pin=$(git -C memory rev-parse HEAD:aaa)
+  remote_sha=$(push_tier_fact aaa '- [upstream](upstream.md) — published by another repo')
+  rm -rf "$TMP_REPO/.bare-bbb.git"
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"could not fetch tier 'bbb' from its remote"* ]]
+  [ "$(git -C memory/aaa rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:aaa)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:aaa)" != "$pin" ]
+  grep -qF -- '- [upstream](aaa/upstream.md) — published by another repo' memory/MEMORY.md
+  [ -z "$(git -C memory status --porcelain)" ]
+  run gitlore_compose_pending memory
+  [ "$status" -eq 0 ]
+}

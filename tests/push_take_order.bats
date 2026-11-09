@@ -123,3 +123,34 @@ dirty_tier_forked_from_live() {
   [[ "$hook_err" == *"tier 'beta' has uncommitted changes, so nothing was taken"* ]]
   [ -f memory/beta/draft.md ]
 }
+
+@test "push-memory records a taken tier when root is behind its remote and dirty" {
+  # The take inside the push moves ddaanet; the end compose first takes root,
+  # which is behind its remote but holds an uncommitted file, so root's take is
+  # refused. The compose still runs: the moved gitlink and the recomposed root
+  # index are staged (D43) for the commit the refusal asks for, and the push
+  # fails on the refusal. Fails under an end compose that returns at root's
+  # refusal, leaving `:ddaanet` at the pin for the commit's pin guard to refuse.
+  wire_memory_remote
+  make_tier_in_memory ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q origin HEAD:live
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  remote_sha=$(push_tier_fact ddaanet '- [upstream](upstream.md) — published by another repo')
+  printf 'unapproved\n' > memory/pending-fact.md
+  push_memory_fact
+
+  run --separate-stderr bash "$CMD"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"memory has uncommitted changes, so its remote was left untouched"* ]]
+  [[ "$output" == *"staged rather than committed"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$remote_sha" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
+  git -C memory diff --cached --name-only | grep -Fqx -- MEMORY.md
+  [ -f memory/pending-fact.md ]
+  run gitlore_compose_pending memory
+  [ "$status" -eq 0 ]
+}

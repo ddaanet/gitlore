@@ -102,16 +102,25 @@ gitlore_compose_moved_tiers() {
 # Assumes `origin/live` has just been fetched. Args: $1 = memory worktree.
 # Returns 1 after emitting.
 gitlore_compose_moved_tiers_for_push() {
-  local mempath="$1" moved remote
+  local mempath="$1" moved remote rc=0
   moved=$(gitlore_tiers_ahead_of_pin "$mempath") || return 1
   [ -n "$moved" ] || return 0
   # `-q --verify` is silent on the expected miss: a remote with no `live` yet.
   if remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) \
      && ! git -C "$mempath" merge-base --is-ancestor "$remote" live; then
     git -C "$mempath" merge-base --is-ancestor live "$remote" || return 0
-    gitlore_merge_one_store "$mempath" "$mempath" "" || return 1
+    # A root refused for uncommitted changes or a failed fetch (rc 2) still
+    # reaches the compose, as in gitlore_merge_stores: the tiers this push took
+    # are recorded — staged on the dirty root — so the commit the refusal asks
+    # for passes the pin guard. The refusal still fails the push.
+    gitlore_merge_one_store "$mempath" "$mempath" "" || rc=$?
+    case "$rc" in
+      0|2) ;;
+      *) return 1 ;;
+    esac
   fi
-  gitlore_compose_moved_tiers "$mempath"
+  gitlore_compose_moved_tiers "$mempath" || return 1
+  [ "$rc" -eq 0 ]
 }
 
 # Print each mounted tier whose HEAD strictly descends the commit root's INDEX

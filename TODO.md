@@ -22,3 +22,4 @@
 - MEMORY.md sits at 96% of its 25600-byte budget; run /gitlore:index-audit.
 - xhigh release review of dev against main.
 - Every `couldn't find remote ref` match in scripts/ (resolve-merge-stores.sh, session-memory.sh, session-tiers.sh, rewrite-guard.sh, record-rewrite.sh, add-tier.sh, cross-rewrite.sh) reads git's English text, which a localized git translates into a could-not-fetch report; one sweep, setting the locale on those fetches or sharing one helper, not a per-site fix.
+- `scripts/push-memory.sh:96` calls `gitlore_take_tiers` bare under `set -e`: a tier's failed fetch during a push (rc 2 since the take carries it past the tier) exits the script 2 before `gitlore_push_stores` records the tiers taken earlier, so a push with one unreachable tier leaves a taken tier ahead of its pin until the next `/gitlore:merge` records it (a detour, not a loop). Decide whether the push also carries the 2 to its end compose.

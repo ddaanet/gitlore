@@ -6,27 +6,43 @@
 # Part of lib/resolve.sh; source that, not this file.
 
 # Every mounted tier's reconcile and take, in order, the part of a take that
-# precedes root's reconcile. Stops at the first store that yields or refuses.
+# precedes root's reconcile. Stops at the first store that yields or refuses
+# with 1. A tier left untaken with rc 2 (gitlore_merge_one_store: a failed
+# fetch, no remote, uncommitted changes) is passed over, so the tiers after it
+# are still taken and the end compose records the ones that moved; the run
+# then returns 2, and gitlore_merge_stores reads it to still fail the take.
+# Returns 0 when every tier is reconciled, 2 when one was passed over, 1 after
+# emitting on a yield or any other refusal.
 # Args: $1 = memory worktree path.
 gitlore_take_tiers() {
-  local mempath="$1" tier
+  local mempath="$1" tier rc=0 tier_rc
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     # `git -C` into an unchecked-out submodule walks up to the enclosing repo.
     [ -e "$mempath/$tier/.git" ] || continue
-    gitlore_take_tier "$mempath" "$tier" || return 1
+    tier_rc=0
+    gitlore_take_tier "$mempath" "$tier" || tier_rc=$?
+    case "$tier_rc" in
+      0) ;;
+      2) rc=2 ;;
+      *) return 1 ;;
+    esac
   done < <(gitlore_tier_paths "$mempath")
+  return "$rc"
 }
 
 # One tier's reconcile, take and carrier repair. A tier inside a push is taken
 # only when it holds something to take: the publish that follows owns the reports
 # for a tier with no remote, a failed fetch and a remote with no `live`.
+# Returns gitlore_merge_one_store's 2 as is: nothing arrived, so there is no
+# carrier to repair.
 # Args: $1 = memory worktree path, $2 = tier name.
 gitlore_take_tier() {
-  local mempath="$1" tier="$2" tierpath="$1/$2"
+  local mempath="$1" tier="$2" tierpath="$1/$2" rc=0
   gitlore_reconcile_one "$tierpath" "tier '$tier'" || return 1
   if [ -z "${GITLORE_TAKE_IN_PUSH:-}" ] || gitlore_tier_has_arrivals "$tierpath"; then
-    gitlore_merge_one_store "$mempath" "$tierpath" "$tier" || return 1
+    gitlore_merge_one_store "$mempath" "$tierpath" "$tier" || rc=$?
+    [ "$rc" -eq 0 ] || return "$rc"
   fi
   gitlore_repair_moved_carrier "$mempath" "$tier"
 }

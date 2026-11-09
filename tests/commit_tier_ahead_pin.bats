@@ -1,9 +1,7 @@
 #!/usr/bin/env bats
 # A tier whose HEAD strictly descends its pin holds lines the root index has
-# not taken: no completed operation leaves one except a landed tier merge
-# awaiting its /gitlore:merge rerun, and recording it through `add -A` would
-# publish those lines uncomposed, whether a landed merge, a killed take or
-# commit, or hand git left it. The commit's pin guard
+# not taken, and recording it through `add -A` would publish those lines
+# uncomposed. The commit's pin guard
 # (gitlore_sync_memory_to_live, run ahead of the pending check) refuses it
 # naming /gitlore:merge, which composes its lines into the root index and
 # records the tier; nothing is written, moved or recorded. The guard runs over

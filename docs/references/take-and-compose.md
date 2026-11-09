@@ -33,19 +33,22 @@ the same five things, in this order.
    marked not-to-publish when the two diverged), then check the arrived carrier
    alone and repair it when it fails (D52). Inside a push a tier is taken only
    when it holds arrivals, and its merge is published on landing (D75). A tier
-   that yields or refuses stops the run.
+   that yields a prepared merge stops the run.
 3. **Reconcile and take root.** A root fast-forward onto a commit recording a
    tier gitlink that no repository holds is refused; a diverged root prepares
-   its merge, which records each tier's `HEAD` itself (below).
+   its merge, which records each tier's `HEAD` itself (below). A store, tier or
+   root, refused for uncommitted changes or a fetch that failed is left exactly
+   as it was, and the run still reaches step 4: the tiers step 2 moved are
+   recorded all the same, staged on a dirty root (D43) or committed on a clean
+   one, and the refusal stands.
 4. **Compose and record once** (`gitlore_compose_moved_tiers`). Every mounted
    tier whose `HEAD` strictly descends the gitlink memory's *index* records is
    composed up into root's `MEMORY.md` in one write, the file and the moved
    gitlinks are staged, and one canned commit
    `Update MEMORY.md for <tiers> tier merge.` records them, its body listing the
-   subjects each tier's range brought in. Whatever moved a tier counts — this
-   run's take, an earlier continuation that landed a tier merge, another
-   checkout, a killed run — because a tier off its pin is all the state there
-   is. A run that moved nothing writes nothing.
+   subjects each tier's range brought in. Whatever moved a tier counts, because
+   a tier off its pin is all the state there is. A run that moved nothing writes
+   nothing.
 5. **Advance `live`** to the bookkeeping commit with the ff-checked `push .`.
 
 A push composes only after root has taken its remote when merely behind, so the
@@ -180,24 +183,20 @@ adopting it stays deleted, and a root reword of an adopted line projects down,
 where a base left at the old pin would re-adopt the line, or rebuild the same
 chunk, at every pass and commit.
 
-The pass composes no tier up and refuses one ahead of its pin, because no
-completed operation leaves that state: the take records the tier it moves, the
-continuation and the recovery stage what they compose, and the commit path
-records every tier with `add -A` only after the pin guard saw them on their
-pins. A tier ahead of its pin is the one transient — a tier merge's continuation
-lands the merge in the tier and composes nothing, so the tier sits ahead until
-the `/gitlore:merge` rerun the skill prescribes — or a run killed between the
-tier's move and its record, a take or a commit, or hand git inside the tier. In
-each case the tier holds lines the root index has not taken, and the one path
-that composes before it records is the take. So the pin guard, run by the pass,
-the pending check and the commit, refuses it with one line per tier naming both
-commits, that the tier is `ahead of the commit the memory store records`,
-`so the root index has not taken its lines`, and `/gitlore:merge` as the remedy;
-the line states no cause, since the same line covers the normal transient and
-the faults. A refusal that names the remedy beats a record that hides the state,
-and refusing outside a take leaves the take as the one writer of the gitlink.
-The take reads the pin from the index as well, since a gitlink already staged by
-a take on a dirty root, the continuation or the recovery is recorded.
+The pass composes no tier up and refuses one ahead of its pin. A tier whose
+`HEAD` strictly descends the gitlink the index records holds lines the root
+index has not taken; recording it with the commit's `add -A` would publish them
+uncomposed, and the one path that composes them before it records is the take.
+So the pin guard, run by the pass, the pending check and the commit, refuses it
+with one line per tier naming both commits, that the tier is
+`ahead of the commit the memory store records`,
+`so the root index has not taken its lines`, and `/gitlore:merge` as the remedy,
+which composes the lines up three-way and records the gitlink; the line states
+no cause, since what moved the tier is not what the reader acts on. A refusal
+that names the remedy beats a record that hides the state, and refusing outside
+a take leaves the take as the one writer of the gitlink. The take reads the pin
+from the index as well, since a gitlink already staged by a take on a dirty
+root, the continuation or the recovery is recorded.
 
 A root move, the fast-forward, the catch-up onto a local `live` ahead of `HEAD`
 and the prepare's checkout and merge, meets a root the gates found clean: every
@@ -257,12 +256,12 @@ Rejected for the take and the recovery; the memory merge's continuation keeps it
 as D78's stated exception, with the tier-wins rule above.
 
 **The pass composing a tier ahead of its pin up and staging the gitlinks it
-merged.** It treats a tier a killed take or hand git moved as a routine arrival,
-so the pass records what no commit approved, and the staged gitlink is an
-uncommitted change every root move then meets, so the fast-forward, the catch-up
-onto a local `live` and the prepare's checkout each need a reset of it. The take
-composes the same lines up and records the gitlink in a commit, and the refusal
-names it (D78).
+merged.** It treats a tier ahead of its pin as a routine arrival, so the pass
+records what no commit approved, and the staged gitlink is an uncommitted change
+every root move then meets, so the fast-forward, the catch-up onto a local
+`live` and the prepare's checkout each need a reset of it. The take composes the
+same lines up and records the gitlink in a commit, and the refusal names it
+(D78).
 
 **A dirty gate per caller of the yield.** A gate written at each yield site
 misses the next caller, as the push's and the resolve command's did, so the

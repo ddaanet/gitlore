@@ -178,20 +178,14 @@ a single abort can carry several tiers:
 
 `SessionStart` reports the same state.
 
-**A tier ahead of its pin is refused, naming the take.** No completed operation
-leaves a tier's `HEAD` ahead of the gitlink the index records: the take records
-the tier it moves, the memory merge's continuation and the recovery stage what
-they compose, and the commit records every tier after the guard saw them on
-their pins. What produces the state is the one transient — a tier merge's
-continuation lands the merge in the tier and composes nothing, so the tier sits
-ahead until the `/gitlore:merge` rerun — or a run killed between a tier's move
-and its record, a take or a commit, or hand git inside the tier; recording it
-silently would publish the tier's commits with their lines never composed into
-the root index. The take is the one path that composes before it records (D78),
-so the refusal names `/gitlore:merge`; nothing puts the tier back on its pin,
-since the take needs it where it stands. A commit interrupted between a tier's
-commit and memory's `add -A` leaves that shape too, and the retry refuses it the
-same way.
+**A tier ahead of its pin is refused, naming the take.** A tier whose `HEAD`
+strictly descends the gitlink the index records holds lines the root index has
+not taken; recording it with the commit's `add -A` would publish the tier's
+commits with those lines never composed into the root index. The take is the one
+path that composes them before it records the gitlink (D78), so the refusal
+names `/gitlore:merge`; nothing puts the tier back on its pin, since the take
+needs it where it stands. A commit interrupted between a tier's commit and
+memory's `add -A` leaves that shape, and the retry refuses it the same way.
 
 ## Rejected alternatives
 
@@ -208,6 +202,6 @@ it. The commit fails on it instead and names `gitlore-compose` (D50).
 
 **Committing through a tier ahead of its pin.** The `add -A` would record a tier
 whose lines the root index has not taken, with no approved summary of its own,
-and hide the killed take or hand git that moved it; the three-way the take runs
-is what carries its lines into root before the gitlink is recorded (D78), and
-the refusal costs one `/gitlore:merge` (D50).
+and hide that the tier holds lines root has not taken; the three-way the take
+runs is what carries its lines into root before the gitlink is recorded (D78),
+and the refusal costs one `/gitlore:merge` (D50).

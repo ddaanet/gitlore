@@ -132,8 +132,8 @@ teardown() {
 }
 
 @test "SessionStart does not put a tier that had outrun its gitlink back on it, reports it in sync with its remote, and refuses it naming the take" {
-  # A tier ahead of the commit memory records is what a killed take or hand git
-  # leaves, and the take is what composes its lines up and records it, so
+  # A tier ahead of the commit memory records holds lines the root index has
+  # not taken, and the take is what composes them up and records it, so
   # SessionStart leaves the tier where the take needs it and reports the state
   # naming /gitlore:merge. The sync report compares HEAD and local `live` with
   # the remote's `live`, not with the pin: this tier is past the pin and equal
