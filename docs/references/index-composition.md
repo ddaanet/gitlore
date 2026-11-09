@@ -99,16 +99,17 @@ The recompose **validates and is fail-safe**: it refuses — reporting on
 existing index — if the result would carry a **duplicate** pointer line, if a
 line **welds two pointer bullets** onto one physical line, if the manifest
 **lists a tier that is not present**, or if a
-**mounted tier is checked out behind or beside the gitlink** the memory store's
-index records for it. That last rule lives outside the shared check and only the
-passes that read the pin run it: `gitlore_compose` itself, so every compose on
+**mounted tier is checked out off the gitlink** the memory store's index records
+for it. That last rule lives outside the shared check and only the passes that
+read the pin run it: `gitlore_compose` itself, so every compose on
 `PostToolBatch` and after a tier mount, and the commit path, which also checks
 it ahead of its read-only pass so such a tier aborts the commit (D50). It covers
 every mounted tier, dormant ones included, because the commit's `add -A` records
-a dormant tier's `HEAD` too. A tier *ahead* of the gitlink passes: the pass
-composes it up three-way (D36, D78). The end of a take and the memory merge's
-continuation compose a tier whatever its relation to the pin, which is why the
-rule is not part of the shared check. The pin is read from the memory store's
+a dormant tier's `HEAD` too. A tier *ahead* of the gitlink is refused naming
+`/gitlore:merge`, since the take is what composes its lines up three-way and
+records it (D78). The end of a take, the memory merge's continuation and the
+recovery compose a tier whatever its relation to the pin, which is why the rule
+is not part of the shared check. The pin is read from the memory store's
 **index** rather than its `HEAD`, because a staged gitlink is what the next
 memory commit records, and a landed merge is not a defect for as long as the
 memory commit recording it is pending. A tier that is mid-merge gets the remedy

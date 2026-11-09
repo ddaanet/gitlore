@@ -2,9 +2,9 @@
 # Two halves of the three-way compose outside a take. gitlore_compose_check_index
 # refuses an index holding conflict markers, so the pending check, the
 # gitlore-compose pass and the commit stop at a root index a compose-up left
-# with markers, until they are gone. And the pass itself runs the three-way for
-# each tier off its pin, so a tier another checkout moved composes like an
-# arrival.
+# with markers, until they are gone. And the pass composes no tier up: a tier
+# another checkout moved ahead of its pin is refused naming the take, which is
+# the one path that composes it three-way and records it.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
@@ -95,32 +95,64 @@ via_commit_bin() {
 
 # --- the pass on a tier off its pin -------------------------------------------
 
-@test "gitlore-compose adopts a tier another checkout moved and keeps a line root alone added for it" {
+# The refusal on stderr, from bin/gitlore-compose: the verbatim pin-check line
+# for tier $1 checked out at $2 over the pin $3, and the take as the remedy.
+assert_refused_ahead() {
+  [[ "$stderr" == *"tier composition refused"* ]] \
+    || { printf 'no refusal header; stderr:\n%s\n' "$stderr" >&2; return 1; }
+  [[ "$stderr" == *"tier '$1' is checked out at ${2:0:12}, ahead of the commit the memory store records at ${3:0:12}"* ]] \
+    || { printf 'the refusal does not name the tier ahead; stderr:\n%s\n' "$stderr" >&2; return 1; }
+  [[ "$stderr" == *"Run /gitlore:merge"* ]]
+}
+
+@test "gitlore-compose refuses a tier another checkout moved, naming the take, and leaves root's own new line unwritten" {
+  # Fails under a pass that composes the tier up: root would gain the tier's
+  # line and its gitlink would be staged with no commit approving the move.
   take_base_store
   # The tier gains a carrier line and its local `live` follows; root has not
   # recorded the move. Root alone adds a line for the tier besides.
   move_tier_off_pin_into_live ddaanet
   seed_root_bullet "ddaanet/rootonly.md" "added in root alone"
   pin=$(git -C memory rev-parse :ddaanet)
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  memory_before=$(git -C memory rev-parse HEAD)
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 
   run --separate-stderr bash "$PLUGIN_ROOT/bin/gitlore-compose"
-  [ "$status" -eq 0 ] || { printf 'status %s, stderr:\n%s\n' "$status" "$stderr" >&2; return 1; }
-  grep -qxF -- '- [upstream](ddaanet/upstream.md) — arrived in another repo' memory/MEMORY.md
-  grep -qxF -- '- [rootonly](ddaanet/rootonly.md) — added in root alone' memory/MEMORY.md
-  # The pass moves the tier nowhere: it is where the other checkout left it.
-  [ "$(git -C memory/ddaanet rev-parse HEAD)" != "$pin" ]
+  [ "$status" -eq 1 ] || { printf 'status %s, stderr:\n%s\n' "$status" "$stderr" >&2; return 1; }
+  assert_refused_ahead ddaanet "$moved" "$pin"
+  # Nothing written, moved, staged or recorded: root keeps its own new line
+  # unprojected, the carrier keeps its arrival, and the tier stays where the
+  # other checkout left it.
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pin" ]
+  [ "$(git -C memory rev-parse HEAD)" = "$memory_before" ]
 }
 
-@test "gitlore-compose keeps root's reword of a line the tier did not touch while it adopts the tier's new line" {
+@test "gitlore-compose refuses a tier another checkout moved and leaves root's reword out of the carrier" {
+  # The down projection would write root's reword into a carrier no compose has
+  # read; the refusal stops ahead of it. Fails under a pass that composes up
+  # and projects down in one go.
   take_base_store
   move_tier_off_pin_into_live ddaanet
   content=$(cat memory/MEMORY.md)
   printf '%s\n' "${content//"a portable fact"/"reworded in root"}" > memory/MEMORY.md
+  pin=$(git -C memory rev-parse :ddaanet)
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 
   run --separate-stderr bash "$PLUGIN_ROOT/bin/gitlore-compose"
-  [ "$status" -eq 0 ] || { printf 'status %s, stderr:\n%s\n' "$status" "$stderr" >&2; return 1; }
-  grep -qxF -- '- [upstream](ddaanet/upstream.md) — arrived in another repo' memory/MEMORY.md
-  grep -qxF -- '- [shared](ddaanet/shared.md) — reworded in root' memory/MEMORY.md
+  [ "$status" -eq 1 ] || { printf 'status %s, stderr:\n%s\n' "$status" "$stderr" >&2; return 1; }
+  assert_refused_ahead ddaanet "$moved" "$pin"
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
+  grep -qxF -- '- [shared](shared.md) — a portable fact' memory/ddaanet/MEMORY.md
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pin" ]
 }
 
 @test "passing pin: the pass on a tier at its pin leaves root's reword in root and projects it into the carrier" {

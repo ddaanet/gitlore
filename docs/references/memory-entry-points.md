@@ -73,17 +73,16 @@ PATH, so a caller runs the bare name (D70).
 **Shared body.** `gitlore_sync_memory_to_live` (lib) is the
 commit-and-advance-live logic: memory's own stale-merge guard → each mounted
 tier's stale-merge guard → pin guard (`gitlore_compose_check_pins`, aborting on
-a tier behind or beside its pin, D50) → composition (`gitlore_compose_pending`;
-a non-empty result aborts the commit naming `gitlore-compose`, rc 1 aborts on a
-problem in an index file with uncommitted changes and otherwise reports and
-continues, rc 2 means an unreadable index and aborts) → tier sync (D42; each
-dirty tier: `add -A`, commit its section, advance its local `live`, onto
-composed carrier content) → memory's `add -A`, which records each tier's `HEAD`
-→ memory's commit (its section, or the canned index message) →
-`push . HEAD:live` (ff) → divergence reported. A stale merge state is handed
-back to the sub-agent while `MERGE_HEAD` is there, and when a checkout has
-cleared it the survivors are classified and repaired, which may mean carrying
-straight on
+a tier off its pin, D50) → composition (`gitlore_compose_pending`; a non-empty
+result aborts the commit naming `gitlore-compose`, rc 1 aborts on a problem in
+an index file with uncommitted changes and otherwise reports and continues, rc 2
+means an unreadable index and aborts) → tier sync (D42; each dirty tier:
+`add -A`, commit its section, advance its local `live`, onto composed carrier
+content) → memory's `add -A`, which records each tier's `HEAD` → memory's commit
+(its section, or the canned index message) → `push . HEAD:live` (ff) →
+divergence reported. A stale merge state is handed back to the sub-agent while
+`MERGE_HEAD` is there, and when a checkout has cleared it the survivors are
+classified and repaired, which may mean carrying straight on
 ([merge-state-recovery.md](merge-state-recovery.md)).
 
 ### Memory Push Entry Point

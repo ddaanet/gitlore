@@ -53,7 +53,7 @@ gitlore: restore it with: git -C \"$abs\" checkout --detach $landed, then re-run
 # would record it, so the recovery owes it.
 #
 # A failed up projection stages nothing: the tier stays ahead of its pin, which
-# the next pass or take composes again. One that leaves a diff3 chunk in root
+# the next take composes again. One that leaves a diff3 chunk in root
 # stages the tier alone, and the markers stop every pass and commit until a
 # person resolves them.
 #

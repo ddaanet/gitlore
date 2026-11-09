@@ -184,18 +184,29 @@ session_start_over_store() {
   [[ "$ctx" != *"gitlore-compose"* ]] || false
 }
 
-@test "a clean tier left off its pin is not put back, and the pending compose over it is reported" {
+@test "a clean tier left off its pin is not put back, and the refusal naming the take is reported" {
+  # Fails under a hook that puts the tier back on its pin, one that composes
+  # the tier's line into root, or a pending check that reports a pass
+  # (`gitlore-compose`) instead of refusing the tier ahead of its pin.
   composed_store
+  pin=$(git -C memory rev-parse :ddaanet)
   strand_live_ahead_of_pin ddaanet
   git -C memory/ddaanet checkout -q --detach live
-  # Nothing at SessionStart moves the tier, and the pending report has no on-pin
-  # guard in front of it: the tier's carrier holds a line root lacks, so a pass
-  # would adopt it. The store is read, not written (session_start_over_store).
+  head=$(git -C memory/ddaanet rev-parse HEAD)
+  [ "$head" != "$pin" ]
+  # Nothing at SessionStart moves the tier, and the pending check has no on-pin
+  # guard in front of it: it meets the tier ahead and refuses, naming the take
+  # that composes its line up and records it. The store is read, not written
+  # (session_start_over_store compares every byte).
   session_start_over_store
-  [[ "$sys" == *"gitlore-compose"* ]] || {
-    printf 'no pending-compose report over a tier off its pin; systemMessage:\n%s\n' "$sys" >&2
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$head" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pin" ]
+  tierline="tier 'ddaanet' is checked out at ${head:0:12}, ahead of the commit the memory store records at ${pin:0:12}: it was moved outside a completed take, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."
+  jq -e --arg l "$tierline" '.systemMessage | split("\n\n") | any(.[]; contains("gitlore: the memory indexes cannot be composed until these are fixed:") and contains($l))' <<<"$hook_json" >/dev/null || {
+    printf 'no refusal paragraph naming the tier ahead; systemMessage:\n%s\n' "$sys" >&2
     return 1
   }
-  [[ "$ctx" == *"gitlore-compose"* ]] || false
-  [[ "$sys" == *"memory/MEMORY.md"* ]] || false
+  [[ "$ctx" == *"$tierline"* ]] || false
+  [[ "$sys" != *"gitlore-compose"* ]] || false
+  [[ "$ctx" != *"gitlore-compose"* ]] || false
 }

@@ -9,10 +9,11 @@
 # enclosure — every entry in memory/.gitmodules is a tier. SessionStart moves no
 # module: a tier that is not checked out is cloned at the commit memory records,
 # and every other tier stays on the commit and the branch it is on, whatever its
-# relation to that commit. A tier ahead of its pin is no fault (the three-way
-# compose answers any disagreement between root's lines and the carrier), and a
-# tier behind it is the pin guard's report. Taking an upstream commit is a
-# merge, and it goes through /gitlore:merge or /gitlore:push.
+# relation to that commit. A tier off its pin is the pin guard's report, which
+# names /gitlore:merge; the hook leaves a tier ahead of its pin where it stands
+# because the take needs it there to compose its lines up.
+# Taking an upstream commit is a merge, and it goes through /gitlore:merge or
+# /gitlore:push.
 #
 # Each tier is fetched read-only and reports its position against the
 # authority's `live` (gitlore_module_position), then any recorded commit that

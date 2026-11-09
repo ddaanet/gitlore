@@ -203,19 +203,17 @@ gitlore_compose_write() {
 
 # The whole in-session pass. Validates first; on any problem prints the problems,
 # writes nothing, and returns 1 — fail-safe, so a broken store is never
-# half-rewritten. Otherwise it composes every ACTIVE tier ahead of its pin UP
-# into root three-way, projects root's lines DOWN into every active tier's
-# carrier, then rewrites the root index's layout.
+# half-rewritten. Otherwise it projects root's lines DOWN into every active
+# tier's carrier, then rewrites the root index's layout. It composes no tier
+# UP: a tier ahead of its pin is refused (rule 7, gitlore_compose_check_pins),
+# naming the take, which composes it up (gitlore_compose_up) and records it.
 #
-# Return codes are four, not two, because "nothing was written", "some of it
-# was" and "root now holds a conflict" need different words from every caller:
+# Return codes are three, not two, because "nothing was written" and "some of
+# it was" need different words from every caller:
 #   0 — composed (stdout: one "composed <file>" line per index rewritten)
 #   1 — validation refused; nothing written (stdout: the problems)
 #   2 — a write FAILED partway; earlier writes stand (stdout: what was written,
 #       then the file that could not be)
-#   3 — root was written with a diff3 chunk where it and a tier both changed one
-#       line apart, and no carrier was (stdout: what was written, then one
-#       "<file>: line <n> holds a conflict marker" line per marker)
 # Code 2 exists because a write's status is otherwise invisible here: the writes
 # ran inside a command substitution feeding a string append, and every caller
 # invokes this function as an `if` condition, which disables errexit for the
@@ -320,11 +318,6 @@ Route the best-fit ones up: \`mv\` the file into that tier's directory, and repr
 Invoke the \`gitlore:memory-writing\` skill before judging: promotion turns on whether the fact's mechanism depends on this repo or only on this repo being a member of a class, and a promoted fact's \`[[links]]\` to project-local siblings go dead in every other consumer of the tier."
       fi
     fi
-  elif [ "$compose_rc" -eq 3 ]; then
-    sysmsg="gitlore: the root index and a tier both changed the same lines — the root index holds conflict markers:
-$result"
-    ctx="gitlore tier composition wrote the root index with a diff3 chunk for each line it and a tier both changed, and wrote no tier index. Resolve each chunk in $mempath/MEMORY.md to the line the root index should carry; the pass runs again on that edit:
-$result"
   elif [ "$compose_rc" -eq 2 ]; then
     # A write failed partway, so the fail-safe promise does NOT hold here: some
     # indexes are composed and at least one is not.
@@ -364,8 +357,7 @@ gitlore_compose() {
     rc=0
     out=$(gitlore_compose_pass "$mempath" gitlore_compose_write) || rc=$?
     if [ "$rc" -ne 0 ]; then
-      # A failed write, or root left with a chunk, follows the indexes already
-      # written.
+      # A failed write follows the indexes already written.
       if [ "$rc" -ge 2 ] && [ -n "$all" ]; then printf '%s\n' "$all"; fi
       printf '%s\n' "$out"
       return "$rc"

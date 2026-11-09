@@ -3,8 +3,10 @@
 # root memory store or a tier, and the hook clones one that is missing, fetches
 # read-only and reports. It does not put a tier back on, or ahead to, the
 # commit memory records; it does not detach a tier or the memory store that sits
-# on a named branch; and the pending-compose report covers a tier that is off
-# its pin, because nothing at SessionStart moves it onto the pin first.
+# on a named branch; and the pending check meets a tier off its pin as it
+# stands, because nothing at SessionStart moves it onto the pin first — it
+# refuses one ahead of its pin naming the take, which composes its lines up and
+# records it, and writes no index.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
@@ -69,24 +71,29 @@ detached_pinned_store() {
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 }
 
-@test "SessionStart over a tier ahead of its pin reports the pending compose on both channels and writes no index" {
+@test "SessionStart over a tier ahead of its pin refuses it naming the take on both channels and writes no index" {
+  # Fails under a hook that composes the tier's new line into root or stages
+  # its gitlink, and under a pending check that reports a pass to run
+  # (`gitlore-compose`) instead of refusing the tier ahead.
   detached_pinned_store
+  pin=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin ddaanet
+  head=$(git -C memory/ddaanet rev-parse HEAD)
   before=$(store_fingerprint)
 
   session_start_over_store
   [ "$(store_fingerprint)" = "$before" ]
-  # The tier's carrier gained a line root lacks, so a pass would adopt it into
-  # root. The pending report names the file and the command on both channels.
-  [[ "$sys" == *"gitlore-compose"* ]] || {
-    printf 'no pending-compose report for a tier ahead of its pin; systemMessage:\n%s\n' "$sys" >&2
+  tierline="tier 'ddaanet' is checked out at ${head:0:12}, ahead of the commit the memory store records at ${pin:0:12}: it was moved outside a completed take, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."
+  jq -e --arg l "$tierline" '.systemMessage | split("\n\n") | any(.[]; contains("gitlore: the memory indexes cannot be composed until these are fixed:") and contains($l))' <<<"$hook_json" >/dev/null || {
+    printf 'no refusal paragraph for a tier ahead of its pin; systemMessage:\n%s\n' "$sys" >&2
     return 1
   }
-  [[ "$ctx" == *"gitlore-compose"* ]] || {
-    printf 'no pending-compose report for the agent; additionalContext lacks it\n' >&2
+  [[ "$ctx" == *"$tierline"* ]] || {
+    printf 'no refusal for the agent; additionalContext lacks the tier line\n' >&2
     return 1
   }
-  [[ "$sys" == *"memory/MEMORY.md"* ]]
+  [[ "$sys" != *"gitlore-compose"* ]]
+  [[ "$ctx" != *"gitlore-compose"* ]]
 }
 
 # --- a tier behind its pin stays where it is, and is reported ------------------
@@ -160,11 +167,12 @@ tier_behind_its_pin() {
   [ "$(git -C memory rev-parse HEAD)" = "$head" ]
 }
 
-# --- the cross-slice case: the read-only report must not stage -----------------
+# --- the cross-slice case: the refusal comes before any three-way --------------
 
-# A tier ahead of its pin whose carrier rewords the line root also rewords: the
-# three-way compose leaves a chunk. The pending check is the read-only form of
-# that pass, and runs here at SessionStart with no on-pin guard in front of it.
+# A tier ahead of its pin whose carrier rewords the line root also rewords: a
+# three-way compose of it would leave a chunk. The pending check runs here at
+# SessionStart with no on-pin guard in front of it, and refuses the tier ahead
+# before any merge is attempted; the take is what composes it.
 tier_ahead_with_a_chunk() {
   take_base_store
   old_pin=$(git -C memory rev-parse :ddaanet)
@@ -193,18 +201,23 @@ tier_ahead_with_a_chunk() {
   [ "$(git -C memory rev-parse :ddaanet)" = "$old_pin" ]
 }
 
-@test "SessionStart over a tier ahead whose three-way merge leaves a chunk stages nothing and leaves root's index as it was" {
+@test "SessionStart over a tier ahead whose three-way merge would chunk refuses it first, leaving root, carrier and the index as they were" {
+  # Fails under a hook that attempts the three-way (a chunk written into root,
+  # or a chunk report instead of the refusal), one that stages the gitlink, and
+  # a pending check that reports a pass to run instead of refusing the tier.
   tier_ahead_with_a_chunk
-  # Not checked here with gitlore_compose_pending: that is the call under test,
-  # and a call before SessionStart would stage what the assertions look for.
-  root_before=$(cat memory/MEMORY.md)
-  cached_before=$(git -C memory diff --cached --raw)
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
   gitlink_before=$(git -C memory ls-files -s -- ddaanet)
-  [ -z "$cached_before" ]
+  [ -z "$(git -C memory diff --cached --raw)" ]
 
   session_start_over_store
-  [ "$(cat memory/MEMORY.md)" = "$root_before" ] || {
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before" || {
     printf 'root MEMORY.md was rewritten by SessionStart\n' >&2
+    return 1
+  }
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before" || {
+    printf 'the carrier was rewritten by SessionStart\n' >&2
     return 1
   }
   [ "$(git -C memory ls-files -s -- ddaanet)" = "$gitlink_before" ] || {
@@ -213,11 +226,14 @@ tier_ahead_with_a_chunk() {
   }
   [ -z "$(git -C memory diff --cached --raw)" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_sha" ]
-  # The read-only report still speaks: a pass would change root.
-  [[ "$sys" == *"gitlore-compose"* ]] || {
-    printf 'no pending-compose report over a tier ahead of its pin; systemMessage:\n%s\n' "$sys" >&2
+  # The refusal, not a chunk: the tier line with both shas and the take.
+  tierline="tier 'ddaanet' is checked out at ${tier_sha:0:12}, ahead of the commit the memory store records at ${old_pin:0:12}: it was moved outside a completed take, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier."
+  jq -e --arg l "$tierline" '.systemMessage | split("\n\n") | any(.[]; contains("gitlore: the memory indexes cannot be composed until these are fixed:") and contains($l))' <<<"$hook_json" >/dev/null || {
+    printf 'no refusal paragraph over the tier ahead of its pin; systemMessage:\n%s\n' "$sys" >&2
     return 1
   }
+  [[ "$ctx" == *"$tierline"* ]]
+  [[ "$sys" != *"gitlore-compose"* ]]
 }
 
 # --- the orphan report: reported, never refused --------------------------------

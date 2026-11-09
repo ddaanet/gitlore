@@ -12,8 +12,9 @@ yields to is in [merge-and-resolve.md](merge-and-resolve.md).
 - Take and compose — **D77** a take visits every tier first and root last, and
   writes root's index once, in one bookkeeping commit · **D78** a tier's lines
   compose up into root three-way, against the carrier at the gitlink memory's
-  index records, and a tier ahead of that gitlink is no fault · in the memory
-  merge's continuation a line both sides changed takes the tier's
+  index records, and a tier ahead of that gitlink outside a take is refused
+  naming the take · in the memory merge's continuation a line both sides changed
+  takes the tier's
 
 ---
 
@@ -90,8 +91,8 @@ visiting a tier gets it too.
 
 `gitlore_compose_up` merges the tiers it is given into root and writes root
 once; it writes no carrier, so a merge in one store never propagates into
-another the user did not review. It runs at four places, all with the same
-three-way:
+another the user did not review. It runs at the three places that move a tier,
+all with the same three-way:
 
 - the end of a take, for the tiers ahead of the gitlinks the index records;
 - the memory merge's continuation, before its commit, for the tiers ahead of the
@@ -100,17 +101,18 @@ three-way:
   once the merge commit lands, leaving a carrier line neither root side held
   adopted by nothing). A line both sides changed takes the tier's there, so no
   chunk is written;
-- the pass `gitlore-compose` and `PostToolBatch`'s pass
-  (`gitlore_compose_pass`), for every active tier off its pin, so a tier another
-  checkout or a killed take moved composes like an arrival; the pass stages the
-  gitlinks of the tiers it merged, and a chunk ends it with root written, since
-  projecting a block holding three versions of one line down would push
-  whichever the projection picked into the carrier;
-- the commit path's pending check, in its read-only form.
+- the recovery of a tier merge that landed outside its continuation
+  (`gitlore_adopt_recovered_merge`, in
+  [merge-state-recovery.md](merge-state-recovery.md)), which stages root and the
+  tier together.
 
-A tier merge's continuation lands the merge and composes nothing: the carrier is
-checked on its own (D52), and the compose runs at the end of the `gitlore-merge`
-or push run that follows.
+The pass `gitlore-compose`, `PostToolBatch`'s pass and the commit path's
+read-only pending check compose no tier up: a tier ahead of its pin is refused
+there by the pin guard (`gitlore_compose_check_pins`), naming `/gitlore:merge`,
+and every tier the pass projects into sits on its pin. A tier merge's
+continuation lands the merge and composes nothing: the carrier is checked on its
+own (D52), and the compose runs at the end of the `gitlore-merge` or push run
+that follows.
 
 ### The three-way
 
@@ -157,60 +159,64 @@ commit move to the end, so a killed take needs no marker, and no walk-back or
 staged pair exists.
 
 **D78 — Tier lines compose up three-way against the index's gitlink, and a tier
-ahead of its pin is no fault**
+ahead of its pin outside a take is refused naming the take**
 
-A tier `HEAD` that strictly descends its pin is not a fault. What is wrong, when
-anything is, is root's lines for the tier disagreeing with the tier's index, and
-the three-way answers it with neither side winning by fiat. The gitlink gives
-root's note of what it has seen: a tier fast-forwarded, merged or committed in
-since is ahead of it, and the carrier at that gitlink is exactly what root's
-block was last composed against.
+My human partner's call. What is wrong, when a tier's `HEAD` strictly descends
+its pin, is root's lines for the tier disagreeing with the tier's index, and the
+three-way answers it with neither side winning by fiat. The gitlink gives root's
+note of what it has seen: a tier fast-forwarded, merged or committed in since is
+ahead of it, and the carrier at that gitlink is exactly what root's block was
+last composed against.
 
 The base is read from the *index*, not `HEAD`, because staging a gitlink is how
-root records that it has seen the tier's version. So every path that merges a
-tier up, the take, the recovery, the continuation and the pass, leaves its
-gitlink staged, clean merge or chunk, before the next pass can read it;
-`gitlore_compose_up` itself stages only on a chunk, where its callers stop
-before their own staging, and the pass (`gitlore_compose_pass`, in write mode
-only) stages the tiers it merged and commits nothing, since the commit is the
-user's or the take's to make. A chunk resolved to either side or to neither then
-stands, a line root deletes after adopting it stays deleted, and a root reword
-of an adopted line projects down, where a base left at the old pin would
-re-adopt the line, or rebuild the same chunk, at every pass and commit.
+root records that it has seen the tier's version. The take, the recovery and the
+continuation leave the gitlink of every tier they merge staged or committed,
+clean merge or chunk, before the next pass reads it: the take in its bookkeeping
+commit, or staged on a root holding unapproved work (D43); the continuation in
+its merge commit; the recovery staged beside root. `gitlore_compose_up` itself
+stages only on a chunk, where its callers stop before their own staging. A chunk
+resolved to either side or to neither then stands, a line root deletes after
+adopting it stays deleted, and a root reword of an adopted line projects down,
+where a base left at the old pin would re-adopt the line, or rebuild the same
+chunk, at every pass and commit.
 
-The take decides whether a tier *moved* against the pin `HEAD` records, not the
-index, since a gitlink the pass staged is recorded by no commit until the
-bookkeeping one or the user's carries it; a mount `HEAD` does not record yet
-reads its staged gitlink as the pin. The ancestry of that move is still read
-against the index pin, the one the record would replace.
+The pass composes no tier up and refuses one ahead of its pin, because no normal
+operation produces that state: the take records the tier it moves, the
+continuation and the recovery stage what they compose, and the commit path
+records every tier with `add -A` only after the pin guard saw them on their
+pins. A tier ahead of its pin is a run killed between the tier's move and its
+record, a take or a commit, or hand git inside the tier: lines the root index
+has not taken, and the one path that composes before it records is the take. So
+the pin guard, run by the pass, the pending check and the commit, refuses it
+with one line per tier naming both commits, that it
+`was moved outside a completed take, so the root index has not taken its lines`,
+and `/gitlore:merge` as the remedy. A refusal that names the remedy beats a
+record that hides the cause, and refusing outside a take leaves the take as the
+one writer of the gitlink. The take reads the pin from the index as well, since
+a gitlink already staged by a take on a dirty root, the continuation or the
+recovery is recorded.
 
 A root move, the fast-forward, the catch-up onto a local `live` ahead of `HEAD`
-and the prepare's checkout and merge, meets the index: `merge` refuses an entry
-that differs from `HEAD`'s, and `checkout` one the move changes. Every merge is
+and the prepare's checkout and merge, meets a clean root: every merge is
 prepared through one yield, whose gate refuses a store with uncommitted files,
 since the continuation's `add -A` would commit them unapproved, and the take
-refuses them before any move; both leave gitlinks out, so a staged gitlink is
-the one uncommitted change a move meets. On that clean root it protects no edit:
-it records what root has seen of the tier, which the commit the move lands on,
-or the end-of-take compose from the tier's `HEAD`, records again. So each move
-first resets to `HEAD`'s every staged gitlink the tier's `HEAD` contains
-(`gitlore_unstage_tier_gitlinks_for_move`); a take that moves root nowhere
-resets nothing, and the staged base stands.
+refuses them before any move.
 
-That rule is the scope of the take's compose and of every pass outside a memory
-merge. The memory merge's continuation is the standing exception: it reads the
-gitlinks `OURS` records from `HEAD:` (above), because the index there already
-holds the staged tier heads. That base cannot record what root has seen until
-the merge commits, so a line both the merged root and the tier changed apart
-takes the tier's line there, reported on stderr as
+That rule is the scope of the take's compose and of the recovery. The memory
+merge's continuation is the standing exception: it reads the gitlinks `OURS`
+records from `HEAD:` (above), because the index there already holds the staged
+tier heads. That base cannot record what root has seen until the merge commits,
+so a line both the merged root and the tier changed apart takes the tier's line
+there, reported on stderr as
 `tier '<tier>' replaced root's line for <path>: <root's line>`, rather than a
 chunk that would recur on every rerun.
 
 `/gitlore:merge` brings in changes from `live` and gains no adoption step, and
-there is no `gitlore-compose --up`. The commit path commits through a tier ahead
-of its pin and its `add -A` records the gitlink (D50). The orphan report also
-runs at the commit and at `SessionStart`, since a line the tier added changes
-nothing in a pass and the pending check does not see it.
+there is no `gitlore-compose --up`. The commit path's pin guard refuses a tier
+ahead of its pin, so its `add -A` records no tier the root index has not taken
+(D50). The orphan report also runs at the commit and at `SessionStart`, since a
+carrier line the layout would adopt into root changes nothing in a pass and the
+pending check does not see it.
 
 **The trade-off of staging on a chunk.** A user who discards root's markers with
 `git checkout -- MEMORY.md` and lets the pass run gets root's old text projected
@@ -234,8 +240,8 @@ between the write and the stage (D77).
 
 **A marker recording a killed take.** A tier a killed run moved with root
 unwritten is a tier off its pin whose carrier holds lines root lacks, and the
-three-way adopts them at the next pass or take, so the state is its own record
-(D77).
+three-way adopts them at the next take, which the pin guard names, so the state
+is its own record (D77).
 
 **An overwrite compose-up.** The earlier up projection replaced root's block for
 a tier with the carrier's, so a line root changed was lost, and a tier ahead of
@@ -244,29 +250,20 @@ changes and chunks only a line both moved apart (D78).
 
 **A base read from `HEAD`.** It rebuilds the same chunk at every pass and every
 commit, because nothing records that root has seen the tier's version (D78).
-Rejected for the take and the passes; the memory merge's continuation keeps it
+Rejected for the take and the recovery; the memory merge's continuation keeps it
 as D78's stated exception, with the tier-wins rule above.
 
-**Staging the merged tiers only on a chunk.** A pass whose clean merge staged
-nothing left the base at the old pin, so a line root deleted after adopting it
-came back at the next pass, and a root reword of an adopted line came back as a
-chunk with an empty base section (D78).
+**The pass composing a tier ahead of its pin up and staging the gitlinks it
+merged.** It treats a tier a killed take or hand git moved as a routine arrival,
+so the pass records what no commit approved, and the staged gitlink is an
+uncommitted change every root move then meets, so the fast-forward, the catch-up
+onto a local `live` and the prepare's checkout each need a reset of it. The take
+composes the same lines up and records the gitlink in a commit, and the refusal
+names it (D78).
 
-**Resetting a staged gitlink only where the move changes it.** One rule per move
-kind, since `merge` refuses any differing entry and `checkout` only a changed
-one; a move runs on a clean root, where the staged gitlink protects nothing, so
-every move resets it (D78).
-
-**Skipping the reset on a dirty root, or a dirty gate per caller.** A root dirty
-with an untracked file or an edit the move leaves alone passes the move, and the
-merge then refuses on the gitlink the skip kept; a gate written at each yield
-site misses the next caller, as the push's and the resolve command's did, so the
+**A dirty gate per caller of the yield.** A gate written at each yield site
+misses the next caller, as the push's and the resolve command's did, so the
 yield itself carries the one gate (D78).
-
-**Staging inside `gitlore_compose_up`.** Its callers all stage the pair they
-record, so the pass was the one gap; staging in the compose-up as well would
-move the take's and the recovery's staging-failure reports, which print the
-`git add` to run, across a function boundary (D78).
 
 **Recording in the merge state which tier commits the continuation has offered
 root as a chunk.** It would make the continuation's base depend on state and add

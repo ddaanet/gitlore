@@ -6,19 +6,22 @@ load helpers/fixtures
 load helpers/tier-fixtures
 
 # Header as in tests/index_compose.bats. Covers rule 7: a mounted tier must
-# sit on or ahead of its pin.
+# sit on its pin outside a take; one ahead is refused naming the take.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 
 setup()    { setup_tmp_repo; }
 teardown() { teardown_tmp_repo; }
 
-# --- rule 7: a tier must sit on or ahead of its pin ---
+# --- rule 7: a tier must sit on its pin ---
 #
-# A tier ahead of its pin is composed up three-way. One moved sideways or
-# behind is refused: a down pass would write root's text over a carrier no
-# compose has read, and a commit would record a commit the pin has passed.
-# Observed in the wild after a hand-run `reset --hard origin/live`.
+# No normal operation leaves a tier ahead of its pin: the take composes the
+# tier it moves up and records the gitlink. A tier ahead outside a take is a
+# killed take or hand git, and is refused naming the take, which composes its
+# lines into the root index three-way. One moved sideways or behind is refused
+# too: a down pass would write root's text over a carrier no compose has read,
+# and a commit would record a commit the pin has passed. Observed in the wild
+# after a hand-run `reset --hard origin/live`.
 
 @test "compose refuses a tier moved sideways onto unrelated history and names the commands that return it" {
   # The SIDEWAYS fixture: neither ancestry test holds, so the refusal names
@@ -76,7 +79,11 @@ teardown() { teardown_tmp_repo; }
   [[ "$output" != *"ahead"* ]]
 }
 
-@test "a tier ahead of its pin composes up and is left where it stands" {
+@test "a tier ahead of its pin is refused naming /gitlore:merge, and nothing is written or staged" {
+  # Fails under a pass that composes a tier ahead up three-way and stages its
+  # gitlink: that records a move no commit approved and hides the killed take
+  # or hand git that produced it. The take is the one path that composes a
+  # tier ahead, so the refusal names it.
   pinned_store_with_tier
   pinned=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin ddaanet
@@ -85,27 +92,41 @@ teardown() { teardown_tmp_repo; }
   # and the mount left no local `live` that holds HEAD's commits.
   git -C memory/ddaanet merge-base --is-ancestor "$pinned" "$moved"
   run ! git -C memory/ddaanet rev-parse -q --verify live
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 
   run gitlore_compose memory
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"is checked out at ${moved:0:12}, ahead of the commit the memory store records at ${pinned:0:12}"* ]]
+  [[ "$tierline" == *"moved outside a completed take"* ]]
+  [[ "$tierline" == *"Run /gitlore:merge"* ]]
+  # And NOT the sideways remedy: returning the tier to its pin would discard
+  # what it holds.
+  [[ "$output" != *"checkout --detach"* ]]
+  # Nothing written, nothing moved, nothing staged.
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
-  grep -qxF -- '- [upstream](ddaanet/upstream.md) — arrived in another repo' memory/MEMORY.md
-  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
-  # The pass stages the merged tier's gitlink and commits nothing: the staged
-  # gitlink is the base the next pass reads (D78), and the commit that records
-  # it is the user's, or the take's bookkeeping one.
-  [ "$(git -C memory rev-parse :ddaanet)" = "$moved" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pinned" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pinned" ]
 }
 
-@test "the check leaves the gitlink of a tier ahead of its pin unstaged" {
+@test "the pending check refuses a tier ahead of its pin and leaves its gitlink unstaged" {
+  # The commit path and SessionStart's diagnostics read this check. Fails if it
+  # reports the pass's would-be write instead of the refusal, or stages the
+  # gitlink on the way.
   pinned_store_with_tier
   pinned=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
 
   run gitlore_compose_pending memory
-  [ "$status" -eq 0 ]
-  [ "$output" = "memory/MEMORY.md" ]
+  [ "$status" -eq 1 ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"${moved:0:12}, ahead of the commit the memory store records at ${pinned:0:12}"* ]]
+  [[ "$tierline" == *"Run /gitlore:merge"* ]]
+  [[ "$output" != *"memory/MEMORY.md"* ]]
   [ "$(git -C memory rev-parse :ddaanet)" = "$pinned" ]
 }
 

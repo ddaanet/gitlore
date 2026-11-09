@@ -5,7 +5,8 @@ load helpers/fixtures
 load helpers/tier-fixtures
 
 # Header as in tests/index_compose.bats. Covers rule 7 edge cases: a spaced
-# project path, a mid-merge tier, and a dormant tier moved ahead of its pin.
+# project path, a mid-merge tier, the take's path for a tier it moved, and a
+# dormant tier moved ahead of its pin.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
 
@@ -26,19 +27,32 @@ reroot_spaced() {
   git config user.name "Test"
 }
 
-@test "a tier ahead of its pin composes up under a project path holding a space" {
+@test "a tier ahead of its pin is refused under a project path holding a space" {
+  # The tier's local `live` follows HEAD here, as after a tier commit whose
+  # gitlink the memory side then lost: the refusal reads the pin, not `live`,
+  # so this shape is refused like the one HEAD alone holds. Fails under a pass
+  # that composes the tier up, or one whose spaced-path handling turns the
+  # refusal into an error of its own.
   reroot_spaced
   pinned_store_with_tier
+  pinned=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin_into_live ddaanet
   moved=$(git -C memory/ddaanet rev-parse HEAD)
   abs=$(cd memory/ddaanet && pwd)
   # The fixture really is spaced, asserted rather than assumed.
   [[ "$abs" == *" "* ]]
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 
   run gitlore_compose memory
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"${moved:0:12}, ahead of the commit the memory store records at ${pinned:0:12}"* ]]
+  [[ "$tierline" == *"Run /gitlore:merge"* ]]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
-  grep -qxF -- '- [upstream](ddaanet/upstream.md) — arrived in another repo' memory/MEMORY.md
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pinned" ]
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 }
 
 @test "a spaced tier moved sideways off its pin prints a command that runs verbatim" {
@@ -84,7 +98,7 @@ reroot_spaced() {
   # And NOT the return-to-the-pin remedy: that checkout unlinks MERGE_HEAD and
   # destroys the prepared merge, so the two wordings must not both appear.
   [[ "$output" != *"checkout --detach"* ]]
-  # Nor a pass over a tier ahead, which would mean it ran first.
+  # Nor the tier-ahead refusal, which would mean that arm ran first.
   [[ "$output" != *"ahead"* ]]
 }
 
@@ -106,11 +120,17 @@ reroot_spaced() {
   [[ "$output" != *"ahead"* ]]
 }
 
-@test "a tier ahead of its pin keeps its arrival while root's new line mirrors down" {
+@test "a tier the take moved keeps its arrival while root's new line mirrors down" {
+  # The take's path for a tier it moved (gitlore_compose_moved_tiers): compose
+  # it up, record the pair. Fails if the next pass reads a base older than the
+  # recorded gitlink and takes the arrival for a root deletion.
   pinned_store_with_tier
   move_tier_off_pin ddaanet
-  run gitlore_compose memory
+  run gitlore_compose_up memory ddaanet :
   [ "$status" -eq 0 ]
+  git -C memory add -- MEMORY.md ddaanet
+  git -C memory commit -qm "Update MEMORY.md for ddaanet tier merge."
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 
   seed_root_bullet "ddaanet/local.md" "authored here"
   printf -- '---\nname: local\ndescription: ""\n---\n\nbody\n' > memory/ddaanet/local.md
@@ -135,12 +155,28 @@ reroot_spaced() {
     '- [upstream](ddaanet/upstream.md) — arrived in another repo'
 }
 
-@test "a dormant tier moved ahead of its pin does not refuse" {
+@test "a dormant tier moved ahead of its pin is refused too" {
+  # The commit's `add -A` records a dormant tier's HEAD as much as an active
+  # one's, and the take walks every mounted tier. Fails under a pin check that
+  # walks the active tiers only.
   pinned_store_with_tier
   set_tier_manifest
+  pinned=$(git -C memory rev-parse :ddaanet)
   move_tier_off_pin ddaanet
+  moved=$(git -C memory/ddaanet rev-parse HEAD)
+  # Root still carries the dormant tier's block here, which a pass would drop:
+  # the byte-identical root pins the refusal running ahead of that write.
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 
   run gitlore_compose memory
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
+  tierline=$(printf '%s\n' "$output" | grep -F "tier 'ddaanet'")
+  [[ "$tierline" == *"${moved:0:12}, ahead of the commit the memory store records at ${pinned:0:12}"* ]]
+  [[ "$tierline" == *"Run /gitlore:merge"* ]]
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$moved" ]
+  [ "$(git -C memory rev-parse :ddaanet)" = "$pinned" ]
+  cmp -s memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/tier.before"
 }
 

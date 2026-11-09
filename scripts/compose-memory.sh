@@ -6,8 +6,7 @@ set -euo pipefail
 # change; this is its remedy, and the pass a PostToolBatch hook makes for an edit
 # made inside a session. Prints one `composed <file>` line per index written and
 # nothing for a store that is already composed. Exits 1 when the pass refuses,
-# with its problems on stderr, or leaves conflict markers in the root index,
-# and 2 when a write failed partway.
+# with its problems on stderr, and 2 when a write failed partway.
 # Callers run it as `gitlore-compose`, the plugin `bin/` name.
 
 # shellcheck disable=SC2046  # intentional word-splitting of the var-name list
@@ -43,10 +42,6 @@ case "$rc" in
   0) [ -z "$out" ] || printf '%s\n' "$out" ;;
   1)
     printf 'gitlore: tier composition refused — the memory indexes were left untouched:\n%s\n' "$out" >&2
-    exit 1
-    ;;
-  3)
-    printf 'gitlore: the root index and a tier both changed the same lines, so the root index now holds conflict markers and no tier index was written:\n%s\nResolve each chunk to the line the root index should carry, then run gitlore-compose again.\n' "$out" >&2
     exit 1
     ;;
   *)

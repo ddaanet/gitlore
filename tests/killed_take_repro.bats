@@ -21,6 +21,10 @@
 # every call to the real binary except the take's pair-staging call
 # (`add -- MEMORY.md ddaanet`), which it refuses — reproducing on disk exactly
 # what a process kill at that point would leave, without depending on timing.
+#
+# What the state gets afterwards: SessionStart and the pass refuse the tier
+# ahead of its pin naming /gitlore:merge, move nothing and write nothing, and
+# the next take composes the tier up and records it.
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -87,7 +91,7 @@ _tier_live_ahead_of_pin() {
   strand_live_ahead_of_pin ddaanet
 }
 
-@test "killed take: SessionStart leaves the tier on the arrival and reports no dangling pointer, then the later take records it" {
+@test "killed take: SessionStart leaves the tier on the arrival, refuses it naming the take, and the later take records it" {
   _tier_live_ahead_of_pin
   pin=$(git -C memory rev-parse ":ddaanet")
   live_sha=$(git -C memory/ddaanet rev-parse live)
@@ -129,10 +133,17 @@ _tier_live_ahead_of_pin() {
   GITLORE_LAUNCHED=1 run --separate-stderr bash -c 'echo "{}" | bash "$1"' _ "$SESSION_START"
   [ "$status" -eq 0 ]
   # SessionStart moves no module: the tier stays on the arrival the take put it
-  # on, however far that is from the pin the kill left in the index.
+  # on, however far that is from the pin the kill left in the index — the take
+  # needs it where it stands.
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
-  # Root's carried-over line and the carrier it came from agree, so nothing is
-  # dangling and nothing is pending: the file the line names is in the tier.
+  # And it names the state and its remedy: the tier is ahead of the commit the
+  # index records, and the take is what composes and records it. Fails under a
+  # hook that reads the tier ahead as no fault and reports nothing.
+  [[ "$output$stderr" == *"cannot be composed until these are fixed"* ]]
+  [[ "$output$stderr" == *"tier 'ddaanet' is checked out at ${live_sha:0:12}, ahead of the commit the memory store records at ${pin:0:12}"* ]]
+  [[ "$output$stderr" == *"Run /gitlore:merge"* ]]
+  # Root's carried-over line and the carrier it came from agree: the file the
+  # line names is in the tier, so no pointer is reported dangling.
   [[ "$output$stderr" != *"ddaanet/local.md names no file in the memory store"* ]]
   # The carrier keeps the line, and the tier is clean.
   grep -qxF -- '- [local](local.md) — committed here, never recorded' memory/ddaanet/MEMORY.md
@@ -170,26 +181,45 @@ _killed_take_then_session_start() {
   [ "$(cat memory/MEMORY.md)" = "$root_before" ]
 }
 
-@test "killed take: SessionStart reports no dangling pointer and no pending compose for the tier it left on the arrival" {
+@test "killed take: SessionStart names the tier ahead and /gitlore:merge on both channels, and no dangling pointer" {
   _killed_take_then_session_start
-  # Root's line and the carrier's agree, so a pass changes nothing: no compose
-  # command is named on either channel, and the file the line names is in the
-  # tier, so no pointer is reported missing.
-  echo "$hook_json" | jq -e '.systemMessage | test("gitlore-compose") | not'
-  echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | test("gitlore-compose") | not'
-  echo "$hook_json" | jq -e '.systemMessage | test("names no file") | not'
-  echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | test("names no file") | not'
+  # The refusal reaches the user and the agent alike, and sends neither to the
+  # pass: a compose cannot take the tier's lines, the take can. The file the
+  # line names is in the tier, so no pointer is reported missing. Fails under a
+  # hook that reports the state on one channel only, or names gitlore-compose.
+  tierline="tier 'ddaanet' is checked out at ${live_sha:0:12}, ahead of the commit the memory store records at ${pin:0:12}"
+  echo "$hook_json" | jq -e --arg l "$tierline" '.systemMessage | contains($l)'
+  echo "$hook_json" | jq -e --arg l "$tierline" '.hookSpecificOutput.additionalContext | contains($l)'
+  echo "$hook_json" | jq -e '.systemMessage | contains("cannot be composed until these are fixed")'
+  echo "$hook_json" | jq -e '.systemMessage | contains("Run /gitlore:merge")'
+  echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | contains("Run /gitlore:merge")'
+  echo "$hook_json" | jq -e '.systemMessage | contains("gitlore-compose") | not'
+  echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | contains("gitlore-compose") | not'
+  echo "$hook_json" | jq -e '.systemMessage | contains("names no file") | not'
+  echo "$hook_json" | jq -e '.hookSpecificOutput.additionalContext | contains("names no file") | not'
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
-  [ -z "$(gitlore_compose_pending memory)" ]
+  # The pending check the commit path reads refuses the same way.
+  run gitlore_compose_pending memory
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"$tierline"* ]]
 }
 
-@test "killed take: gitlore-compose between SessionStart and the take changes nothing, and the take records the tier" {
-  # The tier stays on the arrival and carries the line root carries, so the
-  # compose projects nothing into it: it stays clean, and the take that follows
-  # does not refuse on dirt a compose produced.
+@test "killed take: gitlore-compose between SessionStart and the take refuses naming the take, and the take records the tier" {
+  # The pass composes no tier up: it refuses the tier ahead of its pin, leaves
+  # root and the carrier byte-identical and the tier clean, so the take that
+  # follows does not refuse on dirt a compose produced, and records the tier.
+  # Fails under a pass that composes the tier up and stages its gitlink.
   _killed_take_then_session_start
+  cp memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
   run --separate-stderr "$PLUGIN_ROOT/bin/gitlore-compose"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"tier composition refused"* ]]
+  [[ "$stderr" == *"tier 'ddaanet' is checked out at ${live_sha:0:12}, ahead of the commit the memory store records at ${pin:0:12}"* ]]
+  [[ "$stderr" == *"Run /gitlore:merge"* ]]
+  [ "$(cat memory/MEMORY.md)" = "$root_before" ]
+  cmp -s memory/ddaanet/MEMORY.md "$BATS_TEST_TMPDIR/carrier.before"
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$live_sha" ]
+  [ "$(git -C memory rev-parse ":ddaanet")" = "$pin" ]
   [ -z "$(git -C memory/ddaanet status --porcelain)" ]
 
   run --separate-stderr bash "$CMD"

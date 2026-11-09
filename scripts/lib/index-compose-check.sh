@@ -192,21 +192,27 @@ gitlore_compose_problems_in() {
   return "$found"
 }
 
-# Rule 7 — every MOUNTED tier, dormant ones included, sits on or ahead of the
-# commit the memory store records for it. Print one problem per tier that does
-# not and return 1; print nothing and return 0 otherwise. Depends on
-# gitlore_tier_paths (util-config.sh) and gitlore_store_mid_merge; callers
-# source util.sh, which pulls in both.
+# Rule 7 — every MOUNTED tier, dormant ones included, sits ON the commit the
+# memory store records for it. Print one problem per tier that does not and
+# return 1; print nothing and return 0 otherwise. Depends on gitlore_tier_paths
+# (util-config.sh) and gitlore_store_mid_merge; callers source util.sh, which
+# pulls in both.
 #
-# A tier ahead of its pin passes: the pass composes it up three-way, and the
-# commit's `add -A` records its HEAD. A tier behind its pin does not, dormant or
-# not, since that `add -A` would record the older commit and move the pin
-# backward with no one having asked. Neither does a tier beside its pin, whose
-# HEAD and pin each hold commits the other lacks.
+# No normal operation leaves a tier off its pin: the take records the tier it
+# moves, the memory merge's continuation and the recovery stage what they
+# compose, and the commit records every tier after this rule saw them on their
+# pins. A tier ahead of its pin is a run killed between the tier's move and
+# its record, a take or a commit, or hand git inside the tier, and the commit's
+# `add -A` would record it with its lines never composed into
+# the root index, so it is refused naming the take, which composes them up
+# three-way and records the gitlink. A tier behind its pin is refused, dormant
+# or not, since that `add -A` would record the older commit and move the pin
+# backward with no one having asked. So is a tier beside its pin, whose HEAD
+# and pin each hold commits the other lacks.
 #
 # It lives OUTSIDE gitlore_compose_check, called by the pass and by the commit
-# path's pin guard ahead of it, because the end of a take and the memory
-# merge's continuation compose a tier whatever its relation to the pin.
+# path's pin guard ahead of it, because the end of a take, the memory merge's
+# continuation and the recovery compose a tier whatever its relation to the pin.
 #
 # The pin is read from the memory store's INDEX (`:$tier`), not from
 # `HEAD:$tier`: a gitlink staged for the next memory commit is what that commit
@@ -237,7 +243,11 @@ gitlore_compose_check_pins() {
 "
       continue
     fi
-    git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head" && continue
+    if git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
+      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the commit the memory store records at ${pinned:0:12}: it was moved outside a completed take, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier.
+"
+      continue
+    fi
     if git -C "$tierpath" merge-base --is-ancestor "$head" "$pinned"; then
       problems="${problems}tier '$tier' is checked out at ${head:0:12}, behind the commit the memory store records at ${pinned:0:12}, and a commit would record the older one. Run /gitlore:merge, which fast-forwards it.
 "

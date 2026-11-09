@@ -24,8 +24,8 @@ gitlore's *composition* of the root index.
 gitlink for it: the commit root's block for the tier was last composed against.
 The gitlink moves by an explicit act — a memory commit's `add -A`, a take —
 never at session start (D43, D59). A tier on its gitlink composes as placement;
-one ahead of it is merged into root three-way, against the carrier at the
-gitlink (D78); one behind or beside it is refused at the commit (D50).
+a take merges one it moves into root three-way, against the carrier at the
+gitlink (D78); one off it is refused at the commit and the pass (D50).
 
 The mechanism is a subsystem rather than a single call, so its decisions are
 recorded individually as
@@ -61,7 +61,7 @@ node and nine siblings:
   model, which is D41, in [branch-model.md](branch-model.md).
 - Take and compose, in [take-and-compose.md](take-and-compose.md) — **D77**
   tiers first, root last, one end compose · **D78** the three-way compose-up
-  against the index's gitlink.
+  against the index's gitlink; a tier ahead of it outside a take is refused.
 - Tier merges, in [tier-conflicts.md](tier-conflicts.md) — **D44** shared-tier
   conflicts resolve semantically; memory merges as prose, indexes entry-wise.
 - Defective arriving indexes, in

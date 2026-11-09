@@ -47,7 +47,7 @@ from `HEAD`.
 | Mid-merge | Tier: its notice alone, naming `/gitlore:resolve`. Memory: the command that lands the prepared merge and the one that aborts it, `resolve.sh continue-after-merge` and `abort-merge` |
 | Recorded commit no repository holds | The unresolvable-pin report ([unresolvable-pin.md](unresolvable-pin.md)) |
 | Local against the authority's `live` | The position lines below |
-| Root's tier lines would change in a compose pass | The pending report, `gitlore-compose`; a tier off its pin is included |
+| Root's tier lines would change in a compose pass | The pending report, `gitlore-compose`; a tier off its pin is refused in it, naming `/gitlore:merge` |
 | A tier's index holds a line root does not | The orphan report, reported and never refused |
 
 A prepared merge moved `HEAD` onto its authority, so a position read would

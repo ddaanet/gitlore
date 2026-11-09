@@ -40,75 +40,31 @@ gitlore_compose_would_write() {
   printf 'composed %s\n' "$file"
 }
 
-# The whole pass: validate, compose every active tier ahead of its pin UP into
-# root three-way, project root's lines DOWN into every active tier's carrier,
-# then lay out the root index. $2 names the function that receives each
+# The whole pass: validate, project root's lines DOWN into every active tier's
+# carrier, then lay out the root index. $2 names the function that receives each
 # computed index on stdin and its path as $1: gitlore_compose_write for the pass
 # itself, gitlore_compose_would_write for the check. Return codes are those of
 # gitlore_compose.
+#
+# The pass composes no tier UP: a tier ahead of its pin is refused by rule 7
+# below, naming the take, and the take, the memory merge's continuation and the
+# recovery are the paths that compose one up (gitlore_compose_up) and record or
+# stage the gitlink before the next pass reads it. So every tier the pass
+# projects into sits on its pin, and root already holds what its carrier holds.
 gitlore_compose_pass() {
   local mempath="$1" writer="$2"
   local root="$mempath/MEMORY.md"
-  local active tier changed="" out ahead dir mrc=0
+  local active tier changed="" out
   [ -f "$root" ] || return 0
 
   # Both checks run before either verdict is read, so one refusal carries the
   # whole list. Rule 7 is here rather than in gitlore_compose_check because the
-  # end of a take composes a tier whatever its pin (see gitlore_compose_check_pins).
+  # end of a take, the continuation and the recovery compose a tier whatever its
+  # pin (see gitlore_compose_check_pins).
   local refused=0
   gitlore_compose_check "$mempath" || refused=1
   gitlore_compose_check_pins "$mempath" || refused=1
   [ "$refused" -eq 0 ] || return 1
-
-  # Up first, so the down projection reads root with what a tier another
-  # checkout or a killed take moved already merged in. The check stops at the
-  # first change, since root is what it would write. The pass stages the
-  # gitlink of every tier it merged, chunk or not: the staged gitlink is the base
-  # the next pass reads, so a root edit to an adopted line stands instead of
-  # being merged against the old pin again (D78). The check stages nothing. A
-  # chunk ends the pass with root written and the tiers staged: projecting a
-  # block holding three versions of one line down would push whichever the
-  # projection picked into the carrier.
-  ahead=$(gitlore_tiers_off_pin "$mempath" :)
-  if [ -n "$ahead" ]; then
-    if ! dir=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-compose-up.XXXXXX"); then
-      printf 'could not make a scratch directory to compose %s\n' "$root"
-      return 2
-    fi
-    out=$(gitlore_compose_merge_tiers "$mempath" "$ahead" "$dir" :) || mrc=$?
-    if [ "$mrc" -ge 2 ]; then
-      rm -rf "$dir"
-      printf '%s\n' "$out"
-      return 1
-    fi
-    if ! out=$(gitlore_compose_root_bullets "$mempath" "$dir" | "$writer" "$root"); then
-      rm -rf "$dir"
-      printf 'could not write %s\n' "$root"
-      return 2
-    fi
-    if [ -n "$out" ] && [ "$writer" != gitlore_compose_write ]; then
-      rm -rf "$dir"
-      printf '%s\n' "$out"
-      return 0
-    fi
-    # Root is written at this point, so its `composed` line is out before the
-    # staging can fail: an rc 2 then lists it as written, which it was.
-    if [ "$writer" = gitlore_compose_write ] && ! gitlore_stage_merged_tiers "$mempath" "$dir" > "$dir/stage-problem"; then
-      [ -z "$out" ] || printf '%s\n' "$out"
-      cat "$dir/stage-problem"
-      rm -rf "$dir"
-      return 2
-    fi
-    if [ "$mrc" -eq 1 ]; then
-      printf '%s\n' "$out"
-      rm -rf "$dir"
-      gitlore_index_marker_lines "$root"
-      return 3
-    fi
-    rm -rf "$dir"
-    [ -z "$out" ] || changed="$out
-"
-  fi
 
   active=$(gitlore_active_tiers "$mempath")
 
@@ -145,10 +101,7 @@ EOF2
     printf 'could not write %s\n' "$root"
     return 2
   fi
-  # Root written by the up step above is named once.
-  if [ -n "$out" ] && ! grep -qxF -- "$out" <<<"$changed"; then
-    changed="$changed$out"
-  fi
+  changed="$changed$out"
 
   [ -n "$changed" ] && printf '%s\n' "$changed"
   return 0

@@ -92,34 +92,47 @@ teardown() { teardown_tmp_repo; }
 
 # --- the pass after an adoption: root's later edit to an adopted line stands ---
 #
-# gitlore_compose_up stages nothing itself; its callers stage the pair. The
-# pass is its own caller and stages the gitlink of each tier it merged, so the
-# next pass reads the tier's HEAD as base and root's edit is root's alone.
+# gitlore_compose_up stages nothing itself; its callers record the pair. The
+# take (gitlore_compose_moved_tiers) composes the tier it moved up and commits
+# root's index with the gitlink, so the next pass reads the tier's HEAD as base
+# and root's edit is root's alone. The pass composes no tier up itself, so each
+# fixture drives the take's three acts.
 
-@test "a root deletion of a line the pass adopted stands at the next pass" {
+# The take's path for a tier it moved: compose up, record the pair.
+take_moved_tier() {
+  gitlore_compose_up memory ddaanet : || return 1
+  git -C memory add -- MEMORY.md ddaanet || return 1
+  git -C memory commit -qm "Update MEMORY.md for ddaanet tier merge."
+}
+
+@test "a root deletion of a line the take adopted stands at the next pass" {
   pinned_store_with_tier
   move_tier_off_pin_into_live ddaanet
-  gitlore_compose memory
+  take_moved_tier
   grep -qF 'ddaanet/upstream.md' memory/MEMORY.md
-  [ "$(git -C memory rev-parse :ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
 
   sed -i.bak '/upstream\.md/d' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
-  # Nothing pending: the base now holds the line, so root dropping it is a
-  # root change, not a tier addition to adopt again.
-  [ -z "$(gitlore_compose_pending memory)" ]
+  # Root is not pending: the recorded gitlink holds the line, so root dropping
+  # it is a root change, not a tier addition to adopt again. Fails under a pass
+  # that reads a base older than the recorded gitlink and re-adopts the line.
+  run gitlore_compose_pending memory
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"memory/MEMORY.md"* ]]
   run gitlore_compose memory
   [ "$status" -eq 0 ]
   run ! grep -qF 'upstream.md' memory/MEMORY.md
-  # The carrier keeps its line: a root deletion never deletes in a tier (D36);
-  # the orphan report names it.
-  grep -qF 'upstream.md' memory/ddaanet/MEMORY.md
-  [[ "$(gitlore_compose_orphans memory)" == *"upstream.md is in the tier but not in the root index"* ]]
+  # The take committed root carrying the line, so root at HEAD answers the
+  # deletion lookup (D36): root deleted it, and the down projection removes it
+  # from the carrier rather than reporting an orphan.
+  run ! grep -qF 'upstream.md' memory/ddaanet/MEMORY.md
+  [[ "$(gitlore_compose_orphans memory)" != *"upstream.md"* ]]
 }
 
-@test "a root reword of a line the pass adopted projects down instead of chunking" {
+@test "a root reword of a line the take adopted projects down instead of chunking" {
   pinned_store_with_tier
   move_tier_off_pin_into_live ddaanet
-  gitlore_compose memory
+  take_moved_tier
 
   sed -i.bak 's/arrived in another repo/reworded in root/' memory/MEMORY.md && rm -f memory/MEMORY.md.bak
   run gitlore_compose memory

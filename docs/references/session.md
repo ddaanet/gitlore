@@ -246,12 +246,12 @@ it:
 - *Dangling pointers* (D34) — on every store, refused or not.
 
 `gitlore_compose_pending` runs over every tier wherever it sits: the check is
-read-only, and a tier off its pin composes three-way like an arrival. Two states
-hold it back, and only the rule problems are reported over them: a prepared
-merge in memory or any tier, whose own notice is the report and whose merged
-index is the merger's business (`gitlore_store_mid_merge`, which also covers a
-state file), and a tier whose recorded commit no repository holds, which
-composes nothing and has its own report
+read-only, and a tier off its pin is one of the problems it reports, naming the
+take. Two states hold it back, and only the rule problems are reported over
+them: a prepared merge in memory or any tier, whose own notice is the report and
+whose merged index is the merger's business (`gitlore_store_mid_merge`, which
+also covers a state file), and a tier whose recorded commit no repository holds,
+which composes nothing and has its own report
 ([unresolvable-pin.md](unresolvable-pin.md)). A tier behind or beside its pin is
 a rule problem the pass reports by name. A tier whose local `live` strictly
 contains its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`:
@@ -293,8 +293,9 @@ command, and the checkout changes when they run it (D59).
 **Moving a tier at `SessionStart`.** Re-pinning each tier to its gitlink, or
 advancing it, changes a checkout under the user's edits and discards the
 position a take or a commit just put the tier in; a tier ahead of its gitlink is
-no fault (D78), so there is nothing to put back. The hook clones a missing tier
-and reports the rest (D59).
+left where it stands because the take needs it there to compose its lines up
+(D78), and the pin guard's report names that take. The hook clones a missing
+tier and reports the rest (D59).
 
 **A `WorktreeCreate` hook to set up the memory worktree.** It is an override
 hook — it fires before the worktree exists, must create it, and must print only

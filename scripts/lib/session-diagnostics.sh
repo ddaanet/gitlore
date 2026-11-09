@@ -11,8 +11,8 @@
 # tier index lines root does not carry.
 #
 # The pending report runs over every tier wherever it sits: the check is
-# read-only, and a tier off its pin composes three-way like an arrival. Two
-# states hold it back, and only the rule problems are reported over them: a
+# read-only, and a tier off its pin is one of the problems it reports, naming
+# the take. Two states hold it back, and only the rule problems are reported over them: a
 # prepared merge in memory or any tier, whose own notice is the report and whose
 # merged index is the merger's business, and a tier whose recorded commit no
 # repository holds, which composes nothing (gitlore_sync_nested_tiers reports
@@ -63,8 +63,9 @@ $pending"
 $pending"
       return 0 ;;
   esac
-  # Orphans describe a store as a pass leaves it: before one, a line a tier
-  # off its pin added reads as an orphan and is the pending report's.
+  # Orphans describe a store as a pass leaves it: before one, a carrier line the
+  # layout would adopt into root (a mount) reads as an orphan and is the pending
+  # report's.
   if [ -z "$pending" ]; then
     report_store_orphans "$mempath"
     return 0

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Compose-project: the down projection into a tier's carrier, the root's
-# composed bullet block and the three-way compose-up of a tier ahead of its pin
-# — the per-index projection work gitlore_compose drives.
+# Compose-project: the down projection into a tier's carrier and the root's
+# composed bullet block — the per-index projection work gitlore_compose drives
+# — and the three-way compose-up of a tier ahead of its pin, which the take, the
+# memory merge's continuation and the recovery drive.
 # Part of lib/index-compose.sh; source that, not this file.
 
 # Print the root index's pointer paths at the memory store's HEAD, one per line.
@@ -20,8 +21,9 @@ gitlore_index_head_paths() {
 # with root's text and root's placement — this is where a line authored in the
 # root index becomes a line the tier can travel with.
 #
-# A tier ahead of its pin has been composed up three-way first, in the same
-# pass, so root already holds what the carrier gained. What is left to decide is
+# Every tier the pass reaches sits on its pin (rule 7 refuses one ahead of it,
+# and the take that moves a tier composes it up three-way before recording it),
+# so root already holds what the carrier gained. What is left to decide is
 # a carrier path root does not carry, and "root lacks it" alone is ambiguous —
 # root may have deleted it, or may never have had it. Root at HEAD answers:
 #
@@ -207,9 +209,12 @@ EOF
 # write it once; every other line stays where it is. $3 says where the base
 # gitlink is read, as gitlore_compose_merge_tiers takes it; $4 is its optional
 # mode, `tier-wins`, under which a line both sides changed takes the tier's
-# instead of a chunk and is reported on stdout, one line per path. The end of a take
-# runs it for the tiers it left ahead of the memory index's gitlinks, and the
-# memory merge's continuation for the tiers ahead of the gitlinks OURS records.
+# instead of a chunk and is reported on stdout, one line per path. Its callers
+# are the three paths that move a tier: the end of a take runs it for the tiers
+# it left ahead of the memory index's gitlinks, the memory merge's continuation
+# for the tiers ahead of the gitlinks OURS records, and the recovery for a tier
+# merge that landed outside the continuation. The pass never calls it: rule 7
+# refuses a tier ahead of its pin there, naming the take.
 #
 # Writes no carrier, so a merge in one store never propagates into another the
 # user did not review. Returns 0, 1 and 2 as gitlore_compose does, and 3 when
@@ -253,12 +258,11 @@ gitlore_compose_up() {
   return 3
 }
 
-# Stage the gitlink of every tier gitlore_compose_merge_tiers listed in $2/tiers:
-# here once root holds a diff3 chunk for them, and in the pass after any merge.
-# The staged gitlink is the base every later pass and commit reads, so this is
-# how root records that it has seen the tier's version: a chunk resolved to
-# either side, or to neither, then stands instead of being merged into the same
-# chunk again, and a root edit to an adopted line stands too. Commits nothing. Prints
+# Stage the gitlink of every tier gitlore_compose_merge_tiers listed in $2/tiers,
+# once root holds a diff3 chunk for them. The staged gitlink is the base every
+# later pass and commit reads, so this is how root records that it has seen the
+# tier's version: a chunk resolved to either side, or to neither, then stands
+# instead of being merged into the same chunk again. Commits nothing. Prints
 # the tier it could not stage and returns 1.
 gitlore_stage_merged_tiers() {
   local mempath="$1" dir="$2" tier abs
@@ -275,8 +279,10 @@ gitlore_stage_merged_tiers() {
 }
 
 # Print each ACTIVE tier whose HEAD strictly descends the gitlink memory records
-# for it at $2, one per line: `:` reads memory's index, `HEAD:` its HEAD. A pin
-# the tier does not hold is not ahead of anything, and is left to the pin guard.
+# for it at $2, one per line: `:` reads memory's index, `HEAD:` its HEAD, which
+# the memory merge's continuation reads, since the prepared merge's index
+# already holds each tier's HEAD. A pin the tier does not hold is not ahead of
+# anything, and is left to the pin guard.
 gitlore_tiers_off_pin() {
   local mempath="$1" at="$2" tier pin head
   while IFS= read -r tier; do

@@ -113,12 +113,12 @@ pointer invariant that rests on it.
 - **D46** — a parent commit is never rewritten to re-pin memory
 - **D50** — the commit path writes no index: a store whose indexes a compose
   pass would change aborts, naming them and `gitlore-compose`; so does a tier
-  behind or beside its pin (every mounted tier) and a compose problem in an
-  index file the commit changes, while every other compose refusal reports; a
-  tier ahead of its pin is committed through, its `add -A` recording the gitlink
+  off its pin (every mounted tier; one ahead of it naming the take) and a
+  compose problem in an index file the commit changes, while every other compose
+  refusal reports
 
-*Rejected:* a tip amend to re-pin memory · composing at the commit · a refusal
-for a tier ahead of its pin.
+*Rejected:* a tip amend to re-pin memory · composing at the commit · committing
+through a tier ahead of its pin.
 
 **Memory entry points** — satisfying FR11 and FR8 with no parent commit or push
 in flight.
@@ -249,8 +249,11 @@ deny on writes under `memory/` · an index-size trigger for the audit · carryin
 the index lines' routing surface into the descriptions
 (memory-authoring-guidance.md) · visiting root first with a per-tier bookkeeping
 commit · keeping the per-tier root write, staged pair and walk-back · a marker
-recording a killed take · an overwrite compose-up · a base read from `HEAD` · an
-adoption step in `/gitlore:merge` or `gitlore-compose --up`
+recording a killed take · an overwrite compose-up · a base read from `HEAD` ·
+the pass composing a tier ahead of its pin up and staging the gitlinks it merged
+· a dirty gate per caller of the yield · recording in the merge state which tier
+commits the continuation has offered root as a chunk · composing in the prepare
+· an adoption step in `/gitlore:merge` or `gitlore-compose --up`
 (take-and-compose.md) · an append-only constraint on shared-tier indexes · a
 `merge` driver plus `.gitattributes` · `**/MEMORY.md merge=union` plus a
 dedup-by-path pass (tier-conflicts.md) · a message fix alone for an unadoptable

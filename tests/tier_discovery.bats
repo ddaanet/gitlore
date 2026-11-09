@@ -131,12 +131,14 @@ teardown() {
   [ "$output" != "$remote_sha" ]
 }
 
-@test "SessionStart does not put a tier that had outrun its gitlink back on it, and reports it in sync with its remote" {
-  # A tier ahead of the commit memory records is not a fault: the three-way
-  # compose answers any disagreement between root's lines and the carrier, and
-  # the commit records the tier's HEAD. SessionStart therefore leaves it there.
-  # The report compares HEAD and local `live` with the remote's `live`, not with
-  # the pin: this tier is past the pin and equal to its remote, so it is in sync.
+@test "SessionStart does not put a tier that had outrun its gitlink back on it, reports it in sync with its remote, and refuses it naming the take" {
+  # A tier ahead of the commit memory records is what a killed take or hand git
+  # leaves, and the take is what composes its lines up and records it, so
+  # SessionStart leaves the tier where the take needs it and reports the state
+  # naming /gitlore:merge. The sync report compares HEAD and local `live` with
+  # the remote's `live`, not with the pin: this tier is past the pin and equal
+  # to its remote, so it is in sync. Fails under a hook that re-pins the tier,
+  # or reads the tier ahead as no fault and reports nothing.
   make_parent_with_memory
   make_tier_in_memory ddaanet
   gitlink="$(git -C memory rev-parse HEAD:ddaanet)"
@@ -152,9 +154,13 @@ teardown() {
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
   [ "$(git -C memory rev-parse :ddaanet)" = "$gitlink" ]
   echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("ddaanet") and contains("in sync."))'
-  # No paragraph naming the tier reads the pin as the authority: no merge hint
-  # and no upstream facts waiting.
-  echo "$output" | jq -e '.systemMessage | split("\n\n") | all(.[]; (contains("ddaanet") and (contains("/gitlore:merge") or contains("waiting"))) | not)'
+  # The refusal, with both shas and the remedy, on both channels.
+  tierline="tier 'ddaanet' is checked out at ${remote_sha:0:12}, ahead of the commit the memory store records at ${gitlink:0:12}"
+  echo "$output" | jq -e --arg l "$tierline" '.systemMessage | split("\n\n") | any(.[]; contains("cannot be composed until these are fixed") and contains($l) and contains("Run /gitlore:merge"))'
+  echo "$output" | jq -e --arg l "$tierline" '.hookSpecificOutput.additionalContext | contains($l)'
+  # No paragraph reports upstream facts waiting: the remote holds nothing this
+  # tier does not.
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | all(.[]; (contains("ddaanet") and contains("waiting")) | not)'
 }
 
 @test "SessionStart names a tier whose remote is ahead, and how to take it" {

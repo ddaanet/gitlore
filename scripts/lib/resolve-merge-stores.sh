@@ -127,7 +127,6 @@ gitlore_merge_one_store() {
       printf 'gitlore: memory has uncommitted changes, so HEAD was not moved onto live (%s %s ahead) — commit memory, then run /gitlore:merge again.\n' "$n" "$unit"
       live_ahead_dirty=1
     else
-      gitlore_unstage_tier_gitlinks_for_move "$store" || return 1
       if ! ff_err=$(gitlore_git -C "$store" checkout -q --detach live 2>&1); then
         gitlore_say_for_agent_or_user \
           "gitlore: $label — its local 'live' is ahead of HEAD, but HEAD could not be moved onto it. git said:
@@ -208,7 +207,6 @@ $fetch_err" >&2
   # prepare's check.
   if [ -z "$tier" ]; then
     gitlore_refuse_unresolvable_gitlinks "$mempath" "$remote" || return 1
-    gitlore_unstage_tier_gitlinks_for_move "$store" || return 1
   fi
 
   # Fast-forward: advance the local `live` (created here when the store never had

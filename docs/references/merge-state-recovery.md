@@ -101,14 +101,15 @@ composes the recovered tier's carrier up into the root index three-way (D78) and
 stages `MEMORY.md` and the tier together. A recovery runs inside a gate and
 never reaches the end of a take, so it owes the record itself. A failed up
 projection stages nothing and leaves the gitlink where it is, so the tier stays
-ahead of its pin for the next pass or take to compose; one that leaves a chunk
-stages the tier alone and the markers stop every pass and commit until they are
-resolved. When the enclosing index already records the tier's HEAD, the adoption
-is a no-op, so a re-run after a completed bookkeeping commit does not project
-the carrier over root-index edits made since. The adoption fires for a tier
-alone: the memory root's own recovery would otherwise write and stage in the
-user's project index, outside every approval gate. Nothing is committed here —
-the staged pair rides the next approved memory commit.
+ahead of its pin for the next take to compose, which the pin guard names; one
+that leaves a chunk stages the tier alone and the markers stop every pass and
+commit until they are resolved. When the enclosing index already records the
+tier's HEAD, the adoption is a no-op, so a re-run after a completed bookkeeping
+commit does not project the carrier over root-index edits made since. The
+adoption fires for a tier alone: the memory root's own recovery would otherwise
+write and stage in the user's project index, outside every approval gate.
+Nothing is committed here — the staged pair rides the next approved memory
+commit.
 
 The artifacts are deleted rather than moved aside because the next preparation
 recomputes each of them from the two sides. One dead end remains: a state file
