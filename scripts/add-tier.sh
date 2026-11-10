@@ -72,9 +72,17 @@ mempath=$(gitlore_memory_path)
 # A terminal on stdin means no intent was piped: refuse rather than block on it.
 if [ -t 0 ]; then no_intent; fi
 
+# A mount into a prepared merge would land in the merge's index and be lost or
+# carried by whichever way the merge ends.
+if gitlore_store_mid_merge "$mempath"; then
+  die "the memory store holds a merge that has not landed, so nothing was mounted. Run /gitlore:resolve to land or abort it, then add the tier again."
+fi
+
 # Before any write: whether the store was clean (a clean store gets the canned
-# commit below), and the compose baselines this run must account for.
-pending=$(git -C "$mempath" status --porcelain)
+# commit below), and the compose baselines this run must account for. Untracked
+# files are listed whatever status.showUntrackedFiles says: the canned commit
+# stages them all.
+pending=$(git -C "$mempath" status --porcelain --untracked-files=all)
 pre_stamp=$(gitlore_compose_stamp "$mempath")
 if [ -f "$mempath/MEMORY.md" ]; then
   pre_index=$(mktemp "${TMPDIR:-/tmp}/gitlore-add-tier-index.XXXXXX")

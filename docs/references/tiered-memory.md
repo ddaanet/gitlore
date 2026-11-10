@@ -238,7 +238,9 @@ named by an agent id that reaches hooks only (`scripts/lib/index-sync.sh`), so
 the script cannot pick its own caller's file. It records the pre-run state
 instead and, after the mount, moves every baseline file equal to that state to
 the post-run state; a differing baseline belongs to another batch and is left
-alone, and none is created or deleted (`scripts/add-tier.sh`).
+alone, and none is created or deleted (`scripts/add-tier.sh`). Before any write
+it refuses, naming `/gitlore:resolve`, while the memory store holds a merge that
+has not landed.
 
 *The network and the sandbox (probe, Claude Code 2.1.316).* From the agent's
 command sandbox, `git submodule add` of a GitHub https url, `git submodule add`
