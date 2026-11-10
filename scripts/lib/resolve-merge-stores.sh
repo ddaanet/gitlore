@@ -67,15 +67,21 @@ gitlore_merge_stores() {
 }
 
 # The preflight of every take and every publish, run before either moves, pushes
-# or prepares anything: answer a half-finished merge in any store, then refuse a
-# dirty tier that has something to take.
+# or prepares anything: answer a half-finished merge in any store, refuse a
+# dirty tier that has something to take, then refuse a dirty memory root whose
+# HEAD has forked from its local `live`. That root's reconcile would refuse it
+# after the tiers moved, leaving a tier ahead of its pin, which the commit the
+# refusal asks for is itself refused on.
 # Args: $1 = memory worktree path.
 gitlore_guard_every_store() {
   local mempath="$1" store
   while IFS= read -r store; do
     gitlore_guard_stale_merge_state "$store" || return 1
   done < <(gitlore_memory_stores "$mempath")
-  gitlore_refuse_dirty_tiers "$mempath"
+  gitlore_refuse_dirty_tiers "$mempath" || return 1
+  if [ "$(gitlore_classify_refusal "$mempath" HEAD live)" = "diverged" ]; then
+    gitlore_refuse_dirty_merge "$mempath" live || return 1
+  fi
 }
 
 # Print 1 when a store holds uncommitted work a take must not move over, 0

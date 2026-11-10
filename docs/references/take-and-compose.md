@@ -27,7 +27,11 @@ the same five things, in this order.
 
 1. **Guard every store.** A half-finished merge in any store is answered first,
    then a dirty tier that has something to take is refused, naming it, before
-   anything moves. A dirty tier with nothing to take blocks nothing.
+   anything moves. A dirty tier with nothing to take blocks nothing. A dirty
+   root whose `HEAD` has forked from its local `live` is refused here too, with
+   the yield's own refusal: step 3 would refuse it after the tiers moved,
+   leaving a tier ahead of its pin, which the memory commit that refusal asks
+   for is itself refused on.
 2. **Take each mounted tier** (`gitlore_take_tier`): reconcile its `HEAD`
    against its local `live`, take its remote (fast-forward, or a prepared merge
    marked not-to-publish when the two diverged), then check the arrived carrier

@@ -103,17 +103,8 @@ gitlore_yield_merge() {
   local prep base pending statefile pending_sha rc=0
   # Before anything is written: a refusal must leave no marker, state file or
   # merge behind for the next gate to classify.
-  # A merge is prepared on a clean store only. The continuation commits with
-  # `add -A`, so uncommitted edits would ride into the merge commit unapproved.
-  # Gated here, once, for every caller: the take, the push, the resolve command.
-  # The root arm of the take's predicate is the rule for any store: a tier has
-  # no submodules for its --ignore-submodules=all to leave out.
-  if [ "$(gitlore_store_dirty_for_take "$mempath" "")" = "1" ]; then
-    gitlore_say_for_agent_or_user \
-      "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again." \
-      "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them and try again." >&2
-    return 1
-  fi
+  # Gated here for every caller: the take, the push, the resolve command.
+  gitlore_refuse_dirty_merge "$mempath" "$authority" || return 1
   gitlore_refuse_rewritten "$mempath" "$authority" "$pending_ref" || return 1
   # The marker goes down BEFORE the preparation, so every window inside it
   # leaves a state file for the next gate to classify (D7): a merge that staged
@@ -149,6 +140,24 @@ gitlore_yield_merge() {
   statefile=$(gitlore_merge_state_file "$mempath")
   gitlore_emit_merge_directive "$statefile" "$flavor" "continue-after-merge"
   return 0
+}
+
+# Refuse a merge on a store with uncommitted changes: a merge is prepared on a
+# clean store only, since the continuation commits with `add -A` and
+# uncommitted edits would ride into the merge commit unapproved. Called by the
+# yield above, and by the take's preflight for a memory root forked from its
+# local `live`, so that refusal comes before any tier moves. The root arm of
+# the take's predicate is the rule for any store: a tier has no submodules for
+# its --ignore-submodules=all to leave out.
+# Args: $1 = store worktree, $2 = the merge's authority ref.
+# Returns 1 after emitting when the store is dirty.
+gitlore_refuse_dirty_merge() {
+  local mempath="$1" authority="$2"
+  [ "$(gitlore_store_dirty_for_take "$mempath" "")" = "1" ] || return 0
+  gitlore_say_for_agent_or_user \
+    "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again." \
+    "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them and try again." >&2
+  return 1
 }
 
 # Stop a memory merge whose gitlink the tier cannot answer with its HEAD: a commit

@@ -67,13 +67,14 @@ The invariant is what NFR5 rests on at publish time: the reconcile that precedes
 `gitlore-push` lands a head-vs-live merge first, which keeps the staged commit
 reachable as its second parent, and it survives any number of merge rounds.
 `pre-push` runs no reconcile: its preflight refuses a store whose HEAD and
-`live` have forked and sends the user to `/gitlore:resolve`. A push of `live`
-publishes every ancestor, so `origin/live` contains the gitlink the moment that
-push succeeds, and `pre-push` orders memory before the parent, so a parent push
-that goes through implies its gitlink is public. A push refused by divergence is
-therefore resolved and pushed again, however many times `origin/live` moves
-while a merge is under review; the parent commit — tagged or not — is never
-rewritten to name the merged memory (D46).
+`live` have forked and sends the user to `/gitlore:resolve`, or, when that store
+is memory and holds uncommitted changes, to a memory commit first. A push of
+`live` publishes every ancestor, so `origin/live` contains the gitlink the
+moment that push succeeds, and `pre-push` orders memory before the parent, so a
+parent push that goes through implies its gitlink is public. A push refused by
+divergence is therefore resolved and pushed again, however many times
+`origin/live` moves while a merge is under review; the parent commit — tagged or
+not — is never rewritten to name the merged memory (D46).
 
 ## Decisions — D46, D50
 
