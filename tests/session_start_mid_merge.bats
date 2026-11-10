@@ -198,7 +198,8 @@ merge_fingerprint() {
   [ -f "$statefile" ]
   [ "$(git -C memory rev-parse HEAD)" != "$head0" ]
   session_start_over_store
-  find_report_commands
+  abort_cmd=$(report_commands "$ctx" | grep -F 'abort-merge' | head -n 1 || true)
+  [ -n "$abort_cmd" ]
   run --separate-stderr bash -c "$abort_cmd"
   [ "$status" -eq 0 ] || { printf 'abort failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
   [ "$(git -C memory rev-parse HEAD)" = "$head0" ]
@@ -238,7 +239,8 @@ merge_fingerprint() {
   [ -f "$statefile" ]
   [ -n "$(git -C memory status --porcelain)" ]
   session_start_over_store
-  find_report_commands
+  abort_cmd=$(report_commands "$ctx" | grep -F 'abort-merge' | head -n 1 || true)
+  [ -n "$abort_cmd" ]
   run --separate-stderr bash -c "$abort_cmd"
   [ "$status" -eq 0 ] || { printf 'abort failed (%s):\n%s\n' "$status" "$stderr" >&2; return 1; }
   [ "$(git -C memory rev-parse HEAD)" = "$head0" ]

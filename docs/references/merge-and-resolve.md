@@ -80,7 +80,10 @@ The division of labour is D7's: the script decides, the agent writes prose.
    built and a refused merge commit each print
    `… so the merge was not committed; the merge stays prepared.` after the
    failing command's own text, and a rerun once that cause is fixed lands the
-   merge. The sub-agent and the skill route those lines, the merged-index and
+   merge. A state file with no `MERGE_HEAD` (a checkout cleared it) is refused
+   before anything is committed, with a line naming `/gitlore:resolve`, which
+   repairs the merge state; the sub-agent reports it as unrecognised, not
+   landed. The sub-agent and the skill route those lines, the merged-index and
    conflict-marker refusals, a fresh `gitlore: memory merge prepared` and a
    post-landing `gitlore: pushing '…' failed, and not because of divergence` by
    name, and report any other non-zero outcome as unrecognised rather than

@@ -123,11 +123,13 @@ whether the merge landed, and the message says so.
 
 `SessionStart`'s mid-merge report names two commands for the memory root: the
 continuation that lands the prepared merge and `resolve.sh abort-merge`, which
-puts the store back on the commit the merge started from. It reads the pending
-commit first, since dropping the preparation deletes the pin that names it, and
-refuses, changing nothing, when the store holds no merge gitlore prepared or no
-pending commit is left to return to. It detaches `HEAD` when a branch holds it,
-because `reset` would carry the branch along, runs
+puts the store back on the commit the merge started from. A merge with no
+`MERGE_HEAD`, or a state file without its briefing, cannot land as it stands:
+the report names `/gitlore:resolve` and `abort-merge` instead. It reads the
+pending commit first, since dropping the preparation deletes the pin that names
+it, and refuses, changing nothing, when the store holds no merge gitlore
+prepared or no pending commit is left to return to. It detaches `HEAD` when a
+branch holds it, because `reset` would carry the branch along, runs
 `git reset --merge <pending>`, then drops the preparation the way a dead merge's
 is dropped. The same reset serves a preparation whose `MERGE_HEAD` a checkout
 unlinked, which `git merge --abort` alone cannot restore.

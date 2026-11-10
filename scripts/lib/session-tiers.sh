@@ -2,9 +2,11 @@
 # The nested-tiers stage of session-start.sh (D17 3-i-a). Sourced by
 # session-start.sh only; its function takes the memory path as its argument,
 # calls session-start.sh's own `add_sysmsg` and session-memory.sh's
-# `add_report_each`, and appends directly to session-start.sh's `$protocol_ctx`
-# and `$unresolvable_tiers` globals — none declared here, all
-# left for session-start.sh to emit or read.
+# `add_report` and `add_report_each`, and appends directly to session-start.sh's
+# `$protocol_ctx` and `$unresolvable_tiers` globals — none declared here, all
+# left for session-start.sh to emit or read. A position line that names an act
+# rides both channels (`add_report`, D59); `in sync.` and git's own text stay on
+# the user's.
 
 # Report each tier submodule inside the memory store. Discovery is by
 # enclosure — every entry in memory/.gitmodules is a tier. SessionStart moves no
@@ -99,29 +101,29 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
     position=$(gitlore_module_position "$tierpath" "$auth") || continue
     case "$position" in
       forked)
-        add_sysmsg "gitlore: tier '$tier' has a HEAD that diverged from its local 'live' — run /gitlore:push, which prepares the merge." ;;
+        add_report "gitlore: tier '$tier' has a HEAD that diverged from its local 'live' — run /gitlore:push, which prepares the merge." ;;
       diverged)
         rc=0
         out=$(gitlore_rewrite_hit "$tierpath" "$auth" HEAD) || rc=$?
         case "$rc" in
-          0) add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:push to reconcile and publish." ;;
+          0) add_report "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:push to reconcile and publish." ;;
           1)
             crossing=$(gitlore_cross_rewrite_script "$tierpath")
-            add_sysmsg "gitlore: tier '$tier' holds commits its remote rewrote (record gitlore/rewrites: $out is superseded). Nothing was merged. Run $crossing to cross this tier." ;;
+            add_report "gitlore: tier '$tier' holds commits its remote rewrote (record gitlore/rewrites: $out is superseded). Nothing was merged. Run $crossing to cross this tier." ;;
           *)
             add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live', and its rewrite record gitlore/rewrites could not be fetched, so it cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" ;;
         esac ;;
       ahead)
         if [ "$(git -C "$tierpath" rev-parse -q --verify refs/heads/live)" = "$auth" ]; then
-          add_sysmsg "gitlore: tier '$tier' has a HEAD ahead of its local 'live' — run /gitlore:push."
+          add_report "gitlore: tier '$tier' has a HEAD ahead of its local 'live' — run /gitlore:push."
         else
-          add_sysmsg "gitlore: tier '$tier' holds commits its remote 'live' lacks — run /gitlore:push to publish them."
+          add_report "gitlore: tier '$tier' holds commits its remote 'live' lacks — run /gitlore:push to publish them."
         fi ;;
       behind)
         if [ "$(git -C "$tierpath" rev-parse -q --verify refs/heads/live)" = "$auth" ]; then
-          add_sysmsg "gitlore: tier '$tier' has commits on its local 'live' not checked out — run /gitlore:merge to take them."
+          add_report "gitlore: tier '$tier' has commits on its local 'live' not checked out — run /gitlore:merge to take them."
         else
-          add_sysmsg "gitlore: tier '$tier' has upstream facts waiting — its remote 'live' is ahead of this checkout. Run /gitlore:merge to take them; it needs no push."
+          add_report "gitlore: tier '$tier' has upstream facts waiting — its remote 'live' is ahead of this checkout. Run /gitlore:merge to take them; it needs no push."
         fi ;;
       *)
         add_sysmsg "gitlore: tier '$tier' in sync." ;;

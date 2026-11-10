@@ -30,6 +30,14 @@ if [ $# -ge 1 ]; then
   case "$subcmd" in
     continue-after-merge)
       load_continuation_state
+      # A state file with no MERGE_HEAD is a merge a checkout cleared, or one
+      # never run: a commit here has one parent and drops the pending side. The
+      # guard's repair belongs to the default run, which re-briefs the merger;
+      # its directive printed here would read as a merge landed and re-prepared.
+      if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+        echo "gitlore: $mempath holds a merge state file but no MERGE_HEAD, so nothing was committed and nothing was changed. Run /gitlore:resolve, which repairs the merge state." >&2
+        exit 1
+      fi
       # Compose before committing, so what lands is composed: a merge is the one
       # write path into a memory store that no compose trigger sees.
       compose_merged_indexes "$memroot" "$mempath"
