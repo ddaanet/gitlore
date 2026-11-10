@@ -143,8 +143,10 @@ gitlore_resolve_check_pins() {
     [ -n "$tier" ] || continue
     pin=$(gitlore_tier_pin_absent "$mempath" "$tier")
     [ -n "$pin" ] || continue
-    if [ -n "$(git -C "$mempath/$tier" config --get remote.origin.url || true)" ]; then
-      gitlore_git -C "$mempath/$tier" fetch -q --no-recurse-submodules origin live || true
+    if ! gitlore_tier_fetch_live "$mempath/$tier"; then
+      found=1
+      echo "gitlore: memory records tier '$tier' at ${pin:0:12}, a commit this checkout of the tier does not hold, and the fetch from the tier's remote failed, so whether the remote holds it cannot be told. Nothing composes over it; make the remote reachable, then run /gitlore:resolve again." >&2
+      continue
     fi
     pin=$(gitlore_tier_pin_absent "$mempath" "$tier")
     [ -n "$pin" ] || continue
@@ -172,6 +174,23 @@ $revert" >&2
   [ "$found" -eq 0 ]
 }
 
+# Fetch `origin live` into tier checkout $1, passing git's message through.
+# Return 1 when the fetch failed, so the remote was never read; a tier with no
+# remote, or a remote with no `live` yet, holds nothing more and returns 0.
+# Args: $1 = tier checkout path.
+gitlore_tier_fetch_live() {
+  local tierpath="$1" err
+  [ -n "$(git -C "$tierpath" config --get remote.origin.url || true)" ] || return 0
+  if err=$(gitlore_git -C "$tierpath" fetch -q --no-recurse-submodules origin live 2>&1); then
+    return 0
+  fi
+  [ -z "$err" ] || printf '%s\n' "$err" >&2
+  case "$err" in
+    *"couldn't find remote ref"*) return 0 ;;
+  esac
+  return 1
+}
+
 # `resolve.sh revert-pin <tier>`: revert, on memory's `live`, the memory commit
 # that recorded tier $2 at a commit no repository holds. A revert and never a
 # reset, so the commit stays in history and the root lines it carried go with
@@ -180,7 +199,7 @@ $revert" >&2
 # Returns 1 after saying why on stderr when nothing was reverted.
 # Args: $1 = memory worktree path, $2 = tier path.
 gitlore_revert_lost_pin() {
-  local mempath="$1" tier="$2" lost rec parents head live msg paths repo
+  local mempath="$1" tier="$2" lost rec parents head live msg paths repo root
   if [ ! -e "$mempath/$tier/.git" ]; then
     echo "gitlore: tier '$tier' is not checked out in $mempath, so whether it holds its recorded commit cannot be told; nothing was reverted." >&2
     return 1
@@ -192,7 +211,14 @@ gitlore_revert_lost_pin() {
   # The tiers are left out: the lost tier is checked out off the commit memory
   # records by definition, and a revert writes no tier's worktree.
   if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all)" ]; then
-    echo "gitlore: memory has uncommitted changes; commit them first. Nothing was reverted." >&2
+    # A commit cannot clean the tree: the pin guard refuses one over a tier pin
+    # the tier lacks, so the remedy sets the changes aside instead.
+    repo=$(git rev-parse --show-toplevel)
+    root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
+    echo "gitlore: memory has uncommitted changes, and a memory commit is refused over the lost pin. Set them aside, revert, then restore them and review the result, which can conflict with what the revert undoes. Nothing was reverted.
+gitlore:   cd \"$repo\" && git -C \"$mempath\" stash push -u
+gitlore:   cd \"$repo\" && bash \"$root/scripts/resolve.sh\" revert-pin $(printf '%q' "$tier")
+gitlore:   cd \"$repo\" && git -C \"$mempath\" stash pop" >&2
     return 1
   fi
   head=$(git -C "$mempath" rev-parse HEAD)
@@ -205,8 +231,9 @@ gitlore_revert_lost_pin() {
     echo "gitlore: memory's live records no commit for tier '$tier'; nothing was reverted." >&2
     return 1
   fi
-  if [ -n "$(git -C "$mempath/$tier" config --get remote.origin.url || true)" ]; then
-    gitlore_git -C "$mempath/$tier" fetch -q --no-recurse-submodules origin live || true
+  if ! gitlore_tier_fetch_live "$mempath/$tier"; then
+    echo "gitlore: the fetch from the remote of tier '$tier' failed, so whether it holds the commit memory records for the tier (${lost:0:12}) cannot be told. Make the remote reachable and run this again. Nothing was reverted." >&2
+    return 1
   fi
   if git -C "$mempath/$tier" rev-parse -q --verify "$lost^{commit}" >/dev/null; then
     echo "gitlore: tier '$tier' holds the commit memory records for it (${lost:0:12}), so there is nothing to revert. Run /gitlore:merge." >&2

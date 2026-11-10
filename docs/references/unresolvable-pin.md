@@ -26,8 +26,9 @@ commit only the remote holds is a take's business, not an integrity error.
 `SessionStart` makes that fetch read-only while it reports; `/gitlore:resolve`
 fetches before it decides (`gitlore_resolve_check_pins`). A failed fetch cannot
 tell an unfetched commit from a lost one, so `SessionStart` reports nothing for
-it. Both fetch `origin live` only, so a commit held only on another remote
-branch reads as unresolvable.
+it. `/gitlore:resolve` reports a failed tier fetch as such, with no revert
+command, and exits 1; `revert-pin` refuses over it. Both fetch `origin live`
+only, so a commit held only on another remote branch reads as unresolvable.
 
 The tier pin is read from memory's *index*, as the pin guard reads it: a staged
 gitlink is what the next memory commit records.
@@ -89,11 +90,14 @@ lines. It refuses, saying why and changing nothing, when
 
 - the tier is not checked out, or a store is mid-merge, or memory has
   uncommitted changes (the tier paths excepted, since the lost tier is off the
-  recorded commit by definition and a revert writes no tier's worktree);
+  recorded commit by definition and a revert writes no tier's worktree); the
+  uncommitted-changes refusal prints the stash, revert and stash-pop commands,
+  since a memory commit is refused over the lost pin;
 - memory's `HEAD` is not on its `live`;
 - `live` records no commit for the tier, the tier holds the commit after a fetch
-  (then `/gitlore:merge` is the remedy), or no commit on `live` records the tier
-  at it;
+  (then `/gitlore:merge` is the remedy), the fetch of the tier's remote failed
+  (a remote with no `live` yet is not a failure), or no commit on `live` records
+  the tier at it;
 - the recording commit is a merge commit, which is reverted by hand with
   `git revert -m 1`;
 - the revert does not apply cleanly, in which case it is abandoned and memory is
