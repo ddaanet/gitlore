@@ -11,11 +11,19 @@
 # resolve by hand (gitlore_merge_one_store's 2) is passed over, so the tiers
 # after it are still taken and the end compose records the ones that moved; the
 # run then returns 2, and gitlore_merge_stores reads it to still fail the take.
+#
+# A dirty memory root whose HEAD has forked from its local `live` is refused
+# first, with the yield's own refusal: root's reconcile refuses it after the
+# tiers, and a tier moved by then sits ahead of its pin, which the memory
+# commit that refusal asks for is itself refused on.
 # Returns 0 when every tier is reconciled, 2 when one was passed over, 1 after
 # emitting on a yield or any other refusal.
 # Args: $1 = memory worktree path.
 gitlore_take_tiers() {
   local mempath="$1" tier rc=0 tier_rc
+  if [ "$(gitlore_classify_refusal "$mempath" HEAD live)" = "diverged" ]; then
+    gitlore_refuse_dirty_merge "$mempath" live || return 1
+  fi
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     # `git -C` into an unchecked-out submodule walks up to the enclosing repo.

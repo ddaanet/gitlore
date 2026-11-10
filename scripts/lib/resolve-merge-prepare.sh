@@ -145,7 +145,7 @@ gitlore_yield_merge() {
 # Refuse a merge on a store with uncommitted changes: a merge is prepared on a
 # clean store only, since the continuation commits with `add -A` and
 # uncommitted edits would ride into the merge commit unapproved. Called by the
-# yield above, and by the take's preflight for a memory root forked from its
+# yield above, and by gitlore_take_tiers for a memory root forked from its
 # local `live`, so that refusal comes before any tier moves. The root arm of
 # the take's predicate is the rule for any store: a tier has no submodules for
 # its --ignore-submodules=all to leave out.

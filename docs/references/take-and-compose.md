@@ -27,17 +27,17 @@ the same five things, in this order.
 
 1. **Guard every store.** A half-finished merge in any store is answered first,
    then a dirty tier that has something to take is refused, naming it, before
-   anything moves. A dirty tier with nothing to take blocks nothing. A dirty
-   root whose `HEAD` has forked from its local `live` is refused here too, with
-   the yield's own refusal: step 3 would refuse it after the tiers moved,
-   leaving a tier ahead of its pin, which the memory commit that refusal asks
-   for is itself refused on.
-2. **Take each mounted tier** (`gitlore_take_tier`): reconcile its `HEAD`
-   against its local `live`, take its remote (fast-forward, or a prepared merge
-   marked not-to-publish when the two diverged), then check the arrived carrier
-   alone and repair it when it fails (D52). Inside a push a tier is taken only
-   when it holds arrivals, and its merge is published on landing (D75). A tier
-   that yields a prepared merge, or refuses with anything but an untaken remote,
+   anything moves. A dirty tier with nothing to take blocks nothing.
+2. **Take each mounted tier** (`gitlore_take_tiers`). A dirty root whose `HEAD`
+   has forked from its local `live` is refused first, with the yield's own
+   refusal: step 3 would refuse it after the tiers moved, leaving a tier ahead
+   of its pin, which the memory commit that refusal asks for is itself refused
+   on. Then each tier (`gitlore_take_tier`): reconcile its `HEAD` against its
+   local `live`, take its remote (fast-forward, or a prepared merge marked
+   not-to-publish when the two diverged), then check the arrived carrier alone
+   and repair it when it fails (D52). Inside a push a tier is taken only when it
+   holds arrivals, and its merge is published on landing (D75). A tier that
+   yields a prepared merge, or refuses with anything but an untaken remote,
    stops the run.
 3. **Reconcile and take root.** A root fast-forward onto a commit recording a
    tier gitlink that no repository holds is refused; a diverged root prepares
