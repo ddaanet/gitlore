@@ -87,7 +87,7 @@ The sub-agent reports the continuation's exit status, and only an exit 0 is a la
 
 ## Loop
 
-After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes: `/gitlore:merge` takes what is left.
+After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes; run `/gitlore:merge` instead.
 
 ## Resume commit
 

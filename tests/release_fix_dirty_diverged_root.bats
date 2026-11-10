@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 # A memory root with uncommitted changes whose HEAD has forked from its local
-# `live` is refused before any tier moves, by every entry that takes tiers:
-# /gitlore:merge, /gitlore:push and a pre-push whose tier is behind its remote.
+# `live` is refused at the tier take, before the take moves any tier.
 # A tier moved first would sit ahead of its pin, so the memory commit the
 # refusal asks for would itself be refused by the pin guard naming the take
 # again. A pre-push that takes no tier publishes as it does on any dirty root,
