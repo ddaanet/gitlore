@@ -19,8 +19,8 @@ gitlore_report_forked() {
 # Args: $1 = store worktree, $2 = label for messages, $3 = tier name ("" for memory).
 gitlore_advance_live() {
   local store="$1" label="$2" tier="${3-}" push_err live head
-  # `-q --verify` is silent when `live` does not exist (a tier never fetched).
-  live=$(git -C "$store" rev-parse -q --verify live) || return 0
+  gitlore_ensure_live "$store" || return 1
+  live=$(git -C "$store" rev-parse live)
   head=$(git -C "$store" rev-parse HEAD)
   [ "$head" = "$live" ] && return 0
   # Capture, don't discard: a failure for any reason other than divergence (a
@@ -56,6 +56,15 @@ $push_err" \
     "gitlore: $label could not advance its local 'live'. git said:
 $push_err" >&2
   return 1
+}
+
+# Make a store's missing local `live` from HEAD, as SessionStart does for
+# memory: `submodule update --init` creates no branch, so a tier in any checkout
+# but the one that mounted it has none, and HEAD is the commit memory records.
+# Never from `origin/live`, which may be ahead of it. Args: $1 = store worktree.
+gitlore_ensure_live() {
+  git -C "$1" show-ref --verify --quiet refs/heads/live && return 0
+  gitlore_git -C "$1" branch live HEAD
 }
 
 # Whether the staged MEMORY.md of the memory worktree $1 changes a link into the

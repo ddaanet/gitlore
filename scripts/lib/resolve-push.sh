@@ -63,9 +63,9 @@ gitlore_push_stores() {
     # Unchecked-out tier: `git -C` escapes to the enclosing repo, which would push
     # MEMORY's live to memory's origin under the tier's name.
     [ -e "$tierpath/.git" ] || continue
-    # `-q --verify` is silent on the expected miss: a tier never fetched has no
-    # local `live` and so has nothing of its own to publish.
-    git -C "$tierpath" rev-parse -q --verify live >/dev/null || continue
+    # A tier this checkout did not mount has no local `live`, yet its HEAD can
+    # hold commits memory records: made from HEAD, so they go out.
+    gitlore_ensure_live "$tierpath" || return 1
     if [ -z "$(git -C "$tierpath" config --get remote.origin.url || true)" ]; then
       gitlore_say_for_agent_or_user \
         "gitlore: tier '$tier' has no remote configured, so nothing written there is being shared. Mount it against a remote or unmount it." \
