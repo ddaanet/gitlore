@@ -47,6 +47,9 @@ a decision or correction to whoever made it.
 A `MEMORY.md` — root or tier — gets no paragraph. Root changes that only carry
 a tier's facts — its index lines in the root `MEMORY.md`, its gitlink — take no
 `== memory ==` section; they are committed with the tier's.
+When no tier store changed either, the store has no section to hang them on:
+the summary is a single `== memory ==` section, whose subject line is the root
+commit.
 
 Template, with a tier store and a root change:
 
@@ -85,9 +88,10 @@ EOF
 ```
 
 4. Relay the command's output. If it exits non-zero, surface the output
-   verbatim and stop; do not retry with altered text. The one exception is an
+   verbatim and stop; do not retry with altered text. The exceptions are an
    abort that tells you to run `gitlore-compose`: run it, then retry with the
-   same text. If that retry is refused because a store has changes and no
+   same text; and output containing `gitlore: memory merge prepared`, which
+   hands over to the `gitlore:resolve` skill: invoke it, without asking. If that retry is refused because a store has changes and no
    section, redraft and get approval again.
 5. If the user asks for changes, redraft the summary, show it again, and end
    the turn. Each redraft needs its own approval.

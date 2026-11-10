@@ -166,16 +166,16 @@ projections:
   tier are written into that tier's carrier, de-prefixed, with root's text and
   root's order. Root is canonical, so this is what carries a locally-authored
   line into the store that travels. It places lines and merges nothing.
-- **Up**, three-way, ahead of the down projection in every pass and at the end
-  of a take: a tier whose `HEAD` is ahead of the gitlink memory records has its
-  carrier merged into root's block for it, against the carrier at that gitlink
-  (D78, in [take-and-compose.md](take-and-compose.md)). A line only the tier
-  changed is adopted — this is how a merged tier fact becomes reachable, since
-  the root index is the only surface CC recalls from — a line only root changed
-  stands, and one both changed apart is a diff3 chunk (in the memory merge's
-  continuation, the tier's line). Root's block is never projected down over a
-  carrier before the carrier has been merged up, which is why the down pass
-  needs no refusal for a tier that moved.
+- **Up**, three-way, at the end of a take, in a memory merge's continuation and
+  in the recovery: a tier whose `HEAD` is ahead of the gitlink memory records
+  has its carrier merged into root's block for it, against the carrier at that
+  gitlink (D78, in [take-and-compose.md](take-and-compose.md)). A line only the
+  tier changed is adopted — this is how a merged tier fact becomes reachable,
+  since the root index is the only surface CC recalls from — a line only root
+  changed stands, and one both changed apart is a diff3 chunk (in the memory
+  merge's continuation, the tier's line). Root's block is never projected down
+  over a carrier before the carrier has been merged up: a pass composes no tier
+  up, and refuses a tier ahead of its pin through rule 7, naming the take.
 
 `gitlore_compose_up` is the up projection's entry point for a caller that holds
 the tier list itself. It takes the memory worktree, the tiers to compose, one

@@ -10,8 +10,8 @@ what changes is that a verdict of *discard* or *relocate* is now an edit, and
 that the batch has an order. Take discard and relocate first, since a fact
 leaving the store needs no body or index work, then the survivors' bodies (§2),
 then their index lines (§7). Land every edit before the summary is written: the
-summary states what the facts claim as committed, so a fix that follows it
-describes a commit that no longer matches.
+summary names each change and its cause, so a fix that follows it describes a
+commit that no longer matches.
 
 An index over the loader cap is not this pass's business — retirement across
 the whole store is `/gitlore:index-audit`, taken as its own decision.

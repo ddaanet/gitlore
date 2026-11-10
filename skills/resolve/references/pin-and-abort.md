@@ -13,16 +13,19 @@ it, and the resolver does not say the state is healthy. Two shapes:
 
 - **A tier gitlink.** The line reads `gitlore: memory records tier '<t>' at
   <sha>, a commit …` and says whether neither the tier nor its remote holds it,
-  or the tier has no remote, and names the repo `.gitmodules` records when that
+  or the tier has no remote, or that the fetch from the tier's remote failed, in
+  which case no revert command follows: get the remote reachable and run
+  `/gitlore:resolve` again. It names the repo `.gitmodules` records when that
   is a different one. Nothing composes over the commit. The checkout that
   recorded it runs `/gitlore:push`, which publishes it. If the user says that
   checkout no longer exists, `/gitlore:resolve`'s output carries, after the
   report, a `once no checkout holds it` line and then, last, the command that
   reverts the memory commit which recorded it; the `SessionStart` report
-  carries no command, so run `/gitlore:resolve` to get it. The command reads:
+  carries no command, so run `/gitlore:resolve` to get it. The report prints
+  the command with its absolute paths; run that line as printed. It reads:
 
   ```bash
-  cd "<repo>" && bash "${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh" revert-pin <tier>
+  cd "<repo>" && bash "<abs-path-to-resolve.sh>" revert-pin <tier>
   ```
 
   Run it only after the user confirms no checkout holds the commit. It reverts
@@ -45,10 +48,11 @@ user has them. Do not ask for them or reconstruct them.
 ## Abandoning a prepared merge
 
 A prepared merge that has not landed is abandoned with the abort command the
-session-start report names:
+session-start report names, which it prints with its absolute paths and which is
+run as printed:
 
 ```bash
-cd "<repo>" && bash "${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh" abort-merge
+cd "<repo>" && bash "<abs-path-to-resolve.sh>" abort-merge
 ```
 
 It works on the memory root's merge, restores the store to the commit the merge
