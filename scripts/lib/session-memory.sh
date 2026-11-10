@@ -59,8 +59,9 @@ gitlore_module_position() {
 # Args: $1 = memory worktree path.
 report_memory_position() {
   local mempath="$1" dirty=0 head live auth n unit remote_url fetch_err remote="" fetched=1
-  local position tip rc out crossing pin
-  if gitlore_store_mid_merge "$mempath"; then
+  local position tip rc out crossing pin mid=0
+  gitlore_store_mid_merge "$mempath" && mid=1
+  if [ "$mid" -eq 1 ]; then
     report_memory_mid_merge "$mempath"
   else
     dirty=$(gitlore_memory_dirty "$mempath")
@@ -83,10 +84,8 @@ report_memory_position() {
           fetched=0
           # git's stderr can carry text the remote chose (`remote: …` lines), so
           # it goes to the user only; the agent's context gets the fixed sentence.
-          add_sysmsg "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')"
-          protocol_ctx="$protocol_ctx
-
-gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; the user has git's message."
+          add_report_each "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')" \
+            "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; the user has git's message."
           ;;
       esac
     fi
@@ -102,7 +101,7 @@ gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; 
 
   # A prepared merge moved HEAD onto its authority, so a position read now
   # describes the preparation, not memory; the mid-merge report stands alone.
-  gitlore_store_mid_merge "$mempath" && return 0
+  [ "$mid" -eq 1 ] && return 0
 
   head=$(git -C "$mempath" rev-parse HEAD)
   live=$(git -C "$mempath" rev-parse -q --verify refs/heads/live) || live="$head"
@@ -123,10 +122,8 @@ gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; 
           add_report "gitlore: memory's live holds commits its remote rewrote (record gitlore/rewrites: $out is superseded), so merging upstream memory would re-import the old history. Nothing was merged. Run $crossing to cross this store." ;;
         *)
           # git's text can carry remote-chosen lines, so it goes to the user only.
-          add_sysmsg "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')"
-          protocol_ctx="$protocol_ctx
-
-gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live is unchecked; the user has git's message."
+          add_report_each "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" \
+            "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live is unchecked; the user has git's message."
           ;;
       esac ;;
     ahead)
@@ -174,25 +171,21 @@ report_memory_mid_merge() {
     mh=$(git -C "$mempath" rev-parse -q --verify MERGE_HEAD)
     look="cd \"$repo\" && git -C \"$mempath\" status --short"
     undo="cd \"$repo\" && git -C \"$mempath\" merge --abort"
-    add_sysmsg "gitlore: memory holds a merge gitlore did not prepare (MERGE_HEAD ${mh:0:12}, no merge state file), so nothing was changed. Finish it or undo it in the store:
+    add_report_each "gitlore: memory holds a merge gitlore did not prepare (MERGE_HEAD ${mh:0:12}, no merge state file), so nothing was changed. Finish it or undo it in the store:
   $look
-  $undo"
-    protocol_ctx="$protocol_ctx
-
-gitlore: memory holds a merge gitlore did not prepare (MERGE_HEAD ${mh:0:12}, no merge state file). Do not commit memory or start another take over it. It may hold work in progress: look first, and undo it only if the user confirms:
+  $undo" \
+      "gitlore: memory holds a merge gitlore did not prepare (MERGE_HEAD ${mh:0:12}, no merge state file). Do not commit memory or start another take over it. It may hold work in progress: look first, and undo it only if the user confirms:
   $look
   $undo"
     return 0
   fi
   cont="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" continue-after-merge"
   abort="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" abort-merge"
-  add_sysmsg "gitlore: memory holds a prepared merge that has not landed. To land it, resolve and stage the merged files, then run:
+  add_report_each "gitlore: memory holds a prepared merge that has not landed. To land it, resolve and stage the merged files, then run:
   $cont
 To abort it and put memory back on the commit the merge started from, run:
-  $abort"
-  protocol_ctx="$protocol_ctx
-
-gitlore: memory holds a prepared merge that has not landed; its state file is $statefile. Do not commit memory or start another take over it. To land it, dispatch the gitlore:memory-merger sub-agent with that state file; on approval of its synthesis it runs:
+  $abort" \
+    "gitlore: memory holds a prepared merge that has not landed; its state file is $statefile. Do not commit memory or start another take over it. To land it, dispatch the gitlore:memory-merger sub-agent with that state file; on approval of its synthesis it runs:
   $cont
 To abort the merge instead, which restores memory to the commit it started from, run:
   $abort"

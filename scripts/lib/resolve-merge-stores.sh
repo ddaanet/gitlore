@@ -111,7 +111,7 @@ gitlore_store_dirty_for_take() {
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
   local label remote_url fetched=0 fetch_err="" remote="" live head adopt_rc=0
-  local live_ahead_dirty=0 n unit ff_err
+  local live_ahead_dirty=0 n unit ff_err no_publish=1
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
@@ -224,10 +224,9 @@ $fetch_err" >&2
     # inside a push keeps the publish: landing its merge sends the tier alone, and
     # a tier may go out ahead of what records it.
     if [ -n "$tier" ] && [ -n "${GITLORE_TAKE_IN_PUSH:-}" ]; then
-      gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || return 1
-    else
-      GITLORE_MERGE_NO_PUBLISH=1 gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || return 1
+      no_publish=${GITLORE_MERGE_NO_PUBLISH:-}
     fi
+    GITLORE_MERGE_NO_PUBLISH=$no_publish gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || :
     return 1
   fi
 

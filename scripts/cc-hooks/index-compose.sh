@@ -90,8 +90,8 @@ else
   # Did this batch change the root index, the activation manifest or a tier's
   # carrier? Tracked separately: the triage nudge below fires on a manifest
   # change specifically (the active-tier set may have changed), not on every
-  # memory-writing recompose. The keys of both stamps are read, and a carrier
-  # key counts only when both hold it: one in a single stamp is a tier entering
+  # memory-writing recompose. The keys of both stamps are read, each once, and a
+  # carrier key counts only when both hold it: one in a single stamp is a tier entering
   # or leaving the manifest (the manifest key moves) or a merge being prepared
   # or landing, which is not a carrier edit.
   now=$(gitlore_compose_stamp "$mempath")
@@ -112,10 +112,7 @@ else
       manifest) manifest_touched=1 ;;
       *) if [ -n "$was" ] && [ -n "$is" ]; then carrier_touched=1; fi ;;
     esac
-  done <<EOF
-$was_keys
-$is_keys
-EOF
+  done < <(printf '%s\n%s\n' "$was_keys" "$is_keys" | awk 'length && !seen[$0]++')
   rm -f "$stamp"
   [ -n "$index_touched$manifest_touched$carrier_touched" ] || exit 0
 

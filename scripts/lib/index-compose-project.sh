@@ -101,13 +101,15 @@ gitlore_compose_down() {
 
   while IFS= read -r path; do
     [ -n "$path" ] || continue
-    grep -qxF -- "$path" "$tmpd/head.paths"    && b=1 || b=0
-    grep -qxF -- "$path" "$tmpd/root.paths"    && o=1 || o=0
-    grep -qxF -- "$path" "$tmpd/carrier.paths" && t=1 || t=0
-    if [ "$o" = 1 ]; then
-      gitlore_compose_pick "$path" < "$tmpd/root.bullets"
-    elif [ "$t" = 1 ] && [ "$b" = 0 ]; then
-      gitlore_compose_pick "$path" < "$tmpd/carrier.bullets"
+    # The .paths and .bullets files are line-aligned, so the first line number
+    # of a path in one picks its bullet from the other.
+    grep -qxF -- "$path" "$tmpd/head.paths" && b=1 || b=0
+    o=$(grep -nxF -m1 -- "$path" "$tmpd/root.paths") || o=""
+    t=$(grep -nxF -m1 -- "$path" "$tmpd/carrier.paths") || t=""
+    if [ -n "$o" ]; then
+      sed -n "${o%%:*}p" "$tmpd/root.bullets"
+    elif [ -n "$t" ] && [ "$b" = 0 ]; then
+      sed -n "${t%%:*}p" "$tmpd/carrier.bullets"
     fi
   done < <(gitlore_order_merge "$tmpd/head.paths" "$tmpd/root.paths" "$tmpd/carrier.paths")
 
@@ -121,19 +123,22 @@ gitlore_compose_down() {
 # result no longer shows the loss. Same tiers the pass projects into: active,
 # carrier present, root holding a line for the tier.
 gitlore_compose_restores() {
-  local mempath="$1" tier line path head root
+  local mempath="$1" tier line path head root carrier
   root="$mempath/MEMORY.md"
   [ -f "$root" ] || return 0
-  head=$(gitlore_index_head_paths "$mempath")
+  # Both lists wrapped in newlines for a literal whole-line `case` test, built
+  # once rather than rescanned per root line (see gitlore_index_paths).
+  head=$'\n'$(gitlore_index_head_paths "$mempath")$'\n'
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     [ -f "$mempath/$tier/MEMORY.md" ] || continue
     gitlore_index_has_tier "$root" "$tier" || continue
+    carrier=$'\n'$(gitlore_index_paths "$mempath/$tier/MEMORY.md")$'\n'
     while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in "$tier"/*) ;; *) continue ;; esac
-      grep -qxF -- "$path" <<<"$head" || continue
-      gitlore_index_has_path "$mempath/$tier/MEMORY.md" "${path#"$tier"/}" && continue
+      case "$head" in *$'\n'"$path"$'\n'*) ;; *) continue ;; esac
+      case "$carrier" in *$'\n'"${path#"$tier"/}"$'\n'*) continue ;; esac
       printf '%s\n' "$path"
     done < <(gitlore_index_part "$root" bullets)
   done < <(gitlore_active_tiers "$mempath")

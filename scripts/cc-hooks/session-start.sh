@@ -106,10 +106,8 @@ emit_session_json() {
 # Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's
 # native auto-memory strands in ~/.claude/projects/<cwd>/memory instead of the submodule.
 if [ -z "${GITLORE_LAUNCHED:-}" ]; then
-  add_sysmsg "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install' if you don't use direnv, which installs the launcher shim globally), then restart Claude Code."
-  protocol_ctx="$protocol_ctx
-
-gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or, without direnv, '/gitlore:install', which installs the global launcher shim (Placement B), and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
+  add_report_each "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install' if you don't use direnv, which installs the launcher shim globally), then restart Claude Code." \
+    "gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or, without direnv, '/gitlore:install', which installs the global launcher shim (Placement B), and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
 fi
 
 # Hook dir + wrappers.
@@ -238,15 +236,13 @@ if [ -n "$dangling" ]; then
   dangling_count=$(printf '%s\n' "$dangling" | grep -c .)
   if [ "$dangling_count" -eq 1 ]; then dangling_unit="file"; else dangling_unit="files"; fi
   dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
-  add_sysmsg "gitlore: the memory index points at $dangling_count missing $dangling_unit. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
-$dangling_capped"
   # The agent gets a matching, equally-capped additionalContext: the
   # systemMessage is user-only (D14), so without this the agent has no idea the
   # always-loaded index it is about to trust is stale. Terse on purpose — enough
   # to know it is broken and what to do, not the whole list.
-  protocol_ctx="$protocol_ctx
-
-gitlore: the memory index is STALE — $dangling_count root MEMORY.md pointer $dangling_unit name a target absent from the memory store (nothing was deleted). Likely another consumer merged or renamed those facts in a shared tier. Reconcile the root index: drop each stale line, or redirect it to where the fact now lives.
+  add_report_each "gitlore: the memory index points at $dangling_count missing $dangling_unit. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
+$dangling_capped" \
+    "gitlore: the memory index is STALE — $dangling_count root MEMORY.md pointer $dangling_unit name a target absent from the memory store (nothing was deleted). Likely another consumer merged or renamed those facts in a shared tier. Reconcile the root index: drop each stale line, or redirect it to where the fact now lives.
 $dangling_capped"
 fi
 
@@ -305,10 +301,7 @@ session=$(jq -r '.session_id // ""' <<<"$payload") || session=""
 gitlore_relay_drain "$mempath" "$session"
 gitlore_relay_sweep "$mempath"
 if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
-  add_sysmsg "$GITLORE_RELAY_SYSMSG"
-  protocol_ctx="$protocol_ctx
-
-$GITLORE_RELAY_CTX"
+  add_report_each "$GITLORE_RELAY_SYSMSG" "$GITLORE_RELAY_CTX"
 fi
 
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus

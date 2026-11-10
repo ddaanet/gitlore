@@ -106,7 +106,7 @@ load helpers/take-order
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$up" ]
   # The merger was not briefed: no directive, no state file, no merge pending.
   [[ "$output$err" != *"dispatch sub-agent"* ]]
-  [ ! -f "$(store_state_file memory)" ]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
   run ! git -C memory rev-parse -q --verify MERGE_HEAD
   # Root is back where it was.
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
@@ -155,7 +155,7 @@ load helpers/take-order
   [ "$status" -eq 1 ]
   err="$stderr"
   [[ "$output$err" != *"dispatch sub-agent"* ]]
-  [ ! -f "$(store_state_file memory)" ]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
   [ "$(git -C memory rev-parse HEAD)" = "$root_before" ]
   run ! grep -qF 'ddaanet/lost.md' memory/MEMORY.md
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_sha" ]
@@ -180,7 +180,7 @@ load helpers/take-order
   [ "$status" -eq 1 ]
   err="$stderr"
   [[ "$output$err" != *"dispatch sub-agent"* ]]
-  [ ! -f "$(store_state_file memory)" ]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
   run ! git -C memory rev-parse -q --verify MERGE_HEAD
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [[ "$err" == *"tier 'ddaanet'"* ]]

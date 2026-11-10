@@ -26,7 +26,7 @@
 # its bookkeeping could not be recorded, so a failure there names what it left.
 # Args: $1 = memory worktree. Returns 1 after emitting when nothing was recorded.
 gitlore_compose_moved_tiers() {
-  local mempath="$1" moved names="" tier composed rc=0 msgfile err abs
+  local mempath="$1" moved names="" tier composed rc=0 msg err abs
   local -a paths=()
   moved=$(gitlore_tiers_ahead_of_pin "$mempath") || return 1
   [ -n "$moved" ] || return 0
@@ -48,9 +48,8 @@ gitlore_compose_moved_tiers() {
   fi
   [ -z "$composed" ] || printf '%s\n' "$composed" | sed 's/^/gitlore: /'
 
-  # Written ahead of the staging, which moves the pins the body reads.
-  msgfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-tier-msg.XXXXXX") || msgfile=""
-  [ -z "$msgfile" ] || gitlore_bookkeeping_message "$mempath" "$names" "$moved" > "$msgfile"
+  # Read ahead of the staging, which moves the pins the body reads.
+  msg=$(gitlore_bookkeeping_message "$mempath" "$names" "$moved") || :
 
   if ! gitlore_git -C "$mempath" add -- "${paths[@]}"; then
     # The printed path is absolute, so the command runs from anywhere.
@@ -58,34 +57,26 @@ gitlore_compose_moved_tiers() {
     # shellcheck disable=SC2016  # backticks are markdown for the reader, not a command sub
     printf 'gitlore: %s advanced, but the pointer could not be staged in the memory store. Run `git -C "%s" add --%s` before the next session, or the pointer will be reset to its previous commit.\n' \
       "$names" "$abs" "$(printf ' "%s"' "${paths[@]}")" >&2
-    [ -z "$msgfile" ] || rm -f "$msgfile"
     return 0
   fi
 
   if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all -- . ":(exclude)MEMORY.md")" ]; then
-    [ -z "$msgfile" ] || rm -f "$msgfile"
     printf 'gitlore: the memory store has other uncommitted changes, so the moved %s pointer and the recomposed root index were staged rather than committed. They ride the next memory commit (approved summary).\n' "$names"
     return 0
   fi
   # Nothing staged: the compose changed nothing and the staged gitlinks match what
   # root already records, so an empty commit would only fail.
   if git -C "$mempath" diff --cached --quiet; then
-    [ -z "$msgfile" ] || rm -f "$msgfile"
-    return 0
-  fi
-  if [ -z "$msgfile" ]; then
-    printf 'gitlore: %s advanced and the moves are staged, but no message file could be made for the bookkeeping commit, so they ride the next memory commit.\n' "$names" >&2
     return 0
   fi
 
   # Bare `commit`, never `-a` or an `add -A`: exactly what was staged above goes
   # in. A store clean beyond those paths has nothing else staged to catch.
-  if ! err=$(gitlore_git -C "$mempath" commit -q -F "$msgfile" 2>&1); then
-    rm -f "$msgfile"
+  # `-m`, not `-F -`: gitlore_git's lock retry cannot re-read stdin.
+  if ! err=$(gitlore_git -C "$mempath" commit -q -m "$msg" 2>&1); then
     printf 'gitlore: %s advanced and the moves are staged, but the bookkeeping commit failed, so they ride the next memory commit. git said:\n%s\n' "$names" "$err" >&2
     return 0
   fi
-  rm -f "$msgfile"
 
   # Same invariant every other memory commit restores: `live` holds the commit
   # the moment it exists. Refused only by a race, which the next gate re-reads.

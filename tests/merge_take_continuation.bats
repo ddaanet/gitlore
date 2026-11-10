@@ -33,7 +33,7 @@ prepare_diverged_tier_merge() {
     echo "the take did not prepare a merge" >&2
     return 1
   fi
-  [ -f "$(store_state_file memory/ddaanet)" ] || { echo "no tier merge prepared" >&2; cat "$BATS_TEST_TMPDIR/prepare.out" >&2; return 1; }
+  [ -f "$(gitlore_merge_state_file memory/ddaanet)" ] || { echo "no tier merge prepared" >&2; cat "$BATS_TEST_TMPDIR/prepare.out" >&2; return 1; }
 }
 
 # What the memory-merger sub-agent leaves: the carrier holding both sides' lines.
@@ -101,7 +101,7 @@ duplicate_pointer_carrier() {
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"duplicate pointer"* ]]
-  [ -f "$(store_state_file memory/ddaanet)" ]
+  [ -f "$(gitlore_merge_state_file memory/ddaanet)" ]
   [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_head" ]
   [ "$(git -C memory rev-parse HEAD)" = "$root_head" ]
@@ -170,7 +170,7 @@ duplicate_pointer_carrier() {
 
   run resolve_gate
   [ "$status" -ne 0 ]
-  [ -f "$(store_state_file memory)" ]
+  [ -f "$(gitlore_merge_state_file memory)" ]
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
 

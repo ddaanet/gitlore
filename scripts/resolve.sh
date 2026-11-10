@@ -69,11 +69,9 @@ if [ $# -ge 1 ]; then
       # whichever side refused and yield again.
       rc=0; push_or_report "$mempath" . HEAD:live || rc=$?
       if [ "$rc" -eq 1 ]; then
-        gitlore_yield_merge "$mempath" live head-vs-live HEAD || exit 1
-        exit 1
-      elif [ "$rc" -eq 2 ]; then
-        exit 1
+        gitlore_yield_merge "$mempath" live head-vs-live HEAD || :
       fi
+      [ "$rc" -eq 0 ] || exit 1
       # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
       # gate leaves it empty, because a merge a refused push prepared exists to
       # let that push through.
@@ -85,11 +83,9 @@ if [ $# -ge 1 ]; then
         rc=0; push_or_report "$mempath" origin live || rc=$?
         if [ "$rc" -eq 1 ]; then
           gitlore_git -C "$mempath" fetch -q --no-recurse-submodules origin live || true
-          gitlore_yield_merge "$mempath" origin/live head-vs-remote live || exit 1
-          exit 1
-        elif [ "$rc" -eq 2 ]; then
-          exit 1
+          gitlore_yield_merge "$mempath" origin/live head-vs-remote live || :
         fi
+        [ "$rc" -eq 0 ] || exit 1
       fi
       exit 0
       ;;

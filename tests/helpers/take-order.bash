@@ -138,11 +138,6 @@ side_branch_tier_commit() {
   printf '%s\n' "$out"
 }
 
-# The path of the merge state file of store $1, whether or not it exists.
-store_state_file() {
-  printf '%s/gitlore-merge-state\n' "$(git -C "$1" rev-parse --absolute-git-dir)"
-}
-
 # Run the take; while it yields a prepared merge, record, once the take has
 # exited with its state file written, which store the file belongs to, what the
 # store's index holds unmerged and what the file lists as conflicted, land the
@@ -167,10 +162,10 @@ drive_take_to_rest() {
     [ "$rc" -ne 0 ] || return 0
     found=""
     for store in memory "$@"; do
-      [ -f "$(store_state_file "$store")" ] || continue
+      [ -f "$(gitlore_merge_state_file "$store")" ] || continue
       found="$store"
       paths=$(git -C "$store" diff --name-only --diff-filter=U | paste -sd, -)
-      conflicted=$(jq -r '.conflicted_files[]?' "$(store_state_file "$store")" | paste -sd, -)
+      conflicted=$(jq -r '.conflicted_files[]?' "$(gitlore_merge_state_file "$store")" | paste -sd, -)
       line="$store unmerged=$paths conflicted=$conflicted"
       if [ "$store" = memory ] && [ "$#" -gt 0 ]; then
         line="$line gitlink=$(git -C memory ls-files -s -- "${1#memory/}" | awk '$3 == 0 { print $2 }'):$(git -C "$1" rev-parse HEAD)"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The store-diagnostics stage of session-start.sh (D74). Sourced by
-# session-start.sh only; reports through `add_report` (session-memory.sh), which
+# session-start.sh only; reports through `add_report` and `add_report_each` (session-memory.sh), which
 # session-start.sh also sources, and reads its `$unresolvable_tiers` global.
 # Nothing here writes an index or moves a ref: the indexes are composed where
 # the edit happens, and a store that arrives with a pending compose is reported,
@@ -25,14 +25,8 @@
 report_store_diagnostics() {
   local mempath="$1" tier tierpath ahead="" problems pending rc=0 held=0
 
-  gitlore_store_mid_merge "$mempath" && held=1
+  gitlore_any_store_mid_merge "$mempath" && held=1
   [ -n "${unresolvable_tiers:-}" ] && held=1
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    # `git -C` into an unmaterialized submodule answers for the enclosing repo.
-    [ -e "$mempath/$tier/.git" ] || continue
-    gitlore_store_mid_merge "$mempath/$tier" && held=1
-  done < <(gitlore_tier_paths "$mempath")
 
   if [ "$held" -eq 1 ]; then
     problems=$(gitlore_compose_check "$mempath") || rc=$?
@@ -40,16 +34,6 @@ report_store_diagnostics() {
 $problems"
     return 0
   fi
-
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    tierpath="$mempath/$tier"
-    [ -e "$tierpath/.git" ] || continue
-    if gitlore_live_ahead_of_head "$tierpath"; then
-      ahead="$ahead$tier
-"
-    fi
-  done < <(gitlore_active_tiers "$mempath")
 
   pending=$(gitlore_compose_pending "$mempath") || rc=$?
   case "$rc" in
@@ -70,6 +54,16 @@ $pending"
     report_store_orphans "$mempath"
     return 0
   fi
+
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    tierpath="$mempath/$tier"
+    [ -e "$tierpath/.git" ] || continue
+    if gitlore_live_ahead_of_head "$tierpath"; then
+      ahead="$ahead$tier
+"
+    fi
+  done < <(gitlore_active_tiers "$mempath")
 
   if [ -n "$ahead" ]; then
     add_report "gitlore: these tiers hold commits on their local 'live' that the memory store has not taken. Run /gitlore:merge.
@@ -94,10 +88,8 @@ report_store_orphans() {
   if [ "$o" -eq 1 ]; then unit="line"; else unit="lines"; fi
   capped=$(printf '%s\n' "$orphans" | gitlore_cap_list
     gitlore_cap_rest_note "$o" "$mempath")
-  add_sysmsg "gitlore: $o tier index $unit not in the root index, so not recallable here. Nothing was rewritten or deleted."
-  protocol_ctx="$protocol_ctx
-
-gitlore: these lines are in an active tier's own index but not in the root index ($o total), so they are not recallable here and nothing propagates them: composition projects the ROOT down, and root never carried them. Nothing was rewritten or deleted. Each line names both edits: delete it from the tier's index if the fact does not belong in this repo, or add the quoted line to $mempath/MEMORY.md if it does. Either edit is final.
+  add_report_each "gitlore: $o tier index $unit not in the root index, so not recallable here. Nothing was rewritten or deleted." \
+    "gitlore: these lines are in an active tier's own index but not in the root index ($o total), so they are not recallable here and nothing propagates them: composition projects the ROOT down, and root never carried them. Nothing was rewritten or deleted. Each line names both edits: delete it from the tier's index if the fact does not belong in this repo, or add the quoted line to $mempath/MEMORY.md if it does. Either edit is final.
 $capped"
 }
 

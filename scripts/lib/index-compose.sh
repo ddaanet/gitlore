@@ -26,8 +26,8 @@
 #   index-compose-dangling.sh the dangling-pointer report and its fix lines
 #   index-compose-project.sh  the down/up projection between root and a tier's
 #                              carrier
-#   index-compose-orphans.sh  the orphan report, the path-presence test and the
-#                              line picker
+#   index-compose-orphans.sh  the orphan report, the path list and the line
+#                              picker
 #   index-compose-pending.sh  the compose pass, its index rendering, and the
 #                              read-only check that shares both with the write
 # and index-merge.sh, the entry-wise three-way merge the compose-up runs.

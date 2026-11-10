@@ -28,7 +28,7 @@ RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
   assert_root_yields_at_tier_head "$tier_sha"
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$tier_sha" ]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$tier_sha" ]
-  [ ! -f "$(store_state_file memory)" ]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
 }
 
 @test "a push over a root HEAD/live fork takes the tier before it prepares root's merge" {
@@ -58,7 +58,7 @@ RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
   err="$stderr"
   # The merger was not briefed: no directive, no state file, no merge pending.
   [[ "$output$err" != *"dispatch sub-agent"* ]]
-  [ ! -f "$(store_state_file memory)" ]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
   run ! git -C memory rev-parse -q --verify MERGE_HEAD
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [[ "$err" == *"tier 'ddaanet'"* ]]
@@ -80,7 +80,7 @@ RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
   [ "$status" -eq 1 ]
   err="$stderr"
   [[ "$output$err" != *"dispatch sub-agent"* ]]
-  [ ! -f "$(store_state_file memory)" ]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
   run ! git -C memory rev-parse -q --verify MERGE_HEAD
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [[ "$err" == *"${lost:0:7}"* ]]

@@ -76,11 +76,9 @@ if [ -t 0 ]; then no_intent; fi
 # commit below), and the compose baselines this run must account for.
 pending=$(git -C "$mempath" status --porcelain)
 pre_stamp=$(gitlore_compose_stamp "$mempath")
-pre_index_ok=0
 if [ -f "$mempath/MEMORY.md" ]; then
   pre_index=$(mktemp "${TMPDIR:-/tmp}/gitlore-add-tier-index.XXXXXX")
   cp "$mempath/MEMORY.md" "$pre_index"
-  pre_index_ok=1
 fi
 
 # ---------------------------------------------------------------- parse intent
@@ -357,17 +355,20 @@ fi
 # report, and still catches that agent's later edits. A differing baseline
 # belongs to another batch and is left alone. Only existing files are rewritten:
 # none is created or deleted.
-gitdir=$(git -C "$mempath" rev-parse --absolute-git-dir)
+# The names are the hooks' own: each helper's no-agent form, plus its
+# `-<agent id>` variants.
+stamp_base=$(gitlore_compose_stamp_file "$mempath")
+preimage_base=$(gitlore_index_preimage_file "$mempath")
 post_stamp=$(gitlore_compose_stamp "$mempath")
 # The unmatched-glob case: a pattern with no file stays literal and fails -f.
-for f in "$gitdir/gitlore-compose-stamp" "$gitdir/gitlore-compose-stamp-"*; do
+for f in "$stamp_base" "$stamp_base-"*; do
   [ -f "$f" ] || continue
   if printf '%s\n' "$pre_stamp" | cmp -s - "$f"; then
     printf '%s\n' "$post_stamp" > "$f"
   fi
 done
-if [ "$pre_index_ok" = 1 ] && [ -f "$mempath/MEMORY.md" ]; then
-  for f in "$gitdir/gitlore-index-preimage" "$gitdir/gitlore-index-preimage-"*; do
+if [ -n "$pre_index" ] && [ -f "$mempath/MEMORY.md" ]; then
+  for f in "$preimage_base" "$preimage_base-"*; do
     [ -f "$f" ] || continue
     if cmp -s "$pre_index" "$f"; then
       cp "$mempath/MEMORY.md" "$f"

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The nested-tiers stage of session-start.sh (D17 3-i-a). Sourced by
 # session-start.sh only; its function takes the memory path as its argument,
-# calls session-start.sh's own `add_sysmsg`, and appends directly to its
-# `$protocol_ctx` and `$unresolvable_tiers` globals — none declared here, all
+# calls session-start.sh's own `add_sysmsg` and session-memory.sh's
+# `add_report_each`, and appends directly to session-start.sh's `$protocol_ctx`
+# and `$unresolvable_tiers` globals — none declared here, all
 # left for session-start.sh to emit or read.
 
 # Report each tier submodule inside the memory store. Discovery is by
@@ -51,13 +52,11 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
     # SessionStart does not show the user (D14).
     if [ "$(gitlore_detect_stale_merge_state "$tierpath")" != "clean" ] \
        || git -C "$tierpath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
-      add_sysmsg "gitlore: tier '$tier' has an unfinished merge, so its working tree was left as it is this session. Run /gitlore:resolve to land it."
       # The agent gets its own line: systemMessage is user-only (D14), and the
       # destructive acts here are ones the agent takes unprompted, so the
       # prohibition leads and the remedy follows.
-      protocol_ctx="$protocol_ctx
-
-gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset it, or commit into it. Run /gitlore:resolve to land the merge before writing anything to that tier."
+      add_report_each "gitlore: tier '$tier' has an unfinished merge, so its working tree was left as it is this session. Run /gitlore:resolve to land it." \
+        "gitlore: tier at $tierpath holds an unfinished merge. Do not check it out, reset it, or commit into it. Run /gitlore:resolve to land the merge before writing anything to that tier."
       continue
     fi
     # Fetch read-only: `origin live` with no refspec moves no local branch, and

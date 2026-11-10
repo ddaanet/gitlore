@@ -173,7 +173,7 @@ load helpers/take-order
 
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 1 ]
-  [ -f "$(store_state_file memory/beta)" ]
+  [ -f "$(gitlore_merge_state_file memory/beta)" ]
   [ "$(git -C memory/alpha rev-parse HEAD)" != "$a" ]
   # Root's HEAD, bytes and staged set are as the take found them.
   [ "$(git -C memory rev-parse HEAD)" = "$root" ]
