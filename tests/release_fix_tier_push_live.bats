@@ -90,3 +90,21 @@ tier_without_live() {
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$up" ]
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$up" ]
 }
+
+@test "the default resolve run makes a tier's missing live from HEAD and publishes it before memory" {
+  tier_without_live
+  seed_tier_bullet ddaanet hand.md "committed by hand"
+  git -C memory/ddaanet add -A
+  git -C memory/ddaanet commit -qm "tier fact by hand"
+  seed_root_bullet "ddaanet/hand.md" "committed by hand"
+  git -C memory add -A
+  git -C memory commit -qm "record the hand commit"
+  git -C memory push -q . HEAD:refs/heads/live
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$stderr" >&2; return 1; }
+  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$pin" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$pin" ]
+  [ "$(git -C memory/ddaanet rev-parse live)" = "$pin" ]
+}

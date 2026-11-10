@@ -233,13 +233,14 @@ gitlore_resolve_check_pins "$mempath" || exit 1
 # every level — and before memory's, the order gitlore_push_stores keeps too:
 # memory's commit records each tier's, so memory published ahead of a tier push
 # that then fails leaves a pointer the tier's remote cannot resolve (D17). A
-# tier with no remote or no local `live` has nothing to reconcile yet;
-# `pre-push` is where a missing tier remote is fatal, because that is the point
-# at which its absence starts losing writes.
+# tier with no remote has nothing to reconcile yet; `pre-push` is where a
+# missing tier remote is fatal, because that is the point at which its absence
+# starts losing writes. A tier this checkout did not mount has no local `live`,
+# yet its HEAD can hold commits memory records: made from HEAD, so they go out.
 while IFS= read -r store; do
   if [ "$store" = "$mempath" ]; then continue; fi
   [ -n "$(git -C "$store" config --get remote.origin.url || true)" ] || continue
-  git -C "$store" rev-parse -q --verify live >/dev/null || continue
+  gitlore_ensure_live "$store" || exit 1
   # Every store under `$mempath` is a tier; the root is handled below.
   check_store_gates "$store" "${store##*/}"
 done < <(gitlore_memory_stores "$mempath")
