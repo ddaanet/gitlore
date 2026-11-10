@@ -93,9 +93,9 @@ The division of labour is D7's: the script decides, the agent writes prose.
    waiting; the script gates every tier before memory, the order publishing
    keeps, so memory's pointer never goes out ahead of a tier it records), then
    retries the original commit and tells the user which store was merged — a
-   tier is shared with other repositories, the project store is not. Invoked by
-   the merge skill it does not loop: a bare `resolve.sh` run publishes, and the
-   merge skill reruns its own take, which publishes nothing.
+   tier is shared with other repositories, the project store is not. After a
+   continuation that printed `merged without publishing` it does not loop: a
+   bare `resolve.sh` run publishes, and `/gitlore:merge` takes what is left.
 
 **Memory's `live` reaches its remote only from memory's own gate, which runs
 last.** `check_store_gates` ends by pushing `live` to `origin`, and
