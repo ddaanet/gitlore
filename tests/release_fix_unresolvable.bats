@@ -96,3 +96,40 @@ tier_pin_behind_an_unreachable_remote() {
   # Nothing left staged for the next commit to record by surprise.
   git -C memory diff --cached --quiet
 }
+
+# Follow the commands refusal $1 prints, each a line `cd "<dir>" && ...`, as a
+# reader does: in order, stopping at the first that fails, except that the
+# last still runs when the refusal says it runs whether or not the revert did.
+follow_remedy() {
+  local refusal="$1" cmds cmd n i=0 failed=0 rc
+  cmds=$(printf '%s\n' "$refusal" | sed -n 's/^gitlore:[[:space:]]*\(cd "[^"]*" && .*\)$/\1/p')
+  n=$(printf '%s\n' "$cmds" | grep -c .)
+  [ "$n" -eq 3 ] || { printf 'the refusal names no three-step remedy:\n%s\n' "$refusal" >&2; return 1; }
+  while IFS= read -r cmd; do
+    i=$((i + 1))
+    if [ "$failed" -eq 1 ]; then
+      [ "$i" -eq "$n" ] || continue
+      [[ "$refusal" == *"whether or not"* ]] || continue
+    fi
+    rc=0
+    bash -c "$cmd" >/dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 0 ] || failed=1
+  done <<<"$cmds"
+}
+
+@test "revert-pin's uncommitted-changes remedy restores the changes when its revert step refuses too" {
+  tier_gitlink_nobody_holds
+  printf 'a new fact\n' > memory/new-fact.md
+  printf '%s\n' "<!-- an edit in progress -->" "$(cat memory/MEMORY.md)" > memory/MEMORY.md.new
+  mv memory/MEMORY.md.new memory/MEMORY.md
+  # The revert step then refuses on a later check: the tier's remote is
+  # unreachable, so its fetch fails.
+  git -C memory/ddaanet config remote.origin.url "$TMP_REPO/.no-such-remote.git"
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh" revert-pin ddaanet
+  [ "$status" -ne 0 ]
+  follow_remedy "$stderr"
+  [ "$(git -C memory rev-parse live)" = "$recording" ]
+  [ -f memory/new-fact.md ] || { printf 'the untracked fact is left in the stash\n' >&2; return 1; }
+  grep -qF 'an edit in progress' memory/MEMORY.md
+  [ -z "$(git -C memory stash list)" ]
+}

@@ -212,10 +212,11 @@ gitlore_revert_lost_pin() {
   # records by definition, and a revert writes no tier's worktree.
   if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all)" ]; then
     # A commit cannot clean the tree: the pin guard refuses one over a tier pin
-    # the tier lacks, so the remedy sets the changes aside instead.
+    # the tier lacks, so the remedy sets the changes aside instead. The revert
+    # step can still refuse on a later check, so the restore runs either way.
     repo=$(git rev-parse --show-toplevel)
     root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
-    echo "gitlore: memory has uncommitted changes, and a memory commit is refused over the lost pin. Set them aside, revert, then restore them and review the result, which can conflict with what the revert undoes. Nothing was reverted.
+    echo "gitlore: memory has uncommitted changes, and a memory commit is refused over the lost pin. Set them aside, revert, then restore them: run the third line whether or not the second reverted, since the changes stay set aside until it runs. After a revert the restore can conflict with what the revert undoes, so review the result. Nothing was reverted.
 gitlore:   cd \"$repo\" && git -C \"$mempath\" stash push -u
 gitlore:   cd \"$repo\" && bash \"$root/scripts/resolve.sh\" revert-pin $(printf '%q' "$tier")
 gitlore:   cd \"$repo\" && git -C \"$mempath\" stash pop" >&2

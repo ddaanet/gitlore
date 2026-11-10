@@ -92,7 +92,8 @@ lines. It refuses, saying why and changing nothing, when
   uncommitted changes (the tier paths excepted, since the lost tier is off the
   recorded commit by definition and a revert writes no tier's worktree); the
   uncommitted-changes refusal prints the stash, revert and stash-pop commands,
-  since a memory commit is refused over the lost pin;
+  since a memory commit is refused over the lost pin, and says the stash-pop
+  runs whether or not the revert went through;
 - memory's `HEAD` is not on its `live`;
 - `live` records no commit for the tier, the tier holds the commit after a fetch
   (then `/gitlore:merge` is the remedy), the fetch of the tier's remote failed
