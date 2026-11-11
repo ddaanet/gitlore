@@ -32,7 +32,9 @@ the same five things, in this order.
    has forked from its local `live` is refused first, with the yield's own
    refusal: step 3 would refuse it after the tiers moved, leaving a tier ahead
    of its pin, which the memory commit that refusal asks for is itself refused
-   on. Then each tier (`gitlore_take_tier`): reconcile its `HEAD` against its
+   on. The yield refuses a tier's merge on such a root with the same refusal,
+   which covers the merges the push and the resolve command prepare outside a
+   take. Then each tier (`gitlore_take_tier`): reconcile its `HEAD` against its
    local `live`, take its remote (fast-forward, or a prepared merge marked
    not-to-publish when the two diverged), then check the arrived carrier alone
    and repair it when it fails (D52). Inside a push a tier is taken only when it

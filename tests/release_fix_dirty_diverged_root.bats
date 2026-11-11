@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # A memory root with uncommitted changes whose HEAD has forked from its local
-# `live` is refused at the tier take, before the take moves any tier.
+# `live` is refused at the tier take, before the take moves any tier, and at
+# the yield, before a tier merge the push or the resolve command prepares.
 # A tier moved first would sit ahead of its pin, so the memory commit the
 # refusal asks for would itself be refused by the pin guard naming the take
 # again. A pre-push that takes no tier publishes as it does on any dirty root,
@@ -46,6 +47,44 @@ assert_refused_then_converges() {
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$TIER_UP" ]
   grep -qF '](ddaanet/up.md)' memory/MEMORY.md
   [ "$(git -C memory rev-parse HEAD)" = "$(git -C memory rev-parse live)" ]
+}
+
+# The tier-merge start state: tier ddaanet holds a recorded commit of its own
+# and its remote one this checkout lacks, so the tier has diverged from its
+# remote; memory's local `live` has forked off HEAD, and root holds an
+# uncommitted fact and its index line. Leaves the tier remote's sha in TIER_UP.
+dirty_diverged_root_with_tier_merge() {
+  take_base_store ddaanet
+  local_tier_commit_recorded ddaanet loc.md
+  TIER_UP=$(push_tier_fact ddaanet '- [up](up.md) — published upstream')
+  git -C memory branch -f live "$(git -C memory commit-tree "HEAD^{tree}" -p HEAD~1 -m elsewhere)"
+  printf -- '---\nname: dirty\ndescription: ""\n---\n\nbody\n' > memory/dirty.md
+  seed_root_bullet dirty.md "an uncommitted root fact"
+}
+
+# After a refused tier merge: nothing moved or was prepared in either store,
+# and the tier remote received nothing.
+assert_tier_merge_refused() {
+  local store
+  [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$(git -C memory rev-parse HEAD:ddaanet)" ]
+  for store in memory memory/ddaanet; do
+    [ ! -e "$(gitlore_merge_state_file "$store")" ]
+    [ -z "$(git -C "$store" rev-parse -q --verify MERGE_HEAD || true)" ]
+  done
+  [ "$(git -C memory/ddaanet ls-remote origin refs/heads/live | cut -f1)" = "$TIER_UP" ]
+}
+
+# The commit the refusal asks for goes through, and entry $1 then prepares the
+# tier merge.
+assert_commit_then_tier_merge_prepared() {
+  run commit_sections "memory: record dirty"
+  [ "$status" -eq 0 ]
+  git -C memory cat-file -e HEAD:dirty.md
+
+  run bash "$1"
+  [ "$status" -ne 0 ]
+  [ -f "$(gitlore_merge_state_file memory/ddaanet)" ]
+  git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD
 }
 
 @test "merge: a dirty root forked from live is refused before the tier moves, and converges after the commit" {
@@ -96,4 +135,31 @@ assert_refused_then_converges() {
   run bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
   [ "$(git -C memory/ddaanet ls-remote origin refs/heads/live | cut -f1)" = "$tier_head" ]
+}
+
+@test "pre-push: a tier merge on a dirty root forked from live is refused before it is prepared" {
+  dirty_diverged_root_with_tier_merge
+  CLAUDECODE=1 run bash "$PRE_PUSH"
+  [ "$status" -ne 0 ]
+  assert_tier_merge_refused
+  [[ "$output" == *"gitlore: memory has uncommitted changes and has diverged from 'live', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again."* ]]
+  assert_commit_then_tier_merge_prepared "$PRE_PUSH"
+}
+
+@test "pre-push from a terminal: a tier merge on a dirty root forked from live is refused" {
+  dirty_diverged_root_with_tier_merge
+  run env -u CLAUDECODE bash "$PRE_PUSH"
+  [ "$status" -ne 0 ]
+  assert_tier_merge_refused
+  [[ "$output" == *"gitlore: memory has uncommitted changes and has diverged from 'live', so no merge was prepared. Commit them and try again."* ]]
+  assert_commit_then_tier_merge_prepared "$PRE_PUSH"
+}
+
+@test "resolve: a tier merge on a dirty root forked from live is refused before it is prepared" {
+  dirty_diverged_root_with_tier_merge
+  CLAUDECODE=1 run bash "$PLUGIN_ROOT/scripts/resolve.sh"
+  [ "$status" -eq 1 ]
+  assert_tier_merge_refused
+  [[ "$output" == *"gitlore: memory has uncommitted changes and has diverged from 'live', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again."* ]]
+  assert_commit_then_tier_merge_prepared "$PLUGIN_ROOT/scripts/resolve.sh"
 }

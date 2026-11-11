@@ -105,6 +105,7 @@ gitlore_yield_merge() {
   # merge behind for the next gate to classify.
   # Gated here for every caller: the take, the push, the resolve command.
   gitlore_refuse_dirty_merge "$mempath" "$authority" || return 1
+  gitlore_refuse_tier_merge_on_dirty_forked_root "$mempath" || return 1
   gitlore_refuse_rewritten "$mempath" "$authority" "$pending_ref" || return 1
   # The marker goes down BEFORE the preparation, so every window inside it
   # leaves a state file for the next gate to classify (D7): a merge that staged
@@ -145,8 +146,9 @@ gitlore_yield_merge() {
 # Refuse a merge on a store with uncommitted changes: a merge is prepared on a
 # clean store only, since the continuation commits with `add -A` and
 # uncommitted edits would ride into the merge commit unapproved. Called by the
-# yield above, and by gitlore_take_tiers for a memory root forked from its
-# local `live`, so that refusal comes before any tier moves. The root arm of
+# yield above, and for a memory root forked from its local `live` by
+# gitlore_take_tiers and gitlore_refuse_tier_merge_on_dirty_forked_root, so
+# that refusal comes before any tier moves. The root arm of
 # the take's predicate is the rule for any store: a tier has no submodules for
 # its --ignore-submodules=all to leave out.
 # Args: $1 = store worktree, $2 = the merge's authority ref.
@@ -158,6 +160,28 @@ gitlore_refuse_dirty_merge() {
     "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again." \
     "gitlore: $mempath has uncommitted changes and has diverged from '$authority', so no merge was prepared. Commit them and try again." >&2
   return 1
+}
+
+# Refuse a merge in a tier while the memory root holding it has uncommitted
+# changes and its HEAD has forked from its local `live`: root's own merge
+# cannot be prepared in that state, and the tier merge, once landed, sits ahead
+# of its pin, which the memory commit root's refusal asks for is itself refused
+# on. The take's tier moves are refused by the same check in gitlore_take_tiers;
+# this one covers the merges prepared outside a take — the push's and the
+# resolve command's. A tier is the store whose superproject itself has one; the
+# memory root's superproject is the user's project. The root is printed as
+# the tier path's parent where that is the root, so the message matches the
+# take's refusal.
+# Args: $1 = store worktree. Returns 1 after emitting.
+gitlore_refuse_tier_merge_on_dirty_forked_root() {
+  local store="$1" sup root
+  sup=$(git -C "$store" rev-parse --show-superproject-working-tree) || sup=""
+  [ -n "$sup" ] || return 0
+  [ -n "$(git -C "$sup" rev-parse --show-superproject-working-tree || true)" ] || return 0
+  root=$(dirname "$store")
+  [ "$(git -C "$root" rev-parse --show-toplevel || true)" = "$sup" ] || root="$sup"
+  [ "$(gitlore_classify_refusal "$root" HEAD live)" = "diverged" ] || return 0
+  gitlore_refuse_dirty_merge "$root" live
 }
 
 # Stop a memory merge whose gitlink the tier cannot answer with its HEAD: a commit
