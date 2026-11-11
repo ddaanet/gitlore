@@ -168,18 +168,26 @@ gitlore_refuse_dirty_merge() {
 # of its pin, which the memory commit root's refusal asks for is itself refused
 # on. The take's tier moves are refused by the same check in gitlore_take_tiers;
 # this one covers the merges prepared outside a take — the push's and the
-# resolve command's. A tier is the store whose superproject itself has one; the
-# memory root's superproject is the user's project. The root is printed as
-# the tier path's parent where that is the root, so the message matches the
+# resolve command's. A tier is a store whose superproject is a memory store (it
+# holds MEMORY.md) and which is not that store's memory submodule; the memory
+# root's superproject is the user's project, itself possibly a submodule. The
+# root whose state is classified is the tier's superproject, printed as the
+# tier path's parent where that is the root's top, so the message matches the
 # take's refusal.
 # Args: $1 = store worktree. Returns 1 after emitting.
 gitlore_refuse_tier_merge_on_dirty_forked_root() {
-  local store="$1" sup root
+  local store="$1" sup abs rel own_path root
   sup=$(git -C "$store" rev-parse --show-superproject-working-tree) || sup=""
   [ -n "$sup" ] || return 0
-  [ -n "$(git -C "$sup" rev-parse --show-superproject-working-tree || true)" ] || return 0
+  [ -f "$sup/MEMORY.md" ] || return 0
+  abs=$(git -C "$store" rev-parse --show-toplevel) || return 0
+  rel="${abs#"$sup"/}"
+  own_path=$(git config --file "$sup/.gitmodules" \
+    "submodule.${GITLORE_SUBMODULE_NAME}.path") || own_path=""
+  [ "$rel" != "$own_path" ] || return 0
   root=$(dirname "$store")
-  [ "$(git -C "$root" rev-parse --show-toplevel || true)" = "$sup" ] || root="$sup"
+  [ "$(git -C "$root" rev-parse --show-toplevel || true)" = "$sup" ] \
+    && [ -z "$(git -C "$root" rev-parse --show-prefix || true)" ] || root="$sup"
   [ "$(gitlore_classify_refusal "$root" HEAD live)" = "diverged" ] || return 0
   gitlore_refuse_dirty_merge "$root" live
 }
