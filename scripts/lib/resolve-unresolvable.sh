@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# Unresolvable pins: a recorded commit that the repository which should hold it
+# lacks, whether memory's gitlink on a tier or the parent's pin on memory. It is
+# an integrity error at every level: nothing composes over it and nothing is
+# recorded under it, so the pin never moves backward silently. SessionStart and
+# /gitlore:resolve report it, naming the commit, the remote that lacks it, and
+# the repo `.gitmodules` names when that is a different one. The remedy is per
+# level: the checkout that recorded a tier gitlink publishes it with
+# /gitlore:push, or /gitlore:resolve reverts the memory commit that recorded it
+# when that checkout is gone; a parent pin means the memory holding it has not
+# been merged upstream, which no command here changes.
+# Part of lib/resolve.sh; source that, not this file.
+
+# Print the commit memory's index records for tier $2 when this checkout of the
+# tier does not hold it, and nothing otherwise. Local only: whether the remote
+# holds it is the caller's fetch. The index, not HEAD, as the pin guard reads it:
+# a staged gitlink is what the next memory commit records.
+# Args: $1 = memory worktree path, $2 = tier path.
+gitlore_tier_pin_absent() {
+  local mempath="$1" tier="$2" pin
+  # `git -C` into an unmaterialized submodule answers for the enclosing repo.
+  [ -e "$mempath/$tier/.git" ] || return 0
+  pin=$(git -C "$mempath" rev-parse -q --verify ":$tier") || return 0
+  git -C "$mempath/$tier" rev-parse -q --verify "$pin^{commit}" >/dev/null && return 0
+  printf '%s\n' "$pin"
+}
+
+# Print the commit the parent's index records for memory when the memory store
+# does not hold it, and nothing otherwise. Run from the parent's root.
+# Args: $1 = memory worktree path.
+gitlore_parent_pin_absent() {
+  local mempath="$1" pin
+  pin=$(git rev-parse -q --verify ":$mempath") || return 0
+  git -C "$mempath" rev-parse -q --verify "$pin^{commit}" >/dev/null && return 0
+  printf '%s\n' "$pin"
+}
+
+# The report line for tier $2, whose recorded commit $3 neither the checkout nor
+# its remote holds, for channel $4. Carries the push remedy and the revert, and
+# no command that needs the commit: a checkout of it or a merge that fetches it
+# both fail. The urls — the tier's remote, and the one `.gitmodules` records
+# when that is a different repo — are text a contributor's PR or the user's
+# config chose: the `user` line shows them, their userinfo stripped, and the
+# `agent` line says the user has them.
+# Args: $1 = memory worktree path, $2 = tier path, $3 = the recorded commit,
+# $4 = `user` or `agent`.
+gitlore_unresolvable_tier_report() {
+  local mempath="$1" tier="$2" pin="$3" channel="$4" remote recorded where
+  remote=$(git -C "$mempath/$tier" config --get remote.origin.url || true)
+  if [ -z "$remote" ]; then
+    where="this checkout of the tier does not hold, and the tier has no remote"
+  elif [ "$channel" = agent ]; then
+    where="neither this checkout of the tier nor its remote holds (the user has the remote's url)"
+  else
+    where="neither this checkout of the tier nor its remote $(gitlore_url_for_display "$remote") holds"
+  fi
+  recorded=$(gitlore_gitmodules_url "$mempath/.gitmodules" "$tier")
+  if [ -n "$recorded" ] && { [ -z "$remote" ] || ! gitlore_same_repo_url "$remote" "$recorded"; }; then
+    if [ "$channel" = agent ]; then
+      where="$where; $mempath/.gitmodules names a different repo for the tier (the user has its url)"
+    else
+      where="$where; $mempath/.gitmodules names $(gitlore_url_for_display "$recorded") for the tier, a different repo"
+    fi
+  fi
+  printf "gitlore: memory records tier '%s' at %s, a commit %s. Nothing composes over it. The checkout that recorded it publishes it with /gitlore:push; if that checkout no longer exists, /gitlore:resolve reverts the memory commit that recorded it.\n" \
+    "$tier" "${pin:0:12}" "$where"
+}
+
+# The report line for the parent's pin $2 on memory, which memory's remote does
+# not hold, for channel $3. No command and no url change: whether to accept
+# another repo's url belongs to the multi-repo design, not to this report. The
+# urls go to the `user` line only, as in the tier report.
+# Args: $1 = memory worktree path, $2 = the recorded commit, $3 = `user` or `agent`.
+gitlore_unresolvable_parent_report() {
+  local mempath="$1" pin="$2" channel="$3" remote recorded where
+  remote=$(git -C "$mempath" config --get remote.origin.url || true)
+  if [ -z "$remote" ] || gitlore_is_placeholder_url "$remote"; then
+    where="a commit this memory store does not hold, and memory has no remote"
+  elif [ "$channel" = agent ]; then
+    where="a commit memory's remote does not hold (the user has the remote's url)"
+  else
+    where="a commit memory's remote $(gitlore_url_for_display "$remote") does not hold"
+  fi
+  recorded=$(gitlore_gitmodules_url .gitmodules "$mempath")
+  if [ -n "$recorded" ] && { [ -z "$remote" ] || ! gitlore_same_repo_url "$remote" "$recorded"; }; then
+    if [ "$channel" = agent ]; then
+      where="$where; .gitmodules names a different repo for memory (the user has its url)"
+    else
+      where="$where; .gitmodules names $(gitlore_url_for_display "$recorded") for memory, a different repo"
+    fi
+  fi
+  printf 'gitlore: this repository records memory at %s, %s. The memory holding it has not been merged upstream, so its facts are not in this checkout.\n' \
+    "${pin:0:12}" "$where"
+}
+
+# Print the url .gitmodules file $1 records for the submodule at path $2, or
+# nothing. `-z` keeps a name or path with spaces in one record.
+# Args: $1 = .gitmodules file, $2 = submodule path.
+gitlore_gitmodules_url() {
+  local file="$1" want="$2" rec key name
+  # C for the function's span, since bash 3.2 ignores a locale assigned in front
+  # of a builtin: a NUL-delimited `read` under a multibyte locale overshoots in
+  # bash 5.0-5.3 (BP#65).
+  local LC_ALL=C
+  [ -f "$file" ] || return 0
+  while IFS= read -r -d '' rec; do
+    [ "${rec#*$'\n'}" = "$want" ] || continue
+    key=${rec%%$'\n'*}
+    name=${key#submodule.}
+    name=${name%.path}
+    git config --file "$file" --get "submodule.$name.url" || true
+    return 0
+  done < <(git config --file "$file" -z --get-regexp '^submodule\..*\.path$')
+  return 0
+}
+
+# Exit 0 when urls $1 and $2 name one repository. By D64 `.gitmodules` records
+# a GitHub repo in its https form while the module's own remote can stay on ssh,
+# so both go through the same https form, then lose their userinfo — a login or
+# a credential names no other repo — before a trailing `/` and `.git` are
+# dropped. Any other pair compares as written.
+gitlore_same_repo_url() {
+  local a b
+  a=$(gitlore_url_without_userinfo "$(gitlore_github_https_url "$1")" none)
+  b=$(gitlore_url_without_userinfo "$(gitlore_github_https_url "$2")" none)
+  a=${a%/}
+  a=${a%.git}
+  b=${b%/}
+  b=${b%.git}
+  [ "$a" = "$b" ]
+}
+
+# /gitlore:resolve's check: report every unresolvable pin under this parent on
+# stderr and return 1, or return 0 when there is none. A recorded commit the
+# module lacks gets one fetch of the module's `live` first, since a commit only
+# its remote holds is a take's business, not an integrity error.
+# Args: $1 = memory worktree path.
+gitlore_resolve_check_pins() {
+  local mempath="$1" tier pin found=0 repo root revert
+  repo=$(git rev-parse --show-toplevel)
+  root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    pin=$(gitlore_tier_pin_absent "$mempath" "$tier")
+    [ -n "$pin" ] || continue
+    if ! gitlore_tier_fetch_live "$mempath/$tier"; then
+      found=1
+      echo "gitlore: memory records tier '$tier' at ${pin:0:12}, a commit this checkout of the tier does not hold, and the fetch from the tier's remote failed, so whether the remote holds it cannot be told. Nothing composes over it; make the remote reachable, then run /gitlore:resolve again." >&2
+      continue
+    fi
+    pin=$(gitlore_tier_pin_absent "$mempath" "$tier")
+    [ -n "$pin" ] || continue
+    found=1
+    revert="gitlore: once no checkout holds it, revert the memory commit that recorded it on live, keeping it in history:
+gitlore:   cd \"$repo\" && bash \"$root/scripts/resolve.sh\" revert-pin $(printf '%q' "$tier")"
+    gitlore_say_for_agent_or_user \
+      "$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin" agent)
+$revert" \
+      "$(gitlore_unresolvable_tier_report "$mempath" "$tier" "$pin" user)
+$revert" >&2
+  done < <(gitlore_tier_paths "$mempath")
+
+  pin=$(gitlore_parent_pin_absent "$mempath")
+  if [ -n "$pin" ]; then
+    gitlore_git -C "$mempath" fetch -q --no-recurse-submodules origin live || true
+    pin=$(gitlore_parent_pin_absent "$mempath")
+  fi
+  if [ -n "$pin" ]; then
+    found=1
+    gitlore_say_for_agent_or_user \
+      "$(gitlore_unresolvable_parent_report "$mempath" "$pin" agent)" \
+      "$(gitlore_unresolvable_parent_report "$mempath" "$pin" user)" >&2
+  fi
+  [ "$found" -eq 0 ]
+}
+
+# Fetch `origin live` into tier checkout $1, passing git's message through.
+# Return 1 when the fetch failed, so the remote was never read; a tier with no
+# remote, or a remote with no `live` yet, holds nothing more and returns 0.
+# Args: $1 = tier checkout path.
+gitlore_tier_fetch_live() {
+  local tierpath="$1" err
+  [ -n "$(git -C "$tierpath" config --get remote.origin.url || true)" ] || return 0
+  if err=$(gitlore_git -C "$tierpath" fetch -q --no-recurse-submodules origin live 2>&1); then
+    return 0
+  fi
+  [ -z "$err" ] || printf '%s\n' "$err" >&2
+  case "$err" in
+    *"couldn't find remote ref"*) return 0 ;;
+  esac
+  return 1
+}
+
+# `resolve.sh revert-pin <tier>`: revert, on memory's `live`, the memory commit
+# that recorded tier $2 at a commit no repository holds. A revert and never a
+# reset, so the commit stays in history and the root lines it carried go with
+# it; a holder found alive afterwards sits ahead of the reverted pin, and the
+# compose re-adopts its lines. Publishing the revert is /gitlore:push's.
+# Returns 1 after saying why on stderr when nothing was reverted.
+# Args: $1 = memory worktree path, $2 = tier path.
+gitlore_revert_lost_pin() {
+  local mempath="$1" tier="$2" lost rec parents head live msg paths repo root
+  if [ ! -e "$mempath/$tier/.git" ]; then
+    echo "gitlore: tier '$tier' is not checked out in $mempath, so whether it holds its recorded commit cannot be told; nothing was reverted." >&2
+    return 1
+  fi
+  if gitlore_any_store_mid_merge "$mempath"; then
+    echo "gitlore: a merge is prepared in the memory store or a tier; land or abort it before reverting. Nothing was reverted." >&2
+    return 1
+  fi
+  # The tiers are left out: the lost tier is checked out off the commit memory
+  # records by definition, and a revert writes no tier's worktree.
+  if [ -n "$(git -C "$mempath" status --porcelain --ignore-submodules=all)" ]; then
+    # A commit cannot clean the tree: the pin guard refuses one over a tier pin
+    # the tier lacks, so the remedy sets the changes aside instead. The revert
+    # step can still refuse on a later check, so the restore runs either way.
+    repo=$(git rev-parse --show-toplevel)
+    root="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}"
+    echo "gitlore: memory has uncommitted changes, and a memory commit is refused over the lost pin. Set them aside, revert, then restore them: run the third line whether or not the second reverted, since the changes stay set aside until it runs. After a revert the restore can conflict with what the revert undoes, so review the result. Nothing was reverted.
+gitlore:   cd \"$repo\" && git -C \"$mempath\" stash push -u
+gitlore:   cd \"$repo\" && bash \"$root/scripts/resolve.sh\" revert-pin $(printf '%q' "$tier")
+gitlore:   cd \"$repo\" && git -C \"$mempath\" stash pop" >&2
+    return 1
+  fi
+  head=$(git -C "$mempath" rev-parse HEAD)
+  live=$(git -C "$mempath" rev-parse -q --verify refs/heads/live) || live=""
+  if [ "$head" != "$live" ]; then
+    echo "gitlore: memory's HEAD is not on its live; run /gitlore:merge first. Nothing was reverted." >&2
+    return 1
+  fi
+  if ! lost=$(git -C "$mempath" rev-parse -q --verify "live:$tier"); then
+    echo "gitlore: memory's live records no commit for tier '$tier'; nothing was reverted." >&2
+    return 1
+  fi
+  if ! gitlore_tier_fetch_live "$mempath/$tier"; then
+    echo "gitlore: the fetch from the remote of tier '$tier' failed, so whether it holds the commit memory records for the tier (${lost:0:12}) cannot be told. Make the remote reachable and run this again. Nothing was reverted." >&2
+    return 1
+  fi
+  if git -C "$mempath/$tier" rev-parse -q --verify "$lost^{commit}" >/dev/null; then
+    echo "gitlore: tier '$tier' holds the commit memory records for it (${lost:0:12}), so there is nothing to revert. Run /gitlore:merge." >&2
+    return 1
+  fi
+  # The most recent commit on live that touched the gitlink is the one that set
+  # it to the commit live records.
+  rec=$(git -C "$mempath" log -1 --format=%H live -- "$tier")
+  if [ -z "$rec" ] || [ "$(git -C "$mempath" rev-parse -q --verify "$rec:$tier")" != "$lost" ]; then
+    echo "gitlore: no commit on memory's live records tier '$tier' at ${lost:0:12}; nothing was reverted." >&2
+    return 1
+  fi
+  # `rev-list --parents` prints fixed-width hex ids and nothing else, so a word
+  # count carries none of the usual splitting hazard.
+  parents=$(git -C "$mempath" rev-list --parents -n 1 "$rec" | wc -w | tr -d ' ')
+  if [ "$parents" -ne 2 ]; then
+    echo "gitlore: tier '$tier' was recorded at ${lost:0:12} by merge commit ${rec:0:12}, which this does not revert. Revert it by hand with git revert -m 1. Nothing was reverted." >&2
+    return 1
+  fi
+  if ! gitlore_git -C "$mempath" revert --no-edit "$rec" >&2; then
+    if git -C "$mempath" rev-parse -q --verify REVERT_HEAD >/dev/null; then
+      gitlore_git -C "$mempath" revert --abort >&2 || true
+    fi
+    echo "gitlore: the revert of memory commit ${rec:0:12} did not apply cleanly, so it was abandoned and memory is as it was." >&2
+    return 1
+  fi
+  gitlore_git -C "$mempath" push -q . HEAD:refs/heads/live >&2
+  # Every path the whole commit changed, one per line, as git prints them: a
+  # newline or control character comes out in git's quoted form, so a path
+  # cannot add a line of its own; UTF-8 stays unescaped. Paths are local store
+  # content, so both channels get them.
+  paths=$(git -c core.quotePath=false -C "$mempath" diff-tree --no-commit-id --name-only -r "$rec" | sed 's/^/  /')
+  repo=$(git rev-parse --show-toplevel)
+  msg="gitlore: reverted memory commit ${rec:0:12}, which recorded tier '$tier' at ${lost:0:12}, on live; the commit stays in history. Run /gitlore:push to publish the revert.
+The reverted commit changed these paths, the revert undoes them all:
+$paths
+See the full diff with: cd \"$repo\" && git -C \"$mempath\" show ${rec:0:12}"
+  gitlore_say_for_agent_or_user "$msg" "$msg" >&2
+}

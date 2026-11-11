@@ -8,9 +8,9 @@ allowed-tools: ["Bash", "Skill"]
 
 You are taking published memory in, and sending nothing out.
 
-Nothing advances memory on its own, a session start included. A tier is checked
-out at the commit the memory tree records for it, so facts another repo
-published sit on the tier's remote until this runs; the memory store's own
+Nothing advances memory on its own, a session start included. A tier stays where
+it is, so facts another repo published sit on the tier's remote until this runs;
+the memory store's own
 `live` can hold commits HEAD is not checked out at (another checkout of the
 same store committed them), and its remote can hold more. `/gitlore:push` also takes them, but only on its way to
 publishing this repo's; this skill is the half that discloses nothing.
@@ -63,10 +63,11 @@ Say which stores took what. For the memory store, a line saying HEAD was
 fast-forwarded onto its local `live` is that local move; a line saying memory
 has uncommitted changes, so HEAD was not moved, means nothing moved — relay it
 and tell the user to commit memory (summary, approval) and run
-`/gitlore:merge` again. A tier take records its own bookkeeping commit —
-the moved tier pointer and the recomposed root index — and leaves the memory
-store clean; the run says so when it happens, and says when the pair was only
-staged instead because the store held uncommitted work. Say plainly that
+`/gitlore:merge` again. Tiers are taken first and memory last, and the run ends
+with one bookkeeping commit — the moved tier pointers and the recomposed root
+index — that leaves the memory store clean; the run says so when it happens, and
+says when the moves were only staged because the store held uncommitted work.
+Say plainly that
 nothing was published, and that `/gitlore:push` is what puts this repo's own
 facts on their remotes.
 
@@ -79,10 +80,11 @@ included, then report the outcome the run names:
 - The output ends that tier's line `; /gitlore:push publishes it.` — the repair
   is adopted. Say it is committed in the tier's local `live` and that
   `/gitlore:push` publishes it. Say that only when that line is there.
-- The take rests because this repo's own index has problems. Relay the problems
-  adoption waits on: they are this repo's to fix, nothing is published until
-  they are, and `/gitlore:push` publishes the repair once they are fixed — the
-  next take adopts it without repairing again.
+- The run's root write refuses because this repo's own index has problems
+  (`gitlore: the root index could not take …`, then `nothing was recorded, and
+  … stays where the take put it`). Relay the problems: they are this repo's to
+  fix, then run `/gitlore:merge` again, which composes the repaired tier with no
+  second repair; `/gitlore:push` publishes the repair.
 - The repair cannot fix the arrival. Relay its problem lines and the remedy the
   run prints: `Once the index is fixed where it was published, run
   /gitlore:merge again.`, or, when the refusal also names this repo's own
@@ -93,6 +95,26 @@ A repair that fails on its scratch directory, a read, the rewrite, the commit
 build, the `live` advance or the checkout that follows it prints the refusal and
 `Run /gitlore:merge again.` Relay that: the failure is transient and the next
 take repairs from scratch.
+
+## When the take cannot finish
+
+- **Root written with conflict markers.** `gitlore: the root index and … changed
+  the same lines apart` names the file and each marker line, and nothing was
+  committed. Both sides changed a line of a tier's index: resolve each chunk to
+  the line the root index should carry, then commit memory through the
+  `gitlore:commit` skill. Until the markers are gone every compose and commit
+  refuses root.
+- **A tier commit no repository holds.** `gitlore: memory records <sha> for tier
+  '<t>', and …` means the incoming memory commit records a tier commit the tier
+  lacks, and memory was neither moved nor composed. When the line goes on
+  `neither the tier nor its remote …`, the checkout that recorded it runs
+  `/gitlore:push`; `/gitlore:merge` then retries. The pin is recorded only on
+  memory's remote, which `/gitlore:resolve` and `revert-pin` do not read, so if
+  that checkout is gone nothing in the plugin is known to revert it: say so
+  rather than sending the user to `/gitlore:resolve`. When it goes on `the tier
+  has no remote and does not hold it …`, no push can supply the commit: the user
+  mounts the tier against a remote or unmounts it. Relay the line; the user
+  holds the urls.
 
 ## Correcting what arrived
 
@@ -113,8 +135,8 @@ drops a tier line from the carrier only when the root index carried that path at
 `HEAD`; a path absent there reads as one nobody authored in root, so it stays in
 the carrier and is reported. Whether an arrived path is at `HEAD` depends on
 whether a commit has recorded the recomposed root index yet — a take on a clean
-store commits its own bookkeeping, while a take on a dirty store and a landed
-merge both leave that write for the next memory commit. So run
+store commits its own bookkeeping, while a take on a dirty store leaves that
+write for the next memory commit. So run
 `git -C memory show HEAD:MEMORY.md` and look for the line before assuming one
 pass suffices: present there, removing it from the root index is enough; absent
 there, remove it from the tier's own `MEMORY.md` in the same change.

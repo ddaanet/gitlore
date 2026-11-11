@@ -23,15 +23,29 @@
 #   index-compose-check.sh    gitlore_compose_check's four rules, welded-line
 #                              detection, and rule 7 (a tier off its pin)
 #   index-compose-repair.sh   the mechanical rewrite for a compose-check problem
-#   index-compose-project.sh  the dangling/orphan reports and the down/up
-#                              projection between root and a tier's carrier
+#   index-compose-dangling.sh the dangling-pointer report and its fix lines
+#   index-compose-project.sh  the down/up projection between root and a tier's
+#                              carrier
+#   index-compose-orphans.sh  the orphan report, the path list and the line
+#                              picker
+#   index-compose-pending.sh  the compose pass, its index rendering, and the
+#                              read-only check that shares both with the write
+# and index-merge.sh, the entry-wise three-way merge the compose-up runs.
 
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-check.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-repair.sh"
 # shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-compose-dangling.sh"
+# shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose-project.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-compose-orphans.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-compose-pending.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/index-merge.sh"
 
 # Print the path of a pointer bullet; return 1 if $1 is not one. A bullet is
 # `- [` ... `](` PATH `)` ... — the hook (if any) is irrelevant here. Pure
@@ -168,7 +182,7 @@ EOF
 # trailer. Writes only when the result differs, so an already-canonical index
 # produces no churn; prints "composed <file>" when it did write.
 gitlore_compose_write() {
-  local file="$1" tmp bullets
+  local file="$1" tmp
   # Inside the store's own gitdir, not beside the target: the same reason
   # gitlore_weld_repair (edit-weld.sh) gives for its own scratch file — a kill
   # between this write and the mv/rm below would otherwise leave an untracked
@@ -178,21 +192,7 @@ gitlore_compose_write() {
   # dir for a plain repo, and the caller's cwd is not that dir.
   tmp=$(git -C "$(dirname -- "$file")" rev-parse --absolute-git-dir) \
     && tmp="$tmp/gitlore-compose.tmp.$$" || return 1
-  bullets=$(cat)
-  gitlore_index_part "$file" preamble > "$tmp" || { rm -f "$tmp"; return 1; }
-  # A bulletless index is ALL preamble, emitted verbatim — so one that arrived
-  # unterminated would take the first bullet onto the end of its last line, and a
-  # glued line is not a bullet: the pointer would be lost on write. Only ever a
-  # separator, never normalisation — with no bullets there is nothing to separate
-  # and the file is left exactly as it came.
-  if [ -n "$bullets" ] && [ -s "$tmp" ] &&
-     [ "$(tail -c 1 "$tmp" | wc -l | tr -d ' ')" = 0 ]; then
-    printf '\n' >> "$tmp" || { rm -f "$tmp"; return 1; }
-  fi
-  {
-    [ -n "$bullets" ] && printf '%s\n' "$bullets"
-    gitlore_index_part "$file" trailer
-  } >> "$tmp" || { rm -f "$tmp"; return 1; }
+  gitlore_compose_render "$file" > "$tmp" || { rm -f "$tmp"; return 1; }
   if cmp -s "$tmp" "$file"; then
     rm -f "$tmp"
     return 0
@@ -203,11 +203,13 @@ gitlore_compose_write() {
 
 # The whole in-session pass. Validates first; on any problem prints the problems,
 # writes nothing, and returns 1 — fail-safe, so a broken store is never
-# half-rewritten. Otherwise it projects root's lines DOWN into every ACTIVE
-# tier's carrier, then rewrites the root index's layout.
+# half-rewritten. Otherwise it projects root's lines DOWN into every active
+# tier's carrier, then rewrites the root index's layout. It composes no tier
+# UP: a tier ahead of its pin is refused (rule 7, gitlore_compose_check_pins),
+# naming the take, which composes it up (gitlore_compose_up) and records it.
 #
-# Return codes are three, not two, because "nothing was written" and "some of it
-# was" need different words from every caller:
+# Return codes are three, not two, because "nothing was written" and "some of
+# it was" need different words from every caller:
 #   0 — composed (stdout: one "composed <file>" line per index rewritten)
 #   1 — validation refused; nothing written (stdout: the problems)
 #   2 — a write FAILED partway; earlier writes stand (stdout: what was written,
@@ -222,16 +224,18 @@ gitlore_compose_write() {
 # the post-mount triage nudge — then set GITLORE_COMPOSE_SYSMSG and
 # GITLORE_COMPOSE_CTX (either may end up empty: nothing worth reporting).
 # Shared by the PostToolBatch recompose hook (cc-hooks/index-compose.sh, which
-# detects a touch via .tool_calls[]) and add-tier-batch.sh (which writes the
-# manifest itself, outside any tool call, and so has nothing for that detection
-# to see — it calls this directly instead, with $2 always set).
+# detects a touch via .tool_calls[]) and add-tier.sh (which writes the manifest
+# itself, outside any tool call, and so has nothing for that detection to see —
+# it calls this directly instead, with $2 always set).
 # Depends on gitlore_active_tier_scopes (util-config.sh) and
 # gitlore_get_frontmatter_description (index-sync.sh); callers must source both.
 # Args: $1 = mempath, $2 = non-empty when the manifest changed this batch.
 gitlore_compose_and_report() {
   local mempath="$1" manifest_touched="$2"
-  local sysmsg="" ctx="" compose_rc=0 result
+  local sysmsg="" ctx="" compose_rc=0 result restores
 
+  # Read before the pass: once it has written, the loss is no longer visible.
+  restores=$(gitlore_compose_restores "$mempath")
   result=$(gitlore_compose "$mempath") || compose_rc=$?
   if [ "$compose_rc" -eq 0 ]; then
     if [ -n "$result" ]; then
@@ -241,6 +245,21 @@ gitlore_compose_and_report() {
       sysmsg="gitlore: recomposed tier pointers ($n $unit)"
       ctx="The gitlore tier composition rewrote these indexes to place each active tier's pointer block ahead of the project's own lines, and projected root-authored tier lines down into their carrier — including deletions of a line the memory store has committed, whose carrier copy goes in this same pass, not left for you to also edit by hand. This is expected and complete — do not re-read or re-edit them to verify. Composition places, drops and re-texts carrier lines to match the root index; the root index's own lines are only reordered, never re-texted.
 $result"
+    fi
+
+    # A line the carrier lost and the pass put back. The agent deleted it from
+    # the wrong surface, so the context says where a removal starts.
+    if [ -n "$restores" ]; then
+      local r runit restored_capped
+      r=$(printf '%s\n' "$restores" | grep -c .)
+      if [ "$r" -eq 1 ]; then runit="line"; else runit="lines"; fi
+      restored_capped=$(printf '%s\n' "$restores" | gitlore_cap_list)
+      sysmsg="${sysmsg:+$sysmsg
+}gitlore: restored $r tier index $runit deleted from the tier's own index"
+      ctx="${ctx:+$ctx
+
+}These lines were deleted from a tier's own index while the root index still carries them, and the pass put them back ($r total). A removal starts in the root index: delete the line from $mempath/MEMORY.md, and the next pass drops the tier's copy. If it is the tier's last line in the root index, delete it from both indexes in one batch.
+$restored_capped"
     fi
 
     # Carrier lines the root index does not carry. Reported, never resolved:
@@ -323,57 +342,40 @@ $result"
 }
 
 
+# The whole in-session pass; return codes 0 to 3 as documented above.
+#
+# One pass is not always a fixed point: the layout adopts a carrier into root
+# for a tier root had no line for, and only the next pass sees root holding the
+# tier and re-lays the carrier out (or re-orders it). So the pass repeats with
+# the write while it reports a change, at most three times, and each index is
+# named once however many passes wrote it. A refusal or a failed write from any
+# pass is returned as that pass reported it.
 gitlore_compose() {
-  local mempath="$1"
-  local root="$mempath/MEMORY.md"
-  local active tier changed="" out
-  [ -f "$root" ] || return 0
-
-  # Both checks run before either verdict is read, so one refusal carries the
-  # whole list. Rule 7 is here rather than in gitlore_compose_check because it
-  # guards the down projection specifically (see gitlore_compose_check_pins).
-  local refused=0
-  gitlore_compose_check "$mempath" || refused=1
-  gitlore_compose_check_pins "$mempath" || refused=1
-  [ "$refused" -eq 0 ] || return 1
-
-  active=$(gitlore_active_tiers "$mempath")
-
-  # Down first, then the root layout. The layout pass adopts a carrier for any
-  # active tier root has no line for, and the down pass skips that tier, so
-  # deleting a tier's last root line brings its whole block back: deactivating
-  # the tier is what drops it from a repo (D36).
-  #
-  # ACTIVE tiers only. Root does not represent a dormant tier — it holds no line
-  # for one — so it has no authority over that tier's carrier, and projecting an
-  # empty opinion down would delete a whole store's index.
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -f "$mempath/$tier/MEMORY.md" ] || continue
-    # Root with no line at all for this tier states nothing about it — the same
-    # condition the layout pass adopts on, and projecting an absence down here
-    # would empty the carrier a moment before the layout reads it. That is what
-    # a mount, and a deactivate/reactivate round trip, both look like.
-    gitlore_index_has_tier "$root" "$tier" || continue
-    if ! out=$(gitlore_compose_down "$mempath" "$tier" \
-      | gitlore_compose_write "$mempath/$tier/MEMORY.md"); then
-      [ -n "$changed" ] && printf '%s' "$changed"
-      printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
-      return 2
+  local mempath="$1" passes=0 rc out all="" line
+  while [ "$passes" -lt 3 ]; do
+    passes=$((passes + 1))
+    rc=0
+    out=$(gitlore_compose_pass "$mempath" gitlore_compose_write) || rc=$?
+    if [ "$rc" -ne 0 ]; then
+      # A failed write follows the indexes already written.
+      if [ "$rc" -ge 2 ] && [ -n "$all" ]; then printf '%s\n' "$all"; fi
+      printf '%s\n' "$out"
+      return "$rc"
     fi
-    changed="$changed$out
-"
-  done <<EOF
-$active
-EOF
-
-  if ! out=$(gitlore_compose_root_bullets "$mempath" | gitlore_compose_write "$root"); then
-    [ -n "$changed" ] && printf '%s' "$changed"
-    printf 'could not write %s\n' "$root"
-    return 2
-  fi
-  changed="$changed$out"
-
-  [ -n "$changed" ] && printf '%s\n' "$changed"
+    [ -n "$out" ] || break
+    if [ -z "$all" ]; then
+      all="$out"
+    else
+      while IFS= read -r line; do
+        case "$line" in
+          "composed "*) printf '%s\n' "$all" | grep -qxF -- "$line" || all="$all
+$line" ;;
+        esac
+      done <<EOF2
+$out
+EOF2
+    fi
+  done
+  if [ -n "$all" ]; then printf '%s\n' "$all"; fi
   return 0
 }

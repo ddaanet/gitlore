@@ -149,6 +149,57 @@ gitlore_github_https_url() {
   esac
 }
 
+# Print url $1 as it may be shown. Userinfo in a non-ssh `scheme://` url is a
+# credential whatever its shape — `https://user:token@host`, `https://TOKEN@host`
+# — and goes whole. An ssh url names the login the reader needs to reach the
+# host, so `ssh://user:pw@host/path` and the scp form `user:pw@host:path` keep
+# the user and lose the `:pw`. A url with no userinfo, a local path and a `@`
+# that sits in a path or a query are printed as given.
+# Args: $1 = a url.
+gitlore_url_for_display() {
+  gitlore_url_without_userinfo "$1" login
+}
+
+# Print url $1 with its userinfo cut back to what $2 keeps: `login`, the user
+# of an ssh url, or `none`. The scp form `[user[:pw]@]host:path` is told from a
+# `@` in a plain path by the `:` that follows its `@`. Bound: a password holding
+# `@` is not parsed — the text after the authority's last `@` is the host.
+# Args: $1 = a url, $2 = `login` or `none`.
+gitlore_url_without_userinfo() {
+  local url="$1" keep="$2" scheme rest authority userinfo host path
+  case "$url" in
+    *://*)
+      scheme=${url%%://*}
+      rest=${url#*://}
+      authority=${rest%%/*}
+      case "$authority" in
+        *@*) ;;
+        *) printf '%s\n' "$url"; return 0 ;;
+      esac
+      userinfo=${authority%@*}
+      host=${authority##*@}
+      case "$rest" in
+        */*) path="/${rest#*/}" ;;
+        *) path="" ;;
+      esac
+      case "$keep:$scheme" in
+        login:ssh|login:git+ssh|login:ssh+git)
+          printf '%s://%s@%s%s\n' "$scheme" "${userinfo%%:*}" "$host" "$path" ;;
+        *) printf '%s://%s%s\n' "$scheme" "$host" "$path" ;;
+      esac ;;
+    /*|./*|../*) printf '%s\n' "$url" ;;
+    *@*:*)
+      userinfo=${url%%@*}
+      rest=${url#*@}
+      if [ "$keep" = login ]; then
+        printf '%s@%s\n' "${userinfo%%:*}" "$rest"
+      else
+        printf '%s\n' "$rest"
+      fi ;;
+    *) printf '%s\n' "$url" ;;
+  esac
+}
+
 # Print the hint that follows a store push failure caused by missing
 # credentials. A clone takes its remotes from the https `.gitmodules` urls, and
 # git pushes over https only with a credential helper — which a working
@@ -189,5 +240,5 @@ gitlore_warn_private_under_public() {
   [ -n "$vis" ] || vis=$(gitlore_repo_visibility "$url")
   [ "$vis" = "private" ] || return 0
   [ "$(gitlore_parent_visibility)" = "public" ] || return 0
-  echo "gitlore: warning: the $label $url is private but this repository is public, so an anonymous recursive clone of this repository fails at it whatever url .gitmodules records; making it public is the repository owner's call." >&2
+  echo "gitlore: warning: the $label $(gitlore_url_for_display "$url") is private but this repository is public, so an anonymous recursive clone of this repository fails at it whatever url .gitmodules records; making it public is the repository owner's call." >&2
 }

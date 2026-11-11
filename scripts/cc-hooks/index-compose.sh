@@ -28,7 +28,6 @@ mempath=$(gitlore_memory_path)
 # From here a death reports to the user and the agent instead of ending the turn (D60).
 gitlore_batch_hook_guard "index-compose" "$mempath" "The memory indexes were not recomposed this batch, so a MEMORY.md edit made in it is not yet mirrored into its tier index."
 index="$mempath/MEMORY.md"
-manifest="$mempath/.gitlore-tiers"
 
 # agent_id, never agent_type: only the former is subagent-only, and the latter
 # also appears on the main thread of an --agent session — a fallback there
@@ -88,23 +87,34 @@ else
 }$claimed"
   stamp=$claimed
 
-  # Did this batch change the root index or the activation manifest? Tracked
-  # separately: the triage nudge below fires on a manifest change specifically
-  # (the active-tier set may have changed), not on every memory-writing recompose.
-  now=$(gitlore_compose_stamp "$index" "$manifest")
+  # Did this batch change the root index, the activation manifest or a tier's
+  # carrier? Tracked separately: the triage nudge below fires on a manifest
+  # change specifically (the active-tier set may have changed), not on every
+  # memory-writing recompose. The keys of both stamps are read, each once, and a
+  # carrier key counts only when both hold it: one in a single stamp is a tier entering
+  # or leaving the manifest (the manifest key moves) or a merge being prepared
+  # or landing, which is not a carrier edit.
+  now=$(gitlore_compose_stamp "$mempath")
+  # Assigned apart, so an unreadable stamp dies here under errexit and reaches
+  # the hook guard instead of reading as a batch that moved nothing.
+  was_keys=$(cut -f1 < "$stamp")
+  is_keys=$(cut -f1 <<<"$now")
   index_touched=""
   manifest_touched=""
-  for key in index manifest; do
+  carrier_touched=""
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
     was=$(gitlore_compose_stamp_get "$key" < "$stamp")
     is=$(gitlore_compose_stamp_get "$key" <<<"$now")
     [ "$was" = "$is" ] && continue
     case "$key" in
       index) index_touched=1 ;;
       manifest) manifest_touched=1 ;;
+      *) if [ -n "$was" ] && [ -n "$is" ]; then carrier_touched=1; fi ;;
     esac
-  done
+  done < <(printf '%s\n%s\n' "$was_keys" "$is_keys" | awk 'length && !seen[$0]++')
   rm -f "$stamp"
-  [ -n "$index_touched$manifest_touched" ] || exit 0
+  [ -n "$index_touched$manifest_touched$carrier_touched" ] || exit 0
 
   gitlore_compose_and_report "$mempath" "$manifest_touched"
 fi

@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Commit pending gitlore memory changes. Invoke it first, before any summary is drafted, whenever memory files were written or edited and are not yet committed, or when the user asks to commit memory; it gives the summary format and commits once the user approves the shown summary. Not for publishing memory to its remote — that is gitlore:push.
+description: Commit pending gitlore memory changes. Use when the user asks to commit memory, or a skill's directive says to; invoke it before drafting any summary — it gives the summary format and commits once the user approves the shown summary. Not for a bare memory edit, and not for publishing memory to its remote — that is gitlore:push.
 allowed-tools: ["Bash", "Skill"]
 ---
 
@@ -15,8 +15,9 @@ reply approves it.
 Before drafting the summary, invoke the `gitlore:memory-writing` skill and hold
 every pending memory change against it: whether the fact belongs in the store at
 all, what its body claims, which tier it sits in, and whether its index line
-carries the literal a future session arrives holding. Land those fixes first —
-the summary describes the facts as they will be committed.
+carries the literal a future session arrives holding, or for a HOW line the task
+condition. Land those fixes first — the summary describes the facts as they will
+be committed.
 
 ## Summary format
 
@@ -46,6 +47,9 @@ a decision or correction to whoever made it.
 A `MEMORY.md` — root or tier — gets no paragraph. Root changes that only carry
 a tier's facts — its index lines in the root `MEMORY.md`, its gitlink — take no
 `== memory ==` section; they are committed with the tier's.
+When no tier store changed either, the store has no section to hang them on:
+the summary is a single `== memory ==` section, whose subject line is the root
+commit.
 
 Template, with a tier store and a root change:
 
@@ -84,6 +88,10 @@ EOF
 ```
 
 4. Relay the command's output. If it exits non-zero, surface the output
-   verbatim and stop; do not retry with altered text.
+   verbatim and stop; do not retry with altered text. The exceptions are an
+   abort that tells you to run `gitlore-compose`: run it, then retry with the
+   same text; and output containing `gitlore: memory merge prepared`, which
+   hands over to the `gitlore:resolve` skill: invoke it, without asking. If that retry is refused because a store has changes and no
+   section, redraft and get approval again.
 5. If the user asks for changes, redraft the summary, show it again, and end
    the turn. Each redraft needs its own approval.

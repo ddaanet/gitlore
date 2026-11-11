@@ -17,8 +17,8 @@ source "$PLUGIN_ROOT/scripts/lib/log.sh"
 source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
-# gitlore_detect_stale_merge_state, so the tier re-detach below can tell a store
-# with a merge prepared in it from one it may safely check out.
+# gitlore_detect_stale_merge_state for the tier stage's mid-merge notice, and
+# the unresolvable-pin reports of resolve-unresolvable.sh.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
 # gitlore_sync_nested_tiers, the "Nested tiers" stage below.
@@ -27,6 +27,9 @@ source "$PLUGIN_ROOT/scripts/lib/session-tiers.sh"
 # report_memory_position, the "where memory stands" stage below.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/session-memory.sh"
+# report_store_diagnostics, the "Store diagnostics" stage below.
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/session-diagnostics.sh"
 # gitlore_retire_store_gates, the retired-gate cleanup stage below.
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/session-gate-cleanup.sh"
@@ -103,10 +106,8 @@ emit_session_json() {
 # Launcher guard (D10): without the shim, GITLORE_LAUNCHED is unset and CC's
 # native auto-memory strands in ~/.claude/projects/<cwd>/memory instead of the submodule.
 if [ -z "${GITLORE_LAUNCHED:-}" ]; then
-  add_sysmsg "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install' if you don't use direnv, which installs the launcher shim globally), then restart Claude Code."
-  protocol_ctx="$protocol_ctx
-
-gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or, without direnv, '/gitlore:install', which installs the global launcher shim (Placement B), and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
+  add_report_each "gitlore: memory is NOT redirected — this session was started with a plain 'claude', so auto-memory will strand in the default directory, not the submodule. Fix: run 'direnv allow' in this repo (or '/gitlore:install' if you don't use direnv, which installs the launcher shim globally), then restart Claude Code." \
+    "gitlore: GITLORE_LAUNCHED is unset — the launcher shim did not run, so CC auto-memory is writing to the default ~/.claude/projects/<cwd>/memory dir, NOT the gitlore submodule. Tell the user to run 'direnv allow' (Placement A) or, without direnv, '/gitlore:install', which installs the global launcher shim (Placement B), and restart. Do NOT write autoMemoryDirectory to any settings file — that tier is ignored (D10)."
 fi
 
 # Hook dir + wrappers.
@@ -149,7 +150,7 @@ if [ -f "$SENTINEL" ]; then
   esac
 fi
 
-# Branch model: submodule init, detach at live, report where it stands.
+# Branch model: submodule init, then report where it stands.
 # Memory working tree missing in this worktree. Two cases:
 #  - submodule never initialized (main worktree, fresh clone) → submodule update;
 #  - submodule initialized in the main repo but this is a *linked* worktree whose
@@ -181,18 +182,10 @@ if ! git -C "$mempath" show-ref --verify --quiet refs/heads/live; then
 fi
 
 # Branch model (D17): memory is checked out DETACHED — `live` is the sole
-# travelling ref and is never checked out as a branch, so one memory gitdir
-# serves any number of parent worktrees and every commit path reduces to
-# "pending HEAD vs live". Detaching is done *in place* (no ref argument), which
-# keeps the current commit and any uncommitted work. Nothing at session start
-# advances HEAD onto live: /gitlore:merge does that. A session that predates
-# this model arrives on a named branch and is migrated here, losing nothing —
-# the old model advanced `live` on every commit, so the branch never held
-# anything `live` did not.
-if git -C "$mempath" symbolic-ref -q HEAD >/dev/null; then
-  gitlore_git -C "$mempath" checkout -q --detach
-fi
-
+# travelling ref and is never checked out as a branch. SessionStart moves no
+# module, so nothing here detaches it or advances HEAD onto live: a store
+# attached to a branch breaks a precondition that the install and the mount
+# establish, and /gitlore:merge is what takes live.
 # Remove the retired store gate's pre-commit wrapper and hooksDir mirror (D70).
 gitlore_retire_store_gates "$mempath"
 
@@ -216,48 +209,41 @@ if [ ! -f "$mempath/MEMORY.md" ]; then
   fi
 fi
 
-# Nested tiers (D17 3-i-a): check each tier submodule inside the memory store out
-# at the commit the memory tree records for it, pin it, and report what its
-# remote holds. gitlore_sync_nested_tiers (scripts/lib/session-tiers.sh) is the
-# whole stage; it calls add_sysmsg and appends to protocol_ctx directly.
+# Nested tiers (D17 3-i-a): clone a tier that is not checked out, and report
+# where each stands and any recorded commit no repository holds.
+# gitlore_sync_nested_tiers (scripts/lib/session-tiers.sh) is the whole stage;
+# it calls add_sysmsg, appends to protocol_ctx and lists each tier whose pin is
+# unresolvable in unresolvable_tiers, which the two reports below read.
+unresolvable_tiers=""
 gitlore_sync_nested_tiers "$mempath"
 
-# Compose after the tier pin, so the lines each pinned carrier holds surface in
-# the always-loaded root index this session rather than next (D17 3-ii). Never
-# fatal: a store that fails validation is reported and left alone — SessionStart
-# must always finish.
-compose_rc=0
-compose_problems=$(gitlore_compose "$mempath") || compose_rc=$?
-if [ "$compose_rc" -eq 2 ]; then
-  # Not a refusal: a write failed partway, so some indexes are composed and one
-  # is not. The fail-safe wording below would misdescribe the store.
-  add_sysmsg "gitlore: tier composition could not write an index; the memory indexes are only partly composed:
-$compose_problems"
-elif [ "$compose_rc" -ne 0 ]; then
-  add_sysmsg "gitlore: tier composition refused; the memory indexes were left untouched:
-$compose_problems"
-else
-  # The fifth validation reports rather than refuses — a bullet whose file is
-  # absent leaves the composed output correct, so it is named, not acted on.
-  dangling=$(gitlore_compose_dangling "$mempath")
-  if [ -n "$dangling" ]; then
-    # One synthetic notice, capped: a whole tier's worth of stale pointers must
-    # not flood the user's systemMessage (nor get UI-truncated to "and many more
-    # lines"). List a few, count the rest.
-    dangling_count=$(printf '%s\n' "$dangling" | grep -c .)
-    if [ "$dangling_count" -eq 1 ]; then dangling_unit="file"; else dangling_unit="files"; fi
-    dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
-    add_sysmsg "gitlore: the memory index points at $dangling_count missing $dangling_unit. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
-$dangling_capped"
-    # The agent gets a matching, equally-capped additionalContext: the
-    # systemMessage is user-only (D14), so without this the agent has no idea the
-    # always-loaded index it is about to trust is stale. Terse on purpose — enough
-    # to know it is broken and what to do, not the whole list.
-    protocol_ctx="$protocol_ctx
+# Store diagnostics (D74): the rule problems of the indexes and a pending
+# compose, reported after the tier stage and written nowhere. SessionStart composes
+# no index: PostToolBatch and the mount compose where an edit happens, so an
+# index that is off here changed outside them and is reported, not repaired.
+# Never fatal: the report is read-only and SessionStart must always finish.
+report_store_diagnostics "$mempath"
 
-gitlore: the memory index is STALE — $dangling_count root MEMORY.md pointer $dangling_unit name a target absent from the memory store (composition still produced a correct index; nothing was deleted). Likely another consumer merged or renamed those facts in a shared tier. Reconcile the root index: drop each stale line, or redirect it to where the fact now lives.
+# The fifth validation reports rather than refuses, and it runs on every store,
+# refused or not: a bullet whose file is absent leaves the composed output
+# correct, so it is named, not acted on.
+dangling=$(gitlore_compose_dangling "$mempath")
+dangling=$(gitlore_drop_unresolvable_dangling "$mempath" "$dangling")
+if [ -n "$dangling" ]; then
+  # One synthetic notice, capped: a whole tier's worth of stale pointers must
+  # not flood the user's systemMessage (nor get UI-truncated to "and many more
+  # lines"). List a few, count the rest.
+  dangling_count=$(printf '%s\n' "$dangling" | grep -c .)
+  if [ "$dangling_count" -eq 1 ]; then dangling_unit="file"; else dangling_unit="files"; fi
+  dangling_capped=$(printf '%s\n' "$dangling" | gitlore_cap_list)
+  # The agent gets a matching, equally-capped additionalContext: the
+  # systemMessage is user-only (D14), so without this the agent has no idea the
+  # always-loaded index it is about to trust is stale. Terse on purpose — enough
+  # to know it is broken and what to do, not the whole list.
+  add_report_each "gitlore: the memory index points at $dangling_count missing $dangling_unit. Nothing was rewritten or deleted — restore each file, or remove its line (removing a line deletes nothing).
+$dangling_capped" \
+    "gitlore: the memory index is STALE — $dangling_count root MEMORY.md pointer $dangling_unit name a target absent from the memory store (nothing was deleted). Likely another consumer merged or renamed those facts in a shared tier. Reconcile the root index: drop each stale line, or redirect it to where the fact now lives.
 $dangling_capped"
-  fi
 fi
 
 # Routing guidance (D17): advertise each ACTIVE tier (listed in the manifest)
@@ -315,10 +301,7 @@ session=$(jq -r '.session_id // ""' <<<"$payload") || session=""
 gitlore_relay_drain "$mempath" "$session"
 gitlore_relay_sweep "$mempath"
 if [ -n "$GITLORE_RELAY_SYSMSG" ]; then
-  add_sysmsg "$GITLORE_RELAY_SYSMSG"
-  protocol_ctx="$protocol_ctx
-
-$GITLORE_RELAY_CTX"
+  add_report_each "$GITLORE_RELAY_SYSMSG" "$GITLORE_RELAY_CTX"
 fi
 
 # Emit one SessionStart JSON: the commit-protocol additionalContext always, plus

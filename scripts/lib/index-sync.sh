@@ -146,10 +146,27 @@ _gitlore_agent_suffix() {
 # file, with a literal `absent` for one that is not there — so a file appearing
 # or vanishing registers as a change like any other. Cheap by design: it runs
 # ahead of every Bash call, where keeping whole copies would not be.
-# Args: $1 = root index path, $2 = tier manifest path.
+#
+# Watched: the root index (`index`), the activation manifest (`manifest`) and
+# each active tier's carrier (`carrier/<tier>`), since an edit to a carrier alone
+# is what the down projection restores. A tier holding a prepared merge is left
+# out: the merger edits its carrier, and a compose there would refuse on every
+# batch. The set of keys follows the manifest, so a tier appearing in or leaving
+# it moves the stamp too.
+# Args: $1 = memory path.
 gitlore_compose_stamp() {
-  printf 'index\t%s\n' "$(_gitlore_file_stamp "$1")"
-  printf 'manifest\t%s\n' "$(_gitlore_file_stamp "$2")"
+  local mempath="$1" tier
+  printf 'index\t%s\n' "$(_gitlore_file_stamp "$mempath/MEMORY.md")"
+  printf 'manifest\t%s\n' "$(_gitlore_file_stamp "$mempath/.gitlore-tiers")"
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    # An unmaterialized tier answers `git -C` for the enclosing repo, so it is
+    # never asked; it cannot hold a merge.
+    if [ -e "$mempath/$tier/.git" ] && gitlore_store_mid_merge "$mempath/$tier"; then
+      continue
+    fi
+    printf 'carrier/%s\t%s\n' "$tier" "$(_gitlore_file_stamp "$mempath/$tier/MEMORY.md")"
+  done < <(gitlore_active_tiers "$mempath")
 }
 
 _gitlore_file_stamp() {
@@ -197,8 +214,8 @@ gitlore_index_budget_pct() {
 # adds tens of KB of index in a single step, and the only one whose report is
 # not a `PostToolBatch` pass over an index the agent edited — so it never
 # reaches the advisory in index-sync-post.sh, and a mount that lands past the
-# cutoff is otherwise silent. It needs no once-per-episode marker: the intent
-# file is consumed, so the mount reports once by construction, and writing no
+# cutoff is otherwise silent. It needs no once-per-episode marker: the mount
+# reports once, when add-tier.sh composes, and writing no
 # `budget` marker leaves a later edit-time advisory in the same session free to
 # fire. Past the cutoff the percentage is the wrong number to print — 97% of
 # budget is already truncating — so the cutoff, not the budget, is what the

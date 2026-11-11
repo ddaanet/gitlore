@@ -19,46 +19,6 @@ gitlore: the commit was aborted because git could not read the status of $file, 
 gitlore: the commit was aborted because git could not read the status of $file. Open this project in Claude Code and ask it to repair the memory store, then retry the commit." >&2
 }
 
-# Stage the gitlink of each tier whose HEAD is the commit gitlore_sync_tiers_to_live
-# made and a stopped run never recorded: memory's `add -A` failed after it (a
-# transient index.lock) or the run died between the two. That tier sits ahead of
-# its pin, the shape gitlore_compose_check_pins refuses for a tier moved behind
-# gitlore's back, so without this the retry of the commit is refused for good.
-# Staging it overwrites nothing: the commit path composed that carrier from the
-# root index just before committing it.
-#
-# Recognised by the landing record written just before that commit — HEAD's
-# parent must be the commit the record names, and memory's index must still pin
-# it. Not by the commit's message: a session that edits memory before the retry
-# lands approves a new summary, and the old commit no longer matches it.
-# Residual: a run killed after writing the record and before its commit failed
-# leaves the record behind, and a commit later made on that same pin by other
-# means would be adopted.
-# Returns 1, after git's own message, when a gitlink cannot be staged.
-# Args: $1 = memory worktree path.
-gitlore_stage_landed_tiers() {
-  local mempath="$1" tier tierpath landing recorded pinned parent
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    tierpath="$mempath/$tier"
-    # `git -C` into an unmaterialized submodule walks up to the enclosing repo.
-    [ -e "$tierpath/.git" ] || continue
-    landing=$(gitlore_tier_landing_file "$tierpath") || continue
-    [ -f "$landing" ] || continue
-    recorded=""
-    IFS= read -r recorded < "$landing" || [ -n "$recorded" ] || continue
-    # `-q --verify` is silent on the expected misses: no gitlink in the index
-    # (mid-mount), and a HEAD that is a root commit.
-    pinned=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
-    parent=$(git -C "$tierpath" rev-parse -q --verify "HEAD^") || continue
-    [ "$recorded" = "$pinned" ] || continue
-    [ "$parent" = "$recorded" ] || continue
-    gitlore_git -C "$mempath" add -- "$tier" || return 1
-    rm -f "$landing"
-  done < <(gitlore_tier_paths "$mempath")
-  return 0
-}
-
 # Publish every store to its own remote: each tier's `live` first, then memory's.
 # Assumes the memory worktree exists (caller guards `[ -e "$mempath/.git" ]`).
 # Returns 0 when everything is published (already-up-to-date included, and a
@@ -74,8 +34,9 @@ gitlore_stage_landed_tiers() {
 gitlore_push_stores() {
   local mempath="$1" remote_url tier tierpath tier_err push_err
 
-  # Never publish on top of a half-finished merge, at any level.
-  gitlore_guard_stale_merge_state "$mempath" || return 1
+  # Never publish on top of a half-finished merge, at any level, nor past a dirty
+  # tier that has something to take: the same preflight every take runs.
+  gitlore_guard_every_store "$mempath" || return 1
 
   # Resolved here but acted on AFTER the tiers: memory having no remote says
   # nothing about theirs. A repo whose memory is deliberately local can still
@@ -102,9 +63,9 @@ gitlore_push_stores() {
     # Unchecked-out tier: `git -C` escapes to the enclosing repo, which would push
     # MEMORY's live to memory's origin under the tier's name.
     [ -e "$tierpath/.git" ] || continue
-    # `-q --verify` is silent on the expected miss: a tier never fetched has no
-    # local `live` and so has nothing of its own to publish.
-    git -C "$tierpath" rev-parse -q --verify live >/dev/null || continue
+    # A tier this checkout did not mount has no local `live`, yet its HEAD can
+    # hold commits memory records: made from HEAD, so they go out.
+    gitlore_ensure_live "$tierpath" || return 1
     if [ -z "$(git -C "$tierpath" config --get remote.origin.url || true)" ]; then
       gitlore_say_for_agent_or_user \
         "gitlore: tier '$tier' has no remote configured, so nothing written there is being shared. Mount it against a remote or unmount it." \
@@ -123,11 +84,9 @@ gitlore_push_stores() {
     # sitting at the pin holds approved commits the memory store never recorded,
     # and moving HEAD onto it alone would take the tier off that pin (D43), which
     # is what the next composition refuses. The whole take pass, not this tier
-    # alone, and for the reason the behind-tier branch below gives: it runs
-    # root-first, and a tier take writes a bookkeeping commit that would meet an
-    # equally-behind root's upstream one as a divergence. No `continue` after it
-    # — unlike a take from the remote, what was adopted here has never been
-    # published, so this tier's push is exactly what has to happen next.
+    # alone, and for the reason the behind-tier branch below gives. No `continue`
+    # after it — unlike a take from the remote, what was adopted here has never
+    # been published, so this tier's push is exactly what has to happen next.
     #
     # This take and the behind arm's run marked as inside a push, so a repair
     # names this push as what publishes it rather than /gitlore:push — also
@@ -157,9 +116,8 @@ gitlore_push_stores() {
               # loop guarantees is untouched. A take that cannot fast-forward
               # yields a prepared merge and returns non-zero, as everywhere else.
               #
-              # The whole take pass, not this tier alone: it runs root-first, and
-              # a tier take writes a bookkeeping commit that would meet an
-              # equally-behind root's upstream one as a divergence.
+              # The whole take pass, not this tier alone: every tier, then root,
+              # then the one root write that records them all.
               GITLORE_TAKE_IN_PUSH=1 gitlore_merge_stores "$mempath" || return 1
               # The take can repair a defective arrival, committing on top of
               # what it fetched, and memory's push below records that commit —
@@ -228,6 +186,7 @@ gitlore_push_stores() {
   # instead would make memory's local-only-ness withhold the tiers — the one part
   # other repositories actually read.
   if [ -z "$remote_url" ]; then
+    gitlore_compose_moved_tiers "$mempath" || return 1
     gitlore_say_for_agent_or_user \
       "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published. Run /gitlore:resolve to give memory a remote if it is meant to be shared." \
       "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published." >&2
@@ -242,7 +201,9 @@ gitlore_push_stores() {
 
   # No redirect: `-q` already silences progress, so anything fetch writes here is a
   # real problem. Non-fatal (`|| true`) — the push below is the operation that counts.
-  git -C "$mempath" fetch -q origin live || true
+  git -C "$mempath" fetch -q --no-recurse-submodules origin live || true
+
+  gitlore_compose_moved_tiers_for_push "$mempath" || return 1
 
   # Capture rather than discard the push error: the two branches below diagnose
   # only "unreachable" and "divergence", and a push can fail for neither reason
@@ -316,7 +277,7 @@ $push_err" >&2
       ;;
   esac
 
-  # HEAD-vs-remote divergence. Prepare and yield.
+  # HEAD-vs-remote divergence. Prepare and yield; the yield refuses a dirty root.
   gitlore_yield_merge "$mempath" origin/live head-vs-remote live || return 1
   return 1
 }

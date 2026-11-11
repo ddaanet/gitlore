@@ -64,6 +64,33 @@ gitlore_cd_project_root() {
   cd "${CLAUDE_PROJECT_DIR:-$PWD}" || return 1
 }
 
+# cd to the launch repo for a script the agent runs from its own Bash, whatever
+# directory that shell sits in: the memory path is read from `.gitmodules`
+# relative to it. Agent Bash has no CLAUDE_PROJECT_DIR, so without it the repo is
+# the nearest worktree holding the cwd that has a memory submodule — climbing out
+# of memory/ or a tier when the shell sits inside one, and stopping at the first
+# repo that holds memory, so a gitlore project that is itself a submodule of
+# another repo is not left for the outer. Runs in the caller's shell (never in
+# `$(…)`), since the cd is the point.
+# Returns 0 in a worktree (whether or not it holds memory: the caller's
+# gitlore_memory_path says), 1 when CLAUDE_PROJECT_DIR cannot be entered, 2 when
+# the cwd is outside any git worktree, 3 when a worktree found cannot be entered.
+gitlore_cd_launch_repo() {
+  local top sup
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
+    gitlore_cd_project_root || return 1
+    return 0
+  fi
+  # Outside any worktree rev-parse fails, which is expected: that is return 2.
+  top=$(git rev-parse --show-toplevel 2>/dev/null) || return 2
+  cd "$top" || return 3
+  while ! gitlore_memory_path >/dev/null \
+    && sup=$(git rev-parse --show-superproject-working-tree) && [ -n "$sup" ]; do
+    cd "$sup" || return 3
+  done
+  return 0
+}
+
 # Write an executable hook wrapper that resolves the live plugin via
 # `git config gitlore.hooksDir` and degrades to a clean skip (exit 0) when that
 # config is unset or the target hook is missing (plugin upgraded + cache GC'd),
@@ -118,38 +145,6 @@ gitlore_has_submodule() {
 # shellcheck disable=SC2034  # consumed by sourcing scripts (lib/resolve.sh, resolve.sh)
 readonly GITLORE_PENDING_REF="refs/gitlore/pending"
 
-# Print abs path to the `.claude/` dir in the PARENT working tree that hosts the
-# memory IPC file (the add-tier intent). Resolves the
-# superproject working tree; falls back to the memory worktree's parent dir when
-# memory is not a registered submodule (or is detached). Relocated 2026-07-16
-# from the submodule gitdir so the agent can write these under auto mode — the
-# gitdir is unwritable via every agent tool (Write and a bash heredoc are both
-# classifier/sandbox denied). Args: $1 = memory worktree path (relative or absolute).
-_gitlore_ipc_dir() {
-  local mempath="$1" super=""
-  # Guard on the gitlink rather than suppressing stderr: without a checked-out
-  # memory worktree the rev-parse would fail with an expected "not a git
-  # repository", which is exactly the fallback case below. Guarding removes the
-  # expected failure, so a *real* rev-parse error is no longer swallowed.
-  if [ -e "$mempath/.git" ]; then
-    super=$(git -C "$mempath" rev-parse --show-superproject-working-tree) || super=""
-  fi
-  if [ -z "$super" ]; then
-    super=$(CDPATH='' cd -- "$(dirname -- "$mempath")" && pwd)
-  fi
-  printf '%s/.claude\n' "$super"
-}
-
-# Print abs path to the add-tier intent file. The agent writes the mount/create
-# intent here as `key=value` lines; the PostToolBatch hook (add-tier-batch.sh)
-# runs the git on its behalf. The agent never runs git here, which sidesteps the
-# auto-mode classifier, and mounting a tier CLONES, and the
-# command sandbox has no network — only the hook, which runs outside it, can
-# reach the remote. Gitignored.
-gitlore_add_tier_file() {
-  printf '%s/gitlore-add-tier\n' "$(_gitlore_ipc_dir "$1")"
-}
-
 # Print the CC project-scoped auto-memory dir for a repo root.
 # CC encodes the project dir name by replacing every non-[A-Za-z0-9] byte with
 # `-` (verified empirically against ~/.claude/projects/ entries). The >200-char
@@ -196,14 +191,6 @@ warning for how to activate it.
 EOF
 }
 
-# Print abs path to a tier's landing record: the commit the tier sat on when the
-# commit path last began a commit inside it (gitlore_sync_tiers_to_live), read
-# back by gitlore_stage_landed_tiers. Lives in the tier's gitdir, so it is
-# invisible to `git status`.
-# Args: $1 = tier worktree path.
-gitlore_tier_landing_file() {
-  git -C "$1" rev-parse --git-path gitlore-tier-landing
-}
 
 # Echo '0' (clean) or '1' (dirty). Convention is string output, NOT exit status —
 # callers should compare with `[ "$(gitlore_memory_dirty PATH)" = "1" ]`.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Entry-wise three-way merge for index files (`MEMORY.md`). Source; do not exec.
-# Depends on scripts/lib/index-compose.sh for gitlore_bullet_path,
-# gitlore_index_part and gitlore_compose_pick — callers must source it first.
+# Sourced by scripts/lib/index-compose.sh, whose gitlore_bullet_path,
+# gitlore_index_part and gitlore_compose_pick it depends on; source that.
 #
 # An index is a LIST OF ENTRIES, not prose: each pointer bullet is an
 # independent record keyed by its path. A line-wise merge reads it as prose and
@@ -65,10 +65,16 @@ _gitlore_index_merge_split() {
 # the paths rather than the bullets is what keeps a reworded hook from reading
 # as a positional edit, so a description change never moves its entry and never
 # conflicts with an insertion beside it.
-# Always returns 0; the caller detects conflicts from the emitted markers.
-# Args: $1 = tmpdir, $2/$3/$4 = ours/base/theirs labels.
+# A both-changed bullet is a diff3 chunk, except when $5 names a notes file: it
+# then takes theirs' line and appends `tier '<$6>' replaced root's line for
+# <path>: <ours' line>` to that file, so no chunk is written and the replaced
+# text is on record.
+# Returns 0, the caller detecting conflicts from the emitted markers, and 1
+# only when the notes file cannot be written.
+# Args: $1 = tmpdir, $2/$3/$4 = ours/base/theirs labels,
+# $5 = notes file (optional), $6 = tier name (with $5).
 _gitlore_index_merge_bullets() {
-  local tmpd="$1" olabel="$2" blabel="$3" tlabel="$4"
+  local tmpd="$1" olabel="$2" blabel="$3" tlabel="$4" notes="${5-}" tier="${6-}"
   local path b o t oline tline bline
   while IFS= read -r path; do
     [ -n "$path" ] || continue
@@ -88,6 +94,11 @@ _gitlore_index_merge_bullets() {
     if [ "$oline" = "$tline" ]; then printf '%s\n' "$oline"; continue; fi
     if [ "$b" = 1 ] && [ "$oline" = "$bline" ]; then printf '%s\n' "$tline"; continue; fi
     if [ "$b" = 1 ] && [ "$tline" = "$bline" ]; then printf '%s\n' "$oline"; continue; fi
+    if [ -n "$notes" ]; then
+      printf '%s\n' "$tline"
+      printf "tier '%s' replaced root's line for %s: %s\n" "$tier" "$path" "$oline" >> "$notes" || return 1
+      continue
+    fi
     # Both sides moved this one entry, and apart. The base line is carried into
     # the chunk even when the path is new to both sides (an empty base section),
     # so the shape the agent reads never changes with the case.
@@ -115,10 +126,14 @@ _gitlore_index_merge_has_stray() {
 # Returns 0 when it merged clean, 1 when the output carries conflict markers,
 # 2 when the merge could not be attempted at all.
 # Args: $1/$2/$3 = base/ours/theirs files (a missing path is an empty side),
-#       $4/$5/$6 = ours/base/theirs conflict labels.
+#       $4/$5/$6 = ours/base/theirs conflict labels,
+#       $7 = notes file (optional) and $8 = tier name: with $7 given, a bullet
+#       both sides changed apart takes theirs' line, noted in $7, instead of
+#       becoming a chunk. The prose halves still conflict as before.
 gitlore_index_merge() {
   local basef="$1" oursf="$2" theirsf="$3"
   local olabel="${4:-MINE}" blabel="${5:-BASE}" tlabel="${6:-THEIRS}"
+  local notes="${7-}" tier="${8-}"
   local tmpd rc=0 mrc
 
   tmpd=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-index-merge.XXXXXX") || return 2
@@ -162,7 +177,7 @@ gitlore_index_merge() {
     [ "$mrc" -gt 0 ] && rc=1
   done
 
-  _gitlore_index_merge_bullets "$tmpd" "$olabel" "$blabel" "$tlabel" \
+  _gitlore_index_merge_bullets "$tmpd" "$olabel" "$blabel" "$tlabel" "$notes" "$tier" \
     > "$tmpd/out.bullets" || { rm -rf "$tmpd"; return 2; }
   grep -q '^<<<<<<< ' "$tmpd/out.bullets" && rc=1
 

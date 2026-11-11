@@ -1,6 +1,6 @@
 ---
 name: resolve
-description: Resolve or repair a diverged gitlore memory store or tier. Use when a memory merge or push fails with output containing "gitlore: memory merge prepared" — invoke it without waiting to be asked. Also use when the user runs /gitlore:resolve, reports that memory has stopped publishing, or hands back a divergence message from a push they ran in their own terminal.
+description: 'Resolve or repair a diverged gitlore memory store or tier. Use when a memory merge or push fails with output containing "gitlore: memory merge prepared" — invoke it without waiting to be asked. Also use when the user runs /gitlore:resolve, reports that memory has stopped publishing, or hands back a divergence message from a push they ran in their own terminal.'
 allowed-tools: ["Bash", "Task", "SendMessage"]
 ---
 
@@ -21,7 +21,8 @@ You are resolving a gitlore memory submodule from divergence.
 Exit codes:
 - `0` — healthy or simple repair complete. Summarize and stop.
 - Non-zero + "memory merge prepared" on stderr → proceed to **Parse directive**.
-- Non-zero without that → surface stderr verbatim and stop.
+- Non-zero with a line starting `gitlore: memory records` or `gitlore: this repository records memory at` → a commit no repository holds. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
+- Non-zero without any of those → surface stderr verbatim and stop.
 
 ## Parse directive
 
@@ -53,7 +54,7 @@ gitlore:   <problem line>
 
 Extract them verbatim and pass them in the dispatch prompt. They are the objection a previous synthesis drew, against a merge this session may never have seen, and clearing them is what lets the continuation land it.
 
-The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip. Your own review still governs the merge the sub-agent proposes, below — but not the user's: both sides of the merge already passed an approval gate, so the whole resolution runs without prompting them (D49).
+The directive authorizes its own dispatch: the git operation that triggered the merge is the request for it. Dispatch without a confirming round trip.
 
 The store line names which repository diverged: the project memory store, or a tier mounted inside it. One merge policy covers every level, so the flow below is identical either way — but say which store you merged when you summarize, because a tier is shared with other repositories and the project store is not.
 
@@ -75,7 +76,7 @@ Do not escalate to the user: a merge is automated from their perspective, becaus
 
 On approval, the sub-agent runs the continuation command. The merge commit's message is canned — the continuation writes it; the summary is for your review and your report to the user, not for the commit.
 
-If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed`, the merge did not land and stays prepared. Resume the sub-agent with `rejected:` followed by the problem lines it quoted, and evaluate the new synthesis as before. If a re-synthesis draws the same problem line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
+If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed` or `gitlore: these files still hold conflict markers, so the merge was not committed`, the merge did not land and stays prepared. Resume the sub-agent with `rejected:` followed by the problem lines or file names it quoted, and evaluate the new synthesis as before. If a re-synthesis draws the same line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
 
 The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
 - `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
@@ -86,7 +87,7 @@ The sub-agent reports the continuation's exit status, and only an exit 0 is a la
 
 ## Loop
 
-After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0.
+After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes; run `/gitlore:merge` instead.
 
 ## Resume commit
 
@@ -116,9 +117,5 @@ output may carry index problems. Keep the two kinds apart. Problems in the merge
 index blocked the landing until a new synthesis cleared them; say which they were.
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
 index, index pointers naming files that are not there, a refused push with its
-remedy — came after the merge commit landed; relay it, because it is a problem only
-you can fix.
-A printed remedy (`gitlore: tier '<t>' stays on the merge commit … Run:` and the
-command lines under it) is outstanding whenever it was printed — on an outcome
-that never reaches **Loop** as much as on one where the **Loop**'s `resolve.sh`
-then reports the state healthy. Run those lines, or relay them as not yet run.
+remedy — came after the merge commit landed; relay it; only you can fix it.
+A remedy printed after the landing is still to run: run it, or relay it as not yet run.

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Commit the memory store and its dirty tiers from the sectioned summary, and
 # fast-forward each committed store's local `live`: the FR11 commit path,
-# including tier composition, the pin guard and the landing record. It never
-# prepares or takes a merge; a `live` that cannot fast-forward is reported.
+# including the compose check and the pin guard. It never prepares or takes a
+# merge; a `live` that cannot fast-forward is reported.
 # Part of lib/resolve.sh; source that, not this file.
 
 # Say that a store has forked from its local `live` after a commit. Not an
@@ -19,8 +19,8 @@ gitlore_report_forked() {
 # Args: $1 = store worktree, $2 = label for messages, $3 = tier name ("" for memory).
 gitlore_advance_live() {
   local store="$1" label="$2" tier="${3-}" push_err live head
-  # `-q --verify` is silent when `live` does not exist (a tier never fetched).
-  live=$(git -C "$store" rev-parse -q --verify live) || return 0
+  gitlore_ensure_live "$store" || return 1
+  live=$(git -C "$store" rev-parse live)
   head=$(git -C "$store" rev-parse HEAD)
   [ "$head" = "$live" ] && return 0
   # Capture, don't discard: a failure for any reason other than divergence (a
@@ -58,6 +58,15 @@ $push_err" >&2
   return 1
 }
 
+# Make a store's missing local `live` from HEAD, as SessionStart does for
+# memory: `submodule update --init` creates no branch, so a tier in any checkout
+# but the one that mounted it has none, and HEAD is the commit memory records.
+# Never from `origin/live`, which may be ahead of it. Args: $1 = store worktree.
+gitlore_ensure_live() {
+  git -C "$1" show-ref --verify --quiet refs/heads/live && return 0
+  gitlore_git -C "$1" branch live HEAD
+}
+
 # Whether the staged MEMORY.md of the memory worktree $1 changes a link into the
 # tier $2. Captured rather than `grep -q`: an early exit would SIGPIPE the diff
 # under the caller's pipefail.
@@ -78,13 +87,6 @@ gitlore_commit_root() {
   # Checked explicitly, for the same reason as the tier loop: a caller that
   # tests this function's status suspends errexit.
   gitlore_git -C "$mempath" add -A || return 1
-  # Every tier gitlink is staged now, so no landing record is left with a
-  # commit to vouch for.
-  while IFS= read -r tier; do
-    [ -n "$tier" ] || continue
-    [ -e "$mempath/$tier/.git" ] || continue
-    rm -f "$(gitlore_tier_landing_file "$mempath/$tier")"
-  done < <(gitlore_tier_paths "$mempath")
   # Nothing staged: a store whose only change was a tier already committed, with
   # no pointer left to record. Nothing to commit is not a failure.
   if git -C "$mempath" diff --cached --quiet; then
@@ -129,39 +131,39 @@ gitlore_sync_memory_to_live() {
     gitlore_guard_stale_merge_state "$mempath/$tier" || return 1
   done < <(gitlore_tier_paths "$mempath")
 
-  # A previous run that committed inside a tier and stopped before memory's
-  # `add -A` recorded it left that tier ahead of its pin — the shape the pin
-  # guard below refuses — so it is adopted first.
-  gitlore_stage_landed_tiers "$mempath" || return 1
-
-  # A tier off its pin refuses composition itself (D31, D36), but leaving that
-  # refusal to gitlore_compose's own rc-1 arm would let the `add -A` below stage
-  # the moved gitlink anyway. Checked here, ahead of compose, so an off-pin tier
-  # aborts instead.
+  # The `add -A` below records each tier where it stands, so a tier off its pin
+  # aborts here instead. One ahead of it holds lines the root index has not
+  # taken, which the `add -A` would record uncomposed, so the refusal names the
+  # take, which composes them into the root index and records the gitlink.
   # The declaration stays on its own line: folded into `local pin_problems=$(…)`
   # the status read is `local`'s, always 0, and the refusal is swallowed.
   local pin_problems
   if ! pin_problems=$(gitlore_compose_check_pins "$mempath"); then
-    local pin_header="gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than adopt the move:
+    local pin_header="gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than record the move:
 $pin_problems"
     # The agent arm names no remedy of its own: every branch of
     # gitlore_compose_check_pins already printed the one its cause takes, and
     # $pin_problems can carry several tiers with different causes.
     gitlore_say_for_agent_or_user \
       "$pin_header
-gitlore: composing would have overwritten what that tier holds, and committing would have adopted the move silently. Follow the remedy on each line above, then retry the commit." \
+gitlore: Follow the remedy on each line above, then retry the commit." \
       "$pin_header
-gitlore: composing would have overwritten what that tier holds. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
+gitlore: Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
     return 1
   fi
 
-  # Compose before the tier commit below: composition writes carrier files
-  # inside the tiers, so it must land before the tiers' gitlinks move, or the
-  # gitlink pins the pre-compose content.
+  # The commit writes no index: a store whose indexes a compose pass would
+  # change aborts, so composition has landed (gitlore-compose, or a batch)
+  # before the tiers' gitlinks move.
   local compose_result compose_rc=0
-  compose_result=$(gitlore_compose "$mempath") || compose_rc=$?
+  compose_result=$(gitlore_compose_pending "$mempath") || compose_rc=$?
   case "$compose_rc" in
-    0) ;;
+    0)
+      if [ -n "$compose_result" ]; then
+        gitlore_say_compose_pending "$compose_result" >&2
+        return 1
+      fi
+      ;;
     1)
       # A refusal writes nothing (D31, D36): projecting root's older text over
       # an unadopted carrier would destroy approved upstream facts. The commit
@@ -205,31 +207,18 @@ gitlore: the commit was aborted because a problem is in an index file this commi
       fi
       gitlore_say_for_agent_or_user \
         "$refusal
-gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand — composition runs again at the next memory commit. This commit also stages each tier at the commit its worktree is on now." \
+gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand. This commit also stages each tier at the commit its worktree is on now." \
         "$refusal
 gitlore: the commit went ahead with the memory indexes as they stand. Open this project in Claude Code and ask it to repair the memory store." >&2
       ;;
-    2)
-      # A write failed partway, leaving a half-written carrier — that must not
-      # be committed, so this aborts before any store is committed.
-      local partial="gitlore: tier composition could not write an index — the memory indexes are only partly composed:
-$compose_result"
-      gitlore_say_for_agent_or_user \
-        "$partial
-gitlore: the commit was aborted so the half-written carrier is not committed. Investigate that path (permissions, disk space, a read-only worktree), then retry the commit." \
-        "$partial
-gitlore: the commit was aborted so the half-written carrier is not committed. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
-      return 1
-      ;;
     *)
-      # Unreachable from gitlore_compose, which returns 0, 1 or 2 and nothing
-      # else. Kept because silently proceeding on an unknown status is the
-      # failure the case exists to remove.
-      local unknown="gitlore: tier composition exited with an unrecognised status ($compose_rc), so what it wrote is unknown:
+      # Status 2: an index could not be read, so what a pass would change is
+      # unknown. Nothing is written by the check, and nothing is committed.
+      local unknown="gitlore: tier composition could not be checked, so what it would change is unknown:
 $compose_result"
       gitlore_say_for_agent_or_user \
         "$unknown
-gitlore: the commit was aborted rather than commit a memory store in an unknown state. Establish what gitlore_compose did, then retry the commit." \
+gitlore: the commit was aborted rather than commit a memory store in an unknown state. Investigate that path (permissions, a missing file), then retry the commit." \
         "$unknown
 gitlore: the commit was aborted rather than commit a memory store in an unknown state. Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
       return 1
@@ -242,4 +231,32 @@ gitlore: the commit was aborted rather than commit a memory store in an unknown 
   gitlore_commit_root "$mempath" "$summary" || return 1
   gitlore_advance_live "$mempath" memory || return 1
   return 0
+}
+
+# Stage the memory gitlink into the superproject index (D58) when this run moved
+# memory HEAD. A no-op run stages nothing. The staging is skipped during a replay
+# (rebase, cherry-pick, revert): a replayed commit must keep the pointer it
+# recorded, and the memory worktree does not move when the parent's HEAD does.
+# Args: $1 = memory worktree path.
+gitlore_stage_memory_pointer() {
+  local mempath="$1" super top rel p name op err
+  super=$(git -C "$mempath" rev-parse --show-superproject-working-tree)
+  [ -n "$super" ] || return 0
+  top=$(git -C "$mempath" rev-parse --show-toplevel)
+  rel="${top#"$super"/}"
+  # Marker list: path:operation. A merge is deliberately absent — it is authored now.
+  for marker in rebase-merge:rebase rebase-apply:rebase \
+                CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert; do
+    name="${marker%%:*}"
+    p=$(git -C "$super" rev-parse --git-path "$name")
+    case "$p" in /*) ;; *) p="$super/$p" ;; esac
+    if [ -e "$p" ]; then
+      op="${marker##*:}"
+      echo "gitlore: $op in progress — skipping the staging of the memory pointer; stage it yourself once the $op is done." >&2
+      return 0
+    fi
+  done
+  if ! err=$(git -C "$super" add -- "$rel" 2>&1); then
+    echo "gitlore: memory was committed, but its pointer could not be staged in the parent (git: $err). The pointer floats until you stage it." >&2
+  fi
 }

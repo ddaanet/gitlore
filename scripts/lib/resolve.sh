@@ -10,28 +10,36 @@
 #
 # The library is split into resolve-*.sh parts, each function-only and safe
 # to source twice, that this file sources after its own two lines above:
-#   resolve-recovery.sh     repair a stale merge-state file (lost MERGE_HEAD,
+#   resolve-recovery.sh     classify a stale merge-state file (lost MERGE_HEAD,
 #                            a checkout-cleared staged merge)
-#   resolve-merge-state.sh  merge-state file IO, merge preparation, and the
-#                            sub-agent directive
+#   resolve-recovery-repair.sh repair the landed, adopted and staged outcomes
+#   resolve-merge-state.sh  merge-state file IO and the sub-agent directive
+#   resolve-merge-prepare.sh prepare a memory merge against its authority,
+#                            then yield it to the merger
 #   rewrite-guard.sh        refuse a divergence on rewritten history (D62)
 #   resolve-sync-tiers.sh   commit dirty tiers and fast-forward their `live`
 #   resolve-sync-memory.sh  commit dirty memory itself (the FR11 commit path)
 #   resolve-push.sh         publish every store to its own remote
 #   resolve-merge-stores.sh take whatever each store's remote holds, without
 #                            publishing
-#   resolve-adopt.sh        adopt a tier's arrival into the root index, with
-#                            carrier repair on refusal
-#   resolve-adopt-report.sh report an adoption refusal, walk a tier back, and
-#                            record a landed adoption's bookkeeping commit
+#   resolve-take-tiers.sh   the tier half of a take: the dirty-tier refusal and
+#                            each tier's reconcile, take and repair
+#   resolve-adopt.sh        move a tier onto what its local `live` holds, and
+#                            repair a carrier that arrived defective
+#   resolve-adopt-report.sh the end of a take: one root write and one bookkeeping
+#                            commit for the tiers it moved
+#   resolve-unresolvable.sh a recorded commit no repository holds: its report,
+#                            /gitlore:resolve's check and its revert
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/index-compose.sh"
 # shellcheck disable=SC1091
-source "${BASH_SOURCE[0]%/*}/index-merge.sh"
-# shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-recovery.sh"
 # shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-recovery-repair.sh"
+# shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-merge-state.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-merge-prepare.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/rewrite-guard.sh"
 # shellcheck disable=SC1091
@@ -45,9 +53,13 @@ source "${BASH_SOURCE[0]%/*}/resolve-push.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-merge-stores.sh"
 # shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-take-tiers.sh"
+# shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-adopt.sh"
 # shellcheck disable=SC1091
 source "${BASH_SOURCE[0]%/*}/resolve-adopt-report.sh"
+# shellcheck disable=SC1091
+source "${BASH_SOURCE[0]%/*}/resolve-unresolvable.sh"
 
 # Print every store under this memory tree — memory itself, then each mounted
 # tier — in the order the gates visit them. One merge policy applies at every
@@ -223,8 +235,8 @@ gitlore_classify_refusal() {
 # is pinned at the gitlink the memory store records (D43): the same checkout
 # takes it OFF that pin, and the next composition refuses — the two gates then
 # assert different invariants about one ref and obeying this one breaks the
-# store. A tier goes to the take, which moves HEAD, the root index and the
-# recorded pointer together.
+# store. A tier goes to the take, which moves HEAD and ends by recording it and
+# writing the root index.
 # Args: $1 = store, $2 = label, $3 = tier name ("" when the store is the memory
 # root). Returns 1 after emitting when they disagree.
 gitlore_check_head_live_agree() {

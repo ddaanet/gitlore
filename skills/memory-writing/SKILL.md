@@ -7,197 +7,122 @@ description: Decide whether a learning becomes a gitlore memory fact, and write 
 
 A memory states what is true, addressed to a reader who was not there: a
 future session with none of this one's context, arriving at an unknown moment
-for an unrelated reason. The incident that produced it is scaffolding — useful
-while writing, removed before saving.
+for an unrelated reason. Remove the incident that produced it before saving.
 
 ## 1. Whether it should exist
 
-One question sits over the rest: **what does the next session gain that it
-would not otherwise have had?** The bar is comparative, not absolute — the
-index is capped, so "a future session would benefit" is not the test; it has to
-benefit more than the line it displaces. Questions 2–4 are the three ways
-*otherwise* happens: another artifact already says it, the reader gets there
-unaided, something recomputes it. When none of the three fires and the answer
-is still "not much", that settles it on its own — discard.
+Ask: **what does the next session gain that it would not otherwise have had?**
+It has to benefit more than the index line it displaces. Questions 2–4 are the
+three ways *otherwise* happens: another artifact already says it, the reader
+gets there unaided, something recomputes it. When none fires and the answer is
+still "not much", discard.
 
 Take the questions in order and stop at the first that settles it. The verdicts
 are **discard**, **relocate**, **merge**, or **save as written**. A discard
-that leaves a real gap in the tooling files the missing sentence where it
-belongs before dropping the fact: the fact was wrong as a memory, but the gap
-it exposed is real and nothing else records it. A relocated fact leaves the
-store in the same change that lands it in its owner — file and index line
-together. A copy held until the owner ships is a second home with a deadline
-nobody tracks.
+that exposes a gap in the tooling files the missing sentence where it belongs
+before dropping the fact. A relocated fact leaves the store in the same change
+that lands it in its owner — file and index line together.
 
-1. **Is there an incident?** No incident, no entry. A rule or anti-pattern for
-   a failure nobody has seen dilutes the real entries and costs context on every
-   load. That holds equally for the skill or CLAUDE.md a fact is relocated into.
-   When a rule must exist, state it positively in the step where it acts ("the
-   commit lands before this file is written") rather than as a prohibition on
-   the agent — a positive ordering constrains sequence without forbidding the
-   action, and the request that reaches a decision point is often the one that
-   wants the "forbidden" thing.
-2. **Does another artifact own it?** A memory repeating what another artifact
-   owns is in the wrong place: the owner states it at the moment it matters,
-   while the copy drifts and pays index bytes every session to say it worse.
-   Accuracy is not the test — an accurate fact in the wrong home is still a
-   category error. The owners:
-   - **A skill.** The body reduces to "when using \<skill\>, do X". Delete it
-     and let the skill say X; if X is missing from the skill, fix the skill.
-   - **A design doc.** A `project` memory logging decisions, supersessions and
-     dated status. The living design doc is the memory of the design.
-   - **The code.** A rule about how one call site must behave belongs in a
-     comment there, read by whoever edits that line.
-   - **CLAUDE.md.** A convention binding on all work in one repo, or a shared
-     tier's always-loaded conventions file. Those load whole every session —
-     exactly the scope such a rule wants, and the wrong scope for a fact that
-     should be *found* on meeting a symptom.
-   - **A hook or tool that prints the diagnosis when it fires.** Runtime output
-     is an owner too, and the better teacher: it arrives with the offending
-     input named, at the moment of the failure, and costs nothing on every
-     unrelated session. A memory restating what a hook's own stderr already
-     says reaches the reader later and says it worse.
-   - **A sibling project's skill body or agent definition**, not only its name
-     and description. A fix at an owner my human partner owns is preferred to
-     a note; a brief in the owning repo's `inbox/` is a destination in its own
-     right. Read the inventory (`owned-projects.md` in each mounted tier) here;
-     an owner it does not list is asked about at the commit review and recorded
-     in the same change
-     ([owner-inventory.md](references/owner-inventory.md)).
-   Grep the owner for the load-bearing terms before accepting a pointer that
-   claims coverage.
-3. **Would the reader reach it unaided?** A fact restating common sense, or one
-   that follows in one step from a memory already indexed, spends index bytes
-   telling a competent reader what it had. The tell: the body's general claim is
-   unarguable and only its instance is interesting — the instance was the whole
-   content, and the instance does not generalise.
+1. **Is there an incident?** No incident, no entry — a relocation into a skill
+   or CLAUDE.md included. When a rule must exist, state it positively in the
+   step where it acts ("the commit lands before this file is written"), not as
+   a prohibition on the agent.
+2. **Does another artifact own it?** Read `<mempath>/<tier>/owned-projects.md`
+   for each line of `<mempath>/.gitlore-tiers`, where `<mempath>` is
+   `git config --file .gitmodules submodule.gitlore-memory.path` run from the repo
+   root, skipping a tier without the file and a repo without `.gitlore-tiers`. An
+   owner outside this repo that no inventory lists is asked about at the memory
+   gate before anything is deleted. Move the fact to its owner even when the memory
+   is accurate, and grep the owner for the load-bearing terms before accepting that
+   it covers the fact:
+   - **A skill:** the fact reduces to "when using \<skill\>, do X". A fact written
+     to override an installed skill sits on that skill's topic, so a coverage scan
+     flags it as owned: check which way the claim points, and keep a fact that
+     contradicts the skill unless this repo owns it, in which case fix the skill.
+     If the skill lacks X, fix it when this repo owns it; otherwise route the fact
+     as the inventory says. Otherwise delete the fact.
+   - **A design doc:** a decision, a supersession, a dated status. Record it in the
+     living design doc.
+   - **The code:** how one call site must behave. Write it as a comment at that
+     site.
+   - **CLAUDE.md or a shared tier's conventions file:** a convention binding all
+     work in one repo or tier. A fact meant to be found on meeting a symptom stays
+     in memory.
+   - **A hook or tool that prints the diagnosis when it fires:** delete a memory
+     that restates its output; when the output lacks it, fix the output when this
+     repo owns it, otherwise route the fact as the inventory says.
+   - **A sibling project's skill body, agent definition, hook or tool output:** Unless
+     the fact contradicts the skill (above), route the fact as the inventory says.
+3. **Would the reader reach it unaided?** Discard a fact restating common
+   sense, or following in one step from an indexed memory. The tell: the body's
+   general claim is unarguable and only its instance is interesting. Discard it,
+   unless a reader meeting that instance again would not reach it unaided; then
+   cut the general claim and keep the instance.
 4. **Who reconstructs it?** A script or the harness recomputing it: drop and
    defer. A model inferring it from a paraphrase, with the failure silent:
    carry it.
 5. **What moment does it fire at?** State the moment in one clause. The same
-   clause as a file already in the store means a section in that file, not a
-   new one (§3). Then check the clause names a *literal*, not an activity: an
-   index line fires when a tool result surfaces a string, so a fact whose
-   moment is "writing a design doc" or "authoring a hook" has nothing to match
-   on and is never read, however well written. That content belongs to the
-   skill owning the activity (Q2), or needs a symptom-shaped hook it does not
-   yet have. The hardest case is a symptom with no string — nothing errors, the
-   change simply appears not to work — which neither route reaches: it needs a
+   clause as a file already in the store means a section in that file (§3).
+   Prefer a *literal* — a string a tool result surfaces. An activity ("writing a
+   design doc") goes to the skill owning it (Q2); with no such skill it stays as a
+   HOW line (§7) whose condition names the task. A symptom with no string needs a
    checkpoint inside a skill that owns the surrounding moment.
 6. **Which tier?** Mechanism scoped to this repo, or to the class of repo (§5).
 7. **Does the body survive the strip?** Incident out, first person out,
    deictics out, present tense in, an ageing observation version-stamped (§2).
 8. **Does the index line route to it?** The distinctive literal a session would
-   arrive holding has to be in the line (§7).
+   arrive holding, or for a HOW line the task condition, has to be in the line
+   (§7).
 
-Ask "what is the new learning?" and keep only the answer. What legitimately
-stays in memory is what no owner can carry: a correction from the user, a
-failure mode observed in this repo, a constraint from outside the artifact's
-world. If nothing survives, there was no memory to write — an empty flush is
-the normal case.
+Ask "what is the new learning?" and keep only the answer. What stays in memory
+is what no owner can carry: a correction from the user, a failure mode observed
+in this repo, a constraint from outside the artifact's world. If nothing
+survives, write nothing — an empty flush is the normal case.
 
 ## 2. What the body says
 
-Write from the reader's vantage. The body states what *is*, never what used to
-be or what just changed — a fact phrased as a delta is unreadable once the
-before-state is gone. Lead with the rule in the present tense; give the
-reasoning that makes it decidable in a new situation; cut every sentence that is
-narration rather than instruction. Five habits make a memory worse than useless:
+Write from the reader's vantage, in the present tense. Lead with the rule; give
+the reasoning that makes it decidable in a new situation; cut every sentence
+that is narration. Never write:
 
-- *Describing what used to be.* A snapshot of which repos have migrated or
-  which version is current becomes false without warning and gets acted on.
-- *Writing from the author's present.* "I did X and was corrected" — the reader
-  has no session, no I, and no way to tell whether the anecdote generalises.
-- *Pending or temporal framing.* Work that "needs a fresh session" reads as
-  outstanding forever and invites redoing finished work.
-- *Deictics.* *now*, *here*, *today*, *currently*, *recently*, *this session*
-  are anchored to a moment the reader is not in. Name the condition instead of
-  the moment, and version-stamp an observation that could age (`CC 2.1.220`)
-  rather than calling it recent.
-- *Volatile git state.* No commit ids, branch tips or "uncommitted as of"
-  notes; identify things by durable names.
+- *What used to be or what just changed*, or a snapshot of which repos have
+  migrated or which version is current.
+- *The author's present* — "I did X and was corrected".
+- *Pending or temporal framing* — work that "needs a fresh session".
+- *Deictics* — *now*, *here*, *today*, *currently*, *recently*, *this session*.
+  Name the condition instead, and version-stamp an observation that could age
+  (`CC 2.1.220`).
+- *Volatile git state* — commit ids, branch tips, "uncommitted as of" notes;
+  identify things by durable names.
 
-A quoted correction may name its source: an attribution credits evidence.
-Distinguish the person from the role — `user` is a term of art in most
-described systems (a user-visible hook channel, `protocol.file.allow=user`);
-rename only where the referent is the person who ran, said or corrected
-something.
+A quoted correction may name its source. Rename `user` only where the referent
+is the person who ran, said or corrected something; elsewhere it is a term of
+art (a user-visible hook channel, `protocol.file.allow=user`).
 
 ## 3. A new file, or a section in one that exists
 
-Files with distinct HOW content and one shared WHEN are one memory split by
-topic, and per-file trigger clauses route the reader to a third of the material
-at the moment all of it applies. The tell is duplication: a split along a real
-seam does not repeat itself; one that followed topic headings states the same
-rule twice in near-identical words. Splitting further never helps — every
-fragment inherits the same trigger — and hanging the content off one agent's
-prompt couples a general fact to one consumer.
-
-Same moment clause for two files: merge and dedup, and check the residue for
-anything that fires at a *different* moment — relocate it, since the merged file
-inherits one trigger only. Merge for routing, never for headroom: the byte gain
-is near zero, because the merged line must still carry every distinctive
-literal both entries carried.
+Open [file-shape.md](references/file-shape.md) when a file with the same moment
+clause already exists.
 
 ## 4. Organising a file that holds many facts
 
-A merged file converges on a dozen independent facts under one trigger. Order
-sections by the literal a reader arrives holding, never by discovery order. One
-section per symptom; a symptom whose cases differ gets one section with a
-discriminator, not one section per case. State a shared remedy once and
-reference it — restated in four sections it drifts in four directions. Past
-roughly a screen of sections, lead with a symptom → section map. A fact that is
-a *cost of the remedy* files under the remedy, not under the symptom that led
-there.
-
-**Recall delivers the first 4096 bytes of a file and stops**, so a merged file
-has a ceiling and crosses it silently — the index line still points at
-something that looks complete. Measure with `wc -c` before adding a section,
-and measure the whole file: the `description:` frontmatter is synced from the
-index line (§7), so a line that routes well is charged twice, once in the
-capped index and again inside the fact's own 4096 bytes. A 670-character line
-leaves a frontmatter block of about 800 bytes — a fifth of the budget spent
-before a word of body. Since §7 forbids trimming a
-line to hit a byte target, the budget the body actually has is what argues for
-splitting early — never for a line that routes worse.
-Past the cap the file becomes a hub plus siblings: the hub keeps the trigger
-and the map, now symptom → file, and each section moves to its own file beside
-it, reachable by path once the hub is read. Splitting for size is not the split
-§3 warns against — that one gives each fragment its own index line and its own
-third of one trigger, while this one keeps a single line pointing at the hub.
+Open [file-shape.md](references/file-shape.md) before adding to an existing
+file.
 
 ## 5. Which tier
 
-Ask whether the fact's *mechanism* depends on something unique to this repo, or
-only on this repo being a member of a class — a plugin, a hook-managed repo, a
-submodule-based store. Evidence naming the repo where it surfaced is not
-evidence the mechanism depends on that repo.
-
-Class membership is necessary, not sufficient. A mechanism can belong to the
-class and still have exactly one consumer: name the *other* member that will
-meet the symptom. Being true anywhere does not make it relevant everywhere. The
-asymmetry favours staying local: a tier line is loaded by every session in
-every mounting repo against a capped index, so a weak promotion crowds lines
-that route better, silently, in every repo; demotion later costs a file move.
-Separate behaviour from encoding — how this repo's code handles a mechanism is
-always project-local, and usually belongs in its design doc rather than memory.
+Open [tier-routing.md](references/tier-routing.md) when a tier is mounted and the
+fact might go up.
 
 ## 6. Links when a fact routes up
 
-`[[links]]` travel verbatim. Any that pointed at a project-local sibling
-resolve only in the repo that wrote them and are dead from every other consumer
-of the tier — not the acceptable write-it-later dangle, since the target stays
-local by design. Strip the pointer and keep the prose that names the incident;
-where the link *was* the whole reference, delete it — a tier fact stands on its
-own or it is not a tier fact. Also strip a link naming a skill rather than a
-memory, and one whose target the prose already names.
+Open [tier-routing.md](references/tier-routing.md) when a fact routes up to a tier.
 
 ## 7. The index line
 
-An index line's only job is to let an agent decide read-or-skip, usually on a
-string met **mid-task**: a git error, a flag, a filename, a symptom in a tool
-result. The line is canonical — the file's `description:` is synced from it, so
-edit the line, never the frontmatter.
+An index line lets an agent decide read-or-skip, usually on a string met
+**mid-task**: a git error, a flag, a filename, a symptom in a tool result. Edit
+the line, never the file's `description:` frontmatter, which is synced from it.
 
 Every line is one of three kinds:
 
@@ -205,32 +130,19 @@ Every line is one of three kinds:
   trigger; the prescription is payload.
 - **HOW** — fires on a task or decision being started. The condition is the
   trigger, and it often hides inside what reads like prescription.
-- **Acted-inline** — there is no lookup step: what model to name, how to answer
-  a correction. These do not belong in the index at all. They belong in
-  CLAUDE.md or the tier's conventions file, carried across **whole, with their
-  carve-outs** — the "how to apply" section is where the exceptions live, and a
-  rule that lost its exception is not shorter, it is wrong, in always-on context
-  where nothing routes to the file that would correct it.
+- **Acted-inline** — no lookup step: what model to name, how to answer a
+  correction. Put these in CLAUDE.md or the tier's conventions file, not the
+  index, carried across **whole, with their carve-outs**.
 
-Carry the symptom, not the diagnosis. A line that lists what each case is
-*called* is legible only after the file has been read; what a session arrives
-holding is the observable — the error substring, the flag, the misbehaviour.
-Keep quoted error strings, config keys, env vars, flag and event names, file
-paths, and any contrast whose value was the disambiguation (`fetch -q` vs
-`push -q`). Cut rationale, dates, provenance, cross-references, a hook that
-restates its own title, and a hook naming a count rather than a thing.
-Trimming naturally preserves prescriptions and cuts symptoms, because that is
-what reads well as prose — exactly backwards for a routing table.
+Carry the symptom, not the diagnosis: the observable a session arrives holding
+— the error substring, the flag, the misbehaviour. Keep quoted error strings,
+config keys, env vars, flag and event names, file paths, and any contrast whose
+value was the disambiguation (`fetch -q` vs `push -q`). Cut rationale, dates,
+provenance, cross-references, a hook that restates its own title, and a hook
+naming a count rather than a thing.
 
-Being over the byte cap is never a reason to under-trigger a new or updated
-fact. A line that omits the literal a recall pass would match on is already
-lost, silently, with the file still there looking complete. Write the triggers
-the fact needs; an index over the cap is the retirement decision coming due,
-taken separately with `/gitlore:index-audit`.
-
-A fact written to override an installed skill sits on that skill's own topic,
-so a coverage scan flags it as owned. Check which way the claim points before
-counting an owner.
+Write the triggers the fact needs even when the index is over the byte cap;
+take the overage to `/gitlore:index-audit` separately.
 
 ## 8. Landing it
 
@@ -242,16 +154,6 @@ the parent commit carrying the change it documents.
 
 ## 9. Arriving here at a gate, over facts already written
 
-Three gitlore moments run this pass over facts that exist: the commit review,
-before the approval summary is drafted; `/gitlore:install`, over a store just
-migrated from Claude Code's own auto-memory; and a tier mount, over the local
-facts a new tier's scope may now cover. Nothing changes about the questions —
-what changes is that a verdict of *discard* or *relocate* is now an edit, and
-that the batch has an order. Take discard and relocate first, since a fact
-leaving the store needs no body or index work, then the survivors' bodies (§2),
-then their index lines (§7). Land every edit before the summary is written: the
-summary states what the facts claim as committed, so a fix that follows it
-describes a commit that no longer matches.
-
-An index over the loader cap is not this pass's business — retirement across
-the whole store is `/gitlore:index-audit`, taken as its own decision.
+Open [gate-pass.md](references/gate-pass.md) when a caller sends you here over facts
+already written: the `gitlore:commit` review (before the approval summary),
+`/gitlore:install`, or a tier mount.

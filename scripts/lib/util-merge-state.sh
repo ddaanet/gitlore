@@ -7,8 +7,9 @@
 # matter.
 #
 # The state's IO and the merge itself — writing the marker and the full state
-# file, preparing the merge, emitting the merger directive — is
-# resolve-merge-state.sh instead. The cut is reachability rather than subject:
+# file and emitting the merger directive — is resolve-merge-state.sh instead,
+# and preparing the merge is resolve-merge-prepare.sh. The cut is reachability
+# rather than subject:
 # what is here is what a caller that never sources resolve.sh can reach, which
 # is why gitlore_store_mid_merge exists beside gitlore_detect_stale_merge_state
 # rather than inside it.

@@ -13,9 +13,9 @@ set -euo pipefail
 # One `== <store> ==` section per store with changes, `memory` for root. Each
 # section is committed verbatim in its own store, tiers before root. Refused
 # (exit 2) when the summary is empty, has text before its first header, or does
-# not match the stores that have changes; no commit precedes a refusal. A
-# refused run may still have composed first: that writes the tier carriers and
-# the root MEMORY.md, the same writes the index-compose hook makes.
+# not match the stores that have changes; no commit precedes a refusal. It
+# composes nothing: a store whose indexes a compose pass would change aborts
+# the run, naming `gitlore-compose`.
 # It never prepares or takes a merge: a `live` that cannot fast-forward is
 # reported. Callers run it as `gitlore-commit`, the plugin `bin/` name.
 
@@ -77,29 +77,19 @@ case "$summary" in
   *) refuse "the summary on stdin is empty" ;;
 esac
 
-# The launch repo, whatever directory the agent's shell is in: the memory path is
-# read from `.gitmodules` relative to it. Agent Bash has no CLAUDE_PROJECT_DIR,
-# so without it the repo is the nearest worktree holding the cwd that has a
-# memory submodule — climbing out of memory/ or a tier when the shell sits
-# inside one, and stopping at the first repo that holds memory, so a gitlore
-# project that is itself a submodule of another repo is not left for the outer.
+# The launch repo, whatever directory the agent's shell is in. Outside any
+# worktree memory_path then finds no .gitmodules and the run is a no-op.
 outside_worktree=0
-if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
-  gitlore_cd_project_root || {
+launch_rc=0
+gitlore_cd_launch_repo || launch_rc=$?
+case "$launch_rc" in
+  0) ;;
+  1)
     echo "gitlore: nothing was committed: the project directory '$CLAUDE_PROJECT_DIR' cannot be entered." >&2
-    exit 0
-  }
-# Outside any worktree rev-parse fails, which is expected: memory_path then
-# finds no .gitmodules and the run is a no-op.
-elif top=$(git rev-parse --show-toplevel 2>/dev/null); then
-  cd "$top" || exit 1
-  while ! gitlore_memory_path >/dev/null \
-    && sup=$(git rev-parse --show-superproject-working-tree) && [ -n "$sup" ]; do
-    cd "$sup" || exit 1
-  done
-else
-  outside_worktree=1
-fi
+    exit 0 ;;
+  2) outside_worktree=1 ;;
+  *) exit 1 ;;
+esac
 
 mempath=$(gitlore_memory_path) || mempath=""
 
@@ -129,12 +119,29 @@ while IFS= read -r tier; do
   gitlore_guard_stale_merge_state "$mempath/$tier" || exit 1
 done < <(gitlore_tier_paths "$mempath")
 
-# Composition runs before the stores are judged: it writes tier carriers, so a
-# root tier-line edit it propagates makes a tier dirty that the status below
-# must see. A refusal or a failed write is reported by the sync's own compose,
-# which runs again; a refusal writes nothing, so the state read here is the
-# state the sync starts from.
-gitlore_compose "$mempath" >/dev/null || true
+# The commit writes no index. A store whose indexes a compose pass would change
+# aborts here, before the stores are judged: the pass would make a tier dirty
+# that the status below must see, and the section check would otherwise answer a
+# summary for a state the remedy changes. The check writes no index, no file in
+# a store, and moves no tier. A tier ahead of its pin fails the check and the
+# pin guard below (gitlore_compose_check_pins), which refuses it naming the
+# take, so the `add -A` records no tier the root index has not taken. A
+# non-zero status from the check does not abort here.
+pending_rc=0
+pending=$(gitlore_compose_pending "$mempath") || pending_rc=$?
+if [ "$pending_rc" -eq 0 ] && [ -n "$pending" ]; then
+  gitlore_say_compose_pending "$pending" >&2
+  exit 1
+fi
+# A line a tier holds and root does not changes nothing in a pass, so the check
+# above passes over it. Reported, never refused: which surface is right is a
+# judgement about the fact.
+if [ "$pending_rc" -eq 0 ]; then
+  orphans=$(gitlore_compose_orphans "$mempath")
+  if [ -n "$orphans" ]; then
+    printf 'gitlore: these lines are in a tier'\''s own index but not in the root index, so they are not recallable here. The commit goes ahead; each line names both edits, and either is final:\n%s\n' "$orphans" >&2
+  fi
+fi
 
 # What has changes. Tier-only root changes (a gitlink moving, MEMORY.md lines
 # under a tier prefix) need no section; any other root change does.
@@ -172,8 +179,8 @@ if [ "$root_has" = "0" ] && [ -z "$dirty_tiers" ]; then
   exit 0
 fi
 
-# The section check. Every refusal here precedes the first commit (composition
-# above has already written, as its hook does).
+# The section check. Every refusal here precedes the first commit (the compose
+# check above has written no index).
 headers=$(gitlore_summary_headers "$summary")
 if [ -n "$(gitlore_summary_preamble "$summary")" ]; then
   refuse "text before the first '== <store> ==' header belongs to no store"
@@ -204,37 +211,10 @@ if [ "$root_content" = "1" ]; then
   grep -Fqx -- memory <<<"$headers" || refuse "the root store has changes beyond its tiers and no 'memory' section"
 fi
 
-# Stage the memory gitlink into the superproject index (D58) when this run moved
-# memory HEAD. A no-op run stages nothing. The staging is skipped during a replay
-# (rebase, cherry-pick, revert): a replayed commit must keep the pointer it
-# recorded, and the memory worktree does not move when the parent's HEAD does.
-stage_memory_pointer() {
-  local mempath="$1" super top rel p name op err
-  super=$(git -C "$mempath" rev-parse --show-superproject-working-tree)
-  [ -n "$super" ] || return 0
-  top=$(git -C "$mempath" rev-parse --show-toplevel)
-  rel="${top#"$super"/}"
-  # Marker list: path:operation. A merge is deliberately absent — it is authored now.
-  for marker in rebase-merge:rebase rebase-apply:rebase \
-                CHERRY_PICK_HEAD:cherry-pick REVERT_HEAD:revert; do
-    name="${marker%%:*}"
-    p=$(git -C "$super" rev-parse --git-path "$name")
-    case "$p" in /*) ;; *) p="$super/$p" ;; esac
-    if [ -e "$p" ]; then
-      op="${marker##*:}"
-      echo "gitlore: $op in progress — skipping the staging of the memory pointer; stage it yourself once the $op is done." >&2
-      return 0
-    fi
-  done
-  if ! err=$(git -C "$super" add -- "$rel" 2>&1); then
-    echo "gitlore: memory was committed, but its pointer could not be staged in the parent (git: $err). The pointer floats until you stage it." >&2
-  fi
-}
-
 memory_before=$(git -C "$mempath" rev-parse HEAD)
 gitlore_sync_memory_to_live "$mempath" "$summary" || exit 1
 memory_after=$(git -C "$mempath" rev-parse HEAD)
 if [ "$memory_before" != "$memory_after" ]; then
-  stage_memory_pointer "$mempath"
+  gitlore_stage_memory_pointer "$mempath"
 fi
 exit 0
