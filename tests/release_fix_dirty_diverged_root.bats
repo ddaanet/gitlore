@@ -163,3 +163,67 @@ assert_commit_then_tier_merge_prepared() {
   [[ "$output" == *"gitlore: memory has uncommitted changes and has diverged from 'live', so no merge was prepared. Commit them (approved summary, then a memory commit) and run the command again."* ]]
   assert_commit_then_tier_merge_prepared "$PLUGIN_ROOT/scripts/resolve.sh"
 }
+
+# The project is itself a submodule of an outer repository (a monorepo), at a
+# path with a space. Called first in a test, before any fixture: it moves the
+# fixture root there, so the memory root's superproject has a superproject.
+# The outer index records the project as a gitlink once the fixture has a
+# commit, which `nest_project_gitlink` does.
+nest_project_in_outer() {
+  OUTER="$BATS_TEST_TMPDIR/outer dir"
+  git init -q -b main "$OUTER"
+  rm -rf "$TMP_REPO"
+  TMP_REPO="$OUTER/proj dir"
+  MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
+  export MEMORY_REMOTE
+  mkdir "$TMP_REPO"
+  cd "$TMP_REPO" || return 1
+  git init -q -b main
+  git config user.email "test@example.com"
+  git config user.name "Test"
+}
+
+nest_project_gitlink() {
+  git -C "$OUTER" update-index --add --cacheinfo "160000,$(git rev-parse HEAD),proj dir"
+  [ -n "$(git -C memory rev-parse --show-superproject-working-tree)" ]
+  [ -n "$(git rev-parse --show-superproject-working-tree)" ]
+}
+
+# The project has a local branch `live` forked from its HEAD and an uncommitted
+# change: the state that makes the project, taken for a memory root, dirty and
+# diverged.
+fork_and_dirty_project() {
+  printf 'work\n' > work.txt
+  git add work.txt
+  git commit -qm "project work"
+  git branch -f live "$(git commit-tree "HEAD^{tree}" -p HEAD~1 -m elsewhere)"
+  [ "$(git merge-base HEAD live)" != "$(git rev-parse live)" ]
+  printf 'more\n' >> work.txt
+  [ -n "$(git status --porcelain --ignore-submodules=all -- work.txt)" ]
+}
+
+@test "resolve: a project that is itself a submodule does not make the memory root a tier" {
+  nest_project_in_outer
+  take_base_store ddaanet
+  push_memory_fact
+  fork_root_from_live
+  nest_project_gitlink
+  fork_and_dirty_project
+  [ -z "$(git -C memory status --porcelain --ignore-submodules=all)" ]
+
+  CLAUDECODE=1 run bash "$PLUGIN_ROOT/scripts/resolve.sh"
+  [[ "$output" != *"has uncommitted changes and has diverged"* ]]
+  [ -f "$(gitlore_merge_state_file memory)" ]
+  git -C memory rev-parse -q --verify MERGE_HEAD
+}
+
+@test "pre-push: a tier merge on a dirty root forked from live is refused in a project that is itself a submodule" {
+  nest_project_in_outer
+  dirty_diverged_root_with_tier_merge
+  nest_project_gitlink
+  CLAUDECODE=1 run bash "$PRE_PUSH"
+  [ "$status" -ne 0 ]
+  assert_tier_merge_refused
+  [[ "$output" == *"gitlore: memory has uncommitted changes and has diverged from 'live', so no merge was prepared."* ]]
+  assert_commit_then_tier_merge_prepared "$PRE_PUSH"
+}
