@@ -175,9 +175,18 @@ a single abort can carry several tiers:
   `/gitlore:merge` composes them into the root index and records the tier (D78,
   in [take-and-compose.md](take-and-compose.md));
 - **behind the pin** — `/gitlore:merge` fast-forwards it;
-- **beside the pin**, each holding commits the other lacks — a checkout of the
-  pin, then `/gitlore:merge`, so projecting the root index onto the tier cannot
-  overwrite what it holds.
+- **forked from its own `live`** — beside the pin, each holding commits the
+  other lacks, with the tier's local `live` holding the pin and no branch or
+  remote-tracking ref holding `HEAD`: `/gitlore:merge` merges `live` into `HEAD`
+  and records the tier. A commit on a tier checked out behind its pin, where the
+  tier's local `live` holds the pin, leaves this shape, the yielded memory
+  commit's own included, and a checkout of the pin would leave those commits
+  reachable from the reflog alone;
+- **beside the pin** otherwise — a checkout of the pin, then `/gitlore:merge`,
+  so projecting the root index onto the tier cannot overwrite what it holds.
+  Another ref holding `HEAD` keeps its commits; a tier whose `live` lacks the
+  pin, such as a recorded commit re-authored, gives the take nothing to merge
+  the pin from.
 
 `SessionStart` reports the same state.
 
@@ -186,13 +195,13 @@ memory root that holds uncommitted work and whose `HEAD` has forked from its
 local `live` (`gitlore_root_merge_refused`), asking for a commit; refusing that
 commit for a tier whose remedy is `/gitlore:merge` would send each to the other
 with nothing moving. So in that state `gitlore_pin_yield_tiers` names every tier
-whose remedy is the take — not one mid-merge, not one beside its pin — and the
-guard passes over them, in the commit, `gitlore-compose` and the `PostToolBatch`
-pass alike. The pass projects nothing into a yielded tier, since its carrier
-holds rewords and deletions root has not taken, and the orphan report skips it,
-since the take composes its lines. The commit reads the set before any tier
-commits, stages no yielded tier as its commit lands, keeps it out of memory's
-`add -A`, and prints, per tier:
+whose remedy is the take — a forked one included, not one mid-merge, not one
+beside its pin otherwise — and the guard passes over them, in the commit,
+`gitlore-compose` and the `PostToolBatch` pass alike. The pass projects nothing
+into a yielded tier, since its carrier holds rewords and deletions root has not
+taken, and the orphan report skips it, since the take composes its lines. The
+commit reads the set before any tier commits, stages no yielded tier as its
+commit lands, keeps it out of memory's `add -A`, and prints, per tier:
 `tier '<tier>' is checked out off the commit the memory store records for it, so this commit recorded root's own changes and left the tier unrecorded. Run /gitlore:merge next, which takes the tier and records it.`
 The commit records less than the stores hold, never more, so the approved
 summary still covers it, and the gitlink stays root's true record of what it has

@@ -206,7 +206,9 @@ gitlore_compose_problems_in() {
 # moved the tier is not what the reader acts on. A tier behind its pin is
 # refused, dormant or not, since that `add -A` would record the older commit
 # and move the pin backward with no one having asked. So is a tier beside its
-# pin, whose HEAD and pin each hold commits the other lacks.
+# pin, whose HEAD and pin each hold commits the other lacks: naming the take
+# when the tier has forked from its own `live`, which holds the pin, and the
+# return-to-the-pin checkout otherwise.
 #
 # The rule yields a tier exactly where its remedy, the take, would refuse the
 # memory root (gitlore_pin_yield_tiers): refusing there sends the commit to a
@@ -239,6 +241,9 @@ gitlore_compose_check_pins() {
 " ;;
       "merge behind")
         problems="${problems}tier '$tier' is checked out at ${head:0:12}, behind the commit the memory store records at ${pinned:0:12}, and a commit would record the older one. Run /gitlore:merge, which fast-forwards it.
+" ;;
+      "merge forked")
+        problems="${problems}tier '$tier' is checked out at ${head:0:12}, beside the commit the memory store records at ${pinned:0:12}, with commits no branch holds. Run /gitlore:merge, which merges its local live into them and records the tier.
 " ;;
       *)
         # Absolute, so the printed command runs from anywhere; quoted, so a tier
@@ -274,8 +279,17 @@ gitlore_pin_yield_tiers() {
 # Print how mounted tier $2 sits against the commit memory store $1 records for
 # it, as "<remedy> <relation>": `on`; `resolve mid-merge`; `merge unheld`, a pin
 # this checkout has not fetched, the shape a raw pull in memory leaves; `merge
-# ahead`; `merge behind`; `checkout beside`, each holding commits the other
-# lacks. Print nothing for a tier the rule has no opinion about.
+# ahead`; `merge behind`; `merge forked`, beside the pin with the tier's own
+# `live` holding the pin and no branch or remote-tracking ref holding HEAD;
+# `checkout beside`, every other tier whose HEAD and pin each hold commits the
+# other lacks. Print nothing for a tier the rule has no opinion about.
+#
+# A forked tier is what a commit on a tier checked out behind its pin leaves,
+# the memory commit's own included when the pin guard yields it: the take
+# merges the tier's `live` into HEAD and records the merge, while a checkout of
+# the pin would leave HEAD's commits reachable from the reflog alone. Where
+# another ref holds HEAD, the checkout strands nothing; where `live` lacks the
+# pin, the take has nothing to merge it from.
 #
 # The pin is read from the memory store's INDEX (`:$tier`), not from
 # `HEAD:$tier`: a gitlink staged for the next memory commit is what that commit
@@ -300,6 +314,10 @@ gitlore_tier_pin_relation() {
     printf 'merge ahead\n'
   elif git -C "$tierpath" merge-base --is-ancestor "$head" "$pinned"; then
     printf 'merge behind\n'
+  elif git -C "$tierpath" rev-parse -q --verify live >/dev/null &&
+    git -C "$tierpath" merge-base --is-ancestor "$pinned" live &&
+    [ -z "$(git -C "$tierpath" for-each-ref --contains "$head" refs/heads refs/remotes)" ]; then
+    printf 'merge forked\n'
   else
     printf 'checkout beside\n'
   fi

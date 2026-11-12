@@ -297,6 +297,8 @@ assert_converges() {
   local_tier_commit_recorded ddaanet loc.md
   git -C memory/ddaanet checkout -q --detach HEAD~1
   move_tier_off_pin ddaanet
+  # Another ref holds HEAD, so the checkout strands nothing.
+  git -C memory/ddaanet branch keep
   fork_live_locally
   dirty_root
   pin=$(git -C memory rev-parse HEAD:ddaanet)
@@ -306,4 +308,67 @@ assert_converges() {
   [[ "$output" == *"$(git -C memory/ddaanet rev-parse HEAD | cut -c1-12)"* ]]
   [[ "$output" == *"checkout --detach $pin"* ]]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
+}
+
+# --- a tier forked from its own `live` ------------------------------------------
+
+# Behind its pin with work of its own: the yielded commit lands that work on the
+# tier's HEAD, which leaves it beside the pin, forked from its `live`.
+@test "forked: a tier the yield commit leaves beside its pin is never told to check out, and its commit is recorded" {
+  spaced_repo
+  state_c behind_state
+  seed_tier_bullet ddaanet new.md "an uncommitted tier fact"
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  run commit_sections "memory: record dirty"
+  assert_yielded "$pin"
+  tc=$(git -C memory/ddaanet rev-parse HEAD)
+  git -C memory/ddaanet cat-file -e "$tc:new.md"
+  run bash "$PLUGIN_ROOT/scripts/compose-memory.sh"
+  [[ "$output" != *"checkout --detach"* ]]
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Run /gitlore:merge"* ]]
+  printf 'x\n' > memory/more.md
+  seed_root_bullet more.md "another root fact"
+  run commit_sections "memory: another"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"checkout --detach"* ]]
+  [[ "$output" == *"left the tier unrecorded. Run /gitlore:merge next"* ]]
+  assert_converges
+  git -C memory/ddaanet merge-base --is-ancestor "$tc" "$(git -C memory rev-parse HEAD:ddaanet)"
+  head_index_has ddaanet/new.md
+}
+
+# The same shape made by hand, on a dirty forked root: the commit yields it.
+@test "forked: a hand commit forked from the tier's live, dirty forked root, yields and converges" {
+  spaced_repo
+  take_base_store ddaanet
+  local_tier_commit_recorded ddaanet loc.md
+  git -C memory/ddaanet checkout -q --detach HEAD~1
+  move_tier_off_pin ddaanet
+  tc=$(git -C memory/ddaanet rev-parse HEAD)
+  fork_live_locally
+  dirty_root
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  run commit_sections "memory: record dirty"
+  [[ "$output" != *"checkout --detach"* ]]
+  assert_yielded "$pin"
+  assert_converges
+  git -C memory/ddaanet merge-base --is-ancestor "$tc" "$(git -C memory rev-parse HEAD:ddaanet)"
+}
+
+# Re-authored past the pin: `live` holds the pin's parent, not the pin, so the
+# take would only advance `live`; the checkout stays the remedy.
+@test "guard: a tier re-authored beside its pin keeps its checkout remedy" {
+  spaced_repo
+  take_base_store ddaanet
+  move_tier_diverged_off_pin ddaanet
+  fork_live_locally
+  dirty_root
+  pin=$(git -C memory rev-parse :ddaanet)
+  run commit_sections "memory: record dirty"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"checkout --detach $pin"* ]]
+  run bash "$PLUGIN_ROOT/scripts/compose-memory.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"checkout --detach $pin"* ]]
 }
