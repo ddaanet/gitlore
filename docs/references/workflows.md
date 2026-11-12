@@ -95,7 +95,8 @@ Code and run `/gitlore:resolve`. The primary path resumes from there.
 **Clone**
 
 `git clone --recurse-submodules <repo>` → the first `SessionStart` configures
-settings, reports where memory stands, and replays the hook-manager sentinel.
+settings, reports where memory stands, and reports any hook-manager installer
+the sentinel records.
 
 Without `--recurse-submodules`: `SessionStart` detects the uninitialized
 submodule and runs `git submodule update --init`. That leaves the memory

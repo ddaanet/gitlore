@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
-# shellcheck disable=SC2154
+# Each @test is its own subshell, so SC2030/SC2031 are false positives here.
+# shellcheck disable=SC2154,SC2030,SC2031
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -316,4 +317,81 @@ assert_session_start_did_nothing() {
   run git -C "$WT/memory" symbolic-ref -q HEAD
   [ "$status" -ne 0 ]
   [ "$(git -C "$WT/memory" rev-parse HEAD)" = "$(git -C "$WT/memory" rev-parse live)" ]
+}
+
+# Sentinel installer arms: the sentinel is tracked, so a fresh clone brings its
+# first line. SessionStart never runs the three hook-manager installers; at
+# every session start it tells the user the command to run instead.
+# The stubs sit in a directory with spaces and write a marker file when run.
+installer_fixture() {
+  make_parent_with_memory
+  enable_gitlore
+  printf '%s\n' "$1" > .claude/gitlore-hook-setup
+  STUB_DIR="$BATS_TEST_TMPDIR/stub bin dir"
+  STUB_MARKER="$BATS_TEST_TMPDIR/installer ran marker"
+  mkdir -p "$STUB_DIR"
+  local tool
+  for tool in lefthook npx overcommit; do
+    printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$tool" "$STUB_MARKER" > "$STUB_DIR/$tool"
+    chmod +x "$STUB_DIR/$tool"
+  done
+  PATH="$STUB_DIR:$PATH"
+}
+
+# One systemMessage paragraph names the command, the sentinel and `manual`
+# together, so a `manual` from another notice cannot satisfy it. Reads $output.
+assert_installer_notice() {
+  jq -e --arg c "$1" '.systemMessage // "" | split("\n\n")
+    | any(.[]; contains($c) and contains(".claude/gitlore-hook-setup") and contains("manual"))' <<<"$output"
+}
+
+assert_installer_not_run() {
+  installer_fixture "$1"
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ ! -e "$STUB_MARKER" ]
+}
+
+assert_installer_notice_every_session() {
+  installer_fixture "$1"
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  assert_installer_notice "$1"
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  assert_installer_notice "$1"
+}
+
+@test "sentinel 'lefthook install' is not run at session start" {
+  assert_installer_not_run "lefthook install"
+}
+
+@test "sentinel 'npx husky' is not run at session start" {
+  assert_installer_not_run "npx husky"
+}
+
+@test "sentinel 'overcommit --install' is not run at session start" {
+  assert_installer_not_run "overcommit --install"
+}
+
+@test "sentinel 'lefthook install' gets a notice naming it at every session start" {
+  assert_installer_notice_every_session "lefthook install"
+}
+
+@test "sentinel 'npx husky' gets a notice naming it at every session start" {
+  assert_installer_notice_every_session "npx husky"
+}
+
+@test "sentinel 'overcommit --install' gets a notice naming it at every session start" {
+  assert_installer_notice_every_session "overcommit --install"
+}
+
+@test "a 'manual' sentinel adds no sentinel notice to the systemMessage" {
+  installer_fixture manual
+  run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  [ ! -e "$STUB_MARKER" ]
+  # The hook reached its JSON, so an absent notice is not an absent message.
+  jq -e '.hookSpecificOutput.additionalContext' <<<"$output" >/dev/null
+  jq -e '.systemMessage // "" | contains("gitlore-hook-setup") | not' <<<"$output"
 }

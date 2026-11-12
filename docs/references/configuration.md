@@ -17,9 +17,10 @@ lives in the store's gitdir.
 (`source_up_if_exists` plus `PATH_add .gitlore/bin`) — see Memory Redirect
 Launcher. `.claude/gitlore-hook-setup` is the hook-manager sentinel — the setup
 command or keyword (`lefthook install`, `npx husky`, `overcommit --install`,
-`direct`, `manual`) that `SessionStart` replays to re-wire hook integration on a
-clone or a new machine. Inside the memory submodule, `memory/.gitlore-tiers`
-lists the active tiers in precedence order (D30).
+`direct`, `manual`) that `SessionStart` reads on a clone or a new machine: it
+re-runs the direct wiring, and prints a hook-manager installer for the user to
+run. Inside the memory submodule, `memory/.gitlore-tiers` lists the active tiers
+in precedence order (D30).
 
 **Local git config — never tracked, re-pinned every session.** One key points at
 the installed plugin, whose cache path changes on every upgrade:

@@ -18,7 +18,7 @@ wires them is in
 
 ## The Session
 
-Everything install wires is re-pinned, re-emitted or replayed at the start of
+Everything install wires is re-pinned, re-emitted or re-run at the start of
 every session, which is what makes a clone, a new machine and a plugin upgrade
 heal themselves.
 
@@ -36,9 +36,9 @@ has no memory submodule entry, no-op.
 3. **Emit the wrapper** `gitlore-pre-push` and the `gitlore-pre-commit` stub
    into the git common dir. Idempotent and worktree-agnostic (D11, in
    [hook-wrappers.md](hook-wrappers.md)).
-4. **Replay the hook-manager sentinel** to reinstate wiring after a clone or a
-   new machine (`direct` and `manual` are keywords; the three manager commands
-   are matched as literals and nothing else is run, D45 — see
+4. **Read the hook-manager sentinel** after a clone or a new machine (`direct`
+   re-runs the direct wiring; `manual` is a keyword; the three manager commands
+   are printed for the user to run and nothing else is run, D45 — see
    [Hook Manager Support](installation.md#hook-manager-support)).
 5. **Materialize the store.** Initialize the submodule if needed; add a memory
    worktree for a linked parent worktree; create local `live` from the

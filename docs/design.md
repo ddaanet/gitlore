@@ -226,12 +226,13 @@ Hook-manager wiring and memory-remote creation are install-time concerns, read
 when changing `/gitlore:install` rather than when reasoning about memory itself.
 Wiring detects Lefthook, Husky, Overcommit or nothing, defaults to `direct` so
 FR8 holds out of the box, and reaches the wrapper through the git common dir
-(D11); `SessionStart` replays only the three commands the wire scripts write
-(D45). The remote inherits name, owner and visibility from the parent's
-`origin`, is disclosed before creation (FR10), and a parent with no remote is a
-supported local-only end state. The detection table and each manager's syntax
-are in [installation.md](references/installation.md); the disclosure text and
-the per-provider creation methods are in
+(D11); `SessionStart` runs no command from the sentinel and prints the three
+installer commands the wire scripts write for the user to run (D45). The remote
+inherits name, owner and visibility from the parent's `origin`, is disclosed
+before creation (FR10), and a parent with no remote is a supported local-only
+end state. The detection table and each manager's syntax are in
+[installation.md](references/installation.md); the disclosure text and the
+per-provider creation methods are in
 [memory-remote.md](references/memory-remote.md).
 
 ### Workflows

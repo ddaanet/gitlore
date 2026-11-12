@@ -11,11 +11,12 @@ files are in [hook-wrappers.md](hook-wrappers.md), and what every `SessionStart`
 does is in [session.md](session.md).
 
 - **D25** — direct wiring refuses rather than appends after an existing `exec`
-- **D45** — the sentinel replay is an allow-list, never `sh -c` on the tracked
-  file
+- **D45** — `SessionStart` never runs a command from the tracked sentinel; it
+  prints the installer for the user to run
 
 *Rejected:* a strictly non-empty initial commit · a separate
-`gitlore.memoryPath` config key · replaying the sentinel as a shell command.
+`gitlore.memoryPath` config key · running the sentinel as a shell command ·
+running the three installers at session start.
 
 ---
 
@@ -90,14 +91,15 @@ creation. A partial install (user aborted mid-flow) is recovered by re-running.
 
 **Sentinel file:** `.claude/gitlore-hook-setup` — tracked. Contains the hook
 setup command or keyword (`lefthook install`, `npx husky`,
-`overcommit --install`, `direct`, or `manual`). `SessionStart` replays it to
-re-wire hook-manager integration on a clone or a new machine — by matching the
-line against that closed list, never by handing it to a shell (D45).
+`overcommit --install`, `direct`, or `manual`). `SessionStart` reads it on a
+clone or a new machine: it re-runs the direct wiring for `direct`, and for a
+hook-manager installer it prints the command for the user to run, never handing
+the line to a shell (D45).
 
 The detection script outputs structured results. Each hook manager has an
 idempotent wiring step (uses marker comment `# gitlore: managed` to detect and
 skip duplicates) and a sentinel command stored in `.claude/gitlore-hook-setup`
-and replayed by SessionStart on clone or plugin reinstall.
+and read by SessionStart on clone or plugin reinstall.
 
 **Detection precedence** (first match wins; multiple detections produce a
 warning listing all found managers):
@@ -151,8 +153,8 @@ as `$@`.
 *None, i.e. direct* (sentinel `direct`, a keyword SessionStart interprets rather
 than runs) — a shell stub at `git rev-parse --git-path hooks/pre-push` that
 execs the wrapper. The hooks path is resolved with `--git-path`, not a literal
-`.git/hooks/…`, so the `[ -f ]` test and the `cat >` survive a sentinel replay
-in a linked worktree.
+`.git/hooks/…`, so the `[ -f ]` test and the `cat >` survive the SessionStart
+re-run in a linked worktree.
 
 *Multiple managers, or a hand-set sentinel* (`manual`, also a keyword) — print a
 copy-paste snippet and modify nothing. Reached only when detection is ambiguous
@@ -162,10 +164,12 @@ or a user sets the sentinel themselves.
 
 - `direct` → re-run the direct-wiring installer.
 - `manual` → emit `systemWarning` reminding the user to verify wiring.
-- `lefthook install`, `npx husky`, `overcommit --install` → run that literal
-  command in the repo root.
+- `lefthook install`, `npx husky`, `overcommit --install` → run nothing; at
+  every session start report on `systemMessage` the exact command for the user
+  to run, the sentinel path, and that setting the sentinel's first line to
+  `manual` stops the notice (D45). No check whether the hooks are wired.
 - Any other value → run nothing; report on `systemMessage` that the sentinel
-  names a command gitlore does not replay, and that the user should run it
+  names a command gitlore does not run, and that the user should run it
   themselves or set the sentinel to `manual` (D45).
 
 Idempotency: every wiring modification uses a detection marker
@@ -175,7 +179,8 @@ no-op.
 ## Decisions — D25, D45
 
 Why the wiring above has this shape: why direct wiring refuses rather than
-appends after an existing `exec`, and why the sentinel replay is an allow-list.
+appends after an existing `exec`, and why `SessionStart` runs nothing from the
+sentinel.
 
 **D25 — Direct wiring refuses rather than appends after an existing `exec`**
 
@@ -195,7 +200,7 @@ project's own hook body to interpose safely.
 Resolution: refuse rather than append — print the conflicting file and the line
 to interpose manually to stderr, exit 1. Consistent with `wire-lefthook.sh`'s
 existing exit-1-when-unsafe precedent; both `scripts/install/run.sh` and the
-`SessionStart` sentinel replay call `wire-direct.sh` unguarded under
+`SessionStart` `direct` arm call `wire-direct.sh` unguarded under
 `set -euo pipefail`, so the refusal aborts the caller instead of leaving a
 half-wired repo. Considered and rejected: silently interposing the gitlore line
 before the detected `exec` — the inserted line would itself need to avoid `exec`
@@ -203,28 +208,34 @@ before the detected `exec` — the inserted line would itself need to avoid `exe
 the existing hook body's control flow rather than just appending, a rewrite too
 surprising to do unprompted.
 
-**D45 — The sentinel replay is an allow-list, never `sh -c` on the file**
+**D45 — `SessionStart` never runs a command from the tracked sentinel**
 
-The sentinel is tracked, so it arrives with every clone. Replaying it with
+The sentinel is tracked, so it arrives with every clone. Running it with
 `sh -c "$line"` made the first `SessionStart` in a freshly cloned repo execute
 whatever line the clone brought in, gated only by `gitlore.enabled` in the
 equally tracked `.claude/settings.json` — an arbitrary-code path that a
 contributor, a compromised upstream, or a careless hand edit could reach, and
 that ran before the user had read anything. The three manager commands the wire
-scripts write are the only lines gitlore ever needs to run, so the replay
-matches against exactly those literals; anything else runs nothing and is
-reported on `systemMessage` with the way forward. The cost is that a new manager
-needs a wire script and an arm here rather than a hand-typed sentinel line,
-which is the right cost: a command gitlore runs on a stranger's clone should be
-one gitlore shipped.
+scripts write are the only lines gitlore recognizes, and even those run nothing:
+the installer wires hooks whose content the clone controls (`npx` resolves a
+repo-local package first), so the user runs it. Each session start reports the
+command on `systemMessage`, names the sentinel, and says that setting its first
+line to `manual` stops the notice; no check whether the hooks are already wired.
+Anything else runs nothing and is reported the same way. The cost is a notice at
+every session until the user sets `manual`, which is the right cost: a command
+gitlore runs on a stranger's clone should not exist.
 
 ## Rejected alternatives
 
-**Replaying the sentinel as a shell command.** The `*) sh -c "$cmd"` arm was the
+**Running the sentinel as a shell command.** The `*) sh -c "$cmd"` arm was the
 original design, so a user could wire an unsupported manager by writing its
 install command into the sentinel by hand. That flexibility is what made the
 file an execution vector; `manual` plus a copy-paste snippet covers the same
 need without gitlore running the line.
+
+**Running the three installers at session start.** The allow-list kept the clone
+from choosing the command, but the installer still wires hooks the clone
+controls, without the person who cloned asking for it; the notice replaces it.
 
 **A strictly non-empty initial commit at install.** Install passes
 `--allow-empty` as a safety net: the commit normally carries migrated
