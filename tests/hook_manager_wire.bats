@@ -125,7 +125,7 @@ EOF
 @test "wire-husky writes sentinel" {
   mkdir .husky .claude
   bash "$WIRE_HUSKY"
-  [ "$(cat .claude/gitlore-hook-setup)" = "npx husky" ]
+  [ "$(cat .claude/gitlore-hook-setup)" = "npm install" ]
 }
 
 # ---------------------------------------------------------------------------

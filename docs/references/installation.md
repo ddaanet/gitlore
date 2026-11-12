@@ -90,7 +90,7 @@ creation. A partial install (user aborted mid-flow) is recovered by re-running.
 ## Hook Manager Support
 
 **Sentinel file:** `.claude/gitlore-hook-setup` — tracked. Contains the hook
-setup command or keyword (`lefthook install`, `npx husky`,
+setup command or keyword (`lefthook install`, `npm install`,
 `overcommit --install`, `direct`, or `manual`). `SessionStart` reads it on a
 clone or a new machine: it re-runs the direct wiring for `direct`, and for a
 hook-manager installer it prints the command for the user to run, never handing
@@ -133,10 +133,14 @@ other `pre-commit` hook byte-for-byte alone.
 `lefthook.yml`, `run: '$(git rev-parse --git-common-dir)/gitlore-pre-push'`.
 Lefthook runs `run` through a shell, so the substitution expands at hook time.
 
-*Husky* (`npx husky`) — a guarded
+*Husky* (`npm install`) — a guarded
 `exec "$(git rev-parse --git-common-dir)/gitlore-pre-push" "$@"` appended to
 `.husky/pre-push`, created if missing. Husky runs the script via `sh`, so the
-substitution expands.
+substitution expands. `npm install` wires husky v8 and v9 through the repo's
+`prepare` script, which husky's own setup writes and which gitlore neither
+checks nor sets; `npx husky` prints usage and wires nothing on v8. A sentinel
+that still holds `npx husky` is recognized and gets the same `npm install`
+advice.
 
 *Overcommit* (`overcommit --install`) — a custom `gitlore` hook under `PrePush`
 in `.overcommit.yml`. Overcommit's `command:` is an array exec'd
@@ -163,12 +167,12 @@ or a user sets the sentinel themselves.
 **Sentinel handling in SessionStart:**
 
 - `direct` → re-run the direct-wiring installer.
-- `manual` → print a reminder to verify the wiring on stderr, which the user
-  sees only under `--verbose`.
-- `lefthook install`, `npx husky`, `overcommit --install` → run nothing; at
+- `manual` → print a reminder to verify the wiring on stderr (D14).
+- `lefthook install`, `npm install`, `overcommit --install` → run nothing; at
   every session start report on `systemMessage` the exact command for the user
   to run, the sentinel path, and that setting the sentinel's first line to
-  `manual` stops the notice (D45). No check whether the hooks are wired.
+  `manual` stops the notice (D45). No check whether the hooks are wired. A
+  legacy `npx husky` gets the notice advising `npm install`.
 - Any other value → run nothing; report on `systemMessage` that the sentinel
   names an unrecognized command, that it was not run, that `SessionStart` runs
   no command from the file, and that setting its first line to `manual` stops
@@ -218,13 +222,13 @@ The sentinel is tracked, so it arrives with every clone. Running it with
 whatever line the clone brought in, gated only by `gitlore.enabled` in the
 equally tracked `.claude/settings.json` — an arbitrary-code path that a
 contributor, a compromised upstream, or a careless hand edit could reach, and
-that ran before the user had read anything. The three manager commands the wire
-scripts write are the only lines gitlore recognizes, and even those run nothing:
-the installer wires hooks whose content the clone controls (`npx` resolves a
-repo-local package first), so the user runs it. Each session start reports the
-command on `systemMessage`, names the sentinel, and says that setting its first
-line to `manual` stops the notice; no check whether the hooks are already wired.
-Anything else runs nothing and is reported as unrecognized, with the same
+that ran before the user had read anything. The manager commands gitlore
+recognizes run nothing either: the installer wires hooks whose content the clone
+controls (`npm install` runs the repo's own `prepare` script and its
+dependencies' install scripts), so the user runs it. Each session start reports
+the command on `systemMessage`, names the sentinel, and says that setting its
+first line to `manual` stops the notice; no check whether the hooks are already
+wired. Anything else runs nothing and is reported as unrecognized, with the same
 `manual` off switch and no advice to run the line. The cost is a notice at every
 session until the user sets `manual`, which is the right cost: a command gitlore
 runs on a stranger's clone should not exist.

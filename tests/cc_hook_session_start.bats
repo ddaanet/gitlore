@@ -331,18 +331,28 @@ installer_fixture() {
   STUB_MARKER="$BATS_TEST_TMPDIR/installer ran marker"
   mkdir -p "$STUB_DIR"
   local tool
-  for tool in lefthook npx overcommit; do
+  for tool in lefthook npm npx overcommit; do
     printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$tool" "$STUB_MARKER" > "$STUB_DIR/$tool"
     chmod +x "$STUB_DIR/$tool"
   done
   PATH="$STUB_DIR:$PATH"
 }
 
-# One systemMessage paragraph names the command, the sentinel and `manual`
-# together, so a `manual` from another notice cannot satisfy it. Reads $output.
+# One systemMessage paragraph tells the user to run $1 (`run <cmd>`, the
+# command optionally quoted) and names the sentinel and `manual` together, so
+# a `manual` from another notice cannot satisfy it, nor can the
+# unrecognized-command notice, which quotes the command without saying to run
+# it. `npx husky` wires nothing on husky v8: the paragraph may mention it (a
+# legacy sentinel records it), but never in a sentence that tells the user
+# what to run. Reads $output.
 assert_installer_notice() {
-  jq -e --arg c "$1" '.systemMessage // "" | split("\n\n")
-    | any(.[]; contains($c) and contains(".claude/gitlore-hook-setup") and contains("manual"))' <<<"$output"
+  jq -e --arg c "$1" '
+    def runs($x): test("\\brun\\s+[\"\\x27`]?(" + $x + ")"; "i");
+    .systemMessage // "" | split("\n\n")
+    | any(.[]; runs($c) and contains(".claude/gitlore-hook-setup") and contains("manual")
+      and (contains("unrecognized") | not)
+      and ([splits("(?<=[.;!?])\\s+")]
+        | all(.[]; (contains("npx husky") and runs("npm install|npx husky")) | not)))' <<<"$output"
 }
 
 assert_installer_not_run() {
@@ -352,21 +362,26 @@ assert_installer_not_run() {
   [ ! -e "$STUB_MARKER" ]
 }
 
+# $1 is the sentinel line, $2 the command the notice says to run (default $1).
 assert_installer_notice_every_session() {
   installer_fixture "$1"
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_installer_notice "$1"
+  assert_installer_notice "${2:-$1}"
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_installer_notice "$1"
+  assert_installer_notice "${2:-$1}"
 }
 
 @test "sentinel 'lefthook install' is not run at session start" {
   assert_installer_not_run "lefthook install"
 }
 
-@test "sentinel 'npx husky' is not run at session start" {
+@test "sentinel 'npm install' is not run at session start" {
+  assert_installer_not_run "npm install"
+}
+
+@test "legacy sentinel 'npx husky' is not run at session start" {
   assert_installer_not_run "npx husky"
 }
 
@@ -378,8 +393,12 @@ assert_installer_notice_every_session() {
   assert_installer_notice_every_session "lefthook install"
 }
 
-@test "sentinel 'npx husky' gets a notice naming it at every session start" {
-  assert_installer_notice_every_session "npx husky"
+@test "sentinel 'npm install' gets a notice naming it at every session start" {
+  assert_installer_notice_every_session "npm install"
+}
+
+@test "legacy sentinel 'npx husky' gets a notice to run 'npm install' at every session start" {
+  assert_installer_notice_every_session "npx husky" "npm install"
 }
 
 @test "sentinel 'overcommit --install' gets a notice naming it at every session start" {

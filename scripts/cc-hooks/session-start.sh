@@ -132,9 +132,12 @@ if [ -f "$SENTINEL" ]; then
     # line says, so SessionStart never runs a command taken from it. The three
     # known hook-manager installers (wire-lefthook.sh/wire-husky.sh/
     # wire-overcommit.sh are the only writers) get a notice naming the command
-    # for the user to run; 'manual' stops the notice.
-    "lefthook install"|"npx husky"|"overcommit --install")
-      add_sysmsg "gitlore: .claude/gitlore-hook-setup records the hook-manager installer '$cmd', which SessionStart does not run. To wire the hooks, run '$cmd' yourself. To stop this notice, set the first line of .claude/gitlore-hook-setup to 'manual'."
+    # for the user to run; 'manual' stops the notice. 'npx husky' is the legacy
+    # husky record: it wires nothing on husky v8, so the advice is 'npm install'.
+    "lefthook install"|"npm install"|"npx husky"|"overcommit --install")
+      advice=$cmd
+      [ "$cmd" != "npx husky" ] || advice="npm install"
+      add_sysmsg "gitlore: .claude/gitlore-hook-setup records the hook-manager installer '$cmd', which SessionStart does not run. To wire the hooks, run '$advice' yourself. To stop this notice, set the first line of .claude/gitlore-hook-setup to 'manual'."
       ;;
     *)
       add_sysmsg "gitlore: .claude/gitlore-hook-setup names an unrecognized command ('$cmd') and was not run. SessionStart runs no command from this file. To stop this notice, set the first line of .claude/gitlore-hook-setup to 'manual'."
