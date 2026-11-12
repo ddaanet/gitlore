@@ -14,8 +14,9 @@ and the hook call. The approval gate the commit path carries out is in
   push refused by divergence is resolved and pushed again
 - The commit path — **D50** the commit writes no index and aborts when a compose
   pass would change one; a tier off its pin is fatal (one ahead of it naming the
-  take), and so is a compose problem in an index file the commit changes, while
-  every other compose refusal is reported
+  take) unless the take would refuse memory itself, and so is a compose problem
+  in an index file the commit changes, while every other compose refusal is
+  reported
 
 ---
 
@@ -108,8 +109,8 @@ the push lands — is the one the `push` skill already runs (D20), and a gitlink
 behind memory's tip is the same resting state every other memory advance leaves.
 
 **D50 — The commit path writes no index and aborts on a pending compose; a tier
-off its pin, or a compose problem in an index file the commit changes, is
-fatal**
+off its pin, outside the yield, or a compose problem in an index file the commit
+changes, is fatal**
 
 The commit path publishes what the session composed; it never composes. Anything
 `PostToolBatch` did not compose is assumed to be an exterior change — a human in
@@ -122,7 +123,8 @@ computes what `gitlore_compose` would write through the same
 and only the last step differing: the write replaces the file, the check reports
 its path. It writes no index and no file in a store and moves no tier; a tier
 ahead of its pin fails the pin guard ahead of it, naming the take, so the
-`add -A` records no tier the root index has not taken. A non-empty result aborts
+`add -A` records no tier the root index has not taken, and a tier the guard
+yields (below) is neither refused nor projected into. A non-empty result aborts
 the commit before any store is committed, naming every index the pass would
 change and the remedy: `gitlore-compose` for an agent, the script's path for a
 terminal user. `gitlore-compose` (`scripts/compose-memory.sh`) runs the full
@@ -179,28 +181,47 @@ a single abort can carry several tiers:
 
 `SessionStart` reports the same state.
 
+**The guard yields where its remedy would refuse.** `/gitlore:merge` refuses a
+memory root that holds uncommitted work and whose `HEAD` has forked from its
+local `live` (`gitlore_root_merge_refused`), asking for a commit; refusing that
+commit for a tier whose remedy is `/gitlore:merge` would send each to the other
+with nothing moving. So in that state `gitlore_pin_yield_tiers` names every tier
+whose remedy is the take — not one mid-merge, not one beside its pin — and the
+guard passes over them, in the commit, `gitlore-compose` and the `PostToolBatch`
+pass alike. The pass projects nothing into a yielded tier, since its carrier
+holds rewords and deletions root has not taken, and the orphan report skips it,
+since the take composes its lines. The commit reads the set before any tier
+commits, stages no yielded tier as its commit lands, keeps it out of memory's
+`add -A`, and prints, per tier:
+`tier '<tier>' is checked out off the commit the memory store records for it, so this commit recorded root's own changes and left the tier unrecorded. Run /gitlore:merge next, which takes the tier and records it.`
+The commit records less than the stores hold, never more, so the approved
+summary still covers it, and the gitlink stays root's true record of what it has
+seen. The predicate is read live: once root's work is committed the take runs,
+its root merge records the tier, and the guard applies again.
+
 **A tier ahead of its pin is refused, naming the take.** A tier whose `HEAD`
 strictly descends the gitlink the index records holds lines the root index has
 not taken; recording it with the commit's `add -A` would publish the tier's
 commits with those lines never composed into the root index. The take is the one
 path that composes them before it records the gitlink (D78), so the refusal
 names `/gitlore:merge`; nothing puts the tier back on its pin, since the take
-needs it where it stands. The commit path itself does not leave that shape: as
-each tier's commit lands, `gitlore_sync_tiers_to_live` stages the tier's gitlink
-in memory before advancing its `live`, and a staged gitlink is root's record of
-having seen the tier (D78). A retry completes when nothing has moved memory's
-index or the tier since that staging: its pin guard finds the tier on its index
-pin, and memory's `add -A` carries the staged gitlink into the commit. The retry
-takes a summary drafted for the stores as they stand — the landed tier is clean
-and has no section, which `/gitlore:commit` redrafts. A hand commit made on top
-of the landed one is ahead of the staged pin and is refused as above; a tier
-committed but not yet staged is the same shape, and ends at the take. A take or
-a push that would move memory onto its remote before the retry refuses it for
-the staged gitlink, naming the commit, while one with nothing to take for memory
-leaves the staging as it stands: the gate every merge preparation and root move
-runs (`gitlore_yield_merge`, `gitlore_store_dirty_for_take`) counts a staged
-entry as uncommitted work, since the record must reach a commit and git's merge
-refuses a staged entry in any case, unstaging it as it fails.
+needs it where it stands. Outside the yield, the commit path itself does not
+leave that shape: as each tier's commit lands, `gitlore_sync_tiers_to_live`
+stages the tier's gitlink in memory before advancing its `live`, and a staged
+gitlink is root's record of having seen the tier (D78). A retry completes when
+nothing has moved memory's index or the tier since that staging: its pin guard
+finds the tier on its index pin, and memory's `add -A` carries the staged
+gitlink into the commit. The retry takes a summary drafted for the stores as
+they stand — the landed tier is clean and has no section, which
+`/gitlore:commit` redrafts. A hand commit made on top of the landed one is ahead
+of the staged pin and is refused as above; a tier committed but not yet staged
+is the same shape, and ends at the take. A take or a push that would move memory
+onto its remote before the retry refuses it for the staged gitlink, naming the
+commit, while one with nothing to take for memory leaves the staging as it
+stands: the gate every merge preparation and root move runs
+(`gitlore_yield_merge`, `gitlore_store_dirty_for_take`) counts a staged entry as
+uncommitted work, since the record must reach a commit and git's merge refuses a
+staged entry in any case, unstaging it as it fails.
 
 ## Rejected alternatives
 
@@ -219,7 +240,8 @@ it. The commit fails on it instead and names `gitlore-compose` (D50).
 whose lines the root index has not taken, with no approved summary of its own,
 and hide that the tier holds lines root has not taken; the three-way the take
 runs is what carries its lines into root before the gitlink is recorded (D78),
-and the refusal costs one `/gitlore:merge` (D50).
+and the refusal costs one `/gitlore:merge`, or, where that take refuses memory
+itself, a yield that leaves the tier unrecorded (D50).
 
 **A marker file recording landed tiers for the retry.** A per-store file of
 `tier → landed commit`, written after each tier's commit, read by the pin guard

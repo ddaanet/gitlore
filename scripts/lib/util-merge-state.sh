@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Where a store's merge state lives, and whether there is one: the gitdir paths
 # of the merge-state file and its read-only briefing artifacts, their single
-# remover, and the mid-merge predicates a commit path orders its own work behind.
+# remover, the mid-merge predicates a commit path orders its own work behind,
+# and the dirty-forked-root predicate the take refuses on and the pin guard
+# yields on.
 # Part of util.sh; source that, not this file. Function-only (safe to source
 # twice, unlike util.sh), so definition order between the two files does not
 # matter.
@@ -84,4 +86,41 @@ gitlore_any_store_mid_merge() {
     gitlore_store_mid_merge "$mempath/$tier" && return 0
   done < <(gitlore_tier_paths "$mempath")
   return 1
+}
+
+# Exit 0 when /gitlore:merge refuses the memory root $1 before it moves any
+# store: root holds uncommitted work a take counts, and its HEAD has forked
+# from its local `live`, each holding commits the other lacks, so its merge
+# cannot be prepared until that work is committed. A HEAD or `live` that cannot
+# be read is no fork. Read by the take's own refusal (gitlore_take_tiers), the
+# yield's refusal of a tier merge on such a root, and the pin guard's yield
+# (gitlore_pin_yield_tiers), which all have to agree on the state; it lives here
+# because the guard runs in callers that never source resolve.sh.
+# Args: $1 = memory worktree path.
+gitlore_root_merge_refused() {
+  local root="$1" head live
+  head=$(git -C "$root" rev-parse -q --verify HEAD) || return 1
+  live=$(git -C "$root" rev-parse -q --verify live) || return 1
+  git -C "$root" merge-base --is-ancestor "$head" "$live" && return 1
+  git -C "$root" merge-base --is-ancestor "$live" "$head" && return 1
+  [ "$(gitlore_store_dirty_for_take "$root" "")" = "1" ]
+}
+
+# Print 1 when a store holds uncommitted work a take must not move over, 0
+# otherwise. For the memory root that leaves out a tier gitlink moved in the
+# worktree: tiers move first by design, and the root merge records their HEADs
+# through the prepare. A staged gitlink counts: it is root's record of a tier
+# it has seen (D78), which must reach a commit, and git's merge refuses a
+# staged entry in any case.
+# Args: $1 = store worktree, $2 = tier name ("" = the memory root).
+gitlore_store_dirty_for_take() {
+  local store="$1" tier="$2"
+  if [ -n "$tier" ]; then
+    gitlore_memory_dirty "$store"
+  elif [ -z "$(git -C "$store" status --porcelain --ignore-submodules=all)" ] \
+    && git -C "$store" diff --cached --quiet; then
+    printf '0\n'
+  else
+    printf '1\n'
+  fi
 }

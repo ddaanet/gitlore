@@ -253,11 +253,12 @@ whose merged index is the merger's business (`gitlore_store_mid_merge`, which
 also covers a state file), and a tier whose recorded commit no repository holds,
 which composes nothing and has its own report
 ([unresolvable-pin.md](unresolvable-pin.md)). A tier off its pin is a rule
-problem the pass reports by name. A tier whose local `live` strictly contains
-its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`: composing first
-dirties the tier, and the take then refuses it. When the pass would change
-nothing, the orphan report runs instead, since a line the tier added changes
-nothing in a pass; it is reported and never refused.
+problem the pass reports by name, except one the pin guard yields (D50), which
+the report and the orphan report pass over. A tier whose local `live` strictly
+contains its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`:
+composing first dirties the tier, and the take then refuses it. When the pass
+would change nothing, the orphan report runs instead, since a line the tier
+added changes nothing in a pass; it is reported and never refused.
 
 A registered tier with no checkout does not hold the pending report back: a
 compose keeps its root lines and writes no carrier for it. The dangling report

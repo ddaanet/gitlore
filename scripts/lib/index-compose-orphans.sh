@@ -16,14 +16,20 @@
 # carries never survives a pass (the down projection reads it as root's
 # deletion), so every orphan is one root never committed, and deleting it from
 # the carrier is final.
+#
+# A tier the pin guard yields (gitlore_pin_yield_tiers) is passed over: its
+# carrier holds lines root has not taken yet, and the take that follows the
+# commit composes them, so neither edit is the one to make.
 gitlore_compose_orphans() {
-  local mempath="$1" active tier line path rootpaths
+  local mempath="$1" active yielded tier line path rootpaths
   active=$(gitlore_active_tiers "$mempath")
   [ -f "$mempath/MEMORY.md" ] || return 0
+  yielded=$(gitlore_pin_yield_tiers "$mempath")
   rootpaths=$'\n'$(gitlore_index_paths "$mempath/MEMORY.md")$'\n'
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     [ -f "$mempath/$tier/MEMORY.md" ] || continue
+    grep -Fqx -- "$tier" <<<"$yielded" && continue
     while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
       # Quoted, so the path matches literally and whole-line, never as a glob.

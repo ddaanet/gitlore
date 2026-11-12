@@ -87,7 +87,9 @@ gitlore-commit <<'EOF'
 EOF
 ```
 
-4. Relay the command's output. If it exits non-zero, surface the output
+4. Relay the command's output. An exit 0 can still name `/gitlore:merge` as the
+   next step, for a tier the commit left unrecorded or a diverged `live`; relay
+   that as the next step. If it exits non-zero, surface the output
    verbatim and stop; do not retry with altered text. The exceptions are an
    abort that tells you to run `gitlore-compose`: run it, then retry with the
    same text; and output containing `gitlore: memory merge prepared`, which

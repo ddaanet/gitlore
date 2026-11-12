@@ -2,10 +2,11 @@
 # A memory root with uncommitted changes whose HEAD has forked from its local
 # `live` is refused at the tier take, before the take moves any tier, and at
 # the yield, before a tier merge the push or the resolve command prepares.
-# A tier moved first would sit ahead of its pin, so the memory commit the
-# refusal asks for would itself be refused by the pin guard naming the take
-# again. A pre-push that takes no tier publishes as it does on any dirty root,
-# and /gitlore:resolve moves no tier in this state at all.
+# A tier moved first would sit ahead of its pin, and the memory commit the
+# refusal asks for would leave it unrecorded for a second take
+# (tests/commit_pin_guard_yield.bats). A pre-push that takes no tier publishes
+# as it does on any dirty root, and /gitlore:resolve moves no tier in this
+# state at all.
 bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures

@@ -49,12 +49,15 @@ gitlore_compose_would_write() {
 # The pass composes no tier UP: a tier ahead of its pin is refused by rule 7
 # below, naming the take, and the take, the memory merge's continuation and the
 # recovery are the paths that compose one up (gitlore_compose_up) and record or
-# stage the gitlink before the next pass reads it. So every tier the pass
-# projects into sits on its pin, and root already holds what its carrier holds.
+# stage the gitlink before the next pass reads it. A tier rule 7 yields
+# (gitlore_pin_yield_tiers) is not projected into either: its carrier holds
+# rewords and deletions root has not taken, which the down projection would
+# overwrite with root's text. So every tier the pass projects into sits on its
+# pin, and root already holds what its carrier holds.
 gitlore_compose_pass() {
   local mempath="$1" writer="$2"
   local root="$mempath/MEMORY.md"
-  local active tier changed="" out
+  local active yielded tier changed="" out
   [ -f "$root" ] || return 0
 
   # Both checks run before either verdict is read, so one refusal carries the
@@ -67,6 +70,7 @@ gitlore_compose_pass() {
   [ "$refused" -eq 0 ] || return 1
 
   active=$(gitlore_active_tiers "$mempath")
+  yielded=$(gitlore_pin_yield_tiers "$mempath")
 
   # Down first, then the root layout. The layout pass adopts a carrier for any
   # active tier root has no line for, and the down pass skips that tier, so
@@ -79,6 +83,7 @@ gitlore_compose_pass() {
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     [ -f "$mempath/$tier/MEMORY.md" ] || continue
+    grep -Fqx -- "$tier" <<<"$yielded" && continue
     # Root with no line at all for this tier states nothing about it — the same
     # condition the layout pass adopts on, and projecting an absence down here
     # would empty the carrier a moment before the layout reads it. That is what

@@ -219,7 +219,7 @@ EOF
 # it left ahead of the memory index's gitlinks, the memory merge's continuation
 # for the tiers ahead of the gitlinks OURS records, and the recovery for a tier
 # merge that landed outside the continuation. The pass never calls it: rule 7
-# refuses a tier ahead of its pin there, naming the take.
+# refuses a tier ahead of its pin there, naming the take, or yields it.
 #
 # Writes no carrier, so a merge in one store never propagates into another the
 # user did not review. Returns 0, 1 and 2 as gitlore_compose does, and 3 when

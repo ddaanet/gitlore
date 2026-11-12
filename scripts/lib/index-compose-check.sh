@@ -193,10 +193,11 @@ gitlore_compose_problems_in() {
 }
 
 # Rule 7 — every MOUNTED tier, dormant ones included, sits ON the commit the
-# memory store records for it. Print one problem per tier that does not and
-# return 1; print nothing and return 0 otherwise. Depends on gitlore_tier_paths
-# (util-config.sh) and gitlore_store_mid_merge; callers source util.sh, which
-# pulls in both.
+# memory store records for it, except where the rule yields (below). Print one
+# problem per tier that does not and return 1; print nothing and return 0
+# otherwise. Depends on gitlore_tier_paths (util-config.sh),
+# gitlore_store_mid_merge and gitlore_root_merge_refused (util-merge-state.sh);
+# callers source util.sh, which pulls in all three.
 #
 # A tier ahead of its pin holds lines the root index has not taken: the
 # commit's `add -A` would record it with those lines never composed into the
@@ -207,57 +208,99 @@ gitlore_compose_problems_in() {
 # and move the pin backward with no one having asked. So is a tier beside its
 # pin, whose HEAD and pin each hold commits the other lacks.
 #
+# The rule yields a tier exactly where its remedy, the take, would refuse the
+# memory root (gitlore_pin_yield_tiers): refusing there sends the commit to a
+# take that sends it back. The pass then projects nothing down into that tier,
+# and the commit leaves its gitlink where root records it.
+#
 # It lives OUTSIDE gitlore_compose_check, called by the pass and by the commit
 # path's pin guard ahead of it, because the end of a take, the memory merge's
 # continuation and the recovery compose a tier whatever its relation to the pin.
-#
-# The pin is read from the memory store's INDEX (`:$tier`), not from
-# `HEAD:$tier`: a gitlink staged for the next memory commit is what that commit
-# records.
 gitlore_compose_check_pins() {
-  local mempath="$1" tier tierpath pinned head abs problems=""
+  local mempath="$1" tier tierpath relation pinned head abs problems="" yielded
+  yielded=$(gitlore_pin_yield_tiers "$mempath")
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
-    # `git -C` into an unmaterialized submodule walks up to the enclosing repo,
-    # which would answer for memory's own HEAD under the tier's name.
-    [ -e "$tierpath/.git" ] || continue
-    # `-q --verify` is silent on the expected miss: no gitlink for this tier in
-    # the index at all — mid-mount, or removed — which this rule has no opinion
-    # about. Same for a store with no HEAD yet.
-    pinned=$(git -C "$mempath" rev-parse -q --verify ":$tier") || continue
-    head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
-    [ "$head" = "$pinned" ] && continue
-    if gitlore_store_mid_merge "$tierpath"; then
-      problems="${problems}tier '$tier' is mid-merge and sits off the commit the memory store records for it; run /gitlore:resolve to land the merge before the indexes can be composed
-"
-      continue
-    fi
-    # A pin that is no object in the tier is one this checkout has not fetched,
-    # the shape a raw pull in memory leaves; the take fetches the tier.
-    if ! git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null; then
-      problems="${problems}tier '$tier' is checked out at ${head:0:12} and the memory store records ${pinned:0:12}, a commit this checkout of the tier does not hold. Run /gitlore:merge, which fetches the tier and fast-forwards it.
-"
-      continue
-    fi
-    if git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
-      problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the commit the memory store records at ${pinned:0:12}, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier.
-"
-      continue
-    fi
-    if git -C "$tierpath" merge-base --is-ancestor "$head" "$pinned"; then
-      problems="${problems}tier '$tier' is checked out at ${head:0:12}, behind the commit the memory store records at ${pinned:0:12}, and a commit would record the older one. Run /gitlore:merge, which fast-forwards it.
-"
-      continue
-    fi
-    # Absolute, so the printed command runs from anywhere; quoted, so a tier path
-    # containing whitespace survives being pasted into a shell.
-    abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
-    problems="${problems}tier '$tier' is checked out at ${head:0:12} but the memory store records ${pinned:0:12}: it was moved outside /gitlore:merge, and projecting the root index onto it would overwrite what it holds. Return it to the pin with \`git -C \"$abs\" checkout --detach $pinned\`, then run /gitlore:merge to take upstream properly.
-"
+    relation=$(gitlore_tier_pin_relation "$mempath" "$tier")
+    case "$relation" in ""|on) continue ;; esac
+    grep -Fqx -- "$tier" <<<"$yielded" && continue
+    pinned=$(git -C "$mempath" rev-parse ":$tier")
+    head=$(git -C "$tierpath" rev-parse HEAD)
+    case "$relation" in
+      "resolve mid-merge")
+        problems="${problems}tier '$tier' is mid-merge and sits off the commit the memory store records for it; run /gitlore:resolve to land the merge before the indexes can be composed
+" ;;
+      "merge unheld")
+        problems="${problems}tier '$tier' is checked out at ${head:0:12} and the memory store records ${pinned:0:12}, a commit this checkout of the tier does not hold. Run /gitlore:merge, which fetches the tier and fast-forwards it.
+" ;;
+      "merge ahead")
+        problems="${problems}tier '$tier' is checked out at ${head:0:12}, ahead of the commit the memory store records at ${pinned:0:12}, so the root index has not taken its lines. Run /gitlore:merge, which composes them into the root index and records the tier.
+" ;;
+      "merge behind")
+        problems="${problems}tier '$tier' is checked out at ${head:0:12}, behind the commit the memory store records at ${pinned:0:12}, and a commit would record the older one. Run /gitlore:merge, which fast-forwards it.
+" ;;
+      *)
+        # Absolute, so the printed command runs from anywhere; quoted, so a tier
+        # path containing whitespace survives being pasted into a shell.
+        abs=$(CDPATH='' cd -- "$tierpath" && pwd) || abs="$tierpath"
+        problems="${problems}tier '$tier' is checked out at ${head:0:12} but the memory store records ${pinned:0:12}: it was moved outside /gitlore:merge, and projecting the root index onto it would overwrite what it holds. Return it to the pin with \`git -C \"$abs\" checkout --detach $pinned\`, then run /gitlore:merge to take upstream properly.
+" ;;
+    esac
   done < <(gitlore_tier_paths "$mempath")
 
   [ -z "$problems" ] && return 0
   printf '%s' "$problems" | grep -v '^$'
   return 1
+}
+
+# The tiers rule 7 yields, one per line: where /gitlore:merge refuses the
+# memory root (gitlore_root_merge_refused), every tier whose own remedy is
+# /gitlore:merge. A tier whose remedy is /gitlore:resolve or a checkout keeps its
+# refusal, since that remedy does not run through root's merge. Read live, so
+# the yield ends once root's own work is committed and the take can run.
+# Args: $1 = memory worktree path.
+gitlore_pin_yield_tiers() {
+  local mempath="$1" tier
+  gitlore_root_merge_refused "$mempath" || return 0
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    case "$(gitlore_tier_pin_relation "$mempath" "$tier")" in
+      "merge "*) printf '%s\n' "$tier" ;;
+    esac
+  done < <(gitlore_tier_paths "$mempath")
+}
+
+# Print how mounted tier $2 sits against the commit memory store $1 records for
+# it, as "<remedy> <relation>": `on`; `resolve mid-merge`; `merge unheld`, a pin
+# this checkout has not fetched, the shape a raw pull in memory leaves; `merge
+# ahead`; `merge behind`; `checkout beside`, each holding commits the other
+# lacks. Print nothing for a tier the rule has no opinion about.
+#
+# The pin is read from the memory store's INDEX (`:$tier`), not from
+# `HEAD:$tier`: a gitlink staged for the next memory commit is what that commit
+# records.
+# Args: $1 = memory worktree path, $2 = tier path.
+gitlore_tier_pin_relation() {
+  local mempath="$1" tierpath="$1/$2" pinned head
+  # `git -C` into an unmaterialized submodule walks up to the enclosing repo,
+  # which would answer for memory's own HEAD under the tier's name.
+  [ -e "$tierpath/.git" ] || return 0
+  # `-q --verify` is silent on the expected miss: no gitlink for this tier in
+  # the index at all — mid-mount, or removed. Same for a store with no HEAD yet.
+  pinned=$(git -C "$mempath" rev-parse -q --verify ":$2") || return 0
+  head=$(git -C "$tierpath" rev-parse -q --verify HEAD) || return 0
+  if [ "$head" = "$pinned" ]; then
+    printf 'on\n'
+  elif gitlore_store_mid_merge "$tierpath"; then
+    printf 'resolve mid-merge\n'
+  elif ! git -C "$tierpath" rev-parse -q --verify "${pinned}^{commit}" >/dev/null; then
+    printf 'merge unheld\n'
+  elif git -C "$tierpath" merge-base --is-ancestor "$pinned" "$head"; then
+    printf 'merge ahead\n'
+  elif git -C "$tierpath" merge-base --is-ancestor "$head" "$pinned"; then
+    printf 'merge behind\n'
+  else
+    printf 'checkout beside\n'
+  fi
 }

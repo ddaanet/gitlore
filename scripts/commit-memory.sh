@@ -125,8 +125,10 @@ done < <(gitlore_tier_paths "$mempath")
 # summary for a state the remedy changes. The check writes no index, no file in
 # a store, and moves no tier. A tier ahead of its pin fails the check and the
 # pin guard below (gitlore_compose_check_pins), which refuses it naming the
-# take, so the `add -A` records no tier the root index has not taken. A
-# non-zero status from the check does not abort here.
+# take, so the `add -A` records no tier the root index has not taken. Where the
+# take would refuse root itself, the guard yields that tier instead and the
+# commit leaves it unrecorded (gitlore_pin_yield_tiers). A non-zero status from
+# the check does not abort here.
 pending_rc=0
 pending=$(gitlore_compose_pending "$mempath") || pending_rc=$?
 if [ "$pending_rc" -eq 0 ] && [ -n "$pending" ]; then

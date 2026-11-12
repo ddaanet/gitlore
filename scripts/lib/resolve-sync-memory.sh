@@ -78,15 +78,22 @@ gitlore_staged_index_links_into() {
 }
 
 # Commit the memory store's own changes: every change left after the tiers
-# committed, staged with `add -A` so the moved tier gitlinks ride along. Under a
+# committed, staged with `add -A` so the moved tier gitlinks ride along, a
+# yielded tier's excepted, which stays where root records it. Under a
 # `== memory ==` section that section is the message; with none, the commit is
 # the canned index commit naming the tiers whose pointers it carries.
-# Returns 1 on a failed stage or commit. Args: $1 = memory worktree, $2 = summary.
+# Returns 1 on a failed stage or commit. Args: $1 = memory worktree, $2 =
+# summary, $3 = the yielded tiers, one per line.
 gitlore_commit_root() {
-  local mempath="$1" summary="$2" tier body names="" canned
+  local mempath="$1" summary="$2" yielded="$3" tier body names="" canned
+  local pathspec=(.)
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    pathspec+=(":(exclude,literal)$tier")
+  done <<<"$yielded"
   # Checked explicitly, for the same reason as the tier loop: a caller that
   # tests this function's status suspends errexit.
-  gitlore_git -C "$mempath" add -A || return 1
+  gitlore_git -C "$mempath" add -A -- "${pathspec[@]}" || return 1
   # Nothing staged: a store whose only change was a tier already committed, with
   # no pointer left to record. Nothing to commit is not a failure.
   if git -C "$mempath" diff --cached --quiet; then
@@ -111,6 +118,8 @@ gitlore_commit_root() {
 # Commit the memory store and its dirty tiers from the summary, then advance each
 # committed store's local `live`. The caller has checked the summary's sections
 # and that something has changes.
+# A tier the pin guard yields (gitlore_pin_yield_tiers) is left where root
+# records it, and each one is named with /gitlore:merge as the next step.
 # Returns 0 on success. Returns 1 after emitting a directive when a stale merge
 # state is present, the compose or pin guard refuses, or a commit or a
 # fast-forward fails for a reason other than divergence.
@@ -135,9 +144,12 @@ gitlore_sync_memory_to_live() {
   # aborts here instead. One ahead of it holds lines the root index has not
   # taken, which the `add -A` would record uncomposed, so the refusal names the
   # take, which composes them into the root index and records the gitlink.
+  # Where the take would refuse root, the guard yields instead, and the tiers it
+  # yields are read here, before any tier commit moves a tier off its pin, and
+  # kept out of the `add -A`.
   # The declaration stays on its own line: folded into `local pin_problems=$(…)`
   # the status read is `local`'s, always 0, and the refusal is swallowed.
-  local pin_problems
+  local pin_problems yielded
   if ! pin_problems=$(gitlore_compose_check_pins "$mempath"); then
     local pin_header="gitlore: a tier was moved off the commit the memory store records for it, so the commit was aborted rather than record the move:
 $pin_problems"
@@ -151,6 +163,7 @@ gitlore: Follow the remedy on each line above, then retry the commit." \
 gitlore: Open this project in Claude Code and ask it to repair the memory store, then retry." >&2
     return 1
   fi
+  yielded=$(gitlore_pin_yield_tiers "$mempath")
 
   # The commit writes no index: a store whose indexes a compose pass would
   # change aborts, so composition has landed (gitlore-compose, or a batch)
@@ -207,7 +220,7 @@ gitlore: the commit was aborted because a problem is in an index file this commi
       fi
       gitlore_say_for_agent_or_user \
         "$refusal
-gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand. This commit also stages each tier at the commit its worktree is on now." \
+gitlore: the commit went ahead with the memory indexes as they stand. Fix the problems above by hand. This commit also stages each tier at the commit its worktree is on now${yielded:+, except one named below as left unrecorded}." \
         "$refusal
 gitlore: the commit went ahead with the memory indexes as they stand. Open this project in Claude Code and ask it to repair the memory store." >&2
       ;;
@@ -227,8 +240,12 @@ gitlore: the commit was aborted rather than commit a memory store in an unknown 
 
   # Tiers first: a tier commit moves its gitlink, and the root commit records
   # that move. Reversing the order would pin the tier SHA from before the commit.
-  gitlore_sync_tiers_to_live "$mempath" "$summary" || return 1
-  gitlore_commit_root "$mempath" "$summary" || return 1
+  gitlore_sync_tiers_to_live "$mempath" "$summary" "$yielded" || return 1
+  gitlore_commit_root "$mempath" "$summary" "$yielded" || return 1
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    printf "gitlore: tier '%s' is checked out off the commit the memory store records for it, so this commit recorded root's own changes and left the tier unrecorded. Run /gitlore:merge next, which takes the tier and records it.\n" "$tier" >&2
+  done <<<"$yielded"
   gitlore_advance_live "$mempath" memory || return 1
   return 0
 }

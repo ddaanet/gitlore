@@ -78,25 +78,6 @@ gitlore_guard_every_store() {
   gitlore_refuse_dirty_tiers "$mempath"
 }
 
-# Print 1 when a store holds uncommitted work a take must not move over, 0
-# otherwise. For the memory root that leaves out a tier gitlink moved in the
-# worktree: tiers move first by design, and the root merge records their HEADs
-# through the prepare. A staged gitlink counts: it is root's record of a tier
-# it has seen (D78), which must reach a commit, and git's merge refuses a
-# staged entry in any case.
-# Args: $1 = store worktree, $2 = tier name ("" = the memory root).
-gitlore_store_dirty_for_take() {
-  local store="$1" tier="$2"
-  if [ -n "$tier" ]; then
-    gitlore_memory_dirty "$store"
-  elif [ -z "$(git -C "$store" status --porcelain --ignore-submodules=all)" ] \
-    && git -C "$store" diff --cached --quiet; then
-    printf '0\n'
-  else
-    printf '1\n'
-  fi
-}
-
 # One store's take. Args: $1 = memory worktree, $2 = store worktree,
 # $3 = tier name ("" when the store IS the memory root).
 # Returns 0 when the store is reconciled, 2 after emitting when its remote was

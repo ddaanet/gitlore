@@ -65,7 +65,8 @@ last composed against. `SessionStart` moves no tier (D59). It clones a tier that
 is not checked out, at the recorded commit, fetches the others read-only and
 reports; every other tier stays on the commit and the branch it is on, whatever
 its relation to the gitlink. A tier off the gitlink is the commit's pin guard to
-refuse (D50); one ahead of it is left where it stands because the take needs it
+refuse (D50), or to yield and leave unrecorded where the take would refuse
+memory itself; one ahead of it is left where it stands because the take needs it
 there to compose its lines up three-way, and the refusal names that take (D78).
 Taking an upstream commit is a take, through `/gitlore:merge` or
 `/gitlore:push`.
