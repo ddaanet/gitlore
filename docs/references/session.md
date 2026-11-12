@@ -19,8 +19,8 @@ wires them is in
 ## The Session
 
 Everything install wires is re-pinned, re-emitted or re-run at the start of
-every session, which is what makes a clone, a new machine and a plugin upgrade
-heal themselves.
+every session, except hook-manager wiring: `SessionStart` runs no command the
+clone supplies, so it prints the recorded installer for the user to run.
 
 **`SessionStart`.** Guards: if `gitlore.enabled` is not `true`, or `.gitmodules`
 has no memory submodule entry, no-op.

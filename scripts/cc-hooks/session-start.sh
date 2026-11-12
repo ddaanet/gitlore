@@ -137,7 +137,7 @@ if [ -f "$SENTINEL" ]; then
       add_sysmsg "gitlore: .claude/gitlore-hook-setup records the hook-manager installer '$cmd', which SessionStart does not run. To wire the hooks, run '$cmd' yourself. To stop this notice, set the first line of .claude/gitlore-hook-setup to 'manual'."
       ;;
     *)
-      add_sysmsg "gitlore: .claude/gitlore-hook-setup names an unrecognized command ('$cmd') and was not run. SessionStart runs no command from this file. Run the command yourself, or set the sentinel's first line to 'manual'."
+      add_sysmsg "gitlore: .claude/gitlore-hook-setup names an unrecognized command ('$cmd') and was not run. SessionStart runs no command from this file. To stop this notice, set the first line of .claude/gitlore-hook-setup to 'manual'."
       ;;
   esac
 fi

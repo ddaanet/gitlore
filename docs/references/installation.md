@@ -163,14 +163,17 @@ or a user sets the sentinel themselves.
 **Sentinel handling in SessionStart:**
 
 - `direct` → re-run the direct-wiring installer.
-- `manual` → emit `systemWarning` reminding the user to verify wiring.
+- `manual` → print a reminder to verify the wiring on stderr, which the user
+  sees only under `--verbose`.
 - `lefthook install`, `npx husky`, `overcommit --install` → run nothing; at
   every session start report on `systemMessage` the exact command for the user
   to run, the sentinel path, and that setting the sentinel's first line to
   `manual` stops the notice (D45). No check whether the hooks are wired.
 - Any other value → run nothing; report on `systemMessage` that the sentinel
-  names a command gitlore does not run, and that the user should run it
-  themselves or set the sentinel to `manual` (D45).
+  names an unrecognized command, that it was not run, that `SessionStart` runs
+  no command from the file, and that setting its first line to `manual` stops
+  the notice. It does not tell the user to run the line, which the clone chose
+  (D45).
 
 Idempotency: every wiring modification uses a detection marker
 (`# gitlore: managed` or the format-appropriate equivalent). Re-applying is a
@@ -221,9 +224,10 @@ the installer wires hooks whose content the clone controls (`npx` resolves a
 repo-local package first), so the user runs it. Each session start reports the
 command on `systemMessage`, names the sentinel, and says that setting its first
 line to `manual` stops the notice; no check whether the hooks are already wired.
-Anything else runs nothing and is reported the same way. The cost is a notice at
-every session until the user sets `manual`, which is the right cost: a command
-gitlore runs on a stranger's clone should not exist.
+Anything else runs nothing and is reported as unrecognized, with the same
+`manual` off switch and no advice to run the line. The cost is a notice at every
+session until the user sets `manual`, which is the right cost: a command gitlore
+runs on a stranger's clone should not exist.
 
 ## Rejected alternatives
 
