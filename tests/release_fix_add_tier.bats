@@ -50,8 +50,14 @@ STAGED_PHRASE="left staged for the next gitlore:commit"
 # line, no staged change beyond what the merge itself staged.
 assert_nothing_mounted() {
   [ ! -e memory/ddaanet ]
-  [ ! -f memory/.gitmodules ] || ! grep -qF ddaanet memory/.gitmodules
-  [ ! -f memory/.gitlore-tiers ] || ! grep -qx ddaanet memory/.gitlore-tiers
+  if [ -f memory/.gitmodules ] && grep -qF ddaanet memory/.gitmodules; then
+    echo "memory/.gitmodules registers ddaanet" >&2
+    return 1
+  fi
+  if [ -f memory/.gitlore-tiers ] && grep -qx ddaanet memory/.gitlore-tiers; then
+    echo "memory/.gitlore-tiers lists ddaanet" >&2
+    return 1
+  fi
   [ "$(git -C memory rev-parse HEAD)" = "$before" ]
 }
 

@@ -22,10 +22,16 @@ ${DIFF}
 COMMIT_MESSAGE:
 ${COMMIT_MSG}"
 
-result=$(eval_claude --print "$PROMPT" 2>&1)
+# The verdict is read from stdout alone: the CLI prints its warnings (a sign-in
+# expiry notice) on stderr, and merged into the verdict stream they would
+# displace line 1. stderr is kept apart and reported with any failure.
+err_file=$(mktemp "${TMPDIR:-/tmp}/judge-err.XXXXXX")
+trap 'rm -f "$err_file"' EXIT
+result=$(eval_claude --print "$PROMPT" 2>"$err_file")
 claude_exit=$?
+claude_err=$(cat "$err_file")
 if [ "$claude_exit" -ne 0 ]; then
-  printf 'judge invocation failed (exit %s): %s\n' "$claude_exit" "$result" >&2
+  printf 'judge invocation failed (exit %s): %s\n%s\n' "$claude_exit" "$result" "$claude_err" >&2
   exit 2
 fi
 
@@ -35,5 +41,5 @@ first_word=$(printf '%s\n' "$first_line" | tr '[:upper:]' '[:lower:]' | awk '{pr
 case "$first_word" in
   pass) exit 0 ;;
   fail) printf '%s\n' "$result" >&2; exit 1 ;;
-  *)    printf 'judge verdict unparseable (first line: %s): %s\n' "$first_line" "$result" >&2; exit 2 ;;
+  *)    printf 'judge verdict unparseable (first line: %s): %s\n%s\n' "$first_line" "$result" "$claude_err" >&2; exit 2 ;;
 esac

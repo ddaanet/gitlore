@@ -126,3 +126,16 @@ MOCK
   [[ "$prompt" == *$'DIFF:\n-100 per minute\n+600 per minute'* ]]
   [[ "$prompt" == *"COMMIT_MESSAGE:"$'\n'"$summary" ]]
 }
+
+# The CLI prints warnings (a sign-in expiry notice) on stderr; the verdict is on
+# stdout line 1 and a warning must not displace it.
+@test "judge.sh reads the verdict from stdout when claude warns on stderr first" {
+  cat > "$MOCK_BIN/claude" <<'MOCK'
+#!/usr/bin/env bash
+echo "Warning: this sign-in ends between two dates. Run claude auth login." >&2
+printf 'pass the message is specific\n'
+MOCK
+  chmod +x "$MOCK_BIN/claude"
+  run "$JUDGE_SCRIPT" "some rubric" "some diff" "memory: update"
+  assert_ok
+}
