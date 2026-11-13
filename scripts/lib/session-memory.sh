@@ -76,7 +76,8 @@ report_memory_position() {
   remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
   if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
     rc=0
-    gitlore_fetch_bounded "$mempath" -q origin live || rc=$?
+    # The match below reads git's English text, so this fetch runs under the C locale.
+    LC_ALL=C gitlore_fetch_bounded "$mempath" -q origin live || rc=$?
     fetch_err="$GITLORE_FETCH_OUT"
     if [ "$rc" -eq 0 ]; then
       remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) || remote=""

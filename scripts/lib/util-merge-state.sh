@@ -188,8 +188,7 @@ gitlore_fetch_bounded() {
   GITLORE_FETCH_OUT=""
   if ! gitlore_fetch_timeout_ok "$secs" ||
      ! tmp=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
-    # Callers match git's English text on this output, so git runs under the C locale.
-    GITLORE_FETCH_OUT=$(LC_ALL=C git -C "$dir" fetch "$@" 2>&1) || rc=$?
+    GITLORE_FETCH_OUT=$(git -C "$dir" fetch "$@" 2>&1) || rc=$?
     return "$rc"
   fi
   # The subshell's own stdout and stderr are dropped: job control prints
@@ -198,7 +197,7 @@ gitlore_fetch_bounded() {
   (
     set -m
     r=0
-    LC_ALL=C git -C "$dir" fetch "$@" >"$tmp/out" 2>&1 &
+    git -C "$dir" fetch "$@" >"$tmp/out" 2>&1 &
     fpid=$!
     { sleep "$secs"; : > "$tmp/timeout"; kill -TERM -- "-$fpid"; } &
     wpid=$!
