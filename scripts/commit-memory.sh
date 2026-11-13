@@ -134,8 +134,9 @@ done < <(gitlore_tier_paths "$mempath")
 # a store, and moves no tier. A tier ahead of its pin fails the check and the
 # pin guard below (gitlore_compose_check_pins), which refuses it naming the
 # take, so the `add -A` records no tier the root index has not taken. Where the
-# take would refuse root itself, the guard yields that tier instead and the
-# commit leaves it unrecorded (gitlore_pin_yield_tiers). A non-zero status from
+# take would refuse for uncommitted changes, in the memory root or in a mounted
+# tier (gitlore_take_refused), the guard yields that tier instead and the commit
+# leaves it unrecorded (gitlore_pin_yield_tiers). A non-zero status from
 # the check does not abort here.
 pending_rc=0
 pending=$(gitlore_compose_pending "$mempath") || pending_rc=$?

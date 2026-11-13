@@ -196,8 +196,9 @@ gitlore_compose_problems_in() {
 # memory store records for it, except where the rule yields (below). Print one
 # problem per tier that does not and return 1; print nothing and return 0
 # otherwise. Depends on gitlore_tier_paths (util-config.sh),
-# gitlore_store_mid_merge and gitlore_root_merge_refused (util-merge-state.sh);
-# callers source util.sh, which pulls in all three.
+# gitlore_store_mid_merge, gitlore_root_merge_refused and
+# gitlore_tier_take_refused (util-merge-state.sh); callers source util.sh, which
+# pulls in all four.
 #
 # A tier ahead of its pin holds lines the root index has not taken: the
 # commit's `add -A` would record it with those lines never composed into the
@@ -210,9 +211,10 @@ gitlore_compose_problems_in() {
 # when the tier has forked from its own `live`, which holds the pin, and the
 # return-to-the-pin checkout otherwise.
 #
-# The rule yields a tier exactly where its remedy, the take, would refuse the
-# memory root (gitlore_pin_yield_tiers): refusing there sends the commit to a
-# take that sends it back. The pass then projects nothing down into that tier,
+# The rule yields a tier exactly where its remedy, the take, would refuse for
+# uncommitted changes, in the memory root or in a mounted tier
+# (gitlore_pin_yield_tiers, gitlore_take_refused): refusing there sends the
+# commit to a take that sends it back. The pass then projects nothing down into that tier,
 # and the commit leaves its gitlink where root records it.
 #
 # It lives OUTSIDE gitlore_compose_check, called by the pass and by the commit

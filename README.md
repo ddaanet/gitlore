@@ -126,8 +126,9 @@ Run it yourself in the cases where nothing is left to trigger on:
 - No divergence at all: run standalone it is a health check, and repairs a
   missing memory remote or an unpushed `live` on the spot.
 
-Two repairs have no sub-agent and run a command that `/gitlore:resolve` prints
-with its absolute paths, to be run as printed:
+Two repairs have no sub-agent and run a command printed with its absolute paths,
+to be run as printed. `/gitlore:resolve` prints the first; session start prints
+the second while a memory merge is prepared:
 
 - `revert-pin <tier>` — when memory records a tier at a commit no repository
   holds and the checkout that had it is gone. It reverts the memory commit that

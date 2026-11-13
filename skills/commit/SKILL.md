@@ -101,5 +101,4 @@ EOF
    pointer in the parent index (it prints a notice and skips the staging during
    a rebase, cherry-pick or revert), and the staged pointer rides the next
    parent commit that carries content. Make no parent commit just to record
-   it; one is needed only for a parent change of its own, or when a tool
-   refuses a parent tree with that pending pointer.
+   it; one is needed only for a parent change of its own.

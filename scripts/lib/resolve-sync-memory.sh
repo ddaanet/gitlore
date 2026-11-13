@@ -144,9 +144,10 @@ gitlore_sync_memory_to_live() {
   # aborts here instead. One ahead of it holds lines the root index has not
   # taken, which the `add -A` would record uncomposed, so the refusal names the
   # take, which composes them into the root index and records the gitlink.
-  # Where the take would refuse root, the guard yields instead, and the tiers it
-  # yields are read here, before any tier commit moves a tier off its pin, and
-  # kept out of the `add -A`.
+  # Where the take would refuse for uncommitted changes, in the memory root or
+  # in a mounted tier (gitlore_take_refused), the guard yields instead, and the
+  # tiers it yields are read here, before any tier commit moves a tier off its
+  # pin, and kept out of the `add -A`.
   # The declaration stays on its own line: folded into `local pin_problems=$(…)`
   # the status read is `local`'s, always 0, and the refusal is swallowed.
   local pin_problems yielded
