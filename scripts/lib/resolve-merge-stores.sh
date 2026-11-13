@@ -268,7 +268,7 @@ gitlore_repair_stranded_live() {
   local store="$1" label="$2" head live push_err
   # An unborn store has neither ref to reconcile.
   head=$(git -C "$store" rev-parse -q --verify HEAD) || return 0
-  # No local `live` yet (a tier never fetched) — nothing to strand.
+  # No local `live` yet (a tier not mounted by gitlore) — nothing to strand.
   live=$(git -C "$store" rev-parse -q --verify live) || return 0
   [ "$live" != "$head" ] || return 0
   if ! git -C "$store" merge-base --is-ancestor "$live" "$head"; then
@@ -299,7 +299,7 @@ $push_err" >&2
 }
 
 # True when a store's local `live` holds commits its HEAD does not. Silent on
-# every expected miss — an unborn store, a tier never fetched, refs that agree —
+# every expected miss — an unborn store, a tier not mounted by gitlore, refs that agree —
 # so the callers below read as the question they are asking.
 # Args: $1 = store.
 gitlore_live_ahead_of_head() {
@@ -324,7 +324,7 @@ gitlore_reconcile_one() {
   # A merge left dead by hand is disposed of, or a prepared one continued, before
   # anything here reads the refs: the take runs the same guard first.
   gitlore_guard_stale_merge_state "$store" || return 1
-  # `-q --verify` is silent when `live` does not exist (never fetched).
+  # `-q --verify` is silent when `live` does not exist (a tier not mounted by gitlore).
   live=$(git -C "$store" rev-parse -q --verify live) || return 0
   head=$(git -C "$store" rev-parse HEAD)
   [ "$head" = "$live" ] && return 0

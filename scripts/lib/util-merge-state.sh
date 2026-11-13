@@ -230,8 +230,8 @@ gitlore_fetch_timeout_ok() {
 # Args: $1 = tier worktree.
 gitlore_tier_has_arrivals() {
   local tierpath="$1" live remote
-  # `-q --verify` is silent on the expected miss: a tier never fetched has no
-  # local `live`.
+  # `-q --verify` is silent on the expected miss: a tier not mounted by gitlore has no
+  # local `live`, and a fetch creates only `origin/live`.
   if live=$(git -C "$tierpath" rev-parse -q --verify live) &&
      ! git -C "$tierpath" merge-base --is-ancestor "$live" HEAD; then
     return 0
