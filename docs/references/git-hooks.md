@@ -41,8 +41,14 @@ text directing them to open the project in Claude Code.
 its own remote, then memory's. Failure is fatal — a tier that silently stops
 publishing is indistinguishable from one with nothing to say. The memory-absent
 skip stays non-blocking but warns when the gitlink about to be published is not
-reachable on the memory remote, decided locally without a fetch. Divergence
-routes to `/gitlore:resolve`, which diagnoses the flavor.
+reachable on the memory remote, decided locally without a fetch. What a refused
+push does next depends on how the remote relates to the store: a remote that is
+only ahead is taken in place with the fast-forward `/gitlore:merge` performs,
+and the push resumes; a remote that has diverged yields a prepared merge and the
+directive for `/gitlore:resolve`, which diagnoses the flavor; any other refusal,
+and any store the take or the merge cannot proceed on (a dirty root forked from
+`live`, a dirty tier), prints its own message naming the next step, which can be
+a memory commit first.
 
 ### The gitlink and `live`
 
