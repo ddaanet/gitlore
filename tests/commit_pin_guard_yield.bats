@@ -52,6 +52,9 @@ ahead_state() {
   move_tier_off_pin_into_live ddaanet
 }
 
+# Tier on its pin: the shared base store.
+on_pin_state() { take_base_store ddaanet; }
+
 # Tier behind its pin: checked out one commit before the recorded one.
 behind_state() {
   take_base_store ddaanet
@@ -179,6 +182,25 @@ assert_converges() {
   assert_converges "$after"
   head_index_has ddaanet/upstream.md
   head_index_has ddaanet/new.md
+}
+
+# The yield set is read before the tiers are committed: a tier on its pin with
+# uncommitted work is not in it, so the commit records the tier's new commit.
+@test "yield: a dirty tier on its pin, committed by a yielding run on a dirty forked root, is recorded" {
+  spaced_repo
+  state_c on_pin_state
+  dirty_tier_fact
+  # Tier lines sort ahead of root's own, so the fixture composes before the commit.
+  bash "$PLUGIN_ROOT/scripts/compose-memory.sh"
+  pin=$(git -C memory rev-parse HEAD:ddaanet)
+  [ "$pin" = "$(git -C memory/ddaanet rev-parse HEAD)" ]
+  run commit_sections "memory: record dirty"
+  [ "$status" -eq 0 ]
+  after=$(git -C memory/ddaanet rev-parse HEAD)
+  [ "$after" != "$pin" ]
+  git -C memory/ddaanet cat-file -e HEAD:new.md
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$after" ]
+  git -C memory cat-file -e HEAD:dirty.md
 }
 
 @test "yield: root edits that need a compose pass do not send the commit through gitlore-compose and back" {
