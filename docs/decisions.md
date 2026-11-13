@@ -211,10 +211,10 @@ nowhere. [session.md](references/session.md)
   reports and writes no index, because anything `PostToolBatch` did not compose
   is assumed to be an exterior change and failing on it beats silently fixing it
 - **D83** — SessionStart bounds every fetch it makes by `GITLORE_FETCH_TIMEOUT`
-  seconds (default 5) and reports `timed out after <n>s`; it fetches each store
-  once and its yield checks reuse that outcome; the `PostToolBatch` pass runs no
-  fetch; the `submodule update --init` clone of a store not materialized is not
-  bounded
+  seconds (default 5) and reports `timed out after <n>s`; it fetches each
+  store's `live` once and its yield checks reuse that outcome; the
+  `PostToolBatch` pass runs no fetch; the `submodule update --init` clone of a
+  store not materialized is not bounded
 
 *Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
 start · moving a tier at `SessionStart` · composing at `SessionStart` ·

@@ -285,13 +285,13 @@ and it cannot answer this question without checking remotes so maybe set a small
 timeout and report timed out". The `submodule update --init` that clones a store
 not materialized is not bounded, since a clone outlasts a fetch.
 
-`SessionStart` fetches each store once per run, and the pin-guard yield checks
-in its diagnostics reuse that outcome, so one slow remote costs one timeout. The
-`PostToolBatch` pass runs no fetch: it decides the yield from the refs as last
-fetched (internal `GITLORE_NO_FETCH`), since it runs after every batch of edits
-and a network wait there is paid by the agent's every turn. `gitlore-commit` and
-`gitlore-compose` fetch each tier at most once per run, unbounded unless
-`GITLORE_FETCH_TIMEOUT` is exported as a positive integer.
+`SessionStart` fetches each store's `live` once per run, and the pin-guard yield
+checks in its diagnostics reuse that outcome. The `PostToolBatch` pass runs no
+fetch: it decides the yield from the refs as last fetched (internal
+`GITLORE_NO_FETCH`), since it runs after every batch of edits and a network wait
+there is paid by the agent's every turn. `gitlore-commit` and `gitlore-compose`
+fetch each tier at most once per run, unbounded unless `GITLORE_FETCH_TIMEOUT`
+is exported as a positive integer.
 
 ## Rejected alternatives
 

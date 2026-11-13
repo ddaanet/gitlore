@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # The in-session hooks reach the take-refusal check (the pin guard's yield) and
-# so a tier's remote. SessionStart fetches each store's remote once per
+# so a tier's remote. SessionStart fetches each store's `live` once per
 # run and bounds every fetch with GITLORE_FETCH_TIMEOUT seconds (default 5),
 # reporting a fetch that timed out; the PostToolBatch compose hook does no
 # network access at all.
