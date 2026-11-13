@@ -80,6 +80,11 @@ from the script the node names.
   drives the real claude CLI and costs time and money — run it explicitly, not
   as part of a release. `just release` depends on `prerelease`, which is just
   `precommit`. Mechanism in `docs/references/testing.md`.
+- A changed script is exercised through bats fixtures in temp directories, by
+  the main thread and by every dispatched agent, whose brief says so. The
+  checkout's `memory/` is the live store and its tiers are shared with other
+  repositories, so a `bin/gitlore-*` entry point, a `scripts/*.sh` or a hook
+  run here from a working copy writes real data.
 - macOS is a target: bash 3.2 and BSD `sed`/`mktemp`/`grep`/`find`/`stat`.
   `tests/helpers/bsd-stubs.bash` shadows a tool with its BSD-strict contract so
   a GNU-ism fails on Linux; `tests/bsd_portability.bats` holds the lock-ins.
