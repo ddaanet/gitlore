@@ -1,0 +1,282 @@
+#!/usr/bin/env bats
+# A memory store's tracked .gitmodules is content another contributor can push.
+# A `submodule.*.path` that climbs out of the store (a `..` component, a tracked
+# symlink, a newline that splits one path into two) must not make gitlore act
+# on a repository that is not a tier. Each test states what happens to the
+# VICTIM, a repository outside the store that the hostile path names, so it
+# holds whichever way the path is refused. A .gitmodules entry with no gitlink
+# in the index is the shape used: git refuses a gitlink at such a path.
+#
+# $output and $stderr are bats' captures; shellcheck cannot see them.
+# shellcheck disable=SC2154
+bats_require_minimum_version 1.5.0
+
+load helpers/setup
+load helpers/fixtures
+load helpers/tier-fixtures
+load helpers/push-fixtures
+load helpers/cc-hook-session-start
+
+# The victim: an unrelated repository beside the fixture, holding a commit never
+# pushed anywhere, with an origin of its own that has no `live`.
+make_victim() {
+  VICTIM="$(dirname "$TMP_REPO")/victim-$(basename "$TMP_REPO")"
+  VICTIM_REMOTE="$VICTIM.remote.git"
+  EVIL="../../$(basename "$VICTIM")"
+  git init -q --bare "$VICTIM_REMOTE"
+  git init -q -b main "$VICTIM"
+  git -C "$VICTIM" config user.email v@e
+  git -C "$VICTIM" config user.name v
+  printf 'secret\n' > "$VICTIM/private.txt"
+  git -C "$VICTIM" add private.txt
+  git -C "$VICTIM" commit -qm "private, never pushed"
+  git -C "$VICTIM" remote add origin "$VICTIM_REMOTE"
+}
+
+# Defined here: both loaded helper files define setup and teardown, and the
+# later load would win.
+setup() {
+  setup_tmp_repo
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
+  export MEMORY_REMOTE
+}
+
+teardown() {
+  [ -z "${VICTIM:-}" ] || rm -rf "$VICTIM" "$VICTIM_REMOTE"
+  teardown_tmp_repo
+}
+
+# Commit memory/.gitmodules as a contributor's push leaves it and publish live.
+# Args: the files to stage besides .gitmodules.
+publish_hostile_store() {
+  git -C memory add .gitmodules "$@"
+  git -C memory commit -qm "a contributor's .gitmodules"
+  git -C memory push -q . HEAD:refs/heads/live
+  publish_memory
+}
+
+# Register one hostile entry. Args: $1 = path value.
+hostile_entry() {
+  git config -f memory/.gitmodules submodule.evil.path "$1"
+  git config -f memory/.gitmodules submodule.evil.url ./unused
+}
+
+hostile_store_dotdot() {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  hostile_entry "$EVIL"
+  publish_hostile_store
+}
+
+hostile_store_symlink() {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  ln -s ../.. memory/s
+  hostile_entry "s/$(basename "$VICTIM")"
+  publish_hostile_store s
+}
+
+hostile_store_newline() {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  hostile_entry "inside
+$EVIL"
+  publish_hostile_store
+}
+
+# Assert the push left the victim and its origin untouched.
+assert_victim_not_published() {
+  run git -C "$VICTIM" rev-parse -q --verify refs/heads/live
+  [ "$status" -ne 0 ] || { echo "victim gained a live branch at $output" >&2; return 1; }
+  run git --git-dir="$VICTIM_REMOTE" rev-parse -q --verify refs/heads/live
+  [ "$status" -ne 0 ] || { echo "victim's origin gained live at $output" >&2; return 1; }
+  run git --git-dir="$VICTIM_REMOTE" for-each-ref
+  [ -z "$output" ] || { echo "victim's origin gained refs: $output" >&2; return 1; }
+}
+
+# Give the victim the retired gate's wrapper and a hooksDir mirror.
+plant_victim_gate() {
+  # shellcheck disable=SC2016  # the wrapper's literal marker line
+  printf '#!/bin/sh\nHOOKS_DIR=/x\nexec "$HOOKS_DIR/memory-pre-commit" "$@"\n' > "$VICTIM/.git/hooks/pre-commit"
+  chmod +x "$VICTIM/.git/hooks/pre-commit"
+  git -C "$VICTIM" config gitlore.hooksDir /somewhere
+}
+
+assert_victim_gate_kept() {
+  [ -e "$VICTIM/.git/hooks/pre-commit" ] || { echo "victim's pre-commit hook was removed" >&2; return 1; }
+  local dir
+  dir=$(git -C "$VICTIM" config --get gitlore.hooksDir) \
+    || { echo "victim's gitlore.hooksDir was unset" >&2; return 1; }
+  [ "$dir" = "/somewhere" ] || { echo "victim's gitlore.hooksDir changed to $dir" >&2; return 1; }
+}
+
+start_session() {
+  enable_gitlore
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+}
+
+# --- `..` ---
+
+@test "a '..' path: gitlore-push creates no live branch on the victim and pushes nothing to its origin" {
+  make_victim
+  hostile_store_dotdot
+  run --separate-stderr bash "$CMD"
+  echo "status=$status stdout=$output stderr=$stderr"
+  assert_victim_not_published
+}
+
+@test "a '..' path: gitlore-push does not publish the parent repository to its origin" {
+  make_victim
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  git init -q --bare "$TMP_REPO/.parent-remote.git"
+  git remote add origin "$TMP_REPO/.parent-remote.git"
+  hostile_entry ..
+  publish_hostile_store
+  run --separate-stderr bash "$CMD"
+  echo "status=$status stdout=$output stderr=$stderr"
+  run git --git-dir="$TMP_REPO/.parent-remote.git" for-each-ref
+  [ -z "$output" ] || { echo "parent's origin gained refs: $output" >&2; return 1; }
+}
+
+@test "a '..' path: SessionStart leaves the victim's wrapper pre-commit hook and gitlore.hooksDir" {
+  make_victim
+  hostile_store_dotdot
+  plant_victim_gate
+  start_session
+  echo "status=$status stderr=$stderr"
+  assert_victim_gate_kept
+}
+
+# --- tracked symlink ---
+
+@test "a symlink route: gitlore-push creates no live branch on the victim and pushes nothing to its origin" {
+  make_victim
+  hostile_store_symlink
+  run --separate-stderr bash "$CMD"
+  echo "status=$status stdout=$output stderr=$stderr"
+  assert_victim_not_published
+}
+
+@test "a symlink route: SessionStart leaves the victim's wrapper pre-commit hook and gitlore.hooksDir" {
+  make_victim
+  hostile_store_symlink
+  plant_victim_gate
+  start_session
+  echo "status=$status stderr=$stderr"
+  assert_victim_gate_kept
+}
+
+# --- newline ---
+
+@test "a newline path: gitlore-push creates no live branch on the victim and pushes nothing to its origin" {
+  make_victim
+  hostile_store_newline
+  run --separate-stderr bash "$CMD"
+  echo "status=$status stdout=$output stderr=$stderr"
+  assert_victim_not_published
+}
+
+@test "a newline path: SessionStart leaves the victim's wrapper pre-commit hook and gitlore.hooksDir" {
+  make_victim
+  hostile_store_newline
+  plant_victim_gate
+  start_session
+  echo "status=$status stderr=$stderr"
+  assert_victim_gate_kept
+}
+
+# The one newline shape git admits as a gitlink: the index path `in<LF>../victim`
+# (a tree entry `in<LF>..` holding a gitlink `victim`) splits into `in` and
+# `../victim`, which climbs one level, to a repository inside the parent's work
+# tree.
+hostile_store_newline_gitlink() {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  VICTIM="$TMP_REPO/victim"
+  VICTIM_REMOTE="$TMP_REPO/.victim-remote.git"
+  git init -q --bare "$VICTIM_REMOTE"
+  git init -q -b main "$VICTIM"
+  git -C "$VICTIM" config user.email v@e
+  git -C "$VICTIM" config user.name v
+  printf 'secret\n' > "$VICTIM/private.txt"
+  git -C "$VICTIM" add private.txt
+  git -C "$VICTIM" commit -qm "private, never pushed"
+  git -C "$VICTIM" remote add origin "$VICTIM_REMOTE"
+  printf '160000 %s\tin\n../victim\0' "$(git -C "$VICTIM" rev-parse HEAD)" \
+    | git -C memory update-index -z --index-info
+  hostile_entry "in
+../victim"
+  publish_hostile_store
+  local tree
+  tree=$(git -C memory ls-tree -r HEAD)
+  [[ "$tree" == *'160000 commit '*'	"in\n../victim"'* ]] || false
+}
+
+@test "a newline path git admits as a gitlink: gitlore-push creates no live branch on the victim and pushes nothing to its origin" {
+  hostile_store_newline_gitlink
+  run --separate-stderr bash "$CMD"
+  echo "status=$status stdout=$output stderr=$stderr"
+  assert_victim_not_published
+}
+
+@test "a newline path git admits as a gitlink: SessionStart leaves the victim's wrapper pre-commit hook and gitlore.hooksDir" {
+  hostile_store_newline_gitlink
+  plant_victim_gate
+  start_session
+  echo "status=$status stderr=$stderr"
+  assert_victim_gate_kept
+}
+
+# --- compose ---
+
+@test "the compose pass with the path also in .gitlore-tiers copies no line of the victim's MEMORY.md into root" {
+  make_victim
+  hostile_store_dotdot
+  printf -- '- [secret](secret.md) — a private repo hook line\n' > "$VICTIM/MEMORY.md"
+  printf '%s\n' "$EVIL" > memory/.gitlore-tiers
+  run gitlore_compose memory
+  echo "status=$status output=$output"
+  run grep -F -- "private repo hook line" memory/MEMORY.md
+  [ "$status" -eq 1 ] || { echo "root MEMORY.md carries the victim's line: $output" >&2; return 1; }
+}
+
+# --- controls: a legitimate tier is unaffected ---
+
+@test "control: a mounted tier is listed by gitlore_tier_paths and published by the push" {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  gitlore_compose memory
+  commit_memory_state
+  git -C memory push -q . HEAD:refs/heads/live
+  publish_memory
+  run gitlore_tier_paths memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "ddaanet" ]
+
+  advance_tier_past_remote ddaanet
+  local tip
+  tip=$(git -C memory/ddaanet rev-parse HEAD)
+  run --separate-stderr bash "$CMD"
+  echo "status=$status stdout=$output stderr=$stderr"
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse refs/heads/live)" = "$tip" ]
+}
+
+@test "control: a tier whose gitlink is at a merge conflict stage in the memory index is still listed" {
+  git init -q --bare "$MEMORY_REMOTE"
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  local sha
+  sha=$(git -C memory/ddaanet rev-parse HEAD)
+  git -C memory update-index --force-remove ddaanet
+  printf '160000 %s 1\tddaanet\n160000 %s 2\tddaanet\n160000 %s 3\tddaanet\n' "$sha" "$sha" "$sha" \
+    | git -C memory update-index --index-info
+  run git -C memory ls-files -u
+  [[ "$output" == *" 1	ddaanet"*" 2	ddaanet"*" 3	ddaanet"* ]] || false
+  run gitlore_tier_paths memory
+  [ "$status" -eq 0 ]
+  [ "$output" = "ddaanet" ]
+}
