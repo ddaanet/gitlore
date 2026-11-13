@@ -17,6 +17,14 @@ PLUGIN_ROOT=$(CDPATH="" cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+# Each tier is fetched at most once in this process: the memo file is a private
+# mktemp file that the subshells this script runs share, and is removed when it
+# exits. Without one, each tier is fetched on every check.
+if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
+  trap 'rm -f "$GITLORE_FETCH_MEMO"' EXIT
+else
+  GITLORE_FETCH_MEMO=""
+fi
 
 # The launch repo, whatever directory the agent's shell is in; outside any
 # worktree memory_path finds no .gitmodules and the run is a no-op.

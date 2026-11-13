@@ -14,9 +14,9 @@ and the hook call. The approval gate the commit path carries out is in
   push refused by divergence is resolved and pushed again
 - The commit path — **D50** the commit writes no index and aborts when a compose
   pass would change one; a tier off its pin is fatal (one ahead of it naming the
-  take) unless the take would refuse memory itself, and so is a compose problem
-  in an index file the commit changes, while every other compose refusal is
-  reported
+  take) unless the take would refuse for uncommitted changes, and so is a
+  compose problem in an index file the commit changes, while every other compose
+  refusal is reported
 
 ---
 
@@ -190,23 +190,31 @@ a single abort can carry several tiers:
 
 `SessionStart` reports the same state.
 
-**The guard yields where its remedy would refuse.** `/gitlore:merge` refuses a
-memory root that holds uncommitted work and whose `HEAD` has forked from its
-local `live` (`gitlore_root_merge_refused`), asking for a commit; refusing that
-commit for a tier whose remedy is `/gitlore:merge` would send each to the other
-with nothing moving. So in that state `gitlore_pin_yield_tiers` names every tier
-whose remedy is the take — a forked one included, not one mid-merge, not one
-beside its pin otherwise — and the guard passes over them, in the commit,
-`gitlore-compose` and the `PostToolBatch` pass alike. The pass projects nothing
-into a yielded tier, since its carrier holds rewords and deletions root has not
-taken, and the orphan report skips it, since the take composes its lines. The
-commit reads the set before any tier commits, stages no yielded tier as its
-commit lands, keeps it out of memory's `add -A`, and prints, per tier:
+**The guard yields where its remedy would refuse.** `/gitlore:merge` refuses the
+whole take, before it moves any store, for uncommitted changes in the memory
+root when its `HEAD` has forked from its local `live`
+(`gitlore_root_merge_refused`), or in any one mounted tier that has something to
+take (`gitlore_tier_take_refused`, the check `gitlore_refuse_dirty_tiers`
+refuses by), asking for a commit; refusing that commit for a tier whose remedy
+is `/gitlore:merge` would send each to the other with nothing moving. The rule:
+whenever the take would refuse for uncommitted changes anywhere, root or a tier,
+`gitlore_pin_yield_tiers` names every tier whose remedy is the take — a forked
+one included, not one mid-merge, not one beside its pin otherwise — whichever
+store is the dirty one, and the guard passes over them, in the commit,
+`gitlore-compose` and the `PostToolBatch` pass alike. The refusal and the yield
+read the same predicate, so they agree on the state. The commit and compose
+scripts fetch each tier's `live` at most once per process, the outcome kept in a
+memo directory the entry script creates and removes; `/gitlore:merge` keeps its
+own fetches. The pass projects nothing into a yielded tier, since its carrier
+holds rewords and deletions root has not taken, and the orphan report skips it,
+since the take composes its lines. The commit reads the set before any tier
+commits, stages no yielded tier as its commit lands, keeps it out of memory's
+`add -A`, and prints, per tier:
 `tier '<tier>' is checked out off the commit the memory store records for it, so this commit recorded root's own changes and left the tier unrecorded. Run /gitlore:merge next, which takes the tier and records it.`
 The commit records less than the stores hold, never more, so the approved
 summary still covers it, and the gitlink stays root's true record of what it has
-seen. The predicate is read live: once root's work is committed the take runs,
-its root merge records the tier, and the guard applies again.
+seen. The predicate is read live: once the refused work is committed the take
+runs, its root merge records the tier, and the guard applies again.
 
 **A tier ahead of its pin is refused, naming the take.** A tier whose `HEAD`
 strictly descends the gitlink the index records holds lines the root index has

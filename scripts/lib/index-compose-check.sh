@@ -259,21 +259,42 @@ gitlore_compose_check_pins() {
   return 1
 }
 
-# The tiers rule 7 yields, one per line: where /gitlore:merge refuses the
-# memory root (gitlore_root_merge_refused), every tier whose own remedy is
-# /gitlore:merge. A tier whose remedy is /gitlore:resolve or a checkout keeps its
-# refusal, since that remedy does not run through root's merge. Read live, so
-# the yield ends once root's own work is committed and the take can run.
+# The tiers rule 7 yields, one per line: where /gitlore:merge refuses the take
+# for uncommitted changes, every tier whose own remedy is /gitlore:merge. The
+# take refuses for the memory root (gitlore_root_merge_refused) or for any one
+# mounted tier (gitlore_tier_take_refused, gitlore_refuse_dirty_tiers), and one
+# refusal stops the whole take, so a clean tier off its pin is yielded when
+# another tier is the refused one. A tier whose remedy is /gitlore:resolve or a
+# checkout keeps its refusal, since that remedy does not run through the take.
+# Read live, so the yield ends once the refused work is committed and the take
+# can run.
 # Args: $1 = memory worktree path.
 gitlore_pin_yield_tiers() {
-  local mempath="$1" tier
-  gitlore_root_merge_refused "$mempath" || return 0
+  local mempath="$1" tier candidates=""
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     case "$(gitlore_tier_pin_relation "$mempath" "$tier")" in
-      "merge "*) printf '%s\n' "$tier" ;;
+      "merge "*) candidates="$candidates$tier
+" ;;
     esac
   done < <(gitlore_tier_paths "$mempath")
+  [ -n "$candidates" ] || return 0
+  gitlore_take_refused "$mempath" || return 0
+  printf '%s' "$candidates"
+}
+
+# Exit 0 when /gitlore:merge refuses the take of memory root $1 for uncommitted
+# changes before it moves any store: root's own (gitlore_root_merge_refused) or
+# any mounted tier's (gitlore_tier_take_refused).
+# Args: $1 = memory worktree path.
+gitlore_take_refused() {
+  local mempath="$1" tier
+  gitlore_root_merge_refused "$mempath" && return 0
+  while IFS= read -r tier; do
+    [ -n "$tier" ] || continue
+    gitlore_tier_take_refused "$mempath" "$tier" && return 0
+  done < <(gitlore_tier_paths "$mempath")
+  return 1
 }
 
 # Print how mounted tier $2 sits against the commit memory store $1 records for

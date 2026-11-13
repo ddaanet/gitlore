@@ -124,3 +124,52 @@ gitlore_store_dirty_for_take() {
     printf '1\n'
   fi
 }
+
+# Exit 0 when /gitlore:merge refuses tier $2 of memory root $1 before it moves
+# any store (gitlore_refuse_dirty_tiers): the tier holds uncommitted changes and
+# has something to take. Read by that refusal and by the pin guard's yield
+# (gitlore_pin_yield_tiers), which have to agree on the state.
+# Args: $1 = memory worktree path, $2 = tier name.
+gitlore_tier_take_refused() {
+  local tierpath="$1/$2"
+  [ -e "$tierpath/.git" ] || return 1
+  [ "$(gitlore_memory_dirty "$tierpath")" = "1" ] || return 1
+  gitlore_tier_has_arrivals "$tierpath"
+}
+
+# Fetch the remote's `live` into tier $1, at most once per process. The outcome
+# is recorded in the memo file the entry script names in GITLORE_FETCH_MEMO,
+# which subshells share; with no memo file set every call fetches. A memo that
+# cannot be written costs only a repeated fetch. Exit 0 when the fetch succeeded.
+# Args: $1 = tier worktree.
+gitlore_tier_fetch_memoized() {
+  local tierpath="$1" memo="${GITLORE_FETCH_MEMO:-}"
+  if [ -n "$memo" ] && [ -f "$memo" ]; then
+    grep -qFx -- "ok $tierpath" "$memo" && return 0
+    grep -qFx -- "failed $tierpath" "$memo" && return 1
+  fi
+  # Redirected because failure is an answer here, and the publish that follows
+  # reports the same remote in its own words.
+  if git -C "$tierpath" fetch -q --no-recurse-submodules origin live >/dev/null 2>&1; then
+    [ -z "$memo" ] || printf 'ok %s\n' "$tierpath" >> "$memo" || true
+    return 0
+  fi
+  [ -z "$memo" ] || printf 'failed %s\n' "$tierpath" >> "$memo" || true
+  return 1
+}
+
+# True when a tier's HEAD does not contain its local `live` or its remote's
+# `live`: ahead of HEAD, forked from it or diverged, each is something to take.
+# Args: $1 = tier worktree.
+gitlore_tier_has_arrivals() {
+  local tierpath="$1" live remote
+  # `-q --verify` is silent on the expected miss: a tier never fetched has no
+  # local `live`.
+  if live=$(git -C "$tierpath" rev-parse -q --verify live) &&
+     ! git -C "$tierpath" merge-base --is-ancestor "$live" HEAD; then
+    return 0
+  fi
+  gitlore_tier_fetch_memoized "$tierpath" || return 1
+  remote=$(git -C "$tierpath" rev-parse -q --verify refs/remotes/origin/live) || return 1
+  ! git -C "$tierpath" merge-base --is-ancestor "$remote" HEAD
+}

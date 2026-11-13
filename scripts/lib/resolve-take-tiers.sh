@@ -56,24 +56,6 @@ gitlore_take_tier() {
   gitlore_repair_moved_carrier "$mempath" "$tier"
 }
 
-# True when a tier's HEAD does not contain its local `live` or its remote's
-# `live`: ahead of HEAD, forked from it or diverged, each is something to take.
-# Args: $1 = tier worktree.
-gitlore_tier_has_arrivals() {
-  local tierpath="$1" live remote
-  # `-q --verify` is silent on the expected miss: a tier never fetched has no
-  # local `live`.
-  if live=$(git -C "$tierpath" rev-parse -q --verify live) &&
-     ! git -C "$tierpath" merge-base --is-ancestor "$live" HEAD; then
-    return 0
-  fi
-  # Redirected because failure is an answer here, and the publish that follows
-  # reports the same remote in its own words.
-  git -C "$tierpath" fetch -q --no-recurse-submodules origin live >/dev/null 2>&1 || return 1
-  remote=$(git -C "$tierpath" rev-parse -q --verify refs/remotes/origin/live) || return 1
-  ! git -C "$tierpath" merge-base --is-ancestor "$remote" HEAD
-}
-
 # Refuse while any mounted tier has uncommitted changes and something to take,
 # naming each. Something to take is what the take itself decides by.
 # Args: $1 = memory worktree path. Returns 1 after emitting.
@@ -81,9 +63,7 @@ gitlore_refuse_dirty_tiers() {
   local mempath="$1" tier refused=0
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
-    [ -e "$mempath/$tier/.git" ] || continue
-    [ "$(gitlore_memory_dirty "$mempath/$tier")" = "1" ] || continue
-    gitlore_tier_has_arrivals "$mempath/$tier" || continue
+    gitlore_tier_take_refused "$mempath" "$tier" || continue
     refused=1
     gitlore_say_for_agent_or_user \
       "gitlore: tier '$tier' has uncommitted changes, so nothing was taken. Commit them (approved summary, then a memory commit) and run /gitlore:merge again." \

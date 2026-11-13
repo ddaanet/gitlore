@@ -176,7 +176,8 @@ projections:
   merge's continuation, the tier's line). Root's block is never projected down
   over a carrier before the carrier has been merged up: a pass composes no tier
   up, and refuses a tier ahead of its pin through rule 7, naming the take, or
-  yields it untouched where the take would refuse memory itself (D50).
+  yields it untouched where the take would refuse for uncommitted changes in
+  root or a tier (D50).
 
 `gitlore_compose_up` is the up projection's entry point for a caller that holds
 the tier list itself. It takes the memory worktree, the tiers to compose, one

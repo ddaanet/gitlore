@@ -35,6 +35,14 @@ source "$PLUGIN_ROOT/scripts/lib/util.sh"
 source "$PLUGIN_ROOT/scripts/lib/log.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
+# Each tier is fetched at most once in this process: the memo file is a private
+# mktemp file that the subshells this script runs share, and is removed when it
+# exits. Without one, each tier is fetched on every check.
+if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
+  trap 'rm -f "$GITLORE_FETCH_MEMO"' EXIT
+else
+  GITLORE_FETCH_MEMO=""
+fi
 
 refuse() {
   printf 'usage: gitlore-commit: %s. Run /gitlore:commit to draft the summary and get it approved.\n' "$1" >&2
