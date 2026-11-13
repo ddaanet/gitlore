@@ -97,3 +97,9 @@ EOF
    section, redraft and get approval again.
 5. If the user asks for changes, redraft the summary, show it again, and end
    the turn. Each redraft needs its own approval.
+6. The memory commit stands on its own. `gitlore-commit` stages the memory
+   pointer in the parent index (it prints a notice and skips the staging during
+   a rebase, cherry-pick or revert), and the staged pointer rides the next
+   parent commit that carries content. Make no parent commit just to record
+   it; one is needed only for a parent change of its own, or when a tool
+   refuses a parent tree with that pending pointer.
