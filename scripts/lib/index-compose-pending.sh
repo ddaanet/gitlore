@@ -57,7 +57,7 @@ gitlore_compose_would_write() {
 gitlore_compose_pass() {
   local mempath="$1" writer="$2"
   local root="$mempath/MEMORY.md"
-  local active yielded tier changed="" out
+  local active yielded tier changed="" out bullets
   [ -f "$root" ] || return 0
 
   # Both checks run before either verdict is read, so one refusal carries the
@@ -89,8 +89,16 @@ gitlore_compose_pass() {
     # would empty the carrier a moment before the layout reads it. That is what
     # a mount, and a deactivate/reactivate round trip, both look like.
     gitlore_index_has_tier "$root" "$tier" || continue
-    if ! out=$(gitlore_compose_down "$mempath" "$tier" \
-      | "$writer" "$mempath/$tier/MEMORY.md"); then
+    # The producer's status is checked before the writer sees anything, so a
+    # failed projection leaves the carrier as it was. The `x` keeps trailing
+    # newlines in the bullets.
+    if ! bullets=$(gitlore_compose_down "$mempath" "$tier" && printf x); then
+      [ -n "$changed" ] && printf '%s' "$changed"
+      printf 'could not compose %s; it was left untouched\n' "$mempath/$tier/MEMORY.md"
+      return 2
+    fi
+    bullets=${bullets%x}
+    if ! out=$(printf '%s' "$bullets" | "$writer" "$mempath/$tier/MEMORY.md"); then
       [ -n "$changed" ] && printf '%s' "$changed"
       printf 'could not write %s\n' "$mempath/$tier/MEMORY.md"
       return 2
@@ -101,7 +109,13 @@ gitlore_compose_pass() {
 $active
 EOF2
 
-  if ! out=$(gitlore_compose_root_bullets "$mempath" | "$writer" "$root"); then
+  if ! bullets=$(gitlore_compose_root_bullets "$mempath" && printf x); then
+    [ -n "$changed" ] && printf '%s' "$changed"
+    printf 'could not compose %s; it was left untouched\n' "$root"
+    return 2
+  fi
+  bullets=${bullets%x}
+  if ! out=$(printf '%s' "$bullets" | "$writer" "$root"); then
     [ -n "$changed" ] && printf '%s' "$changed"
     printf 'could not write %s\n' "$root"
     return 2
