@@ -99,7 +99,7 @@ gitlore_merge_one_store() {
   remote_url=$(git -C "$store" config --get remote.origin.url || true)
   if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
     remote_url=""
-  elif fetch_err=$(git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
+  elif fetch_err=$(LC_ALL=C git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
     fetched=1
     remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || remote=""
   else

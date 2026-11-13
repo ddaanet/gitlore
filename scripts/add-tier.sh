@@ -239,7 +239,7 @@ gitlore_warn_private_under_public "tier remote" "$url" "$created_visibility"
 warnings=""
 # Propagation-in: create the local `live` from the remote. Fast-forward-only for
 # free — a refspec fetch into a branch ref refuses a non-ff without `+`.
-if ! fetch_err=$(git -C "$tierpath" fetch origin "live:live" 2>&1); then
+if ! fetch_err=$(LC_ALL=C git -C "$tierpath" fetch origin "live:live" 2>&1); then
   case "$fetch_err" in
     *"couldn't find remote ref"*|*"does not appear to be"*)
       warnings="$warnings

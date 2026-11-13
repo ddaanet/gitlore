@@ -88,7 +88,7 @@ done < "$map_in"
 # one standing. The record is fetched by explicit refspec: no other branch comes
 # with it, and --no-write-fetch-head leaves FETCH_HEAD alone.
 git -C "$store" update-ref -d refs/gitlore/rewrites
-if ! fetch_err=$(git -C "$store" fetch -q --no-write-fetch-head "$remote" +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
+if ! fetch_err=$(LC_ALL=C git -C "$store" fetch -q --no-write-fetch-head "$remote" +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
   case "$fetch_err" in
     *"couldn't find remote ref"*) ;;
     *) refuse "could not fetch gitlore/rewrites from $remote, so the record cannot be checked: $(printf '%s' "$fetch_err" | tr '\n' ' ')" ;;
