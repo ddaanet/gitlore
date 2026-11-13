@@ -173,3 +173,29 @@ memory: record the shared fact"
   [ "$(git -C memory rev-parse HEAD)" = "$root_before" ]
   [ -n "$(git -C memory status --porcelain)" ]
 }
+
+@test "a root holding only tier-carried changes takes a single memory section, committed as the root commit" {
+  # The retry of a half-landed commit: the tier is clean, and root holds only
+  # its staged gitlink and the tier's index line. No tier has a section to hang
+  # them on, so `== memory ==` alone is the summary (skills/commit/SKILL.md).
+  # Fails under a section check that accepts `memory` only for root content.
+  half_landed_tier_fixture
+  git -C memory add .gitlore-tiers
+  git -C memory commit -qm "memory: the tier manifest"
+  PATH="$refuse_bin:$PATH" run --separate-stderr commit_with "== ddaanet ==
+memory: record the shared fact"
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"$refused_msg"* ]]
+  [ -z "$(git -C memory/ddaanet status --porcelain)" ]
+  landed=$(git -C memory/ddaanet rev-parse HEAD)
+  run git -C memory status --porcelain
+  [ "$output" = " M MEMORY.md
+M  ddaanet" ]
+
+  run --separate-stderr commit_with "== memory ==
+memory: record the shared fact"
+  [ "$status" -eq 0 ] || { printf 'refused:\n%s\n' "$stderr" >&2; false; }
+  [ "$(git -C memory log -1 --pretty=%s)" = "memory: record the shared fact" ]
+  [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$landed" ]
+  [ -z "$(git -C memory status --porcelain)" ]
+}

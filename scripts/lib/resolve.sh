@@ -101,10 +101,10 @@ gitlore_detect_stale_merge_state() {
   statefile=$(gitlore_merge_state_file "$mempath")
   gitdir=$(git -C "$mempath" rev-parse --git-dir)
   if [ ! -f "$statefile" ]; then
-    # A real MERGE_HEAD with no state file means gitlore_prepare_merge staged
-    # a merge and the caller died before gitlore_write_merge_state recorded
-    # it — the window an interrupted `push-memory.sh` run left open, with real
-    # content staged and nothing pointing at it.
+    # A real MERGE_HEAD with no state file is a merge gitlore did not prepare —
+    # a hand-run `git merge`, or an agent asked to merge by hand.
+    # gitlore_yield_merge writes its state-file marker before the preparation
+    # starts, so an interrupted gitlore run leaves a state file, not this.
     if [ -f "$gitdir/MERGE_HEAD" ]; then
       printf 'orphaned-merge-head\n'
     else

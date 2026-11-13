@@ -38,8 +38,9 @@ clones one that is not materialized, at the commit memory records
 read-only, and reports; every report carries a directive that works when
 followed, and nothing is fixed silently. A store is detached; one attached to a
 branch breaks a precondition that install and the mount establish and gets no
-handling. A missing local `live` is normal on a fresh clone, where it is made
-from `HEAD`.
+handling. A missing local `live` is normal on a fresh clone. SessionStart makes
+memory's from `HEAD`; a tier's is not made there, and the tier reads as `live`
+at `HEAD` until a push, a memory commit or `/gitlore:resolve` makes it.
 
 | State | Report |
 |---|---|

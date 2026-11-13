@@ -21,7 +21,7 @@ You are resolving a gitlore memory submodule from divergence.
 Exit codes:
 - `0` — healthy or simple repair complete. Summarize and stop.
 - Non-zero + "memory merge prepared" on stderr → proceed to **Parse directive**.
-- Non-zero with a line starting `gitlore: memory records` or `gitlore: this repository records memory at` → a commit no repository holds. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
+- Non-zero with a line starting `gitlore: memory records tier` or `gitlore: this repository records memory at` → a recorded commit its repository lacks, or one a failed fetch left unconfirmed. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
 - Non-zero without any of those → surface stderr verbatim and stop.
 
 ## Parse directive
@@ -87,7 +87,7 @@ The sub-agent reports the continuation's exit status, and only an exit 0 is a la
 
 ## Loop
 
-After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes; run `/gitlore:merge` instead.
+After the sub-agent exits, run `"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes; run `/gitlore:merge` instead.
 
 ## Resume commit
 

@@ -15,8 +15,9 @@ it, and the resolver does not say the state is healthy. Two shapes:
   <sha>, a commit …` and says whether neither the tier nor its remote holds it,
   or the tier has no remote, or that the fetch from the tier's remote failed, in
   which case no revert command follows: get the remote reachable and run
-  `/gitlore:resolve` again. It names the repo `.gitmodules` records when that
-  is a different one. Nothing composes over the commit. The checkout that
+  `/gitlore:resolve` again. The first two name the repo `.gitmodules` records
+  when that is a different one; the fetch-failed line does not. Nothing composes
+  over the commit. The checkout that
   recorded it runs `/gitlore:push`, which publishes it. If the user says that
   checkout no longer exists, `/gitlore:resolve`'s output carries, after the
   report, a `once no checkout holds it` line and then, last, the command that
@@ -40,7 +41,7 @@ it, and the resolver does not say the state is healthy. Two shapes:
 - **The parent's pin on memory.** The line reads `gitlore: this repository
   records memory at <sha>, …` and says the memory holding it has not been merged
   upstream. No command applies, and no url should be changed on the report's
-  say-so: relay it and stop.
+  say-so: relay it, with any git fetch line printed just above it, and stop.
 
 The urls in these reports reach the user's line only; the agent's line says the
 user has them. Do not ask for them or reconstruct them.
