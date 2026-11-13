@@ -25,6 +25,10 @@ gitlore_refuse_rewritten() {
         "gitlore: the local side of $mempath holds commits the remote rewrote (record gitlore/rewrites: $out is superseded). Merging against '$authority' would re-import the old history, so nothing was merged. Run $crossing to cross this store." \
         "gitlore: the local side of $mempath holds commits the remote rewrote (record gitlore/rewrites: $out is superseded). Merging against '$authority' would re-import the old history, so nothing was merged. Run $crossing to cross this store." >&2
       ;;
+    3)
+      # No git text to keep from the agent, so both read the same line.
+      printf '%s\n' "gitlore: the rewrite record gitlore/rewrites could not be fetched (timed out after ${GITLORE_FETCH_TIMEOUT}s), so $mempath cannot be checked for superseded history. Nothing was merged. Run the command again once the remote is reachable." >&2
+      ;;
     *)
       gitlore_say_for_agent_or_user \
         "gitlore: the rewrite record gitlore/rewrites exists on origin but could not be fetched, so $mempath cannot be checked for superseded history. Nothing was merged. Run the command again once the remote is reachable. The user has git's message." \
@@ -40,16 +44,22 @@ gitlore_refuse_rewritten() {
 # would re-import the old line. Key membership only: chains are not followed.
 # The record is fetched by explicit refspec with --no-write-fetch-head, so no
 # other remote branch (the archive branches included) reaches the store and
-# FETCH_HEAD keeps what the caller read from it. Prints nothing itself.
+# FETCH_HEAD keeps what the caller read from it. The fetch is bounded like any
+# other (gitlore_fetch_bounded). Prints nothing itself.
 # Returns 0 for no hit, an absent record, or no origin; 1 with the superseded
 # id on stdout; 2 with git's error on stdout when the record is advertised but
-# cannot be fetched, or the range or map cannot be read.
+# cannot be fetched, or the range or map cannot be read; 3, printing nothing,
+# when the fetch timed out after GITLORE_FETCH_TIMEOUT seconds.
 # Args: $1 = store path, $2 = authority ref or sha, $3 = pending ref.
 gitlore_rewrite_hit() {
   local store="$1" authority="$2" pending="$3"
-  local fetch_err mine map hit
+  local rc=0 fetch_err mine map hit
   [ -n "$(git -C "$store" config --get remote.origin.url)" ] || return 0
-  if ! fetch_err=$(git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
+  gitlore_fetch_bounded "$store" -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites || rc=$?
+  fetch_err="$GITLORE_FETCH_OUT"
+  if [ "$rc" -eq 124 ]; then
+    return 3
+  elif [ "$rc" -ne 0 ]; then
     case "$fetch_err" in
       *"couldn't find remote ref"*) return 0 ;;
     esac

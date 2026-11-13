@@ -13,7 +13,7 @@ wires them is in
   · **D59** SessionStart moves no module; every advance is an explicit take or
   push · **D74** compose only where the edit happens; SessionStart reports and
   writes no index · **D83** SessionStart bounds every fetch it makes, and the
-  hooks never wait on a remote unbounded
+  `PostToolBatch` pass makes none
 
 ---
 
@@ -269,19 +269,21 @@ leaves those lines out, because they are not stale. The tier stage's "could not
 be checked out" notice is its report, on both channels: the agent's line says
 the tier's facts are not available in this session and its index lines stay.
 
-**D83 — SessionStart bounds every fetch it makes; the hooks never wait on a
-remote unbounded**
+**D83 — SessionStart bounds every fetch it makes; the `PostToolBatch` pass makes
+none**
 
 `SessionStart` earns its place by telling the user to merge or push, and it
 cannot answer which without asking the remote, so it fetches. A remote that is
 slow or prompts for credentials must not stall the session, so each fetch it
-makes, memory's and each tier's, runs under a timeout in seconds from
-`GITLORE_FETCH_TIMEOUT`, default 5 (an empty, non-numeric or zero value reads as
-5). A fetch past it is killed with its process group, `SessionStart` completes,
-and the store's could-not-fetch report says `timed out after <n>s`; the module's
-position is then read against local `live`. My human partner: "sessionstart is
-useful because it tells us to merge or push and it cannot answer this question
-without checking remotes so maybe set a small timeout and report timed out".
+makes, memory's and each tier's `live` and the rewrite record, runs under a
+timeout in seconds from `GITLORE_FETCH_TIMEOUT`, default 5 (a value that is not
+a positive integer reads as 5). A fetch past it is killed with its process
+group, `SessionStart` completes, and the store's could-not-fetch report says
+`timed out after <n>s`; the module's position is then read against local `live`.
+My human partner: "sessionstart is useful because it tells us to merge or push
+and it cannot answer this question without checking remotes so maybe set a small
+timeout and report timed out". The `submodule update --init` that clones a store
+not materialized is not bounded, since a clone outlasts a fetch.
 
 `SessionStart` fetches each store once per run, and the pin-guard yield checks
 in its diagnostics reuse that outcome, so one slow remote costs one timeout. The
@@ -289,7 +291,7 @@ in its diagnostics reuse that outcome, so one slow remote costs one timeout. The
 fetched (internal `GITLORE_NO_FETCH`), since it runs after every batch of edits
 and a network wait there is paid by the agent's every turn. `gitlore-commit` and
 `gitlore-compose` fetch each tier at most once per run, unbounded unless
-`GITLORE_FETCH_TIMEOUT` is exported.
+`GITLORE_FETCH_TIMEOUT` is exported as a positive integer.
 
 ## Rejected alternatives
 

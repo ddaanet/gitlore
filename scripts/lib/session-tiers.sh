@@ -121,6 +121,8 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
           1)
             crossing=$(gitlore_cross_rewrite_script "$tierpath")
             add_report "gitlore: tier '$tier' holds commits its remote rewrote (record gitlore/rewrites: $out is superseded). Nothing was merged. Run $crossing to cross this tier." ;;
+          3)
+            add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live', and its rewrite record gitlore/rewrites could not be fetched (timed out after ${GITLORE_FETCH_TIMEOUT}s), so it cannot be checked for rewritten history." ;;
           *)
             add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live', and its rewrite record gitlore/rewrites could not be fetched, so it cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" ;;
         esac ;;

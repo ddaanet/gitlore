@@ -281,3 +281,72 @@ assert_line_with() {
   [[ "$sys$ctx" != *"timed out"* ]]
   [[ "$sys$ctx" != *"could not fetch"* ]]
 }
+
+# --- red: the rewrite-record fetch on the diverged arm is bounded -----------------
+
+# A git on PATH whose fetch of the rewrite record hangs like a stalled remote,
+# recording its pid; every other git call runs the real git. Memory's `live`
+# fetch therefore succeeds and the diverged arm is reached.
+make_hanging_rewrites_git() {
+  local real
+  real=$(command -v git)
+  mkdir -p "$TMP_REPO/stub"
+  cat > "$TMP_REPO/stub/git" <<STUB
+#!/bin/sh
+for a in "\$@"; do
+  case "\$a" in
+    *refs/heads/gitlore/rewrites*)
+      echo \$\$ >> "$HANG_PIDS"
+      exec sleep $HANG_SECONDS ;;
+  esac
+done
+exec "$real" "\$@"
+STUB
+  chmod 755 "$TMP_REPO/stub/git"
+}
+
+@test "red: SessionStart bounds a hanging rewrite-record fetch on memory's diverged arm and reports the timeout" {
+  state_s
+  push_memory_fact
+  make_hanging_rewrites_git
+  GITLORE_FETCH_TIMEOUT=2 PATH="$TMP_REPO/stub:$PATH" run_session_start
+  [ "$status" -eq 0 ]
+  [ "$elapsed" -lt "$HANG_SECONDS" ]
+  assert_hang_reaped
+  assert_line_with "$sys" "rewrite record gitlore/rewrites could not be fetched" "timed out after 2s"
+  assert_line_with "$ctx" "rewrite record gitlore/rewrites could not be fetched" "timed out after 2s"
+  [[ "$sys" == *"$DDAANET_LINE"* ]]
+}
+
+# --- red: gitlore-commit reads a timeout that is not a positive integer as unset --
+
+# Tier ddaanet is dirty with arrivals, so the take is refused and the commit
+# yields org; that answer needs ddaanet's fetch to succeed. setup leaves
+# GITLORE_FETCH_TIMEOUT unset; a test sets it on the call.
+commit_in_state_s() {
+  state_s
+  run commit_sections "memory: record"
+}
+
+ORG_YIELD="tier 'org' is checked out off the commit the memory store records for it"
+
+@test "lock-in: gitlore-commit in state S with GITLORE_FETCH_TIMEOUT unset yields org" {
+  commit_in_state_s
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$ORG_YIELD"* ]]
+  [[ "$output" == *"Run /gitlore:merge next"* ]]
+}
+
+@test "red: gitlore-commit in state S with GITLORE_FETCH_TIMEOUT=0 fetches and yields org as with it unset" {
+  GITLORE_FETCH_TIMEOUT=0 commit_in_state_s
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$ORG_YIELD"* ]]
+  [[ "$output" == *"Run /gitlore:merge next"* ]]
+}
+
+@test "red: gitlore-commit in state S with GITLORE_FETCH_TIMEOUT=abc fetches and yields org as with it unset" {
+  GITLORE_FETCH_TIMEOUT=abc commit_in_state_s
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$ORG_YIELD"* ]]
+  [[ "$output" == *"Run /gitlore:merge next"* ]]
+}

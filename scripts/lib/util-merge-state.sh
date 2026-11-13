@@ -171,8 +171,9 @@ gitlore_fetch_memo_note() {
 }
 
 # Run `git -C $1 fetch $2...`, bounded by GITLORE_FETCH_TIMEOUT seconds when that
-# is non-empty. Its stdout and stderr land in GITLORE_FETCH_OUT. Exit status is
-# git's, or 124 when the timeout killed the fetch.
+# is a positive integer (gitlore_fetch_timeout_ok) and unbounded otherwise. Its
+# stdout and stderr land in GITLORE_FETCH_OUT. Exit status is git's, or 124 when
+# the timeout killed the fetch.
 #
 # The fetch runs as a background job of a subshell under `set -m`, which gives
 # it a process group of its own, and a watchdog job (its own group too) sleeps
@@ -185,7 +186,8 @@ gitlore_fetch_bounded() {
   local dir="$1" secs="${GITLORE_FETCH_TIMEOUT:-}" tmp rc=0
   shift
   GITLORE_FETCH_OUT=""
-  if [ -z "$secs" ] || ! tmp=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
+  if ! gitlore_fetch_timeout_ok "$secs" ||
+     ! tmp=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
     GITLORE_FETCH_OUT=$(git -C "$dir" fetch "$@" 2>&1) || rc=$?
     return "$rc"
   fi
@@ -208,6 +210,18 @@ gitlore_fetch_bounded() {
   GITLORE_FETCH_OUT=$(cat "$tmp/out")
   rm -rf "$tmp"
   return "$rc"
+}
+
+# Exit 0 when $1 is a usable fetch timeout: a positive integer, all digits with
+# at least one of them non-zero. Anything else (empty, 0, 00, abc, -1, 1.5)
+# would make `sleep` return at once or fail and kill every fetch.
+# Args: $1 = candidate GITLORE_FETCH_TIMEOUT value.
+gitlore_fetch_timeout_ok() {
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
+    *[1-9]*) return 0 ;;
+  esac
+  return 1
 }
 
 # True when a tier's HEAD does not contain its local `live` or its remote's

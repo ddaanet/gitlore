@@ -129,6 +129,9 @@ report_memory_position() {
         1)
           crossing=$(gitlore_cross_rewrite_script "$mempath")
           add_report "gitlore: memory's live holds commits its remote rewrote (record gitlore/rewrites: $out is superseded), so merging upstream memory would re-import the old history. Nothing was merged. Run $crossing to cross this store." ;;
+        3)
+          timed_out="gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched (timed out after ${GITLORE_FETCH_TIMEOUT}s), so its divergence from live is unchecked."
+          add_report_each "$timed_out" "$timed_out" ;;
         *)
           # git's text can carry remote-chosen lines, so it goes to the user only.
           add_report_each "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" \
