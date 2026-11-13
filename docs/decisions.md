@@ -210,10 +210,16 @@ nowhere. [session.md](references/session.md)
   what no batch will, and the commit aborts on a pending compose; SessionStart
   reports and writes no index, because anything `PostToolBatch` did not compose
   is assumed to be an exterior change and failing on it beats silently fixing it
+- **D83** — SessionStart bounds every fetch it makes by `GITLORE_FETCH_TIMEOUT`
+  seconds (default 5) and reports `timed out after <n>s`; it fetches each store
+  once and its yield checks reuse that outcome; the `PostToolBatch` pass runs no
+  fetch
 
 *Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
 start · moving a tier at `SessionStart` · composing at `SessionStart` ·
-composing at the commit · splitting the compose pass for a read-only caller.
+composing at the commit · splitting the compose pass for a read-only caller ·
+deciding from last-fetched state only at `SessionStart` · an unbounded fetch in
+a hook.
 
 **Active recall** — why recall is a skill the agent runs itself, not a hook.
 [active-recall.md](references/active-recall.md)

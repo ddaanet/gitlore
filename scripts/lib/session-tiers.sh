@@ -71,14 +71,25 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
     fetched=1
     url=$(git -C "$tierpath" config --get remote.origin.url || true)
     if [ -n "$url" ]; then
-      if fetch_err=$(git -C "$tierpath" fetch origin live 2>&1); then
+      # The outcome goes to the fetch memo, so the pin guard's yield checks
+      # reuse it instead of fetching this remote again.
+      rc=0
+      gitlore_fetch_bounded "$tierpath" origin live || rc=$?
+      fetch_err="$GITLORE_FETCH_OUT"
+      if [ "$rc" -eq 0 ]; then
+        gitlore_fetch_memo_note ok "$tierpath"
         auth=$(git -C "$tierpath" rev-parse -q --verify FETCH_HEAD) || auth=""
       else
+        gitlore_fetch_memo_note failed "$tierpath"
         case "$fetch_err" in
           *"couldn't find remote ref"*) ;;
           *)
             fetched=0
-            add_sysmsg "gitlore: tier '$tier' could not fetch from its remote; it may be stale. git said: $fetch_err" ;;
+            if [ "$rc" -eq 124 ]; then
+              add_sysmsg "gitlore: tier '$tier' could not fetch from its remote (timed out after ${GITLORE_FETCH_TIMEOUT}s); it may be stale."
+            else
+              add_sysmsg "gitlore: tier '$tier' could not fetch from its remote; it may be stale. git said: $fetch_err"
+            fi ;;
         esac
       fi
     fi

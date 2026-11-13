@@ -1,9 +1,9 @@
-# Session and hook wiring — decisions D14, D59, D74
+# Session and hook wiring — decisions D14, D59, D74, D83
 
 What every `SessionStart` does — followed by the decisions that argue for that
-shape (D14, D59, D74). The hook wrapper files gitlore writes into the git common
-dir, and the decisions about where they live and how they are anchored (D5,
-D11), are in [hook-wrappers.md](hook-wrappers.md). The mid-session
+shape (D14, D59, D74, D83). The hook wrapper files gitlore writes into the git
+common dir, and the decisions about where they live and how they are anchored
+(D5, D11), are in [hook-wrappers.md](hook-wrappers.md). The mid-session
 plugin-upgrade notice (D21) has its own node,
 [plugin-upgrade-notice.md](plugin-upgrade-notice.md). The install command that
 wires them is in
@@ -12,7 +12,8 @@ wires them is in
 - The session — **D14** user-facing SessionStart output goes on `systemMessage`
   · **D59** SessionStart moves no module; every advance is an explicit take or
   push · **D74** compose only where the edit happens; SessionStart reports and
-  writes no index
+  writes no index · **D83** SessionStart bounds every fetch it makes, and the
+  hooks never wait on a remote unbounded
 
 ---
 
@@ -60,8 +61,9 @@ has no memory submodule entry, no-op.
 8. **Report the tiers.** A tier that is not checked out is cloned at the commit
    the memory store's index records. A tier holding an unfinished merge is left
    as it is and named. Every other mounted tier stays on the commit it is on,
-   its remote `live` is fetched read-only, and it reports its position against
-   the authority's `live` and any recorded commit no repository holds
+   its remote `live` is fetched read-only, bounded by `GITLORE_FETCH_TIMEOUT`
+   (D83), and it reports its position against the authority's `live` and any
+   recorded commit no repository holds
    ([publishing-divergence.md](publishing-divergence.md),
    [unresolvable-pin.md](unresolvable-pin.md)). A tier advances only through
    `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported by
@@ -154,10 +156,10 @@ own matcher group of `hooks.json`, so the script never runs on `resume` or
 `worktree-drift.sh` warns when an in-process worktree switch has moved the
 session's cwd away from the repo whose memory is redirected. See D15.
 
-## Decisions — D14, D59, D74
+## Decisions — D14, D59, D74, D83
 
 Why the wiring above has this shape: what SessionStart says to whom, and why it
-moves memory nowhere and writes no index.
+moves memory nowhere, writes no index and bounds its fetches.
 
 **D14 — User-facing SessionStart output on `systemMessage`**
 
@@ -217,7 +219,8 @@ and local `live` otherwise. The table, the lines and the fetch-failure arms are
 in [publishing-divergence.md](publishing-divergence.md) (D76). A remote's git
 stderr can carry `remote:` lines the remote chose, so it rides the user's
 channel only and the agent's context gets a fixed sentence saying the user has
-it.
+it. A fetch that times out reports `timed out after <n>s` in place of git's
+reason (D83).
 
 **D74 — Compose only where the edit happens; SessionStart reports and writes no
 index**
@@ -266,7 +269,36 @@ leaves those lines out, because they are not stale. The tier stage's "could not
 be checked out" notice is its report, on both channels: the agent's line says
 the tier's facts are not available in this session and its index lines stay.
 
+**D83 — SessionStart bounds every fetch it makes; the hooks never wait on a
+remote unbounded**
+
+`SessionStart` earns its place by telling the user to merge or push, and it
+cannot answer which without asking the remote, so it fetches. A remote that is
+slow or prompts for credentials must not stall the session, so each fetch it
+makes, memory's and each tier's, runs under a timeout in seconds from
+`GITLORE_FETCH_TIMEOUT`, default 5 (an empty, non-numeric or zero value reads as
+5). A fetch past it is killed with its process group, `SessionStart` completes,
+and the store's could-not-fetch report says `timed out after <n>s`; the module's
+position is then read against local `live`. My human partner: "sessionstart is
+useful because it tells us to merge or push and it cannot answer this question
+without checking remotes so maybe set a small timeout and report timed out".
+
+`SessionStart` fetches each store once per run, and the pin-guard yield checks
+in its diagnostics reuse that outcome, so one slow remote costs one timeout. The
+`PostToolBatch` pass runs no fetch: it decides the yield from the refs as last
+fetched (internal `GITLORE_NO_FETCH`), since it runs after every batch of edits
+and a network wait there is paid by the agent's every turn. `gitlore-commit` and
+`gitlore-compose` fetch each tier at most once per run, unbounded unless
+`GITLORE_FETCH_TIMEOUT` is exported.
+
 ## Rejected alternatives
+
+**Deciding from last-fetched state only, at `SessionStart`.** The merge or push
+hint is the report's value, and it is a function of the remote's `live`; refs
+last fetched may be days old and name the wrong act.
+
+**An unbounded fetch in a hook.** A slow or prompting remote stalls every
+session start (D83).
 
 **Composing at `SessionStart`.** A store that arrives with an index off its
 composition was changed outside a batch. Composing it at session start repairs

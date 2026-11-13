@@ -35,12 +35,13 @@ state to resolve and publish, not as a fault to prevent.
 `SessionStart` moves no module (D59). A module is the memory store or a tier. It
 clones one that is not materialized, at the commit memory records
 (`submodule update --init`, so "clone the repo and run claude" works), fetches
-read-only, and reports; every report carries a directive that works when
-followed, and nothing is fixed silently. A store is detached; one attached to a
-branch breaks a precondition that install and the mount establish and gets no
-handling. A missing local `live` is normal on a fresh clone. SessionStart makes
-memory's from `HEAD`; a tier's is not made there, and the tier reads as `live`
-at `HEAD` until a push, a memory commit or `/gitlore:resolve` makes it.
+read-only, once, under a timeout (`GITLORE_FETCH_TIMEOUT` seconds, default 5;
+D83), and reports; every report carries a directive that works when followed,
+and nothing is fixed silently. A store is detached; one attached to a branch
+breaks a precondition that install and the mount establish and gets no handling.
+A missing local `live` is normal on a fresh clone. SessionStart makes memory's
+from `HEAD`; a tier's is not made there, and the tier reads as `live` at `HEAD`
+until a push, a memory commit or `/gitlore:resolve` makes it.
 
 | State | Report |
 |---|---|
@@ -78,9 +79,12 @@ store says only that it is dirty, since a take will not move a dirty `HEAD`.
 
 A failed fetch keeps its could-not-fetch line, with git's reason in front of the
 position line, on the user channel only because git's stderr can carry text the
-remote chose; the agent gets a fixed sentence saying the user has it. A tier
-that fails its fetch reports its position like memory does instead of its fetch
-alone. No remote adds no line.
+remote chose; the agent gets a fixed sentence saying the user has it. A fetch
+that outlives the timeout is killed and its line says `timed out after <n>s` in
+place of git's reason: memory's on both channels, since the text holds nothing
+the remote chose, a tier's on the user channel. A tier that fails its fetch
+reports its position like memory does instead of its fetch alone. No remote adds
+no line.
 
 The pin takes no part: a parent `git pull` over unpublished memory reads as
 diverged, and over none as behind. Being ahead of the pin says nothing, so

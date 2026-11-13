@@ -184,6 +184,17 @@ fi
 # Remove the retired store gate's pre-commit wrapper and hooksDir mirror (D70).
 gitlore_retire_store_gates "$mempath"
 
+# Every fetch this run makes is bounded by GITLORE_FETCH_TIMEOUT seconds
+# (gitlore_fetch_bounded), and each store is fetched once: the memo file is a
+# private mktemp file the subshells share, removed on exit, where the tier stage
+# records its fetch outcome for the yield checks to reuse.
+case "${GITLORE_FETCH_TIMEOUT:-}" in ''|*[!0-9]*|0) GITLORE_FETCH_TIMEOUT=5 ;; esac
+if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
+  trap 'rm -f "$GITLORE_FETCH_MEMO"' EXIT
+else
+  GITLORE_FETCH_MEMO=""
+fi
+
 report_memory_position "$mempath"
 
 # Root index repair. A store can arrive with no `MEMORY.md` at all: an install

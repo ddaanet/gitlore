@@ -209,13 +209,16 @@ one included, not one mid-merge, not one beside its pin otherwise — whichever
 store is the dirty one, and the guard passes over them, in the commit,
 `gitlore-compose` and the `PostToolBatch` pass alike. The refusal and the yield
 read the same predicate, so they agree on the state. The commit and compose
-scripts fetch each tier's `live` at most once per process, the outcome kept in a
-memo directory the entry script creates and removes; `/gitlore:merge` keeps its
-own fetches. The pass projects nothing into a yielded tier, since its carrier
-holds rewords and deletions root has not taken, and the orphan report skips it,
-since the take composes its lines. The commit reads the set before any tier
-commits, stages no yielded tier as its commit lands, keeps it out of memory's
-`add -A`, and prints, per tier:
+scripts and `SessionStart` fetch each tier's `live` at most once per process,
+the outcome kept in a memo file the entry script creates and removes;
+`SessionStart` bounds its fetches by `GITLORE_FETCH_TIMEOUT` (default 5
+seconds), the commit and compose scripts only when the user exports it, and the
+`PostToolBatch` pass runs no fetch and reads the refs as last fetched (D83);
+`/gitlore:merge` keeps its own fetches. The pass projects nothing into a yielded
+tier, since its carrier holds rewords and deletions root has not taken, and the
+orphan report skips it, since the take composes its lines. The commit reads the
+set before any tier commits, stages no yielded tier as its commit lands, keeps
+it out of memory's `add -A`, and prints, per tier:
 `tier '<tier>' is checked out off the commit the memory store records for it, so this commit recorded root's own changes and left the tier unrecorded. Run /gitlore:merge next, which takes the tier and records it.`
 The commit records less than the stores hold, never more, so the approved
 summary still covers it, and the gitlink stays root's true record of what it has

@@ -59,7 +59,7 @@ gitlore_module_position() {
 # Args: $1 = memory worktree path.
 report_memory_position() {
   local mempath="$1" dirty=0 head live auth n unit remote_url fetch_err remote="" fetched=1
-  local position tip rc out crossing pin mid=0
+  local position tip rc out crossing pin timed_out mid=0
   gitlore_store_mid_merge "$mempath" && mid=1
   if [ "$mid" -eq 1 ]; then
     report_memory_mid_merge "$mempath"
@@ -75,17 +75,26 @@ report_memory_position() {
   # with git's own reason, ahead of the position line.
   remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
   if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
-    if fetch_err=$(git -C "$mempath" fetch -q origin live 2>&1); then
+    rc=0
+    gitlore_fetch_bounded "$mempath" -q origin live || rc=$?
+    fetch_err="$GITLORE_FETCH_OUT"
+    if [ "$rc" -eq 0 ]; then
       remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) || remote=""
     else
       case "$fetch_err" in
         *"couldn't find remote ref"*) ;;
         *)
           fetched=0
-          # git's stderr can carry text the remote chose (`remote: …` lines), so
-          # it goes to the user only; the agent's context gets the fixed sentence.
-          add_report_each "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')" \
-            "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; the user has git's message."
+          if [ "$rc" -eq 124 ]; then
+            timed_out="gitlore: could not fetch memory's remote 'live' (timed out after ${GITLORE_FETCH_TIMEOUT}s), so upstream memory is unknown."
+            add_report_each "$timed_out" "$timed_out"
+          else
+            # git's stderr can carry text the remote chose (`remote: …` lines),
+            # so it goes to the user only; the agent's context gets the fixed
+            # sentence.
+            add_report_each "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')" \
+              "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; the user has git's message."
+          fi
           ;;
       esac
     fi

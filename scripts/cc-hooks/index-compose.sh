@@ -20,6 +20,10 @@ source "$PLUGIN_ROOT/scripts/lib/index-sync.sh"
 # only reacts to Write and Edit lets the root index and a carrier drift apart
 # silently. The stamp is this hook's own copy — the sync hook consumes a
 # different file, so neither has to run first.
+
+# The yield check reads each tier's remote ref as last fetched: this hook runs
+# no fetch (gitlore_tier_fetch_memoized).
+export GITLORE_NO_FETCH=1
 payload=$(cat)   # the stamp is the trigger; the payload is read below for agent_id alone
 
 gitlore_cd_project_root || exit 0   # the launch repo, never the session cwd (see util.sh)
