@@ -213,13 +213,13 @@ behind remote (D49). It clones a module that is not materialized, which moves
 nothing that exists.
 
 **The report.** Each module's position is read against the authority's `live`,
-the remote's when the fetch brought it and local `live` otherwise, and is
-reported in the one line of D84, with the position table and the fetch-failure
-arms, in [publishing-divergence.md](publishing-divergence.md). A remote's git
-stderr can carry `remote:` lines the remote chose, so it rides the user's
-channel only and the agent's context gets a fixed sentence saying the user has
-it. A fetch that times out reports `timed out after <n>s` in place of git's
-reason (D83).
+the remote's when the fetch brought it and local `live` where there is no remote
+`live`, a failed fetch giving `unreachable` in its place, and is reported in the
+one line of D84, with the position table and the fetch-failure arms, in
+[publishing-divergence.md](publishing-divergence.md). A remote's git stderr can
+carry `remote:` lines the remote chose, so it rides the user's channel only and
+the agent's context gets a fixed sentence saying the user has it. A fetch that
+times out reports `timed out after <n>s` in place of git's reason (D83).
 
 **D74 — Compose only where the edit happens; SessionStart reports and writes no
 index**
@@ -278,12 +278,12 @@ makes, memory's and each tier's `live` and the rewrite record, runs under a
 timeout in seconds from `GITLORE_FETCH_TIMEOUT`, default 5 (a value that is not
 a positive integer reads as 5). A fetch past it is killed with its process
 group, `SessionStart` completes, and the store's could-not-fetch report says
-`timed out after <n>s`; the module's position is then read against local `live`,
-and the line lists the store `unreachable` (D84). My human partner:
-"sessionstart is useful because it tells us to merge or push and it cannot
-answer this question without checking remotes so maybe set a small timeout and
-report timed out". The `submodule update --init` that clones a store not
-materialized is not bounded, since a clone outlasts a fetch.
+`timed out after <n>s`; the store's local position is not read, and the line
+lists it `unreachable` (D84). My human partner: "sessionstart is useful because
+it tells us to merge or push and it cannot answer this question without checking
+remotes so maybe set a small timeout and report timed out". The
+`submodule update --init` that clones a store not materialized is not bounded,
+since a clone outlasts a fetch.
 
 `SessionStart` fetches each store's `live` once per run, and the pin-guard yield
 checks in its diagnostics reuse that outcome. The `PostToolBatch` pass runs no

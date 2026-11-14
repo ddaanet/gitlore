@@ -20,7 +20,7 @@
 #
 # A tier whose local `live` strictly contains its HEAD is taken with
 # /gitlore:merge, not composed: composing first dirties the tier and the take
-# refuses. The merge report then stands in for the compose report.
+# refuses. No compose report is printed for it: the session line names the command.
 # Args: $1 = memory worktree path.
 report_store_diagnostics() {
   local mempath="$1" tier tierpath ahead="" problems pending rc=0 held=0

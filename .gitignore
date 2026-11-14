@@ -13,3 +13,5 @@
 # a gate input, it would move every hash.
 __pycache__/
 /.mcp.json
+.DS_Store
+._.DS_Store

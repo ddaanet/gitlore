@@ -61,10 +61,10 @@ describe the preparation: a mid-merge module reports the notice alone.
 
 After a successful fetch, each module compares what it holds locally, `HEAD` and
 local `live`, with the authority's `live`, not with the pin. The authority is
-the remote's `live` when the fetch brought it, and local `live` otherwise, which
-covers no remote, a failed fetch and a remote with no `live` yet. The table
-stands against local `live` too, memory and tier alike
-(`gitlore_module_position`).
+the remote's `live` when the fetch brought it, and local `live` where there is
+no remote or the remote has no `live` yet. The table stands against local `live`
+too, memory and tier alike (`gitlore_module_position`). A store whose fetch
+failed gets no position: the line lists it `unreachable`.
 
 | Local against the authority's `live` | Word in the line | Command |
 |---|---|---|
