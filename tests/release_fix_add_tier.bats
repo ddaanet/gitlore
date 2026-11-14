@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # scripts/add-tier.sh — the clean-store check that licenses D71's canned commit
 # sees every untracked file whatever the user's status config, and a mount into
-# a memory store holding a prepared merge is refused before anything is written.
+# a memory store, or a mounted tier, holding a prepared merge is refused before anything is written.
 # Each @test is its own subshell; per-test exports are consumed within that same
 # test, so SC2030/SC2031 are false positives here.
 # shellcheck disable=SC2030,SC2031
@@ -10,6 +10,8 @@ bats_require_minimum_version 1.5.0
 load helpers/setup
 load helpers/fixtures
 load helpers/tier-fixtures
+load helpers/divergence-fixtures
+load helpers/tier-divergence
 load helpers/add-tier
 
 STAGED_PHRASE="left staged for the next gitlore:commit"
@@ -93,4 +95,61 @@ assert_nothing_mounted() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"/gitlore:resolve"* ]]
   assert_nothing_mounted
+}
+
+# A mounted tier left mid-merge the way production leaves it: its live branch
+# moved, a local tier fact committed, and the merge gate prepared the merge.
+make_mid_merge_tier() {
+  make_parent_with_memory
+  mount_tier_at_live ddaanet
+  set_tier_manifest ddaanet
+  advance_branch_with_file memory/ddaanet live other.md body "sideways" live
+  echo "- [org fact](f.md) — ours" >> memory/ddaanet/MEMORY.md
+  gitlore_compose memory >/dev/null
+  commit_sections "memory: record the org fact"
+  merge_gate || true
+  [ -n "$(git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD)" ]
+}
+
+# Capture what the refusal must leave alone, then check it after the run.
+snapshot_memory_root() {
+  cp memory/.gitlore-tiers "$BATS_TEST_TMPDIR/tiers.before"
+  cp memory/.gitmodules "$BATS_TEST_TMPDIR/modules.before"
+  git -C memory status --porcelain > "$BATS_TEST_TMPDIR/status.before"
+}
+
+assert_second_tier_refused() {
+  [[ "$output" == *"/gitlore:resolve"* ]]
+  [[ "$output" == *"merge"* ]]
+  [[ "$output" != *"mounted at"* ]]
+  [ ! -e memory/second ]
+  cmp memory/.gitlore-tiers "$BATS_TEST_TMPDIR/tiers.before"
+  cmp memory/.gitmodules "$BATS_TEST_TMPDIR/modules.before"
+  git -C memory status --porcelain > "$BATS_TEST_TMPDIR/status.after"
+  cmp "$BATS_TEST_TMPDIR/status.after" "$BATS_TEST_TMPDIR/status.before"
+  git -C memory/ddaanet rev-parse -q --verify MERGE_HEAD >/dev/null
+}
+
+@test "add-tier: a mounted tier holding a prepared merge refuses a mount and names /gitlore:resolve" {
+  make_mid_merge_tier
+  bare=$(make_tier_remote second)
+  write_intent "mode=mount" "name=second" "url=$bare"
+  snapshot_memory_root
+
+  run bash "$ADD_TIER" < "$INTENT"
+  [ "$status" -ne 0 ]
+  assert_second_tier_refused
+}
+
+@test "add-tier: a mounted tier holding a prepared merge refuses a create before any remote is written" {
+  make_mid_merge_tier
+  git init -q --bare "$TMP_REPO/.new-tier.git"
+  write_intent "mode=create" "name=second" "url=$TMP_REPO/.new-tier.git" \
+    "description=Second tier"
+  snapshot_memory_root
+
+  run bash "$ADD_TIER" < "$INTENT"
+  [ "$status" -ne 0 ]
+  assert_second_tier_refused
+  [ -z "$(git -C "$TMP_REPO/.new-tier.git" for-each-ref)" ]
 }

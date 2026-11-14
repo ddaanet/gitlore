@@ -72,10 +72,11 @@ mempath=$(gitlore_memory_path)
 # A terminal on stdin means no intent was piped: refuse rather than block on it.
 if [ -t 0 ]; then no_intent; fi
 
-# A mount into a prepared merge would land in the merge's index and be lost or
-# carried by whichever way the merge ends.
-if gitlore_store_mid_merge "$mempath"; then
-  die "the memory store holds a merge that has not landed, so nothing was mounted. Run /gitlore:resolve to land or abort it, then add the tier again."
+# A mount beside a prepared merge, in the memory store or in any mounted tier,
+# would land in the merge's index (root) or be composed over a store whose merge
+# has not landed (tier), and be lost or carried by whichever way the merge ends.
+if gitlore_any_store_mid_merge "$mempath"; then
+  die "the memory store or a mounted tier holds a merge that has not landed, so nothing was mounted. Run /gitlore:resolve to land or abort it, then add the tier again."
 fi
 
 # Before any write: whether the store was clean (a clean store gets the canned
