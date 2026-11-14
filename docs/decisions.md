@@ -211,7 +211,8 @@ containment under the root as the whole test · refusing every `.claude`
 component · requiring exactly one index entry.
 
 **The session** — what SessionStart says to whom, and why it moves memory
-nowhere. [session.md](references/session.md)
+nowhere. [session-decisions.md](references/session-decisions.md); the wiring
+itself is in [session.md](references/session.md)
 
 - **D14** — user-facing SessionStart output goes on `systemMessage`
 - **D59** — SessionStart moves no module; every advance is an explicit take or

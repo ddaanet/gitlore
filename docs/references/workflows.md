@@ -111,4 +111,4 @@ Without it the first post-clone session dies on `fatal: 'live' is not a commit`.
 memory submodule worktree, detached at `live`. Uniform across
 `claude --worktree`, manual `git worktree add`, and the Desktop button (all
 start a session in the worktree). Why no `WorktreeCreate` hook is registered is
-in [session.md](session.md).
+in [session-decisions.md](session-decisions.md).

@@ -75,9 +75,9 @@ there puts the composed bytes in the merge commit itself rather than in a later,
 unrelated one. That pass is **up-only** (Rejected alternatives, below). The
 mount composes too, by calling the batch's reporting function directly.
 `SessionStart` and the commit path compose nothing: an index that is off there
-changed outside a batch, and is reported (D74, [session.md](session.md)) or
-aborts the commit (D50, [git-hooks.md](git-hooks.md)), and `gitlore-compose`
-clears it.
+changed outside a batch, and is reported (D74,
+[session-decisions.md](session-decisions.md)) or aborts the commit (D50,
+[git-hooks.md](git-hooks.md)), and `gitlore-compose` clears it.
 
 The mid-session trigger keys on
 **what changed, not on what the batch declared**: `index-sync-pre.sh` stamps the

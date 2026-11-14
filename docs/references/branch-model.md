@@ -21,10 +21,10 @@ walk it and the decisions about how it is carried out are in
 
 - **Session start.** SessionStart reports where HEAD stands against `live` and
   `origin/live`; it moves nothing (D59, with the report in
-  [session.md](session.md)). A local `live` ahead of HEAD reads `N behind`, and
-  `/gitlore:merge` is what checks HEAD out at it. A store attached to a named
-  branch breaks a precondition that install and the mount establish, and gets no
-  handling.
+  [session-decisions.md](session-decisions.md)). A local `live` ahead of HEAD
+  reads `N behind`, and `/gitlore:merge` is what checks HEAD out at it. A store
+  attached to a named branch breaks a precondition that install and the mount
+  establish, and gets no handling.
 - **After commit.** The commit path advances `live` immediately
   (`push . HEAD:live`, fast-forward only), so `live` holds every commit the
   moment it exists and memory is repo-global rather than branch-scoped. A commit
