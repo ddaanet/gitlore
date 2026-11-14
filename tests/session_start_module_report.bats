@@ -1,18 +1,17 @@
 #!/usr/bin/env bats
-# What a module reports at SessionStart (no-pin-loop plan, "What a module
+# What the session line says of each module (no-pin-loop plan, "What a module
 # reports"). A module is the root memory store or a tier. After a fetch, it
 # compares what it holds, HEAD and local `live`, with the authority's `live`:
 # the remote's when the fetch brought it, local `live` otherwise (no remote, a
-# failed fetch, a remote with no `live`). Strictly behind hints /gitlore:merge,
-# strictly ahead /gitlore:push, diverged /gitlore:push (and so a HEAD forked from
-# local `live`, whatever the authority, with a remote or without), and in sync
-# reads `in sync.` and nothing else. A failed fetch keeps its could-not-fetch line, ahead of the
-# table's line; a tier that fails its fetch reports its position like memory
-# does; no remote adds no line.
+# remote with no `live`). The result is one word in the session line: strictly
+# behind `N behind` (the line hints /gitlore:merge), strictly ahead `N ahead`
+# (/gitlore:push), diverged `diverged` (/gitlore:push; so a HEAD forked from
+# local `live`, whatever the authority, with a remote or without), level `in
+# sync`. A module whose fetch failed reads `unreachable` and adds no command; its
+# could-not-fetch line comes ahead of the session line. No remote adds no line.
 #
-# The plan fixes the hints and the token `in sync.`, not the sentences, so the
-# assertions match paragraphs of the systemMessage (the notices are joined by a
-# blank line) by command name, module name and that token.
+# The assertions match paragraphs of the systemMessage (the notices are joined by
+# a blank line) by command name, module name and position word.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
@@ -79,29 +78,29 @@ commit_on_head_and_live() {
 
 # --- memory: in sync -----------------------------------------------------------
 
-@test "memory level with its remote's live reports in sync. and nothing else" {
+@test "memory level with its remote's live reports in sync and nothing else" {
   published_memory
   session_start
-  want_sys 'in sync\.' '!tier'
+  want_sys '^gitlore: memory in sync$' '!tier'
   no_sys '/gitlore:(merge|push|resolve)'
   no_sys 'upstream|diverged|could not fetch'
 }
 
-@test "memory with a local-only remote reports in sync. against its own live, with no fetch line" {
+@test "memory with a local-only remote reports in sync against its own live, with no fetch line" {
   local_only_memory
   session_start
-  want_sys 'in sync\.'
+  want_sys '^gitlore: memory in sync$'
   no_sys '(?i)fetch'
   no_sys '/gitlore:(merge|push|resolve)'
 }
 
-@test "memory whose remote has no live branch yet reports in sync. against local live, with no fetch line" {
+@test "memory whose remote has no live branch yet reports in sync against local live, with no fetch line" {
   make_parent_with_memory
   # The stock fixture remote carries only `main`.
   run git -C memory ls-remote --exit-code origin refs/heads/live
   [ "$status" -ne 0 ]
   session_start
-  want_sys 'in sync\.'
+  want_sys '^gitlore: memory in sync$'
   no_sys '(?i)fetch|upstream'
 }
 
@@ -113,9 +112,9 @@ commit_on_head_and_live() {
   git -C memory merge-base --is-ancestor origin/live live
   [ "$(git -C memory rev-parse origin/live)" != "$(git -C memory rev-parse live)" ]
   session_start
-  want_sys '/gitlore:push'
-  want_ctx '/gitlore:push'
-  no_sys 'in sync\.'
+  want_sys '^gitlore: Run /gitlore:push \(memory 1 ahead\)$'
+  want_ctx '^gitlore: Run /gitlore:push \(memory 1 ahead\)$'
+  no_sys 'memory in sync'
   no_sys '/gitlore:(merge|resolve)'
 }
 
@@ -125,8 +124,8 @@ commit_on_head_and_live() {
   git -C memory merge-base --is-ancestor live HEAD
   [ "$(git -C memory rev-parse live)" != "$(git -C memory rev-parse HEAD)" ]
   session_start
-  want_sys '/gitlore:push'
-  no_sys 'in sync\.'
+  want_sys '^gitlore: Run /gitlore:push \(memory 1 ahead\)$'
+  no_sys 'memory in sync'
   no_sys '/gitlore:(merge|resolve)'
 }
 
@@ -141,9 +140,9 @@ commit_on_head_and_live() {
   # is still what a merge has to start from.
   head=$(git -C memory rev-parse HEAD)
   session_start
-  want_sys '/gitlore:push'
-  want_ctx '/gitlore:push'
-  no_sys 'in sync\.'
+  want_sys '^gitlore: Run /gitlore:push \(memory diverged\)$'
+  want_ctx '^gitlore: Run /gitlore:push \(memory diverged\)$'
+  no_sys 'memory in sync'
   # One directive for the one state: the remote being ahead does not add a
   # second hint that would take the user round the fork, and a divergence never
   # hints /gitlore:resolve.
@@ -159,37 +158,38 @@ commit_on_head_and_live() {
   local_only_memory
   make_diverged_head_vs_live
   session_start
-  want_sys '/gitlore:push'
-  want_ctx '/gitlore:push'
-  no_sys 'in sync\.'
+  want_sys '^gitlore: Run /gitlore:push \(memory diverged\)$'
+  want_ctx '^gitlore: Run /gitlore:push \(memory diverged\)$'
+  no_sys 'memory in sync'
   no_sys '/gitlore:(merge|resolve)'
   no_ctx '/gitlore:(merge|resolve)'
 }
 
 # --- memory: a failed fetch ----------------------------------------------------
 
-@test "a failed memory fetch keeps its could-not-fetch line with git's reason, before the table's line" {
+@test "a failed memory fetch keeps its could-not-fetch line with git's reason, before the session line" {
   make_parent_with_memory
   git -C memory remote set-url origin "$TMP_REPO/no-such-remote.git"
   session_start
   want_sys 'could not fetch.*no-such-remote'
-  want_sys 'in sync\.'
+  want_sys '^gitlore: memory unreachable$'
   [ "$(sys_offset 'could not fetch')" -ge 0 ]
-  [ "$(sys_offset 'could not fetch')" -lt "$(sys_offset 'in sync.')" ] || {
-    printf 'the table line comes before the fetch line; systemMessage:\n%s\n' "$(jq -r .systemMessage <<<"$output")" >&2
+  [ "$(sys_offset 'could not fetch')" -lt "$(sys_offset 'memory unreachable')" ] || {
+    printf 'the session line comes before the fetch line; systemMessage:\n%s\n' "$(jq -r .systemMessage <<<"$output")" >&2
     return 1
   }
 }
 
-@test "a failed memory fetch does not hide a position: live ahead of HEAD hints /gitlore:merge after the fetch line" {
+@test "a failed memory fetch makes memory unreachable even with live ahead of HEAD, and hints no command" {
   make_parent_with_memory
   advance_branch_with_file memory live EXTRA.md extra "Advance live"
   git -C memory remote set-url origin "$TMP_REPO/no-such-remote.git"
   session_start
   want_sys 'could not fetch'
-  want_sys '/gitlore:merge'
-  [ "$(sys_offset 'could not fetch')" -lt "$(sys_offset '/gitlore:merge')" ] || {
-    printf 'the merge hint comes before the fetch line; systemMessage:\n%s\n' "$(jq -r .systemMessage <<<"$output")" >&2
+  want_sys '^gitlore: memory unreachable$'
+  no_sys '/gitlore:(merge|push)'
+  [ "$(sys_offset 'could not fetch')" -lt "$(sys_offset 'memory unreachable')" ] || {
+    printf 'the session line comes before the fetch line; systemMessage:\n%s\n' "$(jq -r .systemMessage <<<"$output")" >&2
     return 1
   }
 }
@@ -210,11 +210,11 @@ tier_manifest_committed() {
   git -C memory push -q . HEAD:refs/heads/live
 }
 
-@test "a tier level with its remote's live reports in sync. under its own name" {
+@test "a tier level with its remote's live reports in sync under its own name" {
   tier_store
   session_start
-  want_sys "ddaanet" 'in sync\.'
-  no_sys "(?s)ddaanet.*/gitlore:(merge|push|resolve)"
+  want_sys '^gitlore: memory in sync; ddaanet in sync$'
+  no_sys '/gitlore:(merge|push|resolve)'
   no_sys 'could not fetch'
 }
 
@@ -226,9 +226,9 @@ tier_manifest_committed() {
   git -C memory commit -q -m "record the tier commit"
   git -C memory push -q . HEAD:refs/heads/live
   session_start
-  want_sys "ddaanet" '/gitlore:push'
-  no_sys "(?s)ddaanet.*in sync\."
-  no_sys "(?s)ddaanet.*/gitlore:(merge|resolve)"
+  want_sys '^gitlore: Run /gitlore:push \(memory in sync; ddaanet 1 ahead\)$'
+  no_sys 'ddaanet in sync'
+  no_sys '/gitlore:(merge|resolve)'
 }
 
 @test "a tier whose HEAD forked from its local live hints /gitlore:push" {
@@ -241,32 +241,33 @@ tier_manifest_committed() {
   run ! git -C memory/ddaanet merge-base --is-ancestor live HEAD
   run ! git -C memory/ddaanet merge-base --is-ancestor HEAD live
   session_start
-  want_sys "ddaanet" '/gitlore:push'
-  no_sys "(?s)ddaanet.*in sync\."
-  no_sys "(?s)ddaanet.*/gitlore:(merge|resolve)"
+  want_sys '^gitlore: Run /gitlore:push \(memory in sync; ddaanet diverged\)$'
+  no_sys 'ddaanet in sync'
+  no_sys '/gitlore:(merge|resolve)'
 }
 
-@test "a tier that fails its fetch reports its position after the fetch line, as memory does" {
+@test "a tier that fails its fetch reads unreachable after the fetch line, as memory does" {
   tier_store
-  # Local `live` one commit past HEAD: strictly behind the authority, which is
-  # local `live` once the fetch has failed.
+  # Local `live` one commit past HEAD: behind the authority, which is local
+  # `live` once the fetch has failed, but the position is `unreachable`.
   advance_branch_with_file memory/ddaanet live other.md body "ahead of HEAD" live
   mv "$TMP_REPO/.bare-ddaanet.git" "$TMP_REPO/.bare-ddaanet.git.gone"
   session_start
   want_sys "ddaanet" 'could not fetch'
-  want_sys "ddaanet" '/gitlore:merge'
-  [ "$(sys_offset "could not fetch")" -lt "$(sys_offset '/gitlore:merge')" ] || {
-    printf 'the tier hint comes before the fetch line; systemMessage:\n%s\n' "$(jq -r .systemMessage <<<"$output")" >&2
+  want_sys '^gitlore: memory in sync; ddaanet unreachable$'
+  no_sys '/gitlore:(merge|push)'
+  [ "$(sys_offset "could not fetch")" -lt "$(sys_offset 'ddaanet unreachable')" ] || {
+    printf 'the session line comes before the fetch line; systemMessage:\n%s\n' "$(jq -r .systemMessage <<<"$output")" >&2
     return 1
   }
 }
 
-@test "a tier in sync that fails its fetch keeps the fetch line and still reports in sync." {
+@test "a tier in sync that fails its fetch keeps the fetch line and reads unreachable" {
   tier_store
   mv "$TMP_REPO/.bare-ddaanet.git" "$TMP_REPO/.bare-ddaanet.git.gone"
   session_start
   want_sys "ddaanet" 'could not fetch'
-  want_sys "ddaanet" 'in sync\.'
+  want_sys '^gitlore: memory in sync; ddaanet unreachable$'
 }
 
 @test "a tier with no remote adds no fetch line and reports its position against local live" {
@@ -274,7 +275,7 @@ tier_manifest_committed() {
   git -C memory/ddaanet remote remove origin
   session_start
   no_sys "could not fetch"
-  want_sys "ddaanet" 'in sync\.'
+  want_sys '^gitlore: memory in sync; ddaanet in sync$'
 }
 
 @test "a tier whose remote has no live branch adds no fetch line and reports its position against local live" {
@@ -284,18 +285,17 @@ tier_manifest_committed() {
   [ "$status" -ne 0 ]
   session_start
   no_sys "could not fetch"
-  want_sys "ddaanet" 'in sync\.'
+  want_sys '^gitlore: memory in sync; ddaanet in sync$'
 }
 
-@test "memory and a tier both in sync each report in sync., and no module reports anything else" {
+@test "memory and a tier both in sync are named in one line, and no module reports anything else" {
   wire_memory_remote
   mount_tier_at_live ddaanet
   set_tier_manifest ddaanet
   tier_manifest_committed
   git -C memory push -q origin live
   session_start
-  want_sys "ddaanet" 'in sync\.'
-  want_sys '!ddaanet' '!tier' 'in sync\.'
+  want_sys '^gitlore: memory in sync; ddaanet in sync$'
   no_sys '/gitlore:(merge|push|resolve)'
   no_sys 'could not fetch|upstream|diverged|waiting'
 }

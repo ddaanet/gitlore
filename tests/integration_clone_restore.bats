@@ -102,6 +102,6 @@ teardown() {
   [ "$(git -C "$CLONE/memory" rev-parse HEAD)" = "$gitlink" ]
   [ ! -e "$CLONE/memory/LATER.md" ]
   # The commit waiting upstream is reported, with its count, on both channels.
-  echo "$output" | jq -e '.systemMessage | test("1 upstream.*/gitlore:merge")'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("1 upstream.*/gitlore:merge")'
+  echo "$output" | jq -e '.systemMessage | test("gitlore: Run /gitlore:merge \\(memory 1 behind\\)")'
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("gitlore: Run /gitlore:merge \\(memory 1 behind\\)")'
 }

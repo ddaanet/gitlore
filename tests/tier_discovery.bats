@@ -153,7 +153,7 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$remote_sha" ]
   [ "$(git -C memory rev-parse :ddaanet)" = "$gitlink" ]
-  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("ddaanet") and contains("in sync."))'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; . == "gitlore: memory in sync; ddaanet in sync")'
   # The refusal, with both shas and the remedy, on both channels.
   tierline="tier 'ddaanet' is checked out at ${remote_sha:0:12}, ahead of the commit the memory store records at ${gitlink:0:12}"
   echo "$output" | jq -e --arg l "$tierline" '.systemMessage | split("\n\n") | any(.[]; contains("cannot be composed until these are fixed") and contains($l) and contains("Run /gitlore:merge"))'
@@ -175,11 +175,8 @@ teardown() {
   push_tier_fact ddaanet >/dev/null
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has upstream facts waiting")'
-  # Behind the remote is a take: /gitlore:merge, which needs no push, and no
-  # offer of /gitlore:push.
-  echo "$output" | jq -e '.systemMessage | test("/gitlore:merge")'
-  echo "$output" | jq -e '.systemMessage | test("no push"; "i")'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; . == "gitlore: Run /gitlore:merge (memory in sync; ddaanet 1 behind)")'
+  # Behind the remote is a take: no offer of /gitlore:push.
   echo "$output" | jq -e '.systemMessage | test("/gitlore:push") | not'
   echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
 }
@@ -199,7 +196,7 @@ teardown() {
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("ddaanet") and contains("/gitlore:push"))'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; . == "gitlore: Run /gitlore:push (memory 1 ahead; ddaanet 1 ahead)")'
   echo "$output" | jq -e '.systemMessage | test("upstream facts waiting") | not'
   echo "$output" | jq -e '.systemMessage | test("has diverged") | not'
 }
@@ -220,7 +217,7 @@ teardown() {
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   # Diverged needs a publish: /gitlore:push, and no offer of /gitlore:merge.
-  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has diverged")'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; . == "gitlore: Run /gitlore:push (memory 1 ahead; ddaanet diverged)")'
   echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
   echo "$output" | jq -e '.systemMessage | test("/gitlore:merge") | not'
   echo "$output" | jq -e '.systemMessage | test("could not fetch") | not'
@@ -247,7 +244,7 @@ teardown() {
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("in sync."))'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; . == "gitlore: memory in sync")'
   echo "$output" | jq -e '.systemMessage | (contains("memory ready") or contains("detached at live")) | not'
 }
 
@@ -292,7 +289,8 @@ teardown() {
   export GITLORE_LAUNCHED=1
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  run -1 jq -e '.hookSpecificOutput.additionalContext | test("ddaanet")' <<< "$output"
+  # Only the session line names it
+  jq -e '.hookSpecificOutput.additionalContext | split("\n\n") | (any(.[]; . == "gitlore: memory in sync; ddaanet in sync")) and (map(select(startswith("gitlore: memory in sync") | not)) | any(.[]; test("ddaanet")) | not)' <<< "$output"
 }
 
 @test "SessionStart does not compose: a root-authored tier line stays out of the carrier" {
@@ -352,7 +350,7 @@ teardown() {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ghost
-  # Committed, so the store is clean and the position report is "in sync.".
+  # Committed: a clean store.
   commit_memory_state
   mkdir -p .claude
   printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
@@ -360,7 +358,7 @@ teardown() {
   before=$(cat memory/MEMORY.md memory/ddaanet/MEMORY.md; git -C memory status --porcelain)
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; contains("in sync.") and (contains("ghost") | not))'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; . == "gitlore: Run /gitlore:push (memory 1 ahead; ddaanet in sync)")'
   echo "$output" | jq -e '.systemMessage | (contains("memory ready") or contains("detached at live")) | not'
   # The report names the unmounted tier.
   echo "$output" | jq -e '.systemMessage | test("ghost")'

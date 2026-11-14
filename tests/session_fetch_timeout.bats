@@ -160,10 +160,10 @@ assert_hang_reaped() {
   done
 }
 
-# Each store's position line in state S when its remote answers.
-DDAANET_LINE="gitlore: tier 'ddaanet' has upstream facts waiting"
-ORG_LINE="gitlore: tier 'org' holds commits its remote 'live' lacks"
-MEMORY_LINE="gitlore: memory holds 1 commit its remote's live lacks"
+# The session line in state S when every remote answers, and when one hangs.
+SESSION_LINE="gitlore: Run /gitlore:push (memory 1 ahead; ddaanet 1 behind; org 1 ahead)"
+TIER_HANG_LINE="gitlore: Run /gitlore:push (memory 1 ahead; ddaanet unreachable; org 1 ahead)"
+MEMORY_HANG_LINE="gitlore: Run /gitlore:push (memory unreachable; ddaanet 1 behind; org 1 ahead)"
 
 # A line of $1 holding both literals $2 and $3.
 assert_line_with() {
@@ -180,7 +180,7 @@ assert_line_with() {
   make_fetch_log_git
   PATH="$TMP_REPO/stub:$PATH" run_session_start
   [ "$status" -eq 0 ]
-  [[ "$sys" == *"$DDAANET_LINE"* ]]
+  [[ "$sys" == *"$SESSION_LINE"* ]]
   [ "$(fetches_of ddaanet)" -eq 1 ]
   [ "$(fetches_of org)" -eq 1 ]
   [ "$(memory_fetches)" -eq 1 ]
@@ -197,8 +197,7 @@ assert_line_with() {
   assert_hang_reaped
   assert_line_with "$sys" "gitlore: tier 'ddaanet'" "timed out after 2s"
   # The other stores still report.
-  [[ "$sys" == *"$ORG_LINE"* ]]
-  [[ "$sys" == *"$MEMORY_LINE"* ]]
+  [[ "$sys" == *"$TIER_HANG_LINE"* ]]
 }
 
 @test "red: SessionStart bounds a hanging memory fetch, completes, and reports the timeout" {
@@ -209,8 +208,7 @@ assert_line_with() {
   [ "$elapsed" -lt "$HANG_SECONDS" ]
   assert_hang_reaped
   assert_line_with "$sys" "could not fetch memory's remote 'live'" "timed out after 2s"
-  [[ "$sys" == *"$DDAANET_LINE"* ]]
-  [[ "$sys" == *"$ORG_LINE"* ]]
+  [[ "$sys" == *"$MEMORY_HANG_LINE"* ]]
 }
 
 @test "red: GITLORE_FETCH_TIMEOUT defaults to 5 seconds" {
@@ -275,9 +273,7 @@ assert_line_with() {
   state_s
   run_session_start
   [ "$status" -eq 0 ]
-  [[ "$sys" == *"$DDAANET_LINE"* ]]
-  [[ "$sys" == *"$ORG_LINE"* ]]
-  [[ "$sys" == *"$MEMORY_LINE"* ]]
+  [[ "$sys" == *"$SESSION_LINE"* ]]
   [[ "$sys$ctx" != *"timed out"* ]]
   [[ "$sys$ctx" != *"could not fetch"* ]]
 }
@@ -315,7 +311,8 @@ STUB
   assert_hang_reaped
   assert_line_with "$sys" "rewrite record gitlore/rewrites could not be fetched" "timed out after 2s"
   assert_line_with "$ctx" "rewrite record gitlore/rewrites could not be fetched" "timed out after 2s"
-  [[ "$sys" == *"$DDAANET_LINE"* ]]
+  # Memory is left out of the line (its rewrite check could not run); the tiers stay.
+  [[ "$sys" == *"gitlore: Run /gitlore:push (ddaanet 1 behind; org 1 ahead)"* ]]
 }
 
 # --- red: gitlore-commit reads a timeout that is not a positive integer as unset --

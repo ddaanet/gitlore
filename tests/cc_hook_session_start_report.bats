@@ -20,7 +20,7 @@ load helpers/cc-hook-session-start
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   # The report: the count, the take command, on user and agent channels alike.
-  assert_report_on_both_channels '2 commits.*/gitlore:merge'
+  assert_report_on_both_channels 'gitlore: Run /gitlore:merge \(memory 2 behind\)'
   # Nothing moved: HEAD stays at the gitlink, live stays where it was, and the
   # working tree does not carry live's files.
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
@@ -82,12 +82,8 @@ load helpers/cc-hook-session-start
   live_before=$(git -C memory rev-parse live)
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_report_on_both_channels '2 upstream.*/gitlore:merge'
-  # Behind the remote is a fast-forward: the report says so, says a canned commit
-  # may be recorded, and says no push is needed, and does not offer /gitlore:push.
-  assert_report_on_both_channels 'fast-forward'
-  assert_report_on_both_channels 'canned'
-  assert_report_on_both_channels '(?i)no push'
+  assert_report_on_both_channels 'gitlore: Run /gitlore:merge \(memory 2 behind\)'
+  # Behind the remote is a take, not a publish: the line does not offer /gitlore:push.
   assert_lacks_on_both_channels '/gitlore:push'
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
@@ -105,7 +101,7 @@ load helpers/cc-hook-session-start
   live_before=$(git -C memory rev-parse live)
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_report_on_both_channels 'diverged.*/gitlore:push'
+  assert_report_on_both_channels 'gitlore: Run /gitlore:push \(memory diverged\)'
   assert_lacks_on_both_channels '/gitlore:merge'
   [ "$(git -C memory rev-parse HEAD)" = "$head_before" ]
   [ "$(git -C memory rev-parse live)" = "$live_before" ]
@@ -155,7 +151,7 @@ load helpers/cc-hook-session-start
   rm -f "$fetch_head"
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_report_on_both_channels '1 commit.*/gitlore:merge'
+  assert_report_on_both_channels 'gitlore: Run /gitlore:merge \(memory 1 behind\)'
   echo "$output" | jq -e '.systemMessage | test("fetch"; "i") | not'
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("fetch"; "i") | not'
   [ ! -e "$fetch_head" ]

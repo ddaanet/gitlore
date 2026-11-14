@@ -117,7 +117,7 @@ assert_session_start_did_nothing() {
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
   # D14 always-confirm: a clean start rides a success confirmation on systemMessage:
-  # the module's `in sync.` line, which replaces the old ready line...
+  # the session line listing memory in sync, which replaces the old ready line...
   assert_memory_in_sync "$output"
   # ...and it is NOT the launcher warning (shim ran).
   echo "$output" | jq -e '.systemMessage | test("direnv allow") | not'

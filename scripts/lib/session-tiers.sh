@@ -4,9 +4,9 @@
 # calls session-start.sh's own `add_sysmsg` and session-memory.sh's
 # `add_report` and `add_report_each`, and appends directly to session-start.sh's
 # `$protocol_ctx` and `$unresolvable_tiers` globals — none declared here, all
-# left for session-start.sh to emit or read. A position line that names an act
-# rides both channels (`add_report`, D59); `in sync.` and git's own text stay on
-# the user's.
+# left for session-start.sh to emit or read. Each tier adds its position word to
+# the session line (`gitlore_line_add`, session-memory.sh), which the hook emits
+# once on both channels (D59); git's own fetch text stays on the user's.
 
 # Report each tier submodule inside the memory store. Discovery is by
 # enclosure — every entry in memory/.gitmodules is a tier. SessionStart moves no
@@ -18,9 +18,9 @@
 # Taking an upstream commit is a merge, and it goes through /gitlore:merge or
 # /gitlore:push.
 #
-# Each tier is fetched read-only and reports its position against the
-# authority's `live` (gitlore_module_position), then any recorded commit that
-# neither it nor its remote holds.
+# Each tier is fetched read-only, reports any recorded commit that neither it
+# nor its remote holds, and adds its position against the authority's `live`
+# (gitlore_module_position) to the session line.
 #
 # Every git call is guarded: a broken tier must never abort the session.
 # Args: $1 = mempath.
@@ -65,7 +65,7 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
     # the remote tip is still in hand to compare against. Non-fatal — a session
     # must start whatever a tier's remote says — but NOT silent: a tier that has
     # quietly stopped talking to its remote is indistinguishable from one with
-    # nothing new, so the reason is reported ahead of the position line. No
+    # nothing new, so the reason is reported ahead of the session line. No
     # remote, or a remote with no `live` yet, reads against local `live`.
     auth=""
     fetched=1
@@ -94,6 +94,7 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
         esac
       fi
     fi
+    if [ "$fetched" -eq 0 ]; then gitlore_line_add "$tier" unreachable; continue; fi
     if [ -z "$auth" ]; then
       auth=$(git -C "$tierpath" rev-parse -q --verify refs/heads/live) \
         || auth=$(git -C "$tierpath" rev-parse -q --verify HEAD) || continue
@@ -113,12 +114,12 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
     position=$(gitlore_module_position "$tierpath" "$auth") || continue
     case "$position" in
       forked)
-        add_report "gitlore: tier '$tier' has a HEAD that diverged from its local 'live' — run /gitlore:push, which prepares the merge." ;;
+        gitlore_line_add "$tier" diverged ;;
       diverged)
         rc=0
         out=$(gitlore_rewrite_hit "$tierpath" "$auth" HEAD) || rc=$?
         case "$rc" in
-          0) add_report "gitlore: tier '$tier' has diverged from its remote 'live' — each side has commits the other lacks. Run /gitlore:push to reconcile and publish." ;;
+          0) gitlore_line_add "$tier" diverged ;;
           1)
             crossing=$(gitlore_cross_rewrite_script "$tierpath")
             add_report "gitlore: tier '$tier' holds commits its remote rewrote (record gitlore/rewrites: $out is superseded). Nothing was merged. Run $crossing to cross this tier." ;;
@@ -127,20 +128,10 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
           *)
             add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live', and its rewrite record gitlore/rewrites could not be fetched, so it cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" ;;
         esac ;;
-      ahead)
-        if [ "$(git -C "$tierpath" rev-parse -q --verify refs/heads/live)" = "$auth" ]; then
-          add_report "gitlore: tier '$tier' has a HEAD ahead of its local 'live' — run /gitlore:push."
-        else
-          add_report "gitlore: tier '$tier' holds commits its remote 'live' lacks — run /gitlore:push to publish them."
-        fi ;;
-      behind)
-        if [ "$(git -C "$tierpath" rev-parse -q --verify refs/heads/live)" = "$auth" ]; then
-          add_report "gitlore: tier '$tier' has commits on its local 'live' not checked out — run /gitlore:merge to take them."
-        else
-          add_report "gitlore: tier '$tier' has upstream facts waiting — its remote 'live' is ahead of this checkout. Run /gitlore:merge to take them; it needs no push."
-        fi ;;
+      ahead|behind)
+        gitlore_line_add "$tier" "$(gitlore_line_count "$tierpath" "$auth" "$position") $position" ;;
       *)
-        add_sysmsg "gitlore: tier '$tier' in sync." ;;
+        gitlore_line_add "$tier" "in sync" ;;
     esac
   done < <(gitlore_tier_paths "$mempath")
 }

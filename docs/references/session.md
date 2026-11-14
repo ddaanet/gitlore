@@ -48,9 +48,9 @@ has no memory submodule entry, no-op.
    `origin/live`, which may be ahead of the gitlink (D59).
 6. **Report where memory stands.** The retired store gate's `pre-commit` wrapper
    is removed from the memory store and each checked-out tier (D70).
-   `report_memory_position` states where it sits against the authority's `live`,
-   the remote's or else its own (D59, below). It moves nothing, detaches nothing
-   and is never fatal; the pass continues whatever it reports.
+   `report_memory_position` reads where it sits against the authority's `live`,
+   the remote's or else its own, for the position line (D84). It moves nothing,
+   detaches nothing and is never fatal; the pass continues whatever it reports.
 7. **Repair a missing root index.** A store with no `MEMORY.md` — an install
    seeded from an auto-memory dir that existed but held nothing committed an
    empty tree — gets the `# Memory Index` scaffold written back as an
@@ -62,10 +62,10 @@ has no memory submodule entry, no-op.
    the memory store's index records. A tier holding an unfinished merge is left
    as it is and named. Every other mounted tier stays on the commit it is on,
    its remote `live` is fetched read-only, bounded by `GITLORE_FETCH_TIMEOUT`
-   (D83), and it reports its position against the authority's `live` and any
-   recorded commit no repository holds
-   ([publishing-divergence.md](publishing-divergence.md),
-   [unresolvable-pin.md](unresolvable-pin.md)). A tier advances only through
+   (D83), and its position against the authority's `live` joins the position
+   line (D84, [publishing-divergence.md](publishing-divergence.md)), with any
+   recorded commit no repository holds reported on its own
+   ([unresolvable-pin.md](unresolvable-pin.md)). A tier advances only through
    `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported by
    name, never silently skipped, because a tier that stops talking to its remote
    looks exactly like one with nothing to say.
@@ -179,10 +179,10 @@ puts the model on the hot path against NFR1/D7.
 Every user-facing SessionStart notice rides `systemMessage`, accumulated into
 the single SessionStart JSON the hook writes to fd 3:
 
-- **Position reports** (D59) → `systemMessage`, and `additionalContext` too for
-  the ones that name an act. The hook exits 0 throughout: stdout JSON is parsed
-  only on exit 0, so a non-zero exit would discard the very message it was meant
-  to signal, and SessionStart's exit code is consumed by nothing.
+- **The position line** (D84) → `systemMessage` and `additionalContext`, the
+  same text. The hook exits 0 throughout: stdout JSON is parsed only on exit 0,
+  so a non-zero exit would discard the very message it was meant to signal, and
+  SessionStart's exit code is consumed by nothing.
 - **Clean success** → a brief confirmation (`memory ready`), per the chosen
   always-confirm behaviour.
 - **Launcher-not-redirected** warning → `systemMessage`; when present it leads
@@ -212,11 +212,10 @@ reports and `/gitlore:merge` takes (the local move is in
 behind remote (D49). It clones a module that is not materialized, which moves
 nothing that exists.
 
-**The report.** Each module's position against the authority's `live` is one
-line, on `systemMessage` and, where it names an act, on `additionalContext`
-(`add_report`); the authority is the remote's `live` when the fetch brought it
-and local `live` otherwise. The table, the lines and the fetch-failure arms are
-in [publishing-divergence.md](publishing-divergence.md) (D76). A remote's git
+**The report.** Each module's position is read against the authority's `live`,
+the remote's when the fetch brought it and local `live` otherwise, and is
+reported in the one line of D84, with the position table and the fetch-failure
+arms, in [publishing-divergence.md](publishing-divergence.md). A remote's git
 stderr can carry `remote:` lines the remote chose, so it rides the user's
 channel only and the agent's context gets a fixed sentence saying the user has
 it. A fetch that times out reports `timed out after <n>s` in place of git's
@@ -258,10 +257,10 @@ which composes nothing and has its own report
 ([unresolvable-pin.md](unresolvable-pin.md)). A tier off its pin is a rule
 problem the pass reports by name, except one the pin guard yields (D50), which
 the report and the orphan report pass over. A tier whose local `live` strictly
-contains its `HEAD` gets `/gitlore:merge` in place of `gitlore-compose`:
-composing first dirties the tier, and the take then refuses it. When the pass
-would change nothing, the orphan report runs instead, since a line the tier
-added changes nothing in a pass; it is reported and never refused.
+contains its `HEAD` has the pending report withheld, and the position line names
+the command: composing first dirties the tier, and the take then refuses it.
+When the pass would change nothing, the orphan report runs instead, since a line
+the tier added changes nothing in a pass; it is reported and never refused.
 
 A registered tier with no checkout does not hold the pending report back: a
 compose keeps its root lines and writes no carrier for it. The dangling report
@@ -279,11 +278,12 @@ makes, memory's and each tier's `live` and the rewrite record, runs under a
 timeout in seconds from `GITLORE_FETCH_TIMEOUT`, default 5 (a value that is not
 a positive integer reads as 5). A fetch past it is killed with its process
 group, `SessionStart` completes, and the store's could-not-fetch report says
-`timed out after <n>s`; the module's position is then read against local `live`.
-My human partner: "sessionstart is useful because it tells us to merge or push
-and it cannot answer this question without checking remotes so maybe set a small
-timeout and report timed out". The `submodule update --init` that clones a store
-not materialized is not bounded, since a clone outlasts a fetch.
+`timed out after <n>s`; the module's position is then read against local `live`,
+and the line lists the store `unreachable` (D84). My human partner:
+"sessionstart is useful because it tells us to merge or push and it cannot
+answer this question without checking remotes so maybe set a small timeout and
+report timed out". The `submodule update --init` that clones a store not
+materialized is not bounded, since a clone outlasts a fetch.
 
 `SessionStart` fetches each store's `live` once per run, and the pin-guard yield
 checks in its diagnostics reuse that outcome. The `PostToolBatch` pass runs no

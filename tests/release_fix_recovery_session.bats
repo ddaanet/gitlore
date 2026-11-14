@@ -165,16 +165,16 @@ tier_store() {
   git -C memory commit -q -m "record the tier commit"
   git -C memory push -q . HEAD:refs/heads/live
   session_start_over_store
-  [[ "$sys" == *"tier 'ddaanet'"*"/gitlore:push"* ]]
-  printf '%s\n' "$ctx" | grep -F "tier 'ddaanet'" | grep -qF '/gitlore:push' || {
+  [[ "$sys" == *"gitlore: Run /gitlore:push (memory in sync; ddaanet 1 ahead)"* ]]
+  printf '%s\n' "$ctx" | grep -qF 'gitlore: Run /gitlore:push (memory in sync; ddaanet 1 ahead)' || {
     printf 'the agent is not told the tier has commits to publish; additionalContext:\n%s\n' "$ctx" >&2
     return 1
   }
 }
 
-@test "a tier in sync says so to the user only" {
+@test "a tier in sync is listed on both channels, with no command" {
   tier_store
   session_start_over_store
-  [[ "$sys" == *"tier 'ddaanet' in sync."* ]]
-  [[ "$ctx" != *"tier 'ddaanet' in sync."* ]]
+  [[ "$sys" == *"gitlore: memory in sync; ddaanet in sync"* ]]
+  [[ "$ctx" == *"gitlore: memory in sync; ddaanet in sync"* ]]
 }

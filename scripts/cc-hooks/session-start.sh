@@ -197,6 +197,10 @@ else
   GITLORE_FETCH_MEMO=""
 fi
 
+# The session line names every store's position once, on both channels; the
+# memory and tier stages add to it and it is emitted after the tier stage.
+gitlore_line_stores=""
+gitlore_line_cmd=""
 report_memory_position "$mempath"
 
 # Root index repair. A store can arrive with no `MEMORY.md` at all: an install
@@ -224,6 +228,12 @@ fi
 # unresolvable in unresolvable_tiers, which the two reports below read.
 unresolvable_tiers=""
 gitlore_sync_nested_tiers "$mempath"
+if [ -n "$gitlore_line_stores" ]; then
+  case "$gitlore_line_cmd" in
+    push|merge) add_report "gitlore: Run /gitlore:$gitlore_line_cmd ($gitlore_line_stores)" ;;
+    *) add_report "gitlore: $gitlore_line_stores" ;;
+  esac
+fi
 
 # Store diagnostics (D74): the rule problems of the indexes and a pending
 # compose, reported after the tier stage and written nowhere. SessionStart composes
@@ -296,11 +306,10 @@ fi
 # nothing here for this file's `set -e` to trip on.
 #
 # Guarded on $GITLORE_RELAY_SYSMSG, deliberately NOT nested inside
-# `[ -n "$sysmsg" ]`: report_memory_position adds a line for every position a
-# store can be in, so $sysmsg is never empty by the time we reach here today —
-# but that is an accident of that function, not a contract this fold may lean
-# on. Conditioning on it would be behaviour-identical now and would silently
-# drop the relay the day a position stops reporting.
+# `[ -n "$sysmsg" ]`: the session line is on $sysmsg unless every store is left
+# out of it, so $sysmsg is not always empty or always set by the time we reach
+# here — a state this fold may not lean on. Conditioning on it would drop the
+# relay whenever no store reported.
 # Non-fatal: the relay is a backstop, never a reason a session fails to start.
 # jq has already parsed .claude/settings.json above — the hook exits when it
 # cannot — so the only failure left here is a malformed payload, and it costs

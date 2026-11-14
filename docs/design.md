@@ -215,7 +215,8 @@ on, is in
   (D43, D49, D52), `recall` (D18) and `memory-writing` (D47, D48, D69). Each is
   a skill rather than a command because each has an entry no user types.
 - **Claude Code hooks** — `SessionStart` reports and writes no index and moves
-  no module (D59, D74); the rest are single-purpose (D15, D21, D31, D51, D60).
+  no module (D59, D74, D84); the rest are single-purpose (D15, D21, D31, D51,
+  D60).
 - **Git hook and entry points** — `pre-push` publishes each tier then memory;
   `gitlore-commit` is the one commit path (D58, D70, D50) and `gitlore-push` the
   publish script (D16, D20).

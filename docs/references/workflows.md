@@ -58,9 +58,8 @@ bound for project memory.
 
 **Take without publishing**
 
-1. The user runs `/gitlore:merge`, or a session start reported commits on `live`
-   not checked out here, upstream memory commits, or a tier whose remote is
-   ahead.
+1. The user runs `/gitlore:merge`, or the session start line said
+   `Run /gitlore:merge`.
 2. The skill runs `gitlore-merge`.
 3. Each tier is taken first, then memory's own store, and root's index is
    written once at the end (D77 in [take-and-compose.md](take-and-compose.md)).

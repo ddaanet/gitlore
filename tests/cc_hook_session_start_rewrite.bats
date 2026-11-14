@@ -56,7 +56,7 @@ session_start() {
 @test "session start: record present, clone in fresh position — ordinary /gitlore:push divergence (control)" {
   mem_setup fresh
   session_start
-  assert_report_on_both_channels 'diverged from live.*/gitlore:push'
+  assert_report_on_both_channels 'gitlore: Run /gitlore:push \(memory diverged\)'
   assert_lacks_on_both_channels '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
   assert_channel_lacks .hookSpecificOutput.additionalContext 'cross-rewrite'
@@ -66,7 +66,7 @@ session_start() {
   mem_setup old
   git --git-dir="$TMP_REPO/.bare-memory.git" update-ref -d refs/heads/gitlore/rewrites
   session_start
-  assert_report_on_both_channels 'diverged from live.*/gitlore:push'
+  assert_report_on_both_channels 'gitlore: Run /gitlore:push \(memory diverged\)'
   assert_lacks_on_both_channels '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
   assert_channel_lacks .hookSpecificOutput.additionalContext 'cross-rewrite'
@@ -120,8 +120,7 @@ session_start() {
 @test "session start: a tier with a record but a fresh position — ordinary divergence names /gitlore:push (control)" {
   tier_setup fresh
   session_start
-  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has diverged from its remote")'
-  echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; test("^gitlore: Run /gitlore:push \\(.*ddaanet diverged\\)$"))'
   assert_channel_lacks .systemMessage '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
 }
@@ -130,8 +129,7 @@ session_start() {
   tier_setup old
   git --git-dir="$TMP_REPO/.bare-ddaanet.git" update-ref -d refs/heads/gitlore/rewrites
   session_start
-  echo "$output" | jq -e '.systemMessage | test("tier .ddaanet. has diverged from its remote")'
-  echo "$output" | jq -e '.systemMessage | test("/gitlore:push")'
+  echo "$output" | jq -e '.systemMessage | split("\n\n") | any(.[]; test("^gitlore: Run /gitlore:push \\(.*ddaanet diverged\\)$"))'
   assert_channel_lacks .systemMessage '/gitlore:merge'
   assert_channel_lacks .systemMessage 'cross-rewrite'
 }

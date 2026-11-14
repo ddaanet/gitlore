@@ -125,10 +125,9 @@ checkout, landed, staged, dead) is in
 ### The `merge` skill
 
 Take what every store's remote holds, and publish nothing. A skill for the same
-reasons `push` is: `/gitlore:merge` is the front door, but a session start that
-reported commits on `live` not checked out here, upstream memory commits or an
-upstream-ahead tier has to be able to reach it from context. The body makes one
-call — `gitlore-merge` — and reads the exit the same way.
+reasons `push` is: `/gitlore:merge` is the front door, but a session start line
+that says `Run /gitlore:merge` has to be able to reach it from context. The body
+makes one call — `gitlore-merge` — and reads the exit the same way.
 
 For the memory root only, the take opens with the local half: a `live` that
 strictly contains HEAD — commits another checkout of the store made — is checked

@@ -1,6 +1,6 @@
 ---
 name: merge
-description: Take the memory facts other repos have published — each mounted tier's remote, then memory's own — without publishing anything of this repo's. Use when the user runs /gitlore:merge, asks to take, pull, sync or catch up on shared memory, or when a session start reported commits on live not checked out here, upstream memory commits, or a tier with upstream facts waiting. Not for publishing — that is /gitlore:push — and not a substitute for `git pull` of project code.
+description: Take the memory facts other repos have published — each mounted tier's remote, then memory's own — without publishing anything of this repo's. Use when the user runs /gitlore:merge, asks to take, pull, sync or catch up on shared memory, or when a session start line says `Run /gitlore:merge`. Not for publishing — that is /gitlore:push — and not a substitute for `git pull` of project code.
 allowed-tools: ["Bash", "Skill"]
 ---
 

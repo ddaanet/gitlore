@@ -17,7 +17,7 @@ load helpers/cc-hook-session-start
 
 # Commit memory's tree and put its `live` on the commit, so the committed store
 # is level with its authority and not ahead of it (a module strictly ahead of its
-# live reports /gitlore:push, not in sync.).
+# live reports /gitlore:push, not in sync).
 commit_memory_at_live() {
   commit_memory_state || return 1
   git -C memory update-ref refs/heads/live HEAD
@@ -65,16 +65,15 @@ session_start_over_store() {
   [ "$(store_bytes)" = "$bytes_before" ]
 }
 
-@test "a composed store gets no diagnostic and each module reports in sync." {
+@test "a composed store gets no diagnostic and one line names both modules in sync" {
   composed_store
   session_start_over_store
   # Memory and the one tier are each in sync with the authority's live, and
   # that is all either says: no hint, no fetch line, no diagnostic.
-  [ "$(grep -c 'in sync\.' <<<"$sys")" -eq 2 ] || {
-    printf 'want one in sync. line per module (memory, ddaanet); systemMessage:\n%s\n' "$sys" >&2
+  [ "$(grep -c '^gitlore: memory in sync; ddaanet in sync$' <<<"$sys")" -eq 1 ] || {
+    printf 'want one line naming both modules in sync (memory, ddaanet); systemMessage:\n%s\n' "$sys" >&2
     return 1
   }
-  [[ "$sys" == *"ddaanet"*"in sync."* ]] || false
   [[ "$sys" != *"/gitlore:"* ]] || false
   [[ "$sys" != *"fetch"* ]] || false
   [[ "$ctx" != *"gitlore-compose"* ]] || false

@@ -65,11 +65,7 @@ $pending"
     fi
   done < <(gitlore_active_tiers "$mempath")
 
-  if [ -n "$ahead" ]; then
-    add_report "gitlore: these tiers hold commits on their local 'live' that the memory store has not taken. Run /gitlore:merge.
-$(printf '%s' "$ahead" | sed 's/^/  /')"
-    return 0
-  fi
+  [ -z "$ahead" ] || return 0
   add_report "gitlore: a compose pass would change these indexes:
 $pending
 Run gitlore-compose."
