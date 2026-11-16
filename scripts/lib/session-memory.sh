@@ -212,12 +212,16 @@ report_memory_mid_merge() {
   abort="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" abort-merge"
   # A merge the continuation cannot land as it stands — MERGE_HEAD cleared by a
   # checkout, or a marker whose preparation died before its briefing — goes to
-  # /gitlore:resolve, whose guard repairs both; the hook itself repairs nothing.
+  # the command that prepared it, whose guard repairs both: /gitlore:merge under
+  # the state's `publish: no` mark, which a repair must not publish past, and
+  # /gitlore:resolve otherwise. The hook itself repairs nothing.
   if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null \
      || ! jq -e 'has("changed_files")' "$statefile" >/dev/null 2>&1; then
-    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run /gitlore:resolve to repair and land it. To abort it and put memory back on the commit the merge started from, run:
+    local remedy=/gitlore:resolve
+    [ "$(jq -r '.publish // ""' "$statefile" 2>/dev/null)" = "no" ] && remedy=/gitlore:merge
+    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run $remedy to repair and land it. To abort it and put memory back on the commit the merge started from, run:
   $abort" \
-      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile. Do not commit memory or start another take over it. Run /gitlore:resolve to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
+      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile. Do not commit memory or start another take over it. Run $remedy to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
   $abort"
     return 0
   fi

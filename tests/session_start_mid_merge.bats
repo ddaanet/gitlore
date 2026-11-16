@@ -208,6 +208,39 @@ merge_fingerprint() {
   [ -z "$(git -C memory status --porcelain)" ]
 }
 
+# The report for a state file with no MERGE_HEAD names the command that repairs
+# it without surprise: /gitlore:merge for a merge /gitlore:merge prepared
+# (publish: no), whose repair does not publish; /gitlore:resolve otherwise.
+@test "SessionStart over a lost MERGE_HEAD on a merge /gitlore:merge prepared names /gitlore:merge and the abort command" {
+  root_merge_prepared_against_live
+  [ "$(jq -r '.publish // ""' "$statefile")" = "no" ]
+  git -C memory merge --abort
+  session_start_over_store
+  [[ "$ctx" == *"Run /gitlore:merge"* ]] || {
+    printf 'the repair command is not /gitlore:merge; additionalContext:\n%s\n' "$ctx" >&2
+    return 1
+  }
+  [[ "$sys" == *"Run /gitlore:merge"* ]]
+  [[ "$sys$ctx" != *"/gitlore:resolve"* ]]
+  [[ "$ctx" == *"abort-merge"* ]]
+}
+
+@test "SessionStart over a lost MERGE_HEAD on a merge with no publish mark still names /gitlore:resolve and the abort command" {
+  wire_memory_remote
+  make_diverged_head_vs_live
+  run bash "$PLUGIN_ROOT/scripts/resolve.sh"
+  [ "$status" -ne 0 ]
+  statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
+  [ -f "$statefile" ]
+  [ "$(jq -r '.publish // ""' "$statefile")" = "" ]
+  git -C memory merge --abort
+  session_start_over_store
+  [[ "$ctx" == *"Run /gitlore:resolve"* ]]
+  [[ "$sys" == *"Run /gitlore:resolve"* ]]
+  [[ "$sys$ctx" != *"/gitlore:merge"* ]]
+  [[ "$ctx" == *"abort-merge"* ]]
+}
+
 # An untracked file in nobody's way is not the restore's to touch: it stays,
 # and the abort lists nothing.
 @test "the abort leaves an untracked file a merger wrote where it is" {
