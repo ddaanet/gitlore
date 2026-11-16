@@ -82,7 +82,10 @@ already trusted) — as one step, then recomposes the root index. There is no
 separate manifest edit for you to make: the intent you gave already names the
 one tier being added, so there is nothing left to settle deliberately.
 
-Relay the script's report. It ends one of two ways:
+Relay the script's report. A report ending `add-tier failed — nothing was
+mounted` means the script refused before writing anything: relay the lines
+above it, the user fixes what they name, and then the script is run again.
+Otherwise it ends one of two ways:
 
 - It says the mount was **left staged** for the next `gitlore:commit` — the
   memory store held unapproved work before the call. Invoke the `gitlore:commit`
@@ -94,7 +97,7 @@ Relay the script's report. It ends one of two ways:
 
 Read the composition report:
 
-- **Refused** — the store is left untouched and the reason is named. Fix it,
+- **Refused** (the report says the tier was mounted) — the store is left untouched and the reason is named. Fix it,
   by hand, then retrigger composition with any edit to `memory/MEMORY.md` or
   `memory/.gitlore-tiers`. Do not run the script again: the tier is already
   mounted, and a second call refuses it.

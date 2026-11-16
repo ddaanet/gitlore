@@ -218,6 +218,7 @@ assert_pin_refusal() {
   [[ "$output" == *"is checked out at"* ]]
   [[ "$output" == *"/gitlore:merge"* ]]
   [[ "$output" == *"$1"* ]]
+  [[ "$output" == *"then add the tier again"* ]]
   [[ "$output" != *"mounted at"* ]]
   [[ "$output" != *"activated"* ]]
   assert_root_untouched
@@ -326,6 +327,7 @@ refuses_root_problem() {
   run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"$2"* ]]
+  [[ "$output" == *"then add the tier again"* ]]
   [[ "$output" != *"mounted at"* ]]
   [[ "$output" != *"activated"* ]]
   assert_root_untouched
@@ -371,6 +373,7 @@ refuses_root_problem() {
   run bash "$ADD_TIER" < "$INTENT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"duplicate pointer path"* ]]
+  [[ "$output" == *"then add the tier again"* ]]
   assert_root_untouched
   [ ! -s "$GH_MOCK_LOG" ]
   [ -z "$(git -C "$bare" for-each-ref)" ]
