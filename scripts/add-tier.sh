@@ -79,6 +79,13 @@ if gitlore_any_store_mid_merge "$mempath"; then
   die "the memory store or a mounted tier holds a merge that has not landed, so nothing was mounted. Run /gitlore:resolve to land or abort it, then add the tier again."
 fi
 
+# A tier off the commit the memory store records would refuse the compose after
+# the mount landed, leaving it half-made; the check's own lines carry the remedy.
+if ! pin_problems=$(gitlore_compose_check_pins "$mempath"); then
+  printf '%s\n' "$pin_problems" >&2
+  die "nothing was mounted: a mounted tier is off the commit the memory store records for it."
+fi
+
 # Before any write: whether the store was clean (a clean store gets the canned
 # commit below), and the compose baselines this run must account for. Untracked
 # files are listed whatever status.showUntrackedFiles says: the canned commit

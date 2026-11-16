@@ -240,7 +240,8 @@ instead and, after the mount, moves every baseline file equal to that state to
 the post-run state; a differing baseline belongs to another batch and is left
 alone, and none is created or deleted (`scripts/add-tier.sh`). Before any write
 it refuses, naming `/gitlore:resolve`, while the memory store or any mounted
-tier holds a merge that has not landed.
+tier holds a merge that has not landed, and naming `/gitlore:merge` while a
+mounted tier sits off the commit the memory store records for it.
 
 *The network and the sandbox (probe, Claude Code 2.1.316).* From the agent's
 command sandbox, `git submodule add` of a GitHub https url, `git submodule add`
