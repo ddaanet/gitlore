@@ -79,12 +79,7 @@ On approval, the sub-agent runs the continuation command. The merge commit's mes
 If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed` or `gitlore: these files still hold conflict markers, so the merge was not committed`, the merge did not land and stays prepared. Resume the sub-agent with `rejected:` followed by the problem lines or file names it quoted, and evaluate the new synthesis as before. If a re-synthesis draws the same line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
 
 The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
-- `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
-- `gitlore: memory merge prepared` — the merge landed and the local `live` advance after it, or the push of `live` to `origin`, prepared a fresh one. Go to **Loop**, which picks the new merge up; stopping here would strand the merge the triggering git operation needs.
-- `holds a merge state file but no MERGE_HEAD` — the prepared merge lost its `MERGE_HEAD`, and nothing was committed. The line ends by naming the command that repairs the state; run that one. `/gitlore:merge` named: run or return to `/gitlore:merge`, not **Loop**. `/gitlore:resolve` named: go to **Loop**. The repair prints a directive for the merge it still needs when one remains.
-- `gitlore: pushing '` … `failed, and not because of divergence` — the merge landed, but `live` was not advanced or not published. Send no `rejected:` and do not go to **Loop**: a rerun meets the same refusal, which no merge fixes. Go to **Summarize**, skipping **Resume commit**.
-- The continuation call was denied before it ran — no exit status, no `gitlore:` output. Nothing moved and the merge stays prepared with its synthesis staged. Do not run the continuation yourself and do not re-dispatch: a refusal is the user's to lift. Go to **Summarize**, skipping **Resume commit**.
-- Anything else with a non-zero status — the outcome is unrecognised. Go to **Summarize**, skipping **Resume commit**.
+Each route is in [turn-2-routes.md](references/turn-2-routes.md); read it before routing the report.
 
 ## Loop
 
