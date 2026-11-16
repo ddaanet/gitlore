@@ -98,9 +98,10 @@ The division of labour is D7's: the script decides, the agent writes prose.
    going back through the sub-agent (a second flavor can be waiting; the script
    gates every tier before memory, the order publishing keeps, so memory's
    pointer never goes out ahead of a tier it records), until it exits 0. A rerun
-   that exits non-zero with no directive is relayed, not repeated. The skill
-   then retries the original commit and tells the user which store was merged —
-   a tier is shared with other repositories, the project store is not.
+   that exits non-zero with no directive is relayed, not repeated; one holding a
+   pin line is handled as `pin-and-abort.md` says and skips the retry. Otherwise
+   the skill retries the original commit. It tells the user which store was
+   merged — a tier is shared with other repositories, the project store is not.
 
 **Memory's `live` reaches its remote only from memory's own gate, which runs
 last.** `check_store_gates` ends by pushing `live` to `origin`, and
