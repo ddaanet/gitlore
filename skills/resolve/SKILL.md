@@ -93,7 +93,7 @@ When `/gitlore:merge` invoked this skill, skip this step, whose bare run publish
 Otherwise, after the sub-agent exits, run `"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"` again to check for a second flavor. Its outcomes:
 - A directive: go to **Parse directive**.
 - Exit 0: the merge is resolved; go on to **Resume commit**.
-- Any other non-zero exit: handle the output as Entry mode does — a pin line goes to [pin-and-abort.md](references/pin-and-abort.md), anything else is surfaced verbatim — then go to **Summarize**, skipping **Resume commit**: memory is not resolved.
+- Any other non-zero exit: relay the output verbatim, a pin line as [pin-and-abort.md](references/pin-and-abort.md) says, then go on to **Resume commit**; `gitlore-commit` refuses on its own while a merge is still prepared.
 
 ## Resume commit
 

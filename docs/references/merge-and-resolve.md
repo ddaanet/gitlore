@@ -89,13 +89,17 @@ The division of labour is D7's: the script decides, the agent writes prose.
    name, and report any other non-zero outcome as unrecognised rather than
    landed. The last two both follow a landed merge: the fresh directive goes
    back through the loop, while the push failure ends in the summary.
-5. **The skill loops** until `resolve.sh` exits 0 (a second flavor can be
-   waiting; the script gates every tier before memory, the order publishing
-   keeps, so memory's pointer never goes out ahead of a tier it records), then
-   retries the original commit and tells the user which store was merged — a
-   tier is shared with other repositories, the project store is not. After a
-   continuation that printed `merged without publishing` it does not loop: a
-   bare `resolve.sh` run publishes, and the skill runs `/gitlore:merge` instead.
+5. **The skill loops** unless `/gitlore:merge` invoked it: a bare `resolve.sh`
+   run publishes, so under `/gitlore:merge` the skill returns to that skill's
+   reconcile rerun, which repairs or continues the merge without publishing, and
+   after a continuation that printed `merged without publishing` it runs
+   `/gitlore:merge` instead. Otherwise it reruns `resolve.sh`, each directive
+   going back through the sub-agent (a second flavor can be waiting; the script
+   gates every tier before memory, the order publishing keeps, so memory's
+   pointer never goes out ahead of a tier it records), until it exits 0. A rerun
+   that exits non-zero with no directive is relayed, not repeated. The skill
+   then retries the original commit and tells the user which store was merged —
+   a tier is shared with other repositories, the project store is not.
 
 **Memory's `live` reaches its remote only from memory's own gate, which runs
 last.** `check_store_gates` ends by pushing `live` to `origin`, and
