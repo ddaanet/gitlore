@@ -9,7 +9,7 @@ in [merge-and-resolve.md](merge-and-resolve.md); what `live` is and which side
 of a merge is authoritative are in [branch-model.md](branch-model.md). The
 one-line report of every store's position (D84) is argued in
 [session-decisions.md](session-decisions.md); the table of what a module
-reports, which it reads, stays here.
+reports, which it reads, is in [session.md](session.md).
 
 - Publishing — **D75** a push publishes each store as soon as it is ready, and
   `/gitlore:merge` is for incoming and publishes nothing · **D76** a divergence
@@ -32,66 +32,6 @@ Races are not routine, but they must be expected. Git is distributed, so another
 checkout can publish between any fetch and any push, and a divergence can appear
 during a run that began in sync. The design treats a divergence as an ordinary
 state to resolve and publish, not as a fault to prevent.
-
-## What a module reports
-
-`SessionStart` moves no module (D59). A module is the memory store or a tier. It
-clones one that is not materialized, at the commit memory records
-(`submodule update --init`, so "clone the repo and run claude" works), fetches
-read-only, once, under a timeout (`GITLORE_FETCH_TIMEOUT` seconds, default 5;
-D83), and reports; every report names a command that works when followed, and
-nothing is fixed silently. A store is detached; one attached to a branch breaks
-a precondition that install and the mount establish and gets no handling. A
-missing local `live` is normal on a fresh clone. SessionStart makes memory's
-from `HEAD`; a tier's is not made there, and the tier reads as `live` at `HEAD`
-until a push, a memory commit or `/gitlore:resolve` makes it.
-
-| State | Report |
-|---|---|
-| Not materialized | Cloned at its recorded commit; a failed checkout is named, and the agent is told the tier's facts are unavailable and its root lines stay |
-| Mid-merge | Tier: its notice alone, naming `/gitlore:resolve`. Memory: the command that lands the prepared merge and the one that aborts it, `resolve.sh continue-after-merge` and `abort-merge`; a merge with no `MERGE_HEAD`, or a state file without its briefing, names `/gitlore:resolve` and `abort-merge` instead |
-| Recorded commit no repository holds | The unresolvable-pin report ([unresolvable-pin.md](unresolvable-pin.md)) |
-| Local against the authority's `live` | The position line below |
-| Root's tier lines would change in a compose pass | The pending report, `gitlore-compose`; a tier off its pin is refused in it, naming `/gitlore:merge`, or yielded where that take refuses for uncommitted changes |
-| A tier's index holds a line root does not | The orphan report, reported and never refused |
-
-A prepared merge moved `HEAD` onto its authority, so a position read would
-describe the preparation: a mid-merge module reports the notice alone.
-
-### The position
-
-After a successful fetch, each module compares what it holds locally, `HEAD` and
-local `live`, with the authority's `live`, not with the pin. The authority is
-the remote's `live` when the fetch brought it, and local `live` where there is
-no remote or the remote has no `live` yet. The table stands against local `live`
-too, memory and tier alike (`gitlore_module_position`). A store whose fetch
-failed gets no position: the line lists it `unreachable`.
-
-| Local against the authority's `live` | Word in the line | Command |
-|---|---|---|
-| Strictly behind | `N behind` | `/gitlore:merge`, which fast-forwards and needs no push |
-| Strictly ahead | `N ahead` | `/gitlore:push` |
-| Diverged | `diverged` | `/gitlore:push`, which reconciles and publishes; a rewritten history instead leaves the store out of the line and names the crossing script ([history-rewrites.md](history-rewrites.md)) |
-| `HEAD` forked from local `live` | `diverged` | `/gitlore:push`, which prepares the merge, whatever the authority and with or without a remote |
-| In sync | `in sync` | none |
-
-When local `live` is itself the authority and `HEAD` is behind it, the store
-reads `N behind` and the line names `/gitlore:merge`, counting what `HEAD`
-lacks; a dirty memory store is listed the same way, and says only that it is
-dirty beside the line, since a take will not move a dirty `HEAD`.
-
-A failed fetch keeps its could-not-fetch message, with git's reason, ahead of
-the position line, on the user channel only because git's stderr can carry text
-the remote chose; the agent gets a fixed sentence saying the user has it. A
-fetch that outlives the timeout is killed and its message says
-`timed out after <n>s` in place of git's reason: memory's on both channels,
-since the text holds nothing the remote chose, a tier's on the user channel. The
-store is listed `unreachable` in the line in place of its local position. No
-remote adds no message.
-
-The pin takes no part: a parent `git pull` over unpublished memory reads as
-diverged, and over none as behind. Being ahead of the pin says nothing, so
-memory published before the parent commit that records it reads as in sync.
 
 The only exception to "a divergence names `/gitlore:push`" is a take that is a
 fast-forward plus the canned bookkeeping commit.

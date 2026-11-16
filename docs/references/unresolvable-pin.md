@@ -6,7 +6,7 @@ when a `SessionStart` or `/gitlore:resolve` report names a commit that no
 repository holds, or when changing a take, a compose or the revert. The take and
 compose it stops are in [take-and-compose.md](take-and-compose.md); the position
 report beside it is in
-[publishing-divergence.md](publishing-divergence.md).
+[session.md](session.md).
 
 - The pin — **D79** an unresolvable pin is an integrity error at every level:
   nothing composes over it and nothing is recorded under it; a tier gitlink is

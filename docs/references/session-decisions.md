@@ -3,7 +3,7 @@
 The decisions behind what every `SessionStart` does — D14, D59, D74, D83, D84.
 The wiring they argue for, step by step, is in [session.md](session.md). The
 table of what a module reports, which D84 reads, is in
-[publishing-divergence.md](publishing-divergence.md).
+[session.md](session.md).
 
 - The session — **D14** user-facing SessionStart output goes on `systemMessage`
   · **D59** SessionStart moves no module; every advance is an explicit take or
@@ -75,10 +75,10 @@ nothing that exists.
 the remote's when the fetch brought it and local `live` where there is no remote
 `live`, a failed fetch giving `unreachable` in its place, and is reported in the
 one line of D84, with the position table and the fetch-failure arms, in
-[publishing-divergence.md](publishing-divergence.md). A remote's git stderr can
-carry `remote:` lines the remote chose, so it rides the user's channel only and
-the agent's context gets a fixed sentence saying the user has it. A fetch that
-times out reports `timed out after <n>s` in place of git's reason (D83).
+[session.md](session.md#what-a-module-reports). A remote's git stderr can carry
+`remote:` lines the remote chose, so it rides the user's channel only and the
+agent's context gets a fixed sentence saying the user has it. A fetch that times
+out reports `timed out after <n>s` in place of git's reason (D83).
 
 **D74 — Compose only where the edit happens; SessionStart reports and writes no
 index**
