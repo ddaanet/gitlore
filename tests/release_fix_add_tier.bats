@@ -199,14 +199,9 @@ snapshot_pin_state() {
   git -C memory/ddaanet rev-parse HEAD > "$BATS_TEST_TMPDIR/tierhead.before"
 }
 
-# $1: a stable phrase of the pin state's refusal.
-assert_pin_refusal() {
-  [[ "$output" == *"ddaanet"* ]]
-  [[ "$output" == *"is checked out at"* ]]
-  [[ "$output" == *"/gitlore:merge"* ]]
-  [[ "$output" == *"$1"* ]]
-  [[ "$output" != *"mounted at"* ]]
-  [[ "$output" != *"activated"* ]]
+# The memory root as snapshot_pin_state found it: nothing mounted, written or
+# moved.
+assert_root_untouched() {
   [ ! -e memory/second ]
   cmp memory/.gitlore-tiers "$BATS_TEST_TMPDIR/tiers.before"
   cmp memory/.gitmodules "$BATS_TEST_TMPDIR/modules.before"
@@ -215,6 +210,17 @@ assert_pin_refusal() {
   [ "$(git -C memory rev-parse HEAD)" = "$(cat "$BATS_TEST_TMPDIR/head.before")" ]
   [ "$(git -C memory rev-parse :ddaanet)" = "$(cat "$BATS_TEST_TMPDIR/pin.before")" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$(cat "$BATS_TEST_TMPDIR/tierhead.before")" ]
+}
+
+# $1: a stable phrase of the pin state's refusal.
+assert_pin_refusal() {
+  [[ "$output" == *"ddaanet"* ]]
+  [[ "$output" == *"is checked out at"* ]]
+  [[ "$output" == *"/gitlore:merge"* ]]
+  [[ "$output" == *"$1"* ]]
+  [[ "$output" != *"mounted at"* ]]
+  [[ "$output" != *"activated"* ]]
+  assert_root_untouched
 }
 
 @test "add-tier: a mounted tier ahead of its pin, as resolve leaves it, refuses a mount" {
@@ -288,4 +294,84 @@ assert_pin_refusal() {
   [ "$status" -eq 0 ]
   [ -e memory/second/.git ]
   grep -qx second memory/.gitlore-tiers
+}
+
+# --- a problem the compose check already sees in the root, before the mount ---
+
+# One mutation per rule, applied to a committed, on-pin store with ddaanet
+# mounted. Each leaves the root dirty, the state add-tier meets today and then
+# half-lands on.
+break_root() {
+  pinned_store_with_tier
+  case "$1" in
+    unmounted) printf 'ghost\n' >> memory/.gitlore-tiers ;;
+    duplicate) seed_root_bullet extra.md "one"; seed_root_bullet extra.md "two" ;;
+    weld) printf -- '- [a](a.md) — one - [b](b.md) — two\n' >> memory/MEMORY.md ;;
+    interleaved)
+      seed_root_bullet a.md "one"
+      printf 'stray prose\n' >> memory/MEMORY.md
+      seed_root_bullet b.md "two" ;;
+    marker) printf '<<<<<<< ours\n' >> memory/MEMORY.md ;;
+    prefix) seed_root_bullet gone/x.md "stale" ;;
+  esac
+}
+
+# $1 = case, $2 = a stable phrase of that rule's message.
+refuses_root_problem() {
+  break_root "$1"
+  bare=$(make_tier_remote second)
+  write_intent "mode=mount" "name=second" "url=$bare"
+  snapshot_pin_state
+
+  run bash "$ADD_TIER" < "$INTENT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"$2"* ]]
+  [[ "$output" != *"mounted at"* ]]
+  [[ "$output" != *"activated"* ]]
+  assert_root_untouched
+}
+
+@test "add-tier: a manifest listing a tier that is not mounted refuses the mount" {
+  refuses_root_problem unmounted "which is not mounted in"
+}
+
+@test "add-tier: a duplicate pointer path in the root index refuses the mount" {
+  refuses_root_problem duplicate "duplicate pointer path"
+}
+
+@test "add-tier: a welded line in the root index refuses the mount" {
+  refuses_root_problem weld "welds two pointer bullets"
+}
+
+@test "add-tier: an interleaved non-bullet line in the root index refuses the mount" {
+  refuses_root_problem interleaved "interleaved non-bullet line"
+}
+
+@test "add-tier: a conflict marker in the root index refuses the mount" {
+  refuses_root_problem marker "holds a conflict marker"
+}
+
+@test "add-tier: a root index prefix naming no mounted tier refuses the mount" {
+  refuses_root_problem prefix "naming no mounted tier"
+}
+
+@test "add-tier: a root index problem refuses a create before gh or any remote is touched" {
+  break_root duplicate
+  isolate_home
+  install_gh_mock
+  export GH_MOCK_LOG="$BATS_TEST_TMPDIR/gh.log"
+  export GH_MOCK_STDOUT_API_USER="alice"
+  export GH_MOCK_REMOTE_URL="git@github.com:alice/second-memory.git"
+  bare="$TMP_REPO/.new-tier.git"
+  git init -q -b main --bare "$bare"
+  git config --global "url.$bare.insteadOf" "$GH_MOCK_REMOTE_URL"
+  write_intent "mode=create" "name=second" "description=Second tier"
+  snapshot_pin_state
+
+  run bash "$ADD_TIER" < "$INTENT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"duplicate pointer path"* ]]
+  assert_root_untouched
+  [ ! -s "$GH_MOCK_LOG" ]
+  [ -z "$(git -C "$bare" for-each-ref)" ]
 }

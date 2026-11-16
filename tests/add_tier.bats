@@ -86,7 +86,11 @@ load helpers/add-tier
 
 @test "add-tier: a second mount appends at the bottom, below an already-active tier" {
   make_parent_with_memory
+  # `existing` is really mounted and on its pin, so the compose check has
+  # nothing to refuse before the mount.
+  make_tier_in_memory existing
   set_tier_manifest existing
+  commit_memory_state
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 
@@ -102,7 +106,9 @@ load helpers/add-tier
   # last line bare (a hand edit, an agent Edit) must not have its entry welded
   # onto the next append — that silently drops both tiers from the manifest.
   make_parent_with_memory
+  make_tier_in_memory existing
   printf 'existing' > memory/.gitlore-tiers   # no trailing newline
+  commit_memory_state
   bare=$(make_tier_remote ddaanet)
   write_intent "mode=mount" "name=ddaanet" "url=$bare"
 

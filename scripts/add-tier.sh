@@ -79,11 +79,15 @@ if gitlore_any_store_mid_merge "$mempath"; then
   die "the memory store or a mounted tier holds a merge that has not landed, so nothing was mounted. Run /gitlore:resolve to land or abort it, then add the tier again."
 fi
 
-# A tier off the commit the memory store records would refuse the compose after
-# the mount landed, leaving it half-made; the check's own lines carry the remedy.
-if ! pin_problems=$(gitlore_compose_check_pins "$mempath"); then
-  printf '%s\n' "$pin_problems" >&2
-  die "nothing was mounted: a mounted tier is off the commit the memory store records for it."
+# Whatever the compose pass would refuse on the stores already mounted is
+# refused here, before the first write, in the pass's order; the checks' own
+# lines carry the remedy. Past the mount the same refusal leaves it half-made.
+refused=0
+compose_problems=$(gitlore_compose_check "$mempath") || refused=1
+pin_problems=$(gitlore_compose_check_pins "$mempath") || refused=1
+if [ "$refused" -ne 0 ]; then
+  printf '%s\n' "$compose_problems" "$pin_problems" | sed '/^$/d' >&2
+  die "nothing was mounted: the memory store is not in a state the compose accepts."
 fi
 
 # Before any write: whether the store was clean (a clean store gets the canned
