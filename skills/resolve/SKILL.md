@@ -81,14 +81,14 @@ If the sub-agent reports that the continuation exited 1 with `gitlore: the merge
 The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
 - `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
 - `gitlore: memory merge prepared` — the merge landed and the local `live` advance after it, or the push of `live` to `origin`, prepared a fresh one. Go to **Loop**, which picks the new merge up; stopping here would strand the merge the triggering git operation needs.
-- `holds a merge state file but no MERGE_HEAD` — the prepared merge lost its `MERGE_HEAD`, and nothing was committed. Go to **Loop**: the resolver repairs that state and re-emits the directive for the merge it still needs.
+- `holds a merge state file but no MERGE_HEAD` — the prepared merge lost its `MERGE_HEAD`, and nothing was committed. When `/gitlore:merge` invoked this skill, return to that skill: its reconcile rerun repairs the state without publishing, while **Loop**'s bare run publishes. Otherwise go to **Loop**: the resolver repairs the state, and prints a directive for the merge it still needs when one remains.
 - `gitlore: pushing '` … `failed, and not because of divergence` — the merge landed, but `live` was not advanced or not published. Send no `rejected:` and do not go to **Loop**: a rerun meets the same refusal, which no merge fixes. Go to **Summarize**, skipping **Resume commit**.
 - The continuation call was denied before it ran — no exit status, no `gitlore:` output. Nothing moved and the merge stays prepared with its synthesis staged. Do not run the continuation yourself and do not re-dispatch: a refusal is the user's to lift. Go to **Summarize**, skipping **Resume commit**.
 - Anything else with a non-zero status — the outcome is unrecognised. Go to **Summarize**, skipping **Resume commit**.
 
 ## Loop
 
-After the sub-agent exits, run `"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes; run `/gitlore:merge` instead.
+After the sub-agent exits, run `"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"` again to check for a second flavor. Read its exit as Entry mode's Standalone list does: a directive goes to **Parse directive**, and a non-zero exit with none is surfaced verbatim, then **Summarize**, and stops. Repeat until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes; run `/gitlore:merge` instead.
 
 ## Resume commit
 
