@@ -41,7 +41,8 @@ the git and decides (D7).
   (D75), and the session start line names `push` for any divergence and `merge`
   only for a fast-forward take (D76, D84), because an unpublished merge is
   redone at every upstream update
-  ([publishing-divergence.md](publishing-divergence.md)).
+  ([publishing-divergence.md](publishing-divergence.md), and for D84
+  [session-decisions.md](session-decisions.md)).
 - **Claude Code hooks** — `SessionStart` reports and writes no index and moves
   no module (D59, D74), and does the most work; it is also where a new
   worktree's memory worktree is created, lazily, so worktree support is uniform

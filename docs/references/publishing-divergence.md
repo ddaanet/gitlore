@@ -1,18 +1,19 @@
-# Publishing a divergence — decisions D75, D76, D84
+# Publishing a divergence — decisions D75, D76
 
 Why a divergence is published rather than carried, and what the position report
 hints because of it: a push publishes each store as soon as it is ready (D75),
 and the position line names `/gitlore:push` for any divergence, `/gitlore:merge`
-only for a take that is a fast-forward (D76), one line for every store (D84).
-The first two share one argument. The divergence path they sit on,
-`gitlore_reconcile_one` and the prepared merge, is in
-[merge-and-resolve.md](merge-and-resolve.md); what `live` is and which side of a
-merge is authoritative are in [branch-model.md](branch-model.md).
+only for a take that is a fast-forward (D76). The two share one argument. The
+divergence path they sit on, `gitlore_reconcile_one` and the prepared merge, is
+in [merge-and-resolve.md](merge-and-resolve.md); what `live` is and which side
+of a merge is authoritative are in [branch-model.md](branch-model.md). The
+one-line report of every store's position (D84) is argued in
+[session-decisions.md](session-decisions.md); the table of what a module
+reports, which it reads, stays here.
 
 - Publishing — **D75** a push publishes each store as soon as it is ready, and
   `/gitlore:merge` is for incoming and publishes nothing · **D76** a divergence
   names `/gitlore:push`; `/gitlore:merge` is named only for a fast-forward take
-  · **D84** SessionStart reports every store's position in one line
 
 ---
 
@@ -95,7 +96,7 @@ memory published before the parent commit that records it reads as in sync.
 The only exception to "a divergence names `/gitlore:push`" is a take that is a
 fast-forward plus the canned bookkeeping commit.
 
-## Decisions — D75, D76, D84
+## Decisions — D75, D76
 
 **D75 — A push publishes each store as soon as it is ready**
 
@@ -135,48 +136,6 @@ fast-forwards.
 
 A `HEAD` forked from local `live` is a divergence and hints `/gitlore:push` too,
 with or without a remote.
-
-**D84 — SessionStart reports every store's position in one line**
-
-One line, `gitlore: Run /gitlore:push (memory in sync; ddaanet diverged)`, or
-`gitlore: memory in sync; ddaanet in sync` when no command is named, goes out
-once on `systemMessage` and `additionalContext`, the same text, the all-in-sync
-form included. A line listing one store has no separator. It stands as its own
-paragraph on both channels and after any fetch-failure message of its run.
-Stores come in order: `memory`, then each tier by name in `.gitmodules` order,
-bare and unquoted.
-
-The words are a closed set: `in sync`, `N ahead`, `N behind`, `diverged`,
-`unreachable`, N never 0. `diverged` is position `forked` or `diverged` from
-`gitlore_module_position`. `N ahead` counts the commits the store holds, `HEAD`
-or local `live`, whichever is further, that the authority lacks. `N behind` is
-measured from the checkout: the commits of the authority that `HEAD` lacks, or
-when `HEAD` lacks none, those local `live` lacks, so a tier whose local `live`
-equals `origin/live` and is two commits ahead of its `HEAD` reads `2 behind`.
-`unreachable` is a failed fetch other than "couldn't find remote ref" or no
-remote; it replaces whatever the local position is and names no command, and its
-fetch-failure message keeps its text and channels.
-
-The command is `/gitlore:push` when any listed store is `N ahead` or `diverged`,
-else `/gitlore:merge` when any is `N behind`, else none. The rule is D76's taken
-over every listed store: any divergence is published.
-
-A store whose state has its own message and for which no push or merge is named
-is left out and keeps that message: a memory store holding a merge, a tier with
-an unfinished merge or that could not be checked out, a diverged store whose
-rewrite check hit a recorded rewrite or could not run. A store with a lost pin
-keeps its report and is listed with its position. With every store left out, no
-line is printed. `memory — uncommitted changes present.` stays beside the line.
-
-*One position line per store* (D59's form) names a command per store, and two
-stores can name different ones. *Hint wording that tells `HEAD` diverged from
-`live` from a divergence from the remote* (D76's text) is detail the command
-does not use: both name `/gitlore:push`. *A diagnostics paragraph telling the
-user to run `/gitlore:merge` for tiers whose local `live` is ahead of `HEAD`*
-could name a command other than the line's, so those tiers are counted
-`N behind` and the pending-compose report is withheld for them.
-*A status word carrying more than a position* (`dirty`, `mid-merge`) mixes
-states that name no push or merge into a set that decides the command.
 
 ## Rejected alternatives
 

@@ -1,19 +1,20 @@
-# Session decisions — D14, D59, D74, D83
+# Session decisions — D14, D59, D74, D83, D84
 
-The decisions behind what every `SessionStart` does — D14, D59, D74, D83. The
-wiring they argue for, step by step, is in [session.md](session.md). The
-position line (D84) is argued in
+The decisions behind what every `SessionStart` does — D14, D59, D74, D83, D84.
+The wiring they argue for, step by step, is in [session.md](session.md). The
+table of what a module reports, which D84 reads, is in
 [publishing-divergence.md](publishing-divergence.md).
 
 - The session — **D14** user-facing SessionStart output goes on `systemMessage`
   · **D59** SessionStart moves no module; every advance is an explicit take or
   push · **D74** compose only where the edit happens; SessionStart reports and
   writes no index · **D83** SessionStart bounds every fetch it makes, and the
-  `PostToolBatch` pass makes none
+  `PostToolBatch` pass makes none · **D84** SessionStart reports every store's
+  position in one line
 
 ---
 
-## Decisions — D14, D59, D74, D83
+## Decisions — D14, D59, D74, D83, D84
 
 Why the wiring in [session.md](session.md) has this shape: what SessionStart
 says to whom, and why it moves memory nowhere, writes no index and bounds its
@@ -150,6 +151,49 @@ fetch: it decides the yield from the refs as last fetched (internal
 there is paid by the agent's every turn. `gitlore-commit` and `gitlore-compose`
 fetch each tier at most once per run, unbounded unless `GITLORE_FETCH_TIMEOUT`
 is exported as a positive integer.
+
+**D84 — SessionStart reports every store's position in one line**
+
+One line, `gitlore: Run /gitlore:push (memory in sync; ddaanet diverged)`, or
+`gitlore: memory in sync; ddaanet in sync` when no command is named, goes out
+once on `systemMessage` and `additionalContext`, the same text, the all-in-sync
+form included. A line listing one store has no separator. It stands as its own
+paragraph on both channels and after any fetch-failure message of its run.
+Stores come in order: `memory`, then each tier by name in `.gitmodules` order,
+bare and unquoted.
+
+The words are a closed set: `in sync`, `N ahead`, `N behind`, `diverged`,
+`unreachable`, N never 0. `diverged` is position `forked` or `diverged` from
+`gitlore_module_position`. `N ahead` counts the commits the store holds, `HEAD`
+or local `live`, whichever is further, that the authority lacks. `N behind` is
+measured from the checkout: the commits of the authority that `HEAD` lacks, or
+when `HEAD` lacks none, those local `live` lacks, so a tier whose local `live`
+equals `origin/live` and is two commits ahead of its `HEAD` reads `2 behind`.
+`unreachable` is a failed fetch other than "couldn't find remote ref" or no
+remote; it replaces whatever the local position is and names no command, and its
+fetch-failure message keeps its text and channels.
+
+The command is `/gitlore:push` when any listed store is `N ahead` or `diverged`,
+else `/gitlore:merge` when any is `N behind`, else none. The rule is
+[D76](publishing-divergence.md)'s taken over every listed store: any divergence
+is published.
+
+A store whose state has its own message and for which no push or merge is named
+is left out and keeps that message: a memory store holding a merge, a tier with
+an unfinished merge or that could not be checked out, a diverged store whose
+rewrite check hit a recorded rewrite or could not run. A store with a lost pin
+keeps its report and is listed with its position. With every store left out, no
+line is printed. `memory — uncommitted changes present.` stays beside the line.
+
+*One position line per store* (D59's form) names a command per store, and two
+stores can name different ones. *Hint wording that tells `HEAD` diverged from
+`live` from a divergence from the remote* ([D76](publishing-divergence.md)'s
+text) is detail the command does not use: both name `/gitlore:push`. *A
+diagnostics paragraph telling the user to run `/gitlore:merge` for tiers whose
+local `live` is ahead of `HEAD`* could name a command other than the line's, so
+those tiers are counted `N behind` and the pending-compose report is withheld
+for them. *A status word carrying more than a position* (`dirty`, `mid-merge`)
+mixes states that name no push or merge into a set that decides the command.
 
 ## Rejected alternatives
 

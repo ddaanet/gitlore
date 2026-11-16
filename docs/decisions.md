@@ -51,13 +51,6 @@ merge is first parent. [branch-model.md](references/branch-model.md)
   fast-forward impossible, a tax on every later upstream update, and the push
   prepares the merge and publishes it
   ([publishing-divergence.md](references/publishing-divergence.md))
-- **D84** — SessionStart reports every store's position in one line,
-  `gitlore: Run <command> (memory in sync; ddaanet diverged)`, or with no
-  command `gitlore: memory in sync; ddaanet in sync`; the words are `in sync`,
-  `N ahead`, `N behind`, `diverged`, `unreachable`; the command is
-  `/gitlore:push` when any store is ahead or diverged, else `/gitlore:merge`
-  when any is behind, else none; `unreachable` replaces the local position and
-  names none; a store with its own message and no push or merge is left out
 - **D79** — an unresolvable pin, a recorded commit its repository lacks, is an
   integrity error at every level: nothing composes or is recorded over it; a
   tier gitlink is published by the checkout that recorded it or reverted whole
@@ -227,6 +220,13 @@ itself is in [session.md](references/session.md)
   store's `live` once and its yield checks reuse that outcome; the
   `PostToolBatch` pass runs no fetch; the `submodule update --init` clone of a
   store not materialized is not bounded
+- **D84** — SessionStart reports every store's position in one line,
+  `gitlore: Run <command> (memory in sync; ddaanet diverged)`, or with no
+  command `gitlore: memory in sync; ddaanet in sync`; the words are `in sync`,
+  `N ahead`, `N behind`, `diverged`, `unreachable`; the command is
+  `/gitlore:push` when any store is ahead or diverged, else `/gitlore:merge`
+  when any is behind, else none; `unreachable` replaces the local position and
+  names none; a store with its own message and no push or merge is left out
 
 *Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
 start · moving a tier at `SessionStart` · composing at `SessionStart` ·

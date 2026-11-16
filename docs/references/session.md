@@ -57,8 +57,8 @@ has no memory submodule entry, no-op.
    as it is and named. Every other mounted tier stays on the commit it is on,
    its remote `live` is fetched read-only, bounded by `GITLORE_FETCH_TIMEOUT`
    (D83), and its position against the authority's `live` joins the position
-   line (D84, [publishing-divergence.md](publishing-divergence.md)), with any
-   recorded commit no repository holds reported on its own
+   line (D84, [session-decisions.md](session-decisions.md)), with any recorded
+   commit no repository holds reported on its own
    ([unresolvable-pin.md](unresolvable-pin.md)). A tier advances only through
    `/gitlore:merge` or `/gitlore:push` (D43). An unfetchable tier is reported by
    name, never silently skipped, because a tier that stops talking to its remote
