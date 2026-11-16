@@ -2,7 +2,7 @@
 # A tier with no local `live` — every checkout that did not itself mount the
 # tier, since `submodule update --init` creates no branch — still publishes the
 # commit memory's pin names. A missing local `live` is made from `HEAD`
-# (docs/references/publishing-divergence.md), for a tier as for memory.
+# (docs/references/session.md), for a tier as for memory.
 #
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
 # shellcheck disable=SC2154
