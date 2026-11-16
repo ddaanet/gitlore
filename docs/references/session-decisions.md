@@ -74,7 +74,7 @@ nothing that exists.
 **The report.** Each module's position is read against the authority's `live`,
 the remote's when the fetch brought it and local `live` where there is no remote
 `live`, a failed fetch giving `unreachable` in its place, and is reported in the
-one line of D84, with the position table and the fetch-failure arms, in
+one line of D84, below; the position table and the fetch-failure arms are in
 [session.md](session.md#what-a-module-reports). A remote's git stderr can carry
 `remote:` lines the remote chose, so it rides the user's channel only and the
 agent's context gets a fixed sentence saying the user has it. A fetch that times

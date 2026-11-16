@@ -1,9 +1,9 @@
 # Session and hook wiring
 
 What every `SessionStart` does. The decisions that argue for that shape (D14,
-D59, D74, D83) are in [session-decisions.md](session-decisions.md). The hook
-wrapper files gitlore writes into the git common dir, and the decisions about
-where they live and how they are anchored (D5, D11), are in
+D59, D74, D83, D84) are in [session-decisions.md](session-decisions.md). The
+hook wrapper files gitlore writes into the git common dir, and the decisions
+about where they live and how they are anchored (D5, D11), are in
 [hook-wrappers.md](hook-wrappers.md). The mid-session plugin-upgrade notice
 (D21) has its own node, [plugin-upgrade-notice.md](plugin-upgrade-notice.md).
 The install command that wires them is in

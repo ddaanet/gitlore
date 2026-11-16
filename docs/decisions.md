@@ -66,14 +66,10 @@ single-agent resolve with a post-hoc context refresh · holding a repaired tier
 back until memory can record it · keeping a tier merge landed inside the
 pre-push hook unpublished · publishing from `/gitlore:merge` · hinting
 `/gitlore:merge` for a divergence · hinting `/gitlore:resolve` for a `HEAD`
-forked from local `live` · one position line per store · hint wording that tells
-a `HEAD` diverged from `live` from a divergence from the remote · a diagnostics
-paragraph naming `/gitlore:merge` for a tier whose `live` is ahead of `HEAD` · a
-status word carrying more than a position · a fallback base for the compose · a
-reset of memory's `live` past the commit that recorded a lost pin · reverting
-only the gitlink line · a command or a url change for the parent's pin · a
-healthy report over an unresolvable pin · a hand-rolled keep, drop or refuse
-list for the abort.
+forked from local `live` · a fallback base for the compose · a reset of memory's
+`live` past the commit that recorded a lost pin · reverting only the gitlink
+line · a command or a url change for the parent's pin · a healthy report over an
+unresolvable pin · a hand-rolled keep, drop or refuse list for the abort.
 
 **History rewrites** — what a rewritten store publishes, and what a clone on the
 old history does. [history-rewrites.md](references/history-rewrites.md)
@@ -232,7 +228,10 @@ itself is in [session.md](references/session.md)
 start · moving a tier at `SessionStart` · composing at `SessionStart` ·
 composing at the commit · splitting the compose pass for a read-only caller ·
 deciding from last-fetched state only at `SessionStart` · an unbounded fetch in
-a hook.
+a hook · one position line per store · hint wording that tells a `HEAD` diverged
+from `live` from a divergence from the remote · a diagnostics paragraph naming
+`/gitlore:merge` for a tier whose `live` is ahead of `HEAD` · a status word
+carrying more than a position.
 
 **Active recall** — why recall is a skill the agent runs itself, not a hook.
 [active-recall.md](references/active-recall.md)
