@@ -83,13 +83,13 @@ The division of labour is D7's: the script decides, the agent writes prose.
    merge. A state file with no `MERGE_HEAD` (a checkout cleared it) is refused
    before anything is committed, with a line naming `/gitlore:merge` when the
    state's publish mark is `no` and `/gitlore:resolve` otherwise, which repairs
-   the merge state; the sub-agent reports it as unrecognised, not landed. The
-   sub-agent and the skill route those lines, the merged-index and
-   conflict-marker refusals, a fresh `gitlore: memory merge prepared` and a
-   post-landing `gitlore: pushing '…' failed, and not because of divergence` by
-   name, and report any other non-zero outcome as unrecognised rather than
-   landed. The last two both follow a landed merge: the fresh directive goes
-   back through the loop, while the push failure ends in the summary.
+   the merge state. The sub-agent and the skill route those lines, the
+   merged-index and conflict-marker refusals, a fresh
+   `gitlore: memory merge prepared` and a post-landing
+   `gitlore: pushing '…' failed, and not because of divergence` by name, and
+   report any other non-zero outcome as unrecognised rather than landed. The
+   last two both follow a landed merge: the fresh directive goes back through
+   the loop, while the push failure ends in the summary.
 5. **The skill loops** unless `/gitlore:merge` invoked it: a bare `resolve.sh`
    run publishes, so under `/gitlore:merge` the skill returns to that skill's
    reconcile rerun, which repairs or continues the merge without publishing, and
