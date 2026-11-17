@@ -27,12 +27,13 @@ a git rejection string, a `2>/dev/null` in a file just opened, an empty
 attachment rather than a Read (`cc-memory-retrieval.md`); the gap is the same
 either way.
 
-**The whole mechanism is `skills/recall/SKILL.md`.** Three steps: decide from
-the index already in context with **no tool calls**, select at most five
-entries, then `Read` those bodies in a single batch. Nothing else — no request
-file, no hook, no ledger, no reset. The skill is invoked by the user, by the
-agent when it notices a trigger, or — the load-bearing case — by another skill
-at a checkpoint it prescribes.
+**The whole mechanism is `skills/recall/SKILL.md`.** Decide from the index
+already in context with **no tool calls**, matching the installed skills'
+descriptions — a second routing table, also in context — as well; select at most
+five entries; then `Read` those bodies, and load any matched skill, in a single
+batch. Nothing else — no request file, no hook, no ledger, no reset. The skill
+is invoked by the user, by the agent when it notices a trigger, or — the
+load-bearing case — by another skill at a checkpoint it prescribes.
 
 **Why the agent reads, rather than a hook reading for it.** No hook output field
 can inject a `tool_use` or force a `Read` — verified against the shipped binary
