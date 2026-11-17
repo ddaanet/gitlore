@@ -13,9 +13,9 @@ emits the block: no file watcher, no post-write pass.
 - **A `Bash` write never stamps** — a subprocess (`sed -i`, a `python3`
   heredoc) or Claude Code's in-process simulated `sed` edit alike.
 - **`originSessionId` is written only when the key is absent.** It names the
-  first session to write the file through one of the three tools: never the
-  last editor, and the creator only when the file was created that way. A
-  file written by `Bash` and later edited by the tool carries the editor's id.
+  first session to write the file through one of the three tools — the
+  creator only when the file was created that way. A file written by `Bash`
+  and later edited by the tool carries the editor's id.
 - **`modified:` is a lower bound.** Besides every `Bash` write, the stamper
   returns the content untouched — logging `not stamping provenance` or
   `not dating` at warn, or silently — when the file is not `.md`; its path is
@@ -31,11 +31,7 @@ emits the block: no file watcher, no post-write pass.
   stamped.
 
 To learn who last changed a memory file, read its git history, not
-`modified:`. Read `originSessionId` as reliably neither the last editor nor
-the creator. Before filing a frontmatter write against a tool, run
-`git log -S <field> -- <file>` in the store holding the file: it shows the
-commit where the field entered the file, and whether that predates the tool
-being blamed.
+`modified:`.
 
 Read from the Claude Code 2.1.261 bundle; the same stamper is in
 2.1.258–2.1.260.

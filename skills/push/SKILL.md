@@ -87,7 +87,4 @@ outcome. The command's output is the authoritative report.
 state: commits, the approval gate and tier merges work against local refs, and
 only memory's own publishing has nowhere to go. A `.gitmodules` url of
 `./.git/gitlore-placeholder` is the marker such an install is seeded with, not
-an unfinished migration. The parent's `git remote -v` tells the two readings
-apart: empty, report memory as local-only by design; listing a remote, relay
-the notice's `/gitlore:resolve` line as the way to share memory if it is meant
-to be.
+an unfinished migration.

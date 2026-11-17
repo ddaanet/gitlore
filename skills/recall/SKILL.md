@@ -20,11 +20,10 @@ decide from the line; the fact itself lives only in the file.
 The installed skills' descriptions loaded at session start too, and are a
 second routing table: decide from them the same way, with no tool call. Match
 the task against them as well as the index, and load a skill whose description
-names the moment at hand and whose body is not already in this context. Where
-a loaded skill and a memory read state the same fact differently, the skill is
-the maintained copy. A skill body costs more than a memory file, so load only
-a skill naming this moment, not every adjacent one. A loaded skill does not
-count toward the five bodies below.
+names the moment at hand and whose body is not already in this context. A
+skill body costs more than a memory file, so load only a skill naming this
+moment, not every adjacent one. A loaded skill does not count toward the five
+bodies below.
 
 ## 3. Select at most five
 
