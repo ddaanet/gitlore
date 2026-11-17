@@ -158,8 +158,8 @@ user's approved summary through `gitlore-commit` (the `gitlore:commit` skill), a
 the parent commit carrying the change it documents.
 
 Open [frontmatter-fields.md](references/frontmatter-fields.md) before reading a
-file's `modified:` or `originSessionId` as who changed it, or filing a
-frontmatter write against a tool.
+file's `modified:` as when it last changed, or filing a `metadata:` write
+against gitlore.
 
 ## 9. Arriving here at a gate, over facts already written
 
