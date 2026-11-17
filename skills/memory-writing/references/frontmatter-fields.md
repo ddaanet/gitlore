@@ -31,10 +31,11 @@ emits the block: no file watcher, no post-write pass.
   stamped.
 
 To learn who last changed a memory file, read its git history, not
-`modified:`. Read `originSessionId` as neither the last editor nor the
-creator. Before filing a frontmatter write against a tool, run
-`git log -S <field> -- <file>` in the store holding the file: it settles
-whether that tool ever wrote the field.
+`modified:`. Read `originSessionId` as reliably neither the last editor nor
+the creator. Before filing a frontmatter write against a tool, run
+`git log -S <field> -- <file>` in the store holding the file: it shows the
+commit where the field entered the file, and whether that predates the tool
+being blamed.
 
 Read from the Claude Code 2.1.261 bundle; the same stamper is in
 2.1.258–2.1.260.

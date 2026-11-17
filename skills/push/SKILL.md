@@ -85,9 +85,9 @@ outcome. The command's output is the authoritative report.
 
 `memory has no remote of its own` names a local-only install, a supported end
 state: commits, the approval gate and tier merges work against local refs, and
-only memory's own publishing has nowhere to go. Its `.gitmodules` url stays the
-`./.git/gitlore-placeholder` marker it was seeded with. Report it as such, not
-as an unfinished install or a pending migration. Local-only memory is worth
-raising only paired with a parent whose `git remote -v` lists a remote — and a
-store can be given a remote by hand while its parent has none, so read both
-before concluding either way.
+only memory's own publishing has nowhere to go. A `.gitmodules` url of
+`./.git/gitlore-placeholder` is the marker such an install is seeded with, not
+an unfinished migration. The parent's `git remote -v` tells the two readings
+apart: empty, report memory as local-only by design; listing a remote, relay
+the notice's `/gitlore:resolve` line as the way to share memory if it is meant
+to be.
