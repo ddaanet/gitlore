@@ -12,10 +12,8 @@ emits the block: no file watcher, no post-write pass.
 
 - **A `Bash` write never stamps** — a subprocess (`sed -i`, a `python3`
   heredoc) or Claude Code's in-process simulated `sed` edit alike.
-- **`originSessionId` is written only when the key is absent.** It names the
-  first session to write the file through one of the three tools — the
-  creator only when the file was created that way. A file written by `Bash`
-  and later edited by the tool carries the editor's id.
+- **`originSessionId` is written only when the key is absent**, so a stamp
+  never overwrites it.
 - **`modified:` is a lower bound.** Besides every `Bash` write, the stamper
   returns the content untouched — logging `not stamping provenance` or
   `not dating` at warn, or silently — when the file is not `.md`; its path is
