@@ -43,8 +43,14 @@ source "$PLUGIN_ROOT/scripts/lib/add-tier-url.sh"
 # of MEMORY.md. One EXIT trap covers both on every exit, including the die paths.
 seed=""
 pre_index=""
+# Fetch memo shared by the pre-check, the post-mount pass and the memory sync:
+# each tier is fetched at most once. Created here, not by gitlore_fetch_memo_init,
+# whose EXIT trap would replace cleanup.
+if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then :; else GITLORE_FETCH_MEMO=""; fi
+export GITLORE_FETCH_MEMO
 # shellcheck disable=SC2317  # reached only through the EXIT trap set below
 cleanup() {
+  [ -z "$GITLORE_FETCH_MEMO" ] || rm -f "$GITLORE_FETCH_MEMO"
   [ -z "$seed" ] || rm -rf "$seed"
   [ -z "$pre_index" ] || rm -f "$pre_index"
 }

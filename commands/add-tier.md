@@ -60,6 +60,10 @@ first call every host the mode reaches:
 - **create** without a `url=` — `api.github.com` and `github.com`.
 - **create** with a `url=` — the url's host and `api.github.com`.
 
+The pre-check also fetches the remote of each already-mounted tier with
+uncommitted work, so those tiers' hosts belong in `allowed_domains` too: a denied
+fetch reads as no arrivals.
+
 In a mode that ignores `allowed_domains`, a network denial is retried unsandboxed
 through the permission prompt. A denied call has moved nothing, so the retry is
 the same command.
@@ -82,18 +86,30 @@ already trusted) — as one step, then recomposes the root index. There is no
 separate manifest edit for you to make: the intent you gave already names the
 one tier being added, so there is nothing left to settle deliberately.
 
-Relay the script's report. A report ending `add-tier failed — nothing was
-mounted` means the script refused before writing anything: relay the lines
-above it, the user fixes what they name, and then the script is run again.
-Otherwise it ends one of two ways:
+Relay the script's report, then classify its ending:
 
-- It says the mount was **left staged** for the next `gitlore:commit` — the
-  memory store held unapproved work before the call. Invoke the `gitlore:commit`
-  skill to commit it, with a `== memory ==` section in the summary the user
-  approves.
-- Otherwise the mount is already committed under its canned message
-  (`mount <tier> tier from <url>`) and the parent's memory pointer is staged.
-  There is nothing to hand off.
+- **Refused** — the last line starts `gitlore: add-tier failed —`. What it names
+  is the remedy: relay the lines above it and the message, the user fixes what
+  they name, and then the script is run again. A refusal reached before the mount
+  starts (bad intent, an unusable url, a merge not landed, a pre-check line,
+  `gh` missing) wrote nothing in the store, though a create can already have made
+  its remote (see above). A refusal with no `mounted at` line that names
+  `submodule add`, `.gitmodules` or a tier path "is not a checkout" came after
+  the clone started: `<memory>/<name>` can exist and `.gitmodules` can be
+  staged. Hand the user the report with the path it names, and do not run the
+  script again until the user has cleared that path. A refusal after a
+  `gitlore: tier "<name>" mounted at` line (the mount's commit was refused, or
+  the manifest could not be staged) leaves the tier mounted: fix the cause the
+  message names, commit through `gitlore:commit`, and do not run the script
+  again.
+- **Mounted** — no `add-tier failed —` last line. It ends one of two ways:
+  - It says the mount was **left staged** for the next `gitlore:commit` — the
+    memory store held unapproved work before the call. Invoke the
+    `gitlore:commit` skill to commit it, with a `== memory ==` section in the
+    summary the user approves.
+  - Otherwise the mount is already committed under its canned message
+    (`mount <tier> tier from <url>`) and the parent's memory pointer is staged.
+    There is nothing to hand off.
 
 Read the composition report:
 
@@ -139,4 +155,7 @@ they resolve nowhere from another consumer, so strip them as part of the move.
 Tell the user the tier's name, its remote, its routing guidance, and where it
 now ranks. Any memory change made after the script returned is not in the
 mount's commit: commit it through the `gitlore:commit` skill, with a
-`== memory ==` section in the summary the user approves.
+`== <store> ==` section in the summary the user approves for every store the
+change touched — `== memory ==` for the store's own files, and one for each tier
+a triage `mv` or a stripped `[[link]]` dirtied, since the commit refuses a
+dirty tier that has no section of its own.
