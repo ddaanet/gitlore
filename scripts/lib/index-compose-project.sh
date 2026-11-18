@@ -50,6 +50,9 @@ gitlore_compose_down() {
   local root="$mempath/MEMORY.md"
   local line path tmpd b o t
 
+  # Every write below is checked: one that fails, a scratch disk filling
+  # mid-pass, fails the projection instead of shortening it, and the pass then
+  # leaves the carrier untouched.
   tmpd=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-compose-down.XXXXXX") || return 1
   local side
   for side in root carrier head; do
@@ -64,8 +67,8 @@ gitlore_compose_down() {
       path=$(gitlore_bullet_path "$line") || continue
       case "$path" in "$tier"/*) ;; *) continue ;; esac
       line=$(gitlore_bullet_deprefix "$line" "$tier") || continue
-      printf '%s\n' "$line" >> "$tmpd/root.bullets"
-      printf '%s\n' "${path#"$tier"/}" >> "$tmpd/root.paths"
+      printf '%s\n' "$line" >> "$tmpd/root.bullets" || { rm -rf "$tmpd"; return 1; }
+      printf '%s\n' "${path#"$tier"/}" >> "$tmpd/root.paths" || { rm -rf "$tmpd"; return 1; }
     done < "$root"
   fi
 
@@ -73,8 +76,8 @@ gitlore_compose_down() {
   if [ -f "$carrier" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
       path=$(gitlore_bullet_path "$line") || continue
-      printf '%s\n' "$line" >> "$tmpd/carrier.bullets"
-      printf '%s\n' "$path" >> "$tmpd/carrier.paths"
+      printf '%s\n' "$line" >> "$tmpd/carrier.bullets" || { rm -rf "$tmpd"; return 1; }
+      printf '%s\n' "$path" >> "$tmpd/carrier.paths" || { rm -rf "$tmpd"; return 1; }
     done < <(gitlore_index_part "$carrier" bullets)
   fi
 
@@ -82,7 +85,7 @@ gitlore_compose_down() {
   # leaves the list empty and makes every carrier line a keep.
   while IFS= read -r path; do
     case "$path" in "$tier"/*) ;; *) continue ;; esac
-    printf '%s\n' "${path#"$tier"/}" >> "$tmpd/head.paths"
+    printf '%s\n' "${path#"$tier"/}" >> "$tmpd/head.paths" || { rm -rf "$tmpd"; return 1; }
   done < <(gitlore_index_head_paths "$mempath")
 
   # A path root carries and the carrier lacks is root's insertion, whatever root
@@ -95,7 +98,7 @@ gitlore_compose_down() {
     if grep -qxF -- "$path" "$tmpd/root.paths" && ! grep -qxF -- "$path" "$tmpd/carrier.paths"; then
       continue
     fi
-    printf '%s\n' "$path" >> "$tmpd/head.kept"
+    printf '%s\n' "$path" >> "$tmpd/head.kept" || { rm -rf "$tmpd"; return 1; }
   done < "$tmpd/head.paths"
   mv "$tmpd/head.kept" "$tmpd/head.paths" || { rm -rf "$tmpd"; return 1; }
 
@@ -107,9 +110,9 @@ gitlore_compose_down() {
     o=$(grep -nxF -m1 -- "$path" "$tmpd/root.paths") || o=""
     t=$(grep -nxF -m1 -- "$path" "$tmpd/carrier.paths") || t=""
     if [ -n "$o" ]; then
-      sed -n "${o%%:*}p" "$tmpd/root.bullets"
+      sed -n "${o%%:*}p" "$tmpd/root.bullets" || { rm -rf "$tmpd"; return 1; }
     elif [ -n "$t" ] && [ "$b" = 0 ]; then
-      sed -n "${t%%:*}p" "$tmpd/carrier.bullets"
+      sed -n "${t%%:*}p" "$tmpd/carrier.bullets" || { rm -rf "$tmpd"; return 1; }
     fi
   done < <(gitlore_order_merge "$tmpd/head.paths" "$tmpd/root.paths" "$tmpd/carrier.paths")
 
@@ -179,6 +182,9 @@ gitlore_index_has_tier() {
 # Lines prefixed with a mounted but DORMANT tier are dropped: root does not
 # represent a dormant tier. They keep living in its carrier, and reactivating the
 # tier brings them back through the case above.
+#
+# Returns 1 when a block cannot be read or a line cannot be written, so the
+# caller leaves root untouched instead of writing a short block.
 gitlore_compose_root_bullets() {
   local mempath="$1" merged="${2:-}"
   local root="$mempath/MEMORY.md" active tier line path n
@@ -187,16 +193,19 @@ gitlore_compose_root_bullets() {
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     if [ -n "$merged" ] && n=$(gitlore_line_number "$tier" "$merged/tiers"); then
-      cat -- "$merged/$n"
+      cat -- "$merged/$n" || return 1
     elif [ -f "$mempath/$tier/MEMORY.md" ] && ! gitlore_index_has_tier "$root" "$tier"; then
       while IFS= read -r line || [ -n "$line" ]; do
         [ -n "$line" ] || continue
-        gitlore_bullet_reprefix "$line" "$tier" || continue
+        # A line that is no bullet is skipped; a bullet that cannot be written
+        # fails the block.
+        gitlore_bullet_path "$line" >/dev/null || continue
+        gitlore_bullet_reprefix "$line" "$tier" || return 1
       done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
     else
       while IFS= read -r line || [ -n "$line" ]; do
         path=$(gitlore_bullet_path "$line") || continue
-        case "$path" in "$tier"/*) printf '%s\n' "$line" ;; esac
+        case "$path" in "$tier"/*) printf '%s\n' "$line" || return 1 ;; esac
       done < <(gitlore_index_part "$root" bullets)
     fi
   done <<EOF
@@ -206,7 +215,7 @@ EOF
   while IFS= read -r line || [ -n "$line" ]; do
     path=$(gitlore_bullet_path "$line") || continue
     case "$path" in */*) continue ;; esac
-    printf '%s\n' "$line"
+    printf '%s\n' "$line" || return 1
   done < <(gitlore_index_part "$root" bullets)
 }
 
