@@ -45,7 +45,7 @@ by who invoked it: a push skill reruns itself by its own step, and a user whose
 Edits follow `craft:design-doc-writing`: an inverted decision's text is deleted,
 ids are never renumbered, the commit says why.
 
-- New **D85**: only push publishes; resolve lands locally. Rejected by name:
+- New **D86**: only push publishes; resolve lands locally. Rejected by name:
   "resolve publishes what it lands" and "a no-publish mark on the merge state".
 - **D75**: the clause that a tier merged inside a push publishes on landing is
   rewritten in place: the landing is local and the rerun push publishes it. Its
@@ -108,7 +108,7 @@ checkout.
    relaying the script's line. `turn-2-routes.md`, `unlanded-outcomes.md`, the
    push and merge skills and `agents/memory-merger.md` follow; the merger
    agent's remedy that no script emits is removed.
-5. **Design docs.** D85, the D75 rewrite and the node edits above.
+5. **Design docs.** D86, the D75 rewrite and the node edits above.
    `merge-and-resolve.md` is near its cap: if its edit does not shrink it, a
    verbatim split lands first as its own commit. `TODO.md` drops the no-publish
    residue and the tier notice lines.

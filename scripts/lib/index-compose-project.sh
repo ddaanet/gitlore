@@ -183,8 +183,8 @@ gitlore_index_has_tier() {
 # represent a dormant tier. They keep living in its carrier, and reactivating the
 # tier brings them back through the case above.
 #
-# Returns 1 when a read of its own fails, so the caller leaves root untouched
-# instead of writing a short block. Its lines go to stdout, which every caller
+# Returns 1 when the read of a merged tier block fails, so the caller leaves
+# root untouched instead of writing a short block. Its lines go to stdout, which every caller
 # captures, so an emit is not a write that can fail.
 gitlore_compose_root_bullets() {
   local mempath="$1" merged="${2:-}"
@@ -199,8 +199,7 @@ gitlore_compose_root_bullets() {
       while IFS= read -r line || [ -n "$line" ]; do
         [ -n "$line" ] || continue
         # A line that is no bullet is skipped.
-        gitlore_bullet_path "$line" >/dev/null || continue
-        gitlore_bullet_reprefix "$line" "$tier"
+        gitlore_bullet_reprefix "$line" "$tier" || continue
       done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
     else
       while IFS= read -r line || [ -n "$line" ]; do

@@ -12,9 +12,9 @@ load helpers/tier-fixtures
 # file reads fails, so the pass refuses with its existing message and leaves the
 # index as it was. A failure the producer survives with status 0 hands the
 # writer a short list, and the index loses lines silently: a scratch file on a
-# disk that fills mid-pass, a merged block that cannot be read. Their stdout
-# goes to a capturing caller, so an emit is not a write that can fail and none
-# is guarded.
+# disk that fills mid-pass, a merged block that cannot be read. Both producers'
+# stdout goes to a capturing caller, so an emit alone is not a write that can
+# fail; the guards that remain are on file reads and scratch writes.
 #
 # A failing write is injected by shadowing printf, sed or cat with a function
 # that fails one chosen call made directly from the function under test
@@ -108,8 +108,9 @@ assert_injected_failure() {
   assert_injected_failure printf
 }
 
-# Bullets are emitted in order, shared.md then second.md, each by one sed.
-@test "compose_down fails when emitting a bullet fails" {
+# Bullets are read back in order, shared.md then second.md, each by one sed of
+# the scratch file.
+@test "compose_down fails when reading a bullet from its scratch file fails" {
   tier_store_with_lines
   fail_call sed gitlore_compose_down 2 '*root.bullets'
   run --separate-stderr gitlore_compose_down memory ddaanet
@@ -143,7 +144,19 @@ assert_injected_failure() {
   [ "$status" -ne 0 ]
 }
 
-@test "lock-in: root_bullets adopts every carrier line when no write fails" {
+# The producer's failure, whatever its cause, reaches the pass as the existing
+# refusal.
+@test "a pass whose root producer fails leaves root untouched with the existing refusal" {
+  tier_store_with_lines
+  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
+  gitlore_compose_root_bullets() { return 1; }
+  run gitlore_compose memory
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"could not compose memory/MEMORY.md; it was left untouched"* ]]
+  command cmp "$BATS_TEST_TMPDIR/root.before" memory/MEMORY.md
+}
+
+@test "lock-in: root_bullets adopts every carrier line" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
   set_tier_manifest ddaanet
