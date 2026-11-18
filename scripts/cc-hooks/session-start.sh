@@ -191,11 +191,7 @@ gitlore_retire_store_gates "$mempath"
 # a positive integer leaves gitlore_fetch_bounded unbounded, so SessionStart,
 # which asks for a bound, replaces it with its default.
 gitlore_fetch_timeout_ok "${GITLORE_FETCH_TIMEOUT:-}" || GITLORE_FETCH_TIMEOUT=5
-if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
-  trap 'rm -f "$GITLORE_FETCH_MEMO"' EXIT
-else
-  GITLORE_FETCH_MEMO=""
-fi
+gitlore_fetch_memo_init
 
 # The session line names every store's position once, on both channels; the
 # memory and tier stages add to it and it is emitted after the tier stage.

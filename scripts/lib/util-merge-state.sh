@@ -154,12 +154,10 @@ gitlore_tier_fetch_memoized() {
   fi
   # The output is dropped because failure is an answer here, and the publish
   # that follows reports the same remote in its own words.
-  if gitlore_fetch_bounded "$tierpath" -q --no-recurse-submodules origin live; then
-    gitlore_fetch_memo_note ok "$tierpath"
-    return 0
-  fi
-  gitlore_fetch_memo_note failed "$tierpath"
-  return 1
+  local rc=0
+  gitlore_fetch_bounded "$tierpath" -q --no-recurse-submodules origin live || rc=$?
+  gitlore_fetch_memo_record "$rc" "$tierpath"
+  [ "$rc" -eq 0 ]
 }
 
 # Record in the fetch memo that the fetch of tier $2 ended `ok` or `failed` ($1),
@@ -168,6 +166,25 @@ gitlore_tier_fetch_memoized() {
 gitlore_fetch_memo_note() {
   local memo="${GITLORE_FETCH_MEMO:-}"
   [ -z "$memo" ] || printf '%s %s\n' "$1" "$2" >> "$memo" || true
+}
+
+# Record in the fetch memo the outcome of the fetch of tier $2 that exited $1:
+# `ok` for 0, `failed` for any other status.
+# Args: $1 = fetch exit status, $2 = tier worktree.
+gitlore_fetch_memo_record() {
+  if [ "$1" -eq 0 ]; then gitlore_fetch_memo_note ok "$2"; else gitlore_fetch_memo_note failed "$2"; fi
+}
+
+# Give the calling script its own fetch memo: each tier is fetched at most once
+# in this process. The memo file is a private mktemp file that the subshells the
+# script runs share, and is removed when it exits (the EXIT trap is set in the
+# calling shell). Without one, each tier is fetched on every check.
+gitlore_fetch_memo_init() {
+  if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
+    trap 'rm -f "$GITLORE_FETCH_MEMO"' EXIT
+  else
+    GITLORE_FETCH_MEMO=""
+  fi
 }
 
 # Run `git -C $1 fetch $2...`, bounded by GITLORE_FETCH_TIMEOUT seconds when that

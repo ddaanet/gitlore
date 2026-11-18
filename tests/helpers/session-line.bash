@@ -161,3 +161,24 @@ make_compose_pending() {
   seed_root_bullet "ddaanet/authored.md" "written in the root index"
   [ -n "$(gitlore_compose_pending memory)" ]
 }
+
+# Store $1's origin (a path under $TMP_REPO/memory, "memory" or "memory/<tier>")
+# becomes an ssh-style URL whose transport sleeps $HANG_SECONDS seconds. The
+# sleeper keeps git's stdin and stdout, so git waits on it as on a stalled
+# connection (with them closed git reads EOF and fails at once), and drops
+# stderr, so a sleeper surviving git holds no pipe the hook's caller reads.
+# GIT_SSH_VARIANT=ssh stops git probing the command with `-G` first, so each
+# fetch starts exactly one transport and records exactly one pid.
+make_hanging_remote() {
+  local store="$1"
+  mkdir -p "$BATS_TEST_TMPDIR/hang-bin"
+  cat > "$BATS_TEST_TMPDIR/hang-bin/ssh.sh" <<SCRIPT
+#!/bin/sh
+echo \$\$ >> "$HANG_PIDS"
+exec sleep $HANG_SECONDS 2>/dev/null
+SCRIPT
+  chmod 755 "$BATS_TEST_TMPDIR/hang-bin/ssh.sh"
+  export GIT_SSH_COMMAND="$BATS_TEST_TMPDIR/hang-bin/ssh.sh"
+  export GIT_SSH_VARIANT=ssh
+  git -C "$store" config remote.origin.url "ssh://hang.invalid/repo.git"
+}

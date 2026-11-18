@@ -42,11 +42,10 @@ gitlore_line_add() {
 # holds, HEAD or local `live` whichever is further, that the authority lacks.
 # Behind counts the authority's commits HEAD lacks, or when HEAD lacks none,
 # those local `live` lacks.
-# Args: $1 = store worktree path, $2 = authority sha, $3 = position.
+# Args: $1 = store worktree path, $2 = authority sha, $3 = position, $4 = the
+# store's HEAD sha, $5 = its local `live` sha (HEAD's when it has none).
 gitlore_line_count() {
-  local store="$1" auth="$2" pos="$3" head live tip n
-  head=$(git -C "$store" rev-parse HEAD)
-  live=$(git -C "$store" rev-parse -q --verify refs/heads/live) || live="$head"
+  local store="$1" auth="$2" pos="$3" head="$4" live="$5" tip n
   if [ "$pos" = ahead ]; then
     if git -C "$store" merge-base --is-ancestor "$live" "$head"; then tip="$head"; else tip="$live"; fi
     git -C "$store" rev-list --count "$auth..$tip"
@@ -93,7 +92,7 @@ gitlore_module_position() {
 # Args: $1 = memory worktree path.
 report_memory_position() {
   local mempath="$1" dirty=0 head live auth remote_url fetch_err remote="" fetched=1
-  local position tip rc out crossing pin timed_out mid=0
+  local position tip rc out crossing pin mid=0
   gitlore_store_mid_merge "$mempath" && mid=1
   if [ "$mid" -eq 1 ]; then
     report_memory_mid_merge "$mempath"
@@ -121,8 +120,7 @@ report_memory_position() {
         *)
           fetched=0
           if [ "$rc" -eq 124 ]; then
-            timed_out="gitlore: could not fetch memory's remote 'live' (timed out after ${GITLORE_FETCH_TIMEOUT}s), so upstream memory is unknown."
-            add_report_each "$timed_out" "$timed_out"
+            add_report "gitlore: could not fetch memory's remote 'live' (timed out after ${GITLORE_FETCH_TIMEOUT}s), so upstream memory is unknown."
           else
             # git's stderr can carry text the remote chose (`remote: …` lines),
             # so it goes to the user only; the agent's context gets the fixed
@@ -166,8 +164,7 @@ report_memory_position() {
           crossing=$(gitlore_cross_rewrite_script "$mempath")
           add_report "gitlore: memory's live holds commits its remote rewrote (record gitlore/rewrites: $out is superseded), so merging upstream memory would re-import the old history. Nothing was merged. Run $crossing to cross this store." ;;
         3)
-          timed_out="gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched (timed out after ${GITLORE_FETCH_TIMEOUT}s), so its divergence from live is unchecked."
-          add_report_each "$timed_out" "$timed_out" ;;
+          add_report "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched (timed out after ${GITLORE_FETCH_TIMEOUT}s), so its divergence from live is unchecked." ;;
         *)
           # git's text can carry remote-chosen lines, so it goes to the user only.
           add_report_each "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" \
@@ -175,7 +172,7 @@ report_memory_position() {
           ;;
       esac ;;
     ahead|behind)
-      gitlore_line_add memory "$(gitlore_line_count "$mempath" "$auth" "$position") $position" ;;
+      gitlore_line_add memory "$(gitlore_line_count "$mempath" "$auth" "$position" "$head" "$live") $position" ;;
     *)
       gitlore_line_add memory "in sync" ;;
   esac

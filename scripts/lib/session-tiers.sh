@@ -26,7 +26,7 @@
 # Args: $1 = mempath.
 gitlore_sync_nested_tiers() {
   local mempath="$1"
-  local tier tierpath fetch_err url auth fetched position pin rc out crossing
+  local tier tierpath fetch_err url auth fetched position pin rc out crossing head live
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -77,11 +77,10 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
       # The match below reads git's English text, so this fetch runs under the C locale.
       LC_ALL=C gitlore_fetch_bounded "$tierpath" origin live || rc=$?
       fetch_err="$GITLORE_FETCH_OUT"
+      gitlore_fetch_memo_record "$rc" "$tierpath"
       if [ "$rc" -eq 0 ]; then
-        gitlore_fetch_memo_note ok "$tierpath"
         auth=$(git -C "$tierpath" rev-parse -q --verify FETCH_HEAD) || auth=""
       else
-        gitlore_fetch_memo_note failed "$tierpath"
         case "$fetch_err" in
           *"couldn't find remote ref"*) ;;
           *)
@@ -129,7 +128,9 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
             add_sysmsg "gitlore: tier '$tier' has diverged from its remote 'live', and its rewrite record gitlore/rewrites could not be fetched, so it cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" ;;
         esac ;;
       ahead|behind)
-        gitlore_line_add "$tier" "$(gitlore_line_count "$tierpath" "$auth" "$position") $position" ;;
+        head=$(git -C "$tierpath" rev-parse HEAD) || continue
+        live=$(git -C "$tierpath" rev-parse -q --verify refs/heads/live) || live="$head"
+        gitlore_line_add "$tier" "$(gitlore_line_count "$tierpath" "$auth" "$position" "$head" "$live") $position" ;;
       *)
         gitlore_line_add "$tier" "in sync" ;;
     esac

@@ -53,23 +53,6 @@ tier_head_commit_recorded() {
   git -C memory push -q origin live
 }
 
-# Store $1's origin becomes an ssh-style URL whose transport records its pid in
-# $HANG_PIDS and sleeps $HANG_SECONDS seconds, keeping git's stdin and stdout so
-# git waits on it as on a stalled connection (session_fetch_timeout.bats).
-make_hanging_remote() {
-  local store="$1"
-  mkdir -p "$BATS_TEST_TMPDIR/hang-bin"
-  cat > "$BATS_TEST_TMPDIR/hang-bin/ssh.sh" <<SCRIPT
-#!/bin/sh
-echo \$\$ >> "$HANG_PIDS"
-exec sleep $HANG_SECONDS 2>/dev/null
-SCRIPT
-  chmod 755 "$BATS_TEST_TMPDIR/hang-bin/ssh.sh"
-  export GIT_SSH_COMMAND="$BATS_TEST_TMPDIR/hang-bin/ssh.sh"
-  export GIT_SSH_VARIANT=ssh
-  git -C "$store" config remote.origin.url "ssh://hang.invalid/repo.git"
-}
-
 # --- where N is measured from -------------------------------------------------------
 
 @test "memory behind: N counts the remote commits HEAD lacks, not those live lacks" {
@@ -219,6 +202,7 @@ SCRIPT
 
 @test "a tier whose fetch times out reads unreachable, after the timeout message" {
   synced_store
+  # shellcheck disable=SC2034 # read by make_hanging_remote (tests/helpers/session-line.bash)
   HANG_SECONDS=30 HANG_PIDS="$BATS_TEST_TMPDIR/hang.pids"
   export GITLORE_FETCH_TIMEOUT=1
   make_hanging_remote memory/ddaanet

@@ -20,31 +20,6 @@ load helpers/stub-synth
 load helpers/merge-memory
 load helpers/take-order
 
-# The fixture root moves to a path with a space; called first in a test.
-spaced_repo() {
-  local outer="$BATS_TEST_TMPDIR/outer dir"
-  mkdir -p "$outer"
-  rm -rf "$TMP_REPO"
-  TMP_REPO="$outer/proj dir"
-  MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
-  export MEMORY_REMOTE
-  mkdir "$TMP_REPO"
-  cd "$TMP_REPO" || return 1
-  git init -q -b main
-  git config user.email "test@example.com"
-  git config user.name "Test"
-}
-
-fork_live_locally() {
-  git -C memory branch -f live "$(git -C memory commit-tree "HEAD^{tree}" -p HEAD~1 -m elsewhere)"
-  [ "$(git -C memory merge-base HEAD live)" != "$(git -C memory rev-parse live)" ]
-}
-
-dirty_root() {
-  printf -- '---\nname: dirty\ndescription: ""\n---\n\nbody\n' > memory/dirty.md
-  seed_root_bullet dirty.md "an uncommitted root fact"
-}
-
 # --- tier A's relation to its pin, with tier B mounted on its pin ---------------
 
 a_behind() {
@@ -162,25 +137,6 @@ assert_merge_refusal() {
   [[ "$output" == *"Run /gitlore:merge"* ]]
   [ "$(git -C memory rev-parse HEAD:ddaanet)" = "$pin" ]
 }
-
-# A git on PATH that logs the directory of every `git -C <dir> fetch`.
-make_fetch_log_git() {
-  local real
-  real=$(command -v git)
-  mkdir -p "$TMP_REPO/stub"
-  cat > "$TMP_REPO/stub/git" <<STUB
-#!/bin/sh
-if [ "\$1" = -C ] && [ "\$3" = fetch ]; then printf '%s\n' "\$2" >> "$TMP_REPO/fetch.log"; fi
-exec "$real" "\$@"
-STUB
-  chmod 755 "$TMP_REPO/stub/git"
-  : > "$TMP_REPO/fetch.log"
-}
-
-# How many fetches the stub logged for tier $1. The scripts run from the repo
-# root and fetch with `git -C memory/<tier>`, so the logged directory is
-# relative; an absolute one is matched too.
-fetches_of() { grep -cE "(^|/)memory/$1\$" "$TMP_REPO/fetch.log" || true; }
 
 # --- red: another tier is the refused store --------------------------------------
 

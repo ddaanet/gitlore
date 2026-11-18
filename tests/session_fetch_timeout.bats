@@ -19,6 +19,7 @@ load helpers/tier-fixtures
 load helpers/stub-synth
 load helpers/merge-memory
 load helpers/take-order
+load helpers/session-line
 load helpers/cc-hook-session-start
 load helpers/cc-hook-index-compose
 load helpers/index-compose
@@ -60,66 +61,7 @@ state_s() {
   seed_tier_bullet ddaanet new.md "an uncommitted tier fact"
 }
 
-# Store $1's origin (a path under $TMP_REPO/memory, "memory" or "memory/<tier>")
-# becomes an ssh-style URL whose transport sleeps $HANG_SECONDS seconds. The
-# sleeper keeps git's stdin and stdout, so git waits on it as on a stalled
-# connection (with them closed git reads EOF and fails at once), and drops
-# stderr, so a sleeper surviving git holds no pipe the hook's caller reads.
-# GIT_SSH_VARIANT=ssh stops git probing the command with `-G` first, so each
-# fetch starts exactly one transport and records exactly one pid.
-make_hanging_remote() {
-  local store="$1"
-  mkdir -p "$BATS_TEST_TMPDIR/hang-bin"
-  cat > "$BATS_TEST_TMPDIR/hang-bin/ssh.sh" <<SCRIPT
-#!/bin/sh
-echo \$\$ >> "$HANG_PIDS"
-exec sleep $HANG_SECONDS 2>/dev/null
-SCRIPT
-  chmod 755 "$BATS_TEST_TMPDIR/hang-bin/ssh.sh"
-  export GIT_SSH_COMMAND="$BATS_TEST_TMPDIR/hang-bin/ssh.sh"
-  export GIT_SSH_VARIANT=ssh
-  git -C "$store" config remote.origin.url "ssh://hang.invalid/repo.git"
-}
-
-# A git on PATH that logs the physical directory of every fetch, whatever its
-# shape: global options before the subcommand are skipped (`-C` dirs compose as
-# git composes them, `-c` and the other value-taking ones take their value), and
-# the directory is the cwd when no `-C` is given. Fetches git starts itself
-# (submodule recursion) resolve through git's exec-path and are not seen.
-make_fetch_log_git() {
-  local real
-  real=$(command -v git)
-  mkdir -p "$TMP_REPO/stub"
-  cat > "$TMP_REPO/stub/git" <<STUB
-#!/bin/sh
-dir=. want=
-for a in "\$@"; do
-  if [ -n "\$want" ]; then
-    if [ "\$want" = C ]; then
-      case "\$a" in /*) dir=\$a ;; *) dir=\$dir/\$a ;; esac
-    fi
-    want=
-    continue
-  fi
-  case "\$a" in
-    -C) want=C ;;
-    -c|--git-dir|--work-tree|--namespace|--super-prefix) want=value ;;
-    -*) ;;
-    *)
-      if [ "\$a" = fetch ]; then
-        (cd "\$dir" && pwd -P) >> "$TMP_REPO/fetch.log"
-      fi
-      break ;;
-  esac
-done
-exec "$real" "\$@"
-STUB
-  chmod 755 "$TMP_REPO/stub/git"
-  : > "$TMP_REPO/fetch.log"
-}
-
-# Fetches logged for tier $1; for the memory store itself, `memory_fetches`.
-fetches_of() { grep -cE "(^|/)memory/$1\$" "$TMP_REPO/fetch.log" || true; }
+# Fetches logged for the memory store itself (tiers: `fetches_of`).
 memory_fetches() { grep -cE "(^|/)memory\$" "$TMP_REPO/fetch.log" || true; }
 
 # SessionStart over the fixture; sets $hook_json, $sys, $ctx and $elapsed.

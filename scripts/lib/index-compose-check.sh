@@ -221,14 +221,22 @@ gitlore_compose_problems_in() {
 # path's pin guard ahead of it, because the end of a take, the memory merge's
 # continuation and the recovery compose a tier whatever its relation to the pin.
 gitlore_compose_check_pins() {
-  local mempath="$1" tier tierpath relation pinned head abs problems="" yielded
-  yielded=$(gitlore_pin_yield_tiers "$mempath")
+  local mempath="$1" tier tierpath relation pinned head abs problems="" refused=""
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
     relation=$(gitlore_tier_pin_relation "$mempath" "$tier")
     case "$relation" in ""|on) continue ;; esac
-    grep -Fqx -- "$tier" <<<"$yielded" && continue
+    # The yield set of gitlore_pin_yield_tiers, classified in this loop: a
+    # `merge *` tier yields where the take is refused, which is read once, on
+    # the first such tier.
+    case "$relation" in
+      "merge "*)
+        if [ -z "$refused" ]; then
+          if gitlore_take_refused "$mempath"; then refused=1; else refused=0; fi
+        fi
+        [ "$refused" -eq 1 ] && continue ;;
+    esac
     pinned=$(git -C "$mempath" rev-parse ":$tier")
     head=$(git -C "$tierpath" rev-parse HEAD)
     case "$relation" in

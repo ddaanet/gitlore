@@ -201,3 +201,70 @@ assert_root_yields_at_tier_head() {
   done
   [ "$n" -ge 1 ] || { printf 'memory never yielded a merge: %s\n' "${TAKE_YIELDS[*]-}" >&2; return 1; }
 }
+
+# The fixture root moves to a path with a space; called first in a test.
+spaced_repo() {
+  local outer="$BATS_TEST_TMPDIR/outer dir"
+  mkdir -p "$outer"
+  rm -rf "$TMP_REPO"
+  TMP_REPO="$outer/proj dir"
+  MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
+  export MEMORY_REMOTE
+  mkdir "$TMP_REPO"
+  cd "$TMP_REPO" || return 1
+  git init -q -b main
+  git config user.email "test@example.com"
+  git config user.name "Test"
+}
+
+fork_live_locally() {
+  git -C memory branch -f live "$(git -C memory commit-tree "HEAD^{tree}" -p HEAD~1 -m elsewhere)"
+  [ "$(git -C memory merge-base HEAD live)" != "$(git -C memory rev-parse live)" ]
+}
+
+dirty_root() {
+  printf -- '---\nname: dirty\ndescription: ""\n---\n\nbody\n' > memory/dirty.md
+  seed_root_bullet dirty.md "an uncommitted root fact"
+}
+
+# A git on PATH that logs the physical directory of every fetch, whatever its
+# shape: global options before the subcommand are skipped (`-C` dirs compose as
+# git composes them, `-c` and the other value-taking ones take their value), and
+# the directory is the cwd when no `-C` is given. Fetches git starts itself
+# (submodule recursion) resolve through git's exec-path and are not seen.
+make_fetch_log_git() {
+  local real
+  real=$(command -v git)
+  mkdir -p "$TMP_REPO/stub"
+  cat > "$TMP_REPO/stub/git" <<STUB
+#!/bin/sh
+dir=. want=
+for a in "\$@"; do
+  if [ -n "\$want" ]; then
+    if [ "\$want" = C ]; then
+      case "\$a" in /*) dir=\$a ;; *) dir=\$dir/\$a ;; esac
+    fi
+    want=
+    continue
+  fi
+  case "\$a" in
+    -C) want=C ;;
+    -c|--git-dir|--work-tree|--namespace|--super-prefix) want=value ;;
+    -*) ;;
+    *)
+      if [ "\$a" = fetch ]; then
+        (cd "\$dir" && pwd -P) >> "$TMP_REPO/fetch.log"
+      fi
+      break ;;
+  esac
+done
+exec "$real" "\$@"
+STUB
+  chmod 755 "$TMP_REPO/stub/git"
+  : > "$TMP_REPO/fetch.log"
+}
+
+# How many fetches the stub logged for tier $1 (the scripts fetch with
+# `git -C memory/<tier>`; the logged directory is physical, matched as a suffix).
+# For the memory store itself, `memory_fetches` in session_fetch_timeout.bats.
+fetches_of() { grep -cE "(^|/)memory/$1\$" "$TMP_REPO/fetch.log" || true; }
