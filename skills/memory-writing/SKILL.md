@@ -29,8 +29,8 @@ that lands it in its owner — file and index line together.
    a prohibition on the agent.
 2. **Does another artifact own it?** Read `<mempath>/<tier>/owned-projects.md`
    for each line of `<mempath>/.gitlore-tiers`, where `<mempath>` is
-   `git config --file .gitmodules submodule.gitlore-memory.path` run from the repo
-   root, skipping a tier without the file and a repo without `.gitlore-tiers`. An
+   the absolute path the session-start line `gitlore: the memory store is at …`
+   names, skipping a tier without the file and a repo without `.gitlore-tiers`. An
    owner outside this repo that no inventory lists is asked about at the memory
    gate before anything is deleted. Move the fact to its owner even when the memory
    is accurate, and grep the owner for the load-bearing terms before accepting that

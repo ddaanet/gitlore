@@ -45,10 +45,10 @@ load helpers/setup
 }
 
 # The memory submodule may be mounted at another path: a skill or command that
-# runs a command on, or opens, the store derives the path from .gitmodules.
-@test "distribution: store paths in skills and commands are derived, not memory/" {
+# runs a command on, or opens, the store takes the path from the session-start line.
+@test "distribution: store paths in skills and commands come from the session-start line, not memory/" {
   for f in skills/recall/SKILL.md skills/merge/SKILL.md skills/memory-writing/SKILL.md commands/index-audit.md; do
-    grep -qF 'submodule.gitlore-memory.path' "$PLUGIN_ROOT/$f"
+    grep -qF 'gitlore: the memory store is at' "$PLUGIN_ROOT/$f"
   done
   # shellcheck disable=SC2016  # the backticks are grep pattern text, not a command substitution
   run grep -nE 'git -C memory|(wc -c|awk .*|< ) memory/MEMORY|prefix it with `memory/`|under `memory/` \(or' \

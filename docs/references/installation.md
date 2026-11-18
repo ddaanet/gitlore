@@ -244,24 +244,24 @@ wired. Anything else runs nothing and is reported as unrecognized, with the same
 session until the user sets `manual`, which is the right cost: a command gitlore
 runs on a stranger's clone should not exist.
 
-**D85 — Agent-facing text derives the memory store's path in each call that uses
-it**
+**D85 — Agent-facing text takes the memory store's path from the session-start
+line**
 
 The install prompts for the store's path (step 2 above), so a store sits where
-the user put it. A skill or command step that runs a command on the store, or
-opens a file in it, derives that path in each call that uses it — from
-`git config --file .gitmodules submodule.gitlore-memory.path`, run from the repo
-root, or from a line already in context that states it: the parent of the tier
-path the add-tier report's `mounted at` line names, or the harness's memory
-instructions that name the directory `MEMORY.md` loaded from. A shell binding
-does not survive to the next Bash call, so a name bound in one fenced block is
-empty in the next and `git -C ""` runs silently in the wrong repository. A
-hardcoded `memory/` in such a step goes wrong the same silent way in a repo that
-chose another path: the command succeeds against a directory that is not the
-store, or fails on a missing one with nothing naming the real one. Prose that
-names the default location, as a noun rather than as a path to act on, keeps
-`memory/`: it is the common case and the derivation would cost the reader a
-lookup for nothing.
+the user put it. The SessionStart additionalContext carries one line,
+`gitlore: the memory store is at <absolute path>; skills and commands that open it or run a command on it use this path`,
+every session. A skill or command step that runs a command on the store, or
+opens a file in it, takes the path from that line and pastes it into each call
+that uses it. A shell binding does not survive to the next Bash call, so a name
+bound in one fenced block is empty in the next and `git -C ""` runs silently in
+the wrong repository. A hardcoded `memory/` in such a step goes wrong the same
+silent way in a repo that chose another path: the command succeeds against a
+directory that is not the store, or fails on a missing one with nothing naming
+the real one. A dispatcher pastes the line into a subagent's prompt, since a
+subagent's context has no harness memory section and no SessionStart output.
+Prose that names the default location, as a noun rather than as a path to act
+on, keeps `memory/`: it is the common case and naming the path would cost the
+reader a lookup for nothing.
 
 ## Rejected alternatives
 

@@ -37,6 +37,21 @@ load helpers/cc-hook-session-start
   echo "$output" | jq -e --arg s "show the summary, end your turn, and commit only after the user's reply approves it" '.hookSpecificOutput.additionalContext | contains($s)'
 }
 
+# A skill step that acts on the store takes its path from this line, with no
+# derivation call. The hook runs from the repo root, so $PWD/memory is the
+# form it emits; the test and the hook share the same unresolved $PWD.
+@test "protocol names the memory store's absolute path" {
+  make_parent_with_memory
+  mkdir -p .claude
+  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
+  [ "$status" -eq 0 ]
+  # Positive anchor: the protocol context is present at all.
+  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
+  echo "$output" | jq -e --arg s "the memory store is at $PWD/memory;" '.hookSpecificOutput.additionalContext | contains($s)'
+  echo "$output" | jq -e --arg s "use this path" '.hookSpecificOutput.additionalContext | contains($s)'
+}
+
 @test "emits standing commit-protocol additionalContext every gitlore session" {
   make_parent_with_memory
   mkdir -p .claude
