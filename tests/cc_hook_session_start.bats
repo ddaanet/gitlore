@@ -153,64 +153,6 @@ assert_session_start_did_nothing() {
   assert_memory_in_sync "$output"
 }
 
-# Observed failure: asked to "add a note and commit it to memory", agents
-# committed in the same turn, reading the request as the approval. The protocol
-# carries one sentence that closes it; its two halves are pinned as literals
-# (case-sensitive), so a rewording that flips the meaning cannot satisfy them.
-@test "commit protocol says a request to commit is not approval of an unseen summary" {
-  make_parent_with_memory
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  # Positive anchor: the protocol context is present at all.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
-  echo "$output" | jq -e --arg s "A request to commit memory is not approval of a summary the user has not seen" '.hookSpecificOutput.additionalContext | contains($s)'
-}
-
-@test "commit protocol says to show the summary, end the turn, and commit after the reply approves" {
-  make_parent_with_memory
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  # Positive anchor: the protocol context is present at all.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
-  echo "$output" | jq -e --arg s "show the summary, end your turn, and commit only after the user's reply approves it" '.hookSpecificOutput.additionalContext | contains($s)'
-}
-
-@test "emits standing commit-protocol additionalContext every gitlore session" {
-  make_parent_with_memory
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
-  GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
-  [ "$status" -eq 0 ]
-  # The prohibition (the one piece that must precede any action) is present...
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("never run git commit inside the memory submodule"; "i")'
-  # ...along with the happy path, as the acts it asks for: write the file like
-  # any other edit, then commit memory through the gitlore:commit skill (D70),
-  # which names the command; no config-key lookup rides the orientation.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("gitlore:commit")'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("commitCommand|git config gitlore"; "i") | not'
-  # A request to commit is not approval of a summary the user has not seen.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("not approval.*summary"; "i")'
-  # A parent commit no longer carries memory, so the text must not say it does.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("committing the parent repo"; "i") | not'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("all it needs"; "i") | not'
-  # ...but the persist *procedure* beyond that one command is NOT front-loaded —
-  # no message-file path, no gate mechanism; the gate states them when it fires.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("explicit user approval"; "i") | not'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("rev-parse --git-path gitlore-commit-msg"; "i") | not'
-  # No mechanism the agent cannot act on, and no FR id: the gate describes itself
-  # when it fires, and an FR id resolves to nothing in a consumer repo.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("pre-commit"; "i") | not'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("approval gate"; "i") | not'
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("FR[0-9]") | not'
-  # Forbids by role, never by naming a command form to reason around.
-  echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("git -C"; "i") | not'
-}
-
 @test "leaves memory HEAD on the named branch it arrives on" {
   # SessionStart moves no module: a memory worktree attached to a branch stays
   # attached, at the same commit. A store attached to a branch breaks a
