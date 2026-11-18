@@ -39,13 +39,16 @@ keeps writing to the **launch** repo's submodule. Memory silently strands in the
 wrong working copy — the cwd-vs-launch divergence is the drift signal.
 
 A `PostToolUse` hook on the targeted matcher `EnterWorktree|ExitWorktree`
-(`scripts/cc-hooks/worktree-drift.sh`) catches the transition and emits one
-user-visible `systemMessage` (D14's substrate) when the session has drifted. The
-targeted matcher rests on an empirical confirmation (2026-06-10, this repo) that
-`EnterWorktree` **does** fire `PostToolUse` and that a name-based matcher
-matches `tool_name`. It beats a `"*"` matcher with a fast bail: it fires exactly
-once per transition, so zero per-tool cost and no de-dup state, because it
-cannot fire on the intervening `Bash` calls.
+(`scripts/cc-hooks/worktree-drift.sh`) catches the transition and, when the
+session has drifted, warns on both channels (D14's substrate): a `systemMessage`
+for the user, and an `additionalContext` directive that names the launch repo's
+memory store as the one the agent reads and writes, since the agent working in
+the worktree otherwise never learns where its memory goes. The targeted matcher
+rests on an empirical confirmation (2026-06-10, this repo) that `EnterWorktree`
+**does** fire `PostToolUse` and that a name-based matcher matches `tool_name`.
+It beats a `"*"` matcher with a fast bail: it fires exactly once per transition,
+so zero per-tool cost and no de-dup state, because it cannot fire on the
+intervening `Bash` calls.
 
 Drift predicate (all read-only git, bail silently on any error): the current
 worktree's `--show-toplevel` differs from the launch root's, **and** both

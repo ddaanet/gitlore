@@ -30,8 +30,17 @@ add_linked_worktree() {
   payload=$(jq -nc --arg cwd "$WT" '{tool_name:"EnterWorktree", cwd:$cwd}')
   CLAUDE_PROJECT_DIR="$TMP_REPO" run bash "$DRIFT" <<<"$payload"
   [ "$status" -eq 0 ]
-  echo "$output" | jq -e '.systemMessage | test("worktree")'
-  echo "$output" | jq -e '.systemMessage | test("memory")'
+  # git's spelling of both roots: a macOS tmp path resolves through a symlink.
+  wt=$(git -C "$WT" rev-parse --show-toplevel)
+  launch=$(git -C "$TMP_REPO" rev-parse --show-toplevel)
+  # The user's line, byte for byte.
+  expected="gitlore: this session moved into a linked worktree ($wt), but Claude Code's auto-memory stays pinned to the launch repo ($launch/memory). Memory written here will land in the launch repo's submodule, not this worktree's. To redirect memory to this worktree, start Claude Code from inside it."
+  [ "$(jq -r '.systemMessage' <<<"$output")" = "$expected" ]
+  # The agent's copy rides the PostToolUse context channel and names the store
+  # memory is written to.
+  [ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$output")" = "PostToolUse" ]
+  context=$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")
+  [[ "$context" == *"$launch/memory"* ]]
 }
 
 @test "ExitWorktree back in the launch repo is silent (D15)" {
