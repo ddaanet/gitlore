@@ -9,7 +9,7 @@ user asks to abandon a merge that is prepared.
 The resolver's exit 1 without `gitlore: memory merge prepared` can be an
 integrity report: a recorded commit that the repository which should hold it
 lacks. It is raised before any push or merge gate, so nothing was published past
-it, and the resolver does not say the state is healthy. Two shapes:
+it, and the resolver does not say the state is healthy. Three shapes:
 
 - **A tier gitlink.** The line reads `gitlore: memory records tier '<t>' at
   <sha>, a commit …` and says whether neither the tier nor its remote holds it,
@@ -38,6 +38,12 @@ it, and the resolver does not say the state is healthy. Two shapes:
   tell the user to run `/gitlore:push` to publish the revert. A holder found
   alive afterwards sits ahead of the reverted pin, and the next compose re-adopts
   its lines.
+- **A tier gitlink met while preparing a merge.** The line reads `gitlore:
+  memory records <sha> for tier '<t>', and …` and says neither the tier nor its
+  remote holds the commit, or the tier has no remote. No revert command is
+  printed and none applies: relay it. The checkout that recorded the commit runs
+  `/gitlore:push`, after which `/gitlore:merge` retries; a tier with no remote is
+  mounted against one or unmounted.
 - **The parent's pin on memory.** The line reads `gitlore: this repository
   records memory at <sha>, …` and says the memory holding it has not been merged
   upstream. No command applies, and no url should be changed on the report's

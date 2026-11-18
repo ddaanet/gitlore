@@ -74,10 +74,11 @@ The division of labour is D7's: the script decides, the agent writes prose.
    ([take-and-compose.md](take-and-compose.md)). It runs the dangling-pointer
    report, commits under the canned merge message (D49), and pushes when the
    flavor calls for it. It finds the prepared merge by walking the stores rather
-   than assuming memory, and refuses outright if two are prepared at once. Only
-   its exit 0 means the merge landed: every exit before the merge commit is
-   non-zero. A message file that cannot be created, a message that cannot be
-   built and a refused merge commit each print
+   than assuming memory, and refuses outright if two are prepared at once. The
+   merge landed once its commit did; exit 0 also means the pushes after it
+   succeeded. Every exit before the merge commit is non-zero, and so is one
+   whose push of `live` is refused after it. A message file that cannot be
+   created, a message that cannot be built and a refused merge commit each print
    `… so the merge was not committed; the merge stays prepared.` after the
    failing command's own text, and a rerun once that cause is fixed lands the
    merge. A state file with no `MERGE_HEAD` (a checkout cleared it) is refused

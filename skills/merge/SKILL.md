@@ -87,9 +87,7 @@ included, then report the outcome the run names:
   second repair; `/gitlore:push` publishes the repair.
 - The repair cannot fix the arrival. Relay its problem lines and the remedy the
   run prints: `Once the index is fixed where it was published, run
-  /gitlore:merge again.`, or, when the refusal also names this repo's own
-  indexes, `Fix the problems listed above in this repo; once the index is fixed
-  where it was published, run /gitlore:merge again.`
+  /gitlore:merge again.`
 
 A repair that fails on its scratch directory, a read, the rewrite, the commit
 build, the `live` advance or the checkout that follows it prints the refusal and

@@ -21,7 +21,7 @@ You are resolving a gitlore memory submodule from divergence.
 Exit codes:
 - `0` — healthy or simple repair complete. Summarize and stop.
 - Non-zero + "memory merge prepared" on stderr → proceed to **Parse directive**.
-- Non-zero with a line starting `gitlore: memory records tier` or `gitlore: this repository records memory at` → a recorded commit its repository lacks, or one a failed fetch left unconfirmed. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
+- Non-zero with a line starting `gitlore: memory records` or `gitlore: this repository records memory at` → a recorded commit its repository lacks, or one a failed fetch left unconfirmed. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
 - Non-zero without any of those → surface stderr verbatim and stop.
 
 ## Parse directive
@@ -78,8 +78,7 @@ On approval, the sub-agent runs the continuation command. The merge commit's mes
 
 If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed` or `gitlore: these files still hold conflict markers, so the merge was not committed`, the merge did not land and stays prepared. Resume the sub-agent with `rejected:` followed by the problem lines or file names it quoted, and evaluate the new synthesis as before. If a re-synthesis draws the same line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
 
-The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
-Each route is in [turn-2-routes.md](references/turn-2-routes.md); read it before routing the report.
+The sub-agent reports the continuation's exit status. The merge landed once its commit did, so a non-zero status can follow a landed merge: the push of `live` that comes after the commit was refused. Route the report by the line it quotes; each route is in [turn-2-routes.md](references/turn-2-routes.md), which you read before routing it.
 
 ## Loop
 
@@ -99,12 +98,12 @@ If this skill was triggered by a commit failure, pass the summary again to `gitl
 
 Tell the user what was merged and what state the repo is in now.
 
-Only a continuation that exited 0 is a landed merge; for any other outcome read [unlanded-outcomes.md](references/unlanded-outcomes.md) first.
+The merge landed when the continuation's commit did, and exit 0 says the pushes after it succeeded too. For a non-zero outcome read [unlanded-outcomes.md](references/unlanded-outcomes.md) first: it separates the merges that did not land from the landed one whose push failed.
 
 The continuation checks and composes the memory indexes before it commits, so its
 output may carry index problems. Keep the two kinds apart. Problems in the merged
 index blocked the landing until a new synthesis cleared them; say which they were.
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
-index, index pointers naming files that are not there, a refused push with its
-remedy — came after the merge commit landed; relay it; only you can fix it.
-A remedy printed after the landing is still to run: run it, or relay it as not yet run.
+index, index pointers naming files that are not there, a refused push with git's
+text — came after the merge commit landed; relay it; only you can fix it.
+A command a line asks to run after the landing is still to run: run it, or relay it as not yet run.
