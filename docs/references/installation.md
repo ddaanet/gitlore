@@ -2,17 +2,21 @@
 
 The literal setup detail `design.md`'s Architecture points at — the install
 command's own steps and per-hook-manager wiring syntax — followed by the
-decisions that argue for that shape (D25, D45). Motivation stays in `design.md`;
-this file is what you need while installing or debugging an install, or while
-proposing a change to how any of it is wired. The memory remote the install
-creates is in [memory-remote.md](memory-remote.md). The launcher shim and its
-two placements are in [memory-redirect.md](memory-redirect.md); the hook wrapper
-files are in [hook-wrappers.md](hook-wrappers.md), and what every `SessionStart`
-does is in [session.md](session.md).
+decisions that argue for that shape (D25, D45, D85). Motivation stays in
+`design.md`; this file is what you need while installing or debugging an
+install, or while proposing a change to how any of it is wired. The memory
+remote the install creates is in [memory-remote.md](memory-remote.md). The
+launcher shim and its two placements are in
+[memory-redirect.md](memory-redirect.md); the hook wrapper files are in
+[hook-wrappers.md](hook-wrappers.md), and what every `SessionStart` does is in
+[session.md](session.md).
 
 - **D25** — direct wiring refuses rather than appends after an existing `exec`
 - **D45** — `SessionStart` never runs a command from the tracked sentinel; it
   prints the installer for the user to run
+- **D85** — a skill or command that runs a command on the memory store, or opens
+  a file in it, derives the store's path once per file from `.gitmodules`; prose
+  naming the default location keeps `memory/`
 
 *Rejected:* a strictly non-empty initial commit · a separate
 `gitlore.memoryPath` config key · running the sentinel as a shell command ·
@@ -187,11 +191,12 @@ Idempotency: every wiring modification uses a detection marker
 (`# gitlore: managed` or the format-appropriate equivalent). Re-applying is a
 no-op.
 
-## Decisions — D25, D45
+## Decisions — D25, D45, D85
 
 Why the wiring above has this shape: why direct wiring refuses rather than
-appends after an existing `exec`, and why `SessionStart` runs nothing from the
-sentinel.
+appends after an existing `exec`, why `SessionStart` runs nothing from the
+sentinel, and why agent-facing text derives the store's path instead of naming
+it.
 
 **D25 — Direct wiring refuses rather than appends after an existing `exec`**
 
@@ -236,6 +241,20 @@ wired. Anything else runs nothing and is reported as unrecognized, with the same
 `manual` off switch and no advice to run the line. The cost is a notice at every
 session until the user sets `manual`, which is the right cost: a command gitlore
 runs on a stranger's clone should not exist.
+
+**D85 — Agent-facing text derives the memory store's path from `.gitmodules`**
+
+The install prompts for the store's path (step 2 above), so a store sits where
+the user put it. A skill or command step that runs a command on the store, or
+opens a file in it, derives that path once per file —
+`git config --file .gitmodules submodule.gitlore-memory.path`, run from the repo
+root, bound to a name the later steps use — because a hardcoded `memory/` in
+such a step goes wrong silently in a repo that chose another path: the command
+succeeds against a directory that is not the store, or fails on a missing one
+with nothing naming the real one. Prose that names the default location, as a
+noun rather than as a path to act on, keeps `memory/`: it is the common case and
+the derivation would cost the reader a lookup for nothing. One derivation per
+file keeps each step short and leaves one line to check.
 
 ## Rejected alternatives
 

@@ -169,7 +169,7 @@ names.
 **Install-time and platform surfaces** — read while changing install, the memory
 remote, the hook wrappers, the upgrade notice or a Claude Code workaround, not
 while reasoning about memory itself. Each node opens with its conclusions and
-names its rejected alternatives: install (D25, D45) in
+names its rejected alternatives: install (D25, D45, D85) in
 [installation.md](references/installation.md), the memory remote (D8, D64, D65,
 D80) in [memory-remote.md](references/memory-remote.md), the hook wrappers (D5,
 D11) in [hook-wrappers.md](references/hook-wrappers.md), the plugin-upgrade

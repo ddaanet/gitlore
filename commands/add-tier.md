@@ -115,10 +115,11 @@ Relay the script's report, then classify its ending:
 
 Read the composition report:
 
-- **Refused** (the report says the tier was mounted) — the store is left untouched and the reason is named. Fix it,
-  by hand, then retrigger composition with any edit to `memory/MEMORY.md` or
-  `memory/.gitlore-tiers`. Do not run the script again: the tier is already
-  mounted, and a second call refuses it.
+- **Refused** (the report says the tier was mounted) — the store is left
+  untouched and the reason is named. Fix it by hand, then retrigger composition
+  with any edit to `<memory>/MEMORY.md` or `<memory>/.gitlore-tiers`, where
+  `<memory>` is the store path the `mounted at` line names. Do not run the
+  script again: the tier is already mounted, and a second call refuses it.
 - **Composed** — done. Do not re-read the indexes to verify; composition moves
   lines, it never rewrites them.
 
@@ -130,7 +131,7 @@ occupies the cross-repo scope between this repo's `CLAUDE.md` and the user's own
 `~/.claude/CLAUDE.md`, so repo-specific rules stay where they are.
 
 If you want the new tier ranked somewhere other than the bottom, edit
-`memory/.gitlore-tiers` yourself afterward — a plain reorder, which retriggers
+`<memory>/.gitlore-tiers` yourself afterward — a plain reorder, which retriggers
 composition like any other manifest edit.
 
 ## 3. Triage existing local memory against the new tier
