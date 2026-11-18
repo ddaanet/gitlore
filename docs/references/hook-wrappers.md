@@ -54,7 +54,7 @@ if [ -z "$HOOKS_DIR" ]; then
 fi
 if [ ! -x "$HOOKS_DIR/pre-push" ]; then
   echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
-  echo "Relaunch Claude Code in this repo with 'claude -c' to refresh the hooks dir, then retry." >&2
+  echo "Run (cd '$(git rev-parse --show-toplevel)' && claude -p ping) outside the sandbox, then push again." >&2
   exit 0
 fi
 exec "$HOOKS_DIR/pre-push" "$@"
@@ -86,18 +86,26 @@ not one:
    version-pinned config points at a plugin-cache dir that was GC'd after a
    plugin upgrade, in the window before the next SessionStart re-pins it.
    Without this guard the wrapper `exec`s a missing path and the commit/push
-   **hard-fails** with `exec: …: not found`. Hint: relaunch with `claude -c`.
+   **hard-fails** with `exec: …: not found`. Hint: run
+   `(cd '<repo>' && claude -p ping)` outside the sandbox, then push again.
 
 Both keep git operations unblocked rather than breaking a commit on a
 transient/stale-config condition.
 
-**The refresh is `claude -c`, not a cold session.** Any process start re-pins
-the key — `SessionStart` fires on a resume as it does on a startup, with
-`source=resume` (D21, [plugin-upgrade-notice.md](plugin-upgrade-notice.md)) — so
-a resume closes the staleness window while keeping the conversation that hit it.
-A cold session closes the same window and throws the context away. This is the
-same remedy the upgrade notice names, for the same reason: what went stale was
-frozen at process start, and only a new process re-reads it.
+**The refresh is a one-shot `claude -p ping` in the repo.** Any process start
+re-pins the key: `SessionStart` rewrites the shim and repoints
+`gitlore.hooksDir` at the installed plugin, whatever the session then does. The
+hint is read by whoever ran the push, often an agent inside a live session,
+which cannot relaunch its own process but can start a fresh one; a human can run
+the same line. So the hint names a command rather than a relaunch, with the repo
+the push runs in substituted, so it pastes verbatim. The path is resolved when
+the shim runs, not when it is emitted: one shim in the common dir serves every
+worktree, and the worktree that emitted it may since have been removed. The
+command runs outside the sandbox, since `SessionStart` writes git config and the
+common dir. The push is then repeated: the skipped one published no memory. The
+upgrade notice names `claude -c` instead (D21,
+[plugin-upgrade-notice.md](plugin-upgrade-notice.md)), because there the stale
+thing is the session's own process, which only its own relaunch replaces.
 
 **D11 — Gitlink-aware wrapper paths (common-dir anchor) for linked-worktree
 support**

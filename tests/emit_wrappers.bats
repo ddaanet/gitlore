@@ -54,9 +54,49 @@ EOF
   git config gitlore.hooksDir "$TMP_REPO/gone-cache/scripts/git-hooks"
   run .git/gitlore-pre-push
   [ "$status" -eq 0 ]
-  [[ "$output" == *"gitlore skipped"* ]]
-  [[ "$output" == *"stale"* ]]
-  [[ "$output" == *"claude -c"* ]]   # the recovery act for this branch
+  [ "${#lines[@]}" -eq 2 ]
+  [[ "${lines[0]}" == *"gitlore skipped: hooks dir is stale"* ]]
+  # The recovery act for this branch, naming this repo, on one line.
+  [ "${lines[1]}" = "Run (cd '$TMP_REPO' && claude -p ping) outside the sandbox, then push again." ]
+}
+
+# Print the command the stale hint names, from the shim output in $1.
+stale_remedy_command() {
+  local line
+  line=$(printf '%s\n' "$1" | grep '^Run (cd ')
+  line=${line#Run }
+  printf '%s\n' "${line% outside the sandbox, then push again.}"
+}
+
+@test "the stale hint's command runs verbatim from a path with a space and starts claude in the repo" {
+  spaced="$TMP_REPO/with space"
+  git init -q "$spaced"
+  ( cd "$spaced" && bash "$EMIT" )
+  git -C "$spaced" config gitlore.hooksDir "$TMP_REPO/gone-cache/scripts/git-hooks"
+  run bash -c 'cd "$1" && .git/gitlore-pre-push' _ "$spaced"
+  [ "$status" -eq 0 ]
+  cmd=$(stale_remedy_command "$output")
+  [ -n "$cmd" ]
+  stub="$TMP_REPO/stub-bin"
+  mkdir -p "$stub"
+  # shellcheck disable=SC2016  # the stub expands these when it runs
+  printf '#!/bin/sh\necho "claude $* in $(pwd -P)"\n' > "$stub/claude"
+  chmod +x "$stub/claude"
+  run env PATH="$stub:$PATH" sh -c "cd / && $cmd"
+  [ "$status" -eq 0 ]
+  [ "$output" = "claude -p ping in $spaced" ]
+}
+
+@test "the stale hint names the worktree the push runs in, not the one that emitted the shim" {
+  echo seed > f && git add f && git commit -q -m seed
+  WT="$TMP_REPO-wt"
+  git worktree add -q -b feat "$WT" >/dev/null
+  ( cd "$WT" && bash "$EMIT" )
+  git config gitlore.hooksDir "$TMP_REPO/gone-cache/scripts/git-hooks"
+  run .git/gitlore-pre-push
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"(cd '$TMP_REPO' && claude -p ping)"* ]]
+  [[ "$output" != *"$WT"* ]]
 }
 
 @test "emit-wrappers is idempotent" {

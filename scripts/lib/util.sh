@@ -96,6 +96,10 @@ gitlore_cd_launch_repo() {
 # config is unset or the target hook is missing (plugin upgraded + cache GC'd),
 # so a transient plugin state never bricks a commit/push (NFR8/D5). Used by the
 # parent-hook wrappers (emit-wrappers.sh).
+# The stale remedy names the repo the hook runs in, resolved when it runs: one
+# wrapper in the common dir serves every worktree, and the one that emitted it
+# may since be gone. The path is single-quoted, so a path holding `'` prints a
+# command that does not paste verbatim.
 # Args: $1 = output file path; $2 = hook name to exec under HOOKS_DIR.
 gitlore_emit_hook_wrapper() {
   local out="$1" hook="$2"
@@ -109,7 +113,7 @@ if [ -z "\$HOOKS_DIR" ]; then
 fi
 if [ ! -x "\$HOOKS_DIR/$hook" ]; then
   echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
-  echo "Relaunch Claude Code in this repo with 'claude -c' to refresh the hooks dir, then retry." >&2
+  echo "Run (cd '\$(git rev-parse --show-toplevel)' && claude -p ping) outside the sandbox, then push again." >&2
   exit 0
 fi
 exec "\$HOOKS_DIR/$hook" "\$@"
