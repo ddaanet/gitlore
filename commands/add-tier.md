@@ -88,9 +88,11 @@ one tier being added, so there is nothing left to settle deliberately.
 
 Relay the script's report, then classify its ending:
 
-- **Refused** — the last line starts `gitlore: add-tier failed —`. What it names
-  is the remedy: relay the lines above it and the message, the user fixes what
-  they name, and then the script is run again. A refusal reached before the mount
+- **Refused** — the script exited non-zero. A line starting
+  `gitlore: add-tier failed —` names the remedy; git's own text can follow it on
+  further lines, and an abort with no such line leaves only the failing command's
+  text. Relay the report whole, the user fixes what it names, and then the
+  script is run again. A refusal reached before the mount
   starts (bad intent, an unusable url, a merge not landed, a pre-check line,
   `gh` missing) wrote nothing in the store, though a create can already have made
   its remote (see above). A refusal with no `mounted at` line that names
@@ -102,7 +104,7 @@ Relay the script's report, then classify its ending:
   the manifest could not be staged) leaves the tier mounted: fix the cause the
   message names, commit through `gitlore:commit`, and do not run the script
   again.
-- **Mounted** — no `add-tier failed —` last line. It ends one of two ways:
+- **Mounted** — the script exited 0. It ends one of two ways:
   - It says the mount was **left staged** for the next `gitlore:commit` — the
     memory store held unapproved work before the call. Invoke the
     `gitlore:commit` skill to commit it, with a `== memory ==` section in the
