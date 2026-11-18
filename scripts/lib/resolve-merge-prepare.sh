@@ -163,10 +163,11 @@ gitlore_refuse_dirty_merge() {
 }
 
 # Refuse a merge in a tier while the memory root holding it has uncommitted
-# changes and its HEAD has forked from its local `live`: root's own merge
-# cannot be prepared in that state, and the tier merge, once landed, sits ahead
-# of its pin, which the memory commit root's refusal asks for is itself refused
-# on. The take's tier moves are refused by the same check in gitlore_take_tiers;
+# changes and its HEAD has forked from its local `live`
+# (gitlore_root_merge_refused): root's own merge cannot be prepared in that
+# state, and the tier merge, once landed, would sit ahead of its pin, which the
+# memory commit root's refusal asks for leaves unrecorded. The take's tier
+# moves are refused by the same check in gitlore_take_tiers;
 # this one covers the merges prepared outside a take — the push's and the
 # resolve command's. A tier is a store whose superproject is a memory store (it
 # holds MEMORY.md) and which is not that store's memory submodule; the memory
@@ -188,7 +189,7 @@ gitlore_refuse_tier_merge_on_dirty_forked_root() {
   root=$(dirname "$store")
   [ "$(git -C "$root" rev-parse --show-toplevel || true)" = "$sup" ] \
     && [ -z "$(git -C "$root" rev-parse --show-prefix || true)" ] || root="$sup"
-  [ "$(gitlore_classify_refusal "$root" HEAD live)" = "diverged" ] || return 0
+  gitlore_root_merge_refused "$root" || return 0
   gitlore_refuse_dirty_merge "$root" live
 }
 

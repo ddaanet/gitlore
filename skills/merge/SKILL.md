@@ -1,6 +1,6 @@
 ---
 name: merge
-description: Take the memory facts other repos have published — each mounted tier's remote, then memory's own — without publishing anything of this repo's. Use when the user runs /gitlore:merge, asks to take, pull, sync or catch up on shared memory, or when a session start reported commits on live not checked out here, upstream memory commits, or a tier with upstream facts waiting. Not for publishing — that is /gitlore:push — and not a substitute for `git pull` of project code.
+description: Take the memory facts other repos have published — each mounted tier's remote, then memory's own — without publishing anything of this repo's. Use when the user runs /gitlore:merge, asks to take, pull, sync or catch up on shared memory, or when a session start line says `Run /gitlore:merge`. Not for publishing — that is /gitlore:push — and not a substitute for `git pull` of project code.
 allowed-tools: ["Bash", "Skill"]
 ---
 
@@ -87,9 +87,7 @@ included, then report the outcome the run names:
   second repair; `/gitlore:push` publishes the repair.
 - The repair cannot fix the arrival. Relay its problem lines and the remedy the
   run prints: `Once the index is fixed where it was published, run
-  /gitlore:merge again.`, or, when the refusal also names this repo's own
-  indexes, `Fix the problems listed above in this repo; once the index is fixed
-  where it was published, run /gitlore:merge again.`
+  /gitlore:merge again.`
 
 A repair that fails on its scratch directory, a read, the rewrite, the commit
 build, the `live` advance or the checkout that follows it prints the refusal and

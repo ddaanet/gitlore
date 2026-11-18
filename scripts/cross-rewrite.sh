@@ -132,7 +132,7 @@ check_clean() {
 # cross from.
 fetch_store() {
   local err
-  if ! err=$(git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites +refs/heads/live:refs/remotes/origin/live 2>&1); then
+  if ! err=$(LC_ALL=C git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites +refs/heads/live:refs/remotes/origin/live 2>&1); then
     case "$err" in
       *"couldn't find remote ref refs/heads/gitlore/rewrites"*)
         refuse "no rewrite record on the origin of $store, so there is nothing to cross. The record comes from the rewrite's commit-map, which only the rewritten mirror has (filter-repo leaves it as filter-repo/commit-map in the mirror). With MIRROR set to the mirror's path, publish it, then run this again:
@@ -150,7 +150,7 @@ fetch_main() {
   local err
   [ -z "$MAIN_FETCHED" ] || return 0
   MAIN_FETCHED=1
-  if ! err=$(git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main 2>&1); then
+  if ! err=$(LC_ALL=C git -C "$store" fetch -q --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main 2>&1); then
     case "$err" in
       *"couldn't find remote ref refs/heads/main"*) MAIN_MISSING=1 ;;
       *) refuse "could not fetch from the origin of $store. Once the remote is reachable, run this again. git said: $err" ;;
@@ -197,7 +197,7 @@ load_child_record() {
   done
   [ -e "$child/.git" ] || refuse "$child is not checked out, so its rewrite record cannot be read. Check it out with: $(checkout_command "$child")"
   CHILD_MAP="$tmpd/child.$CHILD_N.map"
-  if ! err=$(git -C "$child" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
+  if ! err=$(LC_ALL=C git -C "$child" fetch -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites 2>&1); then
     case "$err" in
       *"couldn't find remote ref refs/heads/gitlore/rewrites"*)
         : > "$CHILD_MAP" ;;

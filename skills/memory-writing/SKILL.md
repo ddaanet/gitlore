@@ -93,7 +93,12 @@ that is narration. Never write:
   Name the condition instead, and version-stamp an observation that could age
   (`CC 2.1.220`).
 - *Volatile git state* — commit ids, branch tips, "uncommitted as of" notes;
-  identify things by durable names.
+  identify things by durable names: a branch, a path, an issue number. An
+  upstream-main sha is stable but still a poor name. State a session needs
+  exactly belongs in a handoff or task file, not in memory.
+- *A tag or version asserting currency* — "latest tag vX", "since vX", "as of
+  vX": what ages is the claim, not the ref. A version that grounds an
+  observation (`verified against CC 2.1.220`) stays.
 
 A quoted correction may name its source. Rename `user` only where the referent
 is the person who ran, said or corrected something; elsewhere it is a term of
@@ -151,6 +156,10 @@ line to the root `memory/MEMORY.md` — `- [Title](<tier>/<file>.md) — hook`;
 tier carriers and frontmatter follow from that edit. The fact is committed with the
 user's approved summary through `gitlore-commit` (the `gitlore:commit` skill), and its pointer rides
 the parent commit carrying the change it documents.
+
+Open [frontmatter-fields.md](references/frontmatter-fields.md) before reading a
+file's `modified:` as when it last changed, or filing a `metadata:` write
+against gitlore.
 
 ## 9. Arriving here at a gate, over facts already written
 

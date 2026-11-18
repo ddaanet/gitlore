@@ -9,14 +9,15 @@ user asks to abandon a merge that is prepared.
 The resolver's exit 1 without `gitlore: memory merge prepared` can be an
 integrity report: a recorded commit that the repository which should hold it
 lacks. It is raised before any push or merge gate, so nothing was published past
-it, and the resolver does not say the state is healthy. Two shapes:
+it, and the resolver does not say the state is healthy. Three shapes:
 
 - **A tier gitlink.** The line reads `gitlore: memory records tier '<t>' at
   <sha>, a commit …` and says whether neither the tier nor its remote holds it,
   or the tier has no remote, or that the fetch from the tier's remote failed, in
   which case no revert command follows: get the remote reachable and run
-  `/gitlore:resolve` again. It names the repo `.gitmodules` records when that
-  is a different one. Nothing composes over the commit. The checkout that
+  `/gitlore:resolve` again. The first two name the repo `.gitmodules` records
+  when that is a different one; the fetch-failed line does not. Nothing composes
+  over the commit. The checkout that
   recorded it runs `/gitlore:push`, which publishes it. If the user says that
   checkout no longer exists, `/gitlore:resolve`'s output carries, after the
   report, a `once no checkout holds it` line and then, last, the command that
@@ -37,10 +38,16 @@ it, and the resolver does not say the state is healthy. Two shapes:
   tell the user to run `/gitlore:push` to publish the revert. A holder found
   alive afterwards sits ahead of the reverted pin, and the next compose re-adopts
   its lines.
+- **A tier gitlink met while preparing a merge.** The line reads `gitlore:
+  memory records <sha> for tier '<t>', and …` and says neither the tier nor its
+  remote holds the commit, or the tier has no remote. No revert command is
+  printed and none applies: relay it. The checkout that recorded the commit runs
+  `/gitlore:push`, after which `/gitlore:merge` retries; a tier with no remote is
+  mounted against one or unmounted.
 - **The parent's pin on memory.** The line reads `gitlore: this repository
   records memory at <sha>, …` and says the memory holding it has not been merged
   upstream. No command applies, and no url should be changed on the report's
-  say-so: relay it and stop.
+  say-so: relay it, with any git fetch line printed just above it, and stop.
 
 The urls in these reports reach the user's line only; the agent's line says the
 user has them. Do not ask for them or reconstruct them.

@@ -17,6 +17,8 @@ PLUGIN_ROOT=$(CDPATH="" cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 source "$PLUGIN_ROOT/scripts/lib/util.sh"
 # shellcheck disable=SC1091
 source "$PLUGIN_ROOT/scripts/lib/index-compose.sh"
+# Each tier is fetched at most once in this process (see the helper).
+gitlore_fetch_memo_init
 
 # The launch repo, whatever directory the agent's shell is in; outside any
 # worktree memory_path finds no .gitmodules and the run is a no-op.

@@ -219,7 +219,7 @@ EOF
 # it left ahead of the memory index's gitlinks, the memory merge's continuation
 # for the tiers ahead of the gitlinks OURS records, and the recovery for a tier
 # merge that landed outside the continuation. The pass never calls it: rule 7
-# refuses a tier ahead of its pin there, naming the take.
+# refuses a tier ahead of its pin there, naming the take, or yields it.
 #
 # Writes no carrier, so a merge in one store never propagates into another the
 # user did not review. Returns 0, 1 and 2 as gitlore_compose does, and 3 when
@@ -228,7 +228,7 @@ EOF
 # (gitlore_stage_merged_tiers).
 gitlore_compose_up() {
   local mempath="$1" tiers="$2" at="$3" mode="${4-}"
-  local root="$mempath/MEMORY.md" dir out rc=0
+  local root="$mempath/MEMORY.md" dir out bullets rc=0
   [ -f "$root" ] || return 0
   if ! gitlore_compose_check "$mempath"; then
     return 1
@@ -243,7 +243,16 @@ gitlore_compose_up() {
     printf '%s\n' "$out"
     return 1
   fi
-  if ! out=$(gitlore_compose_root_bullets "$mempath" "$dir" | gitlore_compose_write "$root"); then
+  # The producer's status is checked before the writer sees anything, so a
+  # failed projection leaves root as it was. The `x` keeps trailing newlines
+  # in the bullets.
+  if ! bullets=$(gitlore_compose_root_bullets "$mempath" "$dir" && printf x); then
+    rm -rf "$dir"
+    printf 'could not compose %s; it was left untouched\n' "$root"
+    return 2
+  fi
+  bullets=${bullets%x}
+  if ! out=$(printf '%s' "$bullets" | gitlore_compose_write "$root"); then
     rm -rf "$dir"
     printf 'could not write %s\n' "$root"
     return 2

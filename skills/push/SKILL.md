@@ -82,3 +82,9 @@ comes next. This skill does not invoke the commit itself.
 
 Do not run `git log`, `git status`, or `git -C memory rev-parse` to confirm the
 outcome. The command's output is the authoritative report.
+
+`memory has no remote of its own` names a local-only install, a supported end
+state: commits, the approval gate and tier merges work against local refs, and
+only memory's own publishing has nowhere to go. A `.gitmodules` url of
+`./.git/gitlore-placeholder` is the marker such an install is seeded with, not
+an unfinished migration.

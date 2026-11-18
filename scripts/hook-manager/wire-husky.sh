@@ -23,4 +23,4 @@ if ! grep -q '# gitlore: managed' "$f"; then
 fi
 
 mkdir -p .claude
-printf 'npx husky\n' > .claude/gitlore-hook-setup
+printf 'npm install\n' > .claude/gitlore-hook-setup

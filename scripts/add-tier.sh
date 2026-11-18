@@ -43,8 +43,14 @@ source "$PLUGIN_ROOT/scripts/lib/add-tier-url.sh"
 # of MEMORY.md. One EXIT trap covers both on every exit, including the die paths.
 seed=""
 pre_index=""
+# Fetch memo shared by the pre-check, the post-mount pass and the memory sync:
+# each tier is fetched at most once. Created here, not by gitlore_fetch_memo_init,
+# whose EXIT trap would replace cleanup.
+if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then :; else GITLORE_FETCH_MEMO=""; fi
+export GITLORE_FETCH_MEMO
 # shellcheck disable=SC2317  # reached only through the EXIT trap set below
 cleanup() {
+  [ -z "$GITLORE_FETCH_MEMO" ] || rm -f "$GITLORE_FETCH_MEMO"
   [ -z "$seed" ] || rm -rf "$seed"
   [ -z "$pre_index" ] || rm -f "$pre_index"
 }
@@ -72,10 +78,22 @@ mempath=$(gitlore_memory_path)
 # A terminal on stdin means no intent was piped: refuse rather than block on it.
 if [ -t 0 ]; then no_intent; fi
 
-# A mount into a prepared merge would land in the merge's index and be lost or
-# carried by whichever way the merge ends.
-if gitlore_store_mid_merge "$mempath"; then
-  die "the memory store holds a merge that has not landed, so nothing was mounted. Run /gitlore:resolve to land or abort it, then add the tier again."
+# A mount beside a prepared merge, in the memory store or in any mounted tier,
+# would land in the merge's index (root) or be composed over a store whose merge
+# has not landed (tier), and be lost or carried by whichever way the merge ends.
+if gitlore_any_store_mid_merge "$mempath"; then
+  die "the memory store or a mounted tier holds a merge that has not landed, so nothing was mounted. Run /gitlore:resolve to land or abort it, then add the tier again."
+fi
+
+# Whatever the compose pass would refuse on the stores already mounted is
+# refused here, before the first write, in the pass's order; each line names its
+# own cause. Past the mount the same refusal leaves it half-made.
+refused=0
+compose_problems=$(gitlore_compose_check "$mempath") || refused=1
+pin_problems=$(gitlore_compose_check_pins "$mempath") || refused=1
+if [ "$refused" -ne 0 ]; then
+  printf '%s\n' "$compose_problems" "$pin_problems" | sed '/^$/d' >&2
+  die "nothing was mounted: fix what the lines above name, then add the tier again."
 fi
 
 # Before any write: whether the store was clean (a clean store gets the canned
@@ -239,7 +257,7 @@ gitlore_warn_private_under_public "tier remote" "$url" "$created_visibility"
 warnings=""
 # Propagation-in: create the local `live` from the remote. Fast-forward-only for
 # free — a refspec fetch into a branch ref refuses a non-ff without `+`.
-if ! fetch_err=$(git -C "$tierpath" fetch origin "live:live" 2>&1); then
+if ! fetch_err=$(LC_ALL=C git -C "$tierpath" fetch origin "live:live" 2>&1); then
   case "$fetch_err" in
     *"couldn't find remote ref"*|*"does not appear to be"*)
       warnings="$warnings

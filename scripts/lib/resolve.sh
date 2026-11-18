@@ -101,10 +101,10 @@ gitlore_detect_stale_merge_state() {
   statefile=$(gitlore_merge_state_file "$mempath")
   gitdir=$(git -C "$mempath" rev-parse --git-dir)
   if [ ! -f "$statefile" ]; then
-    # A real MERGE_HEAD with no state file means gitlore_prepare_merge staged
-    # a merge and the caller died before gitlore_write_merge_state recorded
-    # it — the window an interrupted `push-memory.sh` run left open, with real
-    # content staged and nothing pointing at it.
+    # A real MERGE_HEAD with no state file is a merge gitlore did not prepare —
+    # a hand-run `git merge`, or an agent asked to merge by hand.
+    # gitlore_yield_merge writes its state-file marker before the preparation
+    # starts, so an interrupted gitlore run leaves a state file, not this.
     if [ -f "$gitdir/MERGE_HEAD" ]; then
       printf 'orphaned-merge-head\n'
     else
@@ -242,7 +242,7 @@ gitlore_classify_refusal() {
 gitlore_check_head_live_agree() {
   local store="$1" label="$2" tier="${3-}" head live abs remedy
   head=$(git -C "$store" rev-parse -q --verify HEAD) || return 0
-  # No local `live` yet (a tier never fetched) — nothing to disagree with.
+  # No local `live` yet (a tier not mounted by gitlore) — nothing to disagree with.
   live=$(git -C "$store" rev-parse -q --verify live) || return 0
   [ "$head" != "$live" ] || return 0
   # `--show-toplevel` rather than a subshell `cd`: the remedy below is printed

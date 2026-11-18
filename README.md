@@ -26,7 +26,7 @@ the next session.
 ## Requirements
 
 - `bash` ≥ 3.2 for the shipped scripts.
-- `git` ≥ 2.13 (for `git submodule absorbgitdirs`; install also uses manual gitdir absorption that works on older versions)
+- `git` 2.29 or later (`fetch --no-write-fetch-head`).
 - `jq`
 - `mikefarah/yq` v4 OR `python3` with PyYAML — required for `wire-lefthook.sh` and `wire-overcommit.sh` to safely merge user YAML configs without clobbering existing keys. Note: yq-based wiring will strip pre-existing YAML comments from `lefthook.yml` / `.overcommit.yml` (the gitlore marker is preserved, user comments are not).
 
@@ -51,6 +51,15 @@ there once instead of being duplicated per repo.
 Mounts an existing tier, or creates one. A mounted tier is dormant until it is
 listed in `memory/.gitlore-tiers` — one name per line, file order is precedence.
 Listing it composes its pointer lines into the always-loaded root index.
+
+The command runs `gitlore-add-tier`, which clones the tier over the network,
+lists it last in `memory/.gitlore-tiers`, composes the root index and reports its
+size. On a clean memory store it commits the mount itself; when the store holds
+uncommitted work, the mount stays staged for the next memory commit.
+
+A memory commit writes no index. If an edit leaves the composed index stale it
+stops and names `gitlore-compose`, which writes the composed tier indexes into
+the memory store and prints a `composed <file>` line for each one it wrote.
 
 ## Publishing and taking
 
@@ -116,6 +125,20 @@ Run it yourself in the cases where nothing is left to trigger on:
 - A new or compacted session, where the directive is no longer in context.
 - No divergence at all: run standalone it is a health check, and repairs a
   missing memory remote or an unpushed `live` on the spot.
+
+Two repairs have no sub-agent and run a command printed with its absolute paths,
+to be run as printed. `/gitlore:resolve` prints the first; session start prints
+the second while a memory merge is prepared:
+
+- `revert-pin <tier>` — when memory records a tier at a commit no repository
+  holds and the checkout that had it is gone. It reverts the memory commit that
+  recorded the pin, keeping it in history, and lists every path that commit
+  changed. Run `/gitlore:push` afterwards to publish the revert.
+- `abort-merge` — abandons a merge that is prepared but has not landed, restoring
+  memory to the commit the merge started from. It discards the merge's staged
+  result, so use it only when you want that merge dropped; the next
+  `/gitlore:merge` or `/gitlore:push` prepares it again if the divergence is
+  still there.
 
 The same reconcile and the same command apply to every mounted tier, not just
 the project's own memory.

@@ -114,38 +114,34 @@ fi
 git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
 bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 
-# Sentinel replay: re-apply hook-setup recorded at install time.
+# Sentinel: the tracked hook-wiring record written at install time.
 SENTINEL=".claude/gitlore-hook-setup"
 if [ -f "$SENTINEL" ]; then
   cmd=$(head -1 "$SENTINEL" | tr -d '\n')
+  # Every notice here rides systemMessage: stderr reaches nobody on exit 0 (D14).
   case "$cmd" in
     "")
-      echo "gitlore: empty sentinel; nothing to replay" >&2
+      add_sysmsg "gitlore: .claude/gitlore-hook-setup has an empty first line, so it records no hook wiring and SessionStart wired nothing. To stop this notice, set its first line to 'manual'."
       ;;
     direct)
       bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
       ;;
-    manual)
-      echo "gitlore: hook wiring is 'manual'; verify your hooks still invoke \$(git rev-parse --git-common-dir)/gitlore-pre-*." >&2
-      ;;
+    # 'manual' is the off switch the other notices name (D45): nothing runs
+    # and nothing is said.
+    manual) ;;
     # The sentinel is a TRACKED file — a fresh clone brings whatever its first
-    # line says, so an unconstrained `sh -c "$cmd"` here would run any line
-    # that clone carried at the very first session start. Only the three known
-    # hook-manager installers (wire-lefthook.sh/wire-husky.sh/wire-overcommit.sh
-    # are the only writers) are legitimate `*)` content; each runs as the
-    # literal command, never through `sh -c`, so nothing beyond that fixed set
-    # can execute.
-    "lefthook install")
-      lefthook install
-      ;;
-    "npx husky")
-      npx husky
-      ;;
-    "overcommit --install")
-      overcommit --install
+    # line says, so SessionStart never runs a command taken from it. The three
+    # known hook-manager installers (wire-lefthook.sh/wire-husky.sh/
+    # wire-overcommit.sh are the only writers) get a notice naming the command
+    # for the user to run; 'manual' stops the notice. 'npx husky' is the legacy
+    # husky record: it wires nothing on husky v8, so the advice is 'npm install'.
+    "lefthook install"|"npm install"|"npx husky"|"overcommit --install")
+      advice=$cmd
+      [ "$cmd" != "npx husky" ] || advice="npm install"
+      add_sysmsg "gitlore: .claude/gitlore-hook-setup records the hook-manager installer '$cmd', which SessionStart does not run. To wire the hooks, run '$advice' yourself. To stop this notice, set the first line of .claude/gitlore-hook-setup to 'manual'."
       ;;
     *)
-      add_sysmsg "gitlore: .claude/gitlore-hook-setup names an unrecognized command ('$cmd') and was not run. gitlore only replays the three known hook-manager installers (lefthook install, npx husky, overcommit --install). Run the command yourself, or set the sentinel's first line to 'manual'."
+      add_sysmsg "gitlore: .claude/gitlore-hook-setup names an unrecognized command ('$cmd') and was not run. SessionStart runs no command from this file. To stop this notice, set the first line of .claude/gitlore-hook-setup to 'manual'."
       ;;
   esac
 fi
@@ -189,6 +185,19 @@ fi
 # Remove the retired store gate's pre-commit wrapper and hooksDir mirror (D70).
 gitlore_retire_store_gates "$mempath"
 
+# Every fetch this run makes is bounded by GITLORE_FETCH_TIMEOUT seconds
+# (gitlore_fetch_bounded), and each store is fetched once: the memo file is a
+# private mktemp file the subshells share, removed on exit, where the tier stage
+# records its fetch outcome for the yield checks to reuse. A value that is not
+# a positive integer leaves gitlore_fetch_bounded unbounded, so SessionStart,
+# which asks for a bound, replaces it with its default.
+gitlore_fetch_timeout_ok "${GITLORE_FETCH_TIMEOUT:-}" || GITLORE_FETCH_TIMEOUT=5
+gitlore_fetch_memo_init
+
+# The session line names every store's position once, on both channels; the
+# memory and tier stages add to it and it is emitted after the tier stage.
+gitlore_line_stores=""
+gitlore_line_cmd=""
 report_memory_position "$mempath"
 
 # Root index repair. A store can arrive with no `MEMORY.md` at all: an install
@@ -216,6 +225,12 @@ fi
 # unresolvable in unresolvable_tiers, which the two reports below read.
 unresolvable_tiers=""
 gitlore_sync_nested_tiers "$mempath"
+if [ -n "$gitlore_line_stores" ]; then
+  case "$gitlore_line_cmd" in
+    push|merge) add_report "gitlore: Run /gitlore:$gitlore_line_cmd ($gitlore_line_stores)" ;;
+    *) add_report "gitlore: $gitlore_line_stores" ;;
+  esac
+fi
 
 # Store diagnostics (D74): the rule problems of the indexes and a pending
 # compose, reported after the tier stage and written nowhere. SessionStart composes
@@ -288,11 +303,10 @@ fi
 # nothing here for this file's `set -e` to trip on.
 #
 # Guarded on $GITLORE_RELAY_SYSMSG, deliberately NOT nested inside
-# `[ -n "$sysmsg" ]`: report_memory_position adds a line for every position a
-# store can be in, so $sysmsg is never empty by the time we reach here today —
-# but that is an accident of that function, not a contract this fold may lean
-# on. Conditioning on it would be behaviour-identical now and would silently
-# drop the relay the day a position stops reporting.
+# `[ -n "$sysmsg" ]`: the session line is on $sysmsg unless every store is left
+# out of it, so $sysmsg is not always empty or always set by the time we reach
+# here — a state this fold may not lean on. Conditioning on it would drop the
+# relay whenever no store reported.
 # Non-fatal: the relay is a backstop, never a reason a session fails to start.
 # jq has already parsed .claude/settings.json above — the hook exits when it
 # cannot — so the only failure left here is a malformed payload, and it costs

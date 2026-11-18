@@ -21,7 +21,7 @@ You are resolving a gitlore memory submodule from divergence.
 Exit codes:
 - `0` — healthy or simple repair complete. Summarize and stop.
 - Non-zero + "memory merge prepared" on stderr → proceed to **Parse directive**.
-- Non-zero with a line starting `gitlore: memory records` or `gitlore: this repository records memory at` → a commit no repository holds. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
+- Non-zero with a line starting `gitlore: memory records` or `gitlore: this repository records memory at` → a recorded commit its repository lacks, or one a failed fetch left unconfirmed. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
 - Non-zero without any of those → surface stderr verbatim and stop.
 
 ## Parse directive
@@ -78,16 +78,17 @@ On approval, the sub-agent runs the continuation command. The merge commit's mes
 
 If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed` or `gitlore: these files still hold conflict markers, so the merge was not committed`, the merge did not land and stays prepared. Resume the sub-agent with `rejected:` followed by the problem lines or file names it quoted, and evaluate the new synthesis as before. If a re-synthesis draws the same line again, stop and relay the lines to the user verbatim — a failure report, not an approval request.
 
-The sub-agent reports the continuation's exit status, and only an exit 0 is a landed merge. Route its other reports by the line it quotes:
-- `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
-- `gitlore: memory merge prepared` — the merge landed and the local `live` advance after it, or the push of `live` to `origin`, prepared a fresh one. Go to **Loop**, which picks the new merge up; stopping here would strand the merge the triggering git operation needs.
-- `gitlore: pushing '` … `failed, and not because of divergence` — the merge landed, but `live` was not advanced or not published. Send no `rejected:` and do not go to **Loop**: a rerun meets the same refusal, which no merge fixes. Go to **Summarize**, skipping **Resume commit**.
-- The continuation call was denied before it ran — no exit status, no `gitlore:` output. Nothing moved and the merge stays prepared with its synthesis staged. Do not run the continuation yourself and do not re-dispatch: a refusal is the user's to lift. Go to **Summarize**, skipping **Resume commit**.
-- Anything else with a non-zero status — the outcome is unrecognised. Go to **Summarize**, skipping **Resume commit**.
+The sub-agent reports the continuation's exit status. The merge landed once its commit did, so a non-zero status can follow a landed merge: the push of `live` that comes after the commit was refused. Route the report by the line it quotes; each route is in [turn-2-routes.md](references/turn-2-routes.md), which you read before routing it.
 
 ## Loop
 
-After the sub-agent exits, run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh` again to check for a second flavor. Repeat from **Parse directive** until the script exits 0. If the continuation printed `gitlore: merged without publishing`, skip this step, which publishes; run `/gitlore:merge` instead.
+When `/gitlore:merge` invoked this skill, skip this step, whose bare run publishes: return to that skill, whose reconcile rerun repairs or continues the merge without publishing. The same holds when the continuation printed `gitlore: merged without publishing`: run `/gitlore:merge` instead.
+
+Otherwise, after the sub-agent exits, run `"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"` again to check for a second flavor. Its outcomes:
+- A directive: go to **Parse directive**.
+- Exit 0: the merge is resolved; go on to **Resume commit**.
+- A non-zero exit whose output holds a pin line: handle it as [pin-and-abort.md](references/pin-and-abort.md) says, then go to **Summarize**, skipping **Resume commit**.
+- Any other non-zero exit: relay the output verbatim, then go on to **Resume commit**; `gitlore-commit` refuses on its own while a merge is still prepared.
 
 ## Resume commit
 
@@ -97,25 +98,12 @@ If this skill was triggered by a commit failure, pass the summary again to `gitl
 
 Tell the user what was merged and what state the repo is in now.
 
-Only a continuation that exited 0 is summarized as a landed merge. The other outcomes:
-- A message-file, message-build or refused-commit line: relay it with whatever the
-  failing command printed above it. The merge stays prepared; the remedy is to fix
-  that cause and run `/gitlore:resolve` again.
-- A `pushing '…' failed, and not because of divergence` line: report the merge as
-  landed and the push as failed, with git's reason under it. Any remedy printed
-  below it is still to run.
-- A denied continuation: say the synthesis is approved and staged and the merge is
-  unlanded, and hand over the continuation command verbatim. The user lands it
-  either by running it with a `!` prefix or by asking for it by name, after which
-  this session runs it; continue from its output as from the sub-agent's report
-  — **Loop**, then **Resume commit**.
-- An unrecognised non-zero outcome: relay the output verbatim with its exit status,
-  as a state to inspect, not a landing to report.
+The merge landed when the continuation's commit did, and exit 0 says the pushes after it succeeded too. For a non-zero outcome read [unlanded-outcomes.md](references/unlanded-outcomes.md) first: it separates the merges that did not land from the landed one whose push failed.
 
 The continuation checks and composes the memory indexes before it commits, so its
 output may carry index problems. Keep the two kinds apart. Problems in the merged
 index blocked the landing until a new synthesis cleared them; say which they were.
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
-index, index pointers naming files that are not there, a refused push with its
-remedy — came after the merge commit landed; relay it; only you can fix it.
-A remedy printed after the landing is still to run: run it, or relay it as not yet run.
+index, index pointers naming files that are not there, a refused push with git's
+text — came after the merge commit landed; relay it; only you can fix it.
+A command a line asks to run after the landing is still to run: run it, or relay it as not yet run.

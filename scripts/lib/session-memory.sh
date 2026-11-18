@@ -24,6 +24,41 @@ add_report_each() {
 $2"
 }
 
+# Add store $1 with position word $2 (`in sync`, `N ahead`, `N behind`,
+# `diverged`, `unreachable`) to the session line, which the hook emits once
+# after every store has reported. The line's command is /gitlore:push when any
+# store is ahead or diverged, else /gitlore:merge when any is behind, else none.
+# While memory is mid-merge (gitlore_line_cmd=held) it is none whatever the
+# stores read: the mid-merge report names the remedy.
+# Args: $1 = store name, $2 = position word.
+gitlore_line_add() {
+  gitlore_line_stores="${gitlore_line_stores:+$gitlore_line_stores; }$1 $2"
+  [ "$gitlore_line_cmd" != held ] || return 0
+  case "$2" in
+    diverged|*ahead) gitlore_line_cmd=push ;;
+    *behind) [ "$gitlore_line_cmd" = push ] || gitlore_line_cmd=merge ;;
+  esac
+}
+
+# Print the N of a store's `N ahead` / `N behind`, against authority commit $2
+# for position $3 (`ahead` or `behind`). Ahead counts the commits the store
+# holds, HEAD or local `live` whichever is further, that the authority lacks.
+# Behind counts the authority's commits HEAD lacks, or when HEAD lacks none,
+# those local `live` lacks.
+# Args: $1 = store worktree path, $2 = authority sha, $3 = position, $4 = the
+# store's HEAD sha, $5 = its local `live` sha (HEAD's when it has none).
+gitlore_line_count() {
+  local store="$1" auth="$2" pos="$3" head="$4" live="$5" tip n
+  if [ "$pos" = ahead ]; then
+    if git -C "$store" merge-base --is-ancestor "$live" "$head"; then tip="$head"; else tip="$live"; fi
+    git -C "$store" rev-list --count "$auth..$tip"
+  else
+    n=$(git -C "$store" rev-list --count "$head..$auth")
+    [ "$n" -gt 0 ] || n=$(git -C "$store" rev-list --count "$live..$auth")
+    printf '%s\n' "$n"
+  fi
+}
+
 # Print where module $1 stands against authority commit $2: `forked` when HEAD
 # and local `live` each hold commits the other lacks, else the furthest of
 # HEAD's and `live`'s relations to the authority — `diverged`, `ahead`, `behind`
@@ -53,12 +88,13 @@ gitlore_module_position() {
 
 # Reports where memory stands (D59): a prepared merge, or else its position
 # against the authority's `live` — its remote's when the fetch brought it, its
-# own local `live` otherwise (no remote, a failed fetch, a remote with no `live`
-# yet). Then the parent's pin on memory, when memory does not hold it. Reads
+# own local `live` otherwise (no remote, a remote with no `live` yet); a failed
+# fetch makes the store `unreachable`. The position goes to the session line
+# (gitlore_line_add), not to a report of its own. Then the parent's pin on memory, when memory does not hold it. Reads
 # only: nothing here moves HEAD, the worktree or any local branch.
 # Args: $1 = memory worktree path.
 report_memory_position() {
-  local mempath="$1" dirty=0 head live auth n unit remote_url fetch_err remote="" fetched=1
+  local mempath="$1" dirty=0 head live auth remote_url fetch_err remote="" fetched=1
   local position tip rc out crossing pin mid=0
   gitlore_store_mid_merge "$mempath" && mid=1
   if [ "$mid" -eq 1 ]; then
@@ -71,21 +107,29 @@ report_memory_position() {
   # Remote: a read-only fetch of `live`, and only for a real remote. The
   # placeholder (or no origin at all) is a local-only install with nothing to
   # ask, and a remote that has no `live` yet has nothing upstream; both read
-  # against local `live` and add no line. Any other fetch failure is named,
-  # with git's own reason, ahead of the position line.
+  # against local `live` and add no message. Any other fetch failure is named,
+  # with git's own reason, ahead of the session line.
   remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
   if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
-    if fetch_err=$(git -C "$mempath" fetch -q origin live 2>&1); then
+    rc=0
+    gitlore_fetch_bounded "$mempath" -q --no-recurse-submodules origin live || rc=$?
+    fetch_err="$GITLORE_FETCH_OUT"
+    if [ "$rc" -eq 0 ]; then
       remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) || remote=""
     else
       case "$fetch_err" in
         *"couldn't find remote ref"*) ;;
         *)
           fetched=0
-          # git's stderr can carry text the remote chose (`remote: …` lines), so
-          # it goes to the user only; the agent's context gets the fixed sentence.
-          add_report_each "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')" \
-            "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; the user has git's message."
+          if [ "$rc" -eq 124 ]; then
+            add_report "gitlore: could not fetch memory's remote 'live' (timed out after ${GITLORE_FETCH_TIMEOUT}s), so upstream memory is unknown."
+          else
+            # git's stderr can carry text the remote chose (`remote: …` lines),
+            # so it goes to the user only; the agent's context gets the fixed
+            # sentence.
+            add_report_each "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown. git said: $(printf '%s' "$fetch_err" | tr '\n' ' ')" \
+              "gitlore: could not fetch memory's remote 'live', so upstream memory is unknown; the user has git's message."
+          fi
           ;;
       esac
     fi
@@ -100,8 +144,10 @@ report_memory_position() {
   fi
 
   # A prepared merge moved HEAD onto its authority, so a position read now
-  # describes the preparation, not memory; the mid-merge report stands alone.
-  [ "$mid" -eq 1 ] && return 0
+  # describes the preparation, not memory; the mid-merge report stands alone,
+  # and the line names no command beside it.
+  if [ "$mid" -eq 1 ]; then gitlore_line_cmd=held; return 0; fi
+  if [ "$fetched" -eq 0 ]; then gitlore_line_add memory unreachable; return 0; fi
 
   head=$(git -C "$mempath" rev-parse HEAD)
   live=$(git -C "$mempath" rev-parse -q --verify refs/heads/live) || live="$head"
@@ -109,46 +155,29 @@ report_memory_position() {
   position=$(gitlore_module_position "$mempath" "$auth")
   case "$position" in
     forked)
-      add_report "gitlore: memory's HEAD has diverged from live — run /gitlore:push, which prepares the merge." ;;
+      gitlore_line_add memory diverged ;;
     diverged)
       # The local tip is what the rewrite record is checked against.
       if git -C "$mempath" merge-base --is-ancestor "$live" "$head"; then tip=HEAD; else tip=live; fi
       rc=0
       out=$(gitlore_rewrite_hit "$mempath" "$auth" "$tip") || rc=$?
       case "$rc" in
-        0) add_report "gitlore: upstream memory has diverged from live — run /gitlore:push to reconcile and publish it." ;;
+        0) gitlore_line_add memory diverged ;;
         1)
           crossing=$(gitlore_cross_rewrite_script "$mempath")
           add_report "gitlore: memory's live holds commits its remote rewrote (record gitlore/rewrites: $out is superseded), so merging upstream memory would re-import the old history. Nothing was merged. Run $crossing to cross this store." ;;
+        3)
+          add_report "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched (timed out after ${GITLORE_FETCH_TIMEOUT}s), so its divergence from live is unchecked." ;;
         *)
           # git's text can carry remote-chosen lines, so it goes to the user only.
           add_report_each "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live cannot be checked for rewritten history. git said: $(printf '%s' "$out" | tr '\n' ' ')" \
             "gitlore: upstream memory's rewrite record gitlore/rewrites could not be fetched, so its divergence from live is unchecked; the user has git's message."
           ;;
       esac ;;
-    ahead)
-      if git -C "$mempath" merge-base --is-ancestor "$live" "$head"; then tip="$head"; else tip="$live"; fi
-      n=$(git -C "$mempath" rev-list --count "$auth..$tip")
-      if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
-      if [ -n "$remote" ]; then
-        add_report "gitlore: memory holds $n $unit its remote's live lacks — run /gitlore:push to publish."
-      else
-        add_report "gitlore: memory's HEAD is $n $unit ahead of live — run /gitlore:push."
-      fi ;;
-    behind)
-      if [ "$live" != "$auth" ]; then
-        n=$(git -C "$mempath" rev-list --count "$live..$auth")
-        if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
-        add_report "gitlore: $n upstream memory $unit — run /gitlore:merge: it fast-forwards, may record a canned commit, and needs no push."
-      elif [ "$dirty" = "0" ]; then
-        # Clean only: a dirty store is reported above, and /gitlore:merge is
-        # what moves HEAD onto live once it is clean.
-        n=$(git -C "$mempath" rev-list --count "$head..$live")
-        if [ "$n" -eq 1 ]; then unit="commit"; else unit="commits"; fi
-        add_report "gitlore: $n $unit on live not checked out here — run /gitlore:merge."
-      fi ;;
+    ahead|behind)
+      gitlore_line_add memory "$(gitlore_line_count "$mempath" "$auth" "$position" "$head" "$live") $position" ;;
     *)
-      add_sysmsg "gitlore: memory in sync." ;;
+      gitlore_line_add memory "in sync" ;;
   esac
 }
 
@@ -183,12 +212,25 @@ report_memory_mid_merge() {
   abort="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" abort-merge"
   # A merge the continuation cannot land as it stands — MERGE_HEAD cleared by a
   # checkout, or a marker whose preparation died before its briefing — goes to
-  # /gitlore:resolve, whose guard repairs both; the hook itself repairs nothing.
+  # the command that prepared it, whose guard repairs both: /gitlore:merge under
+  # the state's `publish: no` mark, which a repair must not publish past, and
+  # /gitlore:resolve otherwise. A state file that is not a JSON object has no
+  # mark to read and goes to /gitlore:resolve, and the agent is told so. The
+  # hook itself repairs nothing.
+  local briefed=false publish="" unread="" jqerr
+  if jqerr=$(jq -e 'type == "object"' "$statefile" 2>&1 >/dev/null); then
+    briefed=$(jq -r 'has("changed_files")' "$statefile")
+    publish=$(jq -r '.publish // ""' "$statefile")
+  else
+    unread=", which could not be read as a merge state${jqerr:+ (jq: ${jqerr%%$'\n'*})}"
+  fi
   if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null \
-     || ! jq -e 'has("changed_files")' "$statefile" >/dev/null 2>&1; then
-    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run /gitlore:resolve to repair and land it. To abort it and put memory back on the commit the merge started from, run:
+     || [ "$briefed" != true ]; then
+    local remedy=/gitlore:resolve
+    [ "$publish" = "no" ] && remedy=/gitlore:merge
+    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run $remedy to repair and land it. To abort it and put memory back on the commit the merge started from, run:
   $abort" \
-      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile. Do not commit memory or start another take over it. Run /gitlore:resolve to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
+      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile$unread. Do not commit memory or start another take over it. Run $remedy to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
   $abort"
     return 0
   fi

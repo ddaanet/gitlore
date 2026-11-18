@@ -17,14 +17,17 @@
 # lands: a staged gitlink is root's record of having seen the tier (D78), so a
 # retry completes when nothing has moved memory's index or the tier since that
 # staging — its pin guard finds the tier on its index pin; a tier committed but
-# not yet staged is ahead of its pin and ends at /gitlore:merge. Recursion is
-# driver-side by design; the memory store gets no recursing hook.
+# not yet staged is ahead of its pin and ends at /gitlore:merge. A tier the pin
+# guard yielded is committed but never staged: root has not taken its lines,
+# and the take that follows records it. Recursion is driver-side by design; the
+# memory store gets no recursing hook.
 #
 # Returns 1 after emitting a message when a tier cannot be committed or its
 # `live` cannot be advanced for a reason other than divergence.
-# Args: $1 = memory worktree path, $2 = the summary text.
+# Args: $1 = memory worktree path, $2 = the summary text, $3 = the yielded
+# tiers, one per line (gitlore_pin_yield_tiers, read before any tier commits).
 gitlore_sync_tiers_to_live() {
-  local mempath="$1" summary="$2" tier tierpath body
+  local mempath="$1" summary="$2" yielded="$3" tier tierpath body
   while IFS= read -r tier; do
     [ -n "$tier" ] || continue
     tierpath="$mempath/$tier"
@@ -46,7 +49,9 @@ gitlore_sync_tiers_to_live() {
     # The message goes in as an argument: no file holds it, and gitlore_git's
     # lock retry has no stdin to re-read.
     gitlore_git -C "$tierpath" commit -q -m "$body" || return 1
-    gitlore_git -C "$mempath" add -- "$tier" || return 1
+    if ! grep -Fqx -- "$tier" <<<"$yielded"; then
+      gitlore_git -C "$mempath" add -- "$tier" || return 1
+    fi
     gitlore_advance_live "$tierpath" "tier '$tier'" "$tier" || return 1
   done < <(gitlore_tier_paths "$mempath")
   return 0

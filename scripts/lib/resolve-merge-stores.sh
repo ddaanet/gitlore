@@ -78,25 +78,6 @@ gitlore_guard_every_store() {
   gitlore_refuse_dirty_tiers "$mempath"
 }
 
-# Print 1 when a store holds uncommitted work a take must not move over, 0
-# otherwise. For the memory root that leaves out a tier gitlink moved in the
-# worktree: tiers move first by design, and the root merge records their HEADs
-# through the prepare. A staged gitlink counts: it is root's record of a tier
-# it has seen (D78), which must reach a commit, and git's merge refuses a
-# staged entry in any case.
-# Args: $1 = store worktree, $2 = tier name ("" = the memory root).
-gitlore_store_dirty_for_take() {
-  local store="$1" tier="$2"
-  if [ -n "$tier" ]; then
-    gitlore_memory_dirty "$store"
-  elif [ -z "$(git -C "$store" status --porcelain --ignore-submodules=all)" ] \
-    && git -C "$store" diff --cached --quiet; then
-    printf '0\n'
-  else
-    printf '1\n'
-  fi
-}
-
 # One store's take. Args: $1 = memory worktree, $2 = store worktree,
 # $3 = tier name ("" when the store IS the memory root).
 # Returns 0 when the store is reconciled, 2 after emitting when its remote was
@@ -118,7 +99,7 @@ gitlore_merge_one_store() {
   remote_url=$(git -C "$store" config --get remote.origin.url || true)
   if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
     remote_url=""
-  elif fetch_err=$(git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
+  elif fetch_err=$(LC_ALL=C git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
     fetched=1
     remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || remote=""
   else
@@ -287,7 +268,7 @@ gitlore_repair_stranded_live() {
   local store="$1" label="$2" head live push_err
   # An unborn store has neither ref to reconcile.
   head=$(git -C "$store" rev-parse -q --verify HEAD) || return 0
-  # No local `live` yet (a tier never fetched) — nothing to strand.
+  # No local `live` yet (a tier not mounted by gitlore) — nothing to strand.
   live=$(git -C "$store" rev-parse -q --verify live) || return 0
   [ "$live" != "$head" ] || return 0
   if ! git -C "$store" merge-base --is-ancestor "$live" "$head"; then
@@ -318,7 +299,7 @@ $push_err" >&2
 }
 
 # True when a store's local `live` holds commits its HEAD does not. Silent on
-# every expected miss — an unborn store, a tier never fetched, refs that agree —
+# every expected miss — an unborn store, a tier not mounted by gitlore, refs that agree —
 # so the callers below read as the question they are asking.
 # Args: $1 = store.
 gitlore_live_ahead_of_head() {
@@ -343,7 +324,7 @@ gitlore_reconcile_one() {
   # A merge left dead by hand is disposed of, or a prepared one continued, before
   # anything here reads the refs: the take runs the same guard first.
   gitlore_guard_stale_merge_state "$store" || return 1
-  # `-q --verify` is silent when `live` does not exist (never fetched).
+  # `-q --verify` is silent when `live` does not exist (a tier not mounted by gitlore).
   live=$(git -C "$store" rev-parse -q --verify live) || return 0
   head=$(git -C "$store" rev-parse HEAD)
   [ "$head" = "$live" ] && return 0

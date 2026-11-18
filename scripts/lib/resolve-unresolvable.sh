@@ -181,7 +181,7 @@ $revert" >&2
 gitlore_tier_fetch_live() {
   local tierpath="$1" err
   [ -n "$(git -C "$tierpath" config --get remote.origin.url || true)" ] || return 0
-  if err=$(gitlore_git -C "$tierpath" fetch -q --no-recurse-submodules origin live 2>&1); then
+  if err=$(LC_ALL=C gitlore_git -C "$tierpath" fetch -q --no-recurse-submodules origin live 2>&1); then
     return 0
   fi
   [ -z "$err" ] || printf '%s\n' "$err" >&2

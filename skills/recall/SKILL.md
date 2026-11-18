@@ -15,7 +15,17 @@ once first.
 Each line is a routing entry — a title, a path, and the trigger keywords. You
 decide from the line; the fact itself lives only in the file.
 
-## 2. Select at most five
+## 2. Match the installed skills too
+
+The installed skills' descriptions loaded at session start too, and are a
+second routing table: decide from them the same way, with no tool call. Match
+the task against them as well as the index, and load a skill whose description
+names the moment at hand and whose body is not already in this context. A
+skill body costs more than a memory file, so load only a skill naming this
+moment, not every adjacent one. A loaded skill does not count toward the five
+bodies below.
+
+## 3. Select at most five
 
 - Pick only entries you are **certain** will help with what you are doing right
   now, judged from the title and the hook text.
@@ -33,10 +43,11 @@ decide from the line; the fact itself lives only in the file.
   and carry on — the checkpoint exists to force a decision, not to manufacture a
   lookup.
 
-## 3. Read them in one batch
+## 4. Read them in one batch
 
-Issue every Read in a **single message**, so the whole selection costs one round
-trip. A path in the index is store-relative, so prefix it with `memory/`:
-`- [T](ddaanet/foo.md)` is at `memory/ddaanet/foo.md`.
+Issue every Read, and the Skill call for any skill from §2, in a **single
+message**, so the whole selection costs one round trip. A path in the index is
+store-relative, so prefix it with `memory/`: `- [T](ddaanet/foo.md)` is at
+`memory/ddaanet/foo.md`.
 
 Then act on what you read.
