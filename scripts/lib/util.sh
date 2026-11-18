@@ -244,7 +244,8 @@ gitlore_git_is_lock_error() {
 # lock-contention failures retry (gitlore_git_is_lock_error); every other
 # failure fails fast. The final attempt's stderr and exit code are surfaced
 # unchanged. Stdout passes through untouched. Apply to mutating git calls only
-# (read-only ops never take the index/ref lock). See D13.
+# (read-only ops never take the index/ref lock). The git runs under LC_ALL=C so
+# the English lock messages match under any caller locale. See D13.
 gitlore_git() {
   local -a schedule
   read -r -a schedule <<< "${GITLORE_GIT_RETRY_SCHEDULE:-0.1 0.2 0.4 0.8 1.6 3.2 3.7}"
@@ -252,7 +253,7 @@ gitlore_git() {
   errfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-git.XXXXXX")
   while :; do
     rc=0
-    git "$@" 2>"$errfile" || rc=$?               # `|| rc=$?` keeps set -e happy
+    LC_ALL=C git "$@" 2>"$errfile" || rc=$?               # `|| rc=$?` keeps set -e happy
     [ "$rc" -eq 0 ] && break
     gitlore_git_is_lock_error "$(cat "$errfile")" || break
     [ "$i" -lt "${#schedule[@]}" ] || break          # retries exhausted
