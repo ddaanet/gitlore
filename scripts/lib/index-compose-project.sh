@@ -183,8 +183,9 @@ gitlore_index_has_tier() {
 # represent a dormant tier. They keep living in its carrier, and reactivating the
 # tier brings them back through the case above.
 #
-# Returns 1 when a read or write of its own fails, so the caller leaves root
-# untouched instead of writing a short block.
+# Returns 1 when a read of its own fails, so the caller leaves root untouched
+# instead of writing a short block. Its lines go to stdout, which every caller
+# captures, so an emit is not a write that can fail.
 gitlore_compose_root_bullets() {
   local mempath="$1" merged="${2:-}"
   local root="$mempath/MEMORY.md" active tier line path n
@@ -197,15 +198,14 @@ gitlore_compose_root_bullets() {
     elif [ -f "$mempath/$tier/MEMORY.md" ] && ! gitlore_index_has_tier "$root" "$tier"; then
       while IFS= read -r line || [ -n "$line" ]; do
         [ -n "$line" ] || continue
-        # A line that is no bullet is skipped; a bullet that cannot be written
-        # fails the block.
+        # A line that is no bullet is skipped.
         gitlore_bullet_path "$line" >/dev/null || continue
-        gitlore_bullet_reprefix "$line" "$tier" || return 1
+        gitlore_bullet_reprefix "$line" "$tier"
       done < <(gitlore_index_part "$mempath/$tier/MEMORY.md" bullets)
     else
       while IFS= read -r line || [ -n "$line" ]; do
         path=$(gitlore_bullet_path "$line") || continue
-        case "$path" in "$tier"/*) printf '%s\n' "$line" || return 1 ;; esac
+        case "$path" in "$tier"/*) printf '%s\n' "$line" ;; esac
       done < <(gitlore_index_part "$root" bullets)
     fi
   done <<EOF
@@ -215,7 +215,7 @@ EOF
   while IFS= read -r line || [ -n "$line" ]; do
     path=$(gitlore_bullet_path "$line") || continue
     case "$path" in */*) continue ;; esac
-    printf '%s\n' "$line" || return 1
+    printf '%s\n' "$line"
   done < <(gitlore_index_part "$root" bullets)
 }
 

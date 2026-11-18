@@ -8,11 +8,13 @@ load helpers/fixtures
 load helpers/tier-fixtures
 
 # The two bullet producers of a compose pass, gitlore_compose_down and
-# gitlore_compose_root_bullets, fail when one of their own writes fails, so the
-# pass refuses with its existing message and leaves the index as it was. A write
-# that fails while the producer still returns 0 hands the writer a short list,
-# and the index loses lines silently: a scratch file on a disk that fills
-# mid-pass, a merged block that cannot be read.
+# gitlore_compose_root_bullets, fail when one of their own scratch writes or
+# file reads fails, so the pass refuses with its existing message and leaves the
+# index as it was. A failure the producer survives with status 0 hands the
+# writer a short list, and the index loses lines silently: a scratch file on a
+# disk that fills mid-pass, a merged block that cannot be read. Their stdout
+# goes to a capturing caller, so an emit is not a write that can fail and none
+# is guarded.
 #
 # A failing write is injected by shadowing printf, sed or cat with a function
 # that fails one chosen call made directly from the function under test
@@ -141,36 +143,6 @@ assert_injected_failure() {
   [ "$status" -ne 0 ]
 }
 
-@test "root_bullets fails when writing a tier line taken from root fails" {
-  tier_store_with_lines
-  fail_call printf gitlore_compose_root_bullets 1 '*](ddaanet/shared.md)*'
-  run --separate-stderr gitlore_compose_root_bullets memory
-  assert_injected_failure printf
-}
-
-@test "root_bullets fails when writing a project line fails" {
-  tier_store_with_lines
-  seed_root_bullet proj.md "a project fact"
-  # Not the last line: a failed write there is the function's status anyway.
-  seed_root_bullet later.md "a later project fact"
-  fail_call printf gitlore_compose_root_bullets 1 '*](proj.md)*'
-  run --separate-stderr gitlore_compose_root_bullets memory
-  assert_injected_failure printf
-}
-
-# Root holds no line for the tier, so its block is the carrier's, reprefixed.
-@test "root_bullets fails when writing an adopted carrier line fails" {
-  make_parent_with_memory
-  make_tier_in_memory ddaanet
-  set_tier_manifest ddaanet
-  seed_tier_bullet ddaanet shared.md "a portable fact"
-  seed_tier_bullet ddaanet second.md "a second portable fact"
-  run ! grep -qF ddaanet/ memory/MEMORY.md
-  fail_call printf gitlore_bullet_reprefix 1 '*shared.md*'
-  run --separate-stderr gitlore_compose_root_bullets memory
-  assert_injected_failure printf
-}
-
 @test "lock-in: root_bullets adopts every carrier line when no write fails" {
   make_parent_with_memory
   make_tier_in_memory ddaanet
@@ -183,16 +155,3 @@ assert_injected_failure() {
   [[ "$output" == *"](ddaanet/second.md)"* ]]
 }
 
-@test "a pass whose root layout fails a write leaves root untouched with the existing refusal" {
-  tier_store_with_lines
-  seed_root_bullet proj.md "a project fact"
-  # Not the last line: a failed write there is the function's status anyway.
-  seed_root_bullet later.md "a later project fact"
-  cp memory/MEMORY.md "$BATS_TEST_TMPDIR/root.before"
-  fail_call printf gitlore_compose_root_bullets 1 '*](proj.md)*'
-  run --separate-stderr gitlore_compose memory
-  [ "$status" -eq 2 ]
-  [[ "$stderr" == *"injected printf failure"* ]]
-  [[ "$output" == *"could not compose memory/MEMORY.md; it was left untouched"* ]]
-  command cmp "$BATS_TEST_TMPDIR/root.before" memory/MEMORY.md
-}
