@@ -14,7 +14,8 @@ load helpers/tier-fixtures
 # writer a short list, and the index loses lines silently: a scratch file on a
 # disk that fills mid-pass, a merged block that cannot be read. Both producers'
 # stdout goes to a capturing caller, so an emit alone is not a write that can
-# fail; the guards that remain are on file reads and scratch writes.
+# fail; the guards that remain are on the merged-block read and the scratch
+# files' writes and reads.
 #
 # A failing write is injected by shadowing printf, sed or cat with a function
 # that fails one chosen call made directly from the function under test

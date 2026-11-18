@@ -184,8 +184,8 @@ gitlore_index_has_tier() {
 # tier brings them back through the case above.
 #
 # Returns 1 when the read of a merged tier block fails, so the caller leaves
-# root untouched instead of writing a short block. Its lines go to stdout, which every caller
-# captures, so an emit is not a write that can fail.
+# root untouched instead of writing a short block. Its lines go to stdout,
+# which every caller captures, so an emit is not a write that can fail.
 gitlore_compose_root_bullets() {
   local mempath="$1" merged="${2:-}"
   local root="$mempath/MEMORY.md" active tier line path n

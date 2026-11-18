@@ -1,0 +1,3 @@
+## Current task
+
+Two items my human partner approved on 2026-11-18 are the work in hand, each a commit with its own delegated medium review: session-start names the memory store's absolute path on additionalContext so skill and command text stops deriving it, and the lock-retry wrapper runs git under LC_ALL=C so its lock-message matching holds under any locale. The fresh session first adds the store-path line to the protocol_ctx in scripts/cc-hooks/session-start.sh with its bats pin, wording as recorded in TODO.md, then updates the four texts and D85 that name the git config derivation.
