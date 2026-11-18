@@ -204,13 +204,14 @@ tier_head_commit_recorded() {
   synced_store
   # shellcheck disable=SC2034 # read by make_hanging_remote (tests/helpers/session-line.bash)
   HANG_SECONDS=30 HANG_PIDS="$BATS_TEST_TMPDIR/hang.pids"
-  export GITLORE_FETCH_TIMEOUT=1
+  # A bound memory's healthy fetch of its local remote meets under load.
+  export GITLORE_FETCH_TIMEOUT=5
   make_hanging_remote memory/ddaanet
   session_start
   assert_line "gitlore: memory in sync; ddaanet unreachable"
   assert_no_old_lines
-  assert_present sys "tier 'ddaanet' could not fetch from its remote \\(timed out after 1s\\)"
-  [ "$(offset sys "timed out after 1s")" -lt "$(offset sys 'gitlore: memory in sync; ddaanet unreachable')" ]
+  assert_present sys "tier 'ddaanet' could not fetch from its remote \\(timed out after 5s\\)"
+  [ "$(offset sys "timed out after 5s")" -lt "$(offset sys 'gitlore: memory in sync; ddaanet unreachable')" ]
 }
 
 @test "a tier remote with no live is not unreachable: it reads against local live" {

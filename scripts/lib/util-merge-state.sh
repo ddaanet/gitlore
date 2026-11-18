@@ -179,6 +179,9 @@ gitlore_fetch_memo_record() {
 # in this process. The memo file is a private mktemp file that the subshells the
 # script runs share, and is removed when it exits (the EXIT trap is set in the
 # calling shell). Without one, each tier is fetched on every check.
+# The `trap … EXIT` it installs replaces any EXIT trap the caller owns, so a
+# caller with its own (scripts/add-tier.sh) does not call this: it creates the
+# memo itself and removes it in that trap.
 gitlore_fetch_memo_init() {
   if GITLORE_FETCH_MEMO=$(mktemp "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
     trap 'rm -f "$GITLORE_FETCH_MEMO"' EXIT
@@ -219,7 +222,9 @@ gitlore_fetch_bounded() {
     r=0
     LC_ALL=C git -C "$dir" fetch "$@" >"$tmp/out" 2>&1 &
     fpid=$!
-    { sleep "$secs"; : > "$tmp/timeout"; kill -TERM -- "-$fpid"; } &
+    # The CONT follows the TERM because a group the terminal stopped (a
+    # transport reading /dev/tty gets SIGTTIN) holds TERM pending until resumed.
+    { sleep "$secs"; : > "$tmp/timeout"; kill -TERM -- "-$fpid"; kill -CONT -- "-$fpid"; } &
     wpid=$!
     wait "$fpid" || r=$?
     kill -TERM -- "-$wpid" || true

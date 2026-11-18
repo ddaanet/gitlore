@@ -28,6 +28,8 @@ load helpers/index-compose
 # parallel run, so the elapsed bound is the hang itself: an unbounded fetch
 # takes at least that long, a bounded one far less.
 HANG_SECONDS=30
+# A test that sets the timeout uses 4s: the other stores' healthy fetches of
+# their local remotes meet it under load, and it differs from the default 5s.
 
 setup() {
   setup_tmp_repo
@@ -133,11 +135,11 @@ assert_line_with() {
 @test "red: SessionStart bounds a hanging tier fetch, completes, and reports the timeout" {
   state_s
   make_hanging_remote memory/ddaanet
-  GITLORE_FETCH_TIMEOUT=2 run_session_start
+  GITLORE_FETCH_TIMEOUT=4 run_session_start
   [ "$status" -eq 0 ]
   [ "$elapsed" -lt "$HANG_SECONDS" ]
   assert_hang_reaped
-  assert_line_with "$sys" "gitlore: tier 'ddaanet'" "timed out after 2s"
+  assert_line_with "$sys" "gitlore: tier 'ddaanet'" "timed out after 4s"
   # The other stores still report.
   [[ "$sys" == *"$TIER_HANG_LINE"* ]]
 }
@@ -145,11 +147,11 @@ assert_line_with() {
 @test "red: SessionStart bounds a hanging memory fetch, completes, and reports the timeout" {
   state_s
   make_hanging_remote memory
-  GITLORE_FETCH_TIMEOUT=2 run_session_start
+  GITLORE_FETCH_TIMEOUT=4 run_session_start
   [ "$status" -eq 0 ]
   [ "$elapsed" -lt "$HANG_SECONDS" ]
   assert_hang_reaped
-  assert_line_with "$sys" "could not fetch memory's remote 'live'" "timed out after 2s"
+  assert_line_with "$sys" "could not fetch memory's remote 'live'" "timed out after 4s"
   [[ "$sys" == *"$MEMORY_HANG_LINE"* ]]
 }
 
@@ -247,14 +249,66 @@ STUB
   state_s
   push_memory_fact
   make_hanging_rewrites_git
-  GITLORE_FETCH_TIMEOUT=2 PATH="$TMP_REPO/stub:$PATH" run_session_start
+  GITLORE_FETCH_TIMEOUT=4 PATH="$TMP_REPO/stub:$PATH" run_session_start
   [ "$status" -eq 0 ]
   [ "$elapsed" -lt "$HANG_SECONDS" ]
   assert_hang_reaped
-  assert_line_with "$sys" "rewrite record gitlore/rewrites could not be fetched" "timed out after 2s"
-  assert_line_with "$ctx" "rewrite record gitlore/rewrites could not be fetched" "timed out after 2s"
+  assert_line_with "$sys" "rewrite record gitlore/rewrites could not be fetched" "timed out after 4s"
+  assert_line_with "$ctx" "rewrite record gitlore/rewrites could not be fetched" "timed out after 4s"
   # Memory is left out of the line (its rewrite check could not run); the tiers stay.
   [[ "$sys" == *"gitlore: Run /gitlore:push (ddaanet 1 behind; org 1 ahead)"* ]]
+}
+
+# A transport that reads the terminal from a background group is stopped by
+# SIGTTIN, and a stopped group holds the timeout's TERM pending: without a CONT
+# the bounded fetch never returns. A controlling terminal needs a pty, which
+# `script` gives; util-linux takes `-c CMD FILE`, BSD `FILE CMD...`.
+@test "red: a timeout ends a fetch whose transport the terminal stopped" {
+  local inner="$BATS_TEST_TMPDIR/inner.sh" result="$BATS_TEST_TMPDIR/result" i=0 spid pid rc secs
+  command -v script >/dev/null || skip "no script(1) for a pty"
+  mkdir -p "$TMP_REPO/stub"
+  cat > "$TMP_REPO/stub/git" <<STUB
+#!/bin/bash
+echo \$\$ >> "$HANG_PIDS"
+read -r _ < /dev/tty
+STUB
+  chmod 755 "$TMP_REPO/stub/git"
+  cat > "$inner" <<INNER
+source "$PLUGIN_ROOT/scripts/lib/util-merge-state.sh"
+PATH="$TMP_REPO/stub:\$PATH"
+GITLORE_FETCH_TIMEOUT=2
+t0=\$SECONDS
+gitlore_fetch_bounded "$TMP_REPO" origin
+rc=\$?
+printf '%s %s\n' "\$rc" "\$((SECONDS - t0))" > "$result.tmp"
+mv "$result.tmp" "$result"
+INNER
+  if script -qec true /dev/null </dev/null >/dev/null 2>&1; then
+    script -qec "bash '$inner'" /dev/null </dev/null >/dev/null 2>&1 &
+  elif script -q /dev/null true </dev/null >/dev/null 2>&1; then
+    script -q /dev/null bash "$inner" </dev/null >/dev/null 2>&1 &
+  else
+    skip "script(1) gives no pty here"
+  fi
+  spid=$!
+  while [ ! -f "$result" ] && [ "$i" -lt 200 ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  if [ ! -f "$result" ]; then
+    # The stopped transport ignores teardown's TERM until resumed.
+    while IFS= read -r pid || [ -n "$pid" ]; do
+      kill -CONT "$pid" || true
+    done < "$HANG_PIDS"
+    kill "$spid" || true
+    echo "the bounded fetch did not return within 20s"
+    return 1
+  fi
+  wait "$spid" || true
+  [ "$(grep -c . "$HANG_PIDS")" -eq 1 ]
+  read -r rc secs < "$result"
+  [ "$rc" -eq 124 ]
+  [ "$secs" -lt 10 ]
 }
 
 # --- red: gitlore-commit reads a timeout that is not a positive integer as unset --

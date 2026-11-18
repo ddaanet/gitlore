@@ -118,7 +118,7 @@ load helpers/session-line
   git -C memory push -q origin live
   assert_level_with_remotes zeta
   assert_level_with_remotes alpha
-  [ "$(git -C memory config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}' | tr '\n' ' ')" = "zeta alpha " ]
+  [ "$(gitlore_tier_paths memory | tr '\n' ' ')" = "zeta alpha " ]
   session_start
   assert_line "gitlore: memory in sync; zeta in sync; alpha in sync"
   assert_no_old_lines
