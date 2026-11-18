@@ -43,3 +43,16 @@ load helpers/setup
   grep -qiE 'summary.*again|again.*summary' "$skill"
   grep -qiE 're-?approv' "$skill"
 }
+
+# The memory submodule may be mounted at another path: a skill or command that
+# runs a command on, or opens, the store derives the path from .gitmodules.
+@test "distribution: store paths in skills and commands are derived, not memory/" {
+  for f in skills/recall/SKILL.md skills/merge/SKILL.md skills/memory-writing/SKILL.md commands/index-audit.md; do
+    grep -qF 'submodule.gitlore-memory.path' "$PLUGIN_ROOT/$f"
+  done
+  # shellcheck disable=SC2016  # the backticks are grep pattern text, not a command substitution
+  run grep -nE 'git -C memory|(wc -c|awk .*|< ) memory/MEMORY|prefix it with `memory/`|under `memory/` \(or' \
+    "$PLUGIN_ROOT/skills/recall/SKILL.md" "$PLUGIN_ROOT/skills/merge/SKILL.md" \
+    "$PLUGIN_ROOT/skills/memory-writing/SKILL.md" "$PLUGIN_ROOT/commands/index-audit.md"
+  [ "$status" -eq 1 ]
+}

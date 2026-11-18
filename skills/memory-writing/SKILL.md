@@ -151,8 +151,8 @@ take the overage to `/gitlore:index-audit` separately.
 
 ## 8. Landing it
 
-Write the file under `memory/` (or the matching tier's directory) and add its
-line to the root `memory/MEMORY.md` — `- [Title](<tier>/<file>.md) — hook`;
+Write the file under `<mempath>` (§1; or the matching tier's directory) and add its
+line to the root `<mempath>/MEMORY.md` — `- [Title](<tier>/<file>.md) — hook`;
 tier carriers and frontmatter follow from that edit. The fact is committed with the
 user's approved summary through `gitlore-commit` (the `gitlore:commit` skill), and its pointer rides
 the parent commit carrying the change it documents.

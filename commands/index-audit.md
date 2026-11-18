@@ -18,8 +18,9 @@ what the store should still contain, not a byte-shaving exercise.
 ## 1. Measure
 
 ```
-wc -c memory/MEMORY.md
-awk '{ print length, $0 }' memory/MEMORY.md | sort -rn | head -10 | cut -c1-120
+mempath=$(git config --file .gitmodules submodule.gitlore-memory.path)
+wc -c "$mempath/MEMORY.md"
+awk '{ print length, $0 }' "$mempath/MEMORY.md" | sort -rn | head -10 | cut -c1-120
 ```
 
 Cost is bytes, not lines. The longest entries are where curation pays: five
@@ -29,7 +30,8 @@ together is a rounding error.
 Then read what sits ahead of the first pointer bullet:
 
 ```
-awk '/^- \[/ { exit } { print NR": "$0 }' memory/MEMORY.md
+mempath=$(git config --file .gitmodules submodule.gitlore-memory.path)
+awk '/^- \[/ { exit } { print NR": "$0 }' "$mempath/MEMORY.md"
 ```
 
 That span is preamble. Composition keeps it verbatim, never mirrors it into a
@@ -105,8 +107,9 @@ weight without markup, and a backtick-only sweep once reported zero misroutes
 where the plain-word sweep found four.
 
 ```
-git -C memory show HEAD:MEMORY.md | tr -s '[:space:]' '\n' | sort -u > "${TMPDIR:-/tmp}/index-before"
-tr -s '[:space:]' '\n' < memory/MEMORY.md | sort -u > "${TMPDIR:-/tmp}/index-after"
+mempath=$(git config --file .gitmodules submodule.gitlore-memory.path)
+git -C "$mempath" show HEAD:MEMORY.md | tr -s '[:space:]' '\n' | sort -u > "${TMPDIR:-/tmp}/index-before"
+tr -s '[:space:]' '\n' < "$mempath/MEMORY.md" | sort -u > "${TMPDIR:-/tmp}/index-after"
 comm -23 "${TMPDIR:-/tmp}/index-before" "${TMPDIR:-/tmp}/index-after"
 ```
 
@@ -129,7 +132,7 @@ disjoint classes (33 and 25 findings with little overlap, measured once).
 Dispatch both against the diff, each briefed to falsify rather than confirm,
 each writing to its own output file and replying with one line naming it.
 
-**Brief A — trigger loss.** Given `git -C memory diff HEAD -- MEMORY.md` and
+**Brief A — trigger loss.** Given `git -C "$mempath" diff HEAD -- MEMORY.md` and
 the two word lists from §3, falsify the claim that only elaboration was cut.
 Report every literal that fell to zero; every literal now present on exactly
 one line that points at a different fact than before; every line where a
@@ -153,6 +156,6 @@ index line, not the fact file.
 
 Editing the index rewrites the `description:` of every fact file a changed
 line points at, so a two-line index edit can produce a fifty-file diff. Review
-`git -C memory status --short` and the frontmatter changes as part of the
+`git -C "$mempath" status --short` and the frontmatter changes as part of the
 pass, then commit memory through the `gitlore:commit` skill; the next parent commit records the pointer. Report the before and after byte counts, the levers used, and the
 auditors' confirmed findings with their repairs.
