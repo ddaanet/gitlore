@@ -48,8 +48,11 @@ bodies below.
 Issue every Read, and the Skill call for any skill from §2, in a **single
 message**, so the whole selection costs one round trip. A path in the index is
 store-relative, so prefix it with `<mempath>/`: `- [T](ddaanet/foo.md)` is at
-`<mempath>/ddaanet/foo.md`. `<mempath>` is the output of `git config --file
-.gitmodules submodule.gitlore-memory.path`, run once from the repo root in the
-same call.
+`<mempath>/ddaanet/foo.md`. `<mempath>` is the absolute memory directory the
+harness's memory instructions in your context name — the one `MEMORY.md` loaded
+from — so it costs no tool call and the Reads take it as is. Only when no such
+instructions are in context, derive it in one Bash call before the batch,
+`git config --file .gitmodules submodule.gitlore-memory.path` from the repo
+root, joined to the repo root.
 
 Then act on what you read.
