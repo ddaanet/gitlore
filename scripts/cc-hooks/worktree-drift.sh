@@ -9,8 +9,9 @@
 # Enter/Exit transition (no per-tool cost, no de-dup needed) and, when the
 # session has drifted into a linked worktree of the same gitlore repo, emits the
 # warning on both channels: a systemMessage for the user and an
-# additionalContext directive naming the launch store for the agent. ExitWorktree returns cwd to the launch root, so the
-# drift predicate is false and the hook is silent — the asymmetry is intentional.
+# additionalContext directive naming the launch store for the agent.
+# ExitWorktree returns cwd to the launch root, so the drift predicate is false
+# and the hook is silent — the asymmetry is intentional.
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"

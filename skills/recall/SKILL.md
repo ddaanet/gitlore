@@ -7,11 +7,10 @@ description: Fetch specific memory bodies into context on demand. Use when a too
 
 ## 1. Decide from the index you already hold — no tool calls
 
-`<mempath>/MEMORY.md` loaded at session start and is in your context now, where
-`<mempath>` is `git config --file .gitmodules submodule.gitlore-memory.path` run from the repo root. **Do not
-Read it, do not grep it, do not run anything.** The one exception: if a
-compaction has happened since it loaded, or it was edited this session, Read it
-once first.
+`<mempath>/MEMORY.md` loaded at session start and is in your context now.
+**Do not Read it, do not grep it, do not run anything.** The one exception: if
+a compaction has happened since it loaded, or it was edited this session, Read
+it once first.
 
 Each line is a routing entry — a title, a path, and the trigger keywords. You
 decide from the line; the fact itself lives only in the file.
@@ -49,6 +48,8 @@ bodies below.
 Issue every Read, and the Skill call for any skill from §2, in a **single
 message**, so the whole selection costs one round trip. A path in the index is
 store-relative, so prefix it with `<mempath>/`: `- [T](ddaanet/foo.md)` is at
-`<mempath>/ddaanet/foo.md`.
+`<mempath>/ddaanet/foo.md`. `<mempath>` is the output of `git config --file
+.gitmodules submodule.gitlore-memory.path`, run once from the repo root in the
+same call.
 
 Then act on what you read.

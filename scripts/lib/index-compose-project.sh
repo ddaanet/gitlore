@@ -183,8 +183,8 @@ gitlore_index_has_tier() {
 # represent a dormant tier. They keep living in its carrier, and reactivating the
 # tier brings them back through the case above.
 #
-# Returns 1 when a block cannot be read or a line cannot be written, so the
-# caller leaves root untouched instead of writing a short block.
+# Returns 1 when one of the file reads or line writes it makes itself fails,
+# so the caller leaves root untouched instead of writing a short block.
 gitlore_compose_root_bullets() {
   local mempath="$1" merged="${2:-}"
   local root="$mempath/MEMORY.md" active tier line path n
