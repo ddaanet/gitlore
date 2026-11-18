@@ -198,6 +198,9 @@ gitlore_fetch_memo_init() {
 # dies with git. Once the fetch ends the watchdog's group is killed, sleeper
 # included, so nothing outlives the call and an early finish waits for nothing.
 # Args: $1 = tier or memory worktree, $2... = fetch arguments.
+#
+# The fetch runs under the C locale: callers match git's English text in
+# GITLORE_FETCH_OUT, and the one that reads none of it loses nothing.
 # shellcheck disable=SC2034 # GITLORE_FETCH_OUT is read by the callers
 gitlore_fetch_bounded() {
   local dir="$1" secs="${GITLORE_FETCH_TIMEOUT:-}" tmp rc=0
@@ -205,7 +208,7 @@ gitlore_fetch_bounded() {
   GITLORE_FETCH_OUT=""
   if ! gitlore_fetch_timeout_ok "$secs" ||
      ! tmp=$(mktemp -d "${TMPDIR:-/tmp}/gitlore-fetch.XXXXXX"); then
-    GITLORE_FETCH_OUT=$(git -C "$dir" fetch "$@" 2>&1) || rc=$?
+    GITLORE_FETCH_OUT=$(LC_ALL=C git -C "$dir" fetch "$@" 2>&1) || rc=$?
     return "$rc"
   fi
   # The subshell's own stdout and stderr are dropped: job control prints
@@ -214,7 +217,7 @@ gitlore_fetch_bounded() {
   (
     set -m
     r=0
-    git -C "$dir" fetch "$@" >"$tmp/out" 2>&1 &
+    LC_ALL=C git -C "$dir" fetch "$@" >"$tmp/out" 2>&1 &
     fpid=$!
     { sleep "$secs"; : > "$tmp/timeout"; kill -TERM -- "-$fpid"; } &
     wpid=$!

@@ -74,8 +74,7 @@ gitlore: tier '$tier' could not be checked out, so its facts are not available i
       # The outcome goes to the fetch memo, so the pin guard's yield checks
       # reuse it instead of fetching this remote again.
       rc=0
-      # The match below reads git's English text, so this fetch runs under the C locale.
-      LC_ALL=C gitlore_fetch_bounded "$tierpath" origin live || rc=$?
+      gitlore_fetch_bounded "$tierpath" origin live || rc=$?
       fetch_err="$GITLORE_FETCH_OUT"
       gitlore_fetch_memo_record "$rc" "$tierpath"
       if [ "$rc" -eq 0 ]; then

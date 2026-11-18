@@ -55,8 +55,7 @@ gitlore_rewrite_hit() {
   local store="$1" authority="$2" pending="$3"
   local rc=0 fetch_err mine map hit
   [ -n "$(git -C "$store" config --get remote.origin.url)" ] || return 0
-  # The match below reads git's English text, so this fetch runs under the C locale.
-  LC_ALL=C gitlore_fetch_bounded "$store" -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites || rc=$?
+  gitlore_fetch_bounded "$store" -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites || rc=$?
   fetch_err="$GITLORE_FETCH_OUT"
   if [ "$rc" -eq 124 ]; then
     return 3
