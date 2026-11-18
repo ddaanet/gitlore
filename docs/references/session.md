@@ -167,14 +167,16 @@ until a push, a memory commit or `/gitlore:resolve` makes it.
 | State | Report |
 |---|---|
 | Not materialized | Cloned at its recorded commit; a failed checkout is named, and the agent is told the tier's facts are unavailable and its root lines stay |
-| Mid-merge | Tier: its notice alone, naming `/gitlore:resolve`. Memory: the command that lands the prepared merge and the one that aborts it, `resolve.sh continue-after-merge` and `abort-merge`; a merge with no `MERGE_HEAD`, or a state file without its briefing, names `abort-merge` and the repair command, which follows the merge's publish mark: `/gitlore:merge` under `no`, `/gitlore:resolve` otherwise |
+| Mid-merge | Tier: its notice alone, naming `/gitlore:resolve`. Memory: the command that lands the prepared merge and the one that aborts it, `resolve.sh continue-after-merge` and `abort-merge`; a merge with no `MERGE_HEAD`, or a state file without its briefing, names `abort-merge` and the repair command, which follows the merge's publish mark: `/gitlore:merge` under `no`, `/gitlore:resolve` otherwise and for a state file that is not a JSON object, which the agent is told |
 | Recorded commit no repository holds | The unresolvable-pin report ([unresolvable-pin.md](unresolvable-pin.md)) |
 | Local against the authority's `live` | The position line below |
 | Root's tier lines would change in a compose pass | The pending report, `gitlore-compose`; a tier off its pin is refused in it, naming `/gitlore:merge`, or yielded where that take refuses for uncommitted changes |
 | A tier's index holds a line root does not | The orphan report, reported and never refused |
 
 A prepared merge moved `HEAD` onto its authority, so a position read would
-describe the preparation: a mid-merge module reports the notice alone.
+describe the preparation: a mid-merge module reports the notice alone. While
+memory is mid-merge the position line lists the tiers and names no command, so
+nothing beside the notice says to push or take.
 
 ### The position
 

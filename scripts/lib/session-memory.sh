@@ -28,9 +28,12 @@ $2"
 # `diverged`, `unreachable`) to the session line, which the hook emits once
 # after every store has reported. The line's command is /gitlore:push when any
 # store is ahead or diverged, else /gitlore:merge when any is behind, else none.
+# While memory is mid-merge (gitlore_line_cmd=held) it is none whatever the
+# stores read: the mid-merge report names the remedy.
 # Args: $1 = store name, $2 = position word.
 gitlore_line_add() {
   gitlore_line_stores="${gitlore_line_stores:+$gitlore_line_stores; }$1 $2"
+  [ "$gitlore_line_cmd" != held ] || return 0
   case "$2" in
     diverged|*ahead) gitlore_line_cmd=push ;;
     *behind) [ "$gitlore_line_cmd" = push ] || gitlore_line_cmd=merge ;;
@@ -109,7 +112,7 @@ report_memory_position() {
   remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
   if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
     rc=0
-    gitlore_fetch_bounded "$mempath" -q origin live || rc=$?
+    gitlore_fetch_bounded "$mempath" -q --no-recurse-submodules origin live || rc=$?
     fetch_err="$GITLORE_FETCH_OUT"
     if [ "$rc" -eq 0 ]; then
       remote=$(git -C "$mempath" rev-parse -q --verify refs/remotes/origin/live) || remote=""
@@ -141,8 +144,9 @@ report_memory_position() {
   fi
 
   # A prepared merge moved HEAD onto its authority, so a position read now
-  # describes the preparation, not memory; the mid-merge report stands alone.
-  [ "$mid" -eq 1 ] && return 0
+  # describes the preparation, not memory; the mid-merge report stands alone,
+  # and the line names no command beside it.
+  if [ "$mid" -eq 1 ]; then gitlore_line_cmd=held; return 0; fi
   if [ "$fetched" -eq 0 ]; then gitlore_line_add memory unreachable; return 0; fi
 
   head=$(git -C "$mempath" rev-parse HEAD)
@@ -210,14 +214,23 @@ report_memory_mid_merge() {
   # checkout, or a marker whose preparation died before its briefing — goes to
   # the command that prepared it, whose guard repairs both: /gitlore:merge under
   # the state's `publish: no` mark, which a repair must not publish past, and
-  # /gitlore:resolve otherwise. The hook itself repairs nothing.
+  # /gitlore:resolve otherwise. A state file that is not a JSON object has no
+  # mark to read and goes to /gitlore:resolve, and the agent is told so. The
+  # hook itself repairs nothing.
+  local briefed=false publish="" unread="" jqerr
+  if jqerr=$(jq -e 'type == "object"' "$statefile" 2>&1 >/dev/null); then
+    briefed=$(jq -r 'has("changed_files")' "$statefile")
+    publish=$(jq -r '.publish // ""' "$statefile")
+  else
+    unread=", which could not be read as a merge state${jqerr:+ (jq: ${jqerr%%$'\n'*})}"
+  fi
   if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null \
-     || ! jq -e 'has("changed_files")' "$statefile" >/dev/null 2>&1; then
+     || [ "$briefed" != true ]; then
     local remedy=/gitlore:resolve
-    [ "$(jq -r '.publish // ""' "$statefile" 2>/dev/null)" = "no" ] && remedy=/gitlore:merge
+    [ "$publish" = "no" ] && remedy=/gitlore:merge
     add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run $remedy to repair and land it. To abort it and put memory back on the commit the merge started from, run:
   $abort" \
-      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile. Do not commit memory or start another take over it. Run $remedy to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
+      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile$unread. Do not commit memory or start another take over it. Run $remedy to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
   $abort"
     return 0
   fi

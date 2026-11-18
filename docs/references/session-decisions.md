@@ -42,8 +42,9 @@ the single SessionStart JSON the hook writes to fd 3:
   same text. The hook exits 0 throughout: stdout JSON is parsed only on exit 0,
   so a non-zero exit would discard the very message it was meant to signal, and
   SessionStart's exit code is consumed by nothing.
-- **Clean success** → a brief confirmation (`memory ready`), per the chosen
-  always-confirm behaviour.
+- **Clean success** → the position line's in-sync form
+  (`gitlore: memory in sync`) is the confirmation, per the chosen always-confirm
+  behaviour.
 - **Launcher-not-redirected** warning → `systemMessage`; when present it leads
   the message and the state line follows.
 
@@ -176,7 +177,9 @@ fetch-failure message keeps its text and channels.
 The command is `/gitlore:push` when any listed store is `N ahead` or `diverged`,
 else `/gitlore:merge` when any is `N behind`, else none. The rule is
 [D76](publishing-divergence.md)'s taken over every listed store: any divergence
-is published.
+is published. While memory holds a merge the line names no command, whatever the
+tiers read: its mid-merge report says not to commit memory or start another
+take, and names the remedy.
 
 A store whose state has its own message and for which no push or merge is named
 is left out and keeps that message: a memory store holding a merge, a tier with

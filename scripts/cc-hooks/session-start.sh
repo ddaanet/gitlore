@@ -118,16 +118,17 @@ bash "$PLUGIN_ROOT/scripts/emit-wrappers.sh"
 SENTINEL=".claude/gitlore-hook-setup"
 if [ -f "$SENTINEL" ]; then
   cmd=$(head -1 "$SENTINEL" | tr -d '\n')
+  # Every notice here rides systemMessage: stderr reaches nobody on exit 0 (D14).
   case "$cmd" in
     "")
-      echo "gitlore: empty sentinel; nothing to replay" >&2
+      add_sysmsg "gitlore: .claude/gitlore-hook-setup has an empty first line, so it records no hook wiring and SessionStart wired nothing. To stop this notice, set its first line to 'manual'."
       ;;
     direct)
       bash "$PLUGIN_ROOT/scripts/hook-manager/wire-direct.sh"
       ;;
-    manual)
-      echo "gitlore: hook wiring is 'manual'; verify your hooks still invoke \$(git rev-parse --git-common-dir)/gitlore-pre-*." >&2
-      ;;
+    # 'manual' is the off switch the other notices name (D45): nothing runs
+    # and nothing is said.
+    manual) ;;
     # The sentinel is a TRACKED file — a fresh clone brings whatever its first
     # line says, so SessionStart never runs a command taken from it. The three
     # known hook-manager installers (wire-lefthook.sh/wire-husky.sh/

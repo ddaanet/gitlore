@@ -273,14 +273,16 @@ assert_session_start_did_nothing() {
   [ ! -e .git/hooks/pre-commit ]
 }
 
-@test "sentinel 'manual' emits a reminder to stderr" {
+@test "sentinel 'manual' prints nothing on systemMessage or stderr" {
   make_parent_with_memory
-  mkdir -p .claude
-  printf '{"gitlore":{"enabled":true}}\n' > .claude/settings.json
+  enable_gitlore
   printf 'manual\n' > .claude/gitlore-hook-setup
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  [[ "$stderr$output" == *"manual"* ]]
+  # The hook reached its JSON, so an absent notice is not an absent message.
+  jq -e '.hookSpecificOutput.additionalContext' <<<"$output" >/dev/null
+  jq -e '.systemMessage // "" | test("manual|hook wiring|gitlore-hook-setup|gitlore-pre-") | not' <<<"$output"
+  [[ "$stderr" != *manual* && "$stderr" != *"hook wiring"* ]]
 }
 
 @test "an unrecognized sentinel is NOT executed as a shell command (W8)" {
@@ -405,7 +407,7 @@ assert_installer_notice_every_session() {
   assert_installer_notice_every_session "overcommit --install"
 }
 
-@test "a 'manual' sentinel adds no sentinel notice to the systemMessage" {
+@test "a 'manual' sentinel adds no installer notice naming the sentinel to the systemMessage" {
   installer_fixture manual
   run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]

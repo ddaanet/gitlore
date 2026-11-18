@@ -136,7 +136,7 @@ assert_fetch_in_c() {
   enable_gitlore
   GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_fetch_in_c "memory fetch -q origin live"
+  assert_fetch_in_c "memory fetch -q --no-recurse-submodules origin live"
 }
 
 @test "locale: SessionStart's bounded fetch of a memory remote with no live runs under LC_ALL=C" {
@@ -148,7 +148,7 @@ assert_fetch_in_c() {
   enable_gitlore
   GITLORE_FETCH_TIMEOUT=30 GITLORE_LAUNCHED=1 run --separate-stderr bash "$SESSION_START"
   [ "$status" -eq 0 ]
-  assert_fetch_in_c "memory fetch -q origin live"
+  assert_fetch_in_c "memory fetch -q --no-recurse-submodules origin live"
 }
 
 @test "locale: SessionStart's fetch of a tier remote with no live runs under LC_ALL=C" {

@@ -167,7 +167,11 @@ or a user sets the sentinel themselves.
 **Sentinel handling in SessionStart:**
 
 - `direct` → re-run the direct-wiring installer.
-- `manual` → print a reminder to verify the wiring on stderr (D14).
+- `manual` → run nothing and print nothing, on either channel: it is the switch
+  that stops the notices below (D45).
+- An empty first line → run nothing; report on `systemMessage` that the sentinel
+  records no wiring and that setting its first line to `manual` stops the
+  notice.
 - `lefthook install`, `npm install`, `overcommit --install` → run nothing; at
   every session start report on `systemMessage` the exact command for the user
   to run, the sentinel path, and that setting the sentinel's first line to

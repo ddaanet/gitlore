@@ -26,7 +26,7 @@ the next session.
 ## Requirements
 
 - `bash` ≥ 3.2 for the shipped scripts.
-- `git`
+- `git` 2.29 or later (`fetch --no-write-fetch-head`).
 - `jq`
 - `mikefarah/yq` v4 OR `python3` with PyYAML — required for `wire-lefthook.sh` and `wire-overcommit.sh` to safely merge user YAML configs without clobbering existing keys. Note: yq-based wiring will strip pre-existing YAML comments from `lefthook.yml` / `.overcommit.yml` (the gitlore marker is preserved, user comments are not).
 

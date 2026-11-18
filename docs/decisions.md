@@ -221,8 +221,9 @@ itself is in [session.md](references/session.md)
   command `gitlore: memory in sync; ddaanet in sync`; the words are `in sync`,
   `N ahead`, `N behind`, `diverged`, `unreachable`; the command is
   `/gitlore:push` when any store is ahead or diverged, else `/gitlore:merge`
-  when any is behind, else none; `unreachable` replaces the local position and
-  names none; a store with its own message and no push or merge is left out
+  when any is behind, else none, and none while memory holds a merge, whose
+  report names the remedy; `unreachable` replaces the local position and names
+  none; a store with its own message and no push or merge is left out
 
 *Rejected:* a `WorktreeCreate` hook · the clean-only fast-forward at session
 start · moving a tier at `SessionStart` · composing at `SessionStart` ·
