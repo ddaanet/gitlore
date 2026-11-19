@@ -61,7 +61,8 @@ decline_pushes_to() {
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"live.lock"* ]]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$live_before" ]
-  # The merge commit lands before either push, and the tier stays on it.
+  # The merge commit lands before the continuation's one push, the local
+  # `HEAD:live` move, and the tier stays on it.
   [ "$(git -C memory/ddaanet rev-parse 'HEAD^1')" = "$ours" ]
   [ "$(git -C memory/ddaanet rev-parse 'HEAD^2')" = "$theirs" ]
   merged=$(git -C memory/ddaanet rev-parse HEAD)

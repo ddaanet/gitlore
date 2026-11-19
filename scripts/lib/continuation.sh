@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The continuation-after-merge functions dispatched by
 # `resolve.sh continue-after-merge`: load the prepared merge state, gate and
-# compose what is about to land. Sourced by
-# scripts/resolve.sh only; its functions set that script's globals (mempath,
+# compose what is about to land, and fast-forward the local `live` with
+# divergence routing (push_or_report, which the default run uses too). Sourced
+# by scripts/resolve.sh only; its functions set that script's globals (mempath,
 # memroot, statefile) and exit on its behalf.
 # Part of scripts/resolve.sh; source that, not this file.
 #
@@ -209,15 +210,13 @@ refuse_leftover_conflict_markers() {
 # Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on
 # success; returns 1 when git's parenthesized reason says the ref diverged,
 # which is the caller's cue to prepare a merge; reports git's own explanation
-# and returns 2 on any other refusal — a protected branch, a pre-receive
-# decline, a bad credential, a full quota. Never exits.
+# and returns 2 on any other refusal. Never exits. Both callers push
+# `. HEAD:live` into the store itself, so the other refusals are local
+# ref-update failures, such as a `live.lock` another process holds.
 #
 # The same discriminator `pre-push` and `gitlore_sync_memory_to_live` apply, and
 # for the same reason: only divergence is something a merge can fix. Without it
-# a policy refusal prepares a merge that cannot help — and this script is where
-# the user lands *after* pre-push has correctly told them the push failed for a
-# reason other than divergence, so it is the last place that should re-diagnose
-# it as one.
+# a ref that could not be updated prepares a merge that cannot help.
 #
 # An empty message is treated as divergence: `push -q`
 # names its rejection reason, so silence here means the refusal carried no text

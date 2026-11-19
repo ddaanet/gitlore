@@ -139,8 +139,10 @@ gitlore_guard_stale_merge_state() {
       # unchanged — and by the time a gate meets it again the merger may already
       # have synthesized and staged an answer, which discarding the merge would
       # throw away. A merge whose authority moved meanwhile lands against the
-      # old one and is re-prepared by the continuation's own refused push, which
-      # costs one cycle; re-preparing every stale merge costs a synthesis.
+      # old one: a moved local `live` refuses the continuation's `HEAD:live`
+      # push, which re-prepares it, and a moved remote is met by the next
+      # /gitlore:push, which prepares the next merge. Either costs one cycle;
+      # re-preparing every stale merge costs a synthesis.
       statefile=$(gitlore_merge_state_file "$mempath")
       # A preparation interrupted between its merge and its briefing left a
       # marker; the merge itself is staged in the store, so the briefing is

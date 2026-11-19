@@ -48,8 +48,10 @@ gitlore_write_merge_marker() {
 # sides, unless the target ref moved while the preparation was interrupted, in
 # which case the briefing describes the authority the merge was NOT built on.
 # That is the trade the whole path already makes for a merge whose authority
-# moved while it waited: it lands against the side it was built on, and the
-# continuation's own refused push re-prepares it.
+# moved while it waited: it lands against the side it was built on. A moved
+# local `live` refuses the continuation's `HEAD:live` push, which re-prepares
+# the merge; a moved remote is met by the next /gitlore:push, which prepares
+# the next merge.
 # Args: $1 = store. Returns 1 if the file cannot be completed.
 gitlore_complete_merge_state() {
   local store="$1" statefile flavor source target cont base
