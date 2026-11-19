@@ -277,8 +277,7 @@ gitlore_check_head_live_agree() {
 # Args: $1 = store worktree.
 gitlore_store_repo_name() {
   local store="$1" url base
-  url=$(git -C "$store" config --get remote.origin.url || true)
-  if [ -z "$url" ] || gitlore_is_placeholder_url "$url"; then
+  if gitlore_store_has_no_remote "$store"; then
     base=$(cd "$store" && pwd -P) || return 1
     printf '%s\n' "${base##*/}"
     return 0
@@ -286,6 +285,7 @@ gitlore_store_repo_name() {
   # Strip a trailing slash, then take the last segment of either url flavor —
   # `host:org/repo.git` and `https://host/org/repo` both end at the same `/`,
   # and an scp-style url with no path separator falls back to the whole tail.
+  url=$(git -C "$store" config --get remote.origin.url)
   url="${url%/}"
   base="${url##*/}"
   base="${base##*:}"

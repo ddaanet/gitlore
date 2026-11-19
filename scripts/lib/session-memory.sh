@@ -94,7 +94,7 @@ gitlore_module_position() {
 # only: nothing here moves HEAD, the worktree or any local branch.
 # Args: $1 = memory worktree path.
 report_memory_position() {
-  local mempath="$1" dirty=0 head live auth remote_url fetch_err remote="" fetched=1
+  local mempath="$1" dirty=0 head live auth fetch_err remote="" fetched=1
   local position tip rc out crossing pin mid=0
   gitlore_store_mid_merge "$mempath" && mid=1
   if [ "$mid" -eq 1 ]; then
@@ -109,8 +109,7 @@ report_memory_position() {
   # ask, and a remote that has no `live` yet has nothing upstream; both read
   # against local `live` and add no message. Any other fetch failure is named,
   # with git's own reason, ahead of the session line.
-  remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-  if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
+  if ! gitlore_store_has_no_remote "$mempath"; then
     rc=0
     gitlore_fetch_bounded "$mempath" -q --no-recurse-submodules origin live || rc=$?
     fetch_err="$GITLORE_FETCH_OUT"

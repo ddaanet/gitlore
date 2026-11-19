@@ -30,9 +30,10 @@ wire_and_push() {
   # tracked .gitmodules records its https form, which a clone fetches with no
   # GitHub SSH key. The .gitmodules url is written and staged before the push:
   # it is settled once origin is wired, so a refused first push leaves
-  # /gitlore:push as the whole remaining step, with no placeholder left behind
-  # and no re-run of install (which exits at the idempotency check, origin now
-  # being real).
+  # /gitlore:push as the whole remaining step, with no placeholder left behind.
+  # The refusal returns 0: install runs under `set -e` and still has the
+  # settings, launcher, wrappers, hook wiring and staging to do after this
+  # script, and /gitlore:push publishes memory but installs none of them.
   local remote_url="$1"
   # `remote add` fails outright on an existing origin, which is exactly the
   # placeholder case reaching here — set-url is what repoints it.
@@ -45,8 +46,8 @@ wire_and_push() {
     "$(gitlore_github_https_url "$remote_url")"
   git add .gitmodules
   if ! gitlore_git -C "$mempath" push -u origin live; then
-    echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:push to retry." >&2
-    exit 1
+    echo "gitlore: wired the remote but could not push memory's live branch; the install goes on. Run /gitlore:push to publish it." >&2
+    return 0
   fi
 }
 

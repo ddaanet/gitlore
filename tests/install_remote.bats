@@ -90,11 +90,23 @@ fake_github_repo() {
   chmod +x "$remote/hooks/pre-receive"
   bash "$RUN_INSTALL" memory local
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" memory url "$remote"
-  [ "$status" -eq 1 ]
-  [[ "$stderr" == *"failed to push"* ]]
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"could not push memory's live branch"* ]]
   [[ "$stderr" == *"/gitlore:push"* ]]
   [[ "$stderr" != *"/gitlore:resolve"* ]]
   [ "$(git config --file .gitmodules submodule.gitlore-memory.url)" = "$remote" ]
+}
+
+@test "a refused first push of live does not abort the install" {
+  local remote="$TMP_REPO/.refusing-remote.git"
+  git init -q --bare "$remote"
+  printf '#!/bin/sh\nexit 1\n' > "$remote/hooks/pre-receive"
+  chmod +x "$remote/hooks/pre-receive"
+  run --separate-stderr bash "$RUN_INSTALL" memory url "$remote"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"gitlore: wired the remote but could not push memory's live branch; the install goes on. Run /gitlore:push to publish it."* ]]
+  [ "$(git -C memory config --get remote.origin.url)" = "$remote" ]
+  [ -n "$(git config --local --get gitlore.hooksDir)" ]
 }
 
 @test "install is idempotent (no second gh repo create call on re-run)" {
