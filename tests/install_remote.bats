@@ -94,6 +94,7 @@ fake_github_repo() {
   [[ "$stderr" == *"failed to push"* ]]
   [[ "$stderr" == *"/gitlore:push"* ]]
   [[ "$stderr" != *"/gitlore:resolve"* ]]
+  [ "$(git config --file .gitmodules submodule.gitlore-memory.url)" = "$remote" ]
 }
 
 @test "install is idempotent (no second gh repo create call on re-run)" {

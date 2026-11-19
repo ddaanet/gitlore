@@ -122,8 +122,7 @@ any_report=""
 # Memory's reachability probe comes first, ahead of semantic-merge detection,
 # and only when a real remote is configured: a memory store with no remote or
 # a placeholder one is local by choice, and nothing here creates a remote.
-remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
+if ! gitlore_store_has_no_remote "$mempath"; then
   if ! ls_remote_err=$(git -C "$mempath" ls-remote origin 2>&1 >/dev/null); then
     printf '%s\n' "$ls_remote_err" >&2
     gitlore_say_for_agent_or_user \
@@ -145,7 +144,7 @@ check_store_gates() {
   # `tier` is the store's tier name, empty for the memory root: the head-vs-live
   # gate's remedy differs by store kind, because a tier is pinned at the gitlink
   # the memory store records (D43) and the root is not.
-  local store="$1" tier="${2-}" rc fetch_err store_url remote_live local_live absent=""
+  local store="$1" tier="${2-}" rc fetch_err remote_live local_live absent=""
   local name="memory"
   [ -z "$tier" ] || name="tier '$tier'"
   rc=0; push_or_report "$store" . HEAD:live || rc=$?
@@ -171,8 +170,7 @@ check_store_gates() {
   fi
   # A store with no remote or a placeholder one has no remote gate: it is
   # reported as local, with no command to run.
-  store_url=$(git -C "$store" config --get remote.origin.url || true)
-  if [ -z "$store_url" ] || gitlore_is_placeholder_url "$store_url"; then
+  if gitlore_store_has_no_remote "$store"; then
     gitlore_say_for_agent_or_user \
       "gitlore: $name has no remote, so it stays local." \
       "gitlore: $name has no remote, so it stays local." >&2
@@ -264,7 +262,7 @@ gitlore_resolve_check_pins "$mempath" || exit 1
 # can hold commits memory records: `gitlore_ensure_live` gives it one from HEAD.
 while IFS= read -r store; do
   if [ "$store" = "$mempath" ]; then continue; fi
-  [ -n "$(git -C "$store" config --get remote.origin.url || true)" ] || continue
+  ! gitlore_store_has_no_remote "$store" || continue
   gitlore_ensure_live "$store" || exit 1
   # Every store under `$mempath` is a tier; the root is handled below.
   check_store_gates "$store" "${store##*/}"

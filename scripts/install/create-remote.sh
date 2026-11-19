@@ -25,10 +25,14 @@ if [ -n "$existing" ] && ! gitlore_is_placeholder_url "$existing"; then
 fi
 
 wire_and_push() {
-  # Args: $1 = remote URL. Wires origin, pushes live, rewrites .gitmodules URL.
+  # Args: $1 = remote URL. Wires origin, rewrites .gitmodules URL, pushes live.
   # origin keeps $1 as given, so pushes use the transport the person chose; the
   # tracked .gitmodules records its https form, which a clone fetches with no
-  # GitHub SSH key.
+  # GitHub SSH key. The .gitmodules url is written and staged before the push:
+  # it is settled once origin is wired, so a refused first push leaves
+  # /gitlore:push as the whole remaining step, with no placeholder left behind
+  # and no re-run of install (which exits at the idempotency check, origin now
+  # being real).
   local remote_url="$1"
   # `remote add` fails outright on an existing origin, which is exactly the
   # placeholder case reaching here — set-url is what repoints it.
@@ -37,13 +41,13 @@ wire_and_push() {
   else
     git -C "$mempath" remote add origin "$remote_url"
   fi
+  git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" \
+    "$(gitlore_github_https_url "$remote_url")"
+  git add .gitmodules
   if ! gitlore_git -C "$mempath" push -u origin live; then
     echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:push to retry." >&2
     exit 1
   fi
-  git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" \
-    "$(gitlore_github_https_url "$remote_url")"
-  git add .gitmodules
 }
 
 local_only_notice() {
@@ -80,7 +84,7 @@ case "$mode" in
       # Resolving the URL via `gh repo view` also respects the user's
       # gh-configured protocol, which `--push` would decide for them.
       if ! gh repo create "$full_name" --"$visibility"; then
-        echo "gitlore: gh repo create failed. Re-run install, with a remote URL if gh cannot create one." >&2
+        echo "gitlore: gh repo create failed. Re-run install with a remote URL." >&2
         exit 1
       fi
       remote_url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl || true)

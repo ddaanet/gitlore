@@ -74,7 +74,7 @@ gitlore_unresolvable_tier_report() {
 gitlore_unresolvable_parent_report() {
   local mempath="$1" pin="$2" channel="$3" remote recorded where
   remote=$(git -C "$mempath" config --get remote.origin.url || true)
-  if [ -z "$remote" ] || gitlore_is_placeholder_url "$remote"; then
+  if gitlore_store_has_no_remote "$mempath"; then
     where="a commit this memory store does not hold, and memory has no remote"
   elif [ "$channel" = agent ]; then
     where="a commit memory's remote does not hold (the user has the remote's url)"

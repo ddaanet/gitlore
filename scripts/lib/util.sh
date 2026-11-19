@@ -42,6 +42,19 @@ gitlore_is_placeholder_url() {
   esac
 }
 
+# True when the store at $1 has no usable remote, which folds two states that
+# mean the same thing: no `remote.origin.url` at all, and a placeholder one — a
+# `git submodule sync` on a local-only install copies the placeholder out of
+# `.gitmodules` into origin, where it names no repository. Both are local by
+# choice, and diagnosing the second as an unreachable host would send the user
+# after a network problem they do not have.
+# Args: $1 = store path.
+gitlore_store_has_no_remote() {
+  local url
+  url=$(git -C "$1" config --get remote.origin.url || true)
+  [ -z "$url" ] || gitlore_is_placeholder_url "$url"
+}
+
 # Marker phrase in the in-tree migration breadcrumb. Single source of truth,
 # matched as a fixed string by gitlore_is_migration_stub and written into the
 # stub body by gitlore_mark_migrated.

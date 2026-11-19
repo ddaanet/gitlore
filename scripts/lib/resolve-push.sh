@@ -32,23 +32,15 @@ gitlore: the commit was aborted because git could not read the status of $file. 
 # ordering guarantee below cannot drift between the two entry points.
 # Args: $1 = memory worktree path.
 gitlore_push_stores() {
-  local mempath="$1" remote_url tier tierpath tier_err push_err
+  local mempath="$1" tier tierpath tier_err push_err
 
   # Never publish on top of a half-finished merge, at any level, nor past a dirty
   # tier that has something to take: the same preflight every take runs.
   gitlore_guard_every_store "$mempath" || return 1
 
-  # Resolved here but acted on AFTER the tiers: memory having no remote says
-  # nothing about theirs. A repo whose memory is deliberately local can still
-  # mount a shared tier, and that tier is the part other repositories read.
-  remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-  # A `git submodule sync` on a local-only install copies the placeholder out of
-  # `.gitmodules` into origin, where it names no repository. Same state as an
-  # unset remote, and diagnosing it as an unreachable host would send the user
-  # after a network problem they do not have.
-  if gitlore_is_placeholder_url "$remote_url"; then
-    remote_url=""
-  fi
+  # Memory having no remote is acted on AFTER the tiers: it says nothing about
+  # theirs. A repo whose memory is deliberately local can still mount a shared
+  # tier, and that tier is the part other repositories read.
 
   # Tier push lockstep (D17). Each tier is an independent repo with its own remote,
   # and the memory commit about to be published records its gitlink — so every tier
@@ -186,7 +178,7 @@ gitlore_push_stores() {
   # published what there was to publish. Failing
   # instead would make memory's local-only-ness withhold the tiers — the one part
   # other repositories actually read.
-  if [ -z "$remote_url" ]; then
+  if gitlore_store_has_no_remote "$mempath"; then
     gitlore_compose_moved_tiers "$mempath" || return 1
     gitlore_say_for_agent_or_user \
       "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published." \
