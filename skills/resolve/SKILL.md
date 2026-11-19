@@ -90,7 +90,7 @@ After the sub-agent exits, run `"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"` agai
 
 ## Resume commit
 
-If this skill was triggered by a commit failure, pass the summary again to `gitlore-commit` now that memory is resolved, through the `gitlore:commit` skill. Re-approve it first if the merge brought content the summary did not cover: present it again, amended for what the merge brought, and commit once the user approves it. `gitlore-commit` on a store with no changes exits 0 whatever the summary says, so a commit that had landed before the merge needs no retry. Publishing is `/gitlore:push`, which is the user's to run. An empty summary on stdin is refused (exit 2), so a retry always carries an approved summary.
+If this skill was triggered by a commit failure, pass the summary again to `gitlore-commit` now that memory is resolved, through the `gitlore:commit` skill. Re-approve it first if the merge brought content the summary did not cover: present it again, amended for what the merge brought, and commit once the user approves it. `gitlore-commit` on a store with no changes exits 0 whatever the summary says, so a commit that had landed before the merge needs no retry. Publishing is `/gitlore:push`, which this skill does not run. An empty summary on stdin is refused (exit 2), so a retry always carries an approved summary.
 
 ## Summarize
 
@@ -104,4 +104,4 @@ index blocked the landing until a new synthesis cleared them; say which they wer
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
 index, index pointers naming files that are not there, a refused advance of `live`
 with git's text — came after the merge commit landed; relay it; only you can fix it.
-`/gitlore:push` is the user's to run: relay a line naming it, never run it.
+A command a line names after the landing is relayed as not yet run and left to what invoked this skill: the skill whose step it was, such as the push skill's own loop, or the user.
