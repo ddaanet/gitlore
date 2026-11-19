@@ -99,7 +99,7 @@ the prescription half; and **rewriting fact bodies** — applying the writing
 rules to a sample moved the files 2% and the index by exactly zero, since the
 two govern different surfaces.
 
-Edit the root `$mempath/MEMORY.md` only. Tier carriers and every touched file's
+Edit the root `<mempath>/MEMORY.md` only. Tier carriers and every touched file's
 `description:` follow from that edit.
 
 ## 3. Sweep the vocabulary before and after

@@ -51,6 +51,7 @@ store-relative, so prefix it with `<mempath>/`: `- [T](ddaanet/foo.md)` is at
 `<mempath>/ddaanet/foo.md`. `<mempath>` is the absolute path the session-start
 line `gitlore: the memory store is at …` in your context names, so it costs no
 tool call and the Reads take it as is. A subagent whose prompt carries no such
-line asks for it rather than deriving it.
+line does no recall: it ends its turn with the request for the line, which the
+dispatcher then pastes, rather than deriving the path.
 
 Then act on what you read.
