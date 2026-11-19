@@ -200,3 +200,16 @@ memory_commit_unpublished() {
   [[ "$stderr" != *"state is healthy"* ]]
   [ ! -f "$(gitlore_merge_state_file memory)" ]
 }
+
+@test "default run: a tier diverged from its own live gets its head-vs-live merge even with its remote unreachable" {
+  take_base_store
+  make_diverged_head_vs_live memory/ddaanet
+  git -C memory/ddaanet config remote.origin.url "$TMP_REPO/.no-such-remote.git"
+
+  resolve_leaving_remotes_alone ddaanet
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"gitlore: memory merge prepared"* ]]
+  [[ "$stderr" == *"flavor=head-vs-live"* ]]
+  [[ "$stderr" != *"gitlore: fetching tier 'ddaanet''s remote 'live' failed"* ]]
+  [ "$(jq -r .flavor "$(gitlore_merge_state_file memory/ddaanet)")" = "head-vs-live" ]
+}

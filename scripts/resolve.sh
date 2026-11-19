@@ -170,22 +170,6 @@ check_store_gates() {
   local store="$1" tier="${2-}" rc fetch_err remote_live local_live absent=""
   local name="memory"
   [ -z "$tier" ] || name="tier '$tier'"
-  # A remote with no `live` yet is the expected first-publish state: the fetch
-  # says so, and that line is matched here rather than shown. Any other fetch
-  # failure leaves the remote's state unknown, so the run stops on git's reason
-  # rather than compare against a stale tracking ref.
-  if ! fetch_err=$(gitlore_git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
-    case "$fetch_err" in
-      *"couldn't find remote ref"*) absent=yes ;;
-      *)
-        printf '%s\n' "$fetch_err" >&2
-        gitlore_say_for_agent_or_user \
-          "gitlore: fetching $name's remote 'live' failed, and not because the remote has none, so its state is unknown. git said it above." \
-          "gitlore: fetching $name's remote 'live' failed, and not because the remote has none, so its state is unknown. git said it above." >&2
-        exit 1
-        ;;
-    esac
-  fi
   rc=0; push_or_report "$store" . HEAD:live || rc=$?
   if [ "$rc" -eq 2 ]; then
     exit 1
@@ -207,7 +191,25 @@ check_store_gates() {
       exit 1
     fi
   fi
-  # The remote gate. A remote with no `live` holds nothing the local one lacks.
+  # The remote gate, after the local one: an unreachable remote does not hide
+  # a divergence the local gate can prepare without it. A remote with no `live`
+  # yet is the expected first-publish state: the fetch says so, and that line
+  # is matched here rather than shown. Any other fetch failure leaves the
+  # remote's state unknown, so the run stops on git's reason rather than
+  # compare against a stale tracking ref.
+  if ! fetch_err=$(gitlore_git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
+    case "$fetch_err" in
+      *"couldn't find remote ref"*) absent=yes ;;
+      *)
+        printf '%s\n' "$fetch_err" >&2
+        gitlore_say_for_agent_or_user \
+          "gitlore: fetching $name's remote 'live' failed, and not because the remote has none, so its state is unknown. git said it above." \
+          "gitlore: fetching $name's remote 'live' failed, and not because the remote has none, so its state is unknown. git said it above." >&2
+        exit 1
+        ;;
+    esac
+  fi
+  # A remote with no `live` holds nothing the local one lacks.
   # Otherwise equality is checked first: the refusal classifier reads equal as
   # behind.
   if [ -n "$absent" ]; then
