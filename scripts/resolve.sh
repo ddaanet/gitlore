@@ -191,8 +191,10 @@ check_store_gates() {
       exit 1
     fi
   fi
-  # The remote gate, after the local one: an unreachable remote does not hide
-  # a divergence the local gate can prepare without it. A remote with no `live`
+  # The remote gate, after the local one: this store's unreachable remote does
+  # not hide its own local divergence, which the local gate prepares without
+  # it. (Memory's reachability probe above, and an earlier store's failed fetch,
+  # still end the run before a later store's local gate.) A remote with no `live`
   # yet is the expected first-publish state: the fetch says so, and that line
   # is matched here rather than shown. Any other fetch failure leaves the
   # remote's state unknown, so the run stops on git's reason rather than
