@@ -156,8 +156,47 @@ memory_commit_unpublished() {
 
   resolve_leaving_remotes_alone ddaanet
   [ "$status" -eq 0 ] || { printf '%s\n' "$stderr" >&2; return 1; }
-  [[ "$stderr" == *"has nothing to publish"* ]]
+  [[ "$stderr" == *"gitlore: memory has nothing to publish"* ]]
   [[ "$stderr" == *"Run /gitlore:merge"* ]]
   [[ "$stderr" != *"is ahead of its remote"* ]]
   [[ "$stderr" != *"memory merge prepared"* ]]
+  [[ "$stderr" != *"state is healthy"* ]]
+}
+
+@test "default run: a tier only behind is named by tier in its nothing-to-publish report" {
+  take_base_store
+  push_tier_fact ddaanet '- [up](up.md) — from upstream' >/dev/null
+
+  resolve_leaving_remotes_alone ddaanet
+  [ "$status" -eq 0 ] || { printf '%s\n' "$stderr" >&2; return 1; }
+  [[ "$stderr" == *"gitlore: tier 'ddaanet' has nothing to publish"* ]]
+  [[ "$stderr" != *"state is healthy"* ]]
+}
+
+@test "default run: an unreachable tier remote fails the run with git's reason, and nothing is called healthy or ahead" {
+  take_base_store
+  git -C memory/ddaanet config remote.origin.url "$TMP_REPO/.no-such-remote.git"
+
+  resolve_leaving_remotes_alone ddaanet
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *".no-such-remote.git' does not appear to be a git repository"* ]]
+  [[ "$stderr" == *"gitlore: fetching tier 'ddaanet''s remote 'live' failed"* ]]
+  [[ "$stderr" != *"state is healthy"* ]]
+  [[ "$stderr" != *"is ahead of its remote"* ]]
+}
+
+@test "default run: a store whose remote 'live' cannot be read is reported, exit 1, and no merge is prepared" {
+  take_base_store
+  # Without a fetch refspec the fetch writes FETCH_HEAD only, so with the
+  # tracking ref gone the remote's `live` has nothing to be read from.
+  git -C memory config --unset-all remote.origin.fetch
+  git -C memory update-ref -d refs/remotes/origin/live
+
+  resolve_leaving_remotes_alone ddaanet
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"gitlore: could not tell how memory's 'live' relates to its remote's"* ]]
+  [[ "$stderr" != *"merge prepared"* ]]
+  [[ "$stderr" != *"is ahead of its remote"* ]]
+  [[ "$stderr" != *"state is healthy"* ]]
+  [ ! -f "$(gitlore_merge_state_file memory)" ]
 }
