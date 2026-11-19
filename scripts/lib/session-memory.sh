@@ -212,25 +212,19 @@ report_memory_mid_merge() {
   abort="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" abort-merge"
   # A merge the continuation cannot land as it stands — MERGE_HEAD cleared by a
   # checkout, or a marker whose preparation died before its briefing — goes to
-  # the command that prepared it, whose guard repairs both: /gitlore:merge under
-  # the state's `publish: no` mark, which a repair must not publish past, and
-  # /gitlore:resolve otherwise. A state file that is not a JSON object has no
-  # mark to read and goes to /gitlore:resolve, and the agent is told so. The
-  # hook itself repairs nothing.
-  local briefed=false publish="" unread="" jqerr
+  # /gitlore:resolve, whose guard repairs both; a state file that is not a JSON
+  # object is named as unreadable. The hook itself repairs nothing.
+  local briefed=false unread="" jqerr
   if jqerr=$(jq -e 'type == "object"' "$statefile" 2>&1 >/dev/null); then
     briefed=$(jq -r 'has("changed_files")' "$statefile")
-    publish=$(jq -r '.publish // ""' "$statefile")
   else
     unread=", which could not be read as a merge state${jqerr:+ (jq: ${jqerr%%$'\n'*})}"
   fi
   if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null \
      || [ "$briefed" != true ]; then
-    local remedy=/gitlore:resolve
-    [ "$publish" = "no" ] && remedy=/gitlore:merge
-    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run $remedy to repair and land it. To abort it and put memory back on the commit the merge started from, run:
+    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run /gitlore:resolve to repair and land it. To abort it and put memory back on the commit the merge started from, run:
   $abort" \
-      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile$unread. Do not commit memory or start another take over it. Run $remedy to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
+      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile$unread. Do not commit memory or start another take over it. Run /gitlore:resolve to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
   $abort"
     return 0
   fi

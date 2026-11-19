@@ -274,25 +274,6 @@ strand_live_behind_head() {
   grep -qF 'dirty.md' memory/MEMORY.md
 }
 
-@test "prepares a merge that will NOT publish when a store has diverged" {
-  wire_memory_remote
-  (
-    cd memory || exit 1
-    git checkout -q live
-    printf 'local\n' > LOCAL.md
-    git add -A
-    git commit -q -m "local, unpublished"
-    git checkout -q --detach live
-  )
-  push_memory_fact
-  run --separate-stderr bash "$CMD"
-  [ "$status" -eq 1 ]
-  [[ "$output$stderr" == *"memory merge prepared"* ]]
-  # The mark the continuation reads: this merge reconciles, it does not share.
-  statefile=$(gitlore_merge_state_file memory)
-  [ "$(jq -r .publish "$statefile")" = "no" ]
-}
-
 @test "a merge aborted by hand is disposed of and re-prepared, not refused over" {
   # The observed producer of a state file without MERGE_HEAD: an agent asked to
   # revert to the pre-merge state runs a plain `git merge --abort` in the store,
@@ -324,28 +305,8 @@ strand_live_behind_head() {
   [[ "$all" == *"nothing landed"* ]]
   [[ "$all" == *"leftover state is discarded"* ]]
   [[ "$all" == *"memory merge prepared"* ]]
-  # The same merge, against the same divergent side, still marked reconcile-only.
+  # The same merge, against the same divergent side.
   [ "$(jq -r .source_ref "$statefile")" = "$pending" ]
-  [ "$(jq -r .publish "$statefile")" = "no" ]
-}
-
-@test "a push-prepared merge is not marked no-publish" {
-  # The flag must not leak into the gates: a merge a refused push prepared
-  # exists precisely so that push can go through.
-  wire_memory_remote
-  (
-    cd memory || exit 1
-    git checkout -q live
-    printf 'local\n' > LOCAL.md
-    git add -A
-    git commit -q -m "local, unpublished"
-    git checkout -q --detach live
-  )
-  push_memory_fact
-  run --separate-stderr bash "$PLUGIN_ROOT/scripts/push-memory.sh"
-  [ "$status" -eq 1 ]
-  statefile=$(gitlore_merge_state_file memory)
-  [ "$(jq -r '.publish // ""' "$statefile")" = "" ]
 }
 
 @test "fails when a TIER has no remote configured" {

@@ -24,15 +24,16 @@ load helpers/resolve-compose
   prepare_tier_merge_with_new_lines
   pin=$(git -C memory rev-parse :ddaanet)
   mem_before=$(git -C memory rev-parse HEAD)
+  tier_remote_before=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
   # A real gitlore_compose_check refusal: a line prefixed with an unmounted tier.
   seed_root_bullet "gone/x.md" "a tier that is no longer mounted"
 
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  # The merge landed and was published...
+  # The merge landed locally and nothing was published...
   merged=$(git -C memory/ddaanet rev-parse live)
   [ "$(git -C memory/ddaanet rev-list --count --merges "$merged" -1)" = "1" ]
-  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$merged" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$tier_remote_before" ]
   [ ! -f "$(git -C memory/ddaanet rev-parse --git-path gitlore-merge-state)" ]
 
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/merge-memory.sh"

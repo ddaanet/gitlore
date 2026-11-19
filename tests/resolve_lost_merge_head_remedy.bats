@@ -3,9 +3,8 @@
 # shellcheck disable=SC2154
 bats_require_minimum_version 1.5.0
 
-# continue-after-merge on a merge state file whose MERGE_HEAD is gone names the
-# command that repairs the state without a surprise: /gitlore:merge when the
-# merge was prepared by it (publish: no), /gitlore:resolve otherwise.
+# continue-after-merge on a merge state file whose MERGE_HEAD is gone names
+# /gitlore:resolve, whichever script prepared the merge.
 
 load helpers/setup
 load helpers/commit-summary
@@ -17,7 +16,7 @@ load helpers/resolve-recovery
 
 RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
 
-@test "lost MERGE_HEAD: a merge prepared by merge-memory.sh names /gitlore:merge" {
+@test "lost MERGE_HEAD: a merge prepared by merge-memory.sh names /gitlore:resolve" {
   make_diverged_head_vs_remote memory
   run --separate-stderr merge_gate
   [ "$status" -eq 1 ]
@@ -27,8 +26,8 @@ RESOLVE="$PLUGIN_ROOT/scripts/resolve.sh"
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"holds a merge state file but no MERGE_HEAD"* ]]
-  [[ "$stderr" == *"Run /gitlore:merge"* ]]
-  [[ "$stderr" != *"/gitlore:resolve"* ]]
+  [[ "$stderr" == *"Run /gitlore:resolve"* ]]
+  [[ "$stderr" != *"/gitlore:merge"* ]]
 }
 
 @test "lost MERGE_HEAD: a merge prepared by a bare resolve.sh names /gitlore:resolve" {

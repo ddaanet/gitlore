@@ -33,9 +33,8 @@ gitlore_write_merge_marker() {
     --arg source "$source" \
     --arg target "$target" \
     --arg cont "$cont" \
-    --arg publish "${GITLORE_MERGE_NO_PUBLISH:+no}" \
     '{flavor: $flavor, store: $store, source_ref: $source, target_ref: $target,
-      continuation: $cont, publish: $publish}' \
+      continuation: $cont}' \
     > "$statefile.tmp" || { rm -f "$statefile.tmp"; return 1; }
   mv "$statefile.tmp" "$statefile" || { rm -f "$statefile.tmp"; return 1; }
 }
@@ -118,12 +117,6 @@ gitlore_write_merge_state() {
   git -C "$mempath" diff "$base" "$target" > "$minef" || : > "$minef"
   git -C "$mempath" diff "$base" "$source" > "$theirsf" || : > "$theirsf"
   git -c core.quotePath=false -C "$mempath" ls-files | sort -u > "$treef" || : > "$treef"
-  # `publish` records whether landing this merge should also push the result. It
-  # is empty for every gate — a merge prepared because a push was refused exists
-  # to let that push succeed — and "no" only when /gitlore:merge asked to
-  # reconcile without publishing. Carried in the state file rather than inferred
-  # at continuation time: by then the entry point that had the intent is gone.
-  #
   # jq builds the JSON rather than a heredoc interpolating into it: $store_abs is
   # a filesystem path, and one containing a `"` or a `\` produces a file that the
   # first reader — `jq -r .flavor` in the stale-state guard — cannot parse, which
@@ -142,12 +135,10 @@ gitlore_write_merge_state() {
     --arg tree "$treef" \
     --argjson changed "$changed" \
     --argjson conflicted "$conflicted" \
-    --arg publish "${GITLORE_MERGE_NO_PUBLISH:+no}" \
     '{flavor: $flavor, store: $store, base: $base, source_ref: $source,
       target_ref: $target, changed_files: $changed,
       conflicted_files: $conflicted, mine_diff: $mine,
-      theirs_diff: $theirs_diff, tree: $tree, continuation: $cont,
-      publish: $publish}' \
+      theirs_diff: $theirs_diff, tree: $tree, continuation: $cont}' \
     > "$statefile.tmp" || { rm -f "$statefile.tmp"; return 1; }
   mv "$statefile.tmp" "$statefile" || { rm -f "$statefile.tmp"; return 1; }
 }

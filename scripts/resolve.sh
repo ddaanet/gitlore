@@ -33,13 +33,10 @@ if [ $# -ge 1 ]; then
       # A state file with no MERGE_HEAD is a merge a checkout cleared, or one
       # never run: a commit here has one parent and drops the pending side. The
       # guard's repair belongs to a run that re-briefs the merger: the default
-      # run, which publishes, or /gitlore:merge's rerun under the no-publish
-      # mark. The directive printed here would read as a merge landed and
-      # re-prepared.
+      # run or /gitlore:merge's rerun. The directive printed here would read as
+      # a merge landed and re-prepared.
       if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
-        remedy=/gitlore:resolve
-        [ "$publish" = "no" ] && remedy=/gitlore:merge
-        echo "gitlore: $mempath holds a merge state file but no MERGE_HEAD, so nothing was committed and nothing was changed. Run $remedy, which repairs the merge state." >&2
+        echo "gitlore: $mempath holds a merge state file but no MERGE_HEAD, so nothing was committed and nothing was changed. Run /gitlore:resolve, which repairs the merge state." >&2
         exit 1
       fi
       # Compose before committing, so what lands is composed: a merge is the one
@@ -75,30 +72,15 @@ if [ $# -ge 1 ]; then
       rm -f "$merge_msgfile"
       gitlore_clear_merge_state "$mempath"
       gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
-      # Restore the invariant: fast-forward local `live` onto the merge commit,
-      # then — when the merge was against the remote — the remote's `live` too.
-      # Either can lose a race with a concurrent advance; re-prepare against
-      # whichever side refused and yield again.
+      # Restore the invariant: fast-forward local `live` onto the merge commit.
+      # It can lose a race with a concurrent advance; re-prepare against `live`
+      # and yield again. The merge reaches a remote only through /gitlore:push.
       rc=0; push_or_report "$mempath" . HEAD:live || rc=$?
       if [ "$rc" -eq 1 ]; then
         gitlore_yield_merge "$mempath" live head-vs-live HEAD || :
       fi
       [ "$rc" -eq 0 ] || exit 1
-      # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
-      # gate leaves it empty, because a merge a refused push prepared exists to
-      # let that push through.
-      if [ "$publish" = "no" ]; then
-        echo "gitlore: merged without publishing, as /gitlore:merge asks. Run /gitlore:push when you want these facts on the remote." >&2
-        exit 0
-      fi
-      if [ "$flavor" = "head-vs-remote" ]; then
-        rc=0; push_or_report "$mempath" origin live || rc=$?
-        if [ "$rc" -eq 1 ]; then
-          gitlore_git -C "$mempath" fetch -q --no-recurse-submodules origin live || true
-          gitlore_yield_merge "$mempath" origin/live head-vs-remote live || :
-        fi
-        [ "$rc" -eq 0 ] || exit 1
-      fi
+      echo "gitlore: merged without publishing. Run /gitlore:push to publish." >&2
       exit 0
       ;;
     abort-merge)

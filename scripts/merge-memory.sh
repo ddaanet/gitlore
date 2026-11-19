@@ -58,8 +58,8 @@ fi
 # Each store's branch is reconciled against its local `live` right before its
 # take, tiers first and memory last: a commit leaves those two free to part (D70),
 # and the take refuses a store whose HEAD and `live` have forked. A merge prepared
-# here publishes nothing once it lands (the take's own rule).
-GITLORE_MERGE_NO_PUBLISH=1 gitlore_merge_stores "$mempath"
+# here lands without publishing (the take's own rule).
+gitlore_merge_stores "$mempath"
 
 # Reached only on success: gitlore_merge_stores returns non-zero on every failure
 # and on a prepared merge, and `set -e` stops us above.

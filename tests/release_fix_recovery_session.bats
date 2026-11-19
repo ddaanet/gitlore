@@ -107,8 +107,8 @@ root_merge_prepared_against_remote() {
   [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
 }
 
-# The same root merge prepared by the standalone resolver, which publishes (the
-# state's publish mark is empty): the shape whose repair /gitlore:resolve owns.
+# The same root merge prepared by the standalone resolver: the shape whose
+# repair /gitlore:resolve owns.
 root_merge_prepared_by_resolve() {
   wire_memory_remote
   make_diverged_head_vs_live
@@ -116,7 +116,6 @@ root_merge_prepared_by_resolve() {
   [ "$status" -ne 0 ]
   statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
   [ -f "$statefile" ]
-  [ "$(jq -r '.publish // ""' "$statefile")" = "" ]
   [ -n "$(git -C memory rev-parse -q --verify MERGE_HEAD)" ]
 }
 
@@ -140,7 +139,7 @@ root_merge_prepared_by_resolve() {
 @test "SessionStart over a root merge whose preparation died before its briefing sends it to /gitlore:resolve" {
   root_merge_prepared_by_resolve
   # The marker gitlore_write_merge_marker leaves: no changed_files, no briefing.
-  jq '{flavor, store, source_ref, target_ref, continuation, publish}' "$statefile" > "$statefile.new"
+  jq '{flavor, store, source_ref, target_ref, continuation}' "$statefile" > "$statefile.new"
   mv "$statefile.new" "$statefile"
   run jq -e 'has("changed_files")' "$statefile"
   [ "$status" -ne 0 ]

@@ -45,7 +45,6 @@ assert_prepared_head_vs_live() {
   statefile=$(git -C "$store" rev-parse --git-path gitlore-merge-state)
   [ -f "$statefile" ]
   [ "$(jq -r .flavor "$statefile")" = "head-vs-live" ]
-  [ "$(jq -r .publish "$statefile")" = "no" ]
   [[ "$output$stderr" == *"memory merge prepared"* ]]
   [[ "$output$stderr" == *"resolve.sh"* ]]
 }

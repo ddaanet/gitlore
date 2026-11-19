@@ -116,3 +116,13 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
 }
 
+@test "head-vs-live: a landing publishes nothing and says so" {
+  remote_before=$(git --git-dir="$TMP_REPO/.memory-remote.git" rev-parse live)
+  run --separate-stderr merge_gate
+  [ "$status" -ne 0 ]
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"gitlore: merged without publishing. Run /gitlore:push to publish."* ]]
+  [ "$(git -C memory rev-parse HEAD)" = "$(git -C memory rev-parse live)" ]
+  [ "$(git --git-dir="$TMP_REPO/.memory-remote.git" rev-parse live)" = "$remote_before" ]
+}

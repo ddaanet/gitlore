@@ -37,9 +37,9 @@ session_start_over_store() {
   ctx=$(jq -r '.hookSpecificOutput.additionalContext // ""' <<<"$output")
 }
 
-# A state file that does not parse cannot say its publish mark, so the repair
-# goes to /gitlore:resolve; the user's text is the one a state file with no
-# mark and no briefing gets, and the agent is told the file could not be read.
+# A state file that does not parse sends the repair to /gitlore:resolve, as
+# every lost-MERGE_HEAD report does; the user's text is the one a state file
+# with no briefing gets, and the agent is told the file could not be read.
 # $1 is what the state file is overwritten with.
 session_start_over_unreadable_state() {
   root_merge_prepared_against_live

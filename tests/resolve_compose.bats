@@ -227,11 +227,11 @@ prepare_tier_merge_head_vs_live() {
   [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
 }
 
-@test "a tier merge whose incoming side welds a line is refused, and the split synthesis publishes" {
+@test "a tier merge whose incoming side welds a line is refused, and the split synthesis lands locally" {
   # A weld that arrives on the far side of a divergence reaches a synthesis,
   # not a take, so it is re-authored rather than repaired: the entry-wise pass
   # carries the welded line through as one bullet, the gate refuses it, and the
-  # split lands and reaches the tier's remote.
+  # split lands in the tier's local live and the remote stays put.
   make_parent_with_memory
   git -C memory push -q origin live
   mount_tier_at_live ddaanet
@@ -241,6 +241,7 @@ prepare_tier_merge_head_vs_live() {
   gitlore_compose memory >/dev/null
   commit_sections "memory: record the org fact"
   push_tier_fact ddaanet "- [their fact](t.md) — theirs- [their other](u.md) — also theirs" >/dev/null
+  tier_remote_before=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
   run bash "$PRE_PUSH"
   [ "$status" -eq 1 ]
   tier_head=$(git -C memory/ddaanet rev-parse HEAD)
@@ -257,6 +258,7 @@ prepare_tier_merge_head_vs_live() {
   git -C memory/ddaanet add -A
   run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
-  git --git-dir="$TMP_REPO/.bare-ddaanet.git" show live:MEMORY.md > "$BATS_TEST_TMPDIR/published"
-  grep -qxF -- '- [their other](u.md) — also theirs' "$BATS_TEST_TMPDIR/published"
+  git -C memory/ddaanet show live:MEMORY.md > "$BATS_TEST_TMPDIR/landed"
+  grep -qxF -- '- [their other](u.md) — also theirs' "$BATS_TEST_TMPDIR/landed"
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$tier_remote_before" ]
 }

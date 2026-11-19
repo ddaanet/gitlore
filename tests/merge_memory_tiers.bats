@@ -158,8 +158,7 @@ EOF
 }
 
 @test "landing a merge-prepared merge advances local live but publishes nothing" {
-  # The end of the no-publish path: the continuation reads the mark and stops
-  # after the local fast-forward, which is the whole difference from a push.
+  # The continuation ends after the local fast-forward and says so.
   wire_memory_remote
   (
     cd memory || exit 1
@@ -176,7 +175,7 @@ EOF
 
   run --separate-stderr run_stub_synth memory
   [ "$status" -eq 0 ]
-  [[ "$output$stderr" == *"merged without publishing"* ]]
+  [[ "$stderr" == *"gitlore: merged without publishing. Run /gitlore:push to publish."* ]]
   # The merge landed locally: HEAD is the merge commit and live followed it.
   [ "$(git -C memory rev-parse HEAD)" = "$(git -C memory rev-parse live)" ]
   [ -f memory/LOCAL.md ]

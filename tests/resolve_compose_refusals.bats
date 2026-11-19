@@ -19,12 +19,15 @@ load helpers/resolve-compose
 
 # Install a pre-receive hook in bare repository $1 that declines every push for
 # a reason other than divergence.
+# The hook also leaves `push-attempted` in the bare repository (its working
+# directory), so a test can tell a push that was never sent from one that was
+# declined and whose message went unshown.
 decline_pushes_to() {
-  printf '#!/bin/sh\necho "declined by policy" >&2\nexit 1\n' > "$1/hooks/pre-receive"
+  printf '#!/bin/sh\n: > push-attempted\necho "declined by policy" >&2\nexit 1\n' > "$1/hooks/pre-receive"
   chmod +x "$1/hooks/pre-receive"
 }
 
-@test "an origin push declined for policy leaves the tier on its merge and exits 1" {
+@test "a landing never pushes: an origin that declines every push changes nothing" {
   prepare_tier_merge_with_new_lines
   ours=$(git -C memory/ddaanet rev-parse HEAD)
   theirs=$(git -C memory/ddaanet rev-parse MERGE_HEAD)
@@ -32,11 +35,13 @@ decline_pushes_to() {
   decline_pushes_to "$TMP_REPO/.bare-ddaanet.git"
 
   run --separate-stderr bash "$RESOLVE" continue-after-merge
-  [ "$status" -eq 1 ]
-  [[ "$stderr" == *"declined by policy"* ]]
+  [ ! -e "$TMP_REPO/.bare-ddaanet.git/push-attempted" ]
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"gitlore: merged without publishing. Run /gitlore:push to publish."* ]]
+  [[ "$stderr" != *"declined by policy"* ]]
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$published" ]
-  # The local `. HEAD:live` push ran before the declined one, so the tier's
-  # `live` holds the merge of the two sides, and the tier stays on it.
+  # The local `. HEAD:live` move ran, so the tier's `live` holds the merge of
+  # the two sides, and the tier stays on it.
   [ "$(git -C memory/ddaanet rev-parse 'live^1')" = "$ours" ]
   [ "$(git -C memory/ddaanet rev-parse 'live^2')" = "$theirs" ]
   [ "$(git -C memory/ddaanet rev-parse HEAD)" = "$(git -C memory/ddaanet rev-parse live)" ]
@@ -84,6 +89,7 @@ decline_pushes_to() {
   remote_before=$(git ls-remote "$TMP_REPO/.bare-memory.git")
 
   run --separate-stderr bash "$RESOLVE"
+  [ ! -e "$TMP_REPO/.bare-memory.git/push-attempted" ]
   [ "$status" -eq 0 ]
   [ "$(git ls-remote "$TMP_REPO/.bare-memory.git")" = "$remote_before" ]
   [[ "$stderr" == *"gitlore: memory is ahead of its remote. Run /gitlore:push to publish it."* ]]

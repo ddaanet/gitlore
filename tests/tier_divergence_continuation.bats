@@ -15,23 +15,25 @@ load helpers/tier-divergence
 
 # --- the continuation follows the merge to its store ---
 
-@test "continue-after-merge commits in the tier, not in memory" {
+@test "continue-after-merge commits in the tier, not in memory, and publishes nothing" {
   make_parent_with_memory
   mount_tier_at_live ddaanet
   diverge_tier_from_remote ddaanet
   mem_before=$(git -C memory rev-parse HEAD)
+  tier_remote_before=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
   bash "$PRE_PUSH" || true
   # Stand in for the memory-merger sub-agent: accept the merged tree as-is.
   git -C memory/ddaanet add -A
 
-  run bash "$RESOLVE" continue-after-merge
+  run --separate-stderr bash "$RESOLVE" continue-after-merge
   [ "$status" -eq 0 ]
+  [[ "$stderr" == *"gitlore: merged without publishing. Run /gitlore:push to publish."* ]]
 
-  # The merge commit is the TIER's, and both its live refs now hold it.
+  # The merge commit is the TIER's: its local live holds it, its remote does not.
   head=$(git -C memory/ddaanet rev-parse HEAD)
   [ "$(git -C memory/ddaanet rev-list --count --merges "$head" -1)" = "1" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$head" ]
-  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$head" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$tier_remote_before" ]
   # Memory took no commit at all: the run that follows records the tier.
   [ "$(git -C memory rev-parse HEAD)" = "$mem_before" ]
   [ ! -f "$(tier_state_file ddaanet)" ]

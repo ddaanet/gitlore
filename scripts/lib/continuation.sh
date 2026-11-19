@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # The continuation-after-merge functions dispatched by
 # `resolve.sh continue-after-merge`: load the prepared merge state, gate and
-# compose what is about to land, and push-with-divergence-routing. Sourced by
+# compose what is about to land. Sourced by
 # scripts/resolve.sh only; its functions set that script's globals (mempath,
-# memroot, statefile, flavor, publish) and exit on its behalf.
+# memroot, statefile) and exit on its behalf.
 # Part of scripts/resolve.sh; source that, not this file.
 #
-# File-wide: flavor and publish are read by scripts/resolve.sh, which shellcheck
-# cannot see from here.
+# File-wide: mempath, memroot and statefile are read by scripts/resolve.sh,
+# which shellcheck cannot see from here.
 # shellcheck disable=SC2034
 
 # Load shared continuation state: require an installed submodule and exactly one
-# prepared merge, then set mempath/statefile/flavor/publish for the caller.
+# prepared merge, then set mempath/memroot/statefile for the caller.
 #
 # The store is FOUND, not derived. Memory and every tier share one merge policy
 # and one state-file name resolved inside their own gitdirs, so a continuation
@@ -45,10 +45,6 @@ load_continuation_state() {
     echo "gitlore: merge state at $statefile does not name a usable store." >&2
     exit 1
   fi
-  flavor=$(jq -r .flavor "$statefile")
-  # `// ""` covers a state file written before the field existed, and jq's own
-  # `null` for a key present but empty: both mean "publish", the gate default.
-  publish=$(jq -r '.publish // ""' "$statefile")
 }
 
 # Gate and stage what a landing merge commits.

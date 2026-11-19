@@ -41,17 +41,18 @@ teardown() { teardown_tmp_repo; }
   [ "$changed" = "LOCAL.md,REMOTE.md" ]
 }
 
-@test "head-vs-remote: continuation advances local live AND origin, stays detached" {
+@test "head-vs-remote: continuation advances local live only, publishes nothing, stays detached" {
   remote_before=$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)
   run bash "$PRE_PUSH"
   [ "$status" -ne 0 ]
-  run_stub_synth memory
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"gitlore: merged without publishing. Run /gitlore:push to publish."* ]]
 
-  # Both refs land on the merge commit — the remote-flavored continuation
-  # advances LOCAL live too, which the old reset-to-origin path had to undo.
+  # Local live lands on the merge commit; the remote stays where it was.
   merge_commit=$(git -C memory rev-parse HEAD)
   [ "$(git -C memory rev-parse live)" = "$merge_commit" ]
-  [ "$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)" = "$merge_commit" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)" = "$remote_before" ]
   # HEAD stays detached — no branch to return to.
   run git -C memory symbolic-ref -q HEAD
   [ "$status" -ne 0 ]
@@ -60,7 +61,7 @@ teardown() { teardown_tmp_repo; }
   [ ! -f "$(git -C memory rev-parse --git-path gitlore-merge-state)" ]
 }
 
-@test "head-vs-remote loop: continuation yields again if retry-push fails" {
+@test "head-vs-remote: a remote that moved during synthesis is not met by the continuation" {
   run bash "$PRE_PUSH"
   [ "$status" -ne 0 ]
   # Simulate another machine pushing to origin during synthesis.
@@ -74,10 +75,14 @@ teardown() { teardown_tmp_repo; }
     git -c user.email=t@t -c user.name=t commit -q -m "Concurrent remote commit"
     git push -q origin live
   )
-  run_stub_synth memory || true
-  statefile=$(git -C memory rev-parse --git-path gitlore-merge-state)
-  [ -f "$statefile" ]
-  [ "$(jq -r .flavor "$statefile")" = "head-vs-remote" ]
+  concurrent=$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)
+  run --separate-stderr run_stub_synth memory
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"gitlore: merged without publishing. Run /gitlore:push to publish."* ]]
+  # The landing never contacts the remote: it keeps the concurrent commit and
+  # no second merge is prepared.
+  [ "$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)" = "$concurrent" ]
+  [ ! -f "$(git -C memory rev-parse --git-path gitlore-merge-state)" ]
 }
 
 @test "head-vs-remote: resolve prepares no merge over a memory root with uncommitted files" {
