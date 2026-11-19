@@ -135,7 +135,7 @@ the carrier and is reported. Whether an arrived path is at `HEAD` depends on
 whether a commit has recorded the recomposed root index yet — a take on a clean
 store commits its own bookkeeping, while a take on a dirty store leaves that
 write for the next memory commit. So run
-`git -C <mempath> show HEAD:MEMORY.md`, where `<mempath>` is
+`git -C "<mempath>" show HEAD:MEMORY.md`, where `<mempath>` is
 the absolute path the session-start line `gitlore: the memory store is at …`
 names, and look for the line before assuming one
 pass suffices: present there, removing it from the root index is enough; absent

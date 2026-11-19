@@ -15,14 +15,15 @@ launcher shim and its two placements are in
 - **D45** — `SessionStart` never runs a command from the tracked sentinel; it
   prints the installer for the user to run
 - **D85** — a skill or command that runs a command on the memory store, or opens
-  a file in it, derives the store's path in each call that uses it, from
-  `.gitmodules` or from a line already in context that states it; prose naming
-  the default location keeps `memory/`
+  a file in it, takes the store's path from the session-start line, which names
+  it absolute every session; prose naming the default location keeps `memory/`
 
 *Rejected:* a strictly non-empty initial commit · a separate
 `gitlore.memoryPath` config key · running the sentinel as a shell command ·
 running the three installers at session start · a hardcoded `memory/` in a step
-that opens the store · deriving the path in prose that only names the store.
+that opens the store · deriving the path from `.gitmodules` in each call that
+uses it · taking the path from the directory the harness memory instructions
+name · deriving the path in prose that only names the store.
 
 ---
 
@@ -197,8 +198,8 @@ no-op.
 
 Why the wiring above has this shape: why direct wiring refuses rather than
 appends after an existing `exec`, why `SessionStart` runs nothing from the
-sentinel, and why agent-facing text derives the store's path instead of naming
-it.
+sentinel, and why agent-facing text takes the store's path from the line
+`SessionStart` names it in.
 
 **D25 — Direct wiring refuses rather than appends after an existing `exec`**
 
@@ -249,7 +250,7 @@ line**
 
 The install prompts for the store's path (step 2 above), so a store sits where
 the user put it. The SessionStart additionalContext carries one line,
-`gitlore: the memory store is at <absolute path>; skills and commands that open it or run a command on it use this path`,
+`gitlore: the memory store is at <absolute path>; skills and commands that open it or run a command on it use this path; a prompt dispatching a subagent that does so carries this line.`,
 every session. A skill or command step that runs a command on the store, or
 opens a file in it, takes the path from that line and pastes it into each call
 that uses it. A shell binding does not survive to the next Bash call, so a name
@@ -257,11 +258,13 @@ bound in one fenced block is empty in the next and `git -C ""` runs silently in
 the wrong repository. A hardcoded `memory/` in such a step goes wrong the same
 silent way in a repo that chose another path: the command succeeds against a
 directory that is not the store, or fails on a missing one with nothing naming
-the real one. A dispatcher pastes the line into a subagent's prompt, since a
-subagent's context has no harness memory section and no SessionStart output.
-Prose that names the default location, as a noun rather than as a path to act
-on, keeps `memory/`: it is the common case and naming the path would cost the
-reader a lookup for nothing.
+the real one. Deriving the path from `.gitmodules` in each call costs a Bash
+call per step for a value fixed for the whole session, and the harness memory
+instructions name the directory only in a session's own context. A dispatcher
+pastes the line into a subagent's prompt, since a subagent's context has no
+harness memory section and no SessionStart output. Prose that names the default
+location, as a noun rather than as a path to act on, keeps `memory/`: it is the
+common case and naming the path would cost the reader a lookup for nothing.
 
 ## Rejected alternatives
 

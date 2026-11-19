@@ -19,10 +19,10 @@ what the store should still contain, not a byte-shaving exercise.
 
 `<mempath>` in the blocks below is the absolute store path the session-start
 line `gitlore: the memory store is at …` names; substitute it when running a
-block.
+block, keeping the quotes around it, since the path can hold a space.
 
 ```
-mempath=<mempath>
+mempath="<mempath>"
 wc -c "$mempath/MEMORY.md"
 awk '{ print length, $0 }' "$mempath/MEMORY.md" | sort -rn | head -10 | cut -c1-120
 ```
@@ -34,7 +34,7 @@ together is a rounding error.
 Then read what sits ahead of the first pointer bullet:
 
 ```
-mempath=<mempath>
+mempath="<mempath>"
 awk '/^- \[/ { exit } { print NR": "$0 }' "$mempath/MEMORY.md"
 ```
 
@@ -111,7 +111,7 @@ weight without markup, and a backtick-only sweep once reported zero misroutes
 where the plain-word sweep found four.
 
 ```
-mempath=<mempath>
+mempath="<mempath>"
 git -C "$mempath" show HEAD:MEMORY.md | tr -s '[:space:]' '\n' | sort -u > "${TMPDIR:-/tmp}/index-before"
 tr -s '[:space:]' '\n' < "$mempath/MEMORY.md" | sort -u > "${TMPDIR:-/tmp}/index-after"
 comm -23 "${TMPDIR:-/tmp}/index-before" "${TMPDIR:-/tmp}/index-after"
@@ -137,7 +137,7 @@ Dispatch both against the diff, each briefed to falsify rather than confirm,
 each writing to its own output file and replying with one line naming it.
 
 **Brief A — trigger loss.** Given
-`git -C <mempath> diff HEAD -- MEMORY.md`
+`git -C "<mempath>" diff HEAD -- MEMORY.md`
 and the two word lists from §3, falsify the claim that only elaboration was cut.
 Report every literal that fell to zero; every literal now present on exactly
 one line that points at a different fact than before; every line where a
@@ -161,6 +161,6 @@ index line, not the fact file.
 
 Editing the index rewrites the `description:` of every fact file a changed
 line points at, so a two-line index edit can produce a fifty-file diff. Review
-`git -C <mempath> status --short`
+`git -C "<mempath>" status --short`
 and the frontmatter changes as part of the pass, then commit memory through the `gitlore:commit` skill; the next parent commit records the pointer. Report the before and after byte counts, the levers used, and the
 auditors' confirmed findings with their repairs.

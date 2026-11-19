@@ -50,6 +50,7 @@ load helpers/cc-hook-session-start
   echo "$output" | jq -e '.hookSpecificOutput.additionalContext | test("ordinary edit"; "i")'
   echo "$output" | jq -e --arg s "the memory store is at $PWD/memory;" '.hookSpecificOutput.additionalContext | contains($s)'
   echo "$output" | jq -e --arg s "use this path" '.hookSpecificOutput.additionalContext | contains($s)'
+  echo "$output" | jq -e --arg s "carries this line" '.hookSpecificOutput.additionalContext | contains($s)'
 }
 
 @test "emits standing commit-protocol additionalContext every gitlore session" {

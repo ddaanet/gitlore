@@ -118,12 +118,13 @@ longer exist are mechanism the agent cannot act on; the prohibition forbids by
 role, because naming `git -C <mempath> commit` invites reasoning about the forms
 left unnamed; and no FR id appears, since it resolves to nothing in the consumer
 repos this context reaches. Pinned by the assertions in
-`tests/cc_hook_session_start.bats`. The base Claude Code memory instructions
-describe generic "edit files, save facts" memory with no review gate, so the
-agent's default is actively wrong in a gitlore repo; the prohibition guards an
-action the agent would otherwise take unprompted, so it must be front-loaded,
-and no hook surfaces the command just in time. Writing stays seamless — no step
-before an edit — and the approval step attaches to the commit alone.
+`tests/cc_hook_session_start_protocol.bats`. The base Claude Code memory
+instructions describe generic "edit files, save facts" memory with no review
+gate, so the agent's default is actively wrong in a gitlore repo; the
+prohibition guards an action the agent would otherwise take unprompted, so it
+must be front-loaded, and no hook surfaces the command just in time. Writing
+stays seamless — no step before an edit — and the approval step attaches to the
+commit alone.
 
 **What a hook may still commit.** `pre-push` runs the take when a store is
 behind its remote or a tier's `live` is ahead of its HEAD, and the take can land

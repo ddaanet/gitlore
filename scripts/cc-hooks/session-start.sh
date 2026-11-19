@@ -81,12 +81,12 @@ exec 3>&1 1>&2
 # nothing in the consumer repos this context lands in.
 protocol_ctx="gitlore: writing a memory file is an ordinary edit. To commit memory, invoke the gitlore:commit skill before drafting anything: it gives the summary format, has you show the summary and end your turn, and after the user's reply approves it runs gitlore-commit from the repo root with the approved summary on stdin, through a quoted heredoc (<<'EOF') so the shell expands nothing in it. Never run git commit inside the memory submodule. A request to commit memory is not approval of a summary the user has not seen: show the summary, end your turn, and commit only after the user's reply approves it."
 
-# The store's absolute path: a skill step that acts on the store takes the path
-# from this line, with no derivation call, and a dispatcher pastes the line into
-# a subagent's prompt because a subagent's context has no harness memory section.
+# The store's absolute path, so no step derives it. The hook runs from the repo
+# root, so $PWD/$mempath is absolute; a subagent gets no SessionStart output,
+# hence the line's own ask that a dispatch prompt carry it.
 protocol_ctx="$protocol_ctx
 
-gitlore: the memory store is at $PWD/$mempath; skills and commands that open it or run a command on it use this path."
+gitlore: the memory store is at $PWD/$mempath; skills and commands that open it or run a command on it use this path; a prompt dispatching a subagent that does so carries this line."
 
 # User-facing output (D14): every user-visible SessionStart notice rides the
 # single SessionStart `systemMessage` (the only reliably user-visible hook
