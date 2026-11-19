@@ -26,7 +26,7 @@
 #     nothing is in dispute, and spending a synthesis on a fast-forward would
 #     make taking upstream facts expensive enough to skip.
 #   - neither contains the other → prepare a merge and yield, exactly as a
-#     refused push does, but marked not-to-publish.
+#     refused push does.
 #
 # A dirty tier with something to take refuses the whole take before anything
 # moves: the working tree may hold this session's uncommitted facts, and a
@@ -91,14 +91,13 @@ gitlore_guard_every_store() {
 # that moved; the push's behind arm collapses it with `|| return 1`.
 gitlore_merge_one_store() {
   local mempath="$1" store="$2" tier="$3"
-  local label remote_url fetched=0 fetch_err="" remote="" live head adopt_rc=0
-  local live_ahead_dirty=0 n unit ff_err no_publish=1
+  local label no_remote=0 fetched=0 fetch_err="" remote="" live head adopt_rc=0
+  local live_ahead_dirty=0 n unit ff_err
 
   if [ -n "$tier" ]; then label="tier '$tier'"; else label="memory"; fi
 
-  remote_url=$(git -C "$store" config --get remote.origin.url || true)
-  if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
-    remote_url=""
+  if gitlore_store_has_no_remote "$store"; then
+    no_remote=1
   elif fetch_err=$(LC_ALL=C git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
     fetched=1
     remote=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live) || remote=""
@@ -150,7 +149,7 @@ $ff_err" >&2
     fi
   fi
 
-  if [ -z "$remote_url" ]; then
+  if [ "$no_remote" -eq 1 ]; then
     # A tier exists to be shared, so one with no remote is a misconfiguration
     # worth stopping on. The memory root is not: a local-only install is a
     # supported end state (D20), and there is genuinely nothing to take.
@@ -200,14 +199,9 @@ $fetch_err" >&2
   fi
 
   if ! git -C "$store" merge-base --is-ancestor "$head" "$remote"; then
-    # Diverged. Same preparation a refused push yields, marked not-to-publish so
-    # the continuation stops after the local `HEAD:live` fast-forward. Only a tier
-    # inside a push keeps the publish: landing its merge sends the tier alone, and
-    # a tier may go out ahead of what records it.
-    if [ -n "$tier" ] && [ -n "${GITLORE_TAKE_IN_PUSH:-}" ]; then
-      no_publish=${GITLORE_MERGE_NO_PUBLISH:-}
-    fi
-    GITLORE_MERGE_NO_PUBLISH=$no_publish gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || :
+    # Diverged. Prepare the merge and yield; the continuation stops after the
+    # local `HEAD:live` fast-forward.
+    gitlore_yield_merge "$store" origin/live head-vs-remote HEAD || :
     return 1
   fi
 

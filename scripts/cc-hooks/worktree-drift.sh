@@ -7,9 +7,11 @@
 # the auto-memory directory. So memory written while in the worktree lands in the
 # *launch* repo's submodule, not the worktree's. This hook fires once on the
 # Enter/Exit transition (no per-tool cost, no de-dup needed) and, when the
-# session has drifted into a linked worktree of the same gitlore repo, emits one
-# user-visible systemMessage. ExitWorktree returns cwd to the launch root, so the
-# drift predicate is false and the hook is silent — the asymmetry is intentional.
+# session has drifted into a linked worktree of the same gitlore repo, emits the
+# warning on both channels: a systemMessage for the user and an
+# additionalContext directive naming the launch store for the agent.
+# ExitWorktree returns cwd to the launch root, so the drift predicate is false
+# and the hook is silent — the asymmetry is intentional.
 set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
@@ -53,4 +55,6 @@ enabled=$(jq -r '.gitlore.enabled // false' "$launch/.claude/settings.json" || e
 mempath=$(cd "$launch" && gitlore_memory_path)
 
 jq -nc --arg wt "$top_cwd" --arg launch "$top_launch" --arg mem "$mempath" \
-  '{systemMessage: ("gitlore: this session moved into a linked worktree (" + $wt + "), but Claude Code'"'"'s auto-memory stays pinned to the launch repo (" + $launch + "/" + $mem + "). Memory written here will land in the launch repo'"'"'s submodule, not this worktree'"'"'s. To redirect memory to this worktree, start Claude Code from inside it.")}'
+  '{systemMessage: ("gitlore: this session moved into a linked worktree (" + $wt + "), but Claude Code'"'"'s auto-memory stays pinned to the launch repo (" + $launch + "/" + $mem + "). Memory written here will land in the launch repo'"'"'s submodule, not this worktree'"'"'s. To redirect memory to this worktree, start Claude Code from inside it."),
+    hookSpecificOutput: {hookEventName: "PostToolUse",
+      additionalContext: ("gitlore: this session'"'"'s memory store is " + $launch + "/" + $mem + ", not this worktree (" + $wt + "). Read and write memory files under " + $launch + "/" + $mem + "; memory commits land in that repo'"'"'s submodule.")}}'

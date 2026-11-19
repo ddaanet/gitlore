@@ -94,7 +94,7 @@ gitlore_module_position() {
 # only: nothing here moves HEAD, the worktree or any local branch.
 # Args: $1 = memory worktree path.
 report_memory_position() {
-  local mempath="$1" dirty=0 head live auth remote_url fetch_err remote="" fetched=1
+  local mempath="$1" dirty=0 head live auth fetch_err remote="" fetched=1
   local position tip rc out crossing pin mid=0
   gitlore_store_mid_merge "$mempath" && mid=1
   if [ "$mid" -eq 1 ]; then
@@ -109,8 +109,7 @@ report_memory_position() {
   # ask, and a remote that has no `live` yet has nothing upstream; both read
   # against local `live` and add no message. Any other fetch failure is named,
   # with git's own reason, ahead of the session line.
-  remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-  if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
+  if ! gitlore_store_has_no_remote "$mempath"; then
     rc=0
     gitlore_fetch_bounded "$mempath" -q --no-recurse-submodules origin live || rc=$?
     fetch_err="$GITLORE_FETCH_OUT"
@@ -212,25 +211,19 @@ report_memory_mid_merge() {
   abort="cd \"$repo\" && bash \"$root/scripts/resolve.sh\" abort-merge"
   # A merge the continuation cannot land as it stands — MERGE_HEAD cleared by a
   # checkout, or a marker whose preparation died before its briefing — goes to
-  # the command that prepared it, whose guard repairs both: /gitlore:merge under
-  # the state's `publish: no` mark, which a repair must not publish past, and
-  # /gitlore:resolve otherwise. A state file that is not a JSON object has no
-  # mark to read and goes to /gitlore:resolve, and the agent is told so. The
-  # hook itself repairs nothing.
-  local briefed=false publish="" unread="" jqerr
+  # /gitlore:resolve, whose guard repairs both; a state file that is not a JSON
+  # object is named as unreadable. The hook itself repairs nothing.
+  local briefed=false unread="" jqerr
   if jqerr=$(jq -e 'type == "object"' "$statefile" 2>&1 >/dev/null); then
     briefed=$(jq -r 'has("changed_files")' "$statefile")
-    publish=$(jq -r '.publish // ""' "$statefile")
   else
     unread=", which could not be read as a merge state${jqerr:+ (jq: ${jqerr%%$'\n'*})}"
   fi
   if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null \
      || [ "$briefed" != true ]; then
-    local remedy=/gitlore:resolve
-    [ "$publish" = "no" ] && remedy=/gitlore:merge
-    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run $remedy to repair and land it. To abort it and put memory back on the commit the merge started from, run:
+    add_report_each "gitlore: memory holds a merge that gitlore prepared but that cannot be landed as it stands. Run /gitlore:resolve to repair and land it. To abort it and put memory back on the commit the merge started from, run:
   $abort" \
-      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile$unread. Do not commit memory or start another take over it. Run $remedy to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
+      "gitlore: memory holds an unfinished merge whose state needs repair before it can land; its state file is $statefile$unread. Do not commit memory or start another take over it. Run /gitlore:resolve to repair and land it. To abort the merge instead, which restores memory to the commit it started from, run:
   $abort"
     return 0
   fi

@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # The continuation-after-merge functions dispatched by
 # `resolve.sh continue-after-merge`: load the prepared merge state, gate and
-# compose what is about to land, and push-with-divergence-routing. Sourced by
-# scripts/resolve.sh only; its functions set that script's globals (mempath,
-# memroot, statefile, flavor, publish) and exit on its behalf.
+# compose what is about to land, and fast-forward the local `live` with
+# divergence routing (push_or_report, which the default run uses too). Sourced
+# by scripts/resolve.sh only; its functions set that script's globals (mempath,
+# memroot, statefile) and exit on its behalf.
 # Part of scripts/resolve.sh; source that, not this file.
 #
-# File-wide: flavor and publish are read by scripts/resolve.sh, which shellcheck
-# cannot see from here.
+# File-wide: mempath, memroot and statefile are read by scripts/resolve.sh,
+# which shellcheck cannot see from here.
 # shellcheck disable=SC2034
 
 # Load shared continuation state: require an installed submodule and exactly one
-# prepared merge, then set mempath/statefile/flavor/publish for the caller.
+# prepared merge, then set mempath/memroot/statefile for the caller.
 #
 # The store is FOUND, not derived. Memory and every tier share one merge policy
 # and one state-file name resolved inside their own gitdirs, so a continuation
@@ -45,10 +46,6 @@ load_continuation_state() {
     echo "gitlore: merge state at $statefile does not name a usable store." >&2
     exit 1
   fi
-  flavor=$(jq -r .flavor "$statefile")
-  # `// ""` covers a state file written before the field existed, and jq's own
-  # `null` for a key present but empty: both mean "publish", the gate default.
-  publish=$(jq -r '.publish // ""' "$statefile")
 }
 
 # Gate and stage what a landing merge commits.
@@ -210,27 +207,25 @@ refuse_leftover_conflict_markers() {
   exit 1
 }
 
-# Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on
-# success; returns 1 when git's parenthesized reason says the ref diverged,
-# which is the caller's cue to prepare a merge; reports git's own explanation
-# and returns 2 on any other refusal — a protected branch, a pre-receive
-# decline, a bad credential, a full quota. Never exits.
+# Fast-forward the store's own `live` to HEAD with `push . HEAD:live`, routing a
+# refusal by its cause. Returns 0 on success; returns 1 when git's parenthesized
+# reason says the ref diverged, which is the caller's cue to prepare a merge;
+# reports git's own explanation and returns 2 on any other refusal. Never exits.
+# The push stays inside the store, so the other refusals are local
+# ref-update failures, such as a `live.lock` another process holds.
 #
 # The same discriminator `pre-push` and `gitlore_sync_memory_to_live` apply, and
 # for the same reason: only divergence is something a merge can fix. Without it
-# a policy refusal prepares a merge that cannot help — and this script is where
-# the user lands *after* pre-push has correctly told them the push failed for a
-# reason other than divergence, so it is the last place that should re-diagnose
-# it as one.
+# a ref that could not be updated prepares a merge that cannot help.
 #
 # An empty message is treated as divergence: `push -q`
 # names its rejection reason, so silence here means the refusal carried no text
 # to route on and the local `HEAD:live` case is the only cause left.
-# Args: $1 = store worktree, $2… = push arguments (remote and refspec).
+# Args: $1 = store worktree.
 push_or_report() {
-  local store="$1"; shift
+  local store="$1"
   local push_err
-  if push_err=$(gitlore_git -C "$store" push -q "$@" 2>&1); then
+  if push_err=$(gitlore_git -C "$store" push -q . HEAD:live 2>&1); then
     return 0
   fi
   case "$push_err" in
@@ -238,9 +233,9 @@ push_or_report() {
     *) [ -n "$push_err" ] || return 1 ;;
   esac
   gitlore_say_for_agent_or_user \
-    "gitlore: pushing '$*' in $store failed, and not because of divergence — no merge can fix this. git said:
+    "gitlore: pushing '. HEAD:live' in $store failed, and not because of divergence — no merge can fix this. git said:
 $push_err" \
-    "gitlore: pushing '$*' in $store failed, and not because of divergence — no merge can fix this. git said:
+    "gitlore: pushing '. HEAD:live' in $store failed, and not because of divergence — no merge can fix this. git said:
 $push_err" >&2
   return 2
 }

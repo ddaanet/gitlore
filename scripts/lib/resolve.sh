@@ -139,8 +139,10 @@ gitlore_guard_stale_merge_state() {
       # unchanged — and by the time a gate meets it again the merger may already
       # have synthesized and staged an answer, which discarding the merge would
       # throw away. A merge whose authority moved meanwhile lands against the
-      # old one and is re-prepared by the continuation's own refused push, which
-      # costs one cycle; re-preparing every stale merge costs a synthesis.
+      # old one: a moved local `live` refuses the continuation's `HEAD:live`
+      # push, which can re-prepare it, and a moved remote is met by the next
+      # /gitlore:push, which prepares the next merge. Either costs one cycle;
+      # re-preparing every stale merge costs a synthesis.
       statefile=$(gitlore_merge_state_file "$mempath")
       # A preparation interrupted between its merge and its briefing left a
       # marker; the merge itself is staged in the store, so the briefing is
@@ -275,8 +277,7 @@ gitlore_check_head_live_agree() {
 # Args: $1 = store worktree.
 gitlore_store_repo_name() {
   local store="$1" url base
-  url=$(git -C "$store" config --get remote.origin.url || true)
-  if [ -z "$url" ] || gitlore_is_placeholder_url "$url"; then
+  if gitlore_store_has_no_remote "$store"; then
     base=$(cd "$store" && pwd -P) || return 1
     printf '%s\n' "${base##*/}"
     return 0
@@ -284,6 +285,7 @@ gitlore_store_repo_name() {
   # Strip a trailing slash, then take the last segment of either url flavor —
   # `host:org/repo.git` and `https://host/org/repo` both end at the same `/`,
   # and an scp-style url with no path separator falls back to the whole tail.
+  url=$(git -C "$store" config --get remote.origin.url)
   url="${url%/}"
   base="${url##*/}"
   base="${base##*:}"

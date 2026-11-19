@@ -123,8 +123,9 @@ Run it yourself in the cases where nothing is left to trigger on:
 - `git push` from a plain terminal — the directive went to your shell, not to a
   Claude session.
 - A new or compacted session, where the directive is no longer in context.
-- No divergence at all: run standalone it is a health check, and repairs a
-  missing memory remote or an unpushed `live` on the spot.
+- No divergence at all: run standalone it is a health check that reports each
+  store ahead of or behind its remote, or without one, and publishes nothing;
+  publishing is `/gitlore:push`.
 
 Two repairs have no sub-agent and run a command printed with its absolute paths,
 to be run as printed. `/gitlore:resolve` prints the first; session start prints

@@ -33,13 +33,10 @@ if [ $# -ge 1 ]; then
       # A state file with no MERGE_HEAD is a merge a checkout cleared, or one
       # never run: a commit here has one parent and drops the pending side. The
       # guard's repair belongs to a run that re-briefs the merger: the default
-      # run, which publishes, or /gitlore:merge's rerun under the no-publish
-      # mark. The directive printed here would read as a merge landed and
-      # re-prepared.
+      # run or /gitlore:merge's rerun. The directive printed here would read as
+      # a merge landed and re-prepared.
       if ! git -C "$mempath" rev-parse -q --verify MERGE_HEAD >/dev/null; then
-        remedy=/gitlore:resolve
-        [ "$publish" = "no" ] && remedy=/gitlore:merge
-        echo "gitlore: $mempath holds a merge state file but no MERGE_HEAD, so nothing was committed and nothing was changed. Run $remedy, which repairs the merge state." >&2
+        echo "gitlore: $mempath holds a merge state file but no MERGE_HEAD, so nothing was committed and nothing was changed. Run /gitlore:resolve, which repairs the merge state." >&2
         exit 1
       fi
       # Compose before committing, so what lands is composed: a merge is the one
@@ -75,30 +72,15 @@ if [ $# -ge 1 ]; then
       rm -f "$merge_msgfile"
       gitlore_clear_merge_state "$mempath"
       gitlore_git -C "$mempath" update-ref -d "$GITLORE_PENDING_REF"
-      # Restore the invariant: fast-forward local `live` onto the merge commit,
-      # then — when the merge was against the remote — the remote's `live` too.
-      # Either can lose a race with a concurrent advance; re-prepare against
-      # whichever side refused and yield again.
-      rc=0; push_or_report "$mempath" . HEAD:live || rc=$?
+      # Restore the invariant: fast-forward local `live` onto the merge commit.
+      # It can lose a race with a concurrent advance; re-prepare against `live`
+      # and yield again. The merge reaches a remote only through /gitlore:push.
+      rc=0; push_or_report "$mempath" || rc=$?
       if [ "$rc" -eq 1 ]; then
         gitlore_yield_merge "$mempath" live head-vs-live HEAD || :
       fi
       [ "$rc" -eq 0 ] || exit 1
-      # `publish: "no"` is /gitlore:merge's mark: reconcile, do not share. Every
-      # gate leaves it empty, because a merge a refused push prepared exists to
-      # let that push through.
-      if [ "$publish" = "no" ]; then
-        echo "gitlore: merged without publishing, as /gitlore:merge asks. Run /gitlore:push when you want these facts on the remote." >&2
-        exit 0
-      fi
-      if [ "$flavor" = "head-vs-remote" ]; then
-        rc=0; push_or_report "$mempath" origin live || rc=$?
-        if [ "$rc" -eq 1 ]; then
-          gitlore_git -C "$mempath" fetch -q --no-recurse-submodules origin live || true
-          gitlore_yield_merge "$mempath" origin/live head-vs-remote live || :
-        fi
-        [ "$rc" -eq 0 ] || exit 1
-      fi
+      echo "gitlore: merged without publishing. Run /gitlore:push to publish." >&2
       exit 0
       ;;
     abort-merge)
@@ -122,8 +104,11 @@ if [ $# -ge 1 ]; then
   esac
 fi
 
-# Default mode: detect + try both pushes in turn. Yield on the first failure;
-# continuations re-enter from the hook (commit/push retries), not from here.
+# Default mode: detect. The head-vs-live gate publishes HEAD to the store's own
+# local `live`; the remote gate only compares `live` with the remote's and
+# reports. Publishing to a remote is /gitlore:push's business. Yield on the
+# first divergence; continuations re-enter from the hook (commit/push retries),
+# not from here.
 
 gitlore_has_submodule || {
   gitlore_say_for_agent_or_user \
@@ -132,51 +117,37 @@ gitlore_has_submodule || {
   exit 1
 }
 mempath=$(gitlore_memory_path)
+any_report=""
 
-# Existing Plan 02 simple repairs (remote.origin.url, ls-remote, push live)
-# happen first — they precede semantic-merge detection.
-remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
-  echo "gitlore: no memory remote configured. Creating one." >&2
-  bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
-  echo "gitlore: memory remote created and live pushed." >&2
-  # Fall through rather than exiting: a repair to memory says nothing about the
-  # tiers, and stopping here would leave a diverged tier undetected.
+# Memory's reachability probe comes first, ahead of semantic-merge detection,
+# and only when a real remote is configured: a memory store with no remote or
+# a placeholder one is local by choice, and nothing here creates a remote.
+if ! gitlore_store_has_no_remote "$mempath"; then
+  if ! ls_remote_err=$(git -C "$mempath" ls-remote origin 2>&1 >/dev/null); then
+    printf '%s\n' "$ls_remote_err" >&2
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" \
+      "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" >&2
+    exit 1
+  fi
 fi
-if ! remote_refs=$(git -C "$mempath" ls-remote origin 2>/dev/null); then
-  gitlore_say_for_agent_or_user \
-    "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" \
-    "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" >&2
-  exit 1
-fi
-# The reachability probe already listed the remote's refs, so whether memory's
-# `live` has ever been published costs no further round trip. Matched as a
-# whole line, so `refs/heads/live-anything` does not count.
-memory_first_publish=yes
-case "$remote_refs"$'\n' in
-  *$'\trefs/heads/live\n'*) memory_first_publish="" ;;
-esac
 
 # Both gates for one store: local `live` first (cheaper, local-only), then the
 # remote's. No branch guard is needed at either level — every store is checked
 # out detached, so `HEAD:live` is always the right question and is a silent
 # no-op when HEAD is already there. Yields and exits on the first divergence;
-# `commands/resolve.md` re-runs this script until it exits 0, which is what
-# walks the remaining gates and stores.
+# the resolve skill's loop re-runs this script until it exits 0, which is what
+# walks the remaining gates and stores. A store whose `live` is ahead of or
+# behind its remote is reported and the run goes on; the report sets
+# `any_report`, which keeps the healthy line from following it.
 check_store_gates() {
   # `tier` is the store's tier name, empty for the memory root: the head-vs-live
   # gate's remedy differs by store kind, because a tier is pinned at the gitlink
   # the memory store records (D43) and the root is not.
-  # `first_publish`, when non-empty, is the caller's word that the remote has no
-  # `live` yet: there is nothing to fetch, and asking anyway prints git's
-  # `couldn't find remote ref live` at the user. Only a caller that already
-  # holds the remote's ref list passes it — the memory root, from its
-  # reachability probe. A tier's first publish still fetches and still prints
-  # the line; finding out beforehand would cost every resolve run a round trip
-  # per tier.
-  local store="$1" tier="${2-}" first_publish="${3-}" rc
-  [ -n "$first_publish" ] || gitlore_git -C "$store" fetch -q --no-recurse-submodules origin live || true
-  rc=0; push_or_report "$store" . HEAD:live || rc=$?
+  local store="$1" tier="${2-}" rc fetch_err remote_live local_live cls=""
+  local name="memory"
+  [ -z "$tier" ] || name="tier '$tier'"
+  rc=0; push_or_report "$store" || rc=$?
   if [ "$rc" -eq 2 ]; then
     exit 1
   elif [ "$rc" -eq 1 ]; then
@@ -197,30 +168,74 @@ check_store_gates() {
       exit 1
     fi
   fi
-  rc=0; push_or_report "$store" origin live || rc=$?
-  if [ "$rc" -eq 2 ]; then
-    exit 1
-  elif [ "$rc" -eq 1 ]; then
-    case "$(gitlore_classify_refusal "$store" live origin/live)" in
-      behind)
-        # Nothing of ours to publish — the remote is ahead, which is
-        # /gitlore:merge's business, not a failed push to report on.
-        gitlore_say_for_agent_or_user \
-          "gitlore: $store has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." \
-          "gitlore: $store has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." >&2
-        ;;
-      diverged)
-        gitlore_yield_merge "$store" origin/live head-vs-remote live || exit 1
-        exit 1
-        ;;
+  # A store with no remote or a placeholder one has no remote gate: it is
+  # reported as local, with no command to run.
+  if gitlore_store_has_no_remote "$store"; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $name has no remote, so it stays local." \
+      "gitlore: $name has no remote, so it stays local." >&2
+    any_report=yes
+    return 0
+  fi
+  # The remote gate, after the local one: this store's unreachable remote does
+  # not hide its own local divergence, which the local gate prepares without
+  # it. (Memory's reachability probe above, and an earlier store's failed fetch,
+  # still end the run before a later store's local gate.) A remote with no `live`
+  # yet is the expected first-publish state: the fetch says so, and that line
+  # is matched here rather than shown. Any other fetch failure leaves the
+  # remote's state unknown, so the run stops on git's reason rather than
+  # compare against a stale tracking ref.
+  if ! fetch_err=$(gitlore_git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
+    case "$fetch_err" in
+      *"couldn't find remote ref"*) cls=ahead ;;
       *)
+        printf '%s\n' "$fetch_err" >&2
         gitlore_say_for_agent_or_user \
-          "gitlore: pushing $store's 'live' to origin was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed." \
-          "gitlore: pushing $store's 'live' to origin was refused as a non-fast-forward, but its local 'live' already contains the remote's. The remote moved during the push, or the fetch before it failed." >&2
+          "gitlore: fetching $name's remote 'live' failed, and not because the remote has none, so its state is unknown. git said it above." \
+          "gitlore: fetching $name's remote 'live' failed, and not because the remote has none, so its state is unknown. git said it above." >&2
         exit 1
         ;;
     esac
   fi
+  # A remote with no `live` holds nothing the local one lacks, so the store is
+  # ahead with nothing to classify. Otherwise equality is checked first: the
+  # refusal classifier reads equal as behind.
+  if [ -z "$cls" ]; then
+    remote_live=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live || true)
+    local_live=$(git -C "$store" rev-parse -q --verify refs/heads/live || true)
+    if [ -n "$remote_live" ] && [ "$remote_live" = "$local_live" ]; then
+      return 0
+    fi
+    cls=$(gitlore_classify_refusal "$store" refs/heads/live refs/remotes/origin/live)
+  fi
+  case "$cls" in
+    ahead)
+      gitlore_say_for_agent_or_user \
+        "gitlore: $name is ahead of its remote. Run /gitlore:push to publish it." \
+        "gitlore: $name is ahead of its remote. Run /gitlore:push to publish it." >&2
+      any_report=yes
+      ;;
+    behind)
+      # Nothing of ours to publish — the remote is ahead, which is
+      # /gitlore:merge's business.
+      gitlore_say_for_agent_or_user \
+        "gitlore: $name has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." \
+        "gitlore: $name has nothing to publish — its remote 'live' is ahead of the local one. Run /gitlore:merge to take those facts." >&2
+      any_report=yes
+      ;;
+    diverged)
+      gitlore_yield_merge "$store" origin/live head-vs-remote live || exit 1
+      exit 1
+      ;;
+    *)
+      # A ref that cannot be read is no classification; a merge prepared on
+      # it would be a guess.
+      gitlore_say_for_agent_or_user \
+        "gitlore: could not tell how $name's 'live' relates to its remote's: one of the two refs cannot be read. No merge was prepared." \
+        "gitlore: could not tell how $name's 'live' relates to its remote's: one of the two refs cannot be read. No merge was prepared." >&2
+      exit 1
+      ;;
+  esac
 }
 
 # A half-finished merge anywhere is the first thing to report: pushing on top of
@@ -234,22 +249,22 @@ done < <(gitlore_memory_stores "$mempath")
 gitlore_resolve_check_pins "$mempath" || exit 1
 
 # Every mounted tier, through the identical pair of gates — one merge policy at
-# every level — and before memory's, the order gitlore_push_stores keeps too:
-# memory's commit records each tier's, so memory published ahead of a tier push
-# that then fails leaves a pointer the tier's remote cannot resolve (D17). A
-# tier with no remote has nothing to reconcile yet; `pre-push` is where a
-# missing tier remote is fatal, because that is the point at which its absence
-# starts losing writes. A tier this checkout did not mount has no local `live`,
-# yet its HEAD can hold commits memory records: made from HEAD, so they go out.
+# every level — and before memory's: detection keeps the order
+# gitlore_push_stores publishes in, so the divergence it yields is the one a
+# push would meet first (D17: memory's commit records each tier's). A tier with
+# no remote has nothing to reconcile yet; `pre-push` is where a missing tier
+# remote is fatal, because that is the point at which its absence starts losing
+# writes. A tier this checkout did not mount has no local `live`, yet its HEAD
+# can hold commits memory records: `gitlore_ensure_live` gives it one from HEAD.
 while IFS= read -r store; do
   if [ "$store" = "$mempath" ]; then continue; fi
-  [ -n "$(git -C "$store" config --get remote.origin.url || true)" ] || continue
+  ! gitlore_store_has_no_remote "$store" || continue
   gitlore_ensure_live "$store" || exit 1
   # Every store under `$mempath` is a tier; the root is handled below.
   check_store_gates "$store" "${store##*/}"
 done < <(gitlore_memory_stores "$mempath")
 
-check_store_gates "$mempath" "" "$memory_first_publish"
+check_store_gates "$mempath"
 
-echo "gitlore: state is healthy. Nothing to do." >&2
+[ -n "$any_report" ] || echo "gitlore: state is healthy. Nothing to do." >&2
 exit 0

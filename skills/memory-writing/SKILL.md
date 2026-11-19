@@ -29,8 +29,8 @@ that lands it in its owner — file and index line together.
    a prohibition on the agent.
 2. **Does another artifact own it?** Read `<mempath>/<tier>/owned-projects.md`
    for each line of `<mempath>/.gitlore-tiers`, where `<mempath>` is
-   `git config --file .gitmodules submodule.gitlore-memory.path` run from the repo
-   root, skipping a tier without the file and a repo without `.gitlore-tiers`. An
+   the absolute path the session-start line `gitlore: the memory store is at …`
+   names, skipping a tier without the file and a repo without `.gitlore-tiers`. An
    owner outside this repo that no inventory lists is asked about at the memory
    gate before anything is deleted. Move the fact to its owner even when the memory
    is accurate, and grep the owner for the load-bearing terms before accepting that
@@ -151,8 +151,8 @@ take the overage to `/gitlore:index-audit` separately.
 
 ## 8. Landing it
 
-Write the file under `memory/` (or the matching tier's directory) and add its
-line to the root `memory/MEMORY.md` — `- [Title](<tier>/<file>.md) — hook`;
+Write the file under `<mempath>` (§1; or the matching tier's directory) and add its
+line to the root `<mempath>/MEMORY.md` — `- [Title](<tier>/<file>.md) — hook`;
 tier carriers and frontmatter follow from that edit. The fact is committed with the
 user's approved summary through `gitlore-commit` (the `gitlore:commit` skill), and its pointer rides
 the parent commit carrying the change it documents.

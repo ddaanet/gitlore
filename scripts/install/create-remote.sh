@@ -19,16 +19,18 @@ url_arg="${3:-}"
 # Idempotency: a real (non-placeholder) origin already wired → nothing to do. A
 # placeholder origin is a local-only install a `git submodule sync` has copied
 # out of `.gitmodules`; it names no repository, so the slot is still ours.
-existing=$(git -C "$mempath" config --get remote.origin.url || true)
-if [ -n "$existing" ] && ! gitlore_is_placeholder_url "$existing"; then
-  exit 0
-fi
+gitlore_store_has_no_remote "$mempath" || exit 0
 
 wire_and_push() {
-  # Args: $1 = remote URL. Wires origin, pushes live, rewrites .gitmodules URL.
+  # Args: $1 = remote URL. Wires origin, rewrites .gitmodules URL, pushes live.
   # origin keeps $1 as given, so pushes use the transport the person chose; the
   # tracked .gitmodules records its https form, which a clone fetches with no
-  # GitHub SSH key.
+  # GitHub SSH key. The .gitmodules url is written and staged before the push:
+  # it is settled once origin is wired, so a refused first push leaves
+  # /gitlore:push as the whole remaining step, with no placeholder left behind.
+  # The refusal returns 0: install runs under `set -e` and still has the
+  # settings, launcher, wrappers, hook wiring and staging to do after this
+  # script, and /gitlore:push publishes memory but installs none of them.
   local remote_url="$1"
   # `remote add` fails outright on an existing origin, which is exactly the
   # placeholder case reaching here — set-url is what repoints it.
@@ -37,13 +39,13 @@ wire_and_push() {
   else
     git -C "$mempath" remote add origin "$remote_url"
   fi
-  if ! gitlore_git -C "$mempath" push -u origin live; then
-    echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:resolve to retry." >&2
-    exit 1
-  fi
   git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" \
     "$(gitlore_github_https_url "$remote_url")"
   git add .gitmodules
+  if ! gitlore_git -C "$mempath" push -u origin live; then
+    echo "gitlore: wired the remote but could not push memory's live branch; the install goes on. Run /gitlore:push to publish it." >&2
+    return 0
+  fi
 }
 
 local_only_notice() {
@@ -80,12 +82,12 @@ case "$mode" in
       # Resolving the URL via `gh repo view` also respects the user's
       # gh-configured protocol, which `--push` would decide for them.
       if ! gh repo create "$full_name" --"$visibility"; then
-        echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover, or re-run install with a remote URL." >&2
+        echo "gitlore: gh repo create failed. Re-run install with a remote URL." >&2
         exit 1
       fi
       remote_url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl || true)
       if [ -z "$remote_url" ]; then
-        echo "gitlore: created remote $full_name but could not resolve its URL. Run /gitlore:resolve to recover." >&2
+        echo "gitlore: created remote $full_name but could not resolve its URL. Re-run install with a remote URL." >&2
         exit 1
       fi
       wire_and_push "$remote_url"

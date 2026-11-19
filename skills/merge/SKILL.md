@@ -54,8 +54,8 @@ and lands a merge commit.
    merge is unlanded and gets continued again — never discarded.
 3. Repeat until the command exits 0.
 
-The landed merge is **not** published: the continuation stops after the local
-fast-forward, which is what makes this different from `/gitlore:push`.
+A landed merge ends at the local fast-forward, as every landing does; this skill
+publishes nothing, and `/gitlore:push` is what publishes afterwards.
 
 ## Report
 
@@ -135,6 +135,8 @@ the carrier and is reported. Whether an arrived path is at `HEAD` depends on
 whether a commit has recorded the recomposed root index yet — a take on a clean
 store commits its own bookkeeping, while a take on a dirty store leaves that
 write for the next memory commit. So run
-`git -C memory show HEAD:MEMORY.md` and look for the line before assuming one
+`git -C "<mempath>" show HEAD:MEMORY.md`, where `<mempath>` is
+the absolute path the session-start line `gitlore: the memory store is at …`
+names, and look for the line before assuming one
 pass suffices: present there, removing it from the root index is enough; absent
 there, remove it from the tier's own `MEMORY.md` in the same change.

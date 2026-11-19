@@ -97,7 +97,7 @@ Relay the script's report, then classify its ending:
   `gh` missing) wrote nothing in the store, though a create can already have made
   its remote (see above). A refusal with no `mounted at` line that names
   `submodule add`, `.gitmodules` or a tier path "is not a checkout" came after
-  the clone started: `<memory>/<name>` can exist and `.gitmodules` can be
+  the clone started: `<mempath>/<name>` can exist and `.gitmodules` can be
   staged. Hand the user the report with the path it names, and do not run the
   script again until the user has cleared that path. A refusal after a
   `gitlore: tier "<name>" mounted at` line (the mount's commit was refused, or
@@ -115,10 +115,12 @@ Relay the script's report, then classify its ending:
 
 Read the composition report:
 
-- **Refused** (the report says the tier was mounted) — the store is left untouched and the reason is named. Fix it,
-  by hand, then retrigger composition with any edit to `memory/MEMORY.md` or
-  `memory/.gitlore-tiers`. Do not run the script again: the tier is already
-  mounted, and a second call refuses it.
+- **Refused** (the report says the tier was mounted) — the store is left
+  untouched and the reason is named. Fix it by hand, then retrigger composition
+  with any edit to `<mempath>/MEMORY.md` or `<mempath>/.gitlore-tiers`, where
+  `<mempath>` is the store, the parent of the tier path the `mounted at` line
+  names. Do not run the script again: the tier is already mounted, and a second
+  call refuses it.
 - **Composed** — done. Do not re-read the indexes to verify; composition moves
   lines, it never rewrites them.
 
@@ -130,7 +132,7 @@ occupies the cross-repo scope between this repo's `CLAUDE.md` and the user's own
 `~/.claude/CLAUDE.md`, so repo-specific rules stay where they are.
 
 If you want the new tier ranked somewhere other than the bottom, edit
-`memory/.gitlore-tiers` yourself afterward — a plain reorder, which retriggers
+`<mempath>/.gitlore-tiers` yourself afterward — a plain reorder, which retriggers
 composition like any other manifest edit.
 
 ## 3. Triage existing local memory against the new tier

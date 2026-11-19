@@ -42,6 +42,19 @@ gitlore_is_placeholder_url() {
   esac
 }
 
+# True when the store at $1 has no usable remote, which folds two states that
+# mean the same thing: no `remote.origin.url` at all, and a placeholder one — a
+# `git submodule sync` on a local-only install copies the placeholder out of
+# `.gitmodules` into origin, where it names no repository. Both are local by
+# choice, and diagnosing the second as an unreachable host would send the user
+# after a network problem they do not have.
+# Args: $1 = store path.
+gitlore_store_has_no_remote() {
+  local url
+  url=$(git -C "$1" config --get remote.origin.url || true)
+  [ -z "$url" ] || gitlore_is_placeholder_url "$url"
+}
+
 # Marker phrase in the in-tree migration breadcrumb. Single source of truth,
 # matched as a fixed string by gitlore_is_migration_stub and written into the
 # stub body by gitlore_mark_migrated.
@@ -96,6 +109,10 @@ gitlore_cd_launch_repo() {
 # config is unset or the target hook is missing (plugin upgraded + cache GC'd),
 # so a transient plugin state never bricks a commit/push (NFR8/D5). Used by the
 # parent-hook wrappers (emit-wrappers.sh).
+# The stale remedy names the repo the hook runs in, resolved when it runs: one
+# wrapper in the common dir serves every worktree, and the one that emitted it
+# may since be gone. The path is single-quoted, so a path holding `'` prints a
+# command that does not paste verbatim.
 # Args: $1 = output file path; $2 = hook name to exec under HOOKS_DIR.
 gitlore_emit_hook_wrapper() {
   local out="$1" hook="$2"
@@ -109,7 +126,7 @@ if [ -z "\$HOOKS_DIR" ]; then
 fi
 if [ ! -x "\$HOOKS_DIR/$hook" ]; then
   echo "gitlore skipped: hooks dir is stale (plugin upgraded; cache GC'd)." >&2
-  echo "Relaunch Claude Code in this repo with 'claude -c' to refresh the hooks dir, then retry." >&2
+  echo "Run (cd '\$(git rev-parse --show-toplevel)' && claude -p ping) outside the sandbox, then push again." >&2
   exit 0
 fi
 exec "\$HOOKS_DIR/$hook" "\$@"
@@ -240,7 +257,8 @@ gitlore_git_is_lock_error() {
 # lock-contention failures retry (gitlore_git_is_lock_error); every other
 # failure fails fast. The final attempt's stderr and exit code are surfaced
 # unchanged. Stdout passes through untouched. Apply to mutating git calls only
-# (read-only ops never take the index/ref lock). See D13.
+# (read-only ops never take the index/ref lock). The git runs under LC_ALL=C so
+# the English lock messages match under any caller locale. See D13.
 gitlore_git() {
   local -a schedule
   read -r -a schedule <<< "${GITLORE_GIT_RETRY_SCHEDULE:-0.1 0.2 0.4 0.8 1.6 3.2 3.7}"
@@ -248,7 +266,7 @@ gitlore_git() {
   errfile=$(mktemp "${TMPDIR:-/tmp}/gitlore-git.XXXXXX")
   while :; do
     rc=0
-    git "$@" 2>"$errfile" || rc=$?               # `|| rc=$?` keeps set -e happy
+    LC_ALL=C git "$@" 2>"$errfile" || rc=$?               # `|| rc=$?` keeps set -e happy
     [ "$rc" -eq 0 ] && break
     gitlore_git_is_lock_error "$(cat "$errfile")" || break
     [ "$i" -lt "${#schedule[@]}" ] || break          # retries exhausted

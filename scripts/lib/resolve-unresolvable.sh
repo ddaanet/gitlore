@@ -69,12 +69,14 @@ gitlore_unresolvable_tier_report() {
 # The report line for the parent's pin $2 on memory, which memory's remote does
 # not hold, for channel $3. No command and no url change: whether to accept
 # another repo's url belongs to the multi-repo design, not to this report. The
-# urls go to the `user` line only, as in the tier report.
+# urls go to the `user` line only, as in the tier report. A placeholder
+# .gitmodules url draws no different-repo clause: it names no repository.
 # Args: $1 = memory worktree path, $2 = the recorded commit, $3 = `user` or `agent`.
 gitlore_unresolvable_parent_report() {
-  local mempath="$1" pin="$2" channel="$3" remote recorded where
+  local mempath="$1" pin="$2" channel="$3" remote recorded where noremote=0
   remote=$(git -C "$mempath" config --get remote.origin.url || true)
-  if [ -z "$remote" ] || gitlore_is_placeholder_url "$remote"; then
+  gitlore_store_has_no_remote "$mempath" && noremote=1
+  if [ "$noremote" -eq 1 ]; then
     where="a commit this memory store does not hold, and memory has no remote"
   elif [ "$channel" = agent ]; then
     where="a commit memory's remote does not hold (the user has the remote's url)"
@@ -82,7 +84,8 @@ gitlore_unresolvable_parent_report() {
     where="a commit memory's remote $(gitlore_url_for_display "$remote") does not hold"
   fi
   recorded=$(gitlore_gitmodules_url .gitmodules "$mempath")
-  if [ -n "$recorded" ] && { [ -z "$remote" ] || ! gitlore_same_repo_url "$remote" "$recorded"; }; then
+  if [ -n "$recorded" ] && ! gitlore_is_placeholder_url "$recorded" \
+    && { [ "$noremote" -eq 1 ] || ! gitlore_same_repo_url "$remote" "$recorded"; }; then
     if [ "$channel" = agent ]; then
       where="$where; .gitmodules names a different repo for memory (the user has its url)"
     else

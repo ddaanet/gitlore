@@ -7,10 +7,10 @@ description: Fetch specific memory bodies into context on demand. Use when a too
 
 ## 1. Decide from the index you already hold — no tool calls
 
-`memory/MEMORY.md` loaded at session start and is in your context now. **Do not
-Read it, do not grep it, do not run anything.** The one exception: if a
-compaction has happened since it loaded, or it was edited this session, Read it
-once first.
+`<mempath>/MEMORY.md` loaded at session start and is in your context now.
+**Do not Read it, do not grep it, do not run anything.** The one exception: if
+a compaction has happened since it loaded, or it was edited this session, Read
+it once first.
 
 Each line is a routing entry — a title, a path, and the trigger keywords. You
 decide from the line; the fact itself lives only in the file.
@@ -47,7 +47,11 @@ bodies below.
 
 Issue every Read, and the Skill call for any skill from §2, in a **single
 message**, so the whole selection costs one round trip. A path in the index is
-store-relative, so prefix it with `memory/`: `- [T](ddaanet/foo.md)` is at
-`memory/ddaanet/foo.md`.
+store-relative, so prefix it with `<mempath>/`: `- [T](ddaanet/foo.md)` is at
+`<mempath>/ddaanet/foo.md`. `<mempath>` is the absolute path the session-start
+line `gitlore: the memory store is at …` in your context names, so it costs no
+tool call and the Reads take it as is. A subagent whose prompt carries no such
+line does no recall: it ends its turn with the request for the line, which the
+dispatcher then pastes, rather than deriving the path.
 
 Then act on what you read.

@@ -57,10 +57,10 @@ it runs a sub-agent that synthesizes memory content and lands a merge commit.
 
 1. Invoke the `gitlore:resolve` skill. The directive in the output above carries
    everything it needs — do not re-derive the store path or the state file.
-2. When it finishes, **run the publish command again.** A remote-flavored merge
-   publishes the store it merged, but a second store may still be unpublished:
-   tiers push before memory, so memory can diverge after a tier has already
-   landed, and resolve handles one store at a time.
+2. When it finishes, **run the publish command again.** A landed merge publishes
+   nothing: the rerun publishes the store it merged, and a second store may
+   still be unpublished, since tiers push before memory and resolve handles one
+   store at a time.
 3. Repeat until the command exits 0.
 
 ## Report
