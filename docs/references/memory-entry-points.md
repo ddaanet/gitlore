@@ -229,12 +229,12 @@ the transcript the agent holds.
 
 **Push is not fire-and-forget, and the skill is shaped around that.** A refused
 push whose reason git attributes to divergence prepares a merge and yields,
-which dispatches the memory-merger sub-agent and lands a merge commit under its
-own approval gate. Divergence is therefore a first-class outcome in the skill
-body, not an error branch: resolve, then **push again**, because tiers publish
-before memory and resolve handles one store per pass, so a second store can
-still be unpublished when the first one's merge lands. That loop, not the exit
-code alone, is what makes "published" true.
+which dispatches the memory-merger sub-agent and lands a merge commit, locally,
+under its own approval gate. Divergence is therefore a first-class outcome in
+the skill body, not an error branch: resolve, then **push again**, because
+resolve publishes nothing (D86) and handles one store per pass, so the merged
+store and a second store are both still unpublished when the first one's merge
+lands. That loop, not the exit code alone, is what makes "published" true.
 
 **No approval gate of its own.** FR11 gates what enters the history, applied
 where content is composed. Re-asking at publish time would gate a decision

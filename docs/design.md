@@ -34,7 +34,8 @@ making a claim about the mechanism it argues. Plans and specs live in `plans/`.
 5. When any divergence is detected (pending commit vs. trunk, or local trunk vs.
    remote), `/gitlore:resolve` performs a semantic merge: a sub-agent with fresh
    context synthesizes the merged content, reviewed by the parent agent — never
-   the user *(D49)* — before the merge lands under a canned message.
+   the user *(D49)* — before the merge lands, locally, under a canned message.
+   Only `/gitlore:push` publishes *(D86)*.
 6. One-command install configures the entire system.
 7. After `git clone`, the first `SessionStart` restores working state
    automatically. Running `/gitlore:install` again is not required; the plugin's
@@ -44,7 +45,8 @@ making a claim about the mechanism it argues. Plans and specs live in `plans/`.
    `git push`. It is also publishable on its own, with no parent push and no
    `git` command typed by hand *(D20)*.
 9. Remote creation is provider-agnostic; `gh` CLI is used opportunistically when
-   available.
+   available. Install and add-tier create remotes; no other entry point does
+   *(D86)*.
 10. **Install-time disclosure (informational).** Before creating the memory
     remote, the user is shown the proposed name, owner, visibility, and a notice
     that memory may contain session context — orientation, not a hard gate.
@@ -231,7 +233,8 @@ FR8 holds out of the box, and reaches the wrapper through the git common dir
 installer commands the wire scripts write for the user to run (D45). The remote
 inherits name, owner and visibility from the parent's `origin`, is disclosed
 before creation (FR10), and a parent with no remote is a supported local-only
-end state. The detection table and each manager's syntax are in
+end state, as is a memory store with no remote of its own (D86). The detection
+table and each manager's syntax are in
 [installation.md](references/installation.md); the disclosure text and the
 per-provider creation methods are in
 [memory-remote.md](references/memory-remote.md).

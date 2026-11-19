@@ -105,14 +105,15 @@ The considered repair was to `commit --amend` the release commit after the merge
 lands so its gitlink names the merged memory, then `tag -f`. It is refused
 because the invariant above already gives correctness: the recorded commit is
 the merge's second parent, it is published by the first `live` push that
-succeeds, and NFR5 holds without the tag's tree ever naming the merge. What the
-amend buys is coherence — a tag whose tree names the memory as merged, and a
-clean parent tree immediately after — and it costs a scripted rewrite of a
-tagged commit, a forced move of a tag about to be published, and an ordering
-dependency on the stale-merge guard, which holds the memory commit path until
-the merge is resolved. The loop that replaces it — resolve, push again, until
-the push lands — is the one the `push` skill already runs (D20), and a gitlink
-behind memory's tip is the same resting state every other memory advance leaves.
+succeeds after the merge lands, and NFR5 holds without the tag's tree ever
+naming the merge. What the amend buys is coherence — a tag whose tree names the
+memory as merged, and a clean parent tree immediately after — and it costs a
+scripted rewrite of a tagged commit, a forced move of a tag about to be
+published, and an ordering dependency on the stale-merge guard, which holds the
+memory commit path until the merge is resolved. The loop that replaces it —
+resolve, push again, until the push lands — is the one the `push` skill already
+runs (D20), and a gitlink behind memory's tip is the same resting state every
+other memory advance leaves.
 
 **D50 — The commit path writes no index and aborts on a pending compose; a tier
 off its pin, outside the yield, or a compose problem in an index file the commit

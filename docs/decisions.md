@@ -38,18 +38,15 @@ merge is first parent. [branch-model.md](references/branch-model.md)
 - **D13** — a lock-contention retry wrapper guards mutating memory git calls
 - **D24** — a directive that names a sub-agent carries its own authorization
 - **D49** — canned unprompted merge commits; takes commit their bookkeeping
-- **D75** — a push publishes each store as soon as it is ready: a tier repaired
-  or merged inside a push goes to its remote even when a later tier or memory
-  then fails, because races are not routine but must be expected, and an
-  unpushed resolution is remerged at every remote update instead of
-  fast-forwarded; pushing it is what puts the store back on `live`.
-  `/gitlore:merge` is for incoming and publishes nothing
+- **D75** — a push publishes each store as soon as it is ready: a repaired tier
+  goes to its remote even when a later store fails; a merge landed for a push is
+  local, and the rerun push publishes it
   ([publishing-divergence.md](references/publishing-divergence.md))
 - **D76** — the position line names `/gitlore:push` for any divergence, a `HEAD`
   forked from local `live` included, and `/gitlore:merge` only when the take is
   a fast-forward plus the canned bookkeeping commit: a divergence makes the
   fast-forward impossible, a tax on every later upstream update, and the push
-  prepares the merge and publishes it
+  prepares the merge and its rerun publishes it
   ([publishing-divergence.md](references/publishing-divergence.md))
 - **D79** — an unresolvable pin, a recorded commit its repository lacks, is an
   integrity error at every level: nothing composes or is recorded over it; a
@@ -59,12 +56,16 @@ merge is first parent. [branch-model.md](references/branch-model.md)
 - **D81** — `resolve.sh abort-merge` restores a prepared merge under git's
   `reset --merge` contract, aimed at the pending commit
   ([merge-state-recovery.md](references/merge-state-recovery.md))
+- **D86** — only `/gitlore:push` publishes, a parent `git push` included;
+  `/gitlore:resolve` lands locally, so a push that met a divergence is finished
+  by pushing again; only install and add-tier create one
+  ([publishing-divergence.md](references/publishing-divergence.md))
 
 *Rejected:* `git commit-tree` plus `git update-ref` for the resolve merge · a
 temporary worktree for resolve · `claude --print` for conflict resolution ·
 single-agent resolve with a post-hoc context refresh · holding a repaired tier
-back until memory can record it · keeping a tier merge landed inside the
-pre-push hook unpublished · publishing from `/gitlore:merge` · hinting
+back until memory can record it · resolve publishes what it lands · a no-publish
+mark on the merge state · publishing from `/gitlore:merge` · hinting
 `/gitlore:merge` for a divergence · hinting `/gitlore:resolve` for a `HEAD`
 forked from local `live` · a fallback base for the compose · a reset of memory's
 `live` past the commit that recorded a lost pin · reverting only the gitlink

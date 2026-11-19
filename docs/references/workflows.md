@@ -69,8 +69,8 @@ bound for project memory.
    one canned bookkeeping message (D49), leaving the store clean; a root store
    holding unapproved work keeps the moves staged instead, and the run says
    which.
-5. On divergence: `/gitlore:resolve`, with a merge marked not-to-publish; the
-   skill reconciles again until the command exits 0. Nothing is published.
+5. On divergence: `/gitlore:resolve` lands the merge locally; the skill
+   reconciles again until the command exits 0. Nothing is published (D86).
 
 **Resolve (on divergence) — primary path: agent-driven**
 

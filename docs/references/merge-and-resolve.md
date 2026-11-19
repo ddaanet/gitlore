@@ -72,48 +72,48 @@ The division of labour is D7's: the script decides, the agent writes prose.
    gitlinks `OURS` records, a line both sides changed taking the tier's; a tier
    merge composes nothing, and the end of the run that follows records it
    ([take-and-compose.md](take-and-compose.md)). It runs the dangling-pointer
-   report, commits under the canned merge message (D49), and pushes when the
-   flavor calls for it. It finds the prepared merge by walking the stores rather
-   than assuming memory, and refuses outright if two are prepared at once. The
-   merge landed once its commit did; exit 0 also means the pushes after it
-   succeeded. Every exit before the merge commit is non-zero, and so is one
-   whose push of `live` is refused after it. A message file that cannot be
-   created, a message that cannot be built and a refused merge commit each print
-   `… so the merge was not committed; the merge stays prepared.` after the
-   failing command's own text, and a rerun once that cause is fixed lands the
-   merge. A state file with no `MERGE_HEAD` (a checkout cleared it) is refused
-   before anything is committed, with a line naming `/gitlore:merge` when the
-   state's publish mark is `no` and `/gitlore:resolve` otherwise, which repairs
-   the merge state. The sub-agent and the skill route those lines, the
-   merged-index and conflict-marker refusals, a fresh
+   report, commits under the canned merge message (D49), and moves local `live`
+   onto it. Nothing is published (D86): a landing ends with
+   `gitlore: merged without publishing. Run /gitlore:push to publish.` on stderr
+   and exit 0. It finds the prepared merge by walking the stores rather than
+   assuming memory, and refuses outright if two are prepared at once. The merge
+   landed once its commit did. Every exit before the merge commit is non-zero,
+   and so is one whose local move of `live` is refused after it: a race with a
+   concurrent advance, which prepares the merge again. A message file that
+   cannot be created, a message that cannot be built and a refused merge commit
+   each print `… so the merge was not committed; the merge stays prepared.`
+   after the failing command's own text, and a rerun once that cause is fixed
+   lands the merge. A state file with no `MERGE_HEAD` (a checkout cleared it) is
+   refused before anything is committed, with a line naming `/gitlore:resolve`,
+   which repairs the merge state. The sub-agent and the skill route those lines,
+   the merged-index and conflict-marker refusals, a fresh
    `gitlore: memory merge prepared` and a post-landing
-   `gitlore: pushing '…' failed, and not because of divergence` by name, and
-   report any other non-zero outcome as unrecognised rather than landed. The
-   last two both follow a landed merge: the fresh directive goes back through
-   the loop, while the push failure ends in the summary.
-5. **The skill loops** unless `/gitlore:merge` invoked it: a bare `resolve.sh`
-   run publishes, so under `/gitlore:merge` the skill returns to that skill's
-   reconcile rerun, which repairs or continues the merge without publishing, and
-   after a continuation that printed `merged without publishing` it runs
-   `/gitlore:merge` instead. Otherwise it reruns `resolve.sh`, each directive
-   going back through the sub-agent (a second flavor can be waiting; the script
-   gates every tier before memory, the order publishing keeps, so memory's
-   pointer never goes out ahead of a tier it records), until it exits 0. A rerun
-   that exits non-zero with no directive is relayed, not repeated; one holding a
-   pin line is handled as `pin-and-abort.md` says and skips the retry. Otherwise
-   the skill retries the original commit. It tells the user which store was
-   merged — a tier is shared with other repositories, the project store is not.
+   `gitlore: pushing '…' failed, and not because of divergence` (the local
+   `live` move) by name, and report any other non-zero outcome as unrecognised
+   rather than landed. The last two both follow a landed merge: the fresh
+   directive goes back through the loop, while the failure ends in the summary.
+5. **The skill loops.** It reruns `resolve.sh`, which publishes nothing, so the
+   rerun is safe whoever started the skill: each directive goes back through the
+   sub-agent (a second flavor can be waiting; the script gates every tier before
+   memory) until it exits 0. A rerun that exits non-zero with no directive is
+   relayed, not repeated; one holding a pin line is handled as
+   `pin-and-abort.md` says and skips the retry. Otherwise the skill retries the
+   original commit. It tells the user which store was merged — a tier is shared
+   with other repositories, the project store is not.
 
-**Memory's `live` reaches its remote only from memory's own gate, which runs
-last.** `check_store_gates` ends by pushing `live` to `origin`, and
-`scripts/resolve.sh` calls it for every mounted tier before calling it for the
-memory root, so a tier gate that refuses stops the run with memory unpublished:
-the memory remote never holds a gitlink a tier's remote cannot resolve, which is
-what D17 orders the gates to prevent. A memory remote that has never held `live`
-is no exception. The run learns that from the `ls-remote` its reachability probe
-already pays for, and spends it only on skipping the `fetch origin live` that
-would otherwise print git's `couldn't find remote ref live`; the publication
-itself still waits for the gate.
+**The default run moves no remote ref (D86).** Each store the run reaches gets
+its local gate, which checks `HEAD` against local `live`, before its remote
+gate, which fetches the remote's `live` and compares: a store only ahead is
+reported with
+`gitlore: <store> is ahead of its remote. Run /gitlore:push to publish it.`, one
+only behind with a line naming `/gitlore:merge`, and a diverged one gets a
+prepared merge. Tiers run before memory, so the divergence yielded is the one a
+push would meet first. The run skips a tier with no remote, or a placeholder
+one, before either gate and prints nothing for it. A memory store with no remote
+or a placeholder one gets its local gate and then stays local: it is reported as
+such, with no command, and nothing creates a remote. A remote that has never
+held `live` is read off the fetch's `couldn't find remote ref` and reported as
+ahead.
 
 **Two subcommands leave a prepared merge or a lost pin without the sub-agent.**
 `resolve.sh abort-merge` puts the memory root back on the commit its prepared
@@ -146,13 +146,12 @@ line, which would claim finished a store that is not; commit memory and run
 by the tier take instead (D43).
 
 Per store, an already-contained remote is nothing to do, a strictly-ahead remote
-is a fast-forward, and a diverged one prepares a merge marked `publish: "no"`,
-which stops the continuation after the local `HEAD:live` fast-forward. Memory's
-own missing remote is reported as nothing to take rather than a failure: a tier
-with no remote is a misconfiguration worth stopping on, since it exists to be
-shared, and the memory root is not. A remote that has no `live` yet is nothing
-to take for either store, read off git's refusal to fetch the missing ref, so a
-run that moved a tier still reaches its root write.
+is a fast-forward, and a diverged one prepares a merge. Memory's own missing
+remote is reported as nothing to take rather than a failure: a tier with no
+remote is a misconfiguration worth stopping on, since it exists to be shared,
+and the memory root is not. A remote that has no `live` yet is nothing to take
+for either store, read off git's refusal to fetch the missing ref, so a run that
+moved a tier still reaches its root write.
 
 Stores are visited **tiers first, root last**, and root's index is written once
 at the end of the run and recorded in one canned bookkeeping commit, so an

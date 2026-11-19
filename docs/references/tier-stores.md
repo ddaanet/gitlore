@@ -129,10 +129,9 @@ tree is left as it is: a position read would describe the preparation, which
 moved `HEAD` onto its authority, and hint a second remedy.
 
 **A tier merge lands in the tier and records nothing in root.** Its continuation
-commits the merge, clears the merge state and advances `live`, publishing only a
-merge a refused push prepared and never one `/gitlore:merge` prepared. The
-carrier check that keeps a defective merged carrier from landing (D52) stays, on
-the carrier alone. The root write and the bookkeeping commit belong to the end
-of the take or push run that follows (D77), which finds the tier ahead of its
-gitlink; a refusal there is the root's, and the tier stays where the take put
-it.
+commits the merge, clears the merge state and advances `live`, publishing
+nothing: the rerun `/gitlore:push` publishes it (D86). The carrier check that
+keeps a defective merged carrier from landing (D52) stays, on the carrier alone.
+The root write and the bookkeeping commit belong to the end of the take or push
+run that follows (D77), which finds the tier ahead of its gitlink; a refusal
+there is the root's, and the tier stays where the take put it.

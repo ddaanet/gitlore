@@ -37,10 +37,10 @@ the same five things, in this order.
    same refusal, which covers the merges the push and the resolve command
    prepare outside a take. Then each tier (`gitlore_take_tier`): reconcile its
    `HEAD` against its local `live`, take its remote (fast-forward, or a prepared
-   merge marked not-to-publish when the two diverged), then check the arrived
-   carrier alone and repair it when it fails (D52). Inside a push a tier is
-   taken only when it holds arrivals, and its merge is published on landing
-   (D75). A tier that yields a prepared merge, or refuses with anything but an
+   merge when the two diverged), then check the arrived carrier alone and repair
+   it when it fails (D52). Inside a push a tier is taken only when it holds
+   arrivals, and its merge lands locally, the rerun push publishing it (D75,
+   D86). A tier that yields a prepared merge, or refuses with anything but an
    untaken remote, stops the run.
 3. **Reconcile and take root.** A root fast-forward onto a commit recording a
    tier gitlink that no repository holds is refused; a diverged root prepares
