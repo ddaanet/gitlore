@@ -145,6 +145,9 @@ assert_memory_stays_local() {
   run --separate-stderr bash "$RESOLVE"
   [ "$status" -ne 0 ]
   [[ "$output$stderr" == *"flavor=head-vs-remote"* ]]
+  # Memory's own gate never reported: the tier's yield ended the run first.
+  [[ "$output$stderr" != *"gitlore: memory is ahead"* ]]
+  [[ "$output$stderr" != *"gitlore: memory has no remote"* ]]
   [ -z "$(git -C memory ls-remote origin live)" ]
 }
 

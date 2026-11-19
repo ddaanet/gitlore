@@ -98,8 +98,9 @@ load helpers/tier-divergence
   run --separate-stderr bash "$PRE_PUSH"
   [ "$status" -eq 1 ]
   all="${output}${stderr}"
-  # The trigger phrase commands/resolve.md matches on, plus the store, so a tier
-  # merge is distinguishable from a memory one in the same output.
+  # The trigger phrase the resolve skill (skills/resolve/SKILL.md) matches on,
+  # plus the store, so a tier merge is distinguishable from a memory one in
+  # the same output.
   [[ "$all" == *"gitlore: memory merge prepared"* ]]
   [[ "$all" == *"head-vs-remote"* ]]
   [[ "$all" == *"memory/ddaanet"* ]]
