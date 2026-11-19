@@ -80,7 +80,8 @@ has no memory submodule entry, no-op.
    session. No earlier step ends the pass, so a resume or compaction of the same
    session always collects what is waiting.
 11. **Emit the standing orientation** on `additionalContext`: the FR11
-   prohibition (D70) and the active tiers' own routing descriptions (D28).
+   prohibition (D70), the memory store's absolute path (D85) and the active
+   tiers' own routing descriptions (D28).
 
 **Worktree creation — handled by `SessionStart`, not a `WorktreeCreate` hook.**
 Memory-worktree setup for a new worktree happens lazily at the next
