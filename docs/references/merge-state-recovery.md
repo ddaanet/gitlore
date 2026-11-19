@@ -53,12 +53,13 @@ progress.
 
 The accepted trade is a merge whose authority moved while it waited — someone
 pushed to `origin/live` meanwhile. It lands against the authority it was built
-on, and the continuation's own fast-forward (`push . HEAD:live`, then
-`push origin live` for a `head-vs-remote` merge) is then refused as a
-non-fast-forward, which re-prepares the merge against the current authority and
-yields again. One extra cycle, against re-synthesizing every merge that outlives
-its session — and re-preparing on sight never avoided it either, since that too
-merely fixed the authority as of whenever the gate happened to run.
+on. A moved local `live` refuses the continuation's own fast-forward
+(`push . HEAD:live`) as a non-fast-forward, which can re-prepare the merge
+against the current authority and yield again, and a moved remote is met by the
+next `/gitlore:push`, which prepares the next merge. One extra cycle, against
+re-synthesizing every merge that outlives its session — and re-preparing on
+sight never avoided it either, since that too merely fixed the authority as of
+whenever the gate happened to run.
 
 Without `MERGE_HEAD`, the guard classifies from the pinned pending commit and
 the state file's own fields, and repairs. Three things produce that state, and

@@ -140,7 +140,7 @@ gitlore_guard_stale_merge_state() {
       # have synthesized and staged an answer, which discarding the merge would
       # throw away. A merge whose authority moved meanwhile lands against the
       # old one: a moved local `live` refuses the continuation's `HEAD:live`
-      # push, which re-prepares it, and a moved remote is met by the next
+      # push, which can re-prepare it, and a moved remote is met by the next
       # /gitlore:push, which prepares the next merge. Either costs one cycle;
       # re-preparing every stale merge costs a synthesis.
       statefile=$(gitlore_merge_state_file "$mempath")

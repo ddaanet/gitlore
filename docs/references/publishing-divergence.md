@@ -86,12 +86,14 @@ with or without a remote.
 
 `/gitlore:push` publishes, and a parent `git push` counts as push: its
 `pre-push` hook runs the same `gitlore_push_stores`. `/gitlore:merge` publishes
-nothing, and `/gitlore:resolve` repairs and lands. Every landing, memory or tier
-and whoever prepared the merge, ends after the local `HEAD:live` move with
-`gitlore: merged without publishing. Run /gitlore:push to publish.` and exit 0,
-so one rerun path serves every entry: a push that met a divergence is finished
-by pushing again, and a remote that moved during a synthesis is met by the next
-push, which prepares the next merge.
+nothing, and `/gitlore:resolve` repairs and lands. A landing, memory or tier and
+whoever prepared the merge, ends after the local `HEAD:live` move with
+`gitlore: merged without publishing. Run /gitlore:push to publish.` and exit 0;
+a refused move exits 1 before that line, leaving what
+[merge-and-resolve.md](merge-and-resolve.md) describes. One rerun path serves
+every entry: a push that met a divergence is finished by pushing again, and a
+remote that moved during a synthesis is met by the next push, which prepares the
+next merge.
 
 The default `resolve.sh` run moves no remote ref. It runs each store's local
 gate before its remote gate, prepares a merge for a diverged store, and for a

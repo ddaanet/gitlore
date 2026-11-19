@@ -80,7 +80,7 @@ refusal_fragments() {
   assert_yield_left_nothing memory "$head_before" "$live_before"
 }
 
-@test "rewrite guard: /gitlore:merge (no-publish, pending=HEAD) is refused on old history" {
+@test "rewrite guard: /gitlore:merge is refused on old history" {
   mem_setup old
   head_before=$(git -C memory rev-parse HEAD)
   live_before=$(git -C memory rev-parse live)

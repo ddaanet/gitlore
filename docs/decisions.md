@@ -58,7 +58,7 @@ merge is first parent. [branch-model.md](references/branch-model.md)
   ([merge-state-recovery.md](references/merge-state-recovery.md))
 - **D86** — only `/gitlore:push` publishes, a parent `git push` included;
   `/gitlore:resolve` lands locally, so a push that met a divergence is finished
-  by pushing again; only install and add-tier create one
+  by pushing again; only install and add-tier create remotes
   ([publishing-divergence.md](references/publishing-divergence.md))
 
 *Rejected:* `git commit-tree` plus `git update-ref` for the resolve merge · a

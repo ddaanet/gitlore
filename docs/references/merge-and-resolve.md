@@ -78,15 +78,15 @@ The division of labour is D7's: the script decides, the agent writes prose.
    and exit 0. It finds the prepared merge by walking the stores rather than
    assuming memory, and refuses outright if two are prepared at once. The merge
    landed once its commit did. Every exit before the merge commit is non-zero,
-   and so is one whose local move of `live` is refused after it: a race with a
-   concurrent advance, which prepares the merge again. A message file that
-   cannot be created, a message that cannot be built and a refused merge commit
-   each print `… so the merge was not committed; the merge stays prepared.`
-   after the failing command's own text, and a rerun once that cause is fixed
-   lands the merge. A state file with no `MERGE_HEAD` (a checkout cleared it) is
-   refused before anything is committed, with a line naming `/gitlore:resolve`,
-   which repairs the merge state. The sub-agent and the skill route those lines,
-   the merged-index and conflict-marker refusals, a fresh
+   and so is one whose local move of `live` is refused after it: a divergence (a
+   concurrent advance) can prepare the merge again. A message file that cannot
+   be created, a message that cannot be built and a refused merge commit each
+   print `… so the merge was not committed; the merge stays prepared.` after the
+   failing command's own text, and a rerun once that cause is fixed lands the
+   merge. A state file with no `MERGE_HEAD` (a checkout cleared it) is refused
+   before anything is committed, with a line naming `/gitlore:resolve`, which
+   repairs the merge state. The sub-agent and the skill route those lines, the
+   merged-index and conflict-marker refusals, a fresh
    `gitlore: memory merge prepared` and a post-landing
    `gitlore: pushing '…' failed, and not because of divergence` (the local
    `live` move) by name, and report any other non-zero outcome as unrecognised
@@ -101,10 +101,12 @@ The division of labour is D7's: the script decides, the agent writes prose.
    original commit. It tells the user which store was merged — a tier is shared
    with other repositories, the project store is not.
 
-**The default run moves no remote ref (D86).** Each store the run reaches gets
-its local gate, which checks `HEAD` against local `live`, before its remote
-gate, which fetches the remote's `live` and compares: a store only ahead is
-reported with
+**The default run moves no remote ref (D86).** A memory store with a real remote
+is probed first, before anything else the run reports: `ls-remote origin` that
+fails ends the run with `gitlore: memory remote unreachable.` and exit 1. Each
+store the run reaches then gets its local gate, which checks `HEAD` against
+local `live`, before its remote gate, which fetches the remote's `live` and
+compares: a store only ahead is reported with
 `gitlore: <store> is ahead of its remote. Run /gitlore:push to publish it.`, one
 only behind with a line naming `/gitlore:merge`, and a diverged one gets a
 prepared merge. Tiers run before memory, so the divergence yielded is the one a
