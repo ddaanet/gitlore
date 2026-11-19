@@ -62,7 +62,7 @@ teardown() { teardown_tmp_repo; }
   [ "$status" -ne 0 ]
 }
 
-@test "resolve: pushes live when remote exists but has no live branch" {
+@test "resolve: a remote with no live branch gets none, and memory is reported ahead" {
   make_parent_with_memory
   bare="$TMP_REPO/.recover-remote.git"
   git init -q --bare "$bare"
@@ -70,8 +70,10 @@ teardown() { teardown_tmp_repo; }
   git -C memory remote add origin "$bare"
   run --separate-stderr bash "$RESOLVE"
   [ "$status" -eq 0 ]
-  remote_live=$(git --git-dir="$bare" rev-parse live 2>/dev/null || echo MISSING)
-  [ "$remote_live" != "MISSING" ]
+  # `git rev-parse live` on a ref-less repository prints its argument, so the
+  # remote is read through ls-remote, which lists nothing for it.
+  [ -z "$(git ls-remote "$bare")" ]
+  [[ "$stderr" == *"gitlore: memory is ahead of its remote. Run /gitlore:push to publish it."* ]]
   # A first publish has no remote `live` to fetch, and git's complaint about
   # that is not the user's to read. `case`, not `[[ ]]`: non-final here.
   case "$output$stderr" in *"couldn't find remote ref"*) false ;; esac

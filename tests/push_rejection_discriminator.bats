@@ -215,11 +215,12 @@ HOOK
   [ "$status" -ne 0 ]
 }
 
-@test "resolve reports a policy rejection instead of preparing a merge" {
+@test "resolve sends nothing to a remote that would reject it, prepares no merge, and names /gitlore:push" {
   # /gitlore:resolve is where the user lands after pre-push has correctly told
   # them the push failed for a reason other than divergence. Re-diagnosing it as
   # divergence here prepares a merge that cannot help — and sends them round the
-  # same loop.
+  # same loop. The default run no longer pushes, so the rejection is never met:
+  # the ahead store is reported and publishing is left to /gitlore:push.
   export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
   MEMORY_REMOTE="$TMP_REPO/.memory-remote.git"
   git init -q --bare "$MEMORY_REMOTE"
@@ -243,11 +244,14 @@ HOOK
     git push -q . HEAD:live
   )
 
+  remote_before=$(git ls-remote "$MEMORY_REMOTE")
+
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh"
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
+  [ "$(git ls-remote "$MEMORY_REMOTE")" = "$remote_before" ]
   msg="$output$stderr"
-  [[ "$msg" == *"not because of divergence"* ]]
-  [[ "$msg" == *"policy: live is protected"* ]]
+  [[ "$msg" == *"gitlore: memory is ahead of its remote. Run /gitlore:push to publish it."* ]]
+  [[ "$msg" != *"policy: live is protected"* ]]
   [[ "$msg" != *"memory merge prepared"* ]]
   run git -C memory rev-parse -q --verify refs/gitlore/pending
   [ "$status" -ne 0 ]

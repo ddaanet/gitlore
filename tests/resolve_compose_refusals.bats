@@ -69,7 +69,7 @@ decline_pushes_to() {
   grep -qxF -- '- [their fact](ddaanet/t.md) — theirs' memory/MEMORY.md
 }
 
-@test "default-mode gates exit 1 on a policy refusal" {
+@test "default-mode gates send nothing to a remote that declines, and name /gitlore:push" {
   make_parent_with_memory
   git -C memory push -q origin live
   decline_pushes_to "$TMP_REPO/.bare-memory.git"
@@ -77,14 +77,15 @@ decline_pushes_to() {
   echo mine > memory/f.md
   git -C memory add -A
   commit_sections "memory: add a fact"
-  # Local `live` strictly ahead of the remote's: routed by ancestry, the declined
-  # push would read as a non-fast-forward the remote raced.
+  # Local `live` strictly ahead of the remote's: routed by ancestry, never by a
+  # push the remote would decline.
   git -C memory merge-base --is-ancestor origin/live live
   [ "$(git -C memory rev-parse live)" != "$(git -C memory rev-parse origin/live)" ]
+  remote_before=$(git ls-remote "$TMP_REPO/.bare-memory.git")
 
   run --separate-stderr bash "$RESOLVE"
-  [ "$status" -eq 1 ]
-  [[ "$stderr" == *"declined by policy"* ]]
-  [[ "$stderr" == *"not because of divergence"* ]]
-  [[ "$stderr" != *"refused as a non-fast-forward"* ]]
+  [ "$status" -eq 0 ]
+  [ "$(git ls-remote "$TMP_REPO/.bare-memory.git")" = "$remote_before" ]
+  [[ "$stderr" == *"gitlore: memory is ahead of its remote. Run /gitlore:push to publish it."* ]]
+  [[ "$stderr" != *"declined by policy"* ]]
 }

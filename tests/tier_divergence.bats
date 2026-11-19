@@ -143,9 +143,11 @@ load helpers/tier-divergence
   [ ! -f "$(tier_state_file ddaanet)" ]
 }
 
-@test "the standalone resolver publishes no memory pointer ahead of a tier it could not publish" {
+@test "the standalone resolver publishes neither the tier nor a memory pointer to it" {
   # Memory's commit records the tier's, so memory going out first would leave
-  # a colleague fetching a gitlink the tier remote cannot resolve (D17).
+  # a colleague fetching a gitlink the tier remote cannot resolve (D17). The
+  # default run sends nothing; the tier's pre-receive hook would decline a push,
+  # and the run never meets it.
   make_parent_with_memory
   git -C memory push -q origin live
   mount_tier_at_live ddaanet
@@ -155,13 +157,17 @@ load helpers/tier-divergence
   git -C memory merge-base --is-ancestor origin/live live
   [ "$(git -C memory rev-parse live)" != "$(git -C memory rev-parse origin/live)" ]
   published=$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)
+  tier_published=$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)
   printf '#!/bin/sh\necho "declined by policy" >&2\nexit 1\n' > "$TMP_REPO/.bare-ddaanet.git/hooks/pre-receive"
   chmod +x "$TMP_REPO/.bare-ddaanet.git/hooks/pre-receive"
 
   run --separate-stderr bash "$RESOLVE"
-  [ "$status" -eq 1 ]
-  [[ "$stderr" == *"declined by policy"* ]]
+  [ "$status" -eq 0 ]
+  [[ "$stderr" != *"declined by policy"* ]]
+  [[ "$stderr" == *"gitlore: tier 'ddaanet' is ahead of its remote. Run /gitlore:push to publish it."* ]]
+  [[ "$stderr" == *"gitlore: memory is ahead of its remote. Run /gitlore:push to publish it."* ]]
   [ "$(git --git-dir="$TMP_REPO/.bare-memory.git" rev-parse live)" = "$published" ]
+  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$tier_published" ]
 }
 
 # --- a prepared merge must survive the next session start ---

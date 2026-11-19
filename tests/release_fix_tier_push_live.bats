@@ -91,7 +91,7 @@ tier_without_live() {
   [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$up" ]
 }
 
-@test "the default resolve run makes a tier's missing live from HEAD and publishes it before memory" {
+@test "the default resolve run makes a tier's missing live from HEAD and leaves both remotes alone" {
   tier_without_live
   seed_tier_bullet ddaanet hand.md "committed by hand"
   git -C memory/ddaanet add -A
@@ -101,10 +101,13 @@ tier_without_live() {
   git -C memory commit -qm "record the hand commit"
   git -C memory push -q . HEAD:refs/heads/live
   pin=$(git -C memory rev-parse HEAD:ddaanet)
+  memory_before=$(git ls-remote "$MEMORY_REMOTE")
+  tier_before=$(git ls-remote "$TMP_REPO/.bare-ddaanet.git")
 
   run --separate-stderr bash "$PLUGIN_ROOT/scripts/resolve.sh"
   [ "$status" -eq 0 ] || { printf '%s\n' "$stderr" >&2; return 1; }
-  [ "$(git --git-dir="$MEMORY_REMOTE" rev-parse live:ddaanet)" = "$pin" ]
-  [ "$(git --git-dir="$TMP_REPO/.bare-ddaanet.git" rev-parse live)" = "$pin" ]
   [ "$(git -C memory/ddaanet rev-parse live)" = "$pin" ]
+  [ "$(git ls-remote "$MEMORY_REMOTE")" = "$memory_before" ]
+  [ "$(git ls-remote "$TMP_REPO/.bare-ddaanet.git")" = "$tier_before" ]
+  [[ "$stderr" == *"gitlore: tier 'ddaanet' is ahead of its remote. Run /gitlore:push to publish it."* ]]
 }
