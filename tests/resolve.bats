@@ -121,12 +121,12 @@ assert_memory_stays_local() {
   case "$output$stderr" in *"couldn't find remote ref"*) false ;; esac
 }
 
-@test "resolve: a tier gate that refuses stops memory's remote-less live from publishing early" {
+@test "resolve: a tier gate that refuses ends the run before memory's gate, and nothing reaches memory's remote" {
   # Memory's remote has no `live` yet, and a mounted tier's own gate is about to
-  # refuse (its local `live` diverged from its remote's). D17: memory's commit
-  # records the tier's gitlink, so memory's `live` must not reach the remote
-  # ahead of a tier gate that then fails; the pointer it would publish names a
-  # tier commit the tier's own remote cannot resolve.
+  # refuse (its local `live` diverged from its remote's). The tiers are gated
+  # before memory (D17: memory's commit records the tier's gitlink), so the
+  # tier's yield is what ends the run, and the default run publishes nothing
+  # (D86): memory's remote still has no `live` afterwards.
   make_parent_with_memory
   bare="$TMP_REPO/.recover-remote.git"
   git init -q --bare "$bare"

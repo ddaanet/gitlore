@@ -136,7 +136,7 @@ fi
 # remote's. No branch guard is needed at either level — every store is checked
 # out detached, so `HEAD:live` is always the right question and is a silent
 # no-op when HEAD is already there. Yields and exits on the first divergence;
-# `commands/resolve.md` re-runs this script until it exits 0, which is what
+# the resolve skill's loop re-runs this script until it exits 0, which is what
 # walks the remaining gates and stores. A store whose `live` is ahead of or
 # behind its remote is reported and the run goes on; the report sets
 # `any_report`, which keeps the healthy line from following it.
