@@ -6,8 +6,7 @@ merge and says so below. Read this when the continuation did not exit 0, or was 
 
 - A merged-index or conflict-marker line a re-synthesis drew again: the merge stays
   prepared. Relay the lines and the files they name verbatim, say the merge is
-  unlanded, and name `/gitlore:resolve` as what picks it up once the user has
-  looked at those files.
+  unlanded, and name `/gitlore:resolve` as what picks it up.
 - A message-file, message-build or refused-commit line: relay it with whatever the
   failing command printed above it. The merge stays prepared; the remedy is to fix
   that cause and run `/gitlore:resolve` again.

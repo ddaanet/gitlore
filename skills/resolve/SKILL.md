@@ -100,7 +100,7 @@ The merge landed when the continuation's commit did, and exit 0 says `live` adva
 
 The continuation checks and composes the memory indexes before it commits, so its
 output may carry index problems. Keep the two kinds apart. Problems in the merged
-index blocked the landing until a new synthesis cleared them; say which they were.
+index blocked the landing until a new synthesis cleared them, or left it unlanded; say which they were.
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
 index, index pointers naming files that are not there, a refused advance of `live`
 with git's text — came after the merge commit landed; relay it; only you can fix it.
