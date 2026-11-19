@@ -331,3 +331,13 @@ make_bare_mirror() {
   [ "$status" -eq 0 ]
   [ -n "$(git --git-dir="$BARE" for-each-ref refs/heads/gitlore/rewrites)" ]
 }
+
+@test "record-rewrite: a store whose origin is the placeholder and no remote argument is refused, naming the remote" {
+  drop_remote_record
+  git -C memory remote set-url origin "$TMP_REPO/.git/gitlore-placeholder"
+  before=$(remote_refs)
+  run --separate-stderr bash "$SCRIPT" memory "$MAP"
+  [ "$status" -ne 0 ]
+  [[ "$output$stderr" == *"has no usable remote named origin"* ]]
+  [ "$(remote_refs)" = "$before" ]
+}

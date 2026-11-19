@@ -26,6 +26,11 @@
 # `record-rewrite:` message on stderr when nothing was pushed. Exit 2 on usage.
 set -euo pipefail
 
+# The libraries shipped beside this script, for the no-remote predicate.
+PLUGIN_ROOT=$(CDPATH="" cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck disable=SC1091
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
   echo "usage: record-rewrite.sh <store> <commit-map> [<remote>]" >&2
   exit 2
@@ -54,8 +59,8 @@ case "$format" in
 esac
 # Only the default is checked by name: an explicit remote is a name git resolves
 # or a URL it reads, and either failing is git's own message below.
-if [ $# -eq 2 ] && [ -z "$(git -C "$store" config --get remote.origin.url)" ]; then
-  refuse "$store has no remote named origin, so there is no record to append to. Pass the remote's URL as the third argument."
+if [ $# -eq 2 ] && gitlore_store_has_no_remote "$store"; then
+  refuse "$store has no usable remote named origin (none, or gitlore's placeholder url), so there is no record to append to. Pass the remote's URL as the third argument."
 fi
 
 tmpd=$(mktemp -d "${TMPDIR:-/tmp}/record-rewrite.XXXXXX")

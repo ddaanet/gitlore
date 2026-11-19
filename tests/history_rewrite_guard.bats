@@ -209,3 +209,34 @@ refusal_fragments() {
   [ -n "$(git -C memory/ddaanet ls-remote origin 'refs/heads/gitlore/archive/*')" ]
   assert_no_archive_fetched memory/ddaanet
 }
+
+# A store with no origin, or an origin that is the placeholder, is local by
+# choice: there is no record to ask for, so the test returns 0 without fetching.
+rewrite_hit_driver() {
+  local driver="$BATS_TEST_TMPDIR/rewrite-hit-driver.sh"
+  cat > "$driver" <<DRIVER
+#!/usr/bin/env bash
+set -euo pipefail
+source "$PLUGIN_ROOT/scripts/lib/util.sh"
+source "$PLUGIN_ROOT/scripts/lib/log.sh"
+source "$PLUGIN_ROOT/scripts/lib/resolve.sh"
+gitlore_rewrite_hit memory origin/live HEAD
+DRIVER
+  run --separate-stderr bash "$driver"
+}
+
+@test "rewrite guard: a store with no origin reports no hit" {
+  mem_setup old
+  git -C memory remote remove origin
+  rewrite_hit_driver
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "rewrite guard: a store whose origin is the placeholder reports no hit and fetches nothing" {
+  mem_setup old
+  git -C memory remote set-url origin "$TMP_REPO/.git/gitlore-placeholder"
+  rewrite_hit_driver
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}

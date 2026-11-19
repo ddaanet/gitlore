@@ -53,8 +53,11 @@ it, plus the repo `.gitmodules` names when that is a different repo from the
 module's remote. "A different repo" is not a string comparison: by D64
 `.gitmodules` records https for a GitHub repo while the module's own remote can
 stay on ssh, so the two urls are compared in https form with userinfo dropped
-(D80). `/gitlore:resolve` does not say "healthy" over it; it checks before the
-gates, so no push publishes past it, and exits 1.
+(D80). A placeholder `.gitmodules` url draws no such clause, whatever the
+module's remote, because the placeholder names no repository. A store with no
+usable remote, whether no origin or the placeholder url, says local, and there
+is no second repo to name. `/gitlore:resolve` does not say "healthy" over it; it
+checks before the gates, so no push publishes past it, and exits 1.
 
 The urls are text the user's config or a contributor's PR chose. The user's line
 shows them under D80; the agent's line says the user has them.

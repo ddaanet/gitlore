@@ -139,6 +139,43 @@ load helpers/unresolvable-pin
   sys_none "${lost:0:12}" "https://github.com/acme/mem.git"
 }
 
+# A local-only memory: .gitmodules holds the placeholder, and origin is either
+# absent or the synced absolute spelling of it. The placeholder names no
+# repository, so the report says memory has no remote and never a different repo.
+@test "SessionStart over a memory with no origin and a placeholder .gitmodules says no remote, not a different repo" {
+  parent_pin_nobody_holds
+  git -C memory remote remove origin
+  git config --file .gitmodules submodule.gitlore-memory.url "./.git/gitlore-placeholder"
+  session_start
+  sys_has "${lost:0:12}" 'memory has no remote'
+  sys_none "${lost:0:12}" 'a different repo'
+  ctx_has "${lost:0:12}" 'memory has no remote'
+  ctx_none "${lost:0:12}" 'a different repo'
+}
+
+@test "SessionStart over a memory with a placeholder origin and a placeholder .gitmodules says no remote, not a different repo" {
+  parent_pin_nobody_holds
+  git -C memory remote set-url origin "$TMP_REPO/.git/gitlore-placeholder"
+  git config --file .gitmodules submodule.gitlore-memory.url "./.git/gitlore-placeholder"
+  session_start
+  sys_has "${lost:0:12}" 'memory has no remote'
+  sys_none "${lost:0:12}" 'a different repo'
+  ctx_has "${lost:0:12}" 'memory has no remote'
+  ctx_none "${lost:0:12}" 'a different repo'
+}
+
+# The placeholder names no repository, so a real origin beside it draws no
+# different-repo clause either.
+@test "SessionStart over a memory with a real origin and a placeholder .gitmodules does not name a different repo" {
+  parent_pin_nobody_holds
+  git config --file .gitmodules submodule.gitlore-memory.url "./.git/gitlore-placeholder"
+  session_start
+  sys_has "${lost:0:12}" "$memory_remote"
+  sys_none "${lost:0:12}" 'a different repo'
+  ctx_has "${lost:0:12}" "memory's remote does not hold"
+  ctx_none "${lost:0:12}" 'a different repo'
+}
+
 # --- /gitlore:resolve ---------------------------------------------------------
 
 @test "/gitlore:resolve over a tier commit nobody holds does not say healthy, and names the commit, the remote and the push remedy" {

@@ -46,15 +46,16 @@ gitlore_refuse_rewritten() {
 # other remote branch (the archive branches included) reaches the store and
 # FETCH_HEAD keeps what the caller read from it. The fetch is bounded like any
 # other (gitlore_fetch_bounded). Prints nothing itself.
-# Returns 0 for no hit, an absent record, or no origin; 1 with the superseded
-# id on stdout; 2 with git's error on stdout when the record is advertised but
-# cannot be fetched, or the range or map cannot be read; 3, printing nothing,
-# when the fetch timed out after GITLORE_FETCH_TIMEOUT seconds.
+# Returns 0 for no hit, an absent record, or no usable origin
+# (gitlore_store_has_no_remote); 1 with the superseded id on stdout; 2 with
+# git's error on stdout when the record is advertised but cannot be fetched, or
+# the range or map cannot be read; 3, printing nothing, when the fetch timed out
+# after GITLORE_FETCH_TIMEOUT seconds.
 # Args: $1 = store path, $2 = authority ref or sha, $3 = pending ref.
 gitlore_rewrite_hit() {
   local store="$1" authority="$2" pending="$3"
   local rc=0 fetch_err mine map hit
-  [ -n "$(git -C "$store" config --get remote.origin.url)" ] || return 0
+  ! gitlore_store_has_no_remote "$store" || return 0
   gitlore_fetch_bounded "$store" -q --no-write-fetch-head origin +refs/heads/gitlore/rewrites:refs/gitlore/rewrites || rc=$?
   fetch_err="$GITLORE_FETCH_OUT"
   if [ "$rc" -eq 124 ]; then
