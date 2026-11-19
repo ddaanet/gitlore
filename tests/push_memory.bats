@@ -107,17 +107,41 @@ add_memory_commit() {
   [[ "$output" == *"memory"* ]]
 }
 
-@test "says memory stays local when it has no remote, and offers /gitlore:resolve" {
+@test "says memory stays local when it has no remote, and names no command" {
   wire_memory_remote
   add_memory_commit
   git -C memory remote remove origin
-  # `/gitlore:resolve` appears only in the agent arm, so the arm has to be
-  # chosen here: bats neither sets nor clears CLAUDECODE, and a test inherits
-  # whatever the invoking shell holds.
+  # The message has an agent arm and a user arm, chosen by CLAUDECODE; bats
+  # neither sets nor clears it, so each arm is run explicitly.
   CLAUDECODE=1 run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
-  [[ "$stderr" == *"no remote of its own"* ]]
-  [[ "$stderr" == *"/gitlore:resolve"* ]]
+  [[ "$stderr" == *"stays local"* ]]
+  [[ "$stderr" != *"/gitlore:resolve"* ]]
+  [[ "$stderr" != *"Run "* ]]
+  [[ "$(printf '%s\n' "$stderr" | grep -F 'stays local')" != *"/gitlore:"* ]]
+  run --separate-stderr env -u CLAUDECODE bash "$CMD"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"stays local"* ]]
+  [[ "$stderr" != *"/gitlore:resolve"* ]]
+  [[ "$stderr" != *"Run "* ]]
+  [[ "$(printf '%s\n' "$stderr" | grep -F 'stays local')" != *"/gitlore:"* ]]
+  # Push creates no remote.
+  [ -z "$(git -C memory config --get remote.origin.url || true)" ]
+}
+
+@test "publishes a first live to a wired remote that has none" {
+  # Pin: push-memory.sh already does this; the test keeps it true once nothing
+  # else creates or fills a remote.
+  make_parent_with_memory
+  git init -q --bare "$MEMORY_REMOTE"
+  git -C memory remote remove origin || true
+  git -C memory remote add origin "$MEMORY_REMOTE"
+  git config gitlore.hooksDir "$PLUGIN_ROOT/scripts/git-hooks"
+  [ -z "$(git ls-remote "$MEMORY_REMOTE")" ]
+  run bash "$CMD"
+  [ "$status" -eq 0 ]
+  [ "$(git -C memory rev-parse live)" = "$(git --git-dir="$MEMORY_REMOTE" rev-parse live)" ]
+  [[ "$output" == *"first publish"* ]]
 }
 
 @test "reads a synced placeholder origin as no remote, not as an unreachable one" {
@@ -128,7 +152,7 @@ add_memory_commit() {
   git -C memory remote set-url origin "$TMP_REPO/.git/gitlore-placeholder"
   run --separate-stderr bash "$CMD"
   [ "$status" -eq 0 ]
-  [[ "$stderr" == *"no remote of its own"* ]]
+  [[ "$stderr" == *"stays local"* ]]
   # Not a network diagnosis: there is no host here to be unreachable.
   [[ "$stderr" != *"unreachable"* ]]
 }

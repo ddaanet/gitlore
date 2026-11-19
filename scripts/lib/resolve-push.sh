@@ -180,15 +180,16 @@ gitlore_push_stores() {
   done < <(gitlore_tier_paths "$mempath")
 
   # A memory store with no remote of its own is a supported end state, not a
-  # broken install: `/gitlore:install` keeps the placeholder when no provider is
+  # broken install: install keeps the placeholder when no provider is
   # available, and a repo can share its tiers while keeping its project facts
-  # local. Say so and stop, having published what there was to publish. Failing
+  # local. Push creates no remote; it says memory stays local and stops, having
+  # published what there was to publish. Failing
   # instead would make memory's local-only-ness withhold the tiers — the one part
   # other repositories actually read.
   if [ -z "$remote_url" ]; then
     gitlore_compose_moved_tiers "$mempath" || return 1
     gitlore_say_for_agent_or_user \
-      "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published. Run /gitlore:resolve to give memory a remote if it is meant to be shared." \
+      "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published." \
       "gitlore: memory has no remote of its own, so it stays local; every mounted tier was published." >&2
     return 0
   fi

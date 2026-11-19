@@ -46,7 +46,7 @@ teardown() {
   git -C memory remote remove origin
   run --separate-stderr bash "$PRE_PUSH"
   [ "$status" -eq 0 ]
-  [[ "$stderr" == *"no remote of its own"* ]]
+  [[ "$stderr" == *"stays local"* ]]
 }
 
 @test "pre-push fails with divergence hint when remote diverged" {

@@ -119,22 +119,18 @@ gitlore_has_submodule || {
 mempath=$(gitlore_memory_path)
 any_report=""
 
-# Existing Plan 02 simple repairs (remote.origin.url, ls-remote, push live)
-# happen first — they precede semantic-merge detection.
+# Memory's reachability probe comes first, ahead of semantic-merge detection,
+# and only when a real remote is configured: a memory store with no remote or
+# a placeholder one is local by choice, and nothing here creates a remote.
 remote_url=$(git -C "$mempath" config --get remote.origin.url || true)
-if [ -z "$remote_url" ] || gitlore_is_placeholder_url "$remote_url"; then
-  echo "gitlore: no memory remote configured. Creating one." >&2
-  bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" "$mempath"
-  echo "gitlore: memory remote created and live pushed." >&2
-  # Fall through rather than exiting: a repair to memory says nothing about the
-  # tiers, and stopping here would leave a diverged tier undetected.
-fi
-if ! ls_remote_err=$(git -C "$mempath" ls-remote origin 2>&1 >/dev/null); then
-  printf '%s\n' "$ls_remote_err" >&2
-  gitlore_say_for_agent_or_user \
-    "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" \
-    "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" >&2
-  exit 1
+if [ -n "$remote_url" ] && ! gitlore_is_placeholder_url "$remote_url"; then
+  if ! ls_remote_err=$(git -C "$mempath" ls-remote origin 2>&1 >/dev/null); then
+    printf '%s\n' "$ls_remote_err" >&2
+    gitlore_say_for_agent_or_user \
+      "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" \
+      "gitlore: memory remote unreachable. $(gitlore_push_credentials_hint "$mempath")" >&2
+    exit 1
+  fi
 fi
 
 # Both gates for one store: local `live` first (cheaper, local-only), then the
@@ -149,7 +145,7 @@ check_store_gates() {
   # `tier` is the store's tier name, empty for the memory root: the head-vs-live
   # gate's remedy differs by store kind, because a tier is pinned at the gitlink
   # the memory store records (D43) and the root is not.
-  local store="$1" tier="${2-}" rc fetch_err remote_live local_live absent=""
+  local store="$1" tier="${2-}" rc fetch_err store_url remote_live local_live absent=""
   local name="memory"
   [ -z "$tier" ] || name="tier '$tier'"
   rc=0; push_or_report "$store" . HEAD:live || rc=$?
@@ -172,6 +168,16 @@ check_store_gates() {
     else
       exit 1
     fi
+  fi
+  # A store with no remote or a placeholder one has no remote gate: it is
+  # reported as local, with no command to run.
+  store_url=$(git -C "$store" config --get remote.origin.url || true)
+  if [ -z "$store_url" ] || gitlore_is_placeholder_url "$store_url"; then
+    gitlore_say_for_agent_or_user \
+      "gitlore: $name has no remote, so it stays local." \
+      "gitlore: $name has no remote, so it stays local." >&2
+    any_report=yes
+    return 0
   fi
   # The remote gate, after the local one: this store's unreachable remote does
   # not hide its own local divergence, which the local gate prepares without

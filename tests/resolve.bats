@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # $stderr is populated by bats `run --separate-stderr`; shellcheck cannot see it.
-# shellcheck disable=SC2154
+# shellcheck disable=SC2154,SC2030,SC2031
 bats_require_minimum_version 1.5.0
 
 load helpers/setup
@@ -40,14 +40,56 @@ teardown() { teardown_tmp_repo; }
   [[ "$output$stderr" != *"$GITLORE_T_PLUGIN_ROOT_UNSET"* ]]
 }
 
-@test "resolve: creates remote when memory has no origin.url" {
+# The default run on a memory store with no usable remote: the local gate still
+# runs, the store is reported as staying local with no command named, and
+# nothing is created. $1 is the shell snippet that leaves memory in that state.
+assert_memory_stays_local() {
+  local log="$TMP_REPO/gh-calls.log" head
+  printf 'local only\n' > memory/local-only.md
+  git -C memory add local-only.md
+  git -C memory commit -qm "a root-only fact"
+  head=$(git -C memory rev-parse HEAD)
+  [ "$(git -C memory rev-parse live)" != "$head" ]
+  GH_MOCK_LOG="$log" run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$stderr" >&2; return 1; }
+  [ "$(git -C memory rev-parse live)" = "$head" ]
+  [[ "$stderr" == *"stays local"* ]]
+  [[ "$stderr" != *"/gitlore:resolve"* ]]
+  [[ "$stderr" != *"Run "* ]]
+  [[ "$(printf '%s\n' "$stderr" | grep -F 'stays local')" != *"/gitlore:"* ]]
+  [[ "$stderr" != *"healthy"* ]]
+  [[ "$stderr" != *"unreachable"* ]]
+  [ ! -e "$log" ]
+}
+
+@test "resolve: memory with no origin stays local: local gate runs, nothing is created" {
   make_parent_with_memory
-  git -C memory remote remove origin 2>/dev/null || true
-  log="$TMP_REPO/gh-calls.log"
-  GH_MOCK_LOG="$log" run bash "$RESOLVE"
-  [ "$status" -eq 0 ]
-  grep -q 'repo create' "$log"
-  [ -n "$(git -C memory config --get remote.origin.url)" ]
+  git -C memory remote remove origin
+  assert_memory_stays_local
+  [ -z "$(git -C memory config --get remote.origin.url || true)" ]
+}
+
+@test "resolve: memory with a placeholder origin stays local the same way" {
+  make_parent_with_memory
+  git -C memory remote set-url origin "$TMP_REPO/.git/gitlore-placeholder"
+  assert_memory_stays_local
+  [ "$(git -C memory config --get remote.origin.url)" = "$TMP_REPO/.git/gitlore-placeholder" ]
+}
+
+@test "resolve: a mounted tier with no remote is skipped without a line of its own" {
+  # Pin: the tier loop already skips a tier with no remote silently.
+  make_parent_with_memory
+  git -C memory remote remove origin
+  git -C memory remote add origin "$GH_MOCK_REMOTE_URL"
+  git -C memory push -q origin live
+  mount_tier_at_live ddaanet
+  git -C memory/ddaanet remote remove origin
+  run --separate-stderr bash "$RESOLVE"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$stderr" >&2; return 1; }
+  # Positive over the same fixture: memory, which has a remote, is still judged.
+  [[ "$stderr" == *"memory is ahead of its remote"* ]]
+  [[ "$stderr" != *"stays local"* ]]
+  [[ "$stderr" != *"ddaanet"* ]]
 }
 
 @test "resolve: reports unreachable remote without calling gh repo create" {

@@ -38,7 +38,7 @@ wire_and_push() {
     git -C "$mempath" remote add origin "$remote_url"
   fi
   if ! gitlore_git -C "$mempath" push -u origin live; then
-    echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:resolve to retry." >&2
+    echo "gitlore: wired remote but failed to push memory's live branch. Run /gitlore:push to retry." >&2
     exit 1
   fi
   git config --file .gitmodules "submodule.${GITLORE_SUBMODULE_NAME}.url" \
@@ -80,12 +80,12 @@ case "$mode" in
       # Resolving the URL via `gh repo view` also respects the user's
       # gh-configured protocol, which `--push` would decide for them.
       if ! gh repo create "$full_name" --"$visibility"; then
-        echo "gitlore: gh repo create failed. Run /gitlore:resolve to recover, or re-run install with a remote URL." >&2
+        echo "gitlore: gh repo create failed. Re-run install, with a remote URL if gh cannot create one." >&2
         exit 1
       fi
       remote_url=$(gh repo view "$full_name" --json sshUrl -q .sshUrl || true)
       if [ -z "$remote_url" ]; then
-        echo "gitlore: created remote $full_name but could not resolve its URL. Run /gitlore:resolve to recover." >&2
+        echo "gitlore: created remote $full_name but could not resolve its URL. Re-run install with a remote URL." >&2
         exit 1
       fi
       wire_and_push "$remote_url"

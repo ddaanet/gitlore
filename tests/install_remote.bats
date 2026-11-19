@@ -70,7 +70,30 @@ fake_github_repo() {
     GH_MOCK_STDERR_REPO_CREATE="GraphQL: Name already exists on this account" \
     run --separate-stderr bash "$RUN_INSTALL" memory
   [ "$status" -ne 0 ]
-  [[ "$output$stderr" == *"/gitlore:resolve"* ]]
+  # The failure line itself names install, not some other line of the run.
+  [[ "$(printf '%s\n%s\n' "$output" "$stderr" | grep -F 'gh repo create failed')" == *"install"* ]]
+  [[ "$output$stderr" != *"/gitlore:resolve"* ]]
+}
+
+@test "install names no resolve command when the created remote's url cannot be read" {
+  unset GH_MOCK_REMOTE_URL
+  run --separate-stderr bash "$RUN_INSTALL" memory
+  [ "$status" -ne 0 ]
+  [[ "$stderr" == *"could not resolve its URL"* ]]
+  [[ "$output$stderr" != *"/gitlore:resolve"* ]]
+}
+
+@test "url mode names /gitlore:push when the first push of live is refused" {
+  local remote="$TMP_REPO/.refusing-remote.git"
+  git init -q --bare "$remote"
+  printf '#!/bin/sh\nexit 1\n' > "$remote/hooks/pre-receive"
+  chmod +x "$remote/hooks/pre-receive"
+  bash "$RUN_INSTALL" memory local
+  run --separate-stderr bash "$PLUGIN_ROOT/scripts/install/create-remote.sh" memory url "$remote"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"failed to push"* ]]
+  [[ "$stderr" == *"/gitlore:push"* ]]
+  [[ "$stderr" != *"/gitlore:resolve"* ]]
 }
 
 @test "install is idempotent (no second gh repo create call on re-run)" {
