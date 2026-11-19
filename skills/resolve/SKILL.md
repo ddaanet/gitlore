@@ -19,7 +19,7 @@ You are resolving a gitlore memory submodule from divergence.
 ```
 
 Exit codes:
-- `0` — healthy, or a report with nothing to do here (a store ahead, behind or staying local). Summarize and stop.
+- `0` — healthy, or a report with nothing to do here (a store ahead, behind or staying local). Summarize, relaying every `gitlore:` line the script printed, and stop.
 - Non-zero + "memory merge prepared" on stderr → proceed to **Parse directive**.
 - Non-zero with a line starting `gitlore: memory records` or `gitlore: this repository records memory at` → a recorded commit its repository lacks, or one a failed fetch left unconfirmed. Relay it, never call the state healthy, and follow [pin-and-abort.md](references/pin-and-abort.md); it also covers `abort-merge`, which abandons a prepared merge.
 - Non-zero without any of those → surface stderr verbatim and stop.
@@ -90,13 +90,13 @@ After the sub-agent exits, run `"${CLAUDE_PLUGIN_ROOT}/scripts/resolve.sh"` agai
 
 ## Resume commit
 
-If this skill was triggered by a commit failure, pass the summary again to `gitlore-commit` now that memory is resolved, through the `gitlore:commit` skill. Re-approve it first if the merge brought content the summary did not cover: present it again, amended for what the merge brought, and commit once the user approves it. `gitlore-commit` on a store with no changes exits 0 whatever the summary says and does not advance `live`, so a commit that had landed before the merge needs no retry: the rerun of `resolve.sh` in **Loop** already advanced local `live` from HEAD. Publishing is `/gitlore:push`. An empty summary on stdin is refused (exit 2), so a retry always carries an approved summary.
+If this skill was triggered by a commit failure, pass the summary again to `gitlore-commit` now that memory is resolved, through the `gitlore:commit` skill. Re-approve it first if the merge brought content the summary did not cover: present it again, amended for what the merge brought, and commit once the user approves it. `gitlore-commit` on a store with no changes exits 0 whatever the summary says, so a commit that had landed before the merge needs no retry. Publishing is `/gitlore:push`, which is the user's to run. An empty summary on stdin is refused (exit 2), so a retry always carries an approved summary.
 
 ## Summarize
 
 Tell the user what was merged and what state the repo is in now.
 
-The merge landed when the continuation's commit did, and exit 0 says `live` advanced locally too. Nothing was published. End by relaying the script's own line verbatim — `gitlore: merged without publishing. Run /gitlore:push to publish.` after a landing, `gitlore: <store> is ahead of its remote. Run /gitlore:push to publish it.` for a store only ahead — so the user sees the publish command. For a non-zero outcome read [unlanded-outcomes.md](references/unlanded-outcomes.md) first: it separates the merges that did not land from the landed one whose advance of `live` failed.
+The merge landed when the continuation's commit did, and exit 0 says `live` advanced locally too. Nothing was published. Relay every `gitlore:` report line the script printed, verbatim and ending with the last of them, so the user sees each command it names; for example `gitlore: merged without publishing. Run /gitlore:push to publish.` after a landing. For a non-zero outcome read [unlanded-outcomes.md](references/unlanded-outcomes.md) first: it separates the merges that did not land from the landed one whose advance of `live` failed.
 
 The continuation checks and composes the memory indexes before it commits, so its
 output may carry index problems. Keep the two kinds apart. Problems in the merged
@@ -104,4 +104,4 @@ index blocked the landing until a new synthesis cleared them; say which they wer
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
 index, index pointers naming files that are not there, a refused advance of `live`
 with git's text — came after the merge commit landed; relay it; only you can fix it.
-A command a line asks to run after the landing is still to run: run it, or relay it as not yet run.
+`/gitlore:push` is the user's to run: relay a line naming it, never run it.
