@@ -207,11 +207,11 @@ refuse_leftover_conflict_markers() {
   exit 1
 }
 
-# Fast-forward a ref with `push`, routing a refusal by its cause. Returns 0 on
-# success; returns 1 when git's parenthesized reason says the ref diverged,
-# which is the caller's cue to prepare a merge; reports git's own explanation
-# and returns 2 on any other refusal. Never exits. Both callers push
-# `. HEAD:live` into the store itself, so the other refusals are local
+# Fast-forward the store's own `live` to HEAD with `push . HEAD:live`, routing a
+# refusal by its cause. Returns 0 on success; returns 1 when git's parenthesized
+# reason says the ref diverged, which is the caller's cue to prepare a merge;
+# reports git's own explanation and returns 2 on any other refusal. Never exits.
+# The push stays inside the store, so the other refusals are local
 # ref-update failures, such as a `live.lock` another process holds.
 #
 # The same discriminator `pre-push` and `gitlore_sync_memory_to_live` apply, and
@@ -221,11 +221,11 @@ refuse_leftover_conflict_markers() {
 # An empty message is treated as divergence: `push -q`
 # names its rejection reason, so silence here means the refusal carried no text
 # to route on and the local `HEAD:live` case is the only cause left.
-# Args: $1 = store worktree, $2… = push arguments (remote and refspec).
+# Args: $1 = store worktree.
 push_or_report() {
-  local store="$1"; shift
+  local store="$1"
   local push_err
-  if push_err=$(gitlore_git -C "$store" push -q "$@" 2>&1); then
+  if push_err=$(gitlore_git -C "$store" push -q . HEAD:live 2>&1); then
     return 0
   fi
   case "$push_err" in
@@ -233,9 +233,9 @@ push_or_report() {
     *) [ -n "$push_err" ] || return 1 ;;
   esac
   gitlore_say_for_agent_or_user \
-    "gitlore: pushing '$*' in $store failed, and not because of divergence — no merge can fix this. git said:
+    "gitlore: pushing '. HEAD:live' in $store failed, and not because of divergence — no merge can fix this. git said:
 $push_err" \
-    "gitlore: pushing '$*' in $store failed, and not because of divergence — no merge can fix this. git said:
+    "gitlore: pushing '. HEAD:live' in $store failed, and not because of divergence — no merge can fix this. git said:
 $push_err" >&2
   return 2
 }

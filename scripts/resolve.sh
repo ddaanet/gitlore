@@ -75,7 +75,7 @@ if [ $# -ge 1 ]; then
       # Restore the invariant: fast-forward local `live` onto the merge commit.
       # It can lose a race with a concurrent advance; re-prepare against `live`
       # and yield again. The merge reaches a remote only through /gitlore:push.
-      rc=0; push_or_report "$mempath" . HEAD:live || rc=$?
+      rc=0; push_or_report "$mempath" || rc=$?
       if [ "$rc" -eq 1 ]; then
         gitlore_yield_merge "$mempath" live head-vs-live HEAD || :
       fi
@@ -144,10 +144,10 @@ check_store_gates() {
   # `tier` is the store's tier name, empty for the memory root: the head-vs-live
   # gate's remedy differs by store kind, because a tier is pinned at the gitlink
   # the memory store records (D43) and the root is not.
-  local store="$1" tier="${2-}" rc fetch_err remote_live local_live absent=""
+  local store="$1" tier="${2-}" rc fetch_err remote_live local_live cls=""
   local name="memory"
   [ -z "$tier" ] || name="tier '$tier'"
-  rc=0; push_or_report "$store" . HEAD:live || rc=$?
+  rc=0; push_or_report "$store" || rc=$?
   if [ "$rc" -eq 2 ]; then
     exit 1
   elif [ "$rc" -eq 1 ]; then
@@ -187,7 +187,7 @@ check_store_gates() {
   # compare against a stale tracking ref.
   if ! fetch_err=$(gitlore_git -C "$store" fetch -q --no-recurse-submodules origin live 2>&1); then
     case "$fetch_err" in
-      *"couldn't find remote ref"*) absent=yes ;;
+      *"couldn't find remote ref"*) cls=ahead ;;
       *)
         printf '%s\n' "$fetch_err" >&2
         gitlore_say_for_agent_or_user \
@@ -197,22 +197,18 @@ check_store_gates() {
         ;;
     esac
   fi
-  # A remote with no `live` holds nothing the local one lacks.
-  # Otherwise equality is checked first: the refusal classifier reads equal as
-  # behind.
-  if [ -n "$absent" ]; then
-    gitlore_say_for_agent_or_user \
-      "gitlore: $name is ahead of its remote. Run /gitlore:push to publish it." \
-      "gitlore: $name is ahead of its remote. Run /gitlore:push to publish it." >&2
-    any_report=yes
-    return 0
+  # A remote with no `live` holds nothing the local one lacks, so the store is
+  # ahead with nothing to classify. Otherwise equality is checked first: the
+  # refusal classifier reads equal as behind.
+  if [ -z "$cls" ]; then
+    remote_live=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live || true)
+    local_live=$(git -C "$store" rev-parse -q --verify refs/heads/live || true)
+    if [ -n "$remote_live" ] && [ "$remote_live" = "$local_live" ]; then
+      return 0
+    fi
+    cls=$(gitlore_classify_refusal "$store" refs/heads/live refs/remotes/origin/live)
   fi
-  remote_live=$(git -C "$store" rev-parse -q --verify refs/remotes/origin/live || true)
-  local_live=$(git -C "$store" rev-parse -q --verify refs/heads/live || true)
-  if [ -n "$remote_live" ] && [ "$remote_live" = "$local_live" ]; then
-    return 0
-  fi
-  case "$(gitlore_classify_refusal "$store" refs/heads/live refs/remotes/origin/live)" in
+  case "$cls" in
     ahead)
       gitlore_say_for_agent_or_user \
         "gitlore: $name is ahead of its remote. Run /gitlore:push to publish it." \

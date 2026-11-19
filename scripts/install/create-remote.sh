@@ -19,10 +19,7 @@ url_arg="${3:-}"
 # Idempotency: a real (non-placeholder) origin already wired → nothing to do. A
 # placeholder origin is a local-only install a `git submodule sync` has copied
 # out of `.gitmodules`; it names no repository, so the slot is still ours.
-existing=$(git -C "$mempath" config --get remote.origin.url || true)
-if [ -n "$existing" ] && ! gitlore_is_placeholder_url "$existing"; then
-  exit 0
-fi
+gitlore_store_has_no_remote "$mempath" || exit 0
 
 wire_and_push() {
   # Args: $1 = remote URL. Wires origin, rewrites .gitmodules URL, pushes live.
