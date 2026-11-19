@@ -78,7 +78,7 @@ On approval, the sub-agent runs the continuation command. The merge commit's mes
 
 If the sub-agent reports that the continuation exited 1 with `gitlore: the merged index fails the check, so the merge was not committed` or `gitlore: these files still hold conflict markers, so the merge was not committed`, the merge did not land and stays prepared. Resume the sub-agent with `rejected:` followed by the problem lines or file names it quoted, and evaluate the new synthesis as before. If a re-synthesis draws the same line again, relay the lines to the user verbatim in **Summarize**, skipping **Resume commit** — a failure report, not an approval request.
 
-The sub-agent reports the continuation's exit status. The merge landed once its commit did, so a non-zero status can follow a landed merge: the local advance of `live` that comes after the commit was refused. Route the report by the line it quotes; each route is in [turn-2-routes.md](references/turn-2-routes.md), which you read before routing it.
+The sub-agent reports the continuation's exit status. The merge landed once its commit did, so a non-zero status can follow a landed merge: the local advance of `live` that comes after the commit was refused. Any other quoted line routes by [turn-2-routes.md](references/turn-2-routes.md), which you read before routing it.
 
 ## Loop
 
@@ -100,7 +100,8 @@ The merge landed when the continuation's commit did, and exit 0 says `live` adva
 
 The continuation checks and composes the memory indexes before it commits, so its
 output may carry index problems. Keep the two kinds apart. Problems in the merged
-index blocked the landing until a new synthesis cleared them, or left it unlanded; say which they were.
-On a landed merge, any other `gitlore:` line — a composition refusal naming another
-index, index pointers naming files that are not there, a refused advance of `live`
-with git's text — came after the merge commit landed; relay it; only you can fix it.
+index blocked the landing until a new synthesis cleared them, or left it unlanded;
+name those lines and say whether the merge landed. On a landed merge, any other
+`gitlore:` line — a composition refusal naming another index, index pointers naming
+files that are not there, a refused advance of `live` with git's text — came after
+the merge commit landed; relay it; only you can fix it.

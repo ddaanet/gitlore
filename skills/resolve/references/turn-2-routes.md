@@ -1,9 +1,9 @@
 # Routing the sub-agent's report after the continuation
 
 The route for each line the sub-agent quotes when the continuation did not exit
-0, or exited 0 and printed one of these. Read this when its report quotes a
-`gitlore:` line other than the two **Approve or reject** answers with `rejected:`,
-or the continuation call was denied.
+0, or exited 0 and printed one of these, apart from the two lines **Approve or
+reject** answers with `rejected:`. Read this when its report quotes any other
+`gitlore:` line, or the continuation call was denied.
 
 - `gitlore: the merge message file could not be created`, `gitlore: the merge message could not be built` or `gitlore: the merge commit was refused` — the merge stays prepared for a reason outside the merged files. Send no `rejected:` and do not go to **Loop**: a rerun re-emits the same directive and meets the same refusal. Go to **Summarize**, skipping **Resume commit**: memory is not resolved.
 - `gitlore: memory merge prepared` — the merge landed and the local `live` advance after it prepared a fresh one. Go to **Loop**, which picks the new merge up; stopping here would strand the merge the triggering git operation needs.
