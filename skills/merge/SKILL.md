@@ -54,8 +54,8 @@ and lands a merge commit.
    merge is unlanded and gets continued again — never discarded.
 3. Repeat until the command exits 0.
 
-The landed merge is **not** published: the continuation stops after the local
-fast-forward, which is what makes this different from `/gitlore:push`.
+A landed merge ends at the local fast-forward, as every landing does; this skill
+publishes nothing, and `/gitlore:push` is what publishes afterwards.
 
 ## Report
 
