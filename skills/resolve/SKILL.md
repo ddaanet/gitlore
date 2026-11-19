@@ -104,4 +104,3 @@ index blocked the landing until a new synthesis cleared them; say which they wer
 On a landed merge, any other `gitlore:` line — a composition refusal naming another
 index, index pointers naming files that are not there, a refused advance of `live`
 with git's text — came after the merge commit landed; relay it; only you can fix it.
-A command a line names after the landing is relayed as not yet run and left to what invoked this skill: the skill whose step it was, such as the push skill's own loop, or the user.
